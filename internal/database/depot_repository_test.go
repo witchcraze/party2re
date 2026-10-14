@@ -5,6 +5,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"sync"
 	"testing"
 
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -220,5 +221,110 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 	}
 	if len(dep.Items) != 0 {
 		t.Errorf("depot items count = %d, want 0", len(dep.Items))
+	}
+}
+
+func TestDepotRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	repo, err := NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char1, err := CreateTestCharacter(ctx, db, "Depot Adjacent 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char2, err := CreateTestCharacter(ctx, db, "Depot Adjacent 2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize depots with initial items
+	it1, _ := item.NewInstance("item-001", 10)
+	it2, _ := item.NewInstance("weapon-01", 1)
+	if _, err := CreateTestDepot(ctx, db, char1.ID, 5, []item.Instance{it1, it2}); err != nil {
+		t.Fatal(err)
+	}
+	it3, _ := item.NewInstance("armor-01", 1)
+	it4, _ := item.NewInstance("item-002", 5)
+	if _, err := CreateTestDepot(ctx, db, char2.ID, 5, []item.Instance{it3, it4}); err != nil {
+		t.Fatal(err)
+	}
+
+	const iterations = 20
+	errCh := make(chan error, iterations*2)
+
+	runWorker := func(charID string) {
+		for i := 0; i < iterations; i++ {
+			err := repo.RunInTx(ctx, func(txCtx context.Context) error {
+				dep, err := repo.FindByCharacterIDForUpdate(txCtx, charID)
+				if err != nil {
+					return err
+				}
+				// Alternately add new items and trim back to avoid capacity overflow
+				newItem, err := item.NewInstance("item-001", 1)
+				if err != nil {
+					return err
+				}
+				_ = dep.AddItem(newItem)
+				if len(dep.Items) > 10 {
+					dep.Items = dep.Items[:5]
+				}
+				return repo.Save(txCtx, dep)
+			})
+			if err != nil {
+				errCh <- err
+				return
+			}
+		}
+		errCh <- nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		runWorker(char1.ID)
+	}()
+	go func() {
+		defer wg.Done()
+		runWorker(char2.ID)
+	}()
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("Concurrent Save failed: %v", err)
+		}
+	}
+
+	// Verify both depots are readable and intact
+	d1, err := repo.FindByCharacterID(ctx, char1.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID char1 error: %v", err)
+	}
+	if len(d1.Items) == 0 {
+		t.Errorf("char1 depot should have items")
+	}
+
+	d2, err := repo.FindByCharacterID(ctx, char2.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID char2 error: %v", err)
+	}
+	if len(d2.Items) == 0 {
+		t.Errorf("char2 depot should have items")
 	}
 }

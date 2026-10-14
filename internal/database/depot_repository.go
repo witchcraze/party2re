@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -79,7 +81,7 @@ func (r *DepotRepository) FindByCharacterIDForUpdate(ctx context.Context, charac
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
-		ORDER BY sort_position, id FOR UPDATE
+		ORDER BY sort_position, id
 	`, characterID)
 	if err != nil {
 		return depot.Depot{}, err
@@ -109,6 +111,14 @@ func (r *DepotRepository) Save(ctx context.Context, value depot.Depot) error {
 }
 
 func saveDepotTx(ctx context.Context, executor sqlContextExecutor, value depot.Depot) error {
+	seen := make(map[string]struct{}, len(value.Items))
+	for _, instance := range value.Items {
+		if _, ok := seen[instance.ID]; ok {
+			return fmt.Errorf("duplicate item instance ID: %s", instance.ID)
+		}
+		seen[instance.ID] = struct{}{}
+	}
+
 	_, err := executor.ExecContext(ctx, `
 		INSERT INTO character_depots (character_id, ex_depot, capacity)
 		VALUES (?, ?, ?)
@@ -120,17 +130,33 @@ func saveDepotTx(ctx context.Context, executor sqlContextExecutor, value depot.D
 		return err
 	}
 
-	if _, err := executor.ExecContext(ctx, "DELETE FROM depot_items WHERE character_id = ?", value.CharacterID); err != nil {
+	if len(value.Items) == 0 {
+		_, err := executor.ExecContext(ctx, "DELETE FROM depot_items WHERE character_id = ?", value.CharacterID)
 		return err
 	}
 
-	for position, instance := range value.Items {
+	currentIDs := make([]any, 0, len(value.Items)+1)
+	currentIDs = append(currentIDs, value.CharacterID)
+	placeholders := make([]string, len(value.Items))
+	for idx, instance := range value.Items {
+		currentIDs = append(currentIDs, instance.ID)
+		placeholders[idx] = "?"
 		if _, err := executor.ExecContext(ctx, `
 			INSERT INTO depot_items (id, character_id, definition_id, quantity, enhancement_level, sort_position)
 			VALUES (?, ?, ?, ?, ?, ?)
-		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel, position); err != nil {
+			ON DUPLICATE KEY UPDATE
+				definition_id = VALUES(definition_id),
+				quantity = VALUES(quantity),
+				enhancement_level = VALUES(enhancement_level),
+				sort_position = VALUES(sort_position)
+		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel, idx); err != nil {
 			return err
 		}
+	}
+
+	query := fmt.Sprintf("DELETE FROM depot_items WHERE character_id = ? AND id NOT IN (%s)", strings.Join(placeholders, ","))
+	if _, err := executor.ExecContext(ctx, query, currentIDs...); err != nil {
+		return err
 	}
 	return nil
 }
