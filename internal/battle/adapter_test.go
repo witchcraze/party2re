@@ -407,6 +407,9 @@ func TestBuildParticipant_EquipmentStats(t *testing.T) {
 	if part.BaseStats != (corebattle.BattleBaseStats{Attack: 30, Defense: 20, Agility: 25}) || !part.OverLevel {
 		t.Fatalf("equipment replaced immutable battle baselines: %+v", part)
 	}
+	if part.Gear == nil || part.Gear.ArmorDefense != 24 || part.Gear.WeaponWeight != 9 || part.Gear.ArmorWeight != 8 || part.Gear.WeaponID != "weapon-08" || part.Gear.ArmorID != "armor-07" || part.Gear.AccessoryID != "item-122" {
+		t.Fatalf("evaluated gear terms lost: %+v", part.Gear)
+	}
 }
 
 func TestBuildParticipantWithCurrentHP(t *testing.T) {

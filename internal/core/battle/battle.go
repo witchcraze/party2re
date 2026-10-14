@@ -29,6 +29,7 @@ type Participant struct {
 	Defense           int
 	Agility           int
 	BaseStats         BattleBaseStats
+	Gear              *BattleGearStats
 	OverLevel         bool
 	Abilities         []string
 	Skills            []ActionSkill
@@ -45,6 +46,13 @@ type Participant struct {
 // BattleBaseStats are the equipment-free stat baselines, never current buffs.
 type BattleBaseStats struct {
 	Attack, Defense, Agility int
+}
+
+// BattleGearStats retains the already evaluated table values. Armor defense is
+// a separate term from current DF; weights are used by extension201's reset.
+type BattleGearStats struct {
+	ArmorDefense, WeaponWeight, ArmorWeight int
+	WeaponID, ArmorID, AccessoryID          string
 }
 
 type Request struct {

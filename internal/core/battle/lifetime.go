@@ -45,6 +45,7 @@ const (
 	ExtendedAdditional   ExtendedEffect = "additional_submission"
 	ExtendedIncense      ExtendedEffect = "incense"
 	ExtendedPurification ExtendedEffect = "purification"
+	ExtendedInterception ExtendedEffect = "interception"
 )
 
 // LifetimeTail contains operation facts, never elapsed time or positive damage.

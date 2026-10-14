@@ -250,6 +250,10 @@ func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect, m
 			}
 		}
 	}
+	return s.temporaryTargetCandidates(c, e, ids, mayDouble)
+}
+
+func (s *LifetimeState) temporaryTargetCandidates(c TargetContext, e TargetEffect, ids []string, mayDouble map[string]bool) []TargetEffect {
 	var targets []TargetEffect
 	for _, id := range ids {
 		t := s.actor(id)

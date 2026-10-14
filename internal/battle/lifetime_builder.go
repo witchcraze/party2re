@@ -51,6 +51,14 @@ func (s *Service) BuildLifetimeActor(ctx context.Context, characterID, icon stri
 		icon = "assets/images/placeholders/character/character-default.svg"
 	}
 	p.Icon = icon
+	// Explicit effects inspect equipped identities, never bag contents. The
+	// batch participant's historical inventory-based passives stay separate.
+	p.ItemDefinitionIDs = nil
+	for _, id := range []string{p.Gear.WeaponID, p.Gear.ArmorID, p.Gear.AccessoryID} {
+		if id != "" {
+			p.ItemDefinitionIDs = append(p.ItemDefinitionIDs, id)
+		}
+	}
 	// Explicit state preserves fallen entrants; the batch builder's HP fallback
 	// remains unchanged for its existing callers.
 	p.HP = char.Stats.HP

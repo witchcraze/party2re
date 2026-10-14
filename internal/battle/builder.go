@@ -264,7 +264,12 @@ func BuildParticipantFromDataWithRNG(
 	}
 
 	builder.WithItems(itemDefIDs...)
-	return builder.Build()
+	p, err := builder.Build()
+	if err != nil {
+		return corebattle.Participant{}, err
+	}
+	p.Gear = &eqStats.Gear
+	return p, nil
 }
 
 // BuildPartyBattleRequest constructs a PartyBattleRequest with provided combatants and rewards.

@@ -25,11 +25,11 @@ func TestDeferredGemsRejectWholeCustomEntry(t *testing.T) {
 	}
 }
 
-func TestRecoveryHelpersDoNotCertifyOuterCatalogEntries(t *testing.T) {
+func TestSharedHelpersDoNotCertifyOuterCatalogEntries(t *testing.T) {
 	definitions := BattleDefinitions{Gems: map[string]corebattle.GemEffect{
 		"supported": {Kind: corebattle.ActionKindAttack, Power: 10},
 	}}
-	for _, sourceID := range []int{19, 20, 21, 22, 23, 28, 29, 30, 31, 32, 33, 93, 94, 95, 96} {
+	for _, sourceID := range []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 28, 29, 30, 31, 32, 33, 72, 73, 93, 94, 95, 96} {
 		id := fmt.Sprintf("gem-%03d", sourceID)
 		for _, slots := range [][3]string{{"supported", id, ""}, {id, "supported", ""}} {
 			action, err := definitions.CustomAction("custom", "Recovery", "", 5, slots)
