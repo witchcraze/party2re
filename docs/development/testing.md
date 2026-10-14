@@ -96,13 +96,13 @@ Future development with multiple concurrent sessions should isolate each environ
 
 ### 5.2 Existing Dedicated Database Setup
 
-[`weeklyRotationDB`](../../internal/ranking/weekly_rotation_integration_test.go), [`contestIntegrationDB`](../../internal/contest/integration_test.go) and [`replayArchiveDB`](../../internal/api/http/replay_authorization_integration_test.go) already create unique databases, copy only required table definitions (including foreign keys) from `PARTY2_DB_DSN`, and drop only their own databases during cleanup. Weekly rotation workers retain separate connections and transactions; shared ranking rows are never cleared or restored by these fixtures.
+[`weeklyRotationDB`](../../internal/ranking/weekly_rotation_integration_test.go), [`contestIntegrationDB`](../../internal/contest/integration_test.go), [`homeIsolatedDB`](../../internal/home/integration_test.go) (copies all table definitions for the capacity-sensitive house build test) and [`replayArchiveDB`](../../internal/api/http/replay_authorization_integration_test.go) already create unique databases, copy only required table definitions (including foreign keys) from `PARTY2_DB_DSN`, and drop only their own databases during cleanup. Weekly rotation workers retain separate connections and transactions; shared ranking rows are never cleared or restored by these fixtures.
 
 `PARTY2_TEST_DB_ADMIN_DSN` must allow creating/dropping these databases. It is supplied by `make test-integration`, `make check`, and the development Compose test runner. For direct host runs with the local Compose services, set it to `root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails these DB-enabled tests rather than falling back to the shared database. This administrator connection is for tests only; ordinary shared-DB tests do not require database-creation privileges.
 
 ### 5.3 Known Implementation Gaps
 
-Some existing fixtures still violate the ownership policy: the [Lottery tests clear shared ticket/round tables (#1396)](https://github.com/witchcraze/party2re/issues/1396), and the [Home integration test deletes houses by town rather than fixture ownership (#1397)](https://github.com/witchcraze/party2re/issues/1397). These are pending corrections, not approved exceptions. This policy change does not modify tests or DB configuration.
+Some existing fixtures still violate the ownership policy: the [Lottery tests clear shared ticket/round tables (#1396)](https://github.com/witchcraze/party2re/issues/1396). This is a pending correction, not an approved exception. This policy change does not modify tests or DB configuration.
 
 ---
 
