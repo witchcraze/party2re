@@ -59,7 +59,7 @@ func TestDamageModifierBoundaries(t *testing.T) {
 			s.Fields.Default = tc.field
 			c.DamageCalls, c.AreaDamageCalls = tc.calls, tc.area
 			rng := &targetRNG{t: t, draws: tc.draws}
-			v := s.modifyDamage(&c, target, tc.power, tc.category, tc.direct, tc.normal, rng)
+			v := s.modifyDamage(&c, target, tc.power, tc.category, tc.direct, tc.normal, rng.Float64)
 			if v-tc.want > 1e-9 || tc.want-v > 1e-9 {
 				t.Fatal(v, tc.want)
 			}

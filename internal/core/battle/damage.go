@@ -133,7 +133,7 @@ func (s *LifetimeState) ApplyDamage(c *DamageContext, e TargetEffect, rng random
 		}
 	}
 	direct, normal := damageFlags(target.TargetEffect)
-	v := s.modifyDamage(c, t, target.Payload.Number, target.Category, direct, normal, rng)
+	v := s.modifyDamage(c, t, target.Payload.Number, target.Category, direct, normal, rng.Float64)
 	if v == 0 {
 		return r, nil
 	}
@@ -254,7 +254,7 @@ func (s *LifetimeState) ApplyAreaDamage(c *DamageContext, power float64, categor
 	if err != nil || !allowed {
 		return nil, err
 	}
-	initial := s.modifyDamage(c, nil, power, category, direct, false, rng)
+	initial := s.modifyDamage(c, nil, power, category, direct, false, rng.Float64)
 	c.AreaDamageCalls++
 	if s.actor(c.ActorID).Extended == ExtendedAdditional && category == CategoryMagic {
 		power *= 1.5

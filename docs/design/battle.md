@@ -604,8 +604,12 @@ intrinsic agility guard requires no skipped cursor/damage context. These are
 formula certifications with explicit prerequisites, not batch DTO or outer
 catalog certification. Fully admitted reset/defeat operations remain supplied
 by their existing owners; absence rejects reachable work before draws. Cosmic
-and antlion damage descendants remain gated for the named-field owner. Repeated
-hit admission accounts for previously consumed one-hit defense. All custom,
+and antlion damage descendants remain gated for the named-field owner. Admission
+follows ordered area targets or each repeated selection up to the producer's
+maximum hit count. Only defenses reachable in earlier invocations are projected
+as consumed; fully blocked attacks need no skipped damage-tail context. Confusion,
+reflection, category cures and later195 activation can make a target reachable
+again and must still reject unsupported tails before any draws or writes. All custom,
 random and delegated closures still require whole-entry admission through
 `skill.BattleDefinitions`; helper availability never enables a slot by itself.
 

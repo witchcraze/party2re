@@ -49,6 +49,19 @@ func damageGemBase(a *LifetimeActor, id int) (TargetEffect, bool) {
 	return e, area
 }
 
+func damageGemHitRange(sourceID int) (base, width int) {
+	base, width = 3, 2
+	switch sourceID {
+	case 7:
+		base = 7
+	case 8:
+		base = 2
+	case 9:
+		base, width = 2, 3
+	}
+	return
+}
+
 // ValidateDamageGem is shared by explicit discovery and execution. Whole-entry
 // admission remains separate from these finite formula certifications.
 func (s *LifetimeState) ValidateDamageGem(sourceID int, c *DamageContext, targetID string, rng random.Generator) error {
@@ -88,7 +101,12 @@ func (s *LifetimeState) ValidateDamageGem(sourceID int, c *DamageContext, target
 	}
 	if sourceID >= 6 && sourceID <= 9 {
 		e.TargetID = ""
-		return s.validateRepeatedDamage(c, e, rng)
+		base, width := damageGemHitRange(sourceID)
+		hits := base + width - 1
+		if s.actor(c.ActorID).HP <= 0 {
+			hits = 0
+		}
+		return s.validateRepeatedDamage(c, e, hits, rng)
 	}
 	if area {
 		e.TargetID = ""
@@ -110,17 +128,7 @@ func (s *LifetimeState) ApplyDamageGem(sourceID int, c *DamageContext, targetID 
 	var prefix []EffectApplication
 	switch sourceID {
 	case 6, 7, 8, 9:
-		base, width := 3, 2
-		if sourceID == 7 {
-			base = 7
-		}
-		if sourceID == 8 {
-			base = 2
-		}
-		if sourceID == 9 {
-			base, width = 2, 3
-			e.Category = CategoryDance
-		}
+		base, width := damageGemHitRange(sourceID)
 		hits := int(rng.Float64()*float64(width)) + base
 		var results []EffectApplication
 		for range hits {
@@ -195,21 +203,34 @@ func (s *LifetimeState) ApplyNormalAttack(c *DamageContext, targetID string, rng
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return nil, err
 	}
-	validate := s.ValidateDamage
-	if hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") || hasItem(s.actor(c.ActorID).ItemDefinitionIDs, "item-147") {
-		validate = s.validateRepeatedDamage
+	strikes := 1
+	if hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
+		strikes = 2
 	}
-	if err := validate(c, TargetEffect{TargetID: targetID, Category: CategoryPhysical, Payload: CallbackPayload{Number: float64(s.actor(c.ActorID).Attack)}, Arguments: []string{"0", "1"}}, rng); err != nil {
+	initialTargetID := targetID
+	if !slices.Contains(c.EnemyIDs, initialTargetID) {
+		initialTargetID = ""
+	}
+	hits := strikes
+	if hasItem(s.actor(c.ActorID).ItemDefinitionIDs, "item-147") && !c.ActorNPC {
+		ids := []string{initialTargetID}
+		if initialTargetID == "" {
+			ids = c.EnemyIDs
+		}
+		for _, id := range ids {
+			if s.actor(id).HP > 0 {
+				hits *= 2
+				break
+			}
+		}
+	}
+	if err := s.validateRepeatedDamage(c, TargetEffect{TargetID: initialTargetID, Category: CategoryPhysical, Payload: CallbackPayload{Number: float64(s.actor(c.ActorID).Attack)}, Arguments: []string{"0", "1"}}, hits, rng); err != nil {
 		return nil, err
 	}
 	if len(c.EnemyIDs) == 0 {
 		return nil, nil
 	}
 	var results []NormalHit
-	strikes := 1
-	if hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
-		strikes = 2
-	}
 	for range strikes {
 		a := s.actor(c.ActorID)
 		t := s.actor(targetID)

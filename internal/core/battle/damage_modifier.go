@@ -1,22 +1,20 @@
 package battle
 
-import "github.com/witchcraze/party2re/internal/core/random"
-
 // modifyDamage is the ordered damage branch of _ex_effect:9948–10129.
 // nil target is the area pre-evaluation's absent target, not the actor.
-func (s *LifetimeState) modifyDamage(c *DamageContext, t *LifetimeActor, v float64, category CallbackCategory, direct, normal bool, rng random.Generator) float64 {
+func (s *LifetimeState) modifyDamage(c *DamageContext, t *LifetimeActor, v float64, category CallbackCategory, direct, normal bool, draw func() float64) float64 {
 	a := s.actor(c.ActorID)
 	item := func(id string) bool { return hasItem(a.ItemDefinitionIDs, id) }
 	weapon := item
 	v = initialDamagePower(a, t, v, category, direct)
 	if t != nil {
 		if item("item-192") && t.Temporary != "" {
-			v = float64(int(v * (1.5 + rng.Float64()*.3)))
+			v = float64(int(v * (1.5 + draw()*.3)))
 		}
 		if t.Status == StatusKinju {
 			v *= 1.25
 		}
-		if hasItem(t.ItemDefinitionIDs, "item-190") && rng.Float64() < 1.0/6 {
+		if hasItem(t.ItemDefinitionIDs, "item-190") && draw() < 1.0/6 {
 			v *= .5
 		}
 	}
@@ -36,16 +34,16 @@ func (s *LifetimeState) modifyDamage(c *DamageContext, t *LifetimeActor, v float
 			v *= .3
 		}
 	}
-	if weapon("weapon-34") && category == CategoryMagic && rng.Float64() < .25 {
+	if weapon("weapon-34") && category == CategoryMagic && draw() < .25 {
 		v *= 1.2
 	}
-	if weapon("weapon-35") && category == CategoryPhysical && rng.Float64() < .25 {
+	if weapon("weapon-35") && category == CategoryPhysical && draw() < .25 {
 		v *= 1.2
 	}
 	if weapon("weapon-36") && category == CategoryBreath {
 		v *= 1.2
 	}
-	if (weapon("weapon-37") || weapon("weapon-63")) && rng.Float64() < .125 {
+	if (weapon("weapon-37") || weapon("weapon-63")) && draw() < .125 {
 		v *= 1.5
 	}
 	if weapon("weapon-68") && float64(a.HP) <= float64(a.MaxHP)*.3 {
