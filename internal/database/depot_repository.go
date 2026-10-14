@@ -81,7 +81,7 @@ func (r *DepotRepository) FindByCharacterIDForUpdate(ctx context.Context, charac
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
-		ORDER BY sort_position, id FOR UPDATE
+		ORDER BY sort_position, id
 	`, characterID)
 	if err != nil {
 		return depot.Depot{}, err

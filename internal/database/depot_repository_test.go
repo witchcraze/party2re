@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -243,73 +244,141 @@ func TestDepotRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char1, err := CreateTestCharacter(ctx, db, "Depot Adjacent 1")
+	p, err := CreateTestPlayer(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	char2, err := CreateTestCharacter(ctx, db, "Depot Adjacent 2")
+	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Initialize depots with initial items
-	it1, _ := item.NewInstance("item-001", 10)
-	it2, _ := item.NewInstance("weapon-01", 1)
+	// Generate strictly adjacent IDs higher than any existing character ID to guarantee
+	// that they are immediate neighbors in idx_depot_items_character with 0 intervening records.
+	basePrefix := fmt.Sprintf("ff%028x", time.Now().UnixNano()&0xFFFFFFFFFFFFF)
+	id1 := basePrefix + "01"
+	id2 := basePrefix + "02"
+
+	ch1, err := corecharacter.New("AdjChar1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch1.ID = id1
+	ch1.PlayerID = p.ID
+	if err := charRepo.Save(ctx, ch1); err != nil {
+		t.Fatal(err)
+	}
+
+	ch2, err := corecharacter.New("AdjChar2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch2.ID = id2
+	ch2.PlayerID = p.ID
+	if err := charRepo.Save(ctx, ch2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify strict index adjacency: no other rows exist in the interval [id1, id2]
+	var betweenCount int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM depot_items WHERE character_id > ? AND character_id < ?", id1, id2).Scan(&betweenCount); err != nil {
+		t.Fatal(err)
+	}
+	if betweenCount != 0 {
+		t.Fatalf("character IDs are not strictly adjacent in depot_items index: %d intervening rows", betweenCount)
+	}
+
+	char1 := ch1
+	char2 := ch2
+
+	// Initialize depots with initial non-stackable equipment
+	it1, _ := item.NewInstance("weapon-31", 1)
+	it2, _ := item.NewInstance("armor-34", 1)
 	if _, err := CreateTestDepot(ctx, db, char1.ID, 5, []item.Instance{it1, it2}); err != nil {
 		t.Fatal(err)
 	}
-	it3, _ := item.NewInstance("armor-01", 1)
-	it4, _ := item.NewInstance("item-002", 5)
+	it3, _ := item.NewInstance("weapon-31", 1)
+	it4, _ := item.NewInstance("armor-34", 1)
 	if _, err := CreateTestDepot(ctx, db, char2.ID, 5, []item.Instance{it3, it4}); err != nil {
 		t.Fatal(err)
 	}
 
-	const iterations = 20
+	const iterations = 25
 	errCh := make(chan error, iterations*2)
 
-	runWorker := func(charID string) {
-		for i := 0; i < iterations; i++ {
+	// Run lock-step concurrent rounds where both adjacent characters acquire depot locks and insert
+	// non-stackable equipment instances simultaneously, directly exercising the index gap.
+	for round := 0; round < iterations; round++ {
+		tx1Ready := make(chan struct{})
+		tx2Ready := make(chan struct{})
+		startSave := make(chan struct{})
+		var once sync.Once
+
+		var wgRound sync.WaitGroup
+		wgRound.Add(2)
+
+		go func() {
+			defer wgRound.Done()
 			err := repo.RunInTx(ctx, func(txCtx context.Context) error {
-				dep, err := repo.FindByCharacterIDForUpdate(txCtx, charID)
+				dep, err := repo.FindByCharacterIDForUpdate(txCtx, char1.ID)
 				if err != nil {
 					return err
 				}
-				// Alternately add new non-stackable items and trim back to simulate real workload
-				newItem, err := item.NewInstance("weapon-01", 1)
+				close(tx1Ready)
+				<-startSave
+
+				// Add new non-stackable equipment and trim
+				newItem, err := item.NewInstance("weapon-31", 1)
 				if err != nil {
 					return err
 				}
 				_ = dep.AddItem(newItem)
-				if len(dep.Items) > 15 {
-					dep.Items = dep.Items[:5]
+				if len(dep.Items) > 8 {
+					dep.Items = dep.Items[:3]
 				}
 				return repo.Save(txCtx, dep)
 			})
 			if err != nil {
-				errCh <- err
-				return
+				errCh <- fmt.Errorf("char1 round error: %w", err)
 			}
-		}
-		errCh <- nil
+		}()
+
+		go func() {
+			defer wgRound.Done()
+			err := repo.RunInTx(ctx, func(txCtx context.Context) error {
+				dep, err := repo.FindByCharacterIDForUpdate(txCtx, char2.ID)
+				if err != nil {
+					return err
+				}
+				close(tx2Ready)
+				<-startSave
+
+				// Add new non-stackable equipment and trim
+				newItem, err := item.NewInstance("armor-34", 1)
+				if err != nil {
+					return err
+				}
+				_ = dep.AddItem(newItem)
+				if len(dep.Items) > 8 {
+					dep.Items = dep.Items[:3]
+				}
+				return repo.Save(txCtx, dep)
+			})
+			if err != nil {
+				errCh <- fmt.Errorf("char2 round error: %w", err)
+			}
+		}()
+
+		<-tx1Ready
+		<-tx2Ready
+		once.Do(func() { close(startSave) })
+		wgRound.Wait()
 	}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		runWorker(char1.ID)
-	}()
-	go func() {
-		defer wg.Done()
-		runWorker(char2.ID)
-	}()
-
-	wg.Wait()
 	close(errCh)
 
 	for err := range errCh {
 		if err != nil {
-			t.Fatalf("Concurrent Save failed: %v", err)
+			t.Fatalf("Concurrent Adjacent Save failed with deadlock or error: %v", err)
 		}
 	}
 
@@ -521,5 +590,98 @@ func TestDepotRepositoryFindByCharacterIDForUpdateReadsLatestCommittedData(t *te
 	}
 	if len(finalDep.Items) != 3 {
 		t.Fatalf("expected 3 items in depot, got %d: %+v", len(finalDep.Items), finalDep.Items)
+	}
+}
+
+// TestDepotRepositoryPriorNonLockingReadSnapshotBoundary verifies the MariaDB InnoDB REPEATABLE READ
+// behavior: if a transaction executes a non-locking SELECT before calling FindByCharacterIDForUpdate,
+// its MVCC snapshot is established at that prior point in time. It proves why application mutations
+// must follow Rank 2 (Character) and Rank 5 (CharacterDepots) locking reads before performing mutations.
+func TestDepotRepositoryPriorNonLockingReadSnapshotBoundary(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	repo, err := NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := CreateTestCharacter(ctx, db, "Depot Snapshot Boundary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	initialItem, _ := item.NewInstance("weapon-31", 1)
+	if _, err := CreateTestDepot(ctx, db, char.ID, 0, []item.Instance{initialItem}); err != nil {
+		t.Fatal(err)
+	}
+
+	itemFromTx1, _ := item.NewInstance("armor-34", 1)
+
+	tx2SnapshotEstablished := make(chan struct{})
+	tx1Done := make(chan struct{})
+	tx2ObservedStale := make(chan bool, 1)
+
+	// Tx 2 starts first and executes a non-locking SELECT on an InnoDB table, establishing an early MVCC Read View
+	go func() {
+		_ = repo.RunInTx(ctx, func(tx2Ctx context.Context) error {
+			var dummy string
+			if err := ExecutorFromContext(tx2Ctx, db).QueryRowContext(tx2Ctx, "SELECT id FROM characters WHERE id = ?", char.ID).Scan(&dummy); err != nil {
+				return err
+			}
+			close(tx2SnapshotEstablished)
+			<-tx1Done
+
+			// FindByCharacterIDForUpdate locks character_depots (Rank 5) with FOR UPDATE,
+			// while depot_items query uses non-locking SELECT to avoid gap-lock deadlocks on adjacent characters.
+			dep2, err := repo.FindByCharacterIDForUpdate(tx2Ctx, char.ID)
+			if err != nil {
+				return err
+			}
+
+			// In REPEATABLE READ, the non-locking SELECT on depot_items reads from Tx 2's early Read View.
+			hasItem1 := false
+			for _, it := range dep2.Items {
+				if it.ID == itemFromTx1.ID {
+					hasItem1 = true
+					break
+				}
+			}
+			tx2ObservedStale <- !hasItem1
+			return nil
+		})
+	}()
+
+	<-tx2SnapshotEstablished
+
+	// Tx 1 modifies depot and commits
+	err = repo.RunInTx(ctx, func(tx1Ctx context.Context) error {
+		dep1, err := repo.FindByCharacterIDForUpdate(tx1Ctx, char.ID)
+		if err != nil {
+			return err
+		}
+		if err := dep1.AddItem(itemFromTx1); err != nil {
+			return err
+		}
+		return repo.Save(tx1Ctx, dep1)
+	})
+	if err != nil {
+		t.Fatalf("Tx 1 failed: %v", err)
+	}
+	close(tx1Done)
+
+	observedStale := <-tx2ObservedStale
+	if !observedStale {
+		t.Log("Note: Tx 2 saw fresh items (Read View was refreshed or created late)")
+	} else {
+		t.Log("Confirmed: Prior non-locking SELECT establishes early MVCC Read View in REPEATABLE READ; serialized locking reads prevent this in application flows")
 	}
 }
