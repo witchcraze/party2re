@@ -7,7 +7,7 @@ To prevent context window flooding, the monolithic rules previously stored here 
 ## Available Rule Modules
 
 - **`.agents/rules/00-migration-constraints.md`**: Absolute constraints for transitioning from the original Party2 implementation (Clean-room rules, IP protection).
-- **`.agents/rules/01-development-workflow.md`**: Rules for Branching, PRs, Issue Templates, TDD, Token Budgeting, and Definition of Done.
+- **`.agents/rules/01-development-workflow.md`**: Rules for Branching, PRs, Issue Templates, TDD, test database ownership/isolation, Token Budgeting, and Definition of Done.
 - **`.agents/rules/02-documentation-sync.md`**: Rules for maintaining the Single Source of Truth (SSOT) and synchronizing documents within Pull Requests.
 - **`.agents/rules/03-architecture.md`**: Guidelines for system architecture, modular monolith design, layer boundaries, and API connections.
 - **`.agents/rules/04-domain-modeling.md`**: Guidelines for modeling game logic, combat, progression, and scheduled actions.
@@ -47,6 +47,8 @@ AGENTS.md (and .agents/rules/)
 Do not use `STATUS.md` or `ROADMAP.md` as substitutes for permanent architecture/design documentation.
 
 Update the owning documents when a change makes their explanations outdated, as defined in `.agents/rules/02-documentation-sync.md`. Do not append completion records for each Issue/PR or routinely update the frozen inventory. Use [`docs/README.md`](docs/README.md) to locate current contracts, gaps and historical evidence.
+
+For database tests, apply the [test database rules](.agents/rules/01-development-workflow.md#test-database-ownership-and-isolation); [`docs/development/testing.md`](docs/development/testing.md#51-database-ownership-and-isolation) owns the operating procedure and isolation examples.
 
 ### Rules vs. Architecture Docs — Placement Criteria
 

@@ -72,7 +72,37 @@ make db-reset
 - **Explicit Setup over Magic**: Test helpers must not obscure what is being tested. Explicit setup is preferred over implicit abstraction.
 - **Reproducible Outcomes**: For exact outcome assertions, inject controlled RNG and clock inputs. Randomized tests should report their seed for replay.
 - **Shared Factories**: Use centralized test factories (`CreateTestPlayer`, `CreateTestCharacterWithFunds`, `CreateTestGuildWithLeader`) for integration tests to ensure unique IDs and valid name lengths.
-- **Weekly ranking rotations**: Tests that commit global weekly resets use a unique database per test, copying only the required table definitions (including foreign keys) from `PARTY2_DB_DSN`. Workers retain separate connections and transactions. `PARTY2_TEST_DB_ADMIN_DSN` must allow creating/dropping these databases; it is supplied by `make test-integration`, `make check`, and the development Compose test runner. For direct host runs with the local Compose services, set it to `root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails DB-enabled weekly tests rather than falling back to the shared database. Cleanup drops only the database created by that test; shared ranking rows are never cleared or restored by these fixtures. This administrator connection is for tests only.
+
+### 5.1 Database Ownership and Isolation
+
+The [workflow rule](../../.agents/rules/01-development-workflow.md#test-database-ownership-and-isolation) defines mandatory constraints. Ordinary DB-backed tests share the database selected by `PARTY2_DB_DSN` within one environment. Unit tests without a database dependency do not need a DB. Shared fixtures can coexist with temporary local development data; neither an empty database nor cleanup of every fixture after every test is a default requirement.
+
+Choose the smallest isolation boundary that preserves the behavior being verified:
+
+| Verification need | Approach |
+| --- | --- |
+| Assertions can identify the test's own records | Shared DB; use unique fixture identifiers and scope assertions/optional cleanup to those records and their dependents |
+| SQL/migration assertions fit entirely within a connection-local temporary table or a guaranteed rollback transaction | Keep that existing isolation when it cannot change unrelated data or compromise concurrent tests |
+| Global counts, capacity limits, resets or lifecycle operations cannot be checked reliably alongside unrelated data | Dedicated DB; freely create, update, delete or reset data inside it |
+| Real commits or independent worker transactions are part of the behavior | Retain those boundaries; use a dedicated DB if interference would otherwise prevent accurate verification |
+
+Cleanup such as `DELETE ... WHERE character_id = ?` is appropriate when the character and affected dependent rows belong to that fixture. A common town ID, a test-like name prefix, absence of `t.Parallel()` or a cooperating test mutex does not establish ownership of all matching data. Go packages can run concurrently even when individual tests are sequential. Deleting shared rows and later restoring them can erase another test's writes.
+
+The existing repository reset assertion in [`ranking_extra_repository_test.go`](../../internal/database/ranking_extra_repository_test.go) keeps its mutation and reads in one transaction and rolls back before checking the fixture again outside it. This does not verify committed cross-connection behavior. If rollback cannot contain every write, or locking interferes with other tests, use a dedicated DB. Connection-local temporary tables in [`job_points_migration_test.go`](../../internal/database/job_points_migration_test.go) and [`replay_migration_test.go`](../../internal/database/replay_migration_test.go) isolate migration fixtures without clearing persistent tables; their connection boundary must be preserved.
+
+Environment-wide initialization/disposal is separate from per-test setup/cleanup. A fresh CI job may initialize and discard its whole environment; a developer may explicitly reset a local environment between uses. These permissions do not authorize an individual shared-DB test to clear unrelated rows. See [local reset procedures](development-environment.md#database-initialization-and-migration) and [CI environment lifetime](ci-cd.md#test-environment-lifetime).
+
+Future development with multiple concurrent sessions should isolate each environment's DB, cache and runtime resources. This policy does not add session provisioning or change the current Compose configuration.
+
+### 5.2 Existing Dedicated Database Setup
+
+[`weeklyRotationDB`](../../internal/ranking/weekly_rotation_integration_test.go), [`contestIntegrationDB`](../../internal/contest/integration_test.go) and [`replayArchiveDB`](../../internal/api/http/replay_authorization_integration_test.go) already create unique databases, copy only required table definitions (including foreign keys) from `PARTY2_DB_DSN`, and drop only their own databases during cleanup. Weekly rotation workers retain separate connections and transactions; shared ranking rows are never cleared or restored by these fixtures.
+
+`PARTY2_TEST_DB_ADMIN_DSN` must allow creating/dropping these databases. It is supplied by `make test-integration`, `make check`, and the development Compose test runner. For direct host runs with the local Compose services, set it to `root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails these DB-enabled tests rather than falling back to the shared database. This administrator connection is for tests only; ordinary shared-DB tests do not require database-creation privileges.
+
+### 5.3 Known Implementation Gaps
+
+Some existing fixtures still violate the ownership policy: the [Lottery tests clear shared ticket/round tables (#1396)](https://github.com/witchcraze/party2re/issues/1396), and the [Home integration test deletes houses by town rather than fixture ownership (#1397)](https://github.com/witchcraze/party2re/issues/1397). These are pending corrections, not approved exceptions. This policy change does not modify tests or DB configuration.
 
 ---
 
