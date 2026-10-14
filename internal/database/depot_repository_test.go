@@ -2,11 +2,13 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"reflect"
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -272,13 +274,13 @@ func TestDepotRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				// Alternately add new items and trim back to avoid capacity overflow
-				newItem, err := item.NewInstance("item-001", 1)
+				// Alternately add new non-stackable items and trim back to simulate real workload
+				newItem, err := item.NewInstance("weapon-01", 1)
 				if err != nil {
 					return err
 				}
 				_ = dep.AddItem(newItem)
-				if len(dep.Items) > 10 {
+				if len(dep.Items) > 15 {
 					dep.Items = dep.Items[:5]
 				}
 				return repo.Save(txCtx, dep)
@@ -326,5 +328,198 @@ func TestDepotRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 	}
 	if len(d2.Items) == 0 {
 		t.Errorf("char2 depot should have items")
+	}
+
+	// Verify database ownership integrity directly:
+	// depot_items for char1 must strictly have character_id = char1.ID and vice versa
+	for _, it := range d1.Items {
+		var owner string
+		if err := db.QueryRowContext(ctx, "SELECT character_id FROM depot_items WHERE id = ?", it.ID).Scan(&owner); err != nil {
+			t.Fatalf("query item %s owner error: %v", it.ID, err)
+		}
+		if owner != char1.ID {
+			t.Errorf("item %s owned by %s, want %s", it.ID, owner, char1.ID)
+		}
+	}
+	for _, it := range d2.Items {
+		var owner string
+		if err := db.QueryRowContext(ctx, "SELECT character_id FROM depot_items WHERE id = ?", it.ID).Scan(&owner); err != nil {
+			t.Fatalf("query item %s owner error: %v", it.ID, err)
+		}
+		if owner != char2.ID {
+			t.Errorf("item %s owned by %s, want %s", it.ID, owner, char2.ID)
+		}
+	}
+}
+
+func TestDepotRepositoryCannotUpdateOtherCharacterItem(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	repo, err := NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char1, err := CreateTestCharacter(ctx, db, "Depot Owner 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char2, err := CreateTestCharacter(ctx, db, "Depot Owner 2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Char 1 saves an initial item
+	origItem := item.Instance{
+		ID:               char1.ID[:30] + "01",
+		DefinitionID:     "weapon-01",
+		Quantity:         1,
+		EnhancementLevel: 5,
+	}
+	if _, err := CreateTestDepot(ctx, db, char1.ID, 0, []item.Instance{origItem}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Char 2 attempts to save depot containing an item sharing Char 1's instance ID
+	hijackedItem := item.Instance{
+		ID:               origItem.ID,
+		DefinitionID:     "armor-99",
+		Quantity:         99,
+		EnhancementLevel: 9,
+	}
+	dep2, err := depot.NewDepot(char2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dep2.Items = []item.Instance{hijackedItem}
+
+	err = repo.Save(ctx, dep2)
+	if err == nil {
+		t.Fatal("expected error when saving depot with item ID owned by another character, got nil")
+	}
+
+	// Verify Char 1's depot is completely untouched
+	d1, err := repo.FindByCharacterID(ctx, char1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d1.Items) != 1 || d1.Items[0] != origItem {
+		t.Fatalf("char1's item was modified or corrupted: got %+v, want %+v", d1.Items, []item.Instance{origItem})
+	}
+}
+
+func TestDepotRepositoryFindByCharacterIDForUpdateReadsLatestCommittedData(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	repo, err := NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := CreateTestCharacter(ctx, db, "Depot Freshness Test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	itemInitial, _ := item.NewInstance("weapon-01", 1)
+	if _, err := CreateTestDepot(ctx, db, char.ID, 0, []item.Instance{itemInitial}); err != nil {
+		t.Fatal(err)
+	}
+
+	itemFromTrx1, _ := item.NewInstance("armor-01", 1)
+	itemFromTrx2, _ := item.NewInstance("item-001", 5)
+
+	trx1Started := make(chan struct{})
+	trx1CanCommit := make(chan struct{})
+	trx2Done := make(chan error, 1)
+
+	// Trx 1 acquires lock on char's depot, adds itemFromTrx1, but holds transaction open
+	go func() {
+		_ = repo.RunInTx(ctx, func(tx1Ctx context.Context) error {
+			dep1, err := repo.FindByCharacterIDForUpdate(tx1Ctx, char.ID)
+			if err != nil {
+				t.Errorf("Trx 1 FindByCharacterIDForUpdate error: %v", err)
+				close(trx1Started)
+				return err
+			}
+			if err := dep1.AddItem(itemFromTrx1); err != nil {
+				t.Errorf("Trx 1 AddItem error: %v", err)
+				close(trx1Started)
+				return err
+			}
+			if err := repo.Save(tx1Ctx, dep1); err != nil {
+				t.Errorf("Trx 1 Save error: %v", err)
+				close(trx1Started)
+				return err
+			}
+			close(trx1Started)
+			<-trx1CanCommit
+			return nil
+		})
+	}()
+
+	<-trx1Started
+
+	// Trx 2 tries to call FindByCharacterIDForUpdate concurrently.
+	// It must block until Trx 1 commits, then read Trx 1's newly committed item (not stale snapshot).
+	go func() {
+		trx2Done <- repo.RunInTx(ctx, func(tx2Ctx context.Context) error {
+			dep2, err := repo.FindByCharacterIDForUpdate(tx2Ctx, char.ID)
+			if err != nil {
+				return err
+			}
+			// Verify Trx 2 sees Trx 1's newly committed item
+			hasItem1 := false
+			for _, it := range dep2.Items {
+				if it.ID == itemFromTrx1.ID {
+					hasItem1 = true
+					break
+				}
+			}
+			if !hasItem1 {
+				return fmt.Errorf("stale read: dep2 missing itemFromTrx1: %+v", dep2.Items)
+			}
+			if err := dep2.AddItem(itemFromTrx2); err != nil {
+				return err
+			}
+			return repo.Save(tx2Ctx, dep2)
+		})
+	}()
+
+	// Wait briefly to ensure Trx 2 is blocked waiting on Trx 1's row lock
+	time.Sleep(50 * time.Millisecond)
+
+	// Unblock Trx 1 to commit
+	close(trx1CanCommit)
+
+	if err := <-trx2Done; err != nil {
+		t.Fatalf("Trx 2 failed: %v", err)
+	}
+
+	// Final verification: depot must contain all 3 items (initial, Trx 1, Trx 2)
+	finalDep, err := repo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(finalDep.Items) != 3 {
+		t.Fatalf("expected 3 items in depot, got %d: %+v", len(finalDep.Items), finalDep.Items)
 	}
 }

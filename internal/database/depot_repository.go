@@ -81,7 +81,7 @@ func (r *DepotRepository) FindByCharacterIDForUpdate(ctx context.Context, charac
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
-		ORDER BY sort_position, id
+		ORDER BY sort_position, id FOR UPDATE
 	`, characterID)
 	if err != nil {
 		return depot.Depot{}, err
@@ -145,11 +145,15 @@ func saveDepotTx(ctx context.Context, executor sqlContextExecutor, value depot.D
 			INSERT INTO depot_items (id, character_id, definition_id, quantity, enhancement_level, sort_position)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON DUPLICATE KEY UPDATE
-				definition_id = VALUES(definition_id),
-				quantity = VALUES(quantity),
-				enhancement_level = VALUES(enhancement_level),
-				sort_position = VALUES(sort_position)
+				character_id = IF(character_id = VALUES(character_id), character_id, NULL),
+				definition_id = IF(character_id = VALUES(character_id), VALUES(definition_id), definition_id),
+				quantity = IF(character_id = VALUES(character_id), VALUES(quantity), quantity),
+				enhancement_level = IF(character_id = VALUES(character_id), VALUES(enhancement_level), enhancement_level),
+				sort_position = IF(character_id = VALUES(character_id), VALUES(sort_position), sort_position)
 		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel, idx); err != nil {
+			if strings.Contains(err.Error(), "character_id") && strings.Contains(err.Error(), "cannot be null") {
+				return fmt.Errorf("item %s belongs to another character: %w", instance.ID, err)
+			}
 			return err
 		}
 	}
