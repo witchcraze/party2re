@@ -46,6 +46,8 @@ helper. A callback error prevents successful transaction completion.
 
 Repositories obtain the executor from the context. `database.RunInTx` reuses
 an ambient transaction; nested calls are not independent commits or savepoints.
+Root transactions use `READ COMMITTED` (`sql.LevelReadCommitted`) to eliminate
+secondary index gap lock deadlocks and stale snapshots under MariaDB InnoDB.
 Rank order applies to acquiring new locks, not merely the textual order of
 updates to rows already locked. The complete hierarchy is owned by
 [the database rules](../../.agents/rules/05-database-and-caching.md).

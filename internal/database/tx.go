@@ -13,14 +13,24 @@ type sqlContextExecutor interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-// RunInTx executes the given function within a database transaction.
+// RunInTx executes the given function within a database transaction using READ COMMITTED isolation.
 // If the context already contains a transaction, it reuses it.
 func RunInTx(ctx context.Context, db *sql.DB, fn func(ctx context.Context) error) error {
+	return RunInTxWithOptions(ctx, db, &sql.TxOptions{Isolation: sql.LevelReadCommitted}, fn)
+}
+
+// RunInTxWithOptions executes the given function within a database transaction with the specified options.
+// If the context already contains an ambient transaction, it reuses it without re-configuring isolation options.
+func RunInTxWithOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
 	if TxFromContext(ctx) != nil {
 		return fn(ctx)
 	}
 
-	tx, err := db.BeginTx(ctx, nil)
+	if opts == nil {
+		opts = &sql.TxOptions{Isolation: sql.LevelReadCommitted}
+	}
+
+	tx, err := db.BeginTx(ctx, opts)
 	if err != nil {
 		return err
 	}
