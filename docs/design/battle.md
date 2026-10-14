@@ -566,6 +566,49 @@ Unknown temporaries have no registered hook and preserve tool input values.
 tool heal before144/239 and the bound/poison recovery modifiers. MP owners reuse
 that segment without adopting HP writes; MP drain/exclusions remain separate.
 
+Explicit damage consumes each producer's base power. Direct and normal-attack
+flags are independent of callback category and element. Resolve targets and
+temporary redirects first, return on zero, count the invocation, redirect a
+fallen continuation to the actor, consume one-hit defense, then test physical
+hit/evasion. The accuracy comparison is strict (`hit < draw×100`); the hit and
+agility draws precede the binding/forbidden-status and weapon63 exceptions.
+Critical power is current AT×0.75 at the normal-attack producer, not an extra
+multiplier in the helper, and direct alone does not skip hit checks.
+
+Damage modifiers follow `_skill.cgi:9948–10129`, including strict magic143
+and area144 thresholds, independent direct/normal predicates, and item239's
+second/third/fourth invocation bonuses only outside area damage. Purification
+resets after modifiers while preserving target status/tension. The defense term
+uses resolved current DF **plus separately evaluated armor DF**, then attacker
+181/187 and target162 rules. Tension precedes mitigation;149 instead modifies
+base power and retains tension. Direct bypasses mitigation except physical
+against162 or baseDF>999. Random variation is applied once; only a result below1
+draws the1-or-2 fallback. Damage activates185/195 before defeat, then surviving
+physical162 defense increase takes precedence over interception. Interception
+uses an untyped-package, direct, nonlethal tool hit, consumes one-hit defense,
+and decrements even when blocked; it neither counts another damage invocation
+nor inherits the lexical physical category. Darkness records the first eligible
+hit before seal11's reset, which preserves target tension. Evaluated gear terms
+survive reload and are not redrawn or inferred from current buffs.
+The explicit actor adapter supplies equipped weapon/armor/accessory identities;
+bag contents do not activate these modifiers.
+
+`ApplyDamage`/`ApplyAreaDamage` and finite `ApplyDamageGem` producers cover
+sources1–18,26,72–73 (`_data.cgi:2089–2106,2114,2160–2161`), including each
+multi-hit draw, successful-damage recoil3, drain26's original capped power for
+healing, and72's unconditional actor defeat call. Normal attack preserves
+seal10 and147 additional-hit predicates. `ApplyExtension201` requires represented
+item150/item159 cursor provenance; its write uses the cursor **after** damage,
+including a nested reset's cursor change, then restores actor agility. Its
+intrinsic agility guard requires no skipped cursor/damage context. These are
+formula certifications with explicit prerequisites, not batch DTO or outer
+catalog certification. Fully admitted reset/defeat operations remain supplied
+by their existing owners; absence rejects reachable work before draws. Cosmic
+and antlion damage descendants remain gated for the named-field owner. Repeated
+hit admission accounts for previously consumed one-hit defense. All custom,
+random and delegated closures still require whole-entry admission through
+`skill.BattleDefinitions`; helper availability never enables a slot by itself.
+
 Concrete producer formulas in `ApplyRecoveryStatGem` are source19–23 (single,
 self-untyped and party healing),28–33 (self-physical or targeted-magic AT/DF/AG
 doubling), and93–96 (party enemy AT/DF/AG/hit reduction), evidenced at

@@ -9,9 +9,49 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/random"
 )
+
+func TestLifetimeGearUsesEquippedIdentities(t *testing.T) {
+	chars, inventory, equipment := newMockCharRepo(), newMockInvRepo(), newMockEquipRepo()
+	char := corecharacter.Character{ID: "gear", JobID: "job-01", Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 100, Defense: 100, Agility: 100}}
+	chars.characters[char.ID] = char
+	inv, err := coreinventory.New(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equip, err := coreequipment.New(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"weapon-35", "item-143", "item-149"} {
+		instance, err := coreitem.NewInstance(id, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := inv.Add(instance); err != nil {
+			t.Fatal(err)
+		}
+		if id == "item-143" {
+			equip.Slots[coreitem.SlotAccessory] = instance.ID
+		}
+	}
+	if err := inventory.Save(context.Background(), inv); err != nil {
+		t.Fatal(err)
+	}
+	if err := equipment.Save(context.Background(), equip); err != nil {
+		t.Fatal(err)
+	}
+	svc := battle.NewService(battle.WithCharacterRepository(chars), battle.WithInventoryRepository(inventory), battle.WithEquipmentRepository(equipment), battle.WithJobHistoryRepository(&historyReadStub{err: corejob.ErrCharacterJobNotFound}))
+	a, err := svc.BuildLifetimeActor(context.Background(), char.ID, "")
+	if err != nil || !reflect.DeepEqual(a.ItemDefinitionIDs, []string{"item-143"}) || a.Gear == nil || a.Gear.WeaponID != "" || a.Gear.AccessoryID != "item-143" {
+		t.Fatal(a, err)
+	}
+}
 
 type historyReadStub struct {
 	state corejob.CharacterJob

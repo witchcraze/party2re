@@ -387,8 +387,11 @@ accepted no-effect versus rejection, actor/target context and suppressed tails.
 The #1343 decomposition separates native target, damage, recovery/stat, status/reset
 and field/composite work. Explicit recovery/stat operations preserve base/current
 stats, helper outcomes and ordered incidental effects as described in the shared
-contract; their finite producer formulas do not admit outer custom/random/calling
-closures. The consumer must preflight all descendants and required damage,
+contract. Explicit single/area damage, finite damage-gem formulas and immediate
+recoil preserve ordered modifiers, hit counts and success-dependent tails in
+that same contract; gear terms must be saved rather than redrawn on reload.
+Their finite producer formulas do not admit outer custom/random/calling
+closures. The consumer must preflight all descendants and required reset/defeat, damage,
 requester and cursor context before costs or committed RNG. The #1367
 [callback context contract](battle.md#callback-context-and-failure-admission)
 distinguishes the requesting player, temporary actor, package target cursor,

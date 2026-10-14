@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -15,6 +16,7 @@ type EquipmentStats struct {
 	AttackBonus  int
 	DefenseBonus int
 	AgilityBonus int
+	Gear         corebattle.BattleGearStats
 }
 
 // CalculateEquipmentStats computes attack, defense, and agility modifications from equipped items
@@ -46,6 +48,8 @@ func CalculateEquipmentStats(
 			hasWeapon = true
 			atk, wt := calculateWeaponStats(inst.DefinitionID, char, rng, hasExAmuletOrAwakening)
 			weaponAtk = atk
+			stats.Gear.WeaponWeight = wt
+			stats.Gear.WeaponID = inst.DefinitionID
 			stats.AttackBonus += atk
 			stats.AgilityBonus -= wt
 		}
@@ -55,6 +59,8 @@ func CalculateEquipmentStats(
 	if instID, ok := equip.Equipped(coreitem.SlotBody); ok {
 		if inst, found := inv.Find(instID); found {
 			def, wt := calculateArmorStats(inst.DefinitionID, char, rng)
+			stats.Gear.ArmorDefense, stats.Gear.ArmorWeight = def, wt
+			stats.Gear.ArmorID = inst.DefinitionID
 			stats.DefenseBonus += def
 			stats.AgilityBonus -= wt
 		}
@@ -64,6 +70,7 @@ func CalculateEquipmentStats(
 	if instID, ok := equip.Equipped(coreitem.SlotAccessory); ok {
 		if inst, found := inv.Find(instID); found {
 			atk, def, agi := calculateAccessoryStats(inst.DefinitionID)
+			stats.Gear.AccessoryID = inst.DefinitionID
 			stats.AttackBonus += atk
 			stats.DefenseBonus += def
 			stats.AgilityBonus += agi
