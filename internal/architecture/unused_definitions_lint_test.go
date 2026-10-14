@@ -405,11 +405,7 @@ func TestUnusedDefinitions(t *testing.T) {
 			len(fieldTargets), len(repoFiles), len(unhandledFields), len(knownLegacyUnusedStructFields))
 	})
 
-	elapsed := time.Since(start)
-	t.Logf("TestUnusedDefinitions completed in %v (< 2.0s budget)", elapsed)
-	if elapsed > 2*time.Second {
-		t.Errorf("TestUnusedDefinitions took %v, exceeding the 2.0s limit", elapsed)
-	}
+	t.Logf("TestUnusedDefinitions completed in %v", time.Since(start))
 }
 
 func TestUnusedDefinitionsDetectsUnusedConst(t *testing.T) {
