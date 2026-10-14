@@ -86,10 +86,19 @@ func (m *mockRepository) CancelByActorID(ctx context.Context, actorID string) (i
 type mockHandler struct {
 	handled bool
 	err     error
+	// called, when non-nil, receives a signal after each handled action so tests
+	// running the worker in a goroutine can wait without racing on handled.
+	called chan struct{}
 }
 
 func (h *mockHandler) Handle(ctx context.Context, action core_scheduling.ScheduledAction) error {
 	h.handled = true
+	if h.called != nil {
+		select {
+		case h.called <- struct{}{}:
+		default:
+		}
+	}
 	return h.err
 }
 
@@ -215,7 +224,7 @@ func TestWorker_Run_TickerExecution(t *testing.T) {
 	logger := &mockLogger{}
 	worker := NewWorker(repo, 10*time.Millisecond, logger)
 
-	handler := &mockHandler{}
+	handler := &mockHandler{called: make(chan struct{}, 1)}
 	worker.RegisterHandler("tick_action", handler)
 
 	action := core_scheduling.ScheduledAction{
@@ -230,15 +239,25 @@ func TestWorker_Run_TickerExecution(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go worker.Run(ctx)
+	done := make(chan struct{})
+	go func() {
+		worker.Run(ctx)
+		close(done)
+	}()
 
-	// Wait for ticker to trigger processActions
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if handler.handled {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
+	// Wait for ticker to trigger the handler (dead-man bound only).
+	select {
+	case <-handler.called:
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected handler to be invoked by worker ticker")
+	}
+
+	// Stop the worker and wait for exit; the close(done) edge makes handled safe to read.
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker.Run did not stop after context cancellation")
 	}
 
 	if !handler.handled {
