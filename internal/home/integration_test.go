@@ -3,6 +3,7 @@ package home_test
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"os"
@@ -95,12 +96,30 @@ func homeIsolatedDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	rows.Close()
-	// Copy definitions only; disable FK checks on one connection so order is irrelevant.
+	copyTableDefinitions(t, source, db, tables)
+	return db
+}
+
+// copyTableDefinitions copies DDL with FK checks disabled on one dedicated
+// connection so table order is irrelevant. FK checks are always re-enabled on
+// that connection before it returns to the pool; if that fails the connection
+// is discarded so a session with checks disabled is never reused.
+func copyTableDefinitions(t *testing.T, source, db *sql.DB, tables []string) {
+	t.Helper()
+	ctx := context.Background()
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
+			t.Errorf("restore foreign key checks: %v", err)
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn }) //lint:ignore error-swallow marks connection bad so the pool discards it
+		}
+		if err := conn.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
 		t.Fatal(err)
 	}
@@ -113,13 +132,17 @@ func homeIsolatedDB(t *testing.T) *sql.DB {
 			t.Fatalf("copy %s: %v", table, err)
 		}
 	}
-	return db
 }
 
 func TestHomeServiceIntegration(t *testing.T) {
 	db := homeIsolatedDB(t)
 
 	ctx := context.Background()
+
+	var fkChecks int
+	if err := db.QueryRowContext(ctx, "SELECT @@FOREIGN_KEY_CHECKS").Scan(&fkChecks); err != nil || fkChecks != 1 {
+		t.Fatalf("foreign key checks must be enabled in the test body: value=%d err=%v", fkChecks, err)
+	}
 
 	char1, err := database.CreateTestCharacter(ctx, db, "HomeIntegrationHero1")
 	if err != nil {
