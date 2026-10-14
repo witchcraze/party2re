@@ -18,6 +18,12 @@ The exact workflow and commands should reflect the actual repository and must no
 
 The current [CI workflow](../../.github/workflows/ci.yml) runs Go checks with atomic coverage inside the development container defined by `Dockerfile.dev` and `compose.yaml`. Docker Compose starts MariaDB and Valkey for integration tests; production-image verification currently checks the build.
 
+## Test environment lifetime
+
+CI assumes a disposable environment per job. The current `verify` job runs on a GitHub-hosted runner: Compose initializes MariaDB from `migrations/` when its data volume is first created, and services/volumes remain available across steps in that job. Runner disposal releases the environment afterward; the workflow does not reset the DB before each test or explicitly run `docker compose down -v`.
+
+Tests within the job share the configured DB unless a fixture creates its own dedicated database. Environment disposal does not protect tests within the run from each other's mutations: the [test DB ownership and isolation rules](testing.md#51-database-ownership-and-isolation) apply in CI as well as locally. Existing dedicated-DB fixtures receive `PARTY2_TEST_DB_ADMIN_DSN` from Compose. [Local development](development-environment.md#database-initialization-and-migration) retains data until an explicit reset or disposal.
+
 ## CI evidence and failure investigation
 
 CI runs on pushes to `main` and PRs targeting `main`. The default PR triggers are opening, synchronization and reopening; changing the base alone does not start CI ([GitHub documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request)). After retargeting, use a supported trigger and confirm a successful `verify` run for the final head before merging. An absent check is not a passing check.

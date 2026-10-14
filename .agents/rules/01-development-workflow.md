@@ -80,6 +80,15 @@ For non-trivial behavior:
 4. **Inner Loop:** Run fast host tests continuously using `make test` (or `make test-integration`).
 5. **Outer Loop:** Auto-format code with `make fmt`, then run unified local verification with `make check` (runs format check, `go vet`, host test suite, and fast smoke build).
 
+### Test Database Ownership and Isolation
+
+- DB-backed tests MUST use the environment's shared test DB by default, choosing a dedicated DB when the isolation criteria below require it.
+- Environment-wide initialization/disposal MAY reset or destroy test data before tests start or after all users of that environment stop. Explicit local resets and temporary development data MAY be used; MUST NOT reset an environment while tests or application processes are using it.
+- Individual tests using the shared DB MUST normally limit deletion/reset to data they created, including dependent rows. MUST NOT commit destructive changes to unrelated data, including table-wide deletes, broad fixture predicates or restoring an old shared-data snapshot. Serialization alone MUST NOT be treated as data ownership.
+- Connection-local temporary tables and guaranteed rollback within a single transaction MAY isolate assertions when they leave unrelated data unchanged and do not compromise other tests. MUST NOT treat rollback as isolation for independent commits, implicit-commit DDL or multiple connections outside that transaction.
+- When shared data or concurrent tests prevent accurate verification, tests MUST use a dedicated DB. Inside that DB they MAY freely manipulate data; creation/cleanup MUST target only their own database. MUST NOT silently fall back to the shared DB when required isolation is unavailable.
+- CI's disposable environment MUST NOT waive ownership/isolation rules for individual tests within a run. Operating procedures and current examples: [`docs/development/testing.md`](../../docs/development/testing.md#51-database-ownership-and-isolation).
+
 ### Whole-Action Admission Regression Coverage
 
 Changes to whole-action admission MUST cover representative cases relevant to the affected behavior:
