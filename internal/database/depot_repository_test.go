@@ -637,18 +637,31 @@ func TestDepotRepositoryPriorNonLockingReadPreventsStaleSnapshotAndItemLoss(t *t
 	itemFromTx2, _ := item.NewInstance("weapon-40", 1)
 
 	tx2SnapshotEstablished := make(chan struct{})
+	var onceEstablished sync.Once
+	notifyEstablished := func() { onceEstablished.Do(func() { close(tx2SnapshotEstablished) }) }
+
 	tx1Done := make(chan struct{})
+	var onceTx1 sync.Once
+	notifyTx1Done := func() { onceTx1.Do(func() { close(tx1Done) }) }
+
 	tx2Done := make(chan error, 1)
 
 	// Tx 2 starts first and executes a non-locking SELECT on an InnoDB table
 	go func() {
+		defer notifyEstablished()
 		tx2Done <- repo.RunInTx(ctx, func(tx2Ctx context.Context) error {
+			defer notifyEstablished()
 			var dummy string
 			if err := ExecutorFromContext(tx2Ctx, db).QueryRowContext(tx2Ctx, "SELECT id FROM characters WHERE id = ?", char.ID).Scan(&dummy); err != nil {
-				return err
+				return fmt.Errorf("Tx 2 early non-locking SELECT failed: %w", err)
 			}
-			close(tx2SnapshotEstablished)
-			<-tx1Done
+			notifyEstablished()
+
+			select {
+			case <-tx1Done:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 
 			// Read depot under lock
 			dep2, err := repo.FindByCharacterIDForUpdate(tx2Ctx, char.ID)
@@ -676,7 +689,14 @@ func TestDepotRepositoryPriorNonLockingReadPreventsStaleSnapshotAndItemLoss(t *t
 		})
 	}()
 
-	<-tx2SnapshotEstablished
+	// Wait for Tx 2 to establish its snapshot, or abort immediately if Tx 2 failed early
+	select {
+	case <-tx2SnapshotEstablished:
+	case err := <-tx2Done:
+		t.Fatalf("Tx 2 failed before establishing snapshot: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for Tx 2 snapshot establishment")
+	}
 
 	// Tx 1 modifies depot and commits
 	err = repo.RunInTx(ctx, func(tx1Ctx context.Context) error {
@@ -689,13 +709,19 @@ func TestDepotRepositoryPriorNonLockingReadPreventsStaleSnapshotAndItemLoss(t *t
 		}
 		return repo.Save(tx1Ctx, dep1)
 	})
+	notifyTx1Done()
 	if err != nil {
 		t.Fatalf("Tx 1 failed: %v", err)
 	}
-	close(tx1Done)
 
-	if err := <-tx2Done; err != nil {
-		t.Fatalf("Tx 2 failed with stale snapshot / item loss error: %v", err)
+	// Wait for Tx 2 to complete, guarded against hangs
+	select {
+	case err := <-tx2Done:
+		if err != nil {
+			t.Fatalf("Tx 2 failed with stale snapshot / item loss error: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for Tx 2 completion")
 	}
 
 	// Final verification: depot must contain all 3 items (initialItem, itemFromTx1, itemFromTx2)
