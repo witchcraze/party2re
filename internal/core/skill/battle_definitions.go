@@ -10,6 +10,8 @@ import corebattle "github.com/witchcraze/party2re/internal/core/battle"
 type BattleDefinitions struct {
 	JobSkills map[string]corebattle.ActionSkill
 	Gems      map[string]corebattle.GemEffect
+	// Explicit callbacks stay separate from the batch engine's scalar payloads.
+	ArithmeticSkills map[string]bool
 }
 
 func (d BattleDefinitions) JobAction(def Definition) (corebattle.ActionSkill, error) {
