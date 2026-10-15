@@ -301,10 +301,11 @@ mutation. A later unsupported slot therefore cannot leave partial effects.
 Consumers must derive discovery and submission from the same server-owned
 definitions and propagate rejection, rather than trusting submitted payloads.
 The explicit Adventure/HTTP consumers remain #1329/#1330. Random/delegated
-invocation has no native executor and is rejected in its entirety, even if some
-possible descendants have primitive implementations; no supported-only draw
-pool is substituted. A supported operation with no eligible effect target is
-still accepted and charged according to its existing resource contract.
+callbacks use the separate explicit invocation boundary described
+[below](#random-and-delegated-job-closure), rather than batch scalar payloads.
+Their entire original closure must be certified; no supported-only draw pool
+is substituted. A supported operation with no eligible effect target is still
+accepted and charged according to its existing resource contract.
 
 Evidence below uses `party2/lib/` at revision
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item/gem/job references are
@@ -463,6 +464,31 @@ Job callbacks that read or change wallet/held tools are owned by #1359;
 job78/79 encounter replacement, SP reduction and enemy ordering by #1360.
 These operations require the same receipt/transaction boundary as their outer
 command. Refresh/retry must not reroll or replay a nested mutation.
+
+Explicit invocation discovery uses `skill.BattleDefinitions.InvocationAction`;
+execution uses the same `LifetimeState.ValidateInvocations` gate before any
+slot runs. The registry identifies outer entries and their declared transitive
+edges by native identity. Tables retain ordered positions, duplicate names and
+all source-context variants; table construction chooses against the actual
+actor at each invocation and captures generated children before execution.
+Admission traverses recursive random, generated, book/tool and helper edges,
+including cycles. Later slots and nested current-job calls must also cover
+contexts reachable after earlier effects, including copied jobs and job300.
+Pure callback admission must certify those contexts, not only the initial
+actor. A missing entry/variant or unresolved helper rejects the whole operation
+before costs or draws. An unusable gem86 last entry and job73's MP0 special case
+remain handled no-effect without demanding skipped callback context.
+
+Naked nested calls share their remaining arguments; each custom slot starts
+with its own copy of the outer resolved target. Explicit gem86/calling helpers
+pass only that target. Later slots stop after actor death, while accepted roster
+and resource changes survive. The invoking consumer resolves tool/custom
+arguments and owns outer admission/costs and durable transactions. It must
+preflight before those mutations, inject frozen command randomness and commit
+the resulting facts with the receipt; core stores neither callbacks nor RNG
+objects and does not replay committed commands. The default registry certifies
+no production invocation entries; synthetic complete catalogs test this
+mechanism without enabling the original catalog or the SQL consumer.
 
 The [shared modifier contract](#shared-modifiers-and-callback-outcomes) separates
 callback categories, target resolution and source-context gates. Job81's song

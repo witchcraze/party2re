@@ -5,13 +5,14 @@ import corebattle "github.com/witchcraze/party2re/internal/core/battle"
 // BattleDefinitions contains explicitly certified native entries, independently
 // of learning, commerce and composition catalogs. Each production entry needs
 // source evidence and tests of its entire effect; a matching kind is not proof.
-// The zero value admits no entries. Random/delegated effects remain unsupported
-// until their executor and full original descendant pool can be certified.
+// The zero value admits no entries. Random/delegated effects require complete
+// original tables and descendant certification independently of batch payloads.
 type BattleDefinitions struct {
 	JobSkills map[string]corebattle.ActionSkill
 	Gems      map[string]corebattle.GemEffect
 	// Explicit callbacks stay separate from the batch engine's scalar payloads.
 	ArithmeticSkills map[string]bool
+	Invocations      corebattle.CallbackCatalog
 }
 
 func (d BattleDefinitions) JobAction(def Definition) (corebattle.ActionSkill, error) {

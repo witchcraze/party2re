@@ -5,7 +5,8 @@ import "errors"
 var ErrUnsupportedEffect = errors.New("battle effect is unsupported")
 
 // ValidateSkillAction checks the complete native payload, not legacy catalog parity.
-// Random/delegated callbacks have no native executor and are deliberately rejected.
+// Random/delegated callbacks use the explicit invocation boundary; batch scalar
+// payloads deliberately cannot enable them.
 func ValidateSkillAction(sk ActionSkill) error {
 	if sk.MPCost < 0 || sk.Power < 0 {
 		return ErrUnsupportedEffect

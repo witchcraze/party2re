@@ -356,14 +356,24 @@ must not bypass that gate or narrow the original random pool to implemented
 effects. Missing original choices remain cutover blockers. #1198 implements
 Try success/exit disposition and #1196/#1197 item rules.
 Random/delegated discovery and submission also depend on the
-[transitive job closure](battle.md#random-and-delegated-job-closure): #1357 owns
-the invoking executor, #1358 arithmetic selectors, #1359 job wallet/held-tool
+[transitive job closure](battle.md#random-and-delegated-job-closure): discovery
+uses `skill.BattleDefinitions.InvocationAction` and execution shares core
+invocation preflight. #1358 owns arithmetic selectors, #1359 job wallet/held-tool
 mutations and #1360 job-driven room transitions. Tool-only travel coverage does
 not certify a job callback that replaces an encounter, changes job SP or
 reorders enemies. Discovery must retain current/previous-job and caller context
 when applying the shared whole-effect gate; a supported direct child is
 insufficient when any hidden descendant is unsupported. The whole submitted
 operation must reject before consumption or durable mutation in that case.
+Resolve the outer tool argument (default self) or custom target before passing
+the callback frame. Keep complete ordered tables and source-context variants,
+rebuild selection against current run actors, and preserve each generated
+child's captured identity. Nested callback changes must retain their ordered
+rosters and assets; each later custom slot receives the original resolved target
+and runs only while the actor remains alive. The run service must freeze command
+draws/results with its receipt and return committed facts on retry, without
+invoking the executor again. Executor support alone certifies no production
+job/gem/tool table and does not provide SQL run/receipt storage.
 For [arithmetic effects](battle.md#arithmetic-selectors-and-digit-reversal),
 discovery and submission share `skill.BattleDefinitions.ArithmeticAction` with
 the same ordered discovered names and submitted text. Keep the selected callback
