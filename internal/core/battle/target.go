@@ -219,8 +219,8 @@ func (s *LifetimeState) validatePartyTarget(c TargetContext, e TargetEffect, rng
 		return ErrUnsupportedEffect
 	}
 	if e.Category == CategoryPhysical && len(c.EnemyIDs) == 0 {
-		for _, target := range s.Actors {
-			if target.Temporary == TemporaryDeflect {
+		for _, id := range s.partyInitialTargetIDs(c, e) {
+			if target := s.actor(id); target != nil && target.Temporary == TemporaryDeflect {
 				return ErrUnsupportedEffect
 			}
 		}
@@ -228,11 +228,7 @@ func (s *LifetimeState) validatePartyTarget(c TargetContext, e TargetEffect, rng
 	return nil
 }
 
-// partyTargetCandidates follows _check_party's possible target paths without
-// draws or mutations. Call only after validatePartyTarget. Temporary redirects
-// run once; the replacement target's temporary is not evaluated recursively.
-// mayDouble contains only earlier reachable205 tails in the same operation.
-func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect, mayDouble map[string]bool) []TargetEffect {
+func (s *LifetimeState) partyInitialTargetIDs(c TargetContext, e TargetEffect) []string {
 	a := s.actor(c.ActorID)
 	ids := []string{e.TargetID}
 	if a.Status == StatusConfusion || (c.Item195Activated && (a.Status == "" || a.categorySealed(e.Category))) {
@@ -245,12 +241,20 @@ func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect, m
 			ids = slices.Clone(c.PartyIDs)
 		}
 		for i, id := range ids {
-			if s.actor(id).HP <= 0 && e.Payload.Symbol != "revival" {
+			if actor := s.actor(id); actor != nil && actor.HP <= 0 && e.Payload.Symbol != "revival" {
 				ids[i] = c.ActorID
 			}
 		}
 	}
-	return s.temporaryTargetCandidates(c, e, ids, mayDouble)
+	return ids
+}
+
+// partyTargetCandidates follows _check_party's possible target paths without
+// draws or mutations. Call only after validatePartyTarget. Temporary redirects
+// run once; the replacement target's temporary is not evaluated recursively.
+// mayDouble contains only earlier reachable205 tails in the same operation.
+func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect, mayDouble map[string]bool) []TargetEffect {
+	return s.temporaryTargetCandidates(c, e, s.partyInitialTargetIDs(c, e), mayDouble)
 }
 
 func (s *LifetimeState) temporaryTargetCandidates(c TargetContext, e TargetEffect, ids []string, mayDouble map[string]bool) []TargetEffect {

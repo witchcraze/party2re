@@ -223,7 +223,7 @@ func TestUnsupportedTargetContextsRejectBeforeDrawsAndMutation(t *testing.T) {
 			e.Category = CategoryMagic
 		case "deflection empty side":
 			s.Actors, c.EnemyIDs = s.Actors[:3], nil
-			s.Actors[1].Temporary = TemporaryDeflect
+			s.Actors[2].Temporary = TemporaryDeflect
 		case "symbol conversion":
 			s.Actors[0].Extended, c.Command, c.Item195Activated = ExtendedMagicSword, "attack", true
 			e.Payload.Symbol = "revival"
