@@ -46,11 +46,17 @@ helper. A callback error prevents successful transaction completion.
 
 Repositories obtain the executor from the context. `database.RunInTx` reuses
 an ambient transaction; nested calls are not independent commits or savepoints.
-Root transactions use `READ COMMITTED` (`sql.LevelReadCommitted`) to eliminate
-secondary index gap lock deadlocks and stale snapshots under MariaDB InnoDB.
+Root transactions use `READ COMMITTED` (`sql.LevelReadCommitted`) to avoid
+secondary index range gap locks and stale snapshots under MariaDB InnoDB.
 Rank order applies to acquiring new locks, not merely the textual order of
 updates to rows already locked. The complete hierarchy is owned by
 [the database rules](../../.agents/rules/05-database-and-caching.md).
+
+Depot serializes changes through the `character_depots` parent row and reads
+items with `FOR UPDATE` to retain the latest committed state. Both locking item
+reads and item deletions explicitly use `idx_depot_items_character`: sparse
+tables can otherwise select a full scan and lock another character's rows.
+`READ COMMITTED` alone does not bound this scan to the owning character.
 
 The runner acquires character before inventory. A callback must not first lock
 a later-rank table and then cause lazy inventory acquisition through `AddGrant`;
