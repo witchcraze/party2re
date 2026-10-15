@@ -182,6 +182,37 @@ func TestEstateService(t *testing.T) {
 			t.Errorf("expected ErrTownMaxHousesReached, got %v", err)
 		}
 	})
+
+	t.Run("non-transactional guild points failure refunds money and aborts without home", func(t *testing.T) {
+		chars["char-gp-fail"] = corecharacter.Character{ID: "char-gp-fail", PlayerID: "p-fail", Name: "FailGuy", Money: 10000}
+		guildPts.err = errors.New("simulated gp error in non-tx mode")
+		defer func() { guildPts.err = nil }()
+
+		_, err := svc.BuildHouse(ctx, "char-gp-fail", "town2", "005")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if chars["char-gp-fail"].Money != 10000 {
+			t.Errorf("expected money to be refunded to 10000, got %d", chars["char-gp-fail"].Money)
+		}
+		if _, exists := repo.homes["char-gp-fail"]; exists {
+			t.Error("expected no home to be saved")
+		}
+	})
+
+	t.Run("non-transactional save home failure refunds money", func(t *testing.T) {
+		chars["char-save-fail"] = corecharacter.Character{ID: "char-save-fail", PlayerID: "p-sf", Name: "SaveFailGuy", Money: 10000}
+		repo.saveHomeErr = errors.New("simulated save home error in non-tx mode")
+		defer func() { repo.saveHomeErr = nil }()
+
+		_, err := svc.BuildHouse(ctx, "char-save-fail", "town2", "005")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if chars["char-save-fail"].Money != 10000 {
+			t.Errorf("expected money to be refunded to 10000, got %d", chars["char-save-fail"].Money)
+		}
+	})
 }
 
 func TestBuildHouse_Transactional(t *testing.T) {

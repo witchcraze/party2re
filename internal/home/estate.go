@@ -138,9 +138,17 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 		return nil, err
 	}
 
+	rollbackFunds := func() {
+		if err := char.AddMoney(t.Price); err == nil && s.charUpdater != nil {
+			//lint:ignore error-swallow compensation rollback on non-transactional failure
+			_ = s.charUpdater.Update(ctx, char)
+		}
+	}
+
 	// Award guild points if applicable: cycle_days * 10
 	if s.guildPoints != nil {
 		if err := s.guildPoints.AddGuildPoints(ctx, characterID, t.CycleDays*10); err != nil {
+			rollbackFunds()
 			return nil, err
 		}
 	}
@@ -157,6 +165,7 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 	}
 
 	if err := s.repo.SaveHome(ctx, existingHome); err != nil {
+		rollbackFunds()
 		return nil, err
 	}
 

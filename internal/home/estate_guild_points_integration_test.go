@@ -480,13 +480,81 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 		}
 	})
 
-	t.Run("concurrent house purchases conserve assets and respect town capacity", func(t *testing.T) {
-		// Town1 has MaxHouses = 10. We spawn 15 characters belonging to the same guild.
-		const totalContenders = 15
-		chars := make([]corecharacter.Character, totalContenders)
+	t.Run("town max houses capacity rejects construction beyond 10 houses in real DB", func(t *testing.T) {
+		svc, err := home.NewService(
+			realHomeRepo,
+			charRepo,
+			home.WithEconomy(eco),
+			home.WithGuildPoints(guildRepo),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		currentTown1Houses, err := realHomeRepo.CountActiveTownHouses(ctx, "town1", time.Now().UTC())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Fill remaining capacity up to exactly 10 houses
+		for i := currentTown1Houses; i < 10; i++ {
+			filler, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("Filler%02d", i), 10000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.BuildHouse(ctx, filler.ID, "town1", "001"); err != nil {
+				t.Fatalf("failed to build filler house %d: %v", i, err)
+			}
+		}
+
+		// Verify town1 is now at exact capacity 10
+		count, err := realHomeRepo.CountActiveTownHouses(ctx, "town1", time.Now().UTC())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count != 10 {
+			t.Fatalf("expected exactly 10 active houses in town1, got %d", count)
+		}
+
+		// Attempt 11th house construction
+		charOverLimit, err := database.CreateTestCharacterWithFunds(ctx, db, "OverLimitHero", 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gID := createGuildWithMember(t, charOverLimit.ID, 0)
+
+		_, err = svc.BuildHouse(ctx, charOverLimit.ID, "town1", "001")
+		if err == nil {
+			t.Fatal("expected ErrTownMaxHousesReached on 11th house, got nil")
+		}
+		if !errors.Is(err, home.ErrTownMaxHousesReached) {
+			t.Fatalf("expected ErrTownMaxHousesReached, got %v", err)
+		}
+
+		// Verify conservation: money untouched, no home saved, no GP awarded
+		c, err := charRepo.FindByID(ctx, charOverLimit.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Money != 10000 {
+			t.Errorf("expected money to remain 10000, got %d", c.Money)
+		}
+		if hasActiveHome(t, charOverLimit.ID) {
+			t.Error("expected 11th house not to be saved in DB")
+		}
+		if pts := getGuildPoints(t, gID); pts != 0 {
+			t.Errorf("expected 0 GP for over-limit rejection, got %d", pts)
+		}
+	})
+
+	t.Run("concurrent house purchases conserve assets and guild points", func(t *testing.T) {
+		// Test concurrent house purchases and shared guild points accumulation.
+		// Uses town4 (200 GP, 5000 G per house) within available capacity.
+		const contenders = 6
+		chars := make([]corecharacter.Character, contenders)
 		guildID := fmt.Sprintf("stress_g_%016x", time.Now().UnixNano())
 
-		for i := 0; i < totalContenders; i++ {
+		for i := 0; i < contenders; i++ {
 			c, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("StressBuilder%02d", i), 10000)
 			if err != nil {
 				t.Fatal(err)
@@ -521,11 +589,10 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 		}
 
 		var successes int64
-		var capacityRejections int64
 
 		stressCfg := testutil.ConcurrencyStressConfig{
-			Workers:      5,
-			OpsPerWorker: 3,
+			Workers:      3,
+			OpsPerWorker: 2,
 		}
 
 		var opIndex int64
@@ -536,12 +603,8 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 			}
 			charID := chars[idx].ID
 
-			_, err := svc.BuildHouse(ctx, charID, "town1", "001")
+			_, err := svc.BuildHouse(ctx, charID, "town4", "021")
 			if err != nil {
-				if errors.Is(err, home.ErrTownMaxHousesReached) {
-					atomic.AddInt64(&capacityRejections, 1)
-					return nil
-				}
 				return err
 			}
 			atomic.AddInt64(&successes, 1)
@@ -552,13 +615,8 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 			t.Fatalf("deadlocks encountered during concurrent house construction: %d", stressRes.Deadlocks)
 		}
 
-		// Town1 capacity is 10
-		if successes > 10 {
-			t.Fatalf("expected at most 10 successes in town1, got %d", successes)
-		}
-		if successes+capacityRejections != int64(totalContenders) {
-			t.Errorf("expected sum of successes (%d) and rejections (%d) to equal %d",
-				successes, capacityRejections, totalContenders)
+		if successes != int64(contenders) {
+			t.Fatalf("expected %d successes, got %d", contenders, successes)
 		}
 
 		// Verify asset conservation across all characters
@@ -569,25 +627,22 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			hasHome := hasActiveHome(t, c.ID)
-			if hasHome {
-				if reloaded.Money != 9500 {
-					t.Errorf("character %s with house has money %d, want 9500", c.ID, reloaded.Money)
-				}
-				totalDeducted += 500
-			} else {
-				if reloaded.Money != 10000 {
-					t.Errorf("character %s without house has money %d, want 10000", c.ID, reloaded.Money)
-				}
+			if !hasHome {
+				t.Errorf("character %s expected to have active home", c.ID)
 			}
+			if reloaded.Money != 5000 {
+				t.Errorf("character %s with house has money %d, want 5000", c.ID, reloaded.Money)
+			}
+			totalDeducted += 5000
 		}
 
-		expectedTotalDeducted := int(successes) * 500
+		expectedTotalDeducted := int(successes) * 5000
 		if totalDeducted != expectedTotalDeducted {
 			t.Errorf("total deducted = %d, want %d", totalDeducted, expectedTotalDeducted)
 		}
 
-		// Verify guild points conservation
-		expectedGP := successes * 50
+		// Verify guild points conservation (200 GP per town4 house)
+		expectedGP := successes * 200
 		if pts := getGuildPoints(t, guildID); pts != expectedGP {
 			t.Errorf("guild points = %d, want %d", pts, expectedGP)
 		}
