@@ -371,3 +371,169 @@ func TestCheckAndApplyMastery_AllJobsMastered_LegendInduction(t *testing.T) {
 		t.Errorf("expected still 1 legend call, got %d", len(legend.calls))
 	}
 }
+
+func TestGetJobMastery_PersistedJobRecordsAndZeroSP(t *testing.T) {
+	ctx := context.Background()
+	jobRepo := newMemoryJobRepository()
+	charRepo := newMemoryCharRepository()
+
+	svc, err := job.NewService(
+		jobRepo,
+		job.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatalf("failed to create job service: %v", err)
+	}
+
+	charID := "char-persisted"
+	char := corecharacter.Character{
+		ID:       charID,
+		JobID:    "job-03",
+		SP:       9,
+		OldJobID: "job-04",
+		OldSP:    11,
+	}
+	charRepo.data[charID] = char
+
+	jobState, err := corejob.NewCharacterJob(charID, "job-03")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1. job-01: mastered, then recorded SP set to 0
+	jobState.RecordMastery("job-01", 80, 80)
+	if err := jobState.RecordJobSP("job-01", 0); err != nil {
+		t.Fatal(err)
+	}
+	// 2. job-02: unmastered, recorded SP set to 17 (History is empty)
+	if err := jobState.RecordJobSP("job-02", 17); err != nil {
+		t.Fatal(err)
+	}
+	// 3. job-05: migration-only preserved SP (is_recorded = false, not in RecordedJobIDs)
+	jobState.RecordedJobSP["job-05"] = 50
+	// 4. job-06: history-only transition, unknown SP
+	jobState.History = append(jobState.History, corejob.Change{FromJobID: "job-06", ToJobID: "job-03"})
+	// 5. job-07: mastered without saved SP (legacy fallback)
+	jobState.MasteredJobs = append(jobState.MasteredJobs, "job-07")
+
+	jobRepo.data[charID] = jobState
+
+	mastery, err := svc.GetJobMastery(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetJobMastery failed: %v", err)
+	}
+
+	findProgress := func(id string) job.JobProgress {
+		for _, j := range mastery.Jobs {
+			if j.JobID == id {
+				return j
+			}
+		}
+		t.Fatalf("job %s not found in mastery progress", id)
+		return job.JobProgress{}
+	}
+
+	// job-01: mastered with 0 SP must return mastered and CurrentSP == 0
+	j01 := findProgress("job-01")
+	if j01.Status != job.JobStatusMastered || j01.CurrentSP != 0 {
+		t.Errorf("job-01: expected mastered / SP 0, got %s / SP %d", j01.Status, j01.CurrentSP)
+	}
+
+	// job-02: explicit record must return learning and CurrentSP == 17
+	j02 := findProgress("job-02")
+	if j02.Status != job.JobStatusLearning || j02.CurrentSP != 17 {
+		t.Errorf("job-02: expected learning / SP 17, got %s / SP %d", j02.Status, j02.CurrentSP)
+	}
+
+	// job-03: live current job must return learning and CurrentSP == 9
+	j03 := findProgress("job-03")
+	if j03.Status != job.JobStatusLearning || j03.CurrentSP != 9 {
+		t.Errorf("job-03: expected learning / SP 9, got %s / SP %d", j03.Status, j03.CurrentSP)
+	}
+
+	// job-04: live old job must return learning and CurrentSP == 11
+	j04 := findProgress("job-04")
+	if j04.Status != job.JobStatusLearning || j04.CurrentSP != 11 {
+		t.Errorf("job-04: expected learning / SP 11, got %s / SP %d", j04.Status, j04.CurrentSP)
+	}
+
+	// job-05: migration-only preserved SP without record presence must remain unlearned
+	j05 := findProgress("job-05")
+	if j05.Status != job.JobStatusUnlearned || j05.CurrentSP != 0 {
+		t.Errorf("job-05: expected unlearned / SP 0, got %s / SP %d", j05.Status, j05.CurrentSP)
+	}
+
+	// job-06: history-only job without saved SP must be learning with SP 0
+	j06 := findProgress("job-06")
+	if j06.Status != job.JobStatusLearning || j06.CurrentSP != 0 {
+		t.Errorf("job-06: expected learning / SP 0, got %s / SP %d", j06.Status, j06.CurrentSP)
+	}
+
+	// job-07: mastered without saved SP falls back to masterSP
+	j07 := findProgress("job-07")
+	if j07.Status != job.JobStatusMastered || j07.CurrentSP != j07.MasterSP {
+		t.Errorf("job-07: expected mastered / SP %d, got %s / SP %d", j07.MasterSP, j07.Status, j07.CurrentSP)
+	}
+
+	// Check counts: mastered = 2 (job-01, job-07), learning = 4 (job-02, job-03, job-04, job-06)
+	if mastery.MasteredCount != 2 {
+		t.Errorf("expected MasteredCount=2, got %d", mastery.MasteredCount)
+	}
+	if mastery.LearningCount != 4 {
+		t.Errorf("expected LearningCount=4, got %d", mastery.LearningCount)
+	}
+}
+
+func TestGetJobMastery_LiveSPPriorityOverSavedSP(t *testing.T) {
+	ctx := context.Background()
+	jobRepo := newMemoryJobRepository()
+	charRepo := newMemoryCharRepository()
+
+	svc, err := job.NewService(
+		jobRepo,
+		job.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatalf("failed to create job service: %v", err)
+	}
+
+	charID := "char-priority"
+	char := corecharacter.Character{
+		ID:       charID,
+		JobID:    "job-01",
+		SP:       5, // live current SP
+		OldJobID: "job-02",
+		OldSP:    7, // live old SP
+	}
+	charRepo.data[charID] = char
+
+	jobState, err := corejob.NewCharacterJob(charID, "job-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// SavedSP has different values
+	if err := jobState.RecordJobSP("job-01", 30); err != nil {
+		t.Fatal(err)
+	}
+	if err := jobState.RecordJobSP("job-02", 40); err != nil {
+		t.Fatal(err)
+	}
+	jobRepo.data[charID] = jobState
+
+	mastery, err := svc.GetJobMastery(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetJobMastery failed: %v", err)
+	}
+
+	for _, j := range mastery.Jobs {
+		if j.JobID == "job-01" {
+			if j.CurrentSP != 5 {
+				t.Errorf("job-01: expected live SP 5 to override saved SP 30, got %d", j.CurrentSP)
+			}
+		}
+		if j.JobID == "job-02" {
+			if j.CurrentSP != 7 {
+				t.Errorf("job-02: expected live OldSP 7 to override saved SP 40, got %d", j.CurrentSP)
+			}
+		}
+	}
+}

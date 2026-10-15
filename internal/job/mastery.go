@@ -100,17 +100,18 @@ func (s *Service) GetJobMastery(ctx context.Context, characterID string) (Charac
 			status = JobStatusMastered
 			if char.JobID == def.ID {
 				currentSP = char.SP
-			} else if sp, ok := jobState.MasteredSP(def.ID); ok && sp > 0 {
-				currentSP = sp
-			} else if char.OldJobID == def.ID && char.OldSP > 0 {
+			} else if char.OldJobID == def.ID {
 				currentSP = char.OldSP
+			} else if sp, ok := jobState.SavedSP(def.ID); ok {
+				currentSP = sp
 			} else {
 				currentSP = masterSP
 			}
 			masteredCount++
 		} else {
-			isLearning := (char.JobID == def.ID && def.ID != "starter") ||
-				(char.OldJobID == def.ID && def.ID != "starter") ||
+			isLearning := char.JobID == def.ID ||
+				char.OldJobID == def.ID ||
+				jobState.HasRecordedJob(def.ID) ||
 				slices.ContainsFunc(jobState.History, func(ch corejob.Change) bool {
 					return ch.FromJobID == def.ID || ch.ToJobID == def.ID
 				})
@@ -121,6 +122,8 @@ func (s *Service) GetJobMastery(ctx context.Context, characterID string) (Charac
 					currentSP = char.SP
 				} else if char.OldJobID == def.ID {
 					currentSP = char.OldSP
+				} else if sp, ok := jobState.SavedSP(def.ID); ok {
+					currentSP = sp
 				} else {
 					currentSP = 0
 				}
