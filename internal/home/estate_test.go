@@ -12,9 +12,13 @@ import (
 
 type mockGuildPoints struct {
 	points map[string]int
+	err    error
 }
 
 func (m *mockGuildPoints) AddGuildPoints(ctx context.Context, characterID string, points int) error {
+	if m.err != nil {
+		return m.err
+	}
 	if m.points == nil {
 		m.points = make(map[string]int)
 	}
@@ -443,6 +447,118 @@ func TestBuildHouse_Transactional(t *testing.T) {
 		}
 		if gp.points["tx-char-2"] != 0 {
 			t.Errorf("expected 0 guild points, got %d", gp.points["tx-char-2"])
+		}
+	})
+
+	t.Run("guild points error aborts transaction and rolls back money and house", func(t *testing.T) {
+		chars := map[string]corecharacter.Character{
+			"tx-gp-fail": {ID: "tx-gp-fail", PlayerID: "p-gp", Name: "FailHero", Money: 10000},
+		}
+		repo := newMockHomeRepo(chars)
+		gpErr := errors.New("database connection refused during guild points add")
+		gp := &mockGuildPoints{err: gpErr}
+		tmr := &mockTimer{}
+		runner := &mockTransactionRunner{chars: chars}
+
+		svc, err := NewService(
+			repo,
+			&mockCharReader{chars: chars},
+			WithNowFunc(func() time.Time { return fixedTime }),
+			WithGuildPoints(gp),
+			WithTimer(tmr),
+			WithTransactionRunner(runner),
+		)
+		if err != nil {
+			t.Fatalf("NewService failed: %v", err)
+		}
+
+		_, err = svc.BuildHouse(ctx, "tx-gp-fail", "town1", "001")
+		if err == nil {
+			t.Fatal("expected error on guild points failure, got nil")
+		}
+		if !errors.Is(err, gpErr) {
+			t.Errorf("expected error %v, got %v", gpErr, err)
+		}
+		if chars["tx-gp-fail"].Money != 10000 {
+			t.Errorf("expected money to remain 10000, got %d", chars["tx-gp-fail"].Money)
+		}
+		if _, exists := repo.homes["tx-gp-fail"]; exists {
+			t.Error("expected house not to be saved in repository")
+		}
+		if len(tmr.locks) != 0 {
+			t.Errorf("expected no timer locks set on failure, got %v", tmr.locks)
+		}
+	})
+
+	t.Run("save home failure aborts transaction and rolls back money", func(t *testing.T) {
+		chars := map[string]corecharacter.Character{
+			"tx-save-fail": {ID: "tx-save-fail", PlayerID: "p-save", Name: "SaveFailHero", Money: 10000},
+		}
+		repo := newMockHomeRepo(chars)
+		saveErr := errors.New("disk full on home save")
+		repo.saveHomeErr = saveErr
+		gp := &mockGuildPoints{}
+		tmr := &mockTimer{}
+		runner := &mockTransactionRunner{chars: chars}
+
+		svc, err := NewService(
+			repo,
+			&mockCharReader{chars: chars},
+			WithNowFunc(func() time.Time { return fixedTime }),
+			WithGuildPoints(gp),
+			WithTimer(tmr),
+			WithTransactionRunner(runner),
+		)
+		if err != nil {
+			t.Fatalf("NewService failed: %v", err)
+		}
+
+		_, err = svc.BuildHouse(ctx, "tx-save-fail", "town1", "001")
+		if err == nil {
+			t.Fatal("expected error on save home failure, got nil")
+		}
+		if !errors.Is(err, saveErr) {
+			t.Errorf("expected error %v, got %v", saveErr, err)
+		}
+		if chars["tx-save-fail"].Money != 10000 {
+			t.Errorf("expected money to remain 10000, got %d", chars["tx-save-fail"].Money)
+		}
+		if len(tmr.locks) != 0 {
+			t.Errorf("expected no timer locks set on failure, got %v", tmr.locks)
+		}
+	})
+
+	t.Run("build house without guild points registrar succeeds", func(t *testing.T) {
+		chars := map[string]corecharacter.Character{
+			"tx-nogp": {ID: "tx-nogp", PlayerID: "p-nogp", Name: "NoGPHero", Money: 10000},
+		}
+		repo := newMockHomeRepo(chars)
+		tmr := &mockTimer{}
+		runner := &mockTransactionRunner{chars: chars}
+
+		svc, err := NewService(
+			repo,
+			&mockCharReader{chars: chars},
+			WithNowFunc(func() time.Time { return fixedTime }),
+			WithTimer(tmr),
+			WithTransactionRunner(runner),
+		)
+		if err != nil {
+			t.Fatalf("NewService failed: %v", err)
+		}
+
+		res, err := svc.BuildHouse(ctx, "tx-nogp", "town1", "001")
+		if err != nil {
+			t.Fatalf("BuildHouse without guildPoints registrar failed: %v", err)
+		}
+		if res.OwnerName != "NoGPHero" {
+			t.Errorf("expected OwnerName NoGPHero, got %s", res.OwnerName)
+		}
+		if chars["tx-nogp"].Money != 9500 {
+			t.Errorf("expected 9500 gold remaining, got %d", chars["tx-nogp"].Money)
+		}
+		if _, exists := repo.homes["tx-nogp"]; !exists {
+			t.Error("expected house to be saved in repository")
 		}
 	})
 }

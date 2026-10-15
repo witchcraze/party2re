@@ -58,8 +58,9 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 
 			// Award guild points if applicable: cycle_days * 10
 			if s.guildPoints != nil {
-				//lint:ignore error-swallow best-effort guild points bonus
-				_ = s.guildPoints.AddGuildPoints(tc.Context, characterID, t.CycleDays*10)
+				if err := s.guildPoints.AddGuildPoints(tc.Context, characterID, t.CycleDays*10); err != nil {
+					return err
+				}
 			}
 
 			existingHome.CharacterID = characterID
@@ -139,8 +140,9 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 
 	// Award guild points if applicable: cycle_days * 10
 	if s.guildPoints != nil {
-		//lint:ignore error-swallow best-effort guild points bonus
-		_ = s.guildPoints.AddGuildPoints(ctx, characterID, t.CycleDays*10)
+		if err := s.guildPoints.AddGuildPoints(ctx, characterID, t.CycleDays*10); err != nil {
+			return nil, err
+		}
 	}
 
 	// Calculate expiration: cycle_days * 24h

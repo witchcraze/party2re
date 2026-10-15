@@ -51,11 +51,12 @@ func (m *mockPetReader) ListHomePets(ctx context.Context, characterID string) ([
 }
 
 type mockHomeRepo struct {
-	homes   map[string]CharacterHome
-	letters map[string]Letter
-	phrases map[string][]CompanionPhrase
-	notices map[string][]DeliveryNotice
-	chars   map[string]corecharacter.Character
+	homes       map[string]CharacterHome
+	letters     map[string]Letter
+	phrases     map[string][]CompanionPhrase
+	notices     map[string][]DeliveryNotice
+	chars       map[string]corecharacter.Character
+	saveHomeErr error
 }
 
 func newMockHomeRepo(chars ...map[string]corecharacter.Character) *mockHomeRepo {
@@ -90,6 +91,9 @@ func (m *mockHomeRepo) GetHome(ctx context.Context, characterID string) (Charact
 }
 
 func (m *mockHomeRepo) SaveHome(ctx context.Context, home CharacterHome) error {
+	if m.saveHomeErr != nil {
+		return m.saveHomeErr
+	}
 	m.homes[home.CharacterID] = home
 	return nil
 }
