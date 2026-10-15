@@ -2,25 +2,95 @@ package database_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
 
-func TestLotteryRepository_Integration(t *testing.T) {
+func lotteryIsolatedDB(t *testing.T) *sql.DB {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-
-	db, err := database.OpenFromEnvironment()
+	ctx := context.Background()
+	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated lottery repository tests")
+	}
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	name := "party2_lottery_repo_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	tables := []string{
+		"players",
+		"characters",
+		"character_depots",
+		"character_lottery",
+		"takarakuji_rounds",
+		"takarakuji_tickets",
+	}
+	for _, table := range tables {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return db
+}
+
+func TestLotteryRepository_Integration(t *testing.T) {
+	db := lotteryIsolatedDB(t)
 
 	repo, err := database.NewLotteryRepository(db)
 	if err != nil {
@@ -54,29 +124,6 @@ func TestLotteryRepository_Integration(t *testing.T) {
 	}
 	if remaining != 7 {
 		t.Errorf("remaining=%d, want 7", remaining)
-	}
-
-	// Acquire advisory lock to prevent cross-package test interference during parallel test runs
-	lockConn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer lockConn.Close()
-
-	var lockAcquired int
-	if err := lockConn.QueryRowContext(ctx, "SELECT GET_LOCK('takarakuji_test_mutex', 60)").Scan(&lockAcquired); err != nil || lockAcquired != 1 {
-		t.Fatalf("failed acquiring takarakuji test mutex: %v", err)
-	}
-	defer func() {
-		_, _ = lockConn.ExecContext(ctx, "SELECT RELEASE_LOCK('takarakuji_test_mutex')")
-	}()
-
-	// Clean tables for isolated round testing
-	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_tickets"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_rounds"); err != nil {
-		t.Fatal(err)
 	}
 
 	// 4. Create Takarakuji round
