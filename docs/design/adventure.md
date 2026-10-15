@@ -364,6 +364,16 @@ reorders enemies. Discovery must retain current/previous-job and caller context
 when applying the shared whole-effect gate; a supported direct child is
 insufficient when any hidden descendant is unsupported. The whole submitted
 operation must reject before consumption or durable mutation in that case.
+For [arithmetic effects](battle.md#arithmetic-selectors-and-digit-reversal),
+discovery and submission share `skill.BattleDefinitions.ArithmeticAction` with
+the same ordered discovered names and submitted text. Keep the selected callback
+identity through nested invocation and the divisor within that operation. Apply
+ordinary costs after the callback, so MP-divisibility reads the source's current
+resources. Persist resulting HP, temporaries, revival/drop facts and completed
+end processing with the command receipt; reload must not rebuild participants
+or rerun selection. An unavailable defeat/reset closure or unsupported discovered
+child rejects before any outer consumption or committed draw. This finite
+effect support does not enable the full random pool or the SQL command consumer.
 The [combat asset contract](battle.md#combat-books-stored-tools-and-purchases)
 also applies to discovery and nested submission: distinguish requester/payer,
 temporary actor, ordered depot selection and held-item instances. Job50 binds

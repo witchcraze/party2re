@@ -428,7 +428,7 @@ table guard and no extended-entry exclusion (`_data.cgi:1260–1264`).
 | Recursive random | Job55 and56 callbacks and a branch of calling-job80's special command reach the general random helper. Job79's NPC callback draws again if alive after the first draw. Coverage is a transitive graph, including cycles, not a fixed one-level list | `_skill.cgi:3860,3886,6257–6262,6381–6419`; #1357, #1339, #1360 |
 | Extended gem86 | Inspect only the current table's last position. A last extended entry returns handled even when its SP/MP check prevents execution; only unhandled falls back to previous job. On execution subtract listed MP **after** the callback, clamped at zero. Job73 always reports handled: at MP>0 increase AT by party count when AT<999, then subtract1 MP; MP0 blocks fallback too. No ordinary equipment gate is applied | `_skill.cgi:10841–10877`; #1357 |
 | Calling gems87–92 | Prefer a calling previous job, otherwise current job, even if the preferred callback has no usable helper. Named commands choose the first matching table entry. Gem92 chooses the first ordinary entry excluding the five command names. The selected child has no ordinary SP or listed-MP charge; its internal gates and side effects still apply | `_skill.cgi:738–753,10879–10918`; `_data.cgi:2175–2180`; #1339, #1357 |
-| Arithmetic and discovered-command delegation | Job72 uses the discovered action map and submitted command context to select a divisor-dependent effect. Job31 also has MP-divisibility and HP digit-reversal effects; these can affect both sides and fallen participants. Direct random selection of a divisor-dependent callback without a divisor fails to cast | `_skill.cgi:2653–2713,5450–5581`; #1358 |
+| Arithmetic and discovered-command delegation | Job72 selects a divisor-dependent effect from the discovered action map and submitted text; job31 has fixed-divisor and HP digit-reversal callbacks. Preserve both sides, effect-specific fallen predicates and the [arithmetic contract](#arithmetic-selectors-and-digit-reversal). A direct random child without a divisor fails to cast | `_skill.cgi:2653–2713,5450–5581`; arithmetic effect owner, invoking closure #1357 |
 | Book/tool descendants | Job50's extended callback can invoke a depot tool; job78 can use an enhanced tool or buy one; job86 can exchange/return a book or invoke it twice. These reach the finite non-job tables and their descendants, including random invocation and travel. An NPC branch is not interchangeable with a player asset operation | `_skill.cgi:3612–3626,5988–6013,6802–6899,10196–10305,10433–10557`; #1341, #1197 |
 | Transformed tables | Copying job pairs and job82's form change affect subsequent table construction. Temporary job300 has four ordinary entries although it is outside the initial general-random job draw. Tool84 can select its current-job table; do not extend the general pool to300 or infer job88 reachability merely from a declared routine | `_skill.cgi:2944–2964,6593–6610,7465–7532`; #1340 |
 
@@ -478,6 +478,41 @@ case rejects the **whole** outer action without spending MP/CMP/items or
 changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
+
+#### Arithmetic selectors and digit reversal
+
+Evidence: `_skill.cgi:2653–2713,5450–5581` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`. These callbacks check the acting
+participant's magic seal, then operate directly on the ordered member list,
+including both sides. They bypass ordinary target redirection, immunity,
+damage/healing modifiers, tension and helper counters. Ordinary SP/item
+eligibility and the post-callback listed-MP charge belong to the invoking owner;
+random invocation retains its separate cost/restoration rules.
+
+| Callback | Selection and direct result |
+| --- | --- |
+| Job31 gravity / death | Living members with nonzero MP divisible by4 /5 and current HP≤999. Gravity sets `max(1, floor(HP/4))`; death sets HP0 and invokes the shared defeat owner. Base defense is irrelevant. |
+| Job31 digit reversal | Use an existing supplied participant on either side directly, including fallen participants. Only an absent participant invokes the untyped ally fallback and its normal confusion/temporary context. Reverse two or three decimal HP digits, including10/100→1, without a MaxHP clamp; one/four digits are unchanged. Negative two/three-character HP strings remain unsupported rather than inventing numeric treatment of the sign. |
+| Job72 divisor wrappers | Magic-state check, then parse the second `＠×…` command from submitted text with its ASCII/full-width space terminator. Resolve against the complete discovered name map; its last matching entry wins. Set divisor3/4/5 and invoke that captured callback, including its own magic-state check. No matching command is an accepted failed cast. |
+| Job72 five effect entries | Nonzero MP divisible by the operation's divisor selects all ordered members. Damage/heal/reflection/death require living HP; revival requires HP≤0. Damage independently draws `floor(260×(0.9+0.3u))` per member; base defense>999 consumes an additional draw and replaces damage with1..2. Healing draws `floor(500×(0.9+0.3u))` and caps at MaxHP. Reflection assigns the magic-counter temporary; revival directly sets MaxHP without reset/cure; death additionally requires current HP≤999. Lethal damage and death invoke defeat immediately, before the next member's eligibility check. |
+
+The divisor belongs to the current operation and is forwarded through nested
+callbacks; it is not a turn-spanning saved effect. A direct random effect entry
+without a divisor still checks the magic state, then returns a failed cast.
+Positional random and first-match delegation pass their captured callback ID;
+they never repeat the wrapper's last-match name lookup. Member order is captured
+at callback entry, while HP/MP eligibility is reread after each defeat hook.
+Arithmetic HP writes do not enqueue darkness recoil or increment damage/risk
+counters; already-recorded end processing retains its normal owner and ordering.
+
+`skill.BattleDefinitions.ArithmeticAction` uses the same preflight as execution,
+with an explicit allowlist of concrete arithmetic IDs separate from batch scalar
+payloads. A discovered unsupported last-match child rejects the whole selector,
+even when an earlier duplicate is supported. Reachable lethal effects require
+an already admitted shared defeat/drop/reset closure; the arithmetic owner does
+not certify that catalog. Accepted nonlethal/no-effect paths need no defeat hook.
+The registry remains empty by default. These finite callbacks neither populate
+complete job tables nor certify #1357 random closures or #1329/#1330 consumers.
 
 #### Shared modifiers and callback outcomes
 
