@@ -25,136 +25,65 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 		return nil, ErrInvalidHouseStyle
 	}
 
-	now := s.nowFunc().UTC()
-
-	if s.runner != nil {
-		req := economy.TransactionRequest{
-			CharacterID: characterID,
-			Cost: economy.ResourceCost{
-				Gold: t.Price,
-			},
-		}
-
-		var ownerName string
-		expiresAt := now.Add(time.Duration(t.CycleDays) * 24 * time.Hour)
-
-		_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			ownerName = tc.Character.Name
-
-			// 1-house rule globally: check existing home
-			existingHome, err := s.repo.GetHome(tc.Context, characterID)
-			if err == nil && existingHome.IsActive(now) {
-				return ErrAlreadyOwnsHouse
-			}
-
-			// Max 10 houses in town
-			count, err := s.repo.CountActiveTownHouses(tc.Context, townID, now)
-			if err != nil {
-				return err
-			}
-			if count >= t.MaxHouses {
-				return ErrTownMaxHousesReached
-			}
-
-			// Award guild points if applicable: cycle_days * 10
-			if s.guildPoints != nil {
-				//lint:ignore error-swallow best-effort guild points bonus
-				_ = s.guildPoints.AddGuildPoints(tc.Context, characterID, t.CycleDays*10)
-			}
-
-			existingHome.CharacterID = characterID
-			existingHome.TownID = t.ID
-			existingHome.HouseStyle = houseStyle
-			existingHome.ExpiresAt = &expiresAt
-			existingHome.UpdatedAt = now
-			if existingHome.CompanionName == "" {
-				existingHome.CompanionName = DefaultCompanionName
-			}
-
-			return s.repo.SaveHome(tc.Context, existingHome)
-		})
-		if err != nil {
-			if errors.Is(err, economy.ErrInsufficientGold) {
-				return nil, ErrInsufficientFunds
-			}
-			if errors.Is(err, corecharacter.ErrNotFound) {
-				return nil, ErrCharacterNotFound
-			}
-			return nil, err
-		}
-
-		// Set Valkey TTL timer cache
-		if s.timer != nil {
-			_ = s.timer.SetLock(ctx, timer.CategoryHouse, characterID, time.Duration(t.CycleDays)*24*time.Hour)
-		}
-
-		jstExpires := expiresAt.In(timer.JST)
-		msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", ownerName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
-
-		return &HomeCheckResult{
-			CharacterID: characterID,
-			OwnerName:   ownerName,
-			TownID:      t.ID,
-			TownName:    t.Name,
-			HouseStyle:  houseStyle,
-			ExpiresAt:   expiresAt,
-			Message:     msg,
-		}, nil
+	if s.runner == nil {
+		return nil, ErrTransactionRunnerRequired
 	}
 
-	char, err := s.charReader.FindByID(ctx, characterID)
+	now := s.nowFunc().UTC()
+
+	req := economy.TransactionRequest{
+		CharacterID: characterID,
+		Cost: economy.ResourceCost{
+			Gold: t.Price,
+		},
+	}
+
+	var ownerName string
+	expiresAt := now.Add(time.Duration(t.CycleDays) * 24 * time.Hour)
+
+	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		ownerName = tc.Character.Name
+
+		// 1-house rule globally: check existing home
+		existingHome, err := s.repo.GetHome(tc.Context, characterID)
+		if err == nil && existingHome.IsActive(now) {
+			return ErrAlreadyOwnsHouse
+		}
+
+		// Max 10 houses in town
+		count, err := s.repo.CountActiveTownHouses(tc.Context, townID, now)
+		if err != nil {
+			return err
+		}
+		if count >= t.MaxHouses {
+			return ErrTownMaxHousesReached
+		}
+
+		// Award guild points if applicable: cycle_days * 10
+		if s.guildPoints != nil {
+			if err := s.guildPoints.AddGuildPoints(tc.Context, characterID, t.CycleDays*10); err != nil {
+				return err
+			}
+		}
+
+		existingHome.CharacterID = characterID
+		existingHome.TownID = t.ID
+		existingHome.HouseStyle = houseStyle
+		existingHome.ExpiresAt = &expiresAt
+		existingHome.UpdatedAt = now
+		if existingHome.CompanionName == "" {
+			existingHome.CompanionName = DefaultCompanionName
+		}
+
+		return s.repo.SaveHome(tc.Context, existingHome)
+	})
 	if err != nil {
+		if errors.Is(err, economy.ErrInsufficientGold) {
+			return nil, ErrInsufficientFunds
+		}
 		if errors.Is(err, corecharacter.ErrNotFound) {
 			return nil, ErrCharacterNotFound
 		}
-		return nil, err
-	}
-
-	// 1-house rule globally: check existing home
-	existingHome, err := s.repo.GetHome(ctx, characterID)
-	if err == nil && existingHome.IsActive(now) {
-		return nil, ErrAlreadyOwnsHouse
-	}
-
-	if char.Money < t.Price {
-		return nil, ErrInsufficientFunds
-	}
-
-	// Max 10 houses in town
-	count, err := s.repo.CountActiveTownHouses(ctx, townID, now)
-	if err != nil {
-		return nil, err
-	}
-	if count >= t.MaxHouses {
-		return nil, ErrTownMaxHousesReached
-	}
-
-	// Deduct funds
-	if err := char.DeductMoney(t.Price); err != nil {
-		return nil, err
-	}
-	if err := s.charUpdater.Update(ctx, char); err != nil {
-		return nil, err
-	}
-
-	// Award guild points if applicable: cycle_days * 10
-	if s.guildPoints != nil {
-		//lint:ignore error-swallow best-effort guild points bonus
-		_ = s.guildPoints.AddGuildPoints(ctx, characterID, t.CycleDays*10)
-	}
-
-	// Calculate expiration: cycle_days * 24h
-	expiresAt := now.Add(time.Duration(t.CycleDays) * 24 * time.Hour)
-	existingHome.CharacterID = characterID
-	existingHome.TownID = t.ID
-	existingHome.HouseStyle = houseStyle
-	existingHome.ExpiresAt = &expiresAt
-	existingHome.UpdatedAt = now
-	if existingHome.CompanionName == "" {
-		existingHome.CompanionName = DefaultCompanionName
-	}
-
-	if err := s.repo.SaveHome(ctx, existingHome); err != nil {
 		return nil, err
 	}
 
@@ -164,11 +93,11 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 	}
 
 	jstExpires := expiresAt.In(timer.JST)
-	msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
+	msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", ownerName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
 
 	return &HomeCheckResult{
 		CharacterID: characterID,
-		OwnerName:   char.Name,
+		OwnerName:   ownerName,
 		TownID:      t.ID,
 		TownName:    t.Name,
 		HouseStyle:  houseStyle,

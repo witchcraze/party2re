@@ -51,11 +51,12 @@ func (m *mockPetReader) ListHomePets(ctx context.Context, characterID string) ([
 }
 
 type mockHomeRepo struct {
-	homes   map[string]CharacterHome
-	letters map[string]Letter
-	phrases map[string][]CompanionPhrase
-	notices map[string][]DeliveryNotice
-	chars   map[string]corecharacter.Character
+	homes       map[string]CharacterHome
+	letters     map[string]Letter
+	phrases     map[string][]CompanionPhrase
+	notices     map[string][]DeliveryNotice
+	chars       map[string]corecharacter.Character
+	saveHomeErr error
 }
 
 func newMockHomeRepo(chars ...map[string]corecharacter.Character) *mockHomeRepo {
@@ -90,6 +91,9 @@ func (m *mockHomeRepo) GetHome(ctx context.Context, characterID string) (Charact
 }
 
 func (m *mockHomeRepo) SaveHome(ctx context.Context, home CharacterHome) error {
+	if m.saveHomeErr != nil {
+		return m.saveHomeErr
+	}
 	m.homes[home.CharacterID] = home
 	return nil
 }
@@ -336,6 +340,7 @@ func TestHomeService(t *testing.T) {
 	fixedTime := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	rng := random.NewDeterministic(42)
 	charUpdater := &mockCharUpdater{chars: chars.chars}
+	runner := &mockTransactionRunner{chars: chars.chars}
 
 	petReader := &mockPetReader{
 		pets: map[string][]HomePet{
@@ -352,6 +357,7 @@ func TestHomeService(t *testing.T) {
 		WithRNG(rng),
 		WithCharacterUpdater(charUpdater),
 		WithHomePetReader(petReader),
+		WithTransactionRunner(runner),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -400,7 +406,7 @@ func TestHomeService(t *testing.T) {
 		}
 
 		// Second house attempt -> ErrAlreadyOwnsHouse
-		_, err = service.BuildHouse(ctx, "char-1", "town2", "005")
+		_, err = service.BuildHouse(ctx, "char-1", "town1", "002")
 		if !errors.Is(err, ErrAlreadyOwnsHouse) {
 			t.Errorf("expected ErrAlreadyOwnsHouse, got %v", err)
 		}
