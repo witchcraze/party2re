@@ -86,6 +86,9 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	var updated corecharacter.Character
 	var updatedState corejob.CharacterJob
 	_, err = s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		if tc.Character.JobMemory != nil {
+			return corejob.ErrJobUnavailable
+		}
 		if needArmor {
 			if err := s.consumeEquippedArmor(tc.Context, characterID); err != nil {
 				return err
