@@ -11195,7 +11195,7 @@
                 }
               }
             },
-            "description": "Unprocessable entity - job requirements not met"
+            "description": "Unprocessable entity - job requirements not met, item missing, or active job memory present"
           },
           "500": {
             "content": {

@@ -126,7 +126,7 @@ exchange still has the independently tracked learned-job eligibility gap
     - Automatically reverted upon resting at home (`home.Sleep`), restoring the remembered current/old jobs and SP.
     - Manual revert via `ExchangeJob` is prohibited (`ErrJobUnavailable`, legacy `job_change.cgi:121`).
 - **Facility Guard Matrix**:
-  - **Normal Job Change (`ChangeJob`)**: Prohibited while either persistent or temporary memory is active (`ErrJobUnavailable`, legacy `job_change.cgi:151`).
+  - **Normal Job Change (`ChangeJob`)**: Prohibited while either persistent or temporary memory is active (`ErrJobUnavailable`, legacy `job_change.cgi:151`). Checked at preflight and strictly revalidated under the character row lock within the economy transaction callback (`internal/job/change.go`); concurrent memory starts abort with `ErrJobUnavailable` and roll back without item/armor consumption, stat/level/history mutations, or post-success side-effect hooks.
   - **Future Memory (`SaveFutureMemory` / `RecallFutureMemory`)**: Prohibited while either persistent or temporary memory is active (legacy `_data.cgi:1843`, `job_change.cgi:564`).
   - **Overlapping Start**: Starting another job memory while either memory kind is active is prohibited (`ErrJobUnavailable`).
   - **Wishing Well SP Exchange**: Prohibited only when persistent job memory is active (`party2/lib/sp_change.cgi:74`); allowed during temporary job memory.
