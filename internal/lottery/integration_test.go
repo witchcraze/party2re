@@ -3,6 +3,7 @@ package lottery_test
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -11,9 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/collection"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
 
@@ -43,16 +46,86 @@ func (n *testNewsPublisher) PublishNews(ctx context.Context, category, title, co
 	return nil
 }
 
-func TestTakarakujiDatabaseIntegration(t *testing.T) {
+func takarakujiIsolatedDB(t *testing.T) *sql.DB {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-
-	db, err := database.OpenFromEnvironment()
+	ctx := context.Background()
+	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated takarakuji tests")
+	}
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	name := "party2_takarakuji_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	tables := []string{
+		"players",
+		"characters",
+		"character_depots",
+		"depot_items",
+		"character_monster_book",
+		"character_item_collection",
+		"character_collection_completions",
+		"takarakuji_rounds",
+		"takarakuji_tickets",
+	}
+	for _, table := range tables {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return db
+}
+
+func TestTakarakujiDatabaseIntegration(t *testing.T) {
+	db := takarakujiIsolatedDB(t)
 
 	lotteryRepo, err := database.NewLotteryRepository(db)
 	if err != nil {
@@ -93,29 +166,6 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-
-	// Acquire advisory lock to prevent cross-package test interference during parallel test runs
-	lockConn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer lockConn.Close()
-
-	var lockAcquired int
-	if err := lockConn.QueryRowContext(ctx, "SELECT GET_LOCK('takarakuji_test_mutex', 60)").Scan(&lockAcquired); err != nil || lockAcquired != 1 {
-		t.Fatalf("failed acquiring takarakuji test mutex: %v", err)
-	}
-	defer func() {
-		_, _ = lockConn.ExecContext(ctx, "SELECT RELEASE_LOCK('takarakuji_test_mutex')")
-	}()
-
-	// Clean tables for isolated round testing
-	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_tickets"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_rounds"); err != nil {
-		t.Fatal(err)
-	}
 
 	// 1. Create main test character with 100,000 gold
 	char1, err := database.CreateTestCharacter(ctx, db, "TakarakujiPlayer1")
@@ -306,21 +356,30 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 	}
 
 	t.Run("Mandatory Induction Failure Causes Full Takarakuji Draw Rollback", func(t *testing.T) {
-		if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_tickets"); err != nil {
+		subDB := takarakujiIsolatedDB(t)
+
+		subLotteryRepo, err := database.NewLotteryRepository(subDB)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_rounds"); err != nil {
+		subCharRepo, err := database.NewCharacterRepository(subDB)
+		if err != nil {
 			t.Fatal(err)
 		}
+		subDepotRepo, err := database.NewDepotRepository(subDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		subTxProvider := database.NewTransactionProvider(subDB)
 
 		inductor := &testLegendInductor{err: errors.New("takarakuji mandatory legend failure")}
 		newsPub := &testNewsPublisher{}
 
-		colRepo, err := database.NewCollectionRepository(db)
+		subColRepo, err := database.NewCollectionRepository(subDB)
 		if err != nil {
 			t.Fatal(err)
 		}
-		colSvc, err := collection.NewService(colRepo, 180, 1,
+		subColSvc, err := collection.NewService(subColRepo, 180, 1,
 			collection.WithLegendInductor(inductor),
 			collection.WithNewsPublisher(newsPub),
 		)
@@ -328,12 +387,12 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		testSvc, err := lottery.NewService(lotteryRepo,
-			lottery.WithCharacterRepository(charRepo),
-			lottery.WithDepotRepository(depotRepo),
+		testSvc, err := lottery.NewService(subLotteryRepo,
+			lottery.WithCharacterRepository(subCharRepo),
+			lottery.WithDepotRepository(subDepotRepo),
 			lottery.WithItemDefinitionProvider(itemCatalog),
-			lottery.WithTransactionProvider(txProvider),
-			lottery.WithCollectionRecorder(colSvc),
+			lottery.WithTransactionProvider(subTxProvider),
+			lottery.WithCollectionRecorder(subColSvc),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -343,12 +402,12 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.ExecContext(ctx, "UPDATE takarakuji_rounds SET prize_1_item_id = 'item-001', prize_2_item_id = 'item-002', prize_3_item_id = 'item-003' WHERE round_id = ?", status.RoundID); err != nil {
+		if _, err := subDB.ExecContext(ctx, "UPDATE takarakuji_rounds SET prize_1_item_id = 'item-001', prize_2_item_id = 'item-002', prize_3_item_id = 'item-003' WHERE round_id = ?", status.RoundID); err != nil {
 			t.Fatal(err)
 		}
 
 		for i := 1; i <= 20; i++ {
-			c, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("TkRollbackBuyer%d_%d", i, time.Now().UnixNano()), 50000)
+			c, err := database.CreateTestCharacterWithFunds(ctx, subDB, fmt.Sprintf("TkRollbackBuyer%d_%d", i, time.Now().UnixNano()), 50000)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -365,11 +424,11 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		}
 
 		var isDrawn bool
-		err = db.QueryRowContext(ctx, "SELECT is_drawn FROM takarakuji_rounds WHERE round_id = ?", status.RoundID).Scan(&isDrawn)
+		err = subDB.QueryRowContext(ctx, "SELECT is_drawn FROM takarakuji_rounds WHERE round_id = ?", status.RoundID).Scan(&isDrawn)
 		if err != nil || isDrawn {
 			t.Errorf("round in DB is_drawn = %v; want false (err=%v)", isDrawn, err)
 		}
-		tickets, err := lotteryRepo.ListRoundTakarakujiTickets(ctx, status.RoundID)
+		tickets, err := subLotteryRepo.ListRoundTakarakujiTickets(ctx, status.RoundID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -387,11 +446,197 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		if len(res.Winners) < 3 {
 			t.Errorf("expected at least 3 winners, got %d", len(res.Winners))
 		}
-		err = db.QueryRowContext(ctx, "SELECT is_drawn FROM takarakuji_rounds WHERE round_id = ?", status.RoundID).Scan(&isDrawn)
+		err = subDB.QueryRowContext(ctx, "SELECT is_drawn FROM takarakuji_rounds WHERE round_id = ?", status.RoundID).Scan(&isDrawn)
 		if err != nil || !isDrawn {
 			t.Errorf("round in DB is_drawn = %v; want true (err=%v)", isDrawn, err)
 		}
 	})
+}
+
+// TestTakarakujiDatabaseIsolation_SharedDataPreserved verifies that running Takarakuji
+// integration tests does not delete or overwrite pre-existing rounds and tickets in the
+// shared database configured by PARTY2_DB_DSN (#1396).
+func TestTakarakujiDatabaseIsolation_SharedDataPreserved(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated takarakuji tests")
+	}
+
+	ctx := context.Background()
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	// Create a dedicated simulated "shared" environment to protect developer data while reproducing the check.
+	simulatedSharedName := "party2_simulated_shared_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+simulatedSharedName+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+simulatedSharedName+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.DBName = simulatedSharedName
+	simulatedSharedDSN := cfg.FormatDSN()
+
+	sharedDB, err := database.Open(simulatedSharedDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sharedDB.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	// Copy required table schemas from PARTY2_DB_DSN into the simulated shared DB.
+	source, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	tables := []string{
+		"players",
+		"characters",
+		"character_depots",
+		"depot_items",
+		"character_monster_book",
+		"character_item_collection",
+		"character_collection_completions",
+		"takarakuji_rounds",
+		"takarakuji_tickets",
+	}
+	for _, table := range tables {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := sharedDB.ExecContext(ctx, ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Insert canary pre-existing round and ticket into the simulated shared DB.
+	canaryChar, err := database.CreateTestCharacter(ctx, sharedDB, "CanaryChar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	canaryCharID := canaryChar.ID
+
+	canaryRoundID := 88888
+	if _, err := sharedDB.ExecContext(ctx, `
+		INSERT INTO takarakuji_rounds (round_id, draw_date, is_drawn, prize_1_item_id, prize_2_item_id, prize_3_item_id)
+		VALUES (?, '2099-01-01 00:00:00', FALSE, 'item-canary-1', 'item-canary-2', 'item-canary-3')
+	`, canaryRoundID); err != nil {
+		t.Fatal(err)
+	}
+
+	canaryTicketID := id.New()
+	if _, err := sharedDB.ExecContext(ctx, `
+		INSERT INTO takarakuji_tickets (id, round_id, character_id)
+		VALUES (?, ?, ?)
+	`, canaryTicketID, canaryRoundID, canaryCharID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Point PARTY2_DB_DSN to the simulated shared DB.
+	t.Setenv("PARTY2_DB_DSN", simulatedSharedDSN)
+
+	// Now instantiate isolated DB as Takarakuji integration tests do.
+	isolatedDB := takarakujiIsolatedDB(t)
+
+	// Verify isolatedDB is a different database and operations on it do not affect sharedDB.
+	var isolatedDBName string
+	if err := isolatedDB.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&isolatedDBName); err != nil {
+		t.Fatal(err)
+	}
+	if isolatedDBName == simulatedSharedName {
+		t.Fatalf("isolatedDB must not be the shared DB (%s)", simulatedSharedName)
+	}
+
+	// Run Takarakuji service operations in the isolated DB.
+	isoLotteryRepo, err := database.NewLotteryRepository(isolatedDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isoCharRepo, err := database.NewCharacterRepository(isolatedDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isoDepotRepo, err := database.NewDepotRepository(isolatedDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isoItemCatalog, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	isoColRepo, err := database.NewCollectionRepository(isolatedDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isoColSvc, err := collection.NewService(isoColRepo, 286, 150)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isoTxProvider := database.NewTransactionProvider(isolatedDB)
+
+	isoSvc, err := lottery.NewService(isoLotteryRepo,
+		lottery.WithCharacterRepository(isoCharRepo),
+		lottery.WithDepotRepository(isoDepotRepo),
+		lottery.WithItemDefinitionProvider(isoItemCatalog),
+		lottery.WithCollectionRecorder(isoColSvc),
+		lottery.WithTransactionProvider(isoTxProvider),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// In the isolated DB, get status (creates round 1 in isolated DB).
+	status, err := isoSvc.GetTakarakujiStatus(ctx)
+	if err != nil {
+		t.Fatalf("GetTakarakujiStatus failed: %v", err)
+	}
+	if status.RoundID == canaryRoundID {
+		t.Fatalf("isolated status round ID (%d) matches canary round ID (%d)", status.RoundID, canaryRoundID)
+	}
+
+	// CRITICAL ASSERTION: The canary round and ticket in the simulated shared DB MUST still exist!
+	var roundCount int
+	if err := sharedDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM takarakuji_rounds WHERE round_id = ?", canaryRoundID).Scan(&roundCount); err != nil {
+		t.Fatal(err)
+	}
+	if roundCount != 1 {
+		t.Errorf("canary round was lost from shared DB: count = %d, want 1", roundCount)
+	}
+
+	var ticketCount int
+	if err := sharedDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM takarakuji_tickets WHERE id = ?", canaryTicketID).Scan(&ticketCount); err != nil {
+		t.Fatal(err)
+	}
+	if ticketCount != 1 {
+		t.Errorf("canary ticket was lost from shared DB: count = %d, want 1", ticketCount)
+	}
 }
 
 func TestRaffleDatabaseIntegration(t *testing.T) {
