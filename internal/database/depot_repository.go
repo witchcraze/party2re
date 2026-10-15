@@ -77,9 +77,10 @@ func (r *DepotRepository) FindByCharacterIDForUpdate(ctx context.Context, charac
 		return depot.Depot{}, err
 	}
 
+	// Full scans on sparse tables can lock another character's items.
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, definition_id, quantity, enhancement_level
-		FROM depot_items
+		FROM depot_items FORCE INDEX (idx_depot_items_character)
 		WHERE character_id = ?
 		ORDER BY sort_position, id FOR UPDATE
 	`, characterID)
@@ -131,7 +132,7 @@ func saveDepotTx(ctx context.Context, executor sqlContextExecutor, value depot.D
 	}
 
 	if len(value.Items) == 0 {
-		_, err := executor.ExecContext(ctx, "DELETE FROM depot_items WHERE character_id = ?", value.CharacterID)
+		_, err := executor.ExecContext(ctx, "DELETE depot_items FROM depot_items FORCE INDEX (idx_depot_items_character) WHERE character_id = ?", value.CharacterID)
 		return err
 	}
 
@@ -158,7 +159,7 @@ func saveDepotTx(ctx context.Context, executor sqlContextExecutor, value depot.D
 		}
 	}
 
-	query := fmt.Sprintf("DELETE FROM depot_items WHERE character_id = ? AND id NOT IN (%s)", strings.Join(placeholders, ","))
+	query := fmt.Sprintf("DELETE depot_items FROM depot_items FORCE INDEX (idx_depot_items_character) WHERE character_id = ? AND id NOT IN (%s)", strings.Join(placeholders, ","))
 	if _, err := executor.ExecContext(ctx, query, currentIDs...); err != nil {
 		return err
 	}
