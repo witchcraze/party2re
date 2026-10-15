@@ -102,6 +102,7 @@ func TestEstateService(t *testing.T) {
 	repo := newMockHomeRepo(chars)
 	guildPts := &mockGuildPoints{points: make(map[string]int)}
 	tmr := &mockTimer{locks: make(map[string]time.Duration)}
+	runner := &mockTransactionRunner{chars: chars}
 
 	fixedTime := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
 	svc, err := NewService(
@@ -110,6 +111,7 @@ func TestEstateService(t *testing.T) {
 		WithCharacterUpdater(charUpdater),
 		WithGuildPoints(guildPts),
 		WithTimer(tmr),
+		WithTransactionRunner(runner),
 		WithNowFunc(func() time.Time { return fixedTime }),
 	)
 	if err != nil {
@@ -183,34 +185,14 @@ func TestEstateService(t *testing.T) {
 		}
 	})
 
-	t.Run("non-transactional guild points failure refunds money and aborts without home", func(t *testing.T) {
-		chars["char-gp-fail"] = corecharacter.Character{ID: "char-gp-fail", PlayerID: "p-fail", Name: "FailGuy", Money: 10000}
-		guildPts.err = errors.New("simulated gp error in non-tx mode")
-		defer func() { guildPts.err = nil }()
-
-		_, err := svc.BuildHouse(ctx, "char-gp-fail", "town2", "005")
-		if err == nil {
-			t.Fatal("expected error, got nil")
+	t.Run("build house without transaction runner returns ErrTransactionRunnerRequired", func(t *testing.T) {
+		svcNoRunner, err := NewService(repo, charReader)
+		if err != nil {
+			t.Fatalf("failed to create service: %v", err)
 		}
-		if chars["char-gp-fail"].Money != 10000 {
-			t.Errorf("expected money to be refunded to 10000, got %d", chars["char-gp-fail"].Money)
-		}
-		if _, exists := repo.homes["char-gp-fail"]; exists {
-			t.Error("expected no home to be saved")
-		}
-	})
-
-	t.Run("non-transactional save home failure refunds money", func(t *testing.T) {
-		chars["char-save-fail"] = corecharacter.Character{ID: "char-save-fail", PlayerID: "p-sf", Name: "SaveFailGuy", Money: 10000}
-		repo.saveHomeErr = errors.New("simulated save home error in non-tx mode")
-		defer func() { repo.saveHomeErr = nil }()
-
-		_, err := svc.BuildHouse(ctx, "char-save-fail", "town2", "005")
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if chars["char-save-fail"].Money != 10000 {
-			t.Errorf("expected money to be refunded to 10000, got %d", chars["char-save-fail"].Money)
+		_, err = svcNoRunner.BuildHouse(ctx, "char-1", "town1", "001")
+		if !errors.Is(err, ErrTransactionRunnerRequired) {
+			t.Errorf("expected ErrTransactionRunnerRequired, got %v", err)
 		}
 	})
 }

@@ -161,6 +161,15 @@ func TestHomeServiceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	eco, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
 	monsterRepo, err := database.NewMonsterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +180,7 @@ func TestHomeServiceIntegration(t *testing.T) {
 		charRepo,
 		home.WithCharacterUpdater(charRepo),
 		home.WithHomePetReader(&testPetAdapter{repo: monsterRepo}),
+		home.WithEconomy(eco),
 	)
 	if err != nil {
 		t.Fatal(err)

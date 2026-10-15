@@ -340,6 +340,7 @@ func TestHomeService(t *testing.T) {
 	fixedTime := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	rng := random.NewDeterministic(42)
 	charUpdater := &mockCharUpdater{chars: chars.chars}
+	runner := &mockTransactionRunner{chars: chars.chars}
 
 	petReader := &mockPetReader{
 		pets: map[string][]HomePet{
@@ -356,6 +357,7 @@ func TestHomeService(t *testing.T) {
 		WithRNG(rng),
 		WithCharacterUpdater(charUpdater),
 		WithHomePetReader(petReader),
+		WithTransactionRunner(runner),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -404,7 +406,7 @@ func TestHomeService(t *testing.T) {
 		}
 
 		// Second house attempt -> ErrAlreadyOwnsHouse
-		_, err = service.BuildHouse(ctx, "char-1", "town2", "005")
+		_, err = service.BuildHouse(ctx, "char-1", "town1", "002")
 		if !errors.Is(err, ErrAlreadyOwnsHouse) {
 			t.Errorf("expected ErrAlreadyOwnsHouse, got %v", err)
 		}
