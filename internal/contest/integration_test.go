@@ -1234,3 +1234,111 @@ func TestContestSettlement_AdminSettle_ScheduleFailureReturnsCommittedResult_Int
 		t.Errorf("round 1 EndTime was not updated, SQL failed to commit!")
 	}
 }
+
+func TestContestSettlement_GetOverview_SchedulingFailureAndReconciliation_DatabaseIntegration(t *testing.T) {
+	ctx := context.Background()
+	_, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	schedRepo := newStatefulSchedRepo()
+	schedService := scheduling.NewService(schedRepo)
+
+	targetEndTime := now.Add(time.Hour)
+	r1 := contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now,
+		EndTime:   targetEndTime,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := contestRepo.SaveRound(ctx, r1); err != nil {
+		t.Fatalf("SaveRound failed: %v", err)
+	}
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithServiceScheduler(schedService),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1. Inject scheduler failure: ScheduleWithID fails
+	schedRepo.failSched = true
+	schedRepo.scheduleErr = errors.New("queue unavailable")
+
+	// Direct ReconcileSettlementSchedule fails with ErrScheduleFailed
+	if err := svc.ReconcileSettlementSchedule(ctx); !errors.Is(err, contest.ErrScheduleFailed) {
+		t.Fatalf("expected ErrScheduleFailed from ReconcileSettlementSchedule, got: %v", err)
+	}
+
+	// GetOverview must propagate the failure, returning ErrScheduleFailed
+	_, overviewErr := svc.GetOverview(ctx)
+	if overviewErr == nil || !errors.Is(overviewErr, contest.ErrScheduleFailed) {
+		t.Fatalf("expected ErrScheduleFailed from GetOverview, got: %v", overviewErr)
+	}
+
+	// SQL round must be unchanged in MariaDB
+	roundAfterFail, err := contestRepo.GetRoundByNumber(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetRoundByNumber failed: %v", err)
+	}
+	if !roundAfterFail.EndTime.Equal(targetEndTime) || roundAfterFail.Status != contest.StatusActive {
+		t.Fatalf("expected SQL round to remain untouched, got: %+v", roundAfterFail)
+	}
+
+	// Queue must have 0 actions
+	if len(schedRepo.actions) != 0 {
+		t.Fatalf("expected 0 actions scheduled during failure, got %d", len(schedRepo.actions))
+	}
+
+	// 2. Clear scheduler failure and verify recovery
+	schedRepo.failSched = false
+	schedRepo.scheduleErr = nil
+
+	overview, err := svc.GetOverview(ctx)
+	if err != nil {
+		t.Fatalf("expected GetOverview to succeed after scheduler recovery, got: %v", err)
+	}
+	if overview.ActiveRound == nil || overview.ActiveRound.Round != 1 {
+		t.Fatalf("expected ActiveRound 1, got %+v", overview.ActiveRound)
+	}
+
+	// 1 scheduled action must now exist in the queue
+	if len(schedRepo.actions) != 1 {
+		t.Fatalf("expected 1 scheduled action after recovery, got %d", len(schedRepo.actions))
+	}
+	expectedActionPrefix := contest.SettlementActionID(1, targetEndTime)
+	var createdAction *core_scheduling.ScheduledAction
+	for _, a := range schedRepo.actions {
+		if strings.HasPrefix(a.ID, expectedActionPrefix) {
+			createdAction = &a
+			break
+		}
+	}
+	if createdAction == nil {
+		t.Fatalf("expected scheduled action with prefix %q in queue", expectedActionPrefix)
+	}
+	if createdAction.State != core_scheduling.StatePending {
+		t.Errorf("expected action State %s, got %s", core_scheduling.StatePending, createdAction.State)
+	}
+	if !createdAction.ExecuteAt.Equal(targetEndTime) {
+		t.Errorf("expected action ExecuteAt %v, got %v", targetEndTime, createdAction.ExecuteAt)
+	}
+
+	// 3. Subsequent GetOverview calls must NOT duplicate the scheduled reservation
+	overview2, err := svc.GetOverview(ctx)
+	if err != nil {
+		t.Fatalf("subsequent GetOverview failed: %v", err)
+	}
+	if overview2.ActiveRound == nil || overview2.ActiveRound.Round != 1 {
+		t.Fatalf("expected ActiveRound 1 on subsequent call, got %+v", overview2.ActiveRound)
+	}
+	if len(schedRepo.actions) != 1 {
+		t.Fatalf("expected still 1 scheduled action (no duplicate), got %d", len(schedRepo.actions))
+	}
+}

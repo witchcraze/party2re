@@ -379,6 +379,9 @@
         },
         "404": {
           "description": "Contest round not found"
+        },
+        "500": {
+          "description": "Internal server error"
         }
       },
       "security": [

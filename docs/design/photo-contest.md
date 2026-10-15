@@ -77,7 +77,7 @@ When a contest is settled:
   - If quorum is not satisfied, the round is postponed and extended by 10 days from the current check time (`now + ContestCycleDays`) without prize distribution, entries are retained, and the next check is scheduled for the extended future deadline.
 - **Scheduling Failure & Recovery Boundary (予約失敗と再調停境界)**:
   - **SQL Commit Precedence**: Database transactions commit durable state (entry submission, round postponement, prize awards) before Valkey scheduling is invoked.
-  - **Error Observability**: Neither startup (`wireContestSettlement`), entry submission (`EnterContest`), settlement execution (`ContestSettlementHandler.Handle`), nor admin settlement (`SettleContest` / `handleSettleContest`) discards scheduling errors. If enqueuing fails after commit, `ErrScheduleFailed` is returned alongside the committed result (e.g. `EnterContest` returns non-empty `ContestEntry` and `ErrScheduleFailed`; `SettleContest` returns `SettlementResult` and `ErrScheduleFailed`). When `Handle` fails to schedule the next check, `scheduling.Worker` transitions the current action to terminal `StateFailed` rather than `StateCompleted`.
+  - **Error Observability**: Neither startup (`wireContestSettlement`), entry submission (`EnterContest`), settlement execution (`ContestSettlementHandler.Handle`), venue visits (`GetOverview` / `GET /contest/venue`), nor admin settlement (`SettleContest` / `handleSettleContest`) discards scheduling errors. If enqueuing fails after commit, `ErrScheduleFailed` is returned alongside the committed result (e.g. `EnterContest` returns non-empty `ContestEntry` and `ErrScheduleFailed`; `SettleContest` returns `SettlementResult` and `ErrScheduleFailed`). When `Handle` fails to schedule the next check, `scheduling.Worker` transitions the current action to terminal `StateFailed` rather than `StateCompleted`. When opportunistic reconciliation fails during venue access, `GetOverview` propagates the failure and `GET /contest/venue` returns `500 Internal Server Error` without duplicate reconciliation calls. When an unready round (`ErrContestNotReadyToSettle`) fails opportunistic reconciliation during `handleSettleContest`, the endpoint returns `500 Internal Server Error` instead of suppressing the error, while returning `400 Bad Request` when reconciliation succeeds.
   - **State Machine Protection & Actor Indexing**:
     - `ReconcileSettlementSchedule` queries active reservations via `FindPendingByActorID(ctx, "contest:settlement")` and backward-compatible checks for legacy actor `"system"`.
     - If a reservation already exists with state `StatePending` or `StateProcessing` matching the target deadline `EndTime`, reconciliation takes no action. This prevents creating duplicate pending actions and protects in-flight processing actions from being overwritten or restarted.
@@ -88,8 +88,8 @@ When a contest is settled:
     - Dedicated background schedulers or polling loops are not used; instead, reconciliation self-heals opportunistically along existing system flows:
       1. **Startup**: `wireContestSettlement` reconciles on server boot.
       2. **Entry Submission**: `EnterContest` triggers reconciliation upon saving an entry.
-      3. **Venue Access**: `GetOverview` / `GET /contest/venue` triggers opportunistic reconciliation on player venue visits.
-      4. **Admin Settlement**: `handleSettleContest` (`POST /contest/settle`) triggers reconciliation before unready settlement checks, while `SettleContest` reconciles for the next round after committing the current round.
+      3. **Venue Access**: `GetOverview` triggers opportunistic reconciliation on player venue visits and propagates reconciliation errors; `GET /contest/venue` delegates directly to `GetOverview` without redundant handler-level reconciliation.
+      4. **Admin Settlement**: `handleSettleContest` (`POST /contest/settle`) reconciles missing reservations when handling an unready round (`ErrContestNotReadyToSettle`) and propagates reconciliation failures (`500`), while `SettleContest` reconciles for the next round after committing the current round.
       5. **Settlement Handler**: `ContestSettlementHandler.Handle` reconciles when recovering from missing rounds (`ErrContestNotFound`) or after rejecting stale action replays.
   - **Stale Action & DB Read Integrity**:
     - In `ContestSettlementHandler.Handle`, database read errors from `GetRoundByNumber` are propagated immediately rather than masked, ensuring unverified rounds are never settled blindly.
@@ -101,7 +101,7 @@ When a contest is settled:
 
 | Action | Legacy Command | HTTP Endpoint | Description |
 | :--- | :--- | :--- | :--- |
-| **Venue Dialogue** | `はなす` | `GET /contest/venue` | Returns `@ワコール` dialogue and overview of contest status. Opportunistically reconciles settlement schedule. |
+| **Venue Dialogue** | `はなす` | `GET /contest/venue` | Returns `@ワコール` dialogue and overview of contest status. Opportunistically reconciles settlement schedule (returns `500` on reconciliation failure). |
 | **Current Entries** | `みる` | `GET /contest/current` | Lists entries and vote counts for active round. |
 | **Past Results** | `past` | `GET /contest/past` | Returns results and top comments of last settled contest. |
 | **Hall of Fame** | `legend` | `GET /contest/legends` | Lists historical round champions. |
@@ -110,7 +110,7 @@ When a contest is settled:
 | **Delete Photo** | `けす` | `DELETE /characters/{id}/photos/{photoId}` | Deletes a photo owned by the character. |
 | **Enter Contest** | `えんとりー` | `POST /characters/{id}/contest/enter` | Submits a photo into the next contest round. Returns `200 OK` on full success, or `202 Accepted` with saved entry and `warning` if scheduling fails. |
 | **Vote** | `とうひょう` | `POST /characters/{id}/contest/vote` | Votes for a contest entry with optional comment. |
-| **Settle Contest** | `集計` | `POST /contest/settle` | Admin endpoint to trigger round conclusion and settlement. Returns `200 OK` on full success, or `202 Accepted` with settled result and `warning` if next schedule fails. |
+| **Settle Contest** | `集計` | `POST /contest/settle` | Admin endpoint to trigger round conclusion and settlement. Returns `200 OK` on full success, `202 Accepted` with settled result and `warning` if next schedule fails, `400 Bad Request` if not ready, or `500` if unready round schedule reconciliation fails. |
 
 ---
 

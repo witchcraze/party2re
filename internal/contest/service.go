@@ -110,7 +110,9 @@ func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) er
 // GetOverview returns a summary of current contest rounds and active submissions.
 // Opportunistically reconciles the contest settlement schedule to self-heal missing reservations during runtime.
 func (s *Service) GetOverview(ctx context.Context) (ContestOverview, error) {
-	_ = s.ReconcileSettlementSchedule(ctx)
+	if err := s.ReconcileSettlementSchedule(ctx); err != nil {
+		return ContestOverview{}, err
+	}
 
 	overview := ContestOverview{
 		MinEntries: MinEntriesForContest,

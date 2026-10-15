@@ -102,8 +102,6 @@ func (h *Handler) handleGetContestVenue(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_ = h.contest.ReconcileSettlementSchedule(r.Context())
-
 	overview, err := h.contest.GetOverview(r.Context())
 
 	if err != nil {
@@ -202,7 +200,10 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err)
 		case errors.Is(err, contest.ErrContestNotReadyToSettle):
 			// Opportunistically reconcile schedule for the unready round to recover missing reservations
-			_ = h.contest.ReconcileSettlementSchedule(r.Context())
+			if recErr := h.contest.ReconcileSettlementSchedule(r.Context()); recErr != nil {
+				writeError(w, http.StatusInternalServerError, recErr)
+				return
+			}
 			writeError(w, http.StatusBadRequest, err)
 		default:
 			writeError(w, http.StatusInternalServerError, err)
