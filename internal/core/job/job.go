@@ -108,6 +108,7 @@ func (c *CharacterJob) RecordJobSP(jobID string, sp int) error {
 // SavedSP prefers the latest recorded value, retaining compatibility with
 // mastery-only snapshots created before independent learned-job storage.
 func (c CharacterJob) SavedSP(jobID string) (int, bool) {
+	jobID = strings.TrimSpace(jobID)
 	if sp, ok := c.RecordedJobSP[jobID]; ok {
 		return sp, true
 	}
@@ -117,6 +118,7 @@ func (c CharacterJob) SavedSP(jobID string) (int, bool) {
 
 // HasRecordedJob requires an actual record, independently of preserved SP.
 func (c CharacterJob) HasRecordedJob(jobID string) bool {
+	jobID = strings.TrimSpace(jobID)
 	if jobID == "" {
 		return false
 	}

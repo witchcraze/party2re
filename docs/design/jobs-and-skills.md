@@ -169,8 +169,9 @@ exchange still has the independently tracked learned-job eligibility gap
 - Exposed via `GET /characters/{id}/job-mastery` as a public inspection endpoint.
 - For each job, status is determined as:
   - `mastered`: Recorded as mastered on the character (`MasteredJobs`) or active job meeting mastery SP (`SP >= master_sp`).
-  - `learning`: Job has been experienced (currently active, previous job `OldJobID`, or present in `History`), but mastery SP is not yet reached.
-  - `unlearned`: Job has never been experienced by the character.
+  - `learning`: Job has an explicit record (`CharacterJob.HasRecordedJob`, currently active, previous job `OldJobID`, or present in `History`), but mastery SP is not yet reached.
+  - `unlearned`: Job has never been experienced by the character. Preserved SP rows with `is_recorded = false` without mastery or history evidence are not considered experienced.
+- Current SP resolves with priority: active job `Character.SP`, previous job `Character.OldSP`, saved value `CharacterJob.SavedSP` (retaining known 0 SP without threshold substitution), or fallback (mastery threshold for mastered jobs without saved SP, 0 for unmastered).
 - Completion percentage (`comp_par`) follows legacy `job_master.cgi:26`:
   ```text
   count = mastered_count * 1.0 + learning_count * 0.5

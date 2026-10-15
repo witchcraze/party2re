@@ -228,3 +228,146 @@ func TestChangeJobRecordsPresenceAcrossDatabaseReload(t *testing.T) {
 		}
 	}
 }
+
+func TestJobMasteryDatabaseProjectionRegression(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+
+	// 1. Create character via test factory: current=job-03 SP 9, old=job-04 SP 11
+	char, err := database.CreateTestCharacter(ctx, db, "Mastery DB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.JobID, char.OldJobID, char.SP, char.OldSP = "job-03", "job-04", 9, 11
+	chars, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. CharacterJob setup:
+	// - RecordMastery("job-01", 80, 80) -> RecordJobSP("job-01", 0)
+	// - RecordJobSP("job-02", 17)
+	// - job-05: migration-only preservation (is_recorded=false directly in character_job_points)
+	// - job-06: history-only transition without saved SP
+	// - job-07: mastered without saved SP (in character_job_masteries)
+	// - job-08: untouched control
+	jobs, err := database.NewCharacterJobRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := corejob.NewCharacterJob(char.ID, char.JobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.RecordMastery("job-01", 80, 80)
+	if err := state.RecordJobSP("job-01", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.RecordJobSP("job-02", 17); err != nil {
+		t.Fatal(err)
+	}
+	state.RecordMastery("job-07", 80, 80)
+	state.History = append(state.History, corejob.Change{FromJobID: "job-06", ToJobID: "job-03"})
+
+	if err := jobs.Save(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert migration-style unrecorded SP for job-05 (is_recorded = 0)
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO character_job_points (character_id, job_id, earned_sp, is_recorded)
+		VALUES (?, 'job-05', 50, FALSE)
+		ON DUPLICATE KEY UPDATE earned_sp = 50, is_recorded = FALSE
+	`, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Reload from DB repository and verify model contract facts
+	loaded, err := jobs.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sp, ok := loaded.SavedSP("job-01"); !ok || sp != 0 {
+		t.Fatalf("job-01 SavedSP expected (0, true), got (%d, %t)", sp, ok)
+	}
+	if !loaded.HasRecordedJob("job-02") {
+		t.Fatalf("job-02 HasRecordedJob expected true")
+	}
+	if loaded.HasRecordedJob("job-05") {
+		t.Fatalf("job-05 HasRecordedJob expected false for migration-only row")
+	}
+
+	// 4. Construct service and verify GetJobMastery projection
+	svc, err := job.NewService(
+		jobs,
+		job.WithCharacterRepository(chars),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mastery, err := svc.GetJobMastery(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	findProgress := func(id string) job.JobProgress {
+		for _, j := range mastery.Jobs {
+			if j.JobID == id {
+				return j
+			}
+		}
+		t.Fatalf("job %s not found in mastery", id)
+		return job.JobProgress{}
+	}
+
+	// job-01: mastered, SP 0
+	j01 := findProgress("job-01")
+	if j01.Status != job.JobStatusMastered || j01.CurrentSP != 0 {
+		t.Errorf("job-01: expected mastered / SP 0, got %s / SP %d", j01.Status, j01.CurrentSP)
+	}
+	// job-02: learning, SP 17
+	j02 := findProgress("job-02")
+	if j02.Status != job.JobStatusLearning || j02.CurrentSP != 17 {
+		t.Errorf("job-02: expected learning / SP 17, got %s / SP %d", j02.Status, j02.CurrentSP)
+	}
+	// job-03: current job, SP 9
+	j03 := findProgress("job-03")
+	if j03.Status != job.JobStatusLearning || j03.CurrentSP != 9 {
+		t.Errorf("job-03: expected learning / SP 9, got %s / SP %d", j03.Status, j03.CurrentSP)
+	}
+	// job-04: old job, SP 11
+	j04 := findProgress("job-04")
+	if j04.Status != job.JobStatusLearning || j04.CurrentSP != 11 {
+		t.Errorf("job-04: expected learning / SP 11, got %s / SP %d", j04.Status, j04.CurrentSP)
+	}
+	// job-05: migration-only, unlearned, SP 0
+	j05 := findProgress("job-05")
+	if j05.Status != job.JobStatusUnlearned || j05.CurrentSP != 0 {
+		t.Errorf("job-05: expected unlearned / SP 0, got %s / SP %d", j05.Status, j05.CurrentSP)
+	}
+	// job-06: history-only, learning, SP 0
+	j06 := findProgress("job-06")
+	if j06.Status != job.JobStatusLearning || j06.CurrentSP != 0 {
+		t.Errorf("job-06: expected learning / SP 0, got %s / SP %d", j06.Status, j06.CurrentSP)
+	}
+	// job-07: mastered without saved SP, fallback to masterSP
+	j07 := findProgress("job-07")
+	if j07.Status != job.JobStatusMastered || j07.CurrentSP != j07.MasterSP {
+		t.Errorf("job-07: expected mastered / SP %d, got %s / SP %d", j07.MasterSP, j07.Status, j07.CurrentSP)
+	}
+	// job-08: unexperienced control, unlearned, SP 0
+	j08 := findProgress("job-08")
+	if j08.Status != job.JobStatusUnlearned || j08.CurrentSP != 0 {
+		t.Errorf("job-08: expected unlearned / SP 0, got %s / SP %d", j08.Status, j08.CurrentSP)
+	}
+}
