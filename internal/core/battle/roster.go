@@ -124,13 +124,17 @@ func (s *LifetimeState) rosterIdentity(identity string) *LifetimeActor {
 // real players retain their position and identity. Dismissed helpers leave all
 // three ordered rosters here; recalling creates a new incarnation.
 func (s *LifetimeState) PruneRoster(c *TargetContext) {
+	actor := s.actor(c.ActorID)
+	actorTeam := ""
+	if actor != nil {
+		actorTeam = actor.TeamID
+	}
 	s.Actors = slices.DeleteFunc(s.Actors, func(a LifetimeActor) bool { return a.HP <= 0 && (a.NPC || a.RosterIdentity != "") })
 	c.PartyIDs, c.EnemyIDs = nil, nil
-	actor := s.actor(c.ActorID)
 	for i := range s.Actors {
 		a := &s.Actors[i]
 		a.RosterDetached = false
-		if actor != nil && a.TeamID == actor.TeamID {
+		if actor != nil && a.TeamID == actorTeam {
 			c.PartyIDs = append(c.PartyIDs, a.ID)
 		} else {
 			c.EnemyIDs = append(c.EnemyIDs, a.ID)

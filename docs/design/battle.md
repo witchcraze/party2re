@@ -853,7 +853,9 @@ or enemy species/suffix. Tools72/73/74 compete for one dummy identity,216 uses a
 separate guardian identity, and extension244 uses a separate snow identity.
 Presence blocks another summon even at HP0. Saving via `PruneRoster` removes dead
 NPCs/helpers and retains fallen real players, then rebuilds side arrays in member
-order. A recalled helper receives a new incarnation ID. Dismissal first sets HP0
+order. Side reconstruction retains the operation actor's team before pruning,
+including when that actor is a dead NPC being removed. A recalled helper receives
+a new incarnation ID. Dismissal first sets HP0
 and NPC color; the current request's arrays stay in their original order until
 the save boundary. A same-request revival can therefore retain that participant
 on the NPC side after reload. No roster operation submits an additional NPC turn
