@@ -12,6 +12,7 @@ type BattleDefinitions struct {
 	Gems      map[string]corebattle.GemEffect
 	// Explicit callbacks stay separate from the batch engine's scalar payloads.
 	ArithmeticSkills map[string]bool
+	RosterSkills     map[string]bool
 	Invocations      corebattle.CallbackCatalog
 }
 

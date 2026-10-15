@@ -94,7 +94,7 @@ func (s *LifetimeState) validateTargetContext(c TargetContext, rng random.Genera
 	for side, ids := range [][]string{c.PartyIDs, c.EnemyIDs} {
 		for _, id := range ids {
 			a := s.actor(id)
-			if a == nil || seen[id] || (a.TeamID == actor.TeamID) != (side == 0) {
+			if a == nil || seen[id] || ((a.TeamID == actor.TeamID) != (side == 0) && !(a.RosterDetached && a.RosterIdentity != "")) {
 				return ErrInvalidParticipant
 			}
 			seen[id] = true
@@ -237,7 +237,7 @@ func (s *LifetimeState) partyInitialTargetIDs(c TargetContext, e TargetEffect) [
 			ids = append(ids, member.ID)
 		}
 	} else {
-		if !slices.Contains(c.PartyIDs, e.TargetID) {
+		if target := s.actor(e.TargetID); target == nil || target.TeamID != a.TeamID {
 			ids = slices.Clone(c.PartyIDs)
 		}
 		for i, id := range ids {
@@ -359,7 +359,7 @@ func (s *LifetimeState) ResolvePartyTarget(c TargetContext, e TargetEffect, rng 
 			r.TargetID = s.randomMember(rng)
 		}
 	} else {
-		if !slices.Contains(c.PartyIDs, r.TargetID) {
+		if target := s.actor(r.TargetID); target == nil || target.TeamID != a.TeamID {
 			r.TargetID = randomRoster(c.PartyIDs, rng)
 		}
 		if s.actor(r.TargetID).HP <= 0 && e.Payload.Symbol != "revival" {
@@ -404,7 +404,7 @@ func (s *LifetimeState) ResolveEnemyTarget(c TargetContext, e TargetEffect, rng 
 			r.TargetID = s.randomMember(rng)
 		}
 	} else {
-		if !slices.Contains(c.EnemyIDs, r.TargetID) {
+		if target := s.actor(r.TargetID); target == nil || target.TeamID == a.TeamID {
 			r.TargetID = randomRoster(c.EnemyIDs, rng)
 		}
 		if s.actor(r.TargetID).HP <= 0 {

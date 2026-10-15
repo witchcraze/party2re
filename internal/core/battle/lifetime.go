@@ -10,6 +10,7 @@ type LifetimeState struct {
 	SkillHistory     map[string]map[string]bool `json:"skill_history"`
 	DroppedCrystals  int                        `json:"dropped_crystals"`
 	SpecialBossField bool                       `json:"special_boss_field"`
+	RosterSequence   uint64                     `json:"roster_sequence"`
 }
 
 // LifetimeActor keeps current resources and effect facts together. Participant
@@ -20,6 +21,10 @@ type LifetimeActor struct {
 	OriginalJobs   BattleJobs      `json:"original_jobs"`
 	JobHistory     map[string]*int `json:"job_history,omitempty"` // nil SP means a recorded job with irrecoverable historical SP.
 	NPC            bool            `json:"npc"`
+	RosterIdentity string          `json:"roster_identity,omitempty"`
+	RosterDetached bool            `json:"-"` // Dismissal changes color before the request's ordered arrays are rebuilt.
+	SummonForm     int             `json:"summon_form,omitempty"`
+	CrystalReward  int             `json:"crystal_reward,omitempty"`
 	Tension        float64         `json:"tension"`
 	Hit            int             `json:"hit"`
 	Temporary      TemporaryEffect `json:"temporary,omitempty"`

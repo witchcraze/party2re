@@ -76,15 +76,17 @@ type AttackDistribution struct {
 	Tails     []EffectApplication
 }
 
-// ApplyDistributedAttack implements calling80's distribution and four ordered
-// tails (_skill.cgi:6436–6465); summoning/appearance selection remains #1339.
-func (s *LifetimeState) ApplyDistributedAttack(c *EffectContext, helperID string, cursor TargetCursor, rng random.Generator) (AttackDistribution, error) {
+func (s *LifetimeState) validateDistributedAttack(c *EffectContext, helperID string, cursor TargetCursor, rng random.Generator) (AttackDistribution, error) {
 	r := AttackDistribution{Cap: 999}
 	if c == nil {
 		return r, ErrInvalidRequest
 	}
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return r, err
+	}
+	helper := s.actor(helperID)
+	if helper == nil || helper.HP <= 0 {
+		return r, nil
 	}
 	switch cursor.Source {
 	case "":
@@ -102,7 +104,6 @@ func (s *LifetimeState) ApplyDistributedAttack(c *EffectContext, helperID string
 	default:
 		return r, ErrUnsupportedEffect
 	}
-	helper := s.actor(helperID)
 	if helper != nil && !slices.Contains(c.PartyIDs, helperID) {
 		return r, ErrUnsupportedEffect
 	}
@@ -119,6 +120,22 @@ func (s *LifetimeState) ApplyDistributedAttack(c *EffectContext, helperID string
 			}
 		}
 	}
+	return r, nil
+}
+
+func (s *LifetimeState) ValidateDistributedAttack(c *EffectContext, helperID string, cursor TargetCursor, rng random.Generator) error {
+	_, err := s.validateDistributedAttack(c, helperID, cursor, rng)
+	return err
+}
+
+// ApplyDistributedAttack implements calling80's distribution and four ordered
+// tails (_skill.cgi:6436–6465); the roster owner resolves the helper first.
+func (s *LifetimeState) ApplyDistributedAttack(c *EffectContext, helperID string, cursor TargetCursor, rng random.Generator) (AttackDistribution, error) {
+	r, err := s.validateDistributedAttack(c, helperID, cursor, rng)
+	if err != nil {
+		return r, err
+	}
+	helper := s.actor(helperID)
 	allowed, err := s.actor(c.ActorID).CheckCategorySeal(CategoryDance, rng)
 	if err != nil || !allowed || helper == nil || helper.HP <= 0 {
 		return r, err

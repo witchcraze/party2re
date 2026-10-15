@@ -450,8 +450,8 @@ special commands use helper stats with the summoner still acting. A missing
 named helper can fall back to the first matching **appearance** in party order;
 `_search_job` excludes self and mixed forms and does not search job IDs. A
 present but fallen named helper does not fall back. Summon branches, merge,
-duplication, growth, helper defense and cross-actor restoration remain #1339;
-the shared attack/target/modifier descendants remain #1343. Legacy appearance
+duplication, growth and cross-actor restoration use the
+[shared roster operations](#summoned-roster-and-helper-commands). Legacy appearance
 paths identify branch evidence only; native assets must be newly authored.
 Evidence: `_skill.cgi:4029–5447,6307–6467,6904–7038,9793–9828,9935–9942,10627–10650`.
 
@@ -845,18 +845,77 @@ and a three-operation ban (`_skill.cgi:4910–4930`). Death-triggered revival an
 reset/reward ordering remain part of `_battle.cgi:defeat:28–142`, not a blanket
 post-battle “keep 1 HP” correction.
 
-Summoned allies append to the ordered roster with the actor's team, hit 95 and
-tension 1; their five stat pairs are independently rolled from supplied bases
-using floor(base×(0.9+rand(0.3))), then ×1.2/floor when the summoner holds item
-165 (`_add_party:9793–9828`). Caller-specific duplicate checks remain distinct.
-Dismissal marks the helper dead and changes its team; member persistence removes
-dead NPC/helpers but keeps fallen players (`_battle.cgi:453–493,518–529`). This
-means a later command can call again after removal. Do not replace helper death
-with permanent character deletion or discard a fallen player who can self-revive.
-Enemy summoning uses the current stage's appearance pool, hard/party scaling,
-full supplied payload and custom gem cost; it refuses once the member count is
-at least ten (`_skill.cgi:9834–9931`). An NPC caster appends it to its own side;
-a player caster appends it to opponents. Gem 82 adds an at-most-one-enemy gate.
+##### Summoned roster and helper commands
+
+`LifetimeState.Actors` preserves member order. Summoned incarnations receive a
+monotonic run-local ID; `RosterIdentity` separately identifies the named helper
+or enemy species/suffix. Tools72/73/74 compete for one dummy identity,216 uses a
+separate guardian identity, and extension244 uses a separate snow identity.
+Presence blocks another summon even at HP0. Saving via `PruneRoster` removes dead
+NPCs/helpers and retains fallen real players, then rebuilds side arrays in member
+order. A recalled helper receives a new incarnation ID. Dismissal first sets HP0
+and NPC color; the current request's arrays stay in their original order until
+the save boundary. A same-request revival can therefore retain that participant
+on the NPC side after reload. No roster operation submits an additional NPC turn
+or finishes an action tail. Evidence: `_battle.cgi:453–493,518–529`.
+
+`AddHelper` supplies the shared primitive for calling, tools and field recreation.
+Each of HP/MP/AT/DF/AG independently rolls floor(base × (0.9 + draw × 0.3)), sets
+its corresponding maximum/base, then separately floors ×1.2 for requester
+item165. Initial hit is95 and tension1; current/previous job payloads survive,
+and defeat EXP/gold are floor(requester level/2) and floor(requester level/4).
+Grave-field composition restores an existing helper's MP on the player tail,
+not the NPC tail; recreation calls this summon primitive and rolls fresh stats
+instead of restoring a byte-identical old helper (#1366).
+The requester remains distinct from a temporary effect actor. Helpers use
+generic native identities and newly authored placeholder art. Evidence:
+`_skill.cgi:9793–9828`; `_data.cgi:1140–1174,1914–1924`.
+
+`RosterEntries` keeps the complete calling-table order and extended markers;
+`ValidateRoster`/`ApplyRoster` own its finite producers. Normal attack switches
+actor only for the existing attack helper, restores it even after an error or
+roster growth, and retains operation counters. Special attacks use the helper's
+source-selected stats with the summoner's modifiers. Merge caps the summoner by
+its own over-level maxima/base stats and the helper at999, without changing their
+maxima; an NPC/helper is dismissed and a real substitute loses its old appearance.
+Duplication63 rolls a new helper from current stats, preserves source base stats,
+clamps copied current HP/MP, copies temporary defense, and heals using the number
+of helpers present **before** creation. Small-helper69 spawning checks each
+identity independently. Growth87 rolls new maxima while retaining abnormal state,
+tension, jobs and extended effects; its trigger and form checks remain independent
+of ordinary command MP/SP. Evidence: `_skill.cgi:4103–4123,4519–4585,5241–5285,6904–7035,10627–10650,11001–11015`.
+
+First non-command callbacks remain distinct:61 directly revives fallen party
+members at42% MaxHP and adds300 AT/AG;62 composes area damage then party healing;
+65 draws3–4 attacks using helper AG;66 adds420 power per fallen party member;
+68 heals the party;69 resolves its magic target before taking5 MP from every
+other party member with at least5 MP, including fallen members;80 composes the
+existing cursor-provenance distribution and ordered tails. 67 independently draws
+after each150-power breath hit to assign double temporary state to the returned
+target; absent-tuple writes and unrepresented redirect transitions remain rejected.
+87 performs one or conditionally two ordered120-power breath passes, skips status
+when the returned target differs, writes poison directly above the999 MaxHP/baseDF
+threshold, otherwise chooses deadly poison/paralysis and invokes its separately
+certified75% status helper, then checks growth. Its status port must admit both
+choices before any hit. Status/death, MP drain, revival, grave-field and general-random descendants
+remain whole-entry gates under #1365/#1337/#1338/#1366/#1357. No scalar damage
+substitution certifies those branches. Item110 remains rejected. The registry's
+`RosterAction` and `RosterInvocation` use the same admission; an arbitrary earlier
+indirect callback without a represented transition projection still rejects the
+enclosing continuation before any slot executes or costs are paid.
+
+Enemy summoning consumes a complete current-stage payload pool and separate
+weighted appearance positions, falling back to position0 for an invalid sampled
+position. It draws an I–Z identity suffix and tries only that suffix and its
+predecessor (I wraps to Z). Member count>=10 prevents all draws; gem82 also requires
+at most one enemy. Hard mode floors ×1.5 for current resources/stats, job SP and
+rewards before party scaling of resources/stats by 1 + (party count−2)×0.05.
+Supplied maxima, hit/tension, status, extended effects, jobs, rewards and custom
+costs are retained; absent maxima take the scaled current values. Native stage
+payload certification remains #1342; ordinary `Monster` stat DTOs do not supply
+missing job/custom effects. Evidence: `_skill.cgi:9834–9931`;
+`_data.cgi:1197,2170`. These are descendants of existing job/custom/tool commands,
+not new transport actions; #1329/#1330 own service/Gateway integration.
 
 #### Temporary transformation and job memory
 

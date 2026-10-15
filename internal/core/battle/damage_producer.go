@@ -194,14 +194,13 @@ type NormalHit struct {
 	Critical bool
 }
 
-// ApplyNormalAttack preserves both seal10 invocations and item147's additional
-// strike. Direct critical power is 75% here; the damage helper never adds it.
-func (s *LifetimeState) ApplyNormalAttack(c *DamageContext, targetID string, rng random.Generator) ([]NormalHit, error) {
+// ValidateNormalAttack checks every reachable strike without drawing or changing state.
+func (s *LifetimeState) ValidateNormalAttack(c *DamageContext, targetID string, rng random.Generator) error {
 	if c == nil {
-		return nil, ErrInvalidRequest
+		return ErrInvalidRequest
 	}
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
-		return nil, err
+		return err
 	}
 	strikes := 1
 	if hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
@@ -224,8 +223,18 @@ func (s *LifetimeState) ApplyNormalAttack(c *DamageContext, targetID string, rng
 			}
 		}
 	}
-	if err := s.validateRepeatedDamage(c, TargetEffect{TargetID: initialTargetID, Category: CategoryPhysical, Payload: CallbackPayload{Number: float64(s.actor(c.ActorID).Attack)}, Arguments: []string{"0", "1"}}, hits, rng); err != nil {
+	return s.validateRepeatedDamage(c, TargetEffect{TargetID: initialTargetID, Category: CategoryPhysical, Payload: CallbackPayload{Number: float64(s.actor(c.ActorID).Attack)}, Arguments: []string{"0", "1"}}, hits, rng)
+}
+
+// ApplyNormalAttack preserves both seal10 invocations and item147's additional
+// strike. Direct critical power is 75% here; the damage helper never adds it.
+func (s *LifetimeState) ApplyNormalAttack(c *DamageContext, targetID string, rng random.Generator) ([]NormalHit, error) {
+	if err := s.ValidateNormalAttack(c, targetID, rng); err != nil {
 		return nil, err
+	}
+	strikes := 1
+	if hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
+		strikes = 2
 	}
 	if len(c.EnemyIDs) == 0 {
 		return nil, nil

@@ -412,7 +412,16 @@ recoil preserve ordered modifiers, hit counts and success-dependent tails in
 that same contract; gear terms must be saved rather than redrawn on reload.
 Their finite producer formulas do not admit outer custom/random/calling
 closures. The consumer must preflight all descendants and required reset/defeat, damage,
-requester and cursor context before costs or committed RNG. The #1367
+requester and cursor context before costs or committed RNG.
+
+Summoned identity, command-actor restoration and save-boundary
+roster rules are owned by [Battle's roster contract](battle.md#summoned-roster-and-helper-commands).
+`Stage.SummonPool` requires complete certified payloads in the current seasonal
+stage's original table order; it never filters through ordinary-floor boss
+exclusion or silently fills missing job/custom effects from scalar monster stats.
+Weighted appearance positions remain separate server-owned input. Service/run
+storage and Gateway execution retain #1329/#1330 ownership.
+The #1367
 [callback context contract](battle.md#callback-context-and-failure-admission)
 distinguishes the requesting player, temporary actor, package target cursor,
 category and operation-entry field snapshot. Preserve those explicit contexts;
