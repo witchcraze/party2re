@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -274,6 +275,26 @@ func (r *trackingJobRepoStub) Save(_ context.Context, state corejob.CharacterJob
 	return nil
 }
 
+type stalePreflightInvRepoStub struct {
+	inv coreinventory.Inventory
+}
+
+func (r *stalePreflightInvRepoStub) FindByCharacterID(_ context.Context, _ string) (coreinventory.Inventory, error) {
+	cpy := r.inv
+	cpy.Items = slices.Clone(r.inv.Items)
+	return cpy, nil
+}
+
+func (r *stalePreflightInvRepoStub) FindByCharacterIDForUpdate(ctx context.Context, id string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, id)
+}
+
+func (r *stalePreflightInvRepoStub) Save(_ context.Context, inv coreinventory.Inventory) error {
+	r.inv = inv
+	r.inv.Items = slices.Clone(inv.Items)
+	return nil
+}
+
 func TestChangeJob_StalePreflight_ActiveJobMemoryUnderLock(t *testing.T) {
 	ctx := context.Background()
 
@@ -316,9 +337,11 @@ func TestChangeJob_StalePreflight_ActiveJobMemoryUnderLock(t *testing.T) {
 			inv, _ := coreinventory.New(charID)
 			fireArmor, _ := item.NewInstance("armor-29", 1)
 			_ = inv.Add(fireArmor)
-			sageItem, _ := item.NewInstance("item-12", 1)
+			sageItem, _ := item.NewInstance("item-027", 1)
 			_ = inv.Add(sageItem)
-			invRepo := &errInventoryRepoStub{inv: inv}
+			miscItem, _ := item.NewInstance("item-12", 1)
+			_ = inv.Add(miscItem)
+			invRepo := &stalePreflightInvRepoStub{inv: inv}
 
 			equip, _ := coreequipment.New(charID)
 			equip.Slots[item.SlotBody] = fireArmor.ID
@@ -359,6 +382,13 @@ func TestChangeJob_StalePreflight_ActiveJobMemoryUnderLock(t *testing.T) {
 			}
 
 			jobState := setupNearCompleteState(svc, charID, baseChar.JobID)
+			// Explicitly unmaster job-33 (賢者) and job-08 (遊び人) so that job-33
+			// is not exempt and genuinely requires and consumes item-027 (賢者の悟り).
+			jobState.MasteredJobs = slices.DeleteFunc(jobState.MasteredJobs, func(id string) bool {
+				return id == "job-33" || id == "job-08"
+			})
+			delete(jobState.MasteredJobSP, "job-33")
+			delete(jobState.MasteredJobSP, "job-08")
 			jobRepo.state = jobState
 
 			// ChangeJob should evaluate preflight as clean (no JobMemory),
@@ -374,17 +404,20 @@ func TestChangeJob_StalePreflight_ActiveJobMemoryUnderLock(t *testing.T) {
 			if bodyArmor, ok := equip.Equipped(item.SlotBody); !ok || bodyArmor != fireArmor.ID {
 				t.Fatalf("expected armor-29 to remain equipped, got %s (ok=%v)", bodyArmor, ok)
 			}
-			if _, found := inv.Find(fireArmor.ID); !found {
+			if _, found := invRepo.inv.Find(fireArmor.ID); !found {
 				t.Fatal("expected armor-29 instance to remain in inventory")
 			}
 
-			// Test with job-08 (Sage, consumes item-12).
-			_, _, err = svc.ChangeJob(ctx, charID, "job-08")
+			// Test with job-33 (Sage / 賢者, unmastered, requires and consumes item-027 賢者の悟り).
+			_, _, err = svc.ChangeJob(ctx, charID, "job-33")
 			if !errors.Is(err, corejob.ErrJobUnavailable) {
-				t.Fatalf("expected ErrJobUnavailable for job-08, got %v", err)
+				t.Fatalf("expected ErrJobUnavailable for job-33, got %v", err)
 			}
-			if inv.Quantity("item-12") != 1 {
-				t.Fatalf("expected item-12 quantity 1 preserved, got %d", inv.Quantity("item-12"))
+			if invRepo.inv.Quantity("item-027") != 1 {
+				t.Fatalf("expected item-027 quantity 1 preserved in inventory, got %d", invRepo.inv.Quantity("item-027"))
+			}
+			if invRepo.inv.Quantity("item-12") != 1 {
+				t.Fatalf("expected item-12 quantity 1 preserved in inventory, got %d", invRepo.inv.Quantity("item-12"))
 			}
 
 			// Ensure zero side-effects persisted or emitted

@@ -67,7 +67,16 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer db.Close()
+			t.Cleanup(func() {
+				if err := db.Close(); err != nil {
+					t.Errorf("failed to close database: %v", err)
+				}
+			})
+
+			charRepo, err := database.NewCharacterRepository(db)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -78,17 +87,13 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 			}
 			t.Cleanup(func() {
 				cleanupCtx := context.Background()
-				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_job_history WHERE character_id = ?", char.ID)
-				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_jobs WHERE character_id = ?", char.ID)
-				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM inventory_items WHERE character_id = ?", char.ID)
-				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
+				if err := charRepo.Delete(cleanupCtx, char.ID); err != nil {
+					t.Errorf("cleanup failed for character %s: %v", char.ID, err)
+				}
+				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID); err != nil {
+					t.Errorf("cleanup failed for player %s: %v", char.PlayerID, err)
+				}
 			})
-
-			charRepo, err := database.NewCharacterRepository(db)
-			if err != nil {
-				t.Fatal(err)
-			}
 			char.JobID = "job-01"
 			char.OldJobID = "job-02"
 			char.Level = 50
