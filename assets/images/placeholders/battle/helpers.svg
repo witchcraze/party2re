@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Generic battle helper development placeholder</title>
+  <path d="M12 51V30a20 20 0 0 1 40 0v21l-10-5-10 6-10-6z" fill="#85c7ac" stroke="#263238" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="25" cy="29" r="3" fill="#263238"/>
+  <circle cx="39" cy="29" r="3" fill="#263238"/>
+  <path d="M26 38q6 5 12 0" fill="none" stroke="#263238" stroke-width="2"/>
+</svg>

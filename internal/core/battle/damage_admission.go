@@ -121,7 +121,7 @@ func (s *LifetimeState) damageCandidates(c *DamageContext, e TargetEffect) []Tar
 	a := s.actor(c.ActorID)
 	var ids []string
 	if a.Status != StatusConfusion {
-		if slices.Contains(c.EnemyIDs, e.TargetID) {
+		if target := s.actor(e.TargetID); target != nil && target.TeamID != a.TeamID {
 			if s.actor(e.TargetID).HP > 0 {
 				ids = append(ids, e.TargetID)
 			}
