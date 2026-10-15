@@ -1805,3 +1805,50 @@ func TestReconcileSettlementSchedule_DifferentRoundMatchingEndTimeNotConfused(t 
 		t.Errorf("scheduled action ID = %q, want prefix %q", newAction.ID, expectedRound2Prefix)
 	}
 }
+
+func TestGetOverview_ReconcileFailurePropagated(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	contestRepo.rounds[1] = contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now.Add(-time.Hour),
+		EndTime:   now.Add(time.Hour),
+	}
+	sched := &mockScheduler{
+		scheduleErr: errors.New("queue unavailable"),
+	}
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithServiceScheduler(sched),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	_, err = svc.GetOverview(ctx)
+	if err == nil {
+		t.Fatal("expected error from GetOverview when reconciliation fails, got nil")
+	}
+	if !errors.Is(err, contest.ErrScheduleFailed) {
+		t.Fatalf("expected ErrScheduleFailed, got: %v", err)
+	}
+
+	// When scheduler succeeds, GetOverview returns overview and schedules action
+	sched.scheduleErr = nil
+	overview, err := svc.GetOverview(ctx)
+	if err != nil {
+		t.Fatalf("expected success after scheduler recovery, got: %v", err)
+	}
+	if overview.ActiveRound == nil || overview.ActiveRound.Round != 1 {
+		t.Fatalf("expected active round 1, got %+v", overview.ActiveRound)
+	}
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 scheduled action after recovery, got %d", len(sched.scheduledActions))
+	}
+}

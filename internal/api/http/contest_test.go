@@ -452,3 +452,124 @@ func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
 		t.Errorf("expected warning mentioning scheduling failure, got %q", payload.Warning)
 	}
 }
+
+func TestGetContestVenue_ReconcileFailure_Returns500(t *testing.T) {
+	reconcileCalls := 0
+	stub := &stubContestService{
+		reconcileFn: func(ctx context.Context) error {
+			reconcileCalls++
+			return nil
+		},
+		getOverviewFn: func(ctx context.Context) (contest.ContestOverview, error) {
+			return contest.ContestOverview{}, fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
+		},
+	}
+
+	handler, err := apihttp.NewHandler(&stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithContest(stub),
+	)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	server := httptest.NewServer(handler.Router())
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/contest/venue")
+	if err != nil {
+		t.Fatalf("GET /contest/venue failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error, got %d", resp.StatusCode)
+	}
+	if reconcileCalls != 0 {
+		t.Errorf("expected venue handler NOT to directly call ReconcileSettlementSchedule (calls=%d), GetOverview owns reconciliation", reconcileCalls)
+	}
+}
+
+func TestSettleContest_NotReadyToSettle_ReconciliationFailure_Returns500(t *testing.T) {
+	adminKey := "test-admin-secret-key"
+	reconcileCalled := false
+	stub := &stubContestService{
+		settleContestFn: func(ctx context.Context, force bool) (contest.SettlementResult, error) {
+			return contest.SettlementResult{}, contest.ErrContestNotReadyToSettle
+		},
+		reconcileFn: func(ctx context.Context) error {
+			reconcileCalled = true
+			return fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
+		},
+	}
+
+	handler, err := apihttp.NewHandler(&stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAdminAPIKey(adminKey),
+		apihttp.WithContest(stub),
+	)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	server := httptest.NewServer(handler.Router())
+	defer server.Close()
+
+	client := &http.Client{}
+	settleBody, _ := json.Marshal(map[string]bool{"force": false})
+
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/contest/settle", bytes.NewReader(settleBody))
+	req.Header.Set("X-Admin-Key", adminKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if !reconcileCalled {
+		t.Fatalf("expected ReconcileSettlementSchedule to be called")
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error on unready settlement reconciliation failure, got %d", resp.StatusCode)
+	}
+}
+
+func TestSettleContest_NotReadyToSettle_ReconciliationSuccess_Returns400(t *testing.T) {
+	adminKey := "test-admin-secret-key"
+	reconcileCalled := false
+	stub := &stubContestService{
+		settleContestFn: func(ctx context.Context, force bool) (contest.SettlementResult, error) {
+			return contest.SettlementResult{}, contest.ErrContestNotReadyToSettle
+		},
+		reconcileFn: func(ctx context.Context) error {
+			reconcileCalled = true
+			return nil
+		},
+	}
+
+	handler, err := apihttp.NewHandler(&stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAdminAPIKey(adminKey),
+		apihttp.WithContest(stub),
+	)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	server := httptest.NewServer(handler.Router())
+	defer server.Close()
+
+	client := &http.Client{}
+	settleBody, _ := json.Marshal(map[string]bool{"force": false})
+
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/contest/settle", bytes.NewReader(settleBody))
+	req.Header.Set("X-Admin-Key", adminKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if !reconcileCalled {
+		t.Fatalf("expected ReconcileSettlementSchedule to be called")
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request on unready settlement when reconciliation succeeds, got %d", resp.StatusCode)
+	}
+}
