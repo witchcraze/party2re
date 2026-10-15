@@ -709,8 +709,9 @@ by themselves. Full slots, complete damage/recovery/status formulas and indirect
 closures still need their callback-specific guards and tails through
 `skill.BattleDefinitions` and whole-action admission. Unsupported
 contexts must be rejected before costs, state or RNG, including an absent target
-that boss-field confusion can retain and deflection into an unrepresented empty
-side. The existing batch resolver retains its separate contract; these operations
+that boss-field confusion can retain and reachable deflection into an unrepresented
+empty side (preserving operations where deflect is on an unreachable participant or
+after single-evaluation cover/reflection redirects). The existing batch resolver retains its separate contract; these operations
 do not certify its lowest-HP/living-only targeting as normal-adventure parity.
 
 Distinguish helper rejection, accepted no-effect, actual application and failure.

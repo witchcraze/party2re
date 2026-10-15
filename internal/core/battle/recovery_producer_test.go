@@ -170,3 +170,77 @@ func TestRecoverySerializedContinuation(t *testing.T) {
 		t.Fatal(completed, results)
 	}
 }
+
+func TestApplyRecoveryStatGemUnrelatedDeflection(t *testing.T) {
+	for _, tc := range []struct {
+		id   int
+		stat BattleStat
+	}{
+		{28, StatAttack},
+		{30, StatDefense},
+		{32, StatAgility},
+	} {
+		t.Run(string(tc.stat), func(t *testing.T) {
+			newFixture := func(selfDeflect, allyDeflect bool) (LifetimeState, EffectContext) {
+				s := LifetimeState{Actors: []LifetimeActor{
+					{
+						Participant: Participant{
+							ID:        "self",
+							TeamID:    "party",
+							HP:        100,
+							Attack:    150,
+							Defense:   150,
+							Agility:   150,
+							BaseStats: BattleBaseStats{Attack: 100, Defense: 100, Agility: 100},
+						},
+						Tension: 1,
+					},
+					{Participant: Participant{ID: "fallen", TeamID: "party", HP: 0}},
+					{Participant: Participant{ID: "ally", TeamID: "party", HP: 100}},
+				}}
+				if selfDeflect {
+					s.actor("self").Temporary = TemporaryDeflect
+				}
+				if allyDeflect {
+					s.actor("ally").Temporary = TemporaryDeflect
+				}
+				c := EffectContext{TargetContext: TargetContext{
+					ActorID:  "self",
+					PartyIDs: []string{"self", "fallen", "ally"},
+					EnemyIDs: []string{},
+				}}
+				return s, c
+			}
+
+			// Case 1: Unrelated ally has TemporaryDeflect -> succeeds, self stat reaches 250, 0 RNG draws.
+			s, c := newFixture(false, true)
+			rng := &targetRNG{t: t}
+			r, err := s.ApplyRecoveryStatGem(tc.id, &c, "self", rng)
+			if err != nil || len(r) == 0 || *s.actor("self").currentStat(tc.stat) != 250 {
+				t.Fatalf("expected producer%d with unrelated deflect to succeed with 250, got err=%v, stat=%d",
+					tc.id, err, *s.actor("self").currentStat(tc.stat))
+			}
+			rng.done()
+
+			// Case 2: Control without deflect -> identical outcome.
+			sControl, cControl := newFixture(false, false)
+			rngControl := &targetRNG{t: t}
+			rControl, errControl := sControl.ApplyRecoveryStatGem(tc.id, &cControl, "self", rngControl)
+			if errControl != nil || len(rControl) == 0 || *sControl.actor("self").currentStat(tc.stat) != 250 {
+				t.Fatalf("control producer%d failed: err=%v", tc.id, errControl)
+			}
+			rngControl.done()
+
+			// Case 3: Reachable target (self) has TemporaryDeflect -> rejected before execution.
+			sReachable, cReachable := newFixture(true, false)
+			before := reloadLifetime(t, sReachable)
+			rngReachable := &targetRNG{t: t}
+			_, errReachable := sReachable.ApplyRecoveryStatGem(tc.id, &cReachable, "self", rngReachable)
+			if !errors.Is(errReachable, ErrUnsupportedEffect) || !reflect.DeepEqual(sReachable, before) || cReachable.StatUpCalls != 0 {
+				t.Fatalf("expected producer%d on reachable deflect to reject with ErrUnsupportedEffect without mutation, got err=%v",
+					tc.id, errReachable)
+			}
+			rngReachable.done()
+		})
+	}
+}

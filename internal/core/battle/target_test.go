@@ -277,3 +277,145 @@ func TestTargetValidationIsInert(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestReachableDeflectionEmptySide(t *testing.T) {
+	// 1. Direct target with deflect and empty enemy side rejects.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("ally").Temporary = TemporaryDeflect
+		before := reloadLifetime(t, s)
+		rng := &targetRNG{t: t}
+		_, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "ally", Category: CategoryPhysical}, rng)
+		if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
+			t.Fatalf("expected direct ally deflect to reject with ErrUnsupportedEffect, got err=%v", err)
+		}
+		rng.done()
+	}
+
+	// 2. Unrelated deflect on ally when targeting self succeeds.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("ally").Temporary = TemporaryDeflect
+		rng := &targetRNG{t: t}
+		r, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "self", Category: CategoryPhysical}, rng)
+		if err != nil || !r.Resolved || r.TargetID != "self" {
+			t.Fatalf("expected target self with unrelated ally deflect to succeed, got err=%v, r=%v", err, r)
+		}
+		rng.done()
+	}
+
+	// 3. Fallback: target not in party reaches ally with deflect -> rejects.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("ally").Temporary = TemporaryDeflect
+		before := reloadLifetime(t, s)
+		rng := &targetRNG{t: t}
+		_, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "missing", Category: CategoryPhysical}, rng)
+		if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
+			t.Fatalf("expected fallback reach to deflect to reject with ErrUnsupportedEffect, got err=%v", err)
+		}
+		rng.done()
+	}
+
+	// 4. Fallback: dead target falls back to self.
+	// 4a. If self has deflect -> rejects.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("self").Temporary = TemporaryDeflect
+		before := reloadLifetime(t, s)
+		rng := &targetRNG{t: t}
+		_, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "fallen", Category: CategoryPhysical}, rng)
+		if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
+			t.Fatalf("expected dead fallback to self with deflect to reject, got err=%v", err)
+		}
+		rng.done()
+	}
+	// 4b. If dead target has deflect, but self does not -> redirects to self, deflect is NOT evaluated, succeeds.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("fallen").Temporary = TemporaryDeflect
+		rng := &targetRNG{t: t}
+		r, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "fallen", Category: CategoryPhysical}, rng)
+		if err != nil || !r.Resolved || r.TargetID != "self" {
+			t.Fatalf("expected dead fallback to self (no deflect) to succeed, got err=%v, r=%v", err, r)
+		}
+		rng.done()
+	}
+
+	// 5. Confusion / activation reach:
+	// 5a. Actor is confused, ally has deflect -> confusion can reach ally -> rejects.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("self").Status = StatusConfusion
+		s.actor("ally").Temporary = TemporaryDeflect
+		before := reloadLifetime(t, s)
+		rng := &targetRNG{t: t}
+		_, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "self", Category: CategoryPhysical}, rng)
+		if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
+			t.Fatalf("expected confusion reaching deflect to reject, got err=%v", err)
+		}
+		rng.done()
+	}
+	// 5b. Item195Activated is true, ally has deflect -> activation can reach ally -> rejects.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		c.Item195Activated = true
+		s.actor("ally").Temporary = TemporaryDeflect
+		before := reloadLifetime(t, s)
+		rng := &targetRNG{t: t}
+		_, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "self", Category: CategoryPhysical}, rng)
+		if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
+			t.Fatalf("expected item195 activation reaching deflect to reject, got err=%v", err)
+		}
+		rng.done()
+	}
+
+	// 6. Magic category: deflect only triggers on physical, so magic targeting ally with deflect succeeds.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("ally").Temporary = TemporaryDeflect
+		rng := &targetRNG{t: t}
+		r, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "ally", Category: CategoryMagic}, rng)
+		if err != nil || !r.Resolved || r.TargetID != "ally" {
+			t.Fatalf("expected magic on ally with deflect to succeed, got err=%v, r=%v", err, r)
+		}
+		rng.done()
+	}
+
+	// 7. One-time temporary rule: reflection and cover do NOT re-evaluate deflect.
+	// 7a. Reflection: ally has TemporaryReflectAttack, actor self has TemporaryDeflect.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("ally").Temporary = TemporaryReflectAttack
+		s.actor("self").Temporary = TemporaryDeflect
+		rng := &targetRNG{t: t}
+		r, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "ally", Category: CategoryPhysical}, rng)
+		if err != nil || !r.Resolved || r.TargetID != "self" {
+			t.Fatalf("expected reflection to redirect to self without evaluating deflect, got err=%v, r=%v", err, r)
+		}
+		rng.done()
+	}
+	// 7b. Cover: ally has TemporaryCover, self has TemporaryCovering, fallen has TemporaryDeflect.
+	{
+		s, c := targetFixture()
+		s.Actors, c.EnemyIDs = s.Actors[:3], nil
+		s.actor("ally").Temporary = TemporaryCover
+		s.actor("self").Temporary = TemporaryCovering
+		s.actor("fallen").Temporary = TemporaryDeflect
+		rng := &targetRNG{t: t}
+		r, err := s.ResolvePartyTarget(c, TargetEffect{TargetID: "ally", Category: CategoryPhysical}, rng)
+		if err != nil || !r.Resolved || r.TargetID != "self" {
+			t.Fatalf("expected cover to redirect to covering member without evaluating deflect, got err=%v, r=%v", err, r)
+		}
+		rng.done()
+	}
+}
