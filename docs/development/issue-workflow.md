@@ -10,6 +10,8 @@ The template captures the work itself: goal, scope, acceptance criteria, tests, 
 
 Issue bodies describe the work and its acceptance criteria; implementation tools and providers are not ticket requirements. Size labels indicate complexity without selecting an executor.
 
+GitHub native relationships own dependencies, parent/sub-issue links and their resolution state under the [workflow rule](../../.agents/rules/01-development-workflow.md#2-issue-and-pr-workflow). The body explains why a prerequisite is needed, which requirements/contracts the work adopts and how to verify them, with references to the prerequisite Issue or owning document. Relationship-only lists, progress/resolution state and full shared specifications do not need a second copy in the body. Adding or resolving a dependency calls for a body edit only when those implementation instructions change.
+
 ## Documentation follows changed explanations
 
 Use the [documentation rule](../../.agents/rules/02-documentation-sync.md) and [documentation map](../README.md) to update owning explanations and consolidate affected duplicates in the same PR. The PR's documentation assessment records meaningful consolidation, necessary growth or why no update is needed; no separate maintenance report is required.
