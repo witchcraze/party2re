@@ -200,40 +200,11 @@ func BuildParticipantFromDataWithRNG(
 		abilities = append(abilities, "pharaoh")
 	}
 
-	// Bind weapon seal combat skills (7..9) and passive abilities (10..12)
+	// Active seals 7..9 use explicit callbacks and previous-job admission.
+	// Bind only passive abilities (10..12) in the batch participant.
 	// Active only when a weapon is equipped in main hand (_data.cgi:2209-2230)
 	if instID, ok := equip.Equipped(item.SlotMainHand); ok && instID != "" && char.WeaponSeal > 0 {
 		switch char.WeaponSeal {
-		case 7:
-			builder.WithSkills(corebattle.ActionSkill{
-				ID:          "seal-skill-shakunetsu",
-				Name:        "しゃくねつ",
-				MPCost:      40,
-				Power:       180,
-				Kind:        corebattle.ActionKindAttack,
-				TargetScope: corebattle.TargetScopeAllEnemies,
-				Element:     corebattle.ElementFire,
-			})
-		case 8:
-			builder.WithSkills(corebattle.ActionSkill{
-				ID:          "seal-skill-mahyado",
-				Name:        "マヒャド",
-				MPCost:      27,
-				Power:       160,
-				Kind:        corebattle.ActionKindAttack,
-				TargetScope: corebattle.TargetScopeAllEnemies,
-				Element:     corebattle.ElementWater,
-			})
-		case 9:
-			builder.WithSkills(corebattle.ActionSkill{
-				ID:          "seal-skill-gigadein",
-				Name:        "ギガデイン",
-				MPCost:      40,
-				Power:       180,
-				Kind:        corebattle.ActionKindAttack,
-				TargetScope: corebattle.TargetScopeAllEnemies,
-				Element:     corebattle.ElementLight,
-			})
 		case 10:
 			abilities = append(abilities, "seal_shinsoku")
 		case 11:

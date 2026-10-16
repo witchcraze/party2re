@@ -19,6 +19,7 @@ type LifetimeActor struct {
 	Participant
 	Jobs           BattleJobs      `json:"jobs"`
 	OriginalJobs   BattleJobs      `json:"original_jobs"`
+	WeaponSeal     int             `json:"weapon_seal"`
 	JobHistory     map[string]*int `json:"job_history,omitempty"` // nil SP means a recorded job with irrecoverable historical SP.
 	NPC            bool            `json:"npc"`
 	RosterIdentity string          `json:"roster_identity,omitempty"`

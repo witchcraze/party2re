@@ -63,7 +63,7 @@ func (s *Service) BuildLifetimeActor(ctx context.Context, characterID, icon stri
 	// remains unchanged for its existing callers.
 	p.HP = char.Stats.HP
 	jobs := corebattle.BattleJobs{JobID: char.JobID, SP: char.SP, OldJobID: char.OldJobID, OldSP: char.OldSP}
-	a := corebattle.LifetimeActor{Participant: p, Jobs: jobs, OriginalJobs: jobs, Tension: 1, Hit: 95}
+	a := corebattle.LifetimeActor{Participant: p, Jobs: jobs, OriginalJobs: jobs, WeaponSeal: char.WeaponSeal, Tension: 1, Hit: 95}
 	a.JobHistory = make(map[string]*int)
 	for _, change := range history.History {
 		if change.FromJobID != "" {
