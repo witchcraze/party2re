@@ -252,22 +252,23 @@ func (s *LifetimeState) partyInitialTargetIDs(c TargetContext, e TargetEffect) [
 // partyTargetCandidates follows _check_party's possible target paths without
 // draws or mutations. Call only after validatePartyTarget. Temporary redirects
 // run once; the replacement target's temporary is not evaluated recursively.
-// mayDouble contains only earlier reachable205 tails in the same operation.
-func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect, mayDouble map[string]bool) []TargetEffect {
-	return s.temporaryTargetCandidates(c, e, s.partyInitialTargetIDs(c, e), mayDouble)
+// mayReplace retains the largest reachable replacement multiplier (205 double
+// or161 defense), also admitting paths after a covering member loses its role.
+func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect, mayReplace map[string]float64) []TargetEffect {
+	return s.temporaryTargetCandidates(c, e, s.partyInitialTargetIDs(c, e), mayReplace)
 }
 
-func (s *LifetimeState) temporaryTargetCandidates(c TargetContext, e TargetEffect, ids []string, mayDouble map[string]bool) []TargetEffect {
+func (s *LifetimeState) temporaryTargetCandidates(c TargetContext, e TargetEffect, ids []string, mayReplace map[string]float64) []TargetEffect {
 	var targets []TargetEffect
 	for _, id := range ids {
 		t := s.actor(id)
-		if mayDouble[id] && t.Temporary != TemporaryDouble {
-			doubled := e
-			doubled.TargetID = id
-			if doubled.Payload.Symbol == "" {
-				doubled.Payload.Number *= 2
+		if multiplier := mayReplace[id]; multiplier > 0 && (t.Temporary != TemporaryDouble || multiplier != 2) {
+			replacement := e
+			replacement.TargetID = id
+			if replacement.Payload.Symbol == "" {
+				replacement.Payload.Number *= multiplier
 			}
-			targets = append(targets, doubled)
+			targets = append(targets, replacement)
 		}
 		candidate := e
 		appendTarget := func(targetID string) {
@@ -285,7 +286,7 @@ func (s *LifetimeState) temporaryTargetCandidates(c TargetContext, e TargetEffec
 			for _, member := range s.Actors {
 				if member.TeamID == t.TeamID && member.Temporary == TemporaryCovering {
 					appendTarget(member.ID)
-					if !mayDouble[member.ID] {
+					if mayReplace[member.ID] == 0 {
 						covered = true
 						break
 					}

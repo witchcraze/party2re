@@ -13,6 +13,7 @@ type BattleDefinitions struct {
 	// Explicit callbacks stay separate from the batch engine's scalar payloads.
 	ArithmeticSkills map[string]bool
 	RosterSkills     map[string]bool
+	RecoveryStatGems map[string]bool
 	Invocations      corebattle.CallbackCatalog
 }
 

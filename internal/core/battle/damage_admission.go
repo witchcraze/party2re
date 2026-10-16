@@ -118,6 +118,10 @@ func (s *LifetimeState) canPreserveAreaPower(c *DamageContext, e TargetEffect) b
 // Damage candidates use the enemy helper's predicates, then the same one-pass
 // temporary continuations as ally effects. No selection/cure draw is consumed.
 func (s *LifetimeState) damageCandidates(c *DamageContext, e TargetEffect) []TargetEffect {
+	return s.damageCandidatesAfter(c, e, nil)
+}
+
+func (s *LifetimeState) damageCandidatesAfter(c *DamageContext, e TargetEffect, mayReplace map[string]float64) []TargetEffect {
 	a := s.actor(c.ActorID)
 	var ids []string
 	if a.Status != StatusConfusion {
@@ -150,7 +154,7 @@ func (s *LifetimeState) damageCandidates(c *DamageContext, e TargetEffect) []Tar
 			candidates = append(candidates, candidate)
 		}
 	} else {
-		candidates = s.temporaryTargetCandidates(c.TargetContext, e, ids, nil)
+		candidates = s.temporaryTargetCandidates(c.TargetContext, e, ids, mayReplace)
 	}
 	if s.Fields.Current() == "phantom" && c.PhantomTargetID != "" && len(c.PhantomEnemyIDs) > 0 {
 		var redirected []TargetEffect

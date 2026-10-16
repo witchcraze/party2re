@@ -6,13 +6,31 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-// ApplyRecoveryStatGem certifies the concrete helper calls at
-// _data.cgi:2107–2111,2116–2121,2181–2184. It does not admit an enclosing custom,
-// random or delegated command or certify the batch resolver's fixed Power DTOs.
+// ApplyRecoveryStatGem executes a complete native body, including target MP
+// facts. Enclosing admission/costs stay with its invoking consumer.
 func (s *LifetimeState) ApplyRecoveryStatGem(sourceID int, c *EffectContext, targetID string, rng random.Generator) ([]EffectApplication, error) {
-	if c == nil {
-		return nil, ErrInvalidRequest
+	if err := s.ValidateRecoveryStatGems([]int{sourceID}, c, targetID, rng); err != nil {
+		return nil, err
 	}
+	if c.Custom && s.actor(targetID) == nil {
+		targetID = c.ActorID
+	}
+	previous := c.targetResources
+	c.targetResources = func(r TargetResolution) {
+		if r.MPDebit != 0 {
+			a := s.actor(c.ActorID)
+			a.MP = max(0, a.MP-r.MPDebit)
+		}
+		if r.MPRecoveryTarget != "" {
+			t := s.actor(r.MPRecoveryTarget)
+			t.MP = min(t.MaxMP, t.MP+r.MPRecovery)
+		}
+	}
+	defer func() { c.targetResources = previous }()
+	return s.applyRecoveryStatGem(sourceID, c, targetID, rng)
+}
+
+func (s *LifetimeState) applyRecoveryStatGem(sourceID int, c *EffectContext, targetID string, rng random.Generator) ([]EffectApplication, error) {
 	e := TargetEffect{TargetID: targetID, Category: CategoryMagic}
 	stat := StatAttack
 	var r EffectApplication
@@ -55,6 +73,62 @@ func (s *LifetimeState) ApplyRecoveryStatGem(sourceID int, c *EffectContext, tar
 			stat, coefficient = StatHit, .2
 		}
 		return s.ApplyPartyStat(c, coefficient, CategoryMagic, stat, true, rng)
+	case 54, 69:
+		ids := c.PartyIDs
+		if sourceID == 69 {
+			ids = make([]string, len(s.Actors))
+			for i, a := range s.Actors {
+				ids[i] = a.ID
+			}
+		}
+		var results []EffectApplication
+		for _, id := range ids {
+			a := s.actor(id)
+			changed := a.Hit != 95
+			if sourceID == 54 {
+				a.Hit = 95
+			} else {
+				changed, a.Tension = a.Tension != 1, 1
+			}
+			results = append(results, EffectApplication{TargetResolution: TargetResolution{TargetEffect: TargetEffect{TargetID: id}, Resolved: true}, Returned: true, Applied: changed})
+		}
+		return results, nil
+	case 67, 74:
+		target := TargetResolution{TargetEffect: TargetEffect{TargetID: c.ActorID}, Resolved: true}
+		if sourceID == 74 {
+			target, err = s.ResolvePartyTarget(c.TargetContext, TargetEffect{TargetID: targetID, Category: CategoryUntyped, Payload: CallbackPayload{Symbol: "encourage"}}, rng)
+			if err != nil {
+				return nil, err
+			}
+			c.targetResources(target)
+		}
+		// tenshon's absent-target fallback is part of74's body, not a return guard.
+		if !target.Resolved {
+			target.TargetID = c.ActorID
+		}
+		t := s.actor(target.TargetID)
+		before, temporary := t.Tension, t.Temporary
+		if err := s.statTension(c, t, false, rng); err != nil {
+			return nil, err
+		}
+		if sourceID == 67 {
+			if err := s.statTension(c, t, false, rng); err != nil {
+				return nil, err
+			}
+		}
+		return []EffectApplication{{TargetResolution: target, Returned: true, Applied: t.Tension != before || t.Temporary != temporary}}, nil
+	case 68:
+		target, err := s.ResolveEnemyTarget(c.TargetContext, TargetEffect{TargetID: targetID, Category: CategoryPhysical, Payload: CallbackPayload{Symbol: "destroy"}}, rng)
+		r.TargetResolution = target
+		if err == nil {
+			c.targetResources(target)
+		}
+		if err != nil || !target.Resolved {
+			return []EffectApplication{r}, err
+		}
+		t := s.actor(target.TargetID)
+		r.Returned, r.Applied = true, t.Tension != 1
+		t.Tension = 1
 	default:
 		return nil, ErrUnsupportedEffect
 	}
@@ -109,7 +183,7 @@ func (s *LifetimeState) validateDistributedAttack(c *EffectContext, helperID str
 	}
 	if helper != nil && helper.HP > 0 {
 		// Earlier205 tails can change both later power and target resolution.
-		admission := statUpAdmission{mayDouble: make(map[string]bool)}
+		admission := statUpAdmission{mayReplace: make(map[string]float64)}
 		for _, stat := range []BattleStat{StatAttack, StatDefense, StatAgility} {
 			for _, id := range c.PartyIDs {
 				e := TargetEffect{TargetID: id, Category: CategoryDance, Payload: CallbackPayload{Number: .5}}

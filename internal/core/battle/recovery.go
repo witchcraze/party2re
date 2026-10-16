@@ -15,6 +15,27 @@ func (s *LifetimeState) validateRecovery(c *EffectContext, e TargetEffect, rng r
 	return nil
 }
 
+func (s *LifetimeState) healingBasePower(c *EffectContext, e TargetEffect) float64 {
+	a, t := s.actor(c.ActorID), s.actor(e.TargetID)
+	v, original := e.Payload.Number, e.Payload.Number
+	if t.Temporary == TemporaryDouble {
+		original *= .5
+	}
+	if hasItem(a.ItemDefinitionIDs, "item-146") {
+		v *= 1.8
+	}
+	if hasItem(a.ItemDefinitionIDs, "item-256") {
+		v *= 1.2
+	}
+	if hasItem(a.ItemDefinitionIDs, "item-148") && e.Category == CategorySong && original < 50 {
+		v *= 10
+	}
+	if s.SpecialBossField && c.DamageCalls > 0 && !(s.Fields.Current() == "sanctuary" && e.Category == CategoryMagic) {
+		v = min(v*.5, float64(t.MaxHP)*.5)
+	}
+	return v
+}
+
 // ApplyHealing implements _heal:9067–9135, with the already recorded operation
 // counters, actor tension, one-time splash and post-cap sanctuary overflow.
 func (s *LifetimeState) ApplyHealing(c *EffectContext, e TargetEffect, rng random.Generator) (EffectApplication, error) {
@@ -23,6 +44,9 @@ func (s *LifetimeState) ApplyHealing(c *EffectContext, e TargetEffect, rng rando
 		return r, err
 	}
 	target, err := s.ResolvePartyTarget(c.TargetContext, e, rng)
+	if err == nil && c.targetResources != nil {
+		c.targetResources(target)
+	}
 	r.TargetResolution = target
 	if err != nil || !target.Resolved {
 		return r, err
@@ -34,23 +58,8 @@ func (s *LifetimeState) ApplyHealing(c *EffectContext, e TargetEffect, rng rando
 	}
 	c.HealCalls++
 	a := s.actor(c.ActorID)
-	original := v
-	if t.Temporary == TemporaryDouble {
-		original *= .5
-	}
-	if hasItem(a.ItemDefinitionIDs, "item-146") {
-		v *= 1.8
-	}
-	if hasItem(a.ItemDefinitionIDs, "item-256") {
-		v *= 1.2
-	}
-	if hasItem(a.ItemDefinitionIDs, "item-148") && target.Category == CategorySong && original < 50 {
-		v *= 10
-	}
+	v = s.healingBasePower(c, target.TargetEffect)
 	sanctuary := s.Fields.Current() == "sanctuary" && target.Category == CategoryMagic
-	if s.SpecialBossField && c.DamageCalls > 0 && !sanctuary {
-		v = min(v*.5, float64(t.MaxHP)*.5)
-	}
 	modified := target.TargetEffect
 	modified.Payload.Number = v
 	v, _, err = s.ModifyEffect(c, modified, ModifierHPHealing, "", rng)

@@ -706,10 +706,18 @@ again and must still reject unsupported tails before any draws or writes. All cu
 random and delegated closures still require whole-entry admission through
 `skill.BattleDefinitions`; helper availability never enables a slot by itself.
 
-Concrete producer formulas in `ApplyRecoveryStatGem` are source19–23 (single,
+Concrete native bodies in `ApplyRecoveryStatGem` are source19–23 (single,
 self-untyped and party healing),28–33 (self-physical or targeted-magic AT/DF/AG
 doubling), and93–96 (party enemy AT/DF/AG/hit reduction), evidenced at
-`_data.cgi:2107–2111,2116–2121,2181–2184`. Stat-up preserves201's untyped/direct
+`_data.cgi:2107–2111,2116–2121,2181–2184`. Source54 restores party hit95,
+including fallen records, without a category check. Source67 invokes self tension
+twice in order;68 resolves an enemy with physical-category symbolic input before
+writing tension1;69 writes tension1 to every member, including fallen opponents.
+Source74 resolves an untyped ally and invokes tension without adding a helper-return
+guard; tension retains its absent-target actor fallback. These five bodies are
+evidenced at `_data.cgi:2142,2155–2157,2162`; staged tension, requester-level
+thresholds and ordered145/161 hooks follow `_skill.cgi:942–990`.
+Stat-up preserves201's untyped/direct
 damage call with half the resulting AG before testing205's AT/tension/double
 tail. Admission checks only targets reachable through the ally helper's fallback,
 confusion/activation and one-pass temporary redirects; unrelated equipment cannot
@@ -728,8 +736,42 @@ before any draws or writes;205 requires the original requester level. The damage
 executor updates the same operation's damage count after its
 target/error/zero gates (`_skill.cgi:8826–8831`), including misses; the stat helper
 does not count the call again. Subsequent239 zeroing and256 splash conditions read
-that shared count. Neither a hook
-test nor these finite producer formulas register complete outer catalog entries.
+that shared count.
+
+`RecoveryStatGemEntries` retains existing native gem IDs, generic callback names,
+source IDs, target/category roles and individual CMP contributions. Explicit
+`BattleDefinitions.RegisterRecoveryStatGems` binds these complete bodies to the
+existing invocation catalog; the batch scalar registry remains separate.
+`RecoveryStatAction` and `ApplyRecoveryStatGems` share whole-slot admission before
+outer costs or committed draws. Both boundaries reject more than three positions,
+matching `_skill.cgi:302–307` and `_npc_action.cgi:220–222`; empty positions do not
+permit a fourth position. Player synthesis separately enforces weighted gem capacity
+(`custom_skill.cgi:144`, `internal/customskill/synthesis.go`); NPC template loading
+does not apply that player synthesis gate (`_npc_action.cgi:623–627`).
+Repeated slots keep the original submitted target;
+custom commands normalize an absent target to the actor before the helpers,
+while naked callbacks retain helper fallback. A complete custom body can be bound
+with `RecoveryStatInvocation`; its enclosing admission projects reachable205
+temporary changes, tension stages, category cures/confusion and stat-cap reopening.
+Category cures remain conditional: a seal can block every matching helper in the
+sequence. Admission retains both possible tension consumption and retention, so an
+initial tension8 cap cannot hide a lower stage that later needs requester context.
+An accepted stat-cap outcome still retains tension (`_skill.cgi:9318–9338`).
+Possible reductions reopen later stat/equipment-tail admission, while the unchanged
+input cap remains a possible no-effect branch when proving tension consumption.
+An immune or redirected reduction must not turn that possible change into a guarantee.
+An arbitrary preceding callback, or a reachable201 damage tail followed by another
+slot, needs that owner's transition projection and remains rejected here.
+
+Complete gem bodies apply helper MP debit/absorption before their effect tails.
+Returned `EffectApplication` facts describe completed writes, including requested
+amount versus actual clamped change; consumers must not apply those resource facts
+again. Operation counters and callback closures are rebuilt per command. Save
+resulting `LifetimeState`, frozen input and facts with the consumer's receipt;
+loading or retrying a committed receipt never executes the callbacks again.
+Registration does not supply outer custom eligibility, charging, NPC selection,
+SQL/assets/receipts or mixed callback closure certification.
+
 `ApplyDistributedAttack` supplies calling80's first strict maximum (including
 fallen), cursor-owned999/1998 cap, living nonholder increases and independent
 AT/DF/AG/heal tails. Its caller must supply the roster owner's named/fallback
