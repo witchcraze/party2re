@@ -310,8 +310,14 @@ accepted and charged according to its existing resource contract.
 Evidence below uses `party2/lib/` at revision
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item/gem/job references are
 provenance identifiers, not authorization to reuse distinctive display names.
-The complete finite entry reconciliation and named unresolved helper branches
-are recorded in [#1333](https://github.com/witchcraze/party2re/issues/1333).
+The finite source-entry ledger and helper evidence are recorded in
+[#1333](https://github.com/witchcraze/party2re/issues/1333). Source-to-native
+body, descendant, registration, discovery, wiring and test evidence are separate
+obligations: [#1410](https://github.com/witchcraze/party2re/issues/1410) maps
+non-job and ordinary NPC entries to their implementation owners, while
+[#1409](https://github.com/witchcraze/party2re/issues/1409) owns shared player-job
+identities. Completing those ownership audits does not certify production
+support; successful original branches retain their concrete implementation gates.
 
 | Dispatch | Enduring behavior / effect boundary | Evidence |
 | --- | --- | --- |
@@ -1009,19 +1015,32 @@ Custom CMP cost is floor(sum(slot costs)×rate), with rate 1/1.1/1.2 for one/two
 occupied slots, counting duplicates. Freeze roster selection and rolls once.
 
 The ordinary stage sources are `stage/0.cgi` through `stage/27.cgi`; stage 15
-copies the current party into bosses, stage 25 randomly selects one of three
-ordinary rosters, and stage 26 selects its seasonal ordinary roster. Read the
+copies the ordered party into bosses and constructs ten ordinary monster
+templates with current jobs drawn from player indices 0..87, previous job36
+and previous SP999 (`stage/15.cgi:10–61`). Freeze both generated tables and
+their context. Stage 25 randomly selects one of three ordinary boss rosters;
+stage 26 selects its ordinary season from room markers in spring, summer,
+autumn, winter priority, defaulting to spring (`stage/26.cgi:16–28,623–1205`).
+This selection does not read the current calendar season. Read the
 ordinary `@bosses` branch separately from `@ex_bosses`/`@exx_bosses` and `king*.cgi`.
+Stage23's ordinary boss uses job21/SP10/MP30 (`stage/23.cgi:15–31`);
+job406 and the declared snow default belong to its EX branch, so neither is
+an ordinary NPC callback prerequisite through that stage.
 Stage 24's **ordinary floor 10** invokes `createExBossField` despite its name
 (`vs_monster.cgi:143–151`): party base maxima are capped at HP/MP 999 and stats
 255, doubled for over-level participants, then reset. The default named field
 in `add_ex_boss:722` belongs to the later EX branch; do not apply it to ordinary
 boss initialization merely because `stage/24.cgi` declares `$ex_field`.
 
-NPC action selection (`_npc_action.cgi:158–322`) builds current/previous-job
-lists with independent gates and custom gems, then randomly selects an admitted
-entry. It does not reuse the player's preferred-action policy or equipment
-extension list. NPC confusion cure is 1/3 versus the player's 1/5; paralysis and
+NPC action selection starts with the mode's SP0/MP0 normal attack
+(`vs_monster.cgi:11–14`), independently of job0's five SP-gated table positions.
+It builds current/previous-job lists with independent gates and custom gems
+(`_npc_action.cgi:158–322`), then randomly selects an admitted position.
+Repeated names retain their selection weight; the later admitted same-name
+callback supplies the name-keyed execution body. NPC-only tables need their
+own complete bodies even when they share player effect helpers. Selection does
+not reuse the player's preferred-action policy or equipment extension list.
+NPC confusion cure is 1/3 versus the player's 1/5; paralysis and
 sleep cures skip action on that operation. The special boss-field and named
 field extra cure draws are separate branches. NPC poison/regeneration/rage run
 inside the normal-action block (`324–361`); item/field/ability tails outside it

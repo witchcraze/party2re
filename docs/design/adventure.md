@@ -350,7 +350,11 @@ The operation matrix establishes the family boundary. Production cutover still
 requires #1188 job supply, #1332 effect lifetimes and the effects/transactions
 decomposed by [#1333](https://github.com/witchcraze/party2re/issues/1333) into
 #1337–#1346. #1342 preserves full ordinary NPC/boss payloads, multiple/conditional
-rosters and stage 24's ordinary-floor special field; #1346 enforces support for
+rosters and stage 24's ordinary-floor special field. The
+[entry ownership reconciliation](battle.md#dynamic-effects-and-catalog-admission)
+distinguishes those payloads from their concrete callback bodies, descendant
+closure, registration and production wiring. Its implementation owners remain
+cutover prerequisites after the audit itself closes; #1346 enforces support for
 the whole reachable effect in both discovery and execution. Indirect invocation
 must not bypass that gate or narrow the original random pool to implemented
 effects. Missing original choices remain cutover blockers. #1198 implements
