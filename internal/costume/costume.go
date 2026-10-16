@@ -25,6 +25,7 @@ type Repository interface {
 	GetActiveCostume(ctx context.Context, characterID string) (*ActiveCostume, error)
 	SaveActiveCostume(ctx context.Context, costume ActiveCostume, ttl time.Duration) error
 	ClearActiveCostume(ctx context.Context, characterID string) error
+	ClearActiveCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error)
 }
 
 // CostumeRepository is an alias for Repository for domain readability.

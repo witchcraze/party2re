@@ -61,12 +61,14 @@ func WithGuildPoints(gp GuildPointsRegistrar) Option {
 func WithTimer(t TimerService) Option {
 	return func(s *Service) {
 		s.timer = t
+		s.wireCostumeClaimChecker()
 	}
 }
 
 func WithCostumeRepository(cr costume.Repository) Option {
 	return func(s *Service) {
 		s.costumeRepo = cr
+		s.wireCostumeClaimChecker()
 	}
 }
 
@@ -140,7 +142,22 @@ func NewService(
 	for _, opt := range opts {
 		opt(s)
 	}
+	s.wireCostumeClaimChecker()
 	return s
+}
+
+func (s *Service) wireCostumeClaimChecker() {
+	if s.costumeRepo == nil || s.timer == nil {
+		return
+	}
+	if mem, ok := s.costumeRepo.(interface {
+		SetClaimChecker(checker costume.ClaimChecker)
+	}); ok {
+		mem.SetClaimChecker(func(ctx context.Context, category, targetID, token string) bool {
+			valid, err := s.timer.VerifyLockToken(ctx, category, targetID, token)
+			return err == nil && valid
+		})
+	}
 }
 
 // BuildStore builds a new store in the specified town for 50,000 G and 90 days.

@@ -993,3 +993,115 @@ func TestWake_LegacyCostumeResetter_ExecutesOnValidWake(t *testing.T) {
 		t.Fatal("expected legacy ResetCostume to be called on valid wake")
 	}
 }
+
+// Issue #1228: Immediately after ownership verification, if processing is stopped,
+// claim expires, successor Wake completes, and player registers a new costume,
+// resuming the old processing must never delete the successor's newly registered costume.
+func TestWake_PauseImmediatelyAfterOwnershipVerification_PreservesSuccessorNewCostume(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 80, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
+		},
+	}
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(tm),
+		WithCharacterUpdater(repo),
+		WithWakeClaimTTL(50*time.Millisecond, 15*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	costumeRepo := costume.NewMemoryCostumeRepository()
+	// Pre-seed initial costume (item 46)
+	_ = costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+		CharacterID: "c1",
+		ItemNo:      46,
+		ItemName:    "old-cat-ears",
+		ExpiresAt:   time.Now().Add(time.Hour),
+	}, time.Hour)
+
+	storeSvc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
+
+	hookEntered := make(chan struct{})
+	releaseHook := make(chan struct{})
+
+	// Intercept claim checker to pause immediately after ownership verification
+	costumeRepo.SetClaimChecker(func(chkCtx context.Context, category, targetID, token string) bool {
+		valid, err := tm.VerifyLockToken(chkCtx, category, targetID, token)
+		if !valid || err != nil {
+			return false
+		}
+		// Ownership is verified! Stop processing immediately
+		close(hookEntered)
+		<-releaseHook
+		// Re-verify that claim is STILL valid upon resumption before allowing deletion
+		stillValid, err := tm.VerifyLockToken(chkCtx, category, targetID, token)
+		return err == nil && stillValid
+	})
+
+	svc.SetCostumeResetter(storeSvc)
+
+	wakeDone := make(chan error, 1)
+	go func() {
+		_, err := svc.Wake(ctx, "c1")
+		wakeDone <- err
+	}()
+
+	select {
+	case <-hookEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hook never entered")
+	}
+
+	// 1. Claim expires; successor Wake takes over claim
+	const successorToken = "successor-token-step3"
+	_ = tm.ReleaseLock(ctx, timer.CategoryWaking, "c1")
+	claimed, err := tm.TryLockWithToken(ctx, timer.CategoryWaking, "c1", successorToken, time.Hour)
+	if err != nil || !claimed {
+		t.Fatalf("successor claim setup failed: %v", err)
+	}
+
+	// 2. Successor completes wake
+	c := repo.chars["c1"]
+	c.PendingWake = false
+	c.Stats.HP = 100
+	c.Tired = 0
+	repo.chars["c1"] = c
+
+	// 3. Player resumes play and registers a NEW costume (item 99)
+	err = costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+		CharacterID: "c1",
+		ItemNo:      99,
+		ItemName:    "new-dragon-wings",
+		ExpiresAt:   time.Now().Add(time.Hour),
+	}, time.Hour)
+	if err != nil {
+		t.Fatalf("failed to save successor new costume: %v", err)
+	}
+
+	// 4. Resume old processing
+	close(releaseHook)
+
+	select {
+	case err := <-wakeDone:
+		if err == nil {
+			t.Fatal("expected old Wake to abort with error after claim loss")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Wake timed out")
+	}
+
+	// 5. Verification: Successor's new costume (item 99) MUST NOT be deleted by the resumed old Wake!
+	activeCostume, err := costumeRepo.GetActiveCostume(ctx, "c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activeCostume == nil || activeCostume.ItemNo != 99 {
+		t.Fatalf("successor's new costume (item 99) was corrupted by resumed old Wake: %+v", activeCostume)
+	}
+}

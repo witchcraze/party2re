@@ -161,3 +161,47 @@ func TestValkeyCostumeRepository_ClearActiveCostume(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expectedCmd, recordedCmd)
 	}
 }
+
+func TestValkeyCostumeRepository_ClearActiveCostumeWithClaim(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Nil client
+	nilRepo := costume.NewValkeyCostumeRepository(nil)
+	reset, err := nilRepo.ClearActiveCostumeWithClaim(ctx, "c1", "waking", "token")
+	if err != nil || reset {
+		t.Fatalf("expected false, nil on nil client, got: %v, %v", reset, err)
+	}
+
+	// 2. Empty token/character/category validation
+	client := valkeytest.NewMockClient()
+	repo := costume.NewValkeyCostumeRepository(client)
+	if _, err := repo.ClearActiveCostumeWithClaim(ctx, "c1", "waking", ""); err == nil {
+		t.Error("expected error on empty token")
+	}
+	if _, err := repo.ClearActiveCostumeWithClaim(ctx, "", "waking", "tok"); err == nil {
+		t.Error("expected error on empty characterID")
+	}
+	if _, err := repo.ClearActiveCostumeWithClaim(ctx, "c1", "", "tok"); err == nil {
+		t.Error("expected error on empty category")
+	}
+
+	// 3. Successful atomic deletion (Lua returns 1)
+	clientOK := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntResult(1)
+	}))
+	repoOK := costume.NewValkeyCostumeRepository(clientOK)
+	reset, err = repoOK.ClearActiveCostumeWithClaim(ctx, "char-123", "waking", "token-match")
+	if err != nil || !reset {
+		t.Fatalf("expected true, nil on token match, got: %v, %v", reset, err)
+	}
+
+	// 4. Token mismatch (Lua returns 0)
+	clientMismatch := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntResult(0)
+	}))
+	repoMismatch := costume.NewValkeyCostumeRepository(clientMismatch)
+	reset, err = repoMismatch.ClearActiveCostumeWithClaim(ctx, "char-123", "waking", "wrong-token")
+	if err != nil || reset {
+		t.Fatalf("expected false, nil on token mismatch, got: %v, %v", reset, err)
+	}
+}

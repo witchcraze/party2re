@@ -2,12 +2,19 @@ package costume
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
 )
+
+//go:embed lua/release_with_claim.lua
+var releaseWithClaimLua string
+
+var releaseWithClaimScript = valkey.NewLuaScript(releaseWithClaimLua)
 
 const (
 	valkeyCostumeKeyPrefix = "party2:daily:costume:"
@@ -84,4 +91,39 @@ func (r *ValkeyCostumeRepository) ClearActiveCostume(ctx context.Context, charac
 	key := valkeyCostumeKeyPrefix + characterID
 	cmd := r.client.B().Del().Key(key).Build()
 	return r.client.Do(ctx, cmd).Error()
+}
+
+// ClearActiveCostumeWithClaim atomically deletes active costume rental state only if claimCategory has claimToken.
+func (r *ValkeyCostumeRepository) ClearActiveCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error) {
+	if r.client == nil {
+		return false, nil
+	}
+	claimToken = strings.TrimSpace(claimToken)
+	if claimToken == "" {
+		return false, errors.New("claim token cannot be empty")
+	}
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return false, errors.New("character id cannot be empty")
+	}
+	claimCategory = strings.TrimSpace(claimCategory)
+	if claimCategory == "" {
+		return false, errors.New("claim category cannot be empty")
+	}
+
+	claimK := "party2:timer:" + claimCategory + ":" + characterID
+	costumeK := valkeyCostumeKeyPrefix + characterID
+
+	res := releaseWithClaimScript.Exec(ctx, r.client, []string{claimK, costumeK}, []string{claimToken})
+	if res.Error() != nil {
+		if valkey.IsValkeyNil(res.Error()) {
+			return false, nil
+		}
+		return false, res.Error()
+	}
+	n, err := res.AsInt64()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
 }

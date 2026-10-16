@@ -456,3 +456,54 @@ func TestValkeyTimer_DailyQuotaErrors(t *testing.T) {
 		t.Fatalf("expected ResetDailyQuota to return expectedErr, got %v", err)
 	}
 }
+
+func TestTimer_VerifyLockToken(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("memory", func(t *testing.T) {
+		svc := NewService(nil)
+		locked, err := svc.TryLockWithToken(ctx, CategoryWaking, "c1", "token-abc", time.Hour)
+		if err != nil || !locked {
+			t.Fatalf("TryLockWithToken: %v", err)
+		}
+
+		// Valid token
+		valid, err := svc.VerifyLockToken(ctx, CategoryWaking, "c1", "token-abc")
+		if err != nil || !valid {
+			t.Errorf("expected valid=true, got %v (err=%v)", valid, err)
+		}
+
+		// Wrong token
+		valid, err = svc.VerifyLockToken(ctx, CategoryWaking, "c1", "wrong-token")
+		if err != nil || valid {
+			t.Errorf("expected valid=false for wrong token, got %v (err=%v)", valid, err)
+		}
+
+		// Non-existent target
+		valid, err = svc.VerifyLockToken(ctx, CategoryWaking, "c2", "token-abc")
+		if err != nil || valid {
+			t.Errorf("expected valid=false for non-existent target, got %v (err=%v)", valid, err)
+		}
+	})
+
+	t.Run("valkey_mock", func(t *testing.T) {
+		mock := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+			cs := cmd.Commands()
+			if len(cs) >= 2 && cs[0] == "GET" && cs[1] == "party2:timer:waking:c1" {
+				return valkeytest.MakeStringResult("token-xyz")
+			}
+			return valkeytest.MakeNilResult()
+		}))
+		svc := NewService(mock)
+
+		valid, err := svc.VerifyLockToken(ctx, CategoryWaking, "c1", "token-xyz")
+		if err != nil || !valid {
+			t.Errorf("expected valid=true, got %v (err=%v)", valid, err)
+		}
+
+		valid, err = svc.VerifyLockToken(ctx, CategoryWaking, "c1", "wrong")
+		if err != nil || valid {
+			t.Errorf("expected valid=false, got %v (err=%v)", valid, err)
+		}
+	})
+}

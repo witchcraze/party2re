@@ -11,9 +11,11 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/tavern"
 	"github.com/witchcraze/party2re/internal/testutil"
 	"github.com/witchcraze/party2re/internal/valkey"
@@ -55,6 +57,7 @@ type wakeClaimCostumeHook struct {
 	hookEntered  chan struct{}
 	releaseHook  chan struct{}
 	skippedTimer *failingRenewTimer
+	storeService *store.Service
 }
 
 func (h *wakeClaimCostumeHook) ResetCostume(_ context.Context, id string) error {
@@ -67,9 +70,12 @@ func (h *wakeClaimCostumeHook) ResetCostumeWithClaim(_ context.Context, id, clai
 	close(h.hookEntered)
 	<-h.releaseHook
 
-	// Resumed old hook attempts to execute costume reset via timer boundary with its token,
+	// Resumed old hook attempts to execute costume reset via real storeService (or timer) with its token,
 	// intentionally using context.Background() to verify that atomic claim verification
 	// (not context cancellation) prevents mutating successor state in real Valkey.
+	if h.storeService != nil {
+		return h.storeService.ResetCostumeWithClaim(context.Background(), id, claimCategory, claimToken)
+	}
 	return h.skippedTimer.ResetDailyQuotaWithClaim(context.Background(), "costume", id, claimCategory, claimToken)
 }
 
@@ -996,7 +1002,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		}
 
 		// Wrap timers in a proxy that skips renewal to simulate keepalive failure
-		skippedTimer := &failingRenewTimer{TimerService: timers}
+		skippedTimer := &failingRenewTimer{Service: timers}
 
 		svc, err := home.NewService(
 			homeRepo,
@@ -1082,7 +1088,29 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		skippedTimer := &failingRenewTimer{TimerService: timers}
+		costumeRepo := costume.NewValkeyCostumeRepository(client)
+		now := time.Now().UTC()
+		if err := costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+			CharacterID: char.ID,
+			ItemNo:      42,
+			RentedAt:    now,
+			ExpiresAt:   now.Add(time.Hour),
+		}, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+
+		skippedTimer := &failingRenewTimer{Service: timers}
+
+		storeSvc1 := store.NewService(
+			nil, nil, nil, nil, nil,
+			store.WithTimer(skippedTimer),
+			store.WithCostumeRepository(costumeRepo),
+		)
+		storeSvc2 := store.NewService(
+			nil, nil, nil, nil, nil,
+			store.WithTimer(timers),
+			store.WithCostumeRepository(costumeRepo),
+		)
 
 		svc1, err := home.NewService(
 			homeRepo,
@@ -1111,8 +1139,10 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			hookEntered:  make(chan struct{}),
 			releaseHook:  make(chan struct{}),
 			skippedTimer: skippedTimer,
+			storeService: storeSvc1,
 		}
 		svc1.SetCostumeResetter(claimHook)
+		svc2.SetCostumeResetter(storeSvc2)
 
 		wakeDone := make(chan error, 1)
 		go func() {
@@ -1135,10 +1165,22 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatalf("successor Wake failed: %+v, %v", res2, err)
 		}
 
+		// Successor wake cleared the old costume (42)
+		oldCostume, err := costumeRepo.GetActiveCostume(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if oldCostume != nil {
+			t.Fatalf("expected old costume to be cleared by successor, got %+v", oldCostume)
+		}
+
 		// 2. Player resumes play and rents a costume in real Valkey
-		costumeKey := "party2:daily:costume:" + char.ID
-		setCmd := client.B().Set().Key(costumeKey).Value("cat-ears").Ex(time.Hour).Build()
-		if err := client.Do(ctx, setCmd).Error(); err != nil {
+		if err := costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+			CharacterID: char.ID,
+			ItemNo:      99,
+			RentedAt:    now,
+			ExpiresAt:   now.Add(time.Hour),
+		}, time.Hour); err != nil {
 			t.Fatalf("failed to rent costume: %v", err)
 		}
 
@@ -1155,10 +1197,12 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		}
 
 		// 4. Verify player's rented costume in real Valkey was NOT deleted by the old hook
-		getCmd := client.B().Get().Key(costumeKey).Build()
-		val, err := client.Do(ctx, getCmd).ToString()
-		if err != nil || val != "cat-ears" {
-			t.Fatalf("player's costume in real Valkey was corrupted: val=%q err=%v", val, err)
+		newCostume, err := costumeRepo.GetActiveCostume(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if newCostume == nil || newCostume.ItemNo != 99 {
+			t.Fatalf("player's costume in real Valkey was corrupted: %+v", newCostume)
 		}
 
 		// 5. Verify SQL PendingWake remains false (completed by successor)
@@ -1241,7 +1285,7 @@ func (f wakeJobRestorerHook) RestoreActiveJob(ctx context.Context, characterID, 
 }
 
 type failingRenewTimer struct {
-	home.TimerService
+	timer.Service
 	dropRenew atomic.Bool
 }
 
@@ -1249,5 +1293,5 @@ func (f *failingRenewTimer) RenewLock(ctx context.Context, category, targetID, t
 	if f.dropRenew.Load() {
 		return false, nil
 	}
-	return f.TimerService.RenewLock(ctx, category, targetID, token, duration)
+	return f.Service.RenewLock(ctx, category, targetID, token, duration)
 }

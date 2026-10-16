@@ -382,16 +382,18 @@ func (s *Service) ResetCostumeWithClaim(ctx context.Context, characterID, claimC
 		// Refuse unsafe deletion to preserve successor state.
 		return false, nil
 	}
-	reset, err := s.timer.ResetDailyQuotaWithClaim(ctx, "costume", characterID, claimCategory, claimToken)
-	if err != nil || !reset {
-		return false, err
-	}
+
 	if s.costumeRepo != nil {
-		if err := s.costumeRepo.ClearActiveCostume(ctx, characterID); err != nil {
+		reset, err := s.costumeRepo.ClearActiveCostumeWithClaim(ctx, characterID, claimCategory, claimToken)
+		if err != nil || !reset {
 			return false, err
 		}
+		// Reset daily quota in timer as well (in Valkey, costume and quota share the key; in memory, resets timer map)
+		_, _ = s.timer.ResetDailyQuotaWithClaim(ctx, "costume", characterID, claimCategory, claimToken)
+		return true, nil
 	}
-	return true, nil
+
+	return s.timer.ResetDailyQuotaWithClaim(ctx, "costume", characterID, claimCategory, claimToken)
 }
 
 // BuyHomeWallpaper purchases a wallpaper for the character's private home.

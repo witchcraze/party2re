@@ -68,6 +68,7 @@ type LockService interface {
 	ReleaseLock(ctx context.Context, category, targetID string) error
 	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
 	ReleaseLockWithClaim(ctx context.Context, category, targetID, claimCategory, claimToken string) (bool, error)
+	VerifyLockToken(ctx context.Context, category, targetID, token string) (bool, error)
 }
 
 // DailyQuotaService defines daily quota tracking and reset operations.
@@ -353,4 +354,38 @@ func (s *service) ReleaseLockWithClaim(ctx context.Context, category, targetID, 
 	}
 	delete(s.memory, targetK)
 	return true, nil
+}
+
+func (s *service) VerifyLockToken(ctx context.Context, category, targetID, token string) (bool, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false, ErrEmptyToken
+	}
+	k, err := timerKey(category, targetID)
+	if err != nil {
+		return false, err
+	}
+	if s.client != nil {
+		cmd := s.client.B().Get().Key(k).Build()
+		resp := s.client.Do(ctx, cmd)
+		if resp.Error() != nil {
+			if valkey.IsValkeyNil(resp.Error()) {
+				return false, nil
+			}
+			return false, resp.Error()
+		}
+		val, err := resp.ToString()
+		if err != nil {
+			return false, err
+		}
+		return val == token, nil
+	}
+
+	s.memMu.RLock()
+	defer s.memMu.RUnlock()
+	exp, exists := s.memory[k]
+	if !exists || time.Now().After(exp.expiresAt) {
+		return false, nil
+	}
+	return exp.value == token, nil
 }
