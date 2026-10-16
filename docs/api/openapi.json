@@ -14868,7 +14868,7 @@
                 }
               }
             },
-            "description": "Conflict - character is already sleeping"
+            "description": "Conflict - character is already sleeping, has pending wake recovery, or wake is currently in progress"
           },
           "500": {
             "content": {

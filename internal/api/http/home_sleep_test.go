@@ -111,6 +111,25 @@ func TestHomeSleepEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/home/sleep - conflict when wake in progress", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			sleepFn: func(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error) {
+				return home.SleepResult{}, home.ErrWakeInProgress
+			},
+		}
+		h := newTestHandler(t, players, characters, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		router := h.Router()
+
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/home/sleep", nil)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("expected 409 Conflict, got %d", rec.Code)
+		}
+	})
+
 	t.Run("POST /characters/{id}/home/sleep - house not found for homeless or expired target", func(t *testing.T) {
 		mockHome := &mockHomeService{
 			sleepFn: func(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error) {

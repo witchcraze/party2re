@@ -156,6 +156,7 @@ func TestHomeGatewayServiceRejectionsAndUnknownFailure(t *testing.T) {
 		status       int
 	}{
 		{"home_sleep", "HOME_ALREADY_SLEEPING", home.ErrAlreadySleeping, 409},
+		{"home_sleep", "HOME_WAKE_IN_PROGRESS", home.ErrWakeInProgress, 409},
 		{"home_sleep", "CHARACTER_NOT_FOUND", home.ErrCharacterNotFound, 404},
 		{"home_sleep", "CHARACTER_NOT_FOUND", corecharacter.ErrNotFound, 404},
 		{"home_sleep", "HOME_HOUSE_NOT_FOUND", home.ErrHouseNotFound, 404},
@@ -205,26 +206,31 @@ func TestHomeGatewayServiceRejectionsAndUnknownFailure(t *testing.T) {
 }
 
 func TestHomeGatewayServiceRevalidatesEarlyWakeAndSleepRace(t *testing.T) {
-	for _, action := range []string{"home_sleep", "home_wake"} {
-		f := newHomeGatewayFixture(t)
-		if action == "home_wake" {
-			setHomeWakeReady(f)
-		}
-		f.beforeExecute = func() {
-			if err := f.timers.SetLock(f.expectedContext, timer.CategorySleep, "hero", time.Hour); err != nil {
-				t.Fatal(err)
+	for _, tc := range []struct {
+		name, action, category, code string
+	}{
+		{"sleep_vs_sleep_timer", "home_sleep", timer.CategorySleep, "HOME_ALREADY_SLEEPING"},
+		{"sleep_vs_asleep_timer", "home_sleep", timer.CategoryAsleep, "HOME_ALREADY_SLEEPING"},
+		{"sleep_vs_waking_claim", "home_sleep", timer.CategoryWaking, "HOME_WAKE_IN_PROGRESS"},
+		{"wake_vs_sleep_timer", "home_wake", timer.CategorySleep, "HOME_STILL_SLEEPING"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newHomeGatewayFixture(t)
+			if tc.action == "home_wake" {
+				setHomeWakeReady(f)
 			}
-		}
-		status, got := f.request(f.router(f.timers), action, "")
-		if status != 409 || f.executions != 1 || f.updates != 0 {
-			t.Fatalf("service revalidation bypassed: %d %s", status, got)
-		}
-		code := "HOME_ALREADY_SLEEPING"
-		if action == "home_wake" {
-			code = "HOME_STILL_SLEEPING"
-		}
-		assertGatewayError(t, got, code)
-		homeObservation(t, got)
+			f.beforeExecute = func() {
+				if err := f.timers.SetLock(f.expectedContext, tc.category, "hero", time.Hour); err != nil {
+					t.Fatal(err)
+				}
+			}
+			status, got := f.request(f.router(f.timers), tc.action, "")
+			if status != 409 || f.executions != 1 || f.updates != 0 {
+				t.Fatalf("service revalidation bypassed: %d %s", status, got)
+			}
+			assertGatewayError(t, got, tc.code)
+			homeObservation(t, got)
+		})
 	}
 }
 

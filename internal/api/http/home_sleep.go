@@ -67,7 +67,7 @@ func (h *Handler) handleHomeSleep(w http.ResponseWriter, r *http.Request) {
 
 		res, err := h.homes.Sleep(r.Context(), char.ID, req.TargetHomeID)
 		if err != nil {
-			if errors.Is(err, home.ErrAlreadySleeping) {
+			if errors.Is(err, home.ErrAlreadySleeping) || errors.Is(err, home.ErrWakeInProgress) {
 				writeError(w, http.StatusConflict, err)
 				return
 			}

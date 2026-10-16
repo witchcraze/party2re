@@ -130,3 +130,18 @@ func WithEconomy(eco *economy.Service) ServiceOption {
 		s.runner = eco
 	}
 }
+
+// SetFullnessResetter registers a cross-domain fullness reset hook.
+func (s *Service) SetFullnessResetter(f FullnessResetter) { s.fullness = f }
+
+// SetBlessingCleaner registers a cross-domain chapel blessing cleaner hook.
+func (s *Service) SetBlessingCleaner(b BlessingCleaner) { s.chapel = b }
+
+// SetAlchemyCompleter registers a cross-domain alchemy synthesis completer hook.
+func (s *Service) SetAlchemyCompleter(a AlchemyCompleter) { s.alchemy = a }
+
+// SetCostumeResetter registers a cross-domain costume reset hook.
+func (s *Service) SetCostumeResetter(c CostumeResetter) { s.costume = c }
+
+// SetJobStateRestorer registers a cross-domain job state restorer hook.
+func (s *Service) SetJobStateRestorer(r JobStateRestorer) { s.jobRestorer = r }
