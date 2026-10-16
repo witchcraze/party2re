@@ -377,15 +377,19 @@ func (s *Service) ResetCostume(ctx context.Context, characterID string) error {
 
 // ResetCostumeWithClaim implements CostumeClaimResetter, resetting costume on rest with atomic claim verification.
 func (s *Service) ResetCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error) {
-	if s.timer != nil {
-		if quotaTimer, ok := s.timer.(interface {
-			ResetDailyQuotaWithClaim(ctx context.Context, action, targetID, claimCategory, claimToken string) (bool, error)
-		}); ok {
-			return quotaTimer.ResetDailyQuotaWithClaim(ctx, "costume", characterID, claimCategory, claimToken)
-		}
+	if s.timer == nil {
+		// When timer is not configured, ownership cannot be verified atomically.
+		// Refuse unsafe deletion to preserve successor state.
+		return false, nil
+	}
+	reset, err := s.timer.ResetDailyQuotaWithClaim(ctx, "costume", characterID, claimCategory, claimToken)
+	if err != nil || !reset {
+		return false, err
 	}
 	if s.costumeRepo != nil {
-		return true, s.costumeRepo.ClearActiveCostume(ctx, characterID)
+		if err := s.costumeRepo.ClearActiveCostume(ctx, characterID); err != nil {
+			return false, err
+		}
 	}
 	return true, nil
 }

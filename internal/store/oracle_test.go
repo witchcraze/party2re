@@ -10,6 +10,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/store"
@@ -497,5 +498,58 @@ func TestOracleService_ApplyAndResetCostume(t *testing.T) {
 	got, _ = costumeRepo.GetActiveCostume(ctx, "char-1")
 	if got != nil {
 		t.Errorf("expected costume cleared after reset, got %+v", got)
+	}
+}
+
+func TestOracleService_ResetCostumeWithClaim(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Without timer: refuses unsafe deletion
+	costumeRepo := costume.NewMemoryCostumeRepository()
+	svcNoTimer := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
+	_ = svcNoTimer.ApplyCostume(ctx, "char-1", 46, "costume-46", "icon", time.Now().Add(time.Hour))
+	reset, err := svcNoTimer.ResetCostumeWithClaim(ctx, "char-1", "waking", "any-token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reset {
+		t.Errorf("expected ResetCostumeWithClaim to return false when timer is nil")
+	}
+	active, _ := costumeRepo.GetActiveCostume(ctx, "char-1")
+	if active == nil || active.ItemNo != 46 {
+		t.Fatalf("costume should not be deleted when timer is nil")
+	}
+
+	// 2. With timer: token mismatch preserves costume in MemoryCostumeRepository
+	tm := timer.NewService(nil)
+	svcWithTimer := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
+	claimed, err := tm.TryLockWithToken(ctx, "waking", "char-1", "valid-token", time.Hour)
+	if err != nil || !claimed {
+		t.Fatalf("failed to setup claim: %v", err)
+	}
+
+	reset, err = svcWithTimer.ResetCostumeWithClaim(ctx, "char-1", "waking", "wrong-token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reset {
+		t.Errorf("expected ResetCostumeWithClaim to return false on token mismatch")
+	}
+	active, _ = costumeRepo.GetActiveCostume(ctx, "char-1")
+	if active == nil || active.ItemNo != 46 {
+		t.Fatalf("costume should NOT be cleared on token mismatch")
+	}
+
+	// 3. With timer: matching token clears costume from MemoryCostumeRepository
+	reset, err = svcWithTimer.ResetCostumeWithClaim(ctx, "char-1", "waking", "valid-token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reset {
+		t.Errorf("expected ResetCostumeWithClaim to return true on matching token")
+	}
+	active, _ = costumeRepo.GetActiveCostume(ctx, "char-1")
+	if active != nil {
+		t.Fatalf("costume should be cleared from MemoryCostumeRepository after verified claim reset")
 	}
 }

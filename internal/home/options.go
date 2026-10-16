@@ -62,6 +62,7 @@ type CostumeResetter interface {
 
 // CostumeClaimResetter resets rented costume state with atomic claim verification.
 type CostumeClaimResetter interface {
+	CostumeResetter
 	ResetCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error)
 }
 

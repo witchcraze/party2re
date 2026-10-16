@@ -298,14 +298,15 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 			}
 		} else {
 			if err := s.executeRecoveryHook(ctx, claimCtx, keeper, func() error {
-				if s.timer != nil {
-					reset, err := s.timer.ResetDailyQuotaWithClaim(claimCtx, "costume", characterID, timer.CategoryWaking, claimToken)
-					if err != nil {
-						return err
-					}
-					if !reset {
-						return ErrWakeInProgress
-					}
+				if s.timer == nil {
+					return ErrWakeInProgress
+				}
+				reset, err := s.timer.ResetDailyQuotaWithClaim(claimCtx, "costume", characterID, timer.CategoryWaking, claimToken)
+				if err != nil {
+					return err
+				}
+				if !reset {
+					return ErrWakeInProgress
 				}
 				return s.costume.ResetCostume(claimCtx, characterID)
 			}); err != nil {

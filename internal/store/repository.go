@@ -63,6 +63,7 @@ type GuildPointsRegistrar interface {
 
 type TimerService interface {
 	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+	ResetDailyQuotaWithClaim(ctx context.Context, action, targetID, claimCategory, claimToken string) (bool, error)
 }
 
 type TxProvider interface {

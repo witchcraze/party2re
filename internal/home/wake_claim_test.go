@@ -10,7 +10,9 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/job"
+	"github.com/witchcraze/party2re/internal/store"
 )
 
 func newWakeTestService(t *testing.T, tm TimerService, chars map[string]corecharacter.Character) (*Service, *mockCharRepo) {
@@ -731,25 +733,20 @@ func TestWake_ClaimLostImmediatelyBeforeDungeonReset_AbortsWithoutAlteringState(
 // Issue #1228: If a recovery hook pauses/blocks, loses claim ownership to a successor Wake,
 // and the successor completes and player resumes play (modifying state), the resumed old hook
 // must detect ownership loss and never corrupt the successor's refreshed state.
-type mockClaimCostumeResetter struct {
+type blockingClaimCostumeResetter struct {
+	inner       CostumeClaimResetter
 	hookEntered chan struct{}
 	releaseHook chan struct{}
-	tm          timer.Service
 }
 
-func (m *mockClaimCostumeResetter) ResetCostume(_ context.Context, id string) error {
-	_, err := m.ResetCostumeWithClaim(context.Background(), id, timer.CategoryWaking, "")
-	return err
+func (b *blockingClaimCostumeResetter) ResetCostume(ctx context.Context, id string) error {
+	return b.inner.ResetCostume(ctx, id)
 }
 
-func (m *mockClaimCostumeResetter) ResetCostumeWithClaim(_ context.Context, id, claimCategory, claimToken string) (bool, error) {
-	close(m.hookEntered)
-	<-m.releaseHook
-
-	// Resumed old hook attempts to execute costume reset via timer boundary with its token,
-	// intentionally using context.Background() to verify that atomic claim verification
-	// (not context cancellation) prevents mutating successor state.
-	return m.tm.ResetDailyQuotaWithClaim(context.Background(), "costume", id, claimCategory, claimToken)
+func (b *blockingClaimCostumeResetter) ResetCostumeWithClaim(ctx context.Context, id, claimCategory, claimToken string) (bool, error) {
+	close(b.hookEntered)
+	<-b.releaseHook
+	return b.inner.ResetCostumeWithClaim(ctx, id, claimCategory, claimToken)
 }
 
 // Issue #1228: If a recovery hook pauses/blocks, loses claim ownership to a successor Wake,
@@ -774,10 +771,13 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 		t.Fatalf("NewService: %v", err)
 	}
 
-	claimResetter := &mockClaimCostumeResetter{
+	costumeRepo := costume.NewMemoryCostumeRepository()
+	storeSvc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
+
+	claimResetter := &blockingClaimCostumeResetter{
+		inner:       storeSvc,
 		hookEntered: make(chan struct{}),
 		releaseHook: make(chan struct{}),
-		tm:          tm,
 	}
 	svc.SetCostumeResetter(claimResetter)
 
@@ -809,10 +809,20 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 	c.Tired = 0
 	repo.chars["c1"] = c
 
-	// 3. Player resumes play and rents a costume in timer quota
+	// 3. Player resumes play and rents a costume in timer quota and MemoryCostumeRepository
 	used, err := tm.ConsumeDailyQuota(ctx, "costume", "c1", time.Now())
 	if err != nil || !used {
 		t.Fatalf("player failed to rent costume: %v", err)
+	}
+	err = costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+		CharacterID: "c1",
+		ItemNo:      46,
+		ItemName:    "cat-ears",
+		Icon:        "icon",
+		ExpiresAt:   time.Now().Add(time.Hour),
+	}, time.Hour)
+	if err != nil {
+		t.Fatalf("failed to save successor active costume: %v", err)
 	}
 
 	// Now resume the old hook
@@ -836,8 +846,150 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 		t.Fatal("player's rented costume quota was erroneously deleted by old hook")
 	}
 
+	activeCostume, err := costumeRepo.GetActiveCostume(ctx, "c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activeCostume == nil || activeCostume.ItemNo != 46 {
+		t.Fatalf("player's active costume in MemoryCostumeRepository was erroneously deleted by old hook: %+v", activeCostume)
+	}
+
 	// Character must remain in awake state
 	if repo.chars["c1"].PendingWake {
 		t.Fatal("character PendingWake was reverted to true")
+	}
+}
+
+// Issue #1228: In in-memory configuration with actual store.Service and MemoryCostumeRepository,
+// successful Wake must reset daily quota and clear active costume from MemoryCostumeRepository.
+func TestWake_CostumeClearedOnSuccessfulWake_MemoryRepository(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 80, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
+		},
+	}
+	costumeRepo := costume.NewMemoryCostumeRepository()
+	storeSvc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
+
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(tm),
+		WithCharacterUpdater(repo),
+		WithCostumeResetter(storeSvc),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	// Pre-seed active costume and daily quota
+	_, _ = tm.ConsumeDailyQuota(ctx, "costume", "c1", time.Now())
+	_ = costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+		CharacterID: "c1",
+		ItemNo:      46,
+		ItemName:    "cat-ears",
+		Icon:        "icon",
+		ExpiresAt:   time.Now().Add(time.Hour),
+	}, time.Hour)
+
+	res, err := svc.Wake(ctx, "c1")
+	if err != nil || !res.Success {
+		t.Fatalf("Wake failed: %+v, %v", res, err)
+	}
+
+	// Verify both daily quota and MemoryCostumeRepository are cleared
+	hasQuota, err := tm.HasUsedDailyQuota(ctx, "costume", "c1")
+	if err != nil || hasQuota {
+		t.Errorf("expected costume daily quota cleared, got %v (err=%v)", hasQuota, err)
+	}
+	active, err := costumeRepo.GetActiveCostume(ctx, "c1")
+	if err != nil || active != nil {
+		t.Errorf("expected MemoryCostumeRepository costume cleared, got %+v (err=%v)", active, err)
+	}
+}
+
+// Issue #1228: If ownership cannot be verified atomically (e.g. timer is nil),
+// Wake must refuse unsafe deletion rather than falling back to unconditional deletion.
+func TestWake_CostumeRefusesUnsafeDeletionWhenTimerNil(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 80, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
+		},
+	}
+	costumeRepo := costume.NewMemoryCostumeRepository()
+	storeSvc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo)) // timer is nil
+
+	tm := timer.NewService(nil)
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(tm),
+		WithCharacterUpdater(repo),
+		WithCostumeResetter(storeSvc),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	_ = costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+		CharacterID: "c1",
+		ItemNo:      46,
+		ItemName:    "cat-ears",
+		Icon:        "icon",
+		ExpiresAt:   time.Now().Add(time.Hour),
+	}, time.Hour)
+
+	_, err = svc.Wake(ctx, "c1")
+	if !errors.Is(err, ErrWakeInProgress) {
+		t.Fatalf("Wake err = %v, want ErrWakeInProgress (refuse unsafe deletion)", err)
+	}
+
+	// Active costume must remain intact in MemoryCostumeRepository
+	active, err := costumeRepo.GetActiveCostume(ctx, "c1")
+	if err != nil || active == nil || active.ItemNo != 46 {
+		t.Fatalf("costume in MemoryCostumeRepository was erroneously deleted when timer was nil")
+	}
+}
+
+type legacyCostumeHook struct {
+	called atomic.Bool
+}
+
+func (l *legacyCostumeHook) ResetCostume(ctx context.Context, characterID string) error {
+	l.called.Store(true)
+	return nil
+}
+
+// Verifies that a legacy CostumeResetter (without CostumeClaimResetter) is safely called
+// after atomic quota reset succeeds on normal Wake.
+func TestWake_LegacyCostumeResetter_ExecutesOnValidWake(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 80, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
+		},
+	}
+	legacyHook := &legacyCostumeHook{}
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(tm),
+		WithCharacterUpdater(repo),
+		WithCostumeResetter(legacyHook),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	res, err := svc.Wake(ctx, "c1")
+	if err != nil || !res.Success {
+		t.Fatalf("Wake failed: %+v, %v", res, err)
+	}
+	if !legacyHook.called.Load() {
+		t.Fatal("expected legacy ResetCostume to be called on valid wake")
 	}
 }
