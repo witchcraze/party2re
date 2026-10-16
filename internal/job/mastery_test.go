@@ -2,6 +2,7 @@ package job_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 type memoryJobRepository struct {
 	data map[string]corejob.CharacterJob
+	err  error
 }
 
 func newMemoryJobRepository() *memoryJobRepository {
@@ -25,9 +27,12 @@ func (r *memoryJobRepository) Save(ctx context.Context, value corejob.CharacterJ
 }
 
 func (r *memoryJobRepository) FindByCharacterID(ctx context.Context, characterID string) (corejob.CharacterJob, error) {
+	if r.err != nil {
+		return corejob.CharacterJob{}, r.err
+	}
 	v, ok := r.data[characterID]
 	if !ok {
-		return corejob.CharacterJob{}, corejob.ErrInvalidCharacter
+		return corejob.CharacterJob{}, corejob.ErrCharacterJobNotFound
 	}
 	return v, nil
 }
@@ -534,6 +539,37 @@ func TestGetJobMastery_LiveSPPriorityOverSavedSP(t *testing.T) {
 			if j.CurrentSP != 7 {
 				t.Errorf("job-02: expected live OldSP 7 to override saved SP 40, got %d", j.CurrentSP)
 			}
+		}
+	}
+}
+
+func TestGetJobMastery_PropagatesStorageAndCancellationErrors(t *testing.T) {
+	ctx := context.Background()
+	jobRepo := newMemoryJobRepository()
+	charRepo := newMemoryCharRepository()
+
+	svc, err := job.NewService(
+		jobRepo,
+		job.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatalf("failed to create job service: %v", err)
+	}
+
+	charID := "char-unreadable"
+	charRepo.data[charID] = corecharacter.Character{
+		ID:       charID,
+		JobID:    "job-03",
+		SP:       9,
+		OldJobID: "job-04",
+		OldSP:    11,
+	}
+
+	for _, wantErr := range []error{context.Canceled, errors.New("storage failure")} {
+		jobRepo.err = wantErr
+		_, err := svc.GetJobMastery(ctx, charID)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("GetJobMastery error = %v, want %v", err, wantErr)
 		}
 	}
 }

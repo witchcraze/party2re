@@ -317,7 +317,7 @@ func isNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, corejob.ErrInvalidCharacter) || errors.Is(err, corecharacter.ErrNotFound) {
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, corejob.ErrCharacterJobNotFound) || errors.Is(err, corejob.ErrInvalidCharacter) || errors.Is(err, corecharacter.ErrNotFound) {
 		return true
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "not found")

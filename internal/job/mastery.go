@@ -70,9 +70,9 @@ func (s *Service) GetJobMastery(ctx context.Context, characterID string) (Charac
 		return CharacterJobMastery{}, err
 	}
 
-	jobState, err := s.repository.FindByCharacterID(ctx, characterID)
+	jobState, err := s.loadState(ctx, char)
 	if err != nil {
-		jobState, _ = corejob.NewCharacterJob(characterID, char.JobID)
+		return CharacterJobMastery{}, err
 	}
 
 	definitions := s.ListDefinitions()
