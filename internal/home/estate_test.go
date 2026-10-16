@@ -153,6 +153,57 @@ func (m *mockTimer) ResetDailyQuota(ctx context.Context, action, targetID string
 	return nil
 }
 
+func (m *mockTimer) ReleaseLockWithClaim(ctx context.Context, category, targetID, claimCategory, claimToken string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err, ok := m.releaseLockErrs[category]; ok && err != nil {
+		return false, err
+	}
+	claimKey := claimCategory + ":" + targetID
+	if m.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	key := category + ":" + targetID
+	delete(m.locks, key)
+	delete(m.tokens, key)
+	return true, nil
+}
+
+func (m *mockTimer) ResetDailyQuotaWithClaim(ctx context.Context, action, targetID, claimCategory, claimToken string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	claimKey := claimCategory + ":" + targetID
+	if m.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	if err, ok := m.resetQuotaErrs[action]; ok && err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (m *mockTimer) ResetDungeonOnceWithClaim(ctx context.Context, targetID, claimCategory, claimToken string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err, ok := m.releaseLockErrs[timer.CategoryDungeonOnce]; ok && err != nil {
+		return false, err
+	}
+	if err, ok := m.resetQuotaErrs["dungeon_once"]; ok && err != nil {
+		return false, err
+	}
+	claimKey := claimCategory + ":" + targetID
+	if m.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	lockKey := timer.CategoryDungeonOnce + ":" + targetID
+	delete(m.locks, lockKey)
+	delete(m.tokens, lockKey)
+	return true, nil
+}
+
 func TestEstateService(t *testing.T) {
 	ctx := context.Background()
 	chars := map[string]corecharacter.Character{

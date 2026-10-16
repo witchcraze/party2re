@@ -661,3 +661,69 @@ func TestWake_ReleaseLockWithToken_MismatchDoesNotDelete(t *testing.T) {
 		t.Fatalf("expected lock deleted, got locked=%v", locked)
 	}
 }
+
+// P1 regression test: If claim is lost immediately before dungeon_once reset,
+// ResetDungeonOnceWithClaim must atomically fail, leaving successor dungeon_once lock
+// and quota intact, and halting Wake before SQL pending_wake or asleep lock are touched.
+func TestWake_ClaimLostImmediatelyBeforeDungeonReset_AbortsWithoutAlteringState(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 80, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
+		},
+	}
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(tm),
+		WithCharacterUpdater(repo),
+		WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	const successorToken = "successor-token-dungeon-guard"
+
+	// During the costume hook (the last hook before dungeon reset), simulate
+	// the successor taking over the waking claim and setting a fresh dungeon lock and quota.
+	svc.SetCostumeResetter(costumeResetFunc(func(_ context.Context, id string) error {
+		_ = tm.ReleaseLock(ctx, timer.CategoryWaking, id)
+		claimed, err := tm.TryLockWithToken(ctx, timer.CategoryWaking, id, successorToken, time.Hour)
+		if err != nil || !claimed {
+			t.Fatalf("successor claim: %v", err)
+		}
+		_ = tm.SetLock(ctx, timer.CategoryDungeonOnce, id, time.Hour)
+		_, _ = tm.ConsumeDailyQuota(ctx, "dungeon_once", id, time.Now())
+		return nil
+	}))
+
+	_, err = svc.Wake(ctx, "c1")
+	if !errors.Is(err, ErrWakeInProgress) {
+		t.Fatalf("Wake err = %v, want ErrWakeInProgress", err)
+	}
+
+	// 1. Successor's dungeon_once lock must NOT have been released
+	dungeonLocked, _ := tm.IsLocked(ctx, timer.CategoryDungeonOnce, "c1")
+	if !dungeonLocked {
+		t.Fatal("successor dungeon_once lock was erroneously deleted")
+	}
+
+	// 2. Successor's daily quota must NOT have been reset
+	hasQuota, _ := tm.HasUsedDailyQuota(ctx, "dungeon_once", "c1")
+	if !hasQuota {
+		t.Fatal("successor daily quota was erroneously reset")
+	}
+
+	// 3. SQL PendingWake must remain true
+	if !repo.chars["c1"].PendingWake {
+		t.Fatal("SQL PendingWake was erroneously cleared")
+	}
+
+	// 4. Successor's waking lock must remain held
+	wakingLocked, _ := tm.IsLocked(ctx, timer.CategoryWaking, "c1")
+	if !wakingLocked {
+		t.Fatal("successor waking lock was erroneously released")
+	}
+}

@@ -781,13 +781,14 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		// Valkey integer-second TTL: 1s TTL renewed every 250ms
 		svc, err := home.NewService(
 			homeRepo,
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
 			home.WithTimer(timers),
-			home.WithWakeClaimTTL(80*time.Millisecond, 25*time.Millisecond),
+			home.WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -816,8 +817,9 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatal("hook never entered")
 		}
 
-		// Hold hook for 200ms (> 2x TTL of 80ms)
-		time.Sleep(200 * time.Millisecond)
+		// Hold hook for 1250ms (> 1000ms TTL in real Valkey).
+		// Without keepalive, the 1s Valkey key would expire after 1000ms.
+		time.Sleep(1250 * time.Millisecond)
 
 		// Key must still be locked in real Valkey via background renewal Lua script
 		locked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID)
@@ -875,7 +877,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
 			home.WithTimer(timers),
-			home.WithWakeClaimTTL(60*time.Millisecond, 20*time.Millisecond),
+			home.WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -953,6 +955,101 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		}
 	})
 
+	t.Run("wake_lease_expiry_aborts_and_preserves_state_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeRealExpiry")
+		char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 50
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		// Setup preexisting dungeon_once lock and daily quota in real Valkey
+		if err := timers.SetLock(ctx, timer.CategoryDungeonOnce, char.ID, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := timers.ConsumeDailyQuota(ctx, "dungeon_once", char.ID, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+
+		// Wrap timers in a proxy that skips renewal to simulate keepalive failure
+		skippedTimer := &failingRenewTimer{TimerService: timers}
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(skippedTimer),
+			home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hookEntered := make(chan struct{})
+		releaseHook := make(chan struct{})
+
+		svc.SetCostumeResetter(wakeCostumeHook(func(_ context.Context, _ string) error {
+			skippedTimer.dropRenew.Store(true)
+			close(hookEntered)
+			<-releaseHook
+			return nil
+		}))
+
+		wakeDone := make(chan error, 1)
+		go func() {
+			_, err := svc.Wake(ctx, char.ID)
+			wakeDone <- err
+		}()
+
+		select {
+		case <-hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		// Sleep 1250ms (> 1000ms TTL) while renewals are dropped
+		time.Sleep(1250 * time.Millisecond)
+
+		// The waking key in real Valkey must now be expired
+		wakingLocked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID)
+		if err != nil || wakingLocked {
+			t.Fatalf("expected waking lock to have expired in Valkey without renewals, got %v (err=%v)", wakingLocked, err)
+		}
+
+		close(releaseHook)
+
+		select {
+		case err := <-wakeDone:
+			if !errors.Is(err, home.ErrWakeInProgress) {
+				t.Fatalf("Wake err = %v, want ErrWakeInProgress due to lease expiry", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Wake timed out")
+		}
+
+		// Preexisting dungeon_once lock and daily quota in real Valkey must NOT be deleted
+		dungeonLocked, _ := timers.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID)
+		if !dungeonLocked {
+			t.Fatal("dungeon_once lock was erroneously deleted after lease expiry")
+		}
+		hasQuota, _ := timers.HasUsedDailyQuota(ctx, "dungeon_once", char.ID)
+		if !hasQuota {
+			t.Fatal("daily quota was erroneously reset after lease expiry")
+		}
+
+		// SQL PendingWake must remain true
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !persisted.PendingWake {
+			t.Fatal("SQL PendingWake was erroneously cleared after lease expiry")
+		}
+	})
+
 	t.Run("concurrent_wake_only_executes_hooks_once", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -1020,4 +1117,16 @@ type wakeJobRestorerHook func(context.Context, string, string) error
 
 func (f wakeJobRestorerHook) RestoreActiveJob(ctx context.Context, characterID, jobID string) error {
 	return f(ctx, characterID, jobID)
+}
+
+type failingRenewTimer struct {
+	home.TimerService
+	dropRenew atomic.Bool
+}
+
+func (f *failingRenewTimer) RenewLock(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error) {
+	if f.dropRenew.Load() {
+		return false, nil
+	}
+	return f.TimerService.RenewLock(ctx, category, targetID, token, duration)
 }

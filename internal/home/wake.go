@@ -235,11 +235,12 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	if err := s.checkNotSleeping(ctx, characterID); err != nil {
 		return WakeResult{}, err
 	}
-	if err := s.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, characterID); err != nil {
+	reset, err := s.timer.ResetDungeonOnceWithClaim(ctx, characterID, timer.CategoryWaking, claimToken)
+	if err != nil {
 		return WakeResult{}, err
 	}
-	if err := s.timer.ResetDailyQuota(ctx, "dungeon_once", characterID); err != nil {
-		return WakeResult{}, err
+	if !reset {
+		return WakeResult{}, ErrWakeInProgress
 	}
 
 	// Finalize durable pending_wake obligation in SQL after all hooks succeed
@@ -250,12 +251,12 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		}
 	}
 
-	if err := keeper.checkOwnership(ctx); err != nil {
+	released, err := s.timer.ReleaseLockWithClaim(ctx, timer.CategoryAsleep, characterID, timer.CategoryWaking, claimToken)
+	if err != nil {
 		return WakeResult{}, err
 	}
-
-	if err := s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID); err != nil {
-		return WakeResult{}, err
+	if !released {
+		return WakeResult{}, ErrWakeInProgress
 	}
 
 	return WakeResult{

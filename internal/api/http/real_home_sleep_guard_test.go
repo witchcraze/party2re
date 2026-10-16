@@ -110,6 +110,38 @@ func (t *inMemoryRealTimer) ResetDailyQuota(ctx context.Context, action, targetI
 	return nil
 }
 
+func (t *inMemoryRealTimer) ReleaseLockWithClaim(ctx context.Context, category, targetID, claimCategory, claimToken string) (bool, error) {
+	claimKey := claimCategory + ":" + targetID
+	if t.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	key := category + ":" + targetID
+	delete(t.remainingDurations, key)
+	delete(t.locks, key)
+	delete(t.tokens, key)
+	return true, nil
+}
+
+func (t *inMemoryRealTimer) ResetDailyQuotaWithClaim(ctx context.Context, action, targetID, claimCategory, claimToken string) (bool, error) {
+	claimKey := claimCategory + ":" + targetID
+	if t.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (t *inMemoryRealTimer) ResetDungeonOnceWithClaim(ctx context.Context, targetID, claimCategory, claimToken string) (bool, error) {
+	claimKey := claimCategory + ":" + targetID
+	if t.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	key := timer.CategoryDungeonOnce + ":" + targetID
+	delete(t.remainingDurations, key)
+	delete(t.locks, key)
+	delete(t.tokens, key)
+	return true, nil
+}
+
 type inMemoryRealBankRepo struct {
 	char corecharacter.Character
 }

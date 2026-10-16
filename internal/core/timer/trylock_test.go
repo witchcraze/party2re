@@ -199,3 +199,76 @@ func TestValkeyTimer_TryLockWithToken(t *testing.T) {
 		t.Fatalf("unexpected command: %v", lastCmd)
 	}
 }
+
+func TestMemoryTimer_ReleaseLockWithClaim(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+
+	// Setup waking claim and asleep lock
+	ok, err := svc.TryLockWithToken(ctx, CategoryWaking, "c1", "tok-1", time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("TryLockWithToken: %v", err)
+	}
+	if err := svc.SetLock(ctx, CategoryAsleep, "c1", time.Hour); err != nil {
+		t.Fatalf("SetLock(CategoryAsleep): %v", err)
+	}
+
+	// Release with mismatched claim token fails and preserves lock
+	released, err := svc.ReleaseLockWithClaim(ctx, CategoryAsleep, "c1", CategoryWaking, "wrong-tok")
+	if err != nil || released {
+		t.Fatalf("ReleaseLockWithClaim wrong token = %v, %v; want false", released, err)
+	}
+	if locked, _ := svc.IsLocked(ctx, CategoryAsleep, "c1"); !locked {
+		t.Fatal("CategoryAsleep must be preserved on token mismatch")
+	}
+
+	// Release with matching claim token succeeds and deletes lock
+	released, err = svc.ReleaseLockWithClaim(ctx, CategoryAsleep, "c1", CategoryWaking, "tok-1")
+	if err != nil || !released {
+		t.Fatalf("ReleaseLockWithClaim matching token = %v, %v; want true", released, err)
+	}
+	if locked, _ := svc.IsLocked(ctx, CategoryAsleep, "c1"); locked {
+		t.Fatal("CategoryAsleep must be deleted on matching token")
+	}
+}
+
+func TestMemoryTimer_ResetDungeonOnceWithClaim(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+
+	// Setup claim, dungeon_once lock, and quota
+	ok, err := svc.TryLockWithToken(ctx, CategoryWaking, "c1", "tok-1", time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("TryLockWithToken: %v", err)
+	}
+	if err := svc.SetLock(ctx, CategoryDungeonOnce, "c1", time.Hour); err != nil {
+		t.Fatalf("SetLock: %v", err)
+	}
+	if _, err := svc.ConsumeDailyQuota(ctx, "dungeon_once", "c1", time.Now()); err != nil {
+		t.Fatalf("ConsumeDailyQuota: %v", err)
+	}
+
+	// Reset with wrong token fails and preserves both
+	reset, err := svc.ResetDungeonOnceWithClaim(ctx, "c1", CategoryWaking, "wrong-tok")
+	if err != nil || reset {
+		t.Fatalf("ResetDungeonOnceWithClaim wrong token = %v, %v; want false", reset, err)
+	}
+	if locked, _ := svc.IsLocked(ctx, CategoryDungeonOnce, "c1"); !locked {
+		t.Fatal("dungeon_once lock must be preserved")
+	}
+	if has, _ := svc.HasUsedDailyQuota(ctx, "dungeon_once", "c1"); !has {
+		t.Fatal("dungeon_once quota must be preserved")
+	}
+
+	// Reset with correct token succeeds and deletes both atomically
+	reset, err = svc.ResetDungeonOnceWithClaim(ctx, "c1", CategoryWaking, "tok-1")
+	if err != nil || !reset {
+		t.Fatalf("ResetDungeonOnceWithClaim matching token = %v, %v; want true", reset, err)
+	}
+	if locked, _ := svc.IsLocked(ctx, CategoryDungeonOnce, "c1"); locked {
+		t.Fatal("dungeon_once lock must be deleted")
+	}
+	if has, _ := svc.HasUsedDailyQuota(ctx, "dungeon_once", "c1"); has {
+		t.Fatal("dungeon_once quota must be deleted")
+	}
+}
