@@ -799,21 +799,27 @@ failure under the shared contract. Existing REST rescue routes remain available.
 omitting or passing an empty string targets the actor's own home. Home sleep is free
 and accepts dead or fatigued actors. Duration scales with online player count.
 `result` reuses the REST fields: `sleeping`, `duration_seconds`, `remaining_seconds`,
-`home_character_id` and `message`. Sleep sets `timer.CategorySleep` and the pending
-recovery flag `timer.CategoryAsleep`, and persists `pending_wake = 1` in MariaDB `characters` (Issue #1118).
+`home_character_id` and `message`. Sleep shares the `timer.CategoryWaking` exclusion boundary
+with Wake, rejects requests while Wake is in progress (`409 HOME_WAKE_IN_PROGRESS`) or while
+an active sleep timer or pending wake recovery remains (`409 HOME_ALREADY_SLEEPING`), persists
+`pending_wake = 1` in MariaDB `characters` (Issue #1118), sets `timer.CategorySleep` and
+`timer.CategoryAsleep` in Valkey, and then reverts any temporary Job Memory. On timer or job-memory
+failure, Sleep rolls back established locks and `pending_wake = 0` using a detached timeout context
+and joins any rollback error onto the returned failure.
 
 `home_wake` accepts no parameters (`{}` or omitted). It is an explicit exception
 to the ordinary sleep action guard:
 - While sleep duration has not elapsed (`timer.CategorySleep` active), the request
   returns `409 HOME_STILL_SLEEPING` without altering vitality or state.
-- Concurrent Wake executions for the same character are serialized via Valkey `timer.CategoryWaking`
+- Concurrent Wake and Sleep executions for the same character are serialized via Valkey `timer.CategoryWaking`
   (`TryLock` with a 30s safety lease). Concurrent attempts while Wake is running return `409 HOME_WAKE_IN_PROGRESS`.
 - When sleep duration has elapsed and pending recovery is active (`characters.pending_wake = 1` in SQL or
   `timer.CategoryAsleep` in Valkey), Wake restores full HP, MP and resets fatigue to 0, then executes configured
   mandatory recovery hooks (tavern fullness reset, chapel blessing clear, alchemy synthesis completion, costume reset)
   and timer cleanup (`timer.CategoryDungeonOnce` lock and `dungeon_once` daily quota).
-  Upon successful completion of all required steps, `characters.pending_wake` is set to 0 in SQL and `timer.CategoryAsleep`
-  is released in Valkey.
+  Before resetting `dungeon_once` and inside the final SQL transaction that sets `characters.pending_wake = 0`
+  before releasing `timer.CategoryAsleep`, Wake re-verifies that no active `timer.CategorySleep` lock exists,
+  ensuring an older Wake can never clear a newly accepted sleep cycle.
 - **Hook failure and partial outcome**: If any mandatory recovery hook or timer cleanup
   fails, Wake aborts and returns `500 EXECUTION_FAILED`. `characters.pending_wake` remains 1 and `timer.CategoryAsleep`
   remains locked (pending recovery is not finalized, keeping ordinary actions blocked). Any effects

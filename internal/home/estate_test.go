@@ -29,6 +29,8 @@ func (m *mockGuildPoints) AddGuildPoints(ctx context.Context, characterID string
 type mockTimer struct {
 	locks               map[string]time.Duration
 	setLockErr          error
+	setLockErrs         map[string]error
+	onSetLock           func(ctx context.Context, category string) error
 	isLockedErr         error
 	getRemainingLockErr error
 	releaseLockErrs     map[string]error
@@ -37,6 +39,14 @@ type mockTimer struct {
 }
 
 func (m *mockTimer) SetLock(ctx context.Context, category, targetID string, duration time.Duration) error {
+	if m.onSetLock != nil {
+		if err := m.onSetLock(ctx, category); err != nil {
+			return err
+		}
+	}
+	if err, ok := m.setLockErrs[category]; ok && err != nil {
+		return err
+	}
 	if m.setLockErr != nil {
 		return m.setLockErr
 	}
@@ -54,7 +64,11 @@ func (m *mockTimer) TryLock(ctx context.Context, category, targetID string, dura
 	if _, held := m.locks[category+":"+targetID]; held {
 		return false, nil
 	}
-	return true, m.SetLock(ctx, category, targetID, duration)
+	if m.locks == nil {
+		m.locks = make(map[string]time.Duration)
+	}
+	m.locks[category+":"+targetID] = duration
+	return true, nil
 }
 
 func (m *mockTimer) IsLocked(ctx context.Context, category, targetID string) (bool, error) {
@@ -77,6 +91,9 @@ func (m *mockTimer) GetRemainingLock(ctx context.Context, category, targetID str
 }
 
 func (m *mockTimer) ReleaseLock(ctx context.Context, category, targetID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err, ok := m.releaseLockErrs[category]; ok && err != nil {
 		return err
 	}

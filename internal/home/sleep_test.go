@@ -27,10 +27,16 @@ func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.C
 }
 
 func (m *mockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	if err := ctx.Err(); err != nil {
+		return corecharacter.Character{}, err
+	}
 	return m.FindByID(ctx, id)
 }
 
 func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if m.updateErr != nil {
 		return m.updateErr
 	}
@@ -430,11 +436,11 @@ func TestSleep_VisitingPrivateHome(t *testing.T) {
 			t.Fatalf("unexpected result: %+v", res)
 		}
 		// clear lock for subsequent sub-tests
+		_ = timerSvc.ReleaseLock(ctx, timer.CategorySleep, "c1")
 		_, _ = svc.Wake(ctx, "c1")
 	})
 
 	t.Run("visiting player with expired town lease succeeds", func(t *testing.T) {
-		time.Sleep(15 * time.Millisecond) // wait for sleep lock to clear
 		res, err := svc.Sleep(ctx, "c1", "c3_expired")
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
@@ -442,11 +448,11 @@ func TestSleep_VisitingPrivateHome(t *testing.T) {
 		if !res.Sleeping || res.HomeCharacterID != "c3_expired" {
 			t.Fatalf("unexpected result: %+v", res)
 		}
+		_ = timerSvc.ReleaseLock(ctx, timer.CategorySleep, "c1")
 		_, _ = svc.Wake(ctx, "c1")
 	})
 
 	t.Run("visiting non-existent character returns ErrCharacterNotFound", func(t *testing.T) {
-		time.Sleep(15 * time.Millisecond) // wait for sleep lock to clear
 		_, err := svc.Sleep(ctx, "c1", "nonexistent")
 		if !errors.Is(err, ErrCharacterNotFound) {
 			t.Fatalf("expected ErrCharacterNotFound, got %v", err)
@@ -462,12 +468,11 @@ func TestSleep_VisitingPrivateHome(t *testing.T) {
 			t.Fatalf("expected sleeping to be true")
 		}
 		// wake up to clear sleep lock
+		_ = timerSvc.ReleaseLock(ctx, timer.CategorySleep, "c1")
 		_, _ = svc.Wake(ctx, "c1")
 	})
 
 	t.Run("visiting active house succeeds", func(t *testing.T) {
-		// Wait for timer to clear
-		time.Sleep(20 * time.Millisecond)
 		res, err := svc.Sleep(ctx, "c1", "c4_active")
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)

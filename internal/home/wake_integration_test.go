@@ -46,6 +46,10 @@ type wakeFullnessHook func(context.Context, string) error
 
 func (f wakeFullnessHook) ResetFullness(ctx context.Context, id string) error { return f(ctx, id) }
 
+type wakeCostumeHook func(context.Context, string) error
+
+func (f wakeCostumeHook) ResetCostume(ctx context.Context, id string) error { return f(ctx, id) }
+
 type failingTavernStatusReader struct {
 	*database.TavernRepository
 	getErr error
@@ -429,4 +433,360 @@ func TestWake_RealTavernFullnessReset(t *testing.T) {
 	if asleep {
 		t.Errorf("expected CategoryAsleep lock released after successful Wake")
 	}
+}
+
+func TestSleepWake_CycleConsistency(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("SQL and Valkey integration environment is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	client, err := valkey.NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	timers := timer.NewService(client)
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	homeRepo, err := database.NewHomeRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	eco, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newChar := func(t *testing.T, ctx context.Context, name string) corecharacter.Character {
+		t.Helper()
+		char, err := database.CreateTestCharacter(ctx, db, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			cleanupCtx := context.Background()
+			_ = timers.ReleaseLock(cleanupCtx, timer.CategorySleep, char.ID)
+			_ = timers.ReleaseLock(cleanupCtx, timer.CategoryAsleep, char.ID)
+			_ = timers.ReleaseLock(cleanupCtx, timer.CategoryWaking, char.ID)
+			_ = timers.ReleaseLock(cleanupCtx, timer.CategoryDungeonOnce, char.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
+		})
+		return char
+	}
+
+	t.Run("sleep_rejected_during_wake_and_preserves_next_cycle", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeCycle1")
+		char.Stats.HP, char.Stats.MP, char.Tired = 1, 0, 80
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithTimer(timers))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// 1. Start first sleep cycle and simulate timer expiry.
+		if _, err := svc.Sleep(ctx, char.ID, char.ID); err != nil {
+			t.Fatalf("first Sleep: %v", err)
+		}
+		if err := timers.ReleaseLock(ctx, timer.CategorySleep, char.ID); err != nil {
+			t.Fatalf("ReleaseLock(CategorySleep): %v", err)
+		}
+
+		// 2. Calling Sleep before Wake completes must return ErrAlreadySleeping.
+		if _, err := svc.Sleep(ctx, char.ID, char.ID); !errors.Is(err, home.ErrAlreadySleeping) {
+			t.Fatalf("Sleep while PendingWake active err = %v, want ErrAlreadySleeping", err)
+		}
+
+		// 3. Start first Wake and pause inside costume hook while racing a Sleep call.
+		enteredHook := make(chan struct{})
+		releaseHook := make(chan struct{})
+		var once sync.Once
+		svc.SetCostumeResetter(wakeCostumeHook(func(hookCtx context.Context, _ string) error {
+			once.Do(func() { close(enteredHook) })
+			select {
+			case <-releaseHook:
+				return nil
+			case <-hookCtx.Done():
+				return hookCtx.Err()
+			}
+		}))
+
+		wakeErr, sleepErr := testutil.RunRace2(
+			func() error {
+				_, err := svc.Wake(ctx, char.ID)
+				return err
+			},
+			func() error {
+				select {
+				case <-enteredHook:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				_, err := svc.Sleep(ctx, char.ID, char.ID)
+				close(releaseHook)
+				return err
+			},
+		)
+		if wakeErr != nil {
+			t.Fatalf("first Wake err = %v", wakeErr)
+		}
+		if !errors.Is(sleepErr, home.ErrWakeInProgress) {
+			t.Fatalf("Sleep during Wake err = %v, want ErrWakeInProgress", sleepErr)
+		}
+
+		// 4. Start second sleep cycle after first Wake completes; verify SQL pending_wake, duration, and asleep.
+		svc.SetCostumeResetter(nil)
+		afterWake, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		afterWake.Stats.HP, afterWake.Stats.MP, afterWake.Tired = 15, 5, 60
+		if err := charRepo.Update(ctx, afterWake); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := svc.Sleep(ctx, char.ID, char.ID); err != nil {
+			t.Fatalf("second Sleep: %v", err)
+		}
+		afterSecondSleep, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !afterSecondSleep.PendingWake {
+			t.Fatalf("expected SQL PendingWake=true after second Sleep")
+		}
+		if rem, err := timers.GetRemainingLock(ctx, timer.CategorySleep, char.ID); err != nil || rem <= 0 {
+			t.Fatalf("expected active CategorySleep duration lock, got rem=%v err=%v", rem, err)
+		}
+		if asleep, err := timers.IsLocked(ctx, timer.CategoryAsleep, char.ID); err != nil || !asleep {
+			t.Fatalf("expected active CategoryAsleep lock, got %v err=%v", asleep, err)
+		}
+
+		if err := timers.ReleaseLock(ctx, timer.CategorySleep, char.ID); err != nil {
+			t.Fatalf("ReleaseLock(CategorySleep) 2nd cycle: %v", err)
+		}
+		status, err := svc.GetSleepStatus(ctx, char.ID)
+		if err != nil || !status.CanWake {
+			t.Fatalf("status after 2nd Sleep expiry = %+v, err = %v; want CanWake=true", status, err)
+		}
+		res, err := svc.Wake(ctx, char.ID)
+		if err != nil || !res.Success {
+			t.Fatalf("second Wake = %+v, %v", res, err)
+		}
+		finalChar, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if finalChar.Stats.HP != finalChar.Stats.MaxHP || finalChar.Stats.MP != finalChar.Stats.MaxMP || finalChar.Tired != 0 || finalChar.PendingWake {
+			t.Fatalf("finalChar after 2nd Wake = %+v; want full vitality and PendingWake=false", finalChar)
+		}
+	})
+
+	t.Run("wake_aborts_if_sleep_lock_appears_during_hook", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeCycle2")
+		char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 50
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+		if err := timers.SetLock(ctx, timer.CategoryAsleep, char.ID, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+		if err := timers.SetLock(ctx, timer.CategoryDungeonOnce, char.ID, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithTimer(timers))
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc.SetFullnessResetter(wakeFullnessHook(func(hookCtx context.Context, id string) error {
+			return timers.SetLock(hookCtx, timer.CategorySleep, id, time.Minute)
+		}))
+
+		if _, err := svc.Wake(ctx, char.ID); !errors.Is(err, home.ErrStillSleeping) {
+			t.Fatalf("Wake err = %v, want ErrStillSleeping", err)
+		}
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !persisted.PendingWake {
+			t.Fatalf("expected PendingWake=true preserved in SQL")
+		}
+		if asleep, err := timers.IsLocked(ctx, timer.CategoryAsleep, char.ID); err != nil || !asleep {
+			t.Fatalf("CategoryAsleep locked = %v, err = %v; want true", asleep, err)
+		}
+		if dungeonOnce, err := timers.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID); err != nil || !dungeonOnce {
+			t.Fatalf("CategoryDungeonOnce locked = %v, err = %v; want true", dungeonOnce, err)
+		}
+	})
+
+	t.Run("concurrent_sleep_and_wake_stress", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeCycleStress")
+
+		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithTimer(timers))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cfg := testutil.GetStressConfig()
+		res := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
+			if worker%2 == 0 {
+				_, err := svc.Sleep(ctx, char.ID, char.ID)
+				if err == nil {
+					_ = timers.ReleaseLock(ctx, timer.CategorySleep, char.ID)
+					return nil
+				}
+				if errors.Is(err, home.ErrAlreadySleeping) || errors.Is(err, home.ErrWakeInProgress) {
+					return nil
+				}
+				return err
+			}
+			_, err := svc.Wake(ctx, char.ID)
+			if err == nil || errors.Is(err, home.ErrStillSleeping) || errors.Is(err, home.ErrWakeInProgress) {
+				return nil
+			}
+			return err
+		})
+		if res.Failures != 0 || res.Deadlocks != 0 {
+			t.Fatalf("stress: %+v", res)
+		}
+
+		// Settle any active sleep duration and verify final Wake leaves a clean state.
+		if err := timers.ReleaseLock(ctx, timer.CategorySleep, char.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Wake(ctx, char.ID); err != nil {
+			t.Fatalf("settling Wake: %v", err)
+		}
+		finalChar, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if finalChar.PendingWake {
+			t.Fatalf("expected PendingWake=false after settling Wake")
+		}
+		if asleep, err := timers.IsLocked(ctx, timer.CategoryAsleep, char.ID); err != nil || asleep {
+			t.Fatalf("expected CategoryAsleep unlocked after settling Wake, got %v (err=%v)", asleep, err)
+		}
+	})
+
+	t.Run("sleep_timer_failure_preserves_job_memory_and_rolls_back_on_canceled_ctx", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeCycleRollback")
+		char.JobID = "warrior"
+		char.SP = 12
+		char.OldJobID = "novice"
+		char.OldSP = 4
+		char.JobMemory = &corecharacter.JobMemory{
+			Kind:     corecharacter.JobMemoryKindTemporary,
+			JobID:    "mage",
+			SP:       25,
+			OldJobID: "apprentice",
+			OldSP:    8,
+		}
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		reqCtx, reqCancel := context.WithCancel(ctx)
+		defer reqCancel()
+
+		var jobRestoreCalls int
+		ft := &failingSleepTimer{
+			TimerService: timers,
+			onSetLock: func(_ context.Context, category string) error {
+				if category == timer.CategoryAsleep {
+					reqCancel()
+					return context.Canceled
+				}
+				return nil
+			},
+		}
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(ft),
+			home.WithJobStateRestorer(wakeJobRestorerHook(func(context.Context, string, string) error {
+				jobRestoreCalls++
+				return nil
+			})),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = svc.Sleep(reqCtx, char.ID, char.ID)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Sleep err = %v, want context.Canceled", err)
+		}
+		if jobRestoreCalls != 0 {
+			t.Fatalf("expected JobStateRestorer not called on timer failure, got %d calls", jobRestoreCalls)
+		}
+
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if persisted.PendingWake {
+			t.Fatalf("expected SQL PendingWake=false rolled back even after request context cancellation")
+		}
+		if persisted.JobID != "warrior" || persisted.SP != 12 {
+			t.Fatalf("expected SQL JobID=warrior SP=12 preserved, got JobID=%s SP=%d", persisted.JobID, persisted.SP)
+		}
+		if persisted.JobMemory == nil || persisted.JobMemory.JobID != "mage" || !persisted.JobMemory.IsTemporary() {
+			t.Fatalf("expected SQL temporary JobMemory preserved, got %+v", persisted.JobMemory)
+		}
+		if sleepLocked, err := timers.IsLocked(ctx, timer.CategorySleep, char.ID); err != nil || sleepLocked {
+			t.Fatalf("expected Valkey CategorySleep released, got %v err=%v", sleepLocked, err)
+		}
+		if wakingLocked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID); err != nil || wakingLocked {
+			t.Fatalf("expected Valkey CategoryWaking released, got %v err=%v", wakingLocked, err)
+		}
+	})
+}
+
+type failingSleepTimer struct {
+	home.TimerService
+	onSetLock func(ctx context.Context, category string) error
+}
+
+func (f *failingSleepTimer) SetLock(ctx context.Context, category, targetID string, duration time.Duration) error {
+	if f.onSetLock != nil {
+		if err := f.onSetLock(ctx, category); err != nil {
+			return err
+		}
+	}
+	return f.TimerService.SetLock(ctx, category, targetID, duration)
+}
+
+type wakeJobRestorerHook func(context.Context, string, string) error
+
+func (f wakeJobRestorerHook) RestoreActiveJob(ctx context.Context, characterID, jobID string) error {
+	return f(ctx, characterID, jobID)
 }
