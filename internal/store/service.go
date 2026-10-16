@@ -151,11 +151,10 @@ func (s *Service) wireCostumeClaimChecker() {
 		return
 	}
 	if mem, ok := s.costumeRepo.(interface {
-		SetClaimChecker(checker costume.ClaimChecker)
+		SetClaimExecutor(executor costume.ClaimExecutor)
 	}); ok {
-		mem.SetClaimChecker(func(ctx context.Context, category, targetID, token string) bool {
-			valid, err := s.timer.VerifyLockToken(ctx, category, targetID, token)
-			return err == nil && valid
+		mem.SetClaimExecutor(func(ctx context.Context, category, targetID, token string, action func() error) (bool, error) {
+			return s.timer.ExecuteWithClaim(ctx, category, targetID, token, action)
 		})
 	}
 }

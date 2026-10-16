@@ -1030,18 +1030,13 @@ func TestWake_PauseImmediatelyAfterOwnershipVerification_PreservesSuccessorNewCo
 	hookEntered := make(chan struct{})
 	releaseHook := make(chan struct{})
 
-	// Intercept claim checker to pause immediately after ownership verification
-	costumeRepo.SetClaimChecker(func(chkCtx context.Context, category, targetID, token string) bool {
-		valid, err := tm.VerifyLockToken(chkCtx, category, targetID, token)
-		if !valid || err != nil {
-			return false
-		}
-		// Ownership is verified! Stop processing immediately
+	// Intercept claim executor to pause processing before atomic execution
+	costumeRepo.SetClaimExecutor(func(chkCtx context.Context, category, targetID, token string, action func() error) (bool, error) {
+		// Stop processing before atomic execution
 		close(hookEntered)
 		<-releaseHook
-		// Re-verify that claim is STILL valid upon resumption before allowing deletion
-		stillValid, err := tm.VerifyLockToken(chkCtx, category, targetID, token)
-		return err == nil && stillValid
+		// Delegate directly to production ExecuteWithClaim without test-side re-verification
+		return tm.ExecuteWithClaim(chkCtx, category, targetID, token, action)
 	})
 
 	svc.SetCostumeResetter(storeSvc)

@@ -74,23 +74,31 @@ func TestMemoryCostumeRepository_ClearActiveCostumeWithClaim(t *testing.T) {
 	}
 	_ = repo.SaveActiveCostume(ctx, active, time.Hour)
 
-	// 1. Without claim checker: refuses unsafe deletion
+	// 1. Without claim executor: refuses unsafe deletion
 	reset, err := repo.ClearActiveCostumeWithClaim(ctx, "c1", "waking", "any-token")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if reset {
-		t.Errorf("expected reset=false when claimChecker is nil")
+		t.Errorf("expected reset=false when claimExecutor is nil")
 	}
 	got, _ := repo.GetActiveCostume(ctx, "c1")
 	if got == nil || got.ItemNo != 46 {
-		t.Fatalf("costume should not be deleted when claimChecker is nil")
+		t.Fatalf("costume should not be deleted when claimExecutor is nil")
 	}
 
 	// 2. Token mismatch preserves costume
 	validToken := "token-123"
-	repo.SetClaimChecker(func(_ context.Context, category, targetID, token string) bool {
-		return category == "waking" && targetID == "c1" && token == validToken
+	repo.SetClaimExecutor(func(_ context.Context, category, targetID, token string, action func() error) (bool, error) {
+		if category == "waking" && targetID == "c1" && token == validToken {
+			if action != nil {
+				if err := action(); err != nil {
+					return false, err
+				}
+			}
+			return true, nil
+		}
+		return false, nil
 	})
 
 	reset, err = repo.ClearActiveCostumeWithClaim(ctx, "c1", "waking", "wrong-token")

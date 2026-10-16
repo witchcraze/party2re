@@ -457,7 +457,7 @@ func TestValkeyTimer_DailyQuotaErrors(t *testing.T) {
 	}
 }
 
-func TestTimer_VerifyLockToken(t *testing.T) {
+func TestTimer_ExecuteWithClaim(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("memory", func(t *testing.T) {
@@ -467,21 +467,39 @@ func TestTimer_VerifyLockToken(t *testing.T) {
 			t.Fatalf("TryLockWithToken: %v", err)
 		}
 
-		// Valid token
-		valid, err := svc.VerifyLockToken(ctx, CategoryWaking, "c1", "token-abc")
+		// Valid token with action
+		actionCalled := false
+		valid, err := svc.ExecuteWithClaim(ctx, CategoryWaking, "c1", "token-abc", func() error {
+			actionCalled = true
+			return nil
+		})
+		if err != nil || !valid || !actionCalled {
+			t.Errorf("expected valid=true and actionCalled=true, got valid=%v actionCalled=%v (err=%v)", valid, actionCalled, err)
+		}
+
+		// Valid token with nil action (verification only)
+		valid, err = svc.ExecuteWithClaim(ctx, CategoryWaking, "c1", "token-abc", nil)
 		if err != nil || !valid {
-			t.Errorf("expected valid=true, got %v (err=%v)", valid, err)
+			t.Errorf("expected valid=true for nil action, got %v (err=%v)", valid, err)
 		}
 
 		// Wrong token
-		valid, err = svc.VerifyLockToken(ctx, CategoryWaking, "c1", "wrong-token")
-		if err != nil || valid {
+		actionCalled = false
+		valid, err = svc.ExecuteWithClaim(ctx, CategoryWaking, "c1", "wrong-token", func() error {
+			actionCalled = true
+			return nil
+		})
+		if err != nil || valid || actionCalled {
 			t.Errorf("expected valid=false for wrong token, got %v (err=%v)", valid, err)
 		}
 
 		// Non-existent target
-		valid, err = svc.VerifyLockToken(ctx, CategoryWaking, "c2", "token-abc")
-		if err != nil || valid {
+		actionCalled = false
+		valid, err = svc.ExecuteWithClaim(ctx, CategoryWaking, "c2", "token-abc", func() error {
+			actionCalled = true
+			return nil
+		})
+		if err != nil || valid || actionCalled {
 			t.Errorf("expected valid=false for non-existent target, got %v (err=%v)", valid, err)
 		}
 	})
@@ -496,13 +514,21 @@ func TestTimer_VerifyLockToken(t *testing.T) {
 		}))
 		svc := NewService(mock)
 
-		valid, err := svc.VerifyLockToken(ctx, CategoryWaking, "c1", "token-xyz")
-		if err != nil || !valid {
-			t.Errorf("expected valid=true, got %v (err=%v)", valid, err)
+		actionCalled := false
+		valid, err := svc.ExecuteWithClaim(ctx, CategoryWaking, "c1", "token-xyz", func() error {
+			actionCalled = true
+			return nil
+		})
+		if err != nil || !valid || !actionCalled {
+			t.Errorf("expected valid=true and actionCalled=true, got %v (err=%v)", valid, err)
 		}
 
-		valid, err = svc.VerifyLockToken(ctx, CategoryWaking, "c1", "wrong")
-		if err != nil || valid {
+		actionCalled = false
+		valid, err = svc.ExecuteWithClaim(ctx, CategoryWaking, "c1", "wrong", func() error {
+			actionCalled = true
+			return nil
+		})
+		if err != nil || valid || actionCalled {
 			t.Errorf("expected valid=false, got %v (err=%v)", valid, err)
 		}
 	})

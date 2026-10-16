@@ -575,21 +575,16 @@ func TestOracleService_ResetCostumeWithClaim_PauseAfterOwnershipVerification(t *
 			t.Fatalf("failed to claim waking lock: %v", err)
 		}
 
-		// Wrap claim checker with pause hook
+		// Wrap claim executor with pause hook to pause processing before atomic execution
 		hookEntered := make(chan struct{})
 		releaseHook := make(chan struct{})
 
-		costumeRepo.SetClaimChecker(func(chkCtx context.Context, category, targetID, token string) bool {
-			valid, err := tm.VerifyLockToken(chkCtx, category, targetID, token)
-			if !valid || err != nil {
-				return false
-			}
-			// Ownership verified! Pause immediately after verification
+		costumeRepo.SetClaimExecutor(func(chkCtx context.Context, category, targetID, token string, action func() error) (bool, error) {
+			// Stop processing before atomic execution
 			close(hookEntered)
 			<-releaseHook
-			// Re-verify that claim is STILL valid upon resumption before allowing deletion
-			stillValid, err := tm.VerifyLockToken(chkCtx, category, targetID, token)
-			return err == nil && stillValid
+			// Delegate directly to production ExecuteWithClaim without test-side re-verification
+			return tm.ExecuteWithClaim(chkCtx, category, targetID, token, action)
 		})
 
 		done := make(chan struct {

@@ -68,7 +68,7 @@ type LockService interface {
 	ReleaseLock(ctx context.Context, category, targetID string) error
 	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
 	ReleaseLockWithClaim(ctx context.Context, category, targetID, claimCategory, claimToken string) (bool, error)
-	VerifyLockToken(ctx context.Context, category, targetID, token string) (bool, error)
+	ExecuteWithClaim(ctx context.Context, category, targetID, token string, fn func() error) (bool, error)
 }
 
 // DailyQuotaService defines daily quota tracking and reset operations.
@@ -356,7 +356,7 @@ func (s *service) ReleaseLockWithClaim(ctx context.Context, category, targetID, 
 	return true, nil
 }
 
-func (s *service) VerifyLockToken(ctx context.Context, category, targetID, token string) (bool, error) {
+func (s *service) ExecuteWithClaim(ctx context.Context, category, targetID, token string, fn func() error) (bool, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return false, ErrEmptyToken
@@ -378,14 +378,27 @@ func (s *service) VerifyLockToken(ctx context.Context, category, targetID, token
 		if err != nil {
 			return false, err
 		}
-		return val == token, nil
+		if val != token {
+			return false, nil
+		}
+		if fn != nil {
+			if err := fn(); err != nil {
+				return false, err
+			}
+		}
+		return true, nil
 	}
 
-	s.memMu.RLock()
-	defer s.memMu.RUnlock()
+	s.memMu.Lock()
+	defer s.memMu.Unlock()
 	exp, exists := s.memory[k]
-	if !exists || time.Now().After(exp.expiresAt) {
+	if !exists || time.Now().After(exp.expiresAt) || exp.value != token {
 		return false, nil
 	}
-	return exp.value == token, nil
+	if fn != nil {
+		if err := fn(); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
 }
