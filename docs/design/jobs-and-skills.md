@@ -167,6 +167,7 @@ exchange still has the independently tracked learned-job eligibility gap
 ### Job Mastery Catalog & Completion Rate (じょぶますたー)
 - Legacy `job_master.cgi` allowed players to inspect character job progress across all 87 jobs and view total mastery percentage (`comp_par`).
 - Exposed via `GET /characters/{id}/job-mastery` as a public inspection endpoint.
+- Genuine absence of a persisted `character_jobs` record initializes a read-only projection from the character's live job state without mutating storage, whereas storage or context cancellation errors during job-record loading propagate as errors (`500 Internal Server Error` over HTTP) rather than fabricating empty progress.
 - For each job, status is determined as:
   - `mastered`: Recorded as mastered on the character (`MasteredJobs`) or active job meeting mastery SP (`SP >= master_sp`).
   - `learning`: Job has an explicit record (`CharacterJob.HasRecordedJob`, currently active, previous job `OldJobID`, or present in `History`), but mastery SP is not yet reached.

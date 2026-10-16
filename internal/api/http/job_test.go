@@ -3,14 +3,17 @@ package http_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/database"
 	jobapp "github.com/witchcraze/party2re/internal/job"
 )
 
@@ -288,4 +291,173 @@ func TestJobEndpoints(t *testing.T) {
 			t.Fatalf("expected 404 Not Found, got %d", rec.Code)
 		}
 	})
+}
+
+type cancelJobReadAdapter struct {
+	*database.CharacterJobRepository
+	observedErr error
+}
+
+func (a *cancelJobReadAdapter) FindByCharacterID(ctx context.Context, characterID string) (corejob.CharacterJob, error) {
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	state, err := a.CharacterJobRepository.FindByCharacterID(canceledCtx, characterID)
+	a.observedErr = err
+	return state, err
+}
+
+func TestJobMasteryUnreadableStateAndMissingStateHTTP(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	ctx := context.Background()
+	realChars, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	realJobs, err := database.NewCharacterJobRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Create character with current="job-03"/SP9, old="job-04"/SP11
+	char, err := database.CreateTestCharacter(ctx, db, "JobMasteryHTTP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.JobID, char.SP = "job-03", 9
+	char.OldJobID, char.OldSP = "job-04", 11
+	if err := realChars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Save job01 mastered with 0 SP, job02 unmastered with 17 SP
+	state, err := corejob.NewCharacterJob(char.ID, char.JobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.RecordMastery("job-01", 80, 80)
+	if err := state.RecordJobSP("job-01", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.RecordJobSP("job-02", 17); err != nil {
+		t.Fatal(err)
+	}
+	if err := realJobs.Save(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+
+	newRouterForJobRepo := func(repo jobapp.Repository) http.Handler {
+		svc, err := jobapp.NewService(repo, jobapp.WithCharacterRepository(realChars))
+		if err != nil {
+			t.Fatal(err)
+		}
+		h := newTestHandler(
+			t,
+			&stubPlayerService{},
+			&stubCharacterService{},
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithJob(svc),
+		)
+		return h.Router()
+	}
+
+	// 3. Normal control GET with real repository
+	normalRouter := newRouterForJobRepo(realJobs)
+	req := httptest.NewRequest(http.MethodGet, "/characters/"+char.ID+"/job-mastery", nil)
+	rec := httptest.NewRecorder()
+	normalRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("normal GET expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var normalMastery jobapp.CharacterJobMastery
+	if err := json.NewDecoder(rec.Body).Decode(&normalMastery); err != nil {
+		t.Fatalf("decode normal mastery: %v", err)
+	}
+	if normalMastery.MasteredCount != 1 || normalMastery.LearningCount != 3 || normalMastery.MasteryPercentage != 2 {
+		t.Fatalf("unexpected normal summary: mastered=%d learning=%d pct=%d",
+			normalMastery.MasteredCount, normalMastery.LearningCount, normalMastery.MasteryPercentage)
+	}
+	findJob := func(m jobapp.CharacterJobMastery, id string) jobapp.JobProgress {
+		for _, j := range m.Jobs {
+			if j.JobID == id {
+				return j
+			}
+		}
+		t.Fatalf("job %s not found", id)
+		return jobapp.JobProgress{}
+	}
+	if j01 := findJob(normalMastery, "job-01"); j01.Status != jobapp.JobStatusMastered || j01.CurrentSP != 0 {
+		t.Fatalf("expected job-01 mastered/SP0, got %+v", j01)
+	}
+	if j02 := findJob(normalMastery, "job-02"); j02.Status != jobapp.JobStatusLearning || j02.CurrentSP != 17 {
+		t.Fatalf("expected job-02 learning/SP17, got %+v", j02)
+	}
+
+	// 4. Faulty repository read (canceled child context) -> must return 500, not 200 empty progress
+	faultAdapter := &cancelJobReadAdapter{CharacterJobRepository: realJobs}
+	faultRouter := newRouterForJobRepo(faultAdapter)
+	faultReq := httptest.NewRequest(http.MethodGet, "/characters/"+char.ID+"/job-mastery", nil)
+	faultRec := httptest.NewRecorder()
+	faultRouter.ServeHTTP(faultRec, faultReq)
+	if !errors.Is(faultAdapter.observedErr, context.Canceled) {
+		t.Fatalf("expected adapter to observe context.Canceled, got %v", faultAdapter.observedErr)
+	}
+	if faultRec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error on unreadable job state, got %d: %s", faultRec.Code, faultRec.Body.String())
+	}
+
+	// 5. Verify persisted state in DB is untouched after failed observation
+	reloaded, err := realJobs.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("reload after fault: %v", err)
+	}
+	if !reloaded.IsMastered("job-01") {
+		t.Fatal("expected job-01 mastery to remain persisted")
+	}
+	if sp, ok := reloaded.SavedSP("job-01"); !ok || sp != 0 {
+		t.Fatalf("expected job-01 SP 0 to remain persisted, got (%d, %t)", sp, ok)
+	}
+	if sp, ok := reloaded.SavedSP("job-02"); !ok || sp != 17 || !reloaded.HasRecordedJob("job-02") {
+		t.Fatalf("expected job-02 recorded SP 17 to remain persisted, got (%d, %t)", sp, ok)
+	}
+
+	// 6. Genuine missing character_jobs row still returns 200 initial projection
+	freshChar, err := database.CreateTestCharacter(ctx, db, "FreshMasteryHTTP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshChar.JobID, freshChar.SP = "job-03", 9
+	freshChar.OldJobID, freshChar.OldSP = "job-04", 11
+	if err := realChars.Update(ctx, freshChar); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := realJobs.FindByCharacterID(ctx, freshChar.ID); !errors.Is(err, database.ErrCharacterJobNotFound) {
+		t.Fatalf("expected ErrCharacterJobNotFound for fresh character, got %v", err)
+	}
+	freshReq := httptest.NewRequest(http.MethodGet, "/characters/"+freshChar.ID+"/job-mastery", nil)
+	freshRec := httptest.NewRecorder()
+	normalRouter.ServeHTTP(freshRec, freshReq)
+	if freshRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for genuine missing character_jobs, got %d: %s", freshRec.Code, freshRec.Body.String())
+	}
+	var freshMastery jobapp.CharacterJobMastery
+	if err := json.NewDecoder(freshRec.Body).Decode(&freshMastery); err != nil {
+		t.Fatalf("decode fresh mastery: %v", err)
+	}
+	if freshMastery.MasteredCount != 0 || freshMastery.LearningCount != 2 || freshMastery.MasteryPercentage != 1 {
+		t.Fatalf("unexpected fresh mastery summary: mastered=%d learning=%d pct=%d",
+			freshMastery.MasteredCount, freshMastery.LearningCount, freshMastery.MasteryPercentage)
+	}
 }
