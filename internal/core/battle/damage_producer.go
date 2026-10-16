@@ -206,8 +206,9 @@ func (s *LifetimeState) ValidateNormalAttack(c *DamageContext, targetID string, 
 	if hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
 		strikes = 2
 	}
+	a := s.actor(c.ActorID)
 	initialTargetID := targetID
-	if !slices.Contains(c.EnemyIDs, initialTargetID) {
+	if t := s.actor(initialTargetID); t == nil || t.TeamID == a.TeamID {
 		initialTargetID = ""
 	}
 	hits := strikes

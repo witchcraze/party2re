@@ -1,6 +1,9 @@
 package battle
 
 import (
+	"encoding/json"
+	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -69,4 +72,75 @@ func TestStatDamageSharesOperationCounter(t *testing.T) {
 		t.Fatal(r, err, c, s)
 	}
 	rng.done()
+}
+
+func TestNormalAttackDetachedTargetAdmission(t *testing.T) {
+	setup := func(t *testing.T) (LifetimeState, RosterContext, string, string) {
+		t.Helper()
+		s, c := rosterFixture()
+		admitRosterDamage(&s, &c)
+		helper59 := addRosterHelper(t, &s, &c, 59)
+		detached := addRosterHelper(t, &s, &c, 60)
+		addRosterHelper(t, &s, &c, 61)
+		if _, err := s.ApplyRoster(&c, "job-60-dismiss", "", &targetRNG{t: t}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.ApplyRoster(&c, "job-61-revive-party", "", &targetRNG{t: t}); err != nil {
+			t.Fatal(err)
+		}
+		s.actor("enemy").Temporary = TemporaryOneHitDefense
+		return s, c, helper59, detached
+	}
+
+	t.Run("unsupported field on detached target rejects before draws", func(t *testing.T) {
+		s, c, _, detached := setup(t)
+		s.Fields.Default = "cosmic"
+		before, _ := json.Marshal(s)
+		beforeParty := append([]string(nil), c.PartyIDs...)
+		beforeEnemy := append([]string(nil), c.EnemyIDs...)
+		rng := &targetRNG{t: t}
+		err := s.ValidateRoster(&c, "job-59-attack", detached, rng)
+		_, runErr := s.ApplyRoster(&c, "job-59-attack", detached, rng)
+		after, _ := json.Marshal(s)
+		if !errors.Is(err, ErrUnsupportedEffect) || !errors.Is(runErr, ErrUnsupportedEffect) || string(after) != string(before) || c.DamageCalls != 0 || c.ActorID != "player" || !reflect.DeepEqual(c.PartyIDs, beforeParty) || !reflect.DeepEqual(c.EnemyIDs, beforeEnemy) {
+			t.Fatal(err, runErr, s, c)
+		}
+		rng.done()
+
+		s.PruneRoster(&c.TargetContext)
+		beforePruned := reloadLifetime(t, s)
+		if err := s.ValidateRoster(&c, "job-59-attack", detached, rng); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, beforePruned) {
+			t.Fatal(err, s)
+		}
+		rng.done()
+	})
+
+	t.Run("one-hit defense on detached target admits single and rejects repeat strikes", func(t *testing.T) {
+		for _, kind := range []string{"single", "seal10", "item147"} {
+			s, c, helper59, detached := setup(t)
+			s.Fields.Default = "cosmic"
+			s.actor(detached).Temporary = TemporaryOneHitDefense
+			switch kind {
+			case "seal10":
+				s.actor(helper59).Abilities = []string{"seal_shinsoku"}
+			case "item147":
+				s.actor(helper59).ItemDefinitionIDs = []string{"item-147"}
+			}
+			before, _ := json.Marshal(s)
+			rng := &targetRNG{t: t}
+			if kind == "single" {
+				rng.draws = []float64{.5}
+			}
+			r, err := s.ApplyRoster(&c, "job-59-attack", detached, rng)
+			after, _ := json.Marshal(s)
+			if kind == "single" {
+				if err != nil || !r.Applied || len(r.Hits) != 1 || r.Hits[0].Applied || c.DamageCalls != 1 || c.ActorID != "player" || s.actor(detached).Temporary != "" {
+					t.Fatal(kind, r, err, c, s.actor(detached))
+				}
+			} else if !errors.Is(err, ErrUnsupportedEffect) || string(after) != string(before) || c.DamageCalls != 0 || c.ActorID != "player" {
+				t.Fatal(kind, r, err, c, s)
+			}
+			rng.done()
+		}
+	})
 }
