@@ -812,7 +812,7 @@ to the ordinary sleep action guard:
 - While sleep duration has not elapsed (`timer.CategorySleep` active), the request
   returns `409 HOME_STILL_SLEEPING` without altering vitality or state.
 - Concurrent Wake and Sleep executions for the same character are serialized via Valkey `timer.CategoryWaking`
-  (`TryLock` with a 30s safety lease). Concurrent attempts while Wake is running return `409 HOME_WAKE_IN_PROGRESS`.
+  using token-scoped exclusive ownership (`TryLockWithToken` with a 30s safety lease, actively renewed via background keepalive). Concurrent attempts while Wake is running, or executions that lose claim ownership during slow recovery hooks, return `409 HOME_WAKE_IN_PROGRESS` immediately without modifying successor locks, quotas, or durable recovery state.
 - When sleep duration has elapsed and pending recovery is active (`characters.pending_wake = 1` in SQL or
   `timer.CategoryAsleep` in Valkey), Wake restores full HP, MP and resets fatigue to 0, then executes configured
   mandatory recovery hooks (tavern fullness reset, chapel blessing clear, alchemy synthesis completion, costume reset)

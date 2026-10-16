@@ -7,12 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/valkey-io/valkey-go"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/store"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
 type mockInvRepo struct {
@@ -498,4 +501,169 @@ func TestOracleService_ApplyAndResetCostume(t *testing.T) {
 	if got != nil {
 		t.Errorf("expected costume cleared after reset, got %+v", got)
 	}
+}
+
+func TestOracleService_ResetCostumeWithClaim(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Without timer: refuses unsafe deletion
+	costumeRepo := costume.NewMemoryCostumeRepository()
+	svcNoTimer := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
+	_ = svcNoTimer.ApplyCostume(ctx, "char-1", 46, "costume-46", "icon", time.Now().Add(time.Hour))
+	reset, err := svcNoTimer.ResetCostumeWithClaim(ctx, "char-1", "waking", "any-token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reset {
+		t.Errorf("expected ResetCostumeWithClaim to return false when timer is nil")
+	}
+	active, _ := costumeRepo.GetActiveCostume(ctx, "char-1")
+	if active == nil || active.ItemNo != 46 {
+		t.Fatalf("costume should not be deleted when timer is nil")
+	}
+
+	// 2. With timer: token mismatch preserves costume in MemoryCostumeRepository
+	tm := timer.NewService(nil)
+	svcWithTimer := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
+	claimed, err := tm.TryLockWithToken(ctx, "waking", "char-1", "valid-token", time.Hour)
+	if err != nil || !claimed {
+		t.Fatalf("failed to setup claim: %v", err)
+	}
+
+	reset, err = svcWithTimer.ResetCostumeWithClaim(ctx, "char-1", "waking", "wrong-token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reset {
+		t.Errorf("expected ResetCostumeWithClaim to return false on token mismatch")
+	}
+	active, _ = costumeRepo.GetActiveCostume(ctx, "char-1")
+	if active == nil || active.ItemNo != 46 {
+		t.Fatalf("costume should NOT be cleared on token mismatch")
+	}
+
+	// 3. With timer: matching token clears costume from MemoryCostumeRepository
+	reset, err = svcWithTimer.ResetCostumeWithClaim(ctx, "char-1", "waking", "valid-token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reset {
+		t.Errorf("expected ResetCostumeWithClaim to return true on matching token")
+	}
+	active, _ = costumeRepo.GetActiveCostume(ctx, "char-1")
+	if active != nil {
+		t.Fatalf("costume should be cleared from MemoryCostumeRepository after verified claim reset")
+	}
+}
+
+func TestOracleService_ResetCostumeWithClaim_PauseAfterOwnershipVerification(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("memory", func(t *testing.T) {
+		tm := timer.NewService(nil)
+		costumeRepo := costume.NewMemoryCostumeRepository()
+		svc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
+
+		// 1. Initial costume
+		_ = svc.ApplyCostume(ctx, "c1", 46, "old-costume", "icon", time.Now().Add(time.Hour))
+
+		// 2. Setup claim
+		const oldToken = "old-token-123"
+		const successorToken = "successor-token-456"
+		claimed, err := tm.TryLockWithToken(ctx, "waking", "c1", oldToken, time.Hour)
+		if err != nil || !claimed {
+			t.Fatalf("failed to claim waking lock: %v", err)
+		}
+
+		// Wrap claim executor with pause hook to pause processing before atomic execution
+		hookEntered := make(chan struct{})
+		releaseHook := make(chan struct{})
+
+		costumeRepo.SetClaimExecutor(func(chkCtx context.Context, category, targetID, token string, action func() error) (bool, error) {
+			// Stop processing before atomic execution
+			close(hookEntered)
+			<-releaseHook
+			// Delegate directly to production ExecuteWithClaim without test-side re-verification
+			return tm.ExecuteWithClaim(chkCtx, category, targetID, token, action)
+		})
+
+		done := make(chan struct {
+			reset bool
+			err   error
+		}, 1)
+
+		go func() {
+			reset, err := svc.ResetCostumeWithClaim(ctx, "c1", "waking", oldToken)
+			done <- struct {
+				reset bool
+				err   error
+			}{reset, err}
+		}()
+
+		select {
+		case <-hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		// 3. While paused: claim expires, successor takes over, completes, and registers new costume!
+		_ = tm.ReleaseLock(ctx, "waking", "c1")
+		claimed, err = tm.TryLockWithToken(ctx, "waking", "c1", successorToken, time.Hour)
+		if err != nil || !claimed {
+			t.Fatalf("successor failed to take lock: %v", err)
+		}
+		// Successor registers new costume
+		_ = costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+			CharacterID: "c1",
+			ItemNo:      99,
+			ItemName:    "new-costume",
+			ExpiresAt:   time.Now().Add(time.Hour),
+		}, time.Hour)
+
+		// 4. Old Wake resumes
+		close(releaseHook)
+
+		res := <-done
+		if res.reset {
+			t.Errorf("expected ResetCostumeWithClaim to return false after claim lost during pause")
+		}
+
+		// 5. Verification: The new costume MUST remain intact!
+		active, err := costumeRepo.GetActiveCostume(ctx, "c1")
+		if err != nil {
+			t.Fatalf("GetActiveCostume failed: %v", err)
+		}
+		if active == nil || active.ItemNo != 99 {
+			t.Fatalf("expected successor's new costume (item 99) to be preserved, got: %+v", active)
+		}
+	})
+
+	t.Run("valkey_no_double_deletion", func(t *testing.T) {
+		var delCalls int
+		mock := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+			cs := cmd.Commands()
+			if len(cs) >= 1 && cs[0] == "DEL" {
+				delCalls++
+				return valkeytest.MakeOKResult()
+			}
+			if len(cs) >= 1 && (cs[0] == "EVAL" || cs[0] == "EVALSHA") {
+				return valkeytest.MakeIntResult(1) // Lua script succeeds
+			}
+			return valkeytest.MakeOKResult()
+		}))
+
+		valkeyRepo := costume.NewValkeyCostumeRepository(mock)
+		tm := timer.NewService(mock)
+		svc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(valkeyRepo), store.WithTimer(tm))
+
+		reset, err := svc.ResetCostumeWithClaim(ctx, "c1", "waking", "token-valkey")
+		if err != nil || !reset {
+			t.Fatalf("ResetCostumeWithClaim failed: reset=%v, err=%v", reset, err)
+		}
+
+		// Ensure NO separate unconditional DEL command was sent to Valkey (only the atomic Lua script ran)
+		if delCalls != 0 {
+			t.Fatalf("expected 0 separate DEL calls to Valkey (atomic Lua only), got %d DEL calls", delCalls)
+		}
+	})
 }

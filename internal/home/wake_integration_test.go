@@ -5,14 +5,17 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/tavern"
 	"github.com/witchcraze/party2re/internal/testutil"
 	"github.com/witchcraze/party2re/internal/valkey"
@@ -49,6 +52,32 @@ func (f wakeFullnessHook) ResetFullness(ctx context.Context, id string) error { 
 type wakeCostumeHook func(context.Context, string) error
 
 func (f wakeCostumeHook) ResetCostume(ctx context.Context, id string) error { return f(ctx, id) }
+
+type wakeClaimCostumeHook struct {
+	hookEntered  chan struct{}
+	releaseHook  chan struct{}
+	skippedTimer *failingRenewTimer
+	storeService *store.Service
+}
+
+func (h *wakeClaimCostumeHook) ResetCostume(_ context.Context, id string) error {
+	_, err := h.ResetCostumeWithClaim(context.Background(), id, timer.CategoryWaking, "")
+	return err
+}
+
+func (h *wakeClaimCostumeHook) ResetCostumeWithClaim(_ context.Context, id, claimCategory, claimToken string) (bool, error) {
+	h.skippedTimer.dropRenew.Store(true)
+	close(h.hookEntered)
+	<-h.releaseHook
+
+	// Resumed old hook attempts to execute costume reset via real storeService (or timer) with its token,
+	// intentionally using context.Background() to verify that atomic claim verification
+	// (not context cancellation) prevents mutating successor state in real Valkey.
+	if h.storeService != nil {
+		return h.storeService.ResetCostumeWithClaim(context.Background(), id, claimCategory, claimToken)
+	}
+	return h.skippedTimer.ResetDailyQuotaWithClaim(context.Background(), "costume", id, claimCategory, claimToken)
+}
 
 type failingTavernStatusReader struct {
 	*database.TavernRepository
@@ -769,6 +798,470 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatalf("expected Valkey CategoryWaking released, got %v err=%v", wakingLocked, err)
 		}
 	})
+
+	t.Run("wake_keep_alive_renews_lease_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeRealKeepAlive")
+		char.Stats.HP, char.Stats.MP, char.Tired = 1, 0, 80
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		// Valkey integer-second TTL: 1s TTL renewed every 250ms
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+			home.WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hookEntered := make(chan struct{})
+		releaseHook := make(chan struct{})
+		var hookCalls int32
+
+		svc.SetCostumeResetter(wakeCostumeHook(func(_ context.Context, _ string) error {
+			atomic.AddInt32(&hookCalls, 1)
+			close(hookEntered)
+			<-releaseHook
+			return nil
+		}))
+
+		wakeDone := make(chan error, 1)
+		go func() {
+			_, err := svc.Wake(ctx, char.ID)
+			wakeDone <- err
+		}()
+
+		select {
+		case <-hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		// Hold hook for 1250ms (> 1000ms TTL in real Valkey).
+		// Without keepalive, the 1s Valkey key would expire after 1000ms.
+		time.Sleep(1250 * time.Millisecond)
+
+		// Key must still be locked in real Valkey via background renewal Lua script
+		locked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID)
+		if err != nil || !locked {
+			t.Fatalf("expected CategoryWaking lock renewed in Valkey, got %v err=%v", locked, err)
+		}
+
+		// Concurrent Wake receives ErrWakeInProgress
+		if _, err := svc.Wake(ctx, char.ID); !errors.Is(err, home.ErrWakeInProgress) {
+			t.Fatalf("concurrent Wake err = %v, want ErrWakeInProgress", err)
+		}
+
+		close(releaseHook)
+		select {
+		case err := <-wakeDone:
+			if err != nil {
+				t.Fatalf("first Wake failed: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("first Wake timed out")
+		}
+
+		// Verify clean completion in SQL and Valkey
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if persisted.PendingWake {
+			t.Fatalf("expected PendingWake=false in SQL")
+		}
+		if persisted.Stats.HP != persisted.Stats.MaxHP || persisted.Stats.MP != persisted.Stats.MaxMP || persisted.Tired != 0 {
+			t.Fatalf("expected full vitality recovered, got %+v tired=%d", persisted.Stats, persisted.Tired)
+		}
+		if locked, _ := timers.IsLocked(ctx, timer.CategoryWaking, char.ID); locked {
+			t.Fatalf("expected CategoryWaking released in Valkey")
+		}
+		if atomic.LoadInt32(&hookCalls) != 1 {
+			t.Fatalf("expected hook called once, got %d", hookCalls)
+		}
+	})
+
+	t.Run("wake_ownership_loss_aborts_and_preserves_successor_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeRealLoss")
+		char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 50
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+			home.WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hookEntered := make(chan struct{})
+		releaseHook := make(chan struct{})
+		const successorToken = "successor-token-real-valkey"
+
+		svc.SetCostumeResetter(wakeCostumeHook(func(hookCtx context.Context, id string) error {
+			close(hookEntered)
+			<-releaseHook
+
+			// Successor overwrites claim in real Valkey with new token
+			_ = timers.ReleaseLock(ctx, timer.CategoryWaking, id)
+			claimed, err := timers.TryLockWithToken(ctx, timer.CategoryWaking, id, successorToken, time.Hour)
+			if err != nil || !claimed {
+				t.Fatalf("successor claim setup failed: %v", err)
+			}
+			_ = timers.SetLock(ctx, timer.CategoryDungeonOnce, id, time.Hour)
+			_, _ = timers.ConsumeDailyQuota(ctx, "dungeon_once", id, time.Now())
+			return nil
+		}))
+
+		wakeDone := make(chan error, 1)
+		go func() {
+			_, err := svc.Wake(ctx, char.ID)
+			wakeDone <- err
+		}()
+
+		select {
+		case <-hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		close(releaseHook)
+
+		select {
+		case err := <-wakeDone:
+			if !errors.Is(err, home.ErrWakeInProgress) {
+				t.Fatalf("Wake err = %v, want ErrWakeInProgress on ownership loss", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Wake timed out")
+		}
+
+		// Verify successor state in real Valkey was preserved
+		wakingLocked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID)
+		if err != nil || !wakingLocked {
+			t.Fatalf("successor waking lock must remain, got %v err=%v", wakingLocked, err)
+		}
+		renewed, err := timers.RenewLock(ctx, timer.CategoryWaking, char.ID, successorToken, time.Hour)
+		if err != nil || !renewed {
+			t.Fatalf("successor token must still hold the lock, got renewed=%v err=%v", renewed, err)
+		}
+
+		dungeonLocked, _ := timers.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID)
+		if !dungeonLocked {
+			t.Fatalf("successor dungeon_once lock must remain in Valkey")
+		}
+
+		hasQuota, _ := timers.HasUsedDailyQuota(ctx, "dungeon_once", char.ID)
+		if !hasQuota {
+			t.Fatalf("successor daily quota must remain in Valkey")
+		}
+
+		// Verify SQL PendingWake is preserved in MariaDB
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !persisted.PendingWake {
+			t.Fatalf("expected SQL PendingWake=true preserved in MariaDB")
+		}
+	})
+
+	t.Run("wake_lease_expiry_aborts_and_preserves_state_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeRealExpiry")
+		char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 50
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		// Setup preexisting dungeon_once lock and daily quota in real Valkey
+		if err := timers.SetLock(ctx, timer.CategoryDungeonOnce, char.ID, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := timers.ConsumeDailyQuota(ctx, "dungeon_once", char.ID, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+
+		// Wrap timers in a proxy that skips renewal to simulate keepalive failure
+		skippedTimer := &failingRenewTimer{Service: timers}
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(skippedTimer),
+			home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hookEntered := make(chan struct{})
+		releaseHook := make(chan struct{})
+
+		svc.SetCostumeResetter(wakeCostumeHook(func(_ context.Context, _ string) error {
+			skippedTimer.dropRenew.Store(true)
+			close(hookEntered)
+			<-releaseHook
+			return nil
+		}))
+
+		wakeDone := make(chan error, 1)
+		go func() {
+			_, err := svc.Wake(ctx, char.ID)
+			wakeDone <- err
+		}()
+
+		select {
+		case <-hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		// Sleep 1250ms (> 1000ms TTL) while renewals are dropped
+		time.Sleep(1250 * time.Millisecond)
+
+		// The waking key in real Valkey must now be expired
+		wakingLocked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID)
+		if err != nil || wakingLocked {
+			t.Fatalf("expected waking lock to have expired in Valkey without renewals, got %v (err=%v)", wakingLocked, err)
+		}
+
+		close(releaseHook)
+
+		select {
+		case err := <-wakeDone:
+			if !errors.Is(err, home.ErrWakeInProgress) {
+				t.Fatalf("Wake err = %v, want ErrWakeInProgress due to lease expiry", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Wake timed out")
+		}
+
+		// Preexisting dungeon_once lock and daily quota in real Valkey must NOT be deleted
+		dungeonLocked, _ := timers.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID)
+		if !dungeonLocked {
+			t.Fatal("dungeon_once lock was erroneously deleted after lease expiry")
+		}
+		hasQuota, _ := timers.HasUsedDailyQuota(ctx, "dungeon_once", char.ID)
+		if !hasQuota {
+			t.Fatal("daily quota was erroneously reset after lease expiry")
+		}
+
+		// SQL PendingWake must remain true
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !persisted.PendingWake {
+			t.Fatal("SQL PendingWake was erroneously cleared after lease expiry")
+		}
+	})
+
+	t.Run("wake_hook_paused_lease_expiry_preserves_successor_play_state_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeRealHookPaused")
+		char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 50
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		costumeRepo := costume.NewValkeyCostumeRepository(client)
+		now := time.Now().UTC()
+		if err := costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+			CharacterID: char.ID,
+			ItemNo:      42,
+			RentedAt:    now,
+			ExpiresAt:   now.Add(time.Hour),
+		}, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+
+		skippedTimer := &failingRenewTimer{Service: timers}
+
+		storeSvc1 := store.NewService(
+			nil, nil, nil, nil, nil,
+			store.WithTimer(skippedTimer),
+			store.WithCostumeRepository(costumeRepo),
+		)
+		storeSvc2 := store.NewService(
+			nil, nil, nil, nil, nil,
+			store.WithTimer(timers),
+			store.WithCostumeRepository(costumeRepo),
+		)
+
+		svc1, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(skippedTimer),
+			home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		svc2, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		claimHook := &wakeClaimCostumeHook{
+			hookEntered:  make(chan struct{}),
+			releaseHook:  make(chan struct{}),
+			skippedTimer: skippedTimer,
+			storeService: storeSvc1,
+		}
+		svc1.SetCostumeResetter(claimHook)
+		svc2.SetCostumeResetter(storeSvc2)
+
+		wakeDone := make(chan error, 1)
+		go func() {
+			_, err := svc1.Wake(ctx, char.ID)
+			wakeDone <- err
+		}()
+
+		select {
+		case <-claimHook.hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		// Sleep 1250ms (> 1000ms TTL) so old Wake's claim expires in real Valkey
+		time.Sleep(1250 * time.Millisecond)
+
+		// 1. Successor Wake runs and completes successfully
+		res2, err := svc2.Wake(ctx, char.ID)
+		if err != nil || !res2.Success {
+			t.Fatalf("successor Wake failed: %+v, %v", res2, err)
+		}
+
+		// Successor wake cleared the old costume (42)
+		oldCostume, err := costumeRepo.GetActiveCostume(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if oldCostume != nil {
+			t.Fatalf("expected old costume to be cleared by successor, got %+v", oldCostume)
+		}
+
+		// 2. Player resumes play and rents a costume in real Valkey
+		if err := costumeRepo.SaveActiveCostume(ctx, costume.ActiveCostume{
+			CharacterID: char.ID,
+			ItemNo:      99,
+			RentedAt:    now,
+			ExpiresAt:   now.Add(time.Hour),
+		}, time.Hour); err != nil {
+			t.Fatalf("failed to rent costume: %v", err)
+		}
+
+		// 3. Resume the old hook
+		close(claimHook.releaseHook)
+
+		select {
+		case err := <-wakeDone:
+			if err == nil {
+				t.Fatal("expected old Wake to abort with error after claim loss")
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("old Wake timed out")
+		}
+
+		// 4. Verify player's rented costume in real Valkey was NOT deleted by the old hook
+		newCostume, err := costumeRepo.GetActiveCostume(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if newCostume == nil || newCostume.ItemNo != 99 {
+			t.Fatalf("player's costume in real Valkey was corrupted: %+v", newCostume)
+		}
+
+		// 5. Verify SQL PendingWake remains false (completed by successor)
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if persisted.PendingWake {
+			t.Fatal("SQL PendingWake was reverted to true")
+		}
+	})
+
+	t.Run("concurrent_wake_only_executes_hooks_once", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeConcurrentHooks")
+		char.Stats.HP, char.Stats.MP, char.Tired = 5, 2, 70
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var hookCalls int32
+		svc.SetCostumeResetter(wakeCostumeHook(func(_ context.Context, _ string) error {
+			atomic.AddInt32(&hookCalls, 1)
+			time.Sleep(30 * time.Millisecond)
+			return nil
+		}))
+
+		cfg := testutil.ConcurrencyStressConfig{
+			Workers:      8,
+			OpsPerWorker: 5,
+		}
+		res := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
+			_, err := svc.Wake(ctx, char.ID)
+			if err == nil || errors.Is(err, home.ErrWakeInProgress) {
+				return nil
+			}
+			return err
+		})
+		if res.Failures != 0 || res.Deadlocks != 0 {
+			t.Fatalf("stress: %+v", res)
+		}
+
+		if calls := atomic.LoadInt32(&hookCalls); calls != 1 {
+			t.Fatalf("expected costume hook called exactly once, got %d", calls)
+		}
+	})
 }
 
 type failingSleepTimer struct {
@@ -789,4 +1282,16 @@ type wakeJobRestorerHook func(context.Context, string, string) error
 
 func (f wakeJobRestorerHook) RestoreActiveJob(ctx context.Context, characterID, jobID string) error {
 	return f(ctx, characterID, jobID)
+}
+
+type failingRenewTimer struct {
+	timer.Service
+	dropRenew atomic.Bool
+}
+
+func (f *failingRenewTimer) RenewLock(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error) {
+	if f.dropRenew.Load() {
+		return false, nil
+	}
+	return f.Service.RenewLock(ctx, category, targetID, token, duration)
 }

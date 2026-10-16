@@ -28,6 +28,7 @@ func (m *mockGuildPoints) AddGuildPoints(ctx context.Context, characterID string
 
 type mockTimer struct {
 	locks               map[string]time.Duration
+	tokens              map[string]string
 	setLockErr          error
 	setLockErrs         map[string]error
 	onSetLock           func(ctx context.Context, category string) error
@@ -53,21 +54,47 @@ func (m *mockTimer) SetLock(ctx context.Context, category, targetID string, dura
 	if m.locks == nil {
 		m.locks = make(map[string]time.Duration)
 	}
-	m.locks[category+":"+targetID] = duration
+	if m.tokens == nil {
+		m.tokens = make(map[string]string)
+	}
+	key := category + ":" + targetID
+	m.locks[key] = duration
+	m.tokens[key] = "1"
 	return nil
 }
 
 func (m *mockTimer) TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error) {
+	return m.TryLockWithToken(ctx, category, targetID, "1", duration)
+}
+
+func (m *mockTimer) TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error) {
 	if m.tryLockErr != nil {
 		return false, m.tryLockErr
 	}
-	if _, held := m.locks[category+":"+targetID]; held {
+	key := category + ":" + targetID
+	if _, held := m.locks[key]; held {
 		return false, nil
 	}
 	if m.locks == nil {
 		m.locks = make(map[string]time.Duration)
 	}
-	m.locks[category+":"+targetID] = duration
+	if m.tokens == nil {
+		m.tokens = make(map[string]string)
+	}
+	m.locks[key] = duration
+	m.tokens[key] = token
+	return true, nil
+}
+
+func (m *mockTimer) RenewLock(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error) {
+	key := category + ":" + targetID
+	if _, held := m.locks[key]; !held {
+		return false, nil
+	}
+	if m.tokens[key] != token {
+		return false, nil
+	}
+	m.locks[key] = duration
 	return true, nil
 }
 
@@ -97,8 +124,26 @@ func (m *mockTimer) ReleaseLock(ctx context.Context, category, targetID string) 
 	if err, ok := m.releaseLockErrs[category]; ok && err != nil {
 		return err
 	}
-	delete(m.locks, category+":"+targetID)
+	key := category + ":" + targetID
+	delete(m.locks, key)
+	delete(m.tokens, key)
 	return nil
+}
+
+func (m *mockTimer) ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	key := category + ":" + targetID
+	if _, held := m.locks[key]; !held {
+		return false, nil
+	}
+	if m.tokens[key] != token {
+		return false, nil
+	}
+	delete(m.locks, key)
+	delete(m.tokens, key)
+	return true, nil
 }
 
 func (m *mockTimer) ResetDailyQuota(ctx context.Context, action, targetID string) error {
@@ -106,6 +151,57 @@ func (m *mockTimer) ResetDailyQuota(ctx context.Context, action, targetID string
 		return err
 	}
 	return nil
+}
+
+func (m *mockTimer) ReleaseLockWithClaim(ctx context.Context, category, targetID, claimCategory, claimToken string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err, ok := m.releaseLockErrs[category]; ok && err != nil {
+		return false, err
+	}
+	claimKey := claimCategory + ":" + targetID
+	if m.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	key := category + ":" + targetID
+	delete(m.locks, key)
+	delete(m.tokens, key)
+	return true, nil
+}
+
+func (m *mockTimer) ResetDailyQuotaWithClaim(ctx context.Context, action, targetID, claimCategory, claimToken string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	claimKey := claimCategory + ":" + targetID
+	if m.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	if err, ok := m.resetQuotaErrs[action]; ok && err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (m *mockTimer) ResetDungeonOnceWithClaim(ctx context.Context, targetID, claimCategory, claimToken string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err, ok := m.releaseLockErrs[timer.CategoryDungeonOnce]; ok && err != nil {
+		return false, err
+	}
+	if err, ok := m.resetQuotaErrs["dungeon_once"]; ok && err != nil {
+		return false, err
+	}
+	claimKey := claimCategory + ":" + targetID
+	if m.tokens[claimKey] != claimToken {
+		return false, nil
+	}
+	lockKey := timer.CategoryDungeonOnce + ":" + targetID
+	delete(m.locks, lockKey)
+	delete(m.tokens, lockKey)
+	return true, nil
 }
 
 func TestEstateService(t *testing.T) {

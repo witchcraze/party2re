@@ -15,14 +15,29 @@ type CharacterUpdater interface {
 	Update(ctx context.Context, char corecharacter.Character) error
 }
 
-// TimerService manages sleep timers and daily quotas.
-type TimerService interface {
+// TimerLockService manages sleep timers and token/claim locks.
+type TimerLockService interface {
 	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
-	TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error)
+	TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error)
+	RenewLock(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error)
 	IsLocked(ctx context.Context, category, targetID string) (bool, error)
 	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
 	ReleaseLock(ctx context.Context, category, targetID string) error
+	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
+	ReleaseLockWithClaim(ctx context.Context, category, targetID, claimCategory, claimToken string) (bool, error)
+}
+
+// TimerQuotaService manages daily quota resets and claim-guarded resets.
+type TimerQuotaService interface {
 	ResetDailyQuota(ctx context.Context, action, targetID string) error
+	ResetDailyQuotaWithClaim(ctx context.Context, action, targetID, claimCategory, claimToken string) (bool, error)
+	ResetDungeonOnceWithClaim(ctx context.Context, targetID, claimCategory, claimToken string) (bool, error)
+}
+
+// TimerService manages sleep timers, locks, and daily quotas.
+type TimerService interface {
+	TimerLockService
+	TimerQuotaService
 }
 
 // FullnessResetter resets character eating/fullness state upon rest.
@@ -43,6 +58,12 @@ type AlchemyCompleter interface {
 // CostumeResetter resets rented costume state upon rest.
 type CostumeResetter interface {
 	ResetCostume(ctx context.Context, characterID string) error
+}
+
+// CostumeClaimResetter resets rented costume state with atomic claim verification.
+type CostumeClaimResetter interface {
+	CostumeResetter
+	ResetCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error)
 }
 
 // JobStateRestorer restores character_jobs.current_job_id upon rest when reverting JobMemory.
@@ -161,6 +182,14 @@ func WithOnlineCounter(c OnlineCounter) ServiceOption {
 func WithBaseSleepDuration(d time.Duration) ServiceOption {
 	return func(s *Service) {
 		s.baseSleepDuration = d
+	}
+}
+
+// WithWakeClaimTTL configures the safety TTL and renewal interval for Wake exclusive claims.
+func WithWakeClaimTTL(ttl, renewInterval time.Duration) ServiceOption {
+	return func(s *Service) {
+		s.wakeClaimTTL = ttl
+		s.wakeClaimRenewInterval = renewInterval
 	}
 }
 

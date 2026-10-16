@@ -375,6 +375,27 @@ func (s *Service) ResetCostume(ctx context.Context, characterID string) error {
 	return s.costumeRepo.ClearActiveCostume(ctx, characterID)
 }
 
+// ResetCostumeWithClaim implements CostumeClaimResetter, resetting costume on rest with atomic claim verification.
+func (s *Service) ResetCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error) {
+	if s.timer == nil {
+		// When timer is not configured, ownership cannot be verified atomically.
+		// Refuse unsafe deletion to preserve successor state.
+		return false, nil
+	}
+
+	if s.costumeRepo != nil {
+		reset, err := s.costumeRepo.ClearActiveCostumeWithClaim(ctx, characterID, claimCategory, claimToken)
+		if err != nil || !reset {
+			return false, err
+		}
+		// Reset daily quota in timer as well (in Valkey, costume and quota share the key; in memory, resets timer map)
+		_, _ = s.timer.ResetDailyQuotaWithClaim(ctx, "costume", characterID, claimCategory, claimToken)
+		return true, nil
+	}
+
+	return s.timer.ResetDailyQuotaWithClaim(ctx, "costume", characterID, claimCategory, claimToken)
+}
+
 // BuyHomeWallpaper purchases a wallpaper for the character's private home.
 func (s *Service) BuyHomeWallpaper(ctx context.Context, characterID string, wallpaper string) (*HomeWallpaperResult, error) {
 	cleanWallpaper := strings.TrimSpace(wallpaper)
