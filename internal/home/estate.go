@@ -46,7 +46,10 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 
 		// 1-house rule globally: check existing home
 		existingHome, err := s.repo.GetHome(tc.Context, characterID)
-		if err == nil && existingHome.IsActive(now) {
+		if err != nil {
+			return err
+		}
+		if existingHome.IsActive(now) {
 			return ErrAlreadyOwnsHouse
 		}
 
