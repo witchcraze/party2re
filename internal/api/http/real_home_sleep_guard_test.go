@@ -25,6 +25,7 @@ type inMemoryRealTimer struct {
 	remainingDurations map[string]time.Duration
 	getRemainingErrs   map[string]error
 	locks              map[string]bool
+	tokens             map[string]string
 	isLockedErrs       map[string]error
 }
 
@@ -33,22 +34,41 @@ func newInMemoryRealTimer() *inMemoryRealTimer {
 		remainingDurations: make(map[string]time.Duration),
 		getRemainingErrs:   make(map[string]error),
 		locks:              make(map[string]bool),
+		tokens:             make(map[string]string),
 		isLockedErrs:       make(map[string]error),
 	}
 }
 
 func (t *inMemoryRealTimer) SetLock(ctx context.Context, category, targetID string, duration time.Duration) error {
-	t.remainingDurations[category+":"+targetID] = duration
-	t.locks[category+":"+targetID] = true
+	key := category + ":" + targetID
+	t.remainingDurations[key] = duration
+	t.locks[key] = true
+	t.tokens[key] = "1"
 	return nil
 }
 
 func (t *inMemoryRealTimer) TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error) {
+	return t.TryLockWithToken(ctx, category, targetID, "1", duration)
+}
+
+func (t *inMemoryRealTimer) TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error) {
 	key := category + ":" + targetID
 	if t.locks[key] {
 		return false, nil
 	}
-	return true, t.SetLock(ctx, category, targetID, duration)
+	t.remainingDurations[key] = duration
+	t.locks[key] = true
+	t.tokens[key] = token
+	return true, nil
+}
+
+func (t *inMemoryRealTimer) RenewLock(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error) {
+	key := category + ":" + targetID
+	if !t.locks[key] || t.tokens[key] != token {
+		return false, nil
+	}
+	t.remainingDurations[key] = duration
+	return true, nil
 }
 
 func (t *inMemoryRealTimer) IsLocked(ctx context.Context, category, targetID string) (bool, error) {
@@ -71,7 +91,19 @@ func (t *inMemoryRealTimer) ReleaseLock(ctx context.Context, category, targetID 
 	key := category + ":" + targetID
 	delete(t.remainingDurations, key)
 	delete(t.locks, key)
+	delete(t.tokens, key)
 	return nil
+}
+
+func (t *inMemoryRealTimer) ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error) {
+	key := category + ":" + targetID
+	if !t.locks[key] || t.tokens[key] != token {
+		return false, nil
+	}
+	delete(t.remainingDurations, key)
+	delete(t.locks, key)
+	delete(t.tokens, key)
+	return true, nil
 }
 
 func (t *inMemoryRealTimer) ResetDailyQuota(ctx context.Context, action, targetID string) error {

@@ -29,28 +29,30 @@ type Limiter interface {
 type LetterListResult = pagination.Page[Letter]
 
 type Service struct {
-	repo              Repository
-	charReader        CharacterReader
-	rngMu             sync.Mutex
-	rng               random.Generator
-	nowFunc           func() time.Time
-	timer             TimerService
-	charUpdater       CharacterUpdater
-	guildPoints       GuildPointsRegistrar
-	invMgr            InventoryManager
-	depotMgr          DepotManager
-	catalog           ItemCatalog
-	fullness          FullnessResetter
-	chapel            BlessingCleaner
-	alchemy           AlchemyCompleter
-	recipeLearner     RecipeLearner
-	costume           CostumeResetter
-	costumeApplier    CostumeApplier
-	jobRestorer       JobStateRestorer
-	onlineCounter     OnlineCounter
-	baseSleepDuration time.Duration
-	runner            TransactionRunner
-	petReader         HomePetReader
+	repo                   Repository
+	charReader             CharacterReader
+	rngMu                  sync.Mutex
+	rng                    random.Generator
+	nowFunc                func() time.Time
+	timer                  TimerService
+	charUpdater            CharacterUpdater
+	guildPoints            GuildPointsRegistrar
+	invMgr                 InventoryManager
+	depotMgr               DepotManager
+	catalog                ItemCatalog
+	fullness               FullnessResetter
+	chapel                 BlessingCleaner
+	alchemy                AlchemyCompleter
+	recipeLearner          RecipeLearner
+	costume                CostumeResetter
+	costumeApplier         CostumeApplier
+	jobRestorer            JobStateRestorer
+	onlineCounter          OnlineCounter
+	baseSleepDuration      time.Duration
+	runner                 TransactionRunner
+	petReader              HomePetReader
+	wakeClaimTTL           time.Duration
+	wakeClaimRenewInterval time.Duration
 }
 
 func (s *Service) SetHomePetReader(r HomePetReader) {

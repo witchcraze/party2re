@@ -88,3 +88,114 @@ func TestValkeyTimer_TryLock(t *testing.T) {
 		t.Fatalf("err = %v, want valkey error", err)
 	}
 }
+
+func TestMemoryTimer_TokenLockLifecycle(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+
+	// 1. Acquire with tok1
+	ok, err := svc.TryLockWithToken(ctx, CategoryWaking, "c1", "tok1", time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("TryLockWithToken tok1 = %v, %v; want true", ok, err)
+	}
+
+	// 2. Contention with tok2
+	ok, err = svc.TryLockWithToken(ctx, CategoryWaking, "c1", "tok2", time.Minute)
+	if err != nil || ok {
+		t.Fatalf("TryLockWithToken tok2 = %v, %v; want false", ok, err)
+	}
+
+	// 3. Renew with wrong token fails
+	renewed, err := svc.RenewLock(ctx, CategoryWaking, "c1", "tok2", time.Minute)
+	if err != nil || renewed {
+		t.Fatalf("RenewLock tok2 = %v, %v; want false", renewed, err)
+	}
+
+	// 4. Renew with correct token succeeds
+	renewed, err = svc.RenewLock(ctx, CategoryWaking, "c1", "tok1", time.Minute)
+	if err != nil || !renewed {
+		t.Fatalf("RenewLock tok1 = %v, %v; want true", renewed, err)
+	}
+
+	// 5. Release with wrong token fails and preserves lock
+	released, err := svc.ReleaseLockWithToken(ctx, CategoryWaking, "c1", "tok2")
+	if err != nil || released {
+		t.Fatalf("ReleaseLockWithToken tok2 = %v, %v; want false", released, err)
+	}
+	if locked, _ := svc.IsLocked(ctx, CategoryWaking, "c1"); !locked {
+		t.Fatal("lock should still be held after wrong token release")
+	}
+
+	// 6. Release with correct token succeeds
+	released, err = svc.ReleaseLockWithToken(ctx, CategoryWaking, "c1", "tok1")
+	if err != nil || !released {
+		t.Fatalf("ReleaseLockWithToken tok1 = %v, %v; want true", released, err)
+	}
+	if locked, _ := svc.IsLocked(ctx, CategoryWaking, "c1"); locked {
+		t.Fatal("lock should be released after correct token release")
+	}
+
+	// 7. tok2 can now acquire
+	ok, err = svc.TryLockWithToken(ctx, CategoryWaking, "c1", "tok2", time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("TryLockWithToken tok2 after release = %v, %v; want true", ok, err)
+	}
+}
+
+func TestMemoryTimer_TokenLockExpiredFailsRenewAndRelease(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+
+	ok, err := svc.TryLockWithToken(ctx, CategoryWaking, "c1", "tok1", 10*time.Millisecond)
+	if err != nil || !ok {
+		t.Fatalf("TryLockWithToken = %v, %v", ok, err)
+	}
+
+	time.Sleep(30 * time.Millisecond)
+
+	// Renew expired returns false
+	renewed, err := svc.RenewLock(ctx, CategoryWaking, "c1", "tok1", time.Minute)
+	if err != nil || renewed {
+		t.Fatalf("RenewLock on expired = %v, %v; want false", renewed, err)
+	}
+
+	// Release expired returns false
+	released, err := svc.ReleaseLockWithToken(ctx, CategoryWaking, "c1", "tok1")
+	if err != nil || released {
+		t.Fatalf("ReleaseLockWithToken on expired = %v, %v; want false", released, err)
+	}
+}
+
+func TestMemoryTimer_TokenLockValidation(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+
+	if _, err := svc.TryLockWithToken(ctx, CategoryWaking, "c1", "", time.Minute); !errors.Is(err, ErrEmptyToken) {
+		t.Fatalf("TryLockWithToken empty token err = %v, want ErrEmptyToken", err)
+	}
+	if _, err := svc.RenewLock(ctx, CategoryWaking, "c1", "", time.Minute); !errors.Is(err, ErrEmptyToken) {
+		t.Fatalf("RenewLock empty token err = %v, want ErrEmptyToken", err)
+	}
+	if _, err := svc.ReleaseLockWithToken(ctx, CategoryWaking, "c1", ""); !errors.Is(err, ErrEmptyToken) {
+		t.Fatalf("ReleaseLockWithToken empty token err = %v, want ErrEmptyToken", err)
+	}
+}
+
+func TestValkeyTimer_TryLockWithToken(t *testing.T) {
+	ctx := context.Background()
+	key := PrefixTimer + CategoryWaking + ":c1"
+
+	var lastCmd []string
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		lastCmd = cmd.Commands()
+		return valkeytest.MakeOKResult()
+	}))
+
+	ok, err := NewService(client).TryLockWithToken(ctx, CategoryWaking, "c1", "my-uuid-token", 30*time.Second)
+	if err != nil || !ok {
+		t.Fatalf("TryLockWithToken = %v, %v; want true", ok, err)
+	}
+	if len(lastCmd) != 6 || lastCmd[0] != "SET" || lastCmd[1] != key || lastCmd[2] != "my-uuid-token" || lastCmd[3] != "NX" || lastCmd[4] != "EX" || lastCmd[5] != "30" {
+		t.Fatalf("unexpected command: %v", lastCmd)
+	}
+}

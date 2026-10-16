@@ -9,6 +9,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 var (
@@ -20,9 +21,6 @@ var (
 
 const (
 	DefaultBaseSleepDuration = 60 * time.Second
-
-	// wakeClaimTTL bounds the per-character Wake claim if the process dies mid-Wake.
-	wakeClaimTTL = 30 * time.Second
 
 	// sleepRollbackTimeout bounds best-effort SQL/Valkey cleanup when Sleep fails
 	// even if the caller's request context was canceled or timed out.
@@ -44,13 +42,6 @@ type SleepStatus struct {
 	RemainingSeconds int    `json:"remaining_seconds"`
 	CanWake          bool   `json:"can_wake"`
 	Message          string `json:"message"`
-}
-
-// WakeResult represents the outcome of waking up from sleep.
-type WakeResult struct {
-	Success   bool                    `json:"success"`
-	Message   string                  `json:"message"`
-	Character corecharacter.Character `json:"character"`
 }
 
 // CalculateSleepDuration calculates sleep duration scaled by concurrent online player count.
@@ -103,14 +94,15 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 		return SleepResult{}, ErrAlreadySleeping
 	}
 
-	claimed, err := s.timer.TryLock(ctx, timer.CategoryWaking, characterID, wakeClaimTTL)
+	sleepClaimToken := id.New()
+	claimed, err := s.timer.TryLockWithToken(ctx, timer.CategoryWaking, characterID, sleepClaimToken, s.claimTTL())
 	if err != nil {
 		return SleepResult{}, err
 	}
 	if !claimed {
 		return SleepResult{}, ErrWakeInProgress
 	}
-	defer s.releaseWakingClaim(ctx, characterID)
+	defer s.releaseWakingClaim(ctx, characterID, sleepClaimToken)
 
 	if isSleeping, err := s.timer.IsLocked(ctx, timer.CategorySleep, characterID); err != nil {
 		return SleepResult{}, err
@@ -157,13 +149,6 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 		HomeCharacterID:  targetHomeID,
 		Message:          fmt.Sprintf("%sはベッドにもぐりこんだ！", char.Name),
 	}, nil
-}
-
-func (s *Service) releaseWakingClaim(ctx context.Context, characterID string) {
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sleepRollbackTimeout)
-	defer cancel()
-	//lint:ignore error-swallow best-effort claim release; the claim also expires by TTL
-	_ = s.timer.ReleaseLock(cleanupCtx, timer.CategoryWaking, characterID)
 }
 
 func (s *Service) markPendingWake(ctx context.Context, characterID string, initialChar corecharacter.Character) (bool, error) {
@@ -279,123 +264,6 @@ func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (Sleep
 	}, nil
 }
 
-// Wake completes the sleeping cycle, restoring full HP/MP/tired, resetting fullness and chapel prayers.
-func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, error) {
-	if s.timer == nil {
-		return WakeResult{}, errors.New("timer service not configured")
-	}
-
-	if err := s.checkNotSleeping(ctx, characterID); err != nil {
-		return WakeResult{}, err
-	}
-
-	char, err := s.charReader.FindByID(ctx, characterID)
-	if err != nil {
-		return WakeResult{}, err
-	}
-
-	isPendingWake := char.PendingWake
-	if !isPendingWake && s.timer != nil {
-		asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
-		if err != nil {
-			return WakeResult{}, err
-		}
-		if asleep {
-			isPendingWake = true
-		}
-	}
-	if !isPendingWake {
-		return WakeResult{
-			Success:   true,
-			Message:   fmt.Sprintf("%sはすでに目覚めています", char.Name),
-			Character: char,
-		}, nil
-	}
-
-	// Serialize recovery per character: a concurrent Wake must not repeat side effects
-	// (e.g. the dungeon_once reset) after another Wake has completed and play resumed.
-	claimed, err := s.timer.TryLock(ctx, timer.CategoryWaking, characterID, wakeClaimTTL)
-	if err != nil {
-		return WakeResult{}, err
-	}
-	if !claimed {
-		return WakeResult{}, ErrWakeInProgress
-	}
-	defer s.releaseWakingClaim(ctx, characterID)
-
-	if err := s.checkNotSleeping(ctx, characterID); err != nil {
-		return WakeResult{}, err
-	}
-
-	// Re-verify after claim in case another Wake finished concurrently
-	if s.charReader != nil {
-		if c, err := s.charReader.FindByID(ctx, characterID); err == nil && !c.PendingWake {
-			asleep, _ := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
-			if !asleep {
-				return WakeResult{
-					Success:   true,
-					Message:   fmt.Sprintf("%sはすでに目覚めています", c.Name),
-					Character: c,
-				}, nil
-			}
-		}
-	}
-
-	char, err = s.recoverVitality(ctx, characterID, char)
-	if err != nil {
-		return WakeResult{}, err
-	}
-
-	if s.fullness != nil {
-		if err := s.fullness.ResetFullness(ctx, characterID); err != nil {
-			return WakeResult{}, err
-		}
-	}
-	if s.chapel != nil {
-		if err := s.chapel.ClearBlessing(ctx, characterID); err != nil {
-			return WakeResult{}, err
-		}
-	}
-	if s.alchemy != nil {
-		if err := s.alchemy.CompleteOngoingSynthesis(ctx, characterID); err != nil {
-			return WakeResult{}, err
-		}
-	}
-	if s.costume != nil {
-		if err := s.costume.ResetCostume(ctx, characterID); err != nil {
-			return WakeResult{}, err
-		}
-	}
-
-	if err := s.checkNotSleeping(ctx, characterID); err != nil {
-		return WakeResult{}, err
-	}
-	if err := s.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, characterID); err != nil {
-		return WakeResult{}, err
-	}
-	if err := s.timer.ResetDailyQuota(ctx, "dungeon_once", characterID); err != nil {
-		return WakeResult{}, err
-	}
-
-	// Finalize durable pending_wake obligation in SQL after all hooks succeed
-	if char.PendingWake {
-		char, err = s.finalizePendingWake(ctx, characterID)
-		if err != nil {
-			return WakeResult{}, err
-		}
-	}
-
-	if err := s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID); err != nil {
-		return WakeResult{}, err
-	}
-
-	return WakeResult{
-		Success:   true,
-		Message:   fmt.Sprintf("%sのHP・MP・疲労度が回復した！", char.Name),
-		Character: char,
-	}, nil
-}
-
 func (s *Service) checkNotSleeping(ctx context.Context, characterID string) error {
 	rem, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, characterID)
 	if err != nil {
@@ -436,24 +304,4 @@ func (s *Service) mutateCharacter(ctx context.Context, characterID string, fallb
 		return corecharacter.Character{}, err
 	}
 	return fallback, nil
-}
-
-func (s *Service) recoverVitality(ctx context.Context, characterID string, char corecharacter.Character) (corecharacter.Character, error) {
-	// Commit vitality recovery before mandatory hooks and Valkey cleanup.
-	// Mutate the runner's current locked state, preserving unrelated assets.
-	return s.mutateCharacter(ctx, characterID, char, func(_ context.Context, c *corecharacter.Character) error {
-		c.RecoverVitality()
-		c.ResetTired()
-		return nil
-	})
-}
-
-func (s *Service) finalizePendingWake(ctx context.Context, characterID string) (corecharacter.Character, error) {
-	return s.mutateCharacter(ctx, characterID, corecharacter.Character{}, func(txCtx context.Context, c *corecharacter.Character) error {
-		if err := s.checkNotSleeping(txCtx, characterID); err != nil {
-			return err
-		}
-		c.PendingWake = false
-		return nil
-	})
 }

@@ -442,3 +442,222 @@ func TestSleep_RollbackSucceedsOnCanceledContextAndSurfacesRollbackError(t *test
 		}
 	})
 }
+
+// Issue #1228: Keep-alive renewal extends the wake claim lease during slow recovery hooks.
+func TestWake_KeepAliveRenewsLeaseDuringSlowHook(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 80, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
+		},
+	}
+	// Configure short TTL (60ms) and renewal interval (20ms)
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(tm),
+		WithCharacterUpdater(repo),
+		WithWakeClaimTTL(60*time.Millisecond, 20*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	hookEntered := make(chan struct{})
+	releaseHook := make(chan struct{})
+	var hookCalls atomic.Int32
+
+	svc.SetCostumeResetter(costumeResetFunc(func(_ context.Context, _ string) error {
+		hookCalls.Add(1)
+		close(hookEntered)
+		<-releaseHook
+		return nil
+	}))
+
+	wakeDone := make(chan error, 1)
+	go func() {
+		_, err := svc.Wake(ctx, "c1")
+		wakeDone <- err
+	}()
+
+	select {
+	case <-hookEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hook never entered")
+	}
+
+	// Sleep for 150ms (> 2x TTL of 60ms) while hook is blocked.
+	// The keeper background goroutine must actively renew the lock.
+	time.Sleep(150 * time.Millisecond)
+
+	// Claim must still be active and held
+	locked, err := tm.IsLocked(ctx, timer.CategoryWaking, "c1")
+	if err != nil {
+		t.Fatalf("IsLocked: %v", err)
+	}
+	if !locked {
+		t.Fatalf("expected waking claim still locked via keep-alive renewal")
+	}
+
+	// Concurrent Wake must still receive ErrWakeInProgress
+	if _, err := svc.Wake(ctx, "c1"); !errors.Is(err, ErrWakeInProgress) {
+		t.Fatalf("concurrent Wake err = %v, want ErrWakeInProgress", err)
+	}
+
+	// Release hook and let Wake finish
+	close(releaseHook)
+	select {
+	case err := <-wakeDone:
+		if err != nil {
+			t.Fatalf("first Wake failed: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("first Wake timed out")
+	}
+
+	// After completion, claim must be released
+	if locked, _ := tm.IsLocked(ctx, timer.CategoryWaking, "c1"); locked {
+		t.Fatalf("expected waking claim released after completion")
+	}
+	if hookCalls.Load() != 1 {
+		t.Fatalf("expected hook called exactly once, got %d", hookCalls.Load())
+	}
+}
+
+// Issue #1228: If wake ownership is lost (e.g. stolen/overwritten by a successor cycle),
+// the previous Wake must abort immediately, never delete successor's claim or quotas,
+// and never finalize pending_wake in SQL.
+func TestWake_AbortsImmediatelyWhenClaimOwnershipLost(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 80, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
+		},
+	}
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(tm),
+		WithCharacterUpdater(repo),
+		WithWakeClaimTTL(50*time.Millisecond, 15*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	hookEntered := make(chan struct{})
+	releaseHook := make(chan struct{})
+
+	const successorToken = "successor-token-999"
+
+	svc.SetCostumeResetter(costumeResetFunc(func(_ context.Context, id string) error {
+		close(hookEntered)
+		<-releaseHook
+
+		// Simulate successor overwriting the claim with its own token
+		// and acquiring a fresh dungeon_once lock and daily quota.
+		_ = tm.ReleaseLock(ctx, timer.CategoryWaking, id)
+		claimed, err := tm.TryLockWithToken(ctx, timer.CategoryWaking, id, successorToken, time.Hour)
+		if err != nil || !claimed {
+			t.Fatalf("successor claim setup failed: claimed=%v err=%v", claimed, err)
+		}
+		_ = tm.SetLock(ctx, timer.CategoryDungeonOnce, id, time.Hour)
+		_, _ = tm.ConsumeDailyQuota(ctx, "dungeon_once", id, time.Now())
+		return nil
+	}))
+
+	wakeDone := make(chan error, 1)
+	go func() {
+		_, err := svc.Wake(ctx, "c1")
+		wakeDone <- err
+	}()
+
+	select {
+	case <-hookEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hook never entered")
+	}
+
+	close(releaseHook)
+
+	select {
+	case err := <-wakeDone:
+		if !errors.Is(err, ErrWakeInProgress) {
+			t.Fatalf("Wake err = %v, want ErrWakeInProgress due to ownership loss", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Wake timed out")
+	}
+
+	// 1. Successor's claim must NOT have been deleted by the aborted Wake's defer
+	wakingLocked, err := tm.IsLocked(ctx, timer.CategoryWaking, "c1")
+	if err != nil || !wakingLocked {
+		t.Fatalf("successor waking lock must be retained, got locked=%v err=%v", wakingLocked, err)
+	}
+	// Verify successor token is still intact
+	renewed, err := tm.RenewLock(ctx, timer.CategoryWaking, "c1", successorToken, time.Hour)
+	if err != nil || !renewed {
+		t.Fatalf("successor token must still own waking lock, got renewed=%v err=%v", renewed, err)
+	}
+
+	// 2. Successor's dungeon_once lock must NOT have been released
+	dungeonLocked, _ := tm.IsLocked(ctx, timer.CategoryDungeonOnce, "c1")
+	if !dungeonLocked {
+		t.Fatalf("successor dungeon_once lock was erroneously released by aborted wake")
+	}
+
+	// 3. Successor's daily quota must NOT have been reset
+	hasQuota, _ := tm.HasUsedDailyQuota(ctx, "dungeon_once", "c1")
+	if !hasQuota {
+		t.Fatalf("successor daily quota was reset, want true (still used)")
+	}
+
+	// 4. SQL PendingWake must NOT have been finalized to false
+	if !repo.chars["c1"].PendingWake {
+		t.Fatalf("SQL PendingWake was erroneously cleared by aborted wake")
+	}
+}
+
+// Issue #1228: ReleaseLockWithToken must only delete the lock if the token matches.
+func TestWake_ReleaseLockWithToken_MismatchDoesNotDelete(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+
+	// Worker 1 acquires lock with token-1
+	claimed, err := tm.TryLockWithToken(ctx, timer.CategoryWaking, "c1", "token-1", time.Minute)
+	if err != nil || !claimed {
+		t.Fatalf("TryLockWithToken: %v", err)
+	}
+
+	// Worker 2 attempts release with wrong token-2 -> should fail and NOT delete
+	released, err := tm.ReleaseLockWithToken(ctx, timer.CategoryWaking, "c1", "token-2")
+	if err != nil {
+		t.Fatalf("ReleaseLockWithToken: %v", err)
+	}
+	if released {
+		t.Fatalf("expected released=false for mismatched token")
+	}
+
+	// Lock must still exist
+	locked, err := tm.IsLocked(ctx, timer.CategoryWaking, "c1")
+	if err != nil || !locked {
+		t.Fatalf("expected lock still held, got locked=%v", locked)
+	}
+
+	// Release with correct token-1 succeeds
+	released, err = tm.ReleaseLockWithToken(ctx, timer.CategoryWaking, "c1", "token-1")
+	if err != nil {
+		t.Fatalf("ReleaseLockWithToken: %v", err)
+	}
+	if !released {
+		t.Fatalf("expected released=true for matching token")
+	}
+
+	// Lock should now be deleted
+	locked, err = tm.IsLocked(ctx, timer.CategoryWaking, "c1")
+	if err != nil || locked {
+		t.Fatalf("expected lock deleted, got locked=%v", locked)
+	}
+}

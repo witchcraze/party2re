@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -767,6 +768,236 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		}
 		if wakingLocked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID); err != nil || wakingLocked {
 			t.Fatalf("expected Valkey CategoryWaking released, got %v err=%v", wakingLocked, err)
+		}
+	})
+
+	t.Run("wake_keep_alive_renews_lease_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeRealKeepAlive")
+		char.Stats.HP, char.Stats.MP, char.Tired = 1, 0, 80
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+			home.WithWakeClaimTTL(80*time.Millisecond, 25*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hookEntered := make(chan struct{})
+		releaseHook := make(chan struct{})
+		var hookCalls int32
+
+		svc.SetCostumeResetter(wakeCostumeHook(func(_ context.Context, _ string) error {
+			atomic.AddInt32(&hookCalls, 1)
+			close(hookEntered)
+			<-releaseHook
+			return nil
+		}))
+
+		wakeDone := make(chan error, 1)
+		go func() {
+			_, err := svc.Wake(ctx, char.ID)
+			wakeDone <- err
+		}()
+
+		select {
+		case <-hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		// Hold hook for 200ms (> 2x TTL of 80ms)
+		time.Sleep(200 * time.Millisecond)
+
+		// Key must still be locked in real Valkey via background renewal Lua script
+		locked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID)
+		if err != nil || !locked {
+			t.Fatalf("expected CategoryWaking lock renewed in Valkey, got %v err=%v", locked, err)
+		}
+
+		// Concurrent Wake receives ErrWakeInProgress
+		if _, err := svc.Wake(ctx, char.ID); !errors.Is(err, home.ErrWakeInProgress) {
+			t.Fatalf("concurrent Wake err = %v, want ErrWakeInProgress", err)
+		}
+
+		close(releaseHook)
+		select {
+		case err := <-wakeDone:
+			if err != nil {
+				t.Fatalf("first Wake failed: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("first Wake timed out")
+		}
+
+		// Verify clean completion in SQL and Valkey
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if persisted.PendingWake {
+			t.Fatalf("expected PendingWake=false in SQL")
+		}
+		if persisted.Stats.HP != persisted.Stats.MaxHP || persisted.Stats.MP != persisted.Stats.MaxMP || persisted.Tired != 0 {
+			t.Fatalf("expected full vitality recovered, got %+v tired=%d", persisted.Stats, persisted.Tired)
+		}
+		if locked, _ := timers.IsLocked(ctx, timer.CategoryWaking, char.ID); locked {
+			t.Fatalf("expected CategoryWaking released in Valkey")
+		}
+		if atomic.LoadInt32(&hookCalls) != 1 {
+			t.Fatalf("expected hook called once, got %d", hookCalls)
+		}
+	})
+
+	t.Run("wake_ownership_loss_aborts_and_preserves_successor_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeRealLoss")
+		char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 50
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+			home.WithWakeClaimTTL(60*time.Millisecond, 20*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hookEntered := make(chan struct{})
+		releaseHook := make(chan struct{})
+		const successorToken = "successor-token-real-valkey"
+
+		svc.SetCostumeResetter(wakeCostumeHook(func(hookCtx context.Context, id string) error {
+			close(hookEntered)
+			<-releaseHook
+
+			// Successor overwrites claim in real Valkey with new token
+			_ = timers.ReleaseLock(hookCtx, timer.CategoryWaking, id)
+			claimed, err := timers.TryLockWithToken(hookCtx, timer.CategoryWaking, id, successorToken, time.Hour)
+			if err != nil || !claimed {
+				t.Fatalf("successor claim setup failed: %v", err)
+			}
+			_ = timers.SetLock(hookCtx, timer.CategoryDungeonOnce, id, time.Hour)
+			_, _ = timers.ConsumeDailyQuota(hookCtx, "dungeon_once", id, time.Now())
+			return nil
+		}))
+
+		wakeDone := make(chan error, 1)
+		go func() {
+			_, err := svc.Wake(ctx, char.ID)
+			wakeDone <- err
+		}()
+
+		select {
+		case <-hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		close(releaseHook)
+
+		select {
+		case err := <-wakeDone:
+			if !errors.Is(err, home.ErrWakeInProgress) {
+				t.Fatalf("Wake err = %v, want ErrWakeInProgress on ownership loss", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Wake timed out")
+		}
+
+		// Verify successor state in real Valkey was preserved
+		wakingLocked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID)
+		if err != nil || !wakingLocked {
+			t.Fatalf("successor waking lock must remain, got %v err=%v", wakingLocked, err)
+		}
+		renewed, err := timers.RenewLock(ctx, timer.CategoryWaking, char.ID, successorToken, time.Hour)
+		if err != nil || !renewed {
+			t.Fatalf("successor token must still hold the lock, got renewed=%v err=%v", renewed, err)
+		}
+
+		dungeonLocked, _ := timers.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID)
+		if !dungeonLocked {
+			t.Fatalf("successor dungeon_once lock must remain in Valkey")
+		}
+
+		hasQuota, _ := timers.HasUsedDailyQuota(ctx, "dungeon_once", char.ID)
+		if !hasQuota {
+			t.Fatalf("successor daily quota must remain in Valkey")
+		}
+
+		// Verify SQL PendingWake is preserved in MariaDB
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !persisted.PendingWake {
+			t.Fatalf("expected SQL PendingWake=true preserved in MariaDB")
+		}
+	})
+
+	t.Run("concurrent_wake_only_executes_hooks_once", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeConcurrentHooks")
+		char.Stats.HP, char.Stats.MP, char.Tired = 5, 2, 70
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var hookCalls int32
+		svc.SetCostumeResetter(wakeCostumeHook(func(_ context.Context, _ string) error {
+			atomic.AddInt32(&hookCalls, 1)
+			time.Sleep(30 * time.Millisecond)
+			return nil
+		}))
+
+		cfg := testutil.ConcurrencyStressConfig{
+			Workers:      8,
+			OpsPerWorker: 5,
+		}
+		res := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
+			_, err := svc.Wake(ctx, char.ID)
+			if err == nil || errors.Is(err, home.ErrWakeInProgress) {
+				return nil
+			}
+			return err
+		})
+		if res.Failures != 0 || res.Deadlocks != 0 {
+			t.Fatalf("stress: %+v", res)
+		}
+
+		if calls := atomic.LoadInt32(&hookCalls); calls != 1 {
+			t.Fatalf("expected costume hook called exactly once, got %d", calls)
 		}
 	})
 }

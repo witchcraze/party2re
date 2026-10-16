@@ -19,9 +19,12 @@ type CharacterUpdater interface {
 type TimerService interface {
 	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
 	TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error)
+	TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error)
+	RenewLock(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error)
 	IsLocked(ctx context.Context, category, targetID string) (bool, error)
 	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
 	ReleaseLock(ctx context.Context, category, targetID string) error
+	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
 	ResetDailyQuota(ctx context.Context, action, targetID string) error
 }
 
@@ -161,6 +164,14 @@ func WithOnlineCounter(c OnlineCounter) ServiceOption {
 func WithBaseSleepDuration(d time.Duration) ServiceOption {
 	return func(s *Service) {
 		s.baseSleepDuration = d
+	}
+}
+
+// WithWakeClaimTTL configures the safety TTL and renewal interval for Wake exclusive claims.
+func WithWakeClaimTTL(ttl, renewInterval time.Duration) ServiceOption {
+	return func(s *Service) {
+		s.wakeClaimTTL = ttl
+		s.wakeClaimRenewInterval = renewInterval
 	}
 }
 
