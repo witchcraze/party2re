@@ -731,6 +731,30 @@ func TestWake_ClaimLostImmediatelyBeforeDungeonReset_AbortsWithoutAlteringState(
 // Issue #1228: If a recovery hook pauses/blocks, loses claim ownership to a successor Wake,
 // and the successor completes and player resumes play (modifying state), the resumed old hook
 // must detect ownership loss and never corrupt the successor's refreshed state.
+type mockClaimCostumeResetter struct {
+	hookEntered chan struct{}
+	releaseHook chan struct{}
+	tm          timer.Service
+}
+
+func (m *mockClaimCostumeResetter) ResetCostume(_ context.Context, id string) error {
+	_, err := m.ResetCostumeWithClaim(context.Background(), id, timer.CategoryWaking, "")
+	return err
+}
+
+func (m *mockClaimCostumeResetter) ResetCostumeWithClaim(_ context.Context, id, claimCategory, claimToken string) (bool, error) {
+	close(m.hookEntered)
+	<-m.releaseHook
+
+	// Resumed old hook attempts to execute costume reset via timer boundary with its token,
+	// intentionally using context.Background() to verify that atomic claim verification
+	// (not context cancellation) prevents mutating successor state.
+	return m.tm.ResetDailyQuotaWithClaim(context.Background(), "costume", id, claimCategory, claimToken)
+}
+
+// Issue #1228: If a recovery hook pauses/blocks, loses claim ownership to a successor Wake,
+// and the successor completes and player resumes play (modifying state), the resumed old hook
+// must detect ownership loss and never corrupt the successor's refreshed state.
 func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T) {
 	ctx := context.Background()
 	tm := timer.NewService(nil)
@@ -750,26 +774,12 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 		t.Fatalf("NewService: %v", err)
 	}
 
-	hookEntered := make(chan struct{})
-	releaseHook := make(chan struct{})
-
-	// Simulate external state modified after successor completion (e.g. rented costume, eaten meal)
-	var activeCostume atomic.Pointer[string]
-	costumeVal := "valkyrie-armor"
-
-	// Mock costume resetter that checks context cancellation before clearing
-	costumeResetter := costumeResetFunc(func(hookCtx context.Context, id string) error {
-		close(hookEntered)
-		<-releaseHook
-
-		// When resumed, if context is canceled or claim is lost, do not mutate state
-		if err := hookCtx.Err(); err != nil {
-			return err
-		}
-		activeCostume.Store(nil)
-		return nil
-	})
-	svc.SetCostumeResetter(costumeResetter)
+	claimResetter := &mockClaimCostumeResetter{
+		hookEntered: make(chan struct{}),
+		releaseHook: make(chan struct{}),
+		tm:          tm,
+	}
+	svc.SetCostumeResetter(claimResetter)
 
 	wakeDone := make(chan error, 1)
 	go func() {
@@ -778,7 +788,7 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 	}()
 
 	select {
-	case <-hookEntered:
+	case <-claimResetter.hookEntered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("hook never entered")
 	}
@@ -799,11 +809,14 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 	c.Tired = 0
 	repo.chars["c1"] = c
 
-	// 3. Player resumes play and rents a costume
-	activeCostume.Store(&costumeVal)
+	// 3. Player resumes play and rents a costume in timer quota
+	used, err := tm.ConsumeDailyQuota(ctx, "costume", "c1", time.Now())
+	if err != nil || !used {
+		t.Fatalf("player failed to rent costume: %v", err)
+	}
 
 	// Now resume the old hook
-	close(releaseHook)
+	close(claimResetter.releaseHook)
 
 	select {
 	case err := <-wakeDone:
@@ -815,8 +828,12 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 	}
 
 	// Verification: The player's post-wake state MUST NOT be corrupted by the old hook
-	if current := activeCostume.Load(); current == nil || *current != costumeVal {
-		t.Fatalf("player's rented costume was corrupted by old hook: got %v, want %s", current, costumeVal)
+	hasCostume, err := tm.HasUsedDailyQuota(ctx, "costume", "c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasCostume {
+		t.Fatal("player's rented costume quota was erroneously deleted by old hook")
 	}
 
 	// Character must remain in awake state

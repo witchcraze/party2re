@@ -60,6 +60,11 @@ type CostumeResetter interface {
 	ResetCostume(ctx context.Context, characterID string) error
 }
 
+// CostumeClaimResetter resets rented costume state with atomic claim verification.
+type CostumeClaimResetter interface {
+	ResetCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error)
+}
+
 // JobStateRestorer restores character_jobs.current_job_id upon rest when reverting JobMemory.
 type JobStateRestorer interface {
 	RestoreActiveJob(ctx context.Context, characterID, jobID string) error

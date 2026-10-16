@@ -51,6 +51,28 @@ type wakeCostumeHook func(context.Context, string) error
 
 func (f wakeCostumeHook) ResetCostume(ctx context.Context, id string) error { return f(ctx, id) }
 
+type wakeClaimCostumeHook struct {
+	hookEntered  chan struct{}
+	releaseHook  chan struct{}
+	skippedTimer *failingRenewTimer
+}
+
+func (h *wakeClaimCostumeHook) ResetCostume(_ context.Context, id string) error {
+	_, err := h.ResetCostumeWithClaim(context.Background(), id, timer.CategoryWaking, "")
+	return err
+}
+
+func (h *wakeClaimCostumeHook) ResetCostumeWithClaim(_ context.Context, id, claimCategory, claimToken string) (bool, error) {
+	h.skippedTimer.dropRenew.Store(true)
+	close(h.hookEntered)
+	<-h.releaseHook
+
+	// Resumed old hook attempts to execute costume reset via timer boundary with its token,
+	// intentionally using context.Background() to verify that atomic claim verification
+	// (not context cancellation) prevents mutating successor state in real Valkey.
+	return h.skippedTimer.ResetDailyQuotaWithClaim(context.Background(), "costume", id, claimCategory, claimToken)
+}
+
 type failingTavernStatusReader struct {
 	*database.TavernRepository
 	getErr error
@@ -1085,19 +1107,12 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		hookEntered := make(chan struct{})
-		releaseHook := make(chan struct{})
-		costumeKey := "party2:daily:costume:" + char.ID
-
-		svc1.SetCostumeResetter(wakeCostumeHook(func(hookCtx context.Context, id string) error {
-			skippedTimer.dropRenew.Store(true)
-			close(hookEntered)
-			<-releaseHook
-
-			// Resumed old hook attempts to execute the real costume reset under hookCtx
-			cmd := client.B().Del().Key(costumeKey).Build()
-			return client.Do(hookCtx, cmd).Error()
-		}))
+		claimHook := &wakeClaimCostumeHook{
+			hookEntered:  make(chan struct{}),
+			releaseHook:  make(chan struct{}),
+			skippedTimer: skippedTimer,
+		}
+		svc1.SetCostumeResetter(claimHook)
 
 		wakeDone := make(chan error, 1)
 		go func() {
@@ -1106,7 +1121,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		}()
 
 		select {
-		case <-hookEntered:
+		case <-claimHook.hookEntered:
 		case <-time.After(5 * time.Second):
 			t.Fatal("hook never entered")
 		}
@@ -1121,13 +1136,14 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		}
 
 		// 2. Player resumes play and rents a costume in real Valkey
+		costumeKey := "party2:daily:costume:" + char.ID
 		setCmd := client.B().Set().Key(costumeKey).Value("cat-ears").Ex(time.Hour).Build()
 		if err := client.Do(ctx, setCmd).Error(); err != nil {
 			t.Fatalf("failed to rent costume: %v", err)
 		}
 
 		// 3. Resume the old hook
-		close(releaseHook)
+		close(claimHook.releaseHook)
 
 		select {
 		case err := <-wakeDone:

@@ -375,6 +375,21 @@ func (s *Service) ResetCostume(ctx context.Context, characterID string) error {
 	return s.costumeRepo.ClearActiveCostume(ctx, characterID)
 }
 
+// ResetCostumeWithClaim implements CostumeClaimResetter, resetting costume on rest with atomic claim verification.
+func (s *Service) ResetCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error) {
+	if s.timer != nil {
+		if quotaTimer, ok := s.timer.(interface {
+			ResetDailyQuotaWithClaim(ctx context.Context, action, targetID, claimCategory, claimToken string) (bool, error)
+		}); ok {
+			return quotaTimer.ResetDailyQuotaWithClaim(ctx, "costume", characterID, claimCategory, claimToken)
+		}
+	}
+	if s.costumeRepo != nil {
+		return true, s.costumeRepo.ClearActiveCostume(ctx, characterID)
+	}
+	return true, nil
+}
+
 // BuyHomeWallpaper purchases a wallpaper for the character's private home.
 func (s *Service) BuyHomeWallpaper(ctx context.Context, characterID string, wallpaper string) (*HomeWallpaperResult, error) {
 	cleanWallpaper := strings.TrimSpace(wallpaper)

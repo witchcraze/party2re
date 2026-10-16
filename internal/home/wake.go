@@ -283,8 +283,45 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		}
 	}
 	if s.costume != nil {
+		if claimResetter, ok := s.costume.(CostumeClaimResetter); ok {
+			if err := s.executeRecoveryHook(ctx, claimCtx, keeper, func() error {
+				reset, err := claimResetter.ResetCostumeWithClaim(claimCtx, characterID, timer.CategoryWaking, claimToken)
+				if err != nil {
+					return err
+				}
+				if !reset {
+					return ErrWakeInProgress
+				}
+				return nil
+			}); err != nil {
+				return WakeResult{}, err
+			}
+		} else {
+			if err := s.executeRecoveryHook(ctx, claimCtx, keeper, func() error {
+				if s.timer != nil {
+					reset, err := s.timer.ResetDailyQuotaWithClaim(claimCtx, "costume", characterID, timer.CategoryWaking, claimToken)
+					if err != nil {
+						return err
+					}
+					if !reset {
+						return ErrWakeInProgress
+					}
+				}
+				return s.costume.ResetCostume(claimCtx, characterID)
+			}); err != nil {
+				return WakeResult{}, err
+			}
+		}
+	} else if s.timer != nil {
 		if err := s.executeRecoveryHook(ctx, claimCtx, keeper, func() error {
-			return s.costume.ResetCostume(claimCtx, characterID)
+			reset, err := s.timer.ResetDailyQuotaWithClaim(claimCtx, "costume", characterID, timer.CategoryWaking, claimToken)
+			if err != nil {
+				return err
+			}
+			if !reset {
+				return ErrWakeInProgress
+			}
+			return nil
 		}); err != nil {
 			return WakeResult{}, err
 		}
