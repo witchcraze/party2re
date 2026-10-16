@@ -757,6 +757,9 @@ Category cures remain conditional: a seal can block every matching helper in the
 sequence. Admission retains both possible tension consumption and retention, so an
 initial tension8 cap cannot hide a lower stage that later needs requester context.
 An accepted stat-cap outcome still retains tension (`_skill.cgi:9318–9338`).
+Possible reductions reopen later stat/equipment-tail admission, while the unchanged
+input cap remains a possible no-effect branch when proving tension consumption.
+An immune or redirected reduction must not turn that possible change into a guarantee.
 An arbitrary preceding callback, or a reachable201 damage tail followed by another
 slot, needs that owner's transition projection and remains rejected here.
 

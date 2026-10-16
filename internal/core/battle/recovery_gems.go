@@ -161,7 +161,9 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 				t := projected.actor(candidate.TargetID)
 				power := projected.finalEffectPower(&context, projected.initialEffectPower(&context, candidate, ModifierStatUp))
 				mayConsume = mayConsume || projected.statUpTailPossible(&context, candidate, stat, admission.powerMayChange)
-				if !projected.statUpTailPossible(&context, candidate, stat, false) || int(float64(t.baseStat(stat))*power*min(1, projected.actor(c.ActorID).Tension)) == 0 {
+				// A possible decrease does not eliminate the original capped no-effect branch.
+				wasCapped := float64(*s.actor(t.ID).currentStat(stat)) >= t.statUpCap(projected.actor(c.ActorID), stat)
+				if wasCapped || !projected.statUpTailPossible(&context, candidate, stat, false) || int(float64(t.baseStat(stat))*power*min(1, projected.actor(c.ActorID).Tension)) == 0 {
 					consumes = false
 				}
 				self205 = self205 || (stat != StatAttack && t.ID == c.ActorID && hasItem(t.ItemDefinitionIDs, "item-205"))
