@@ -74,6 +74,9 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 	if s == nil || c == nil || len(ids) == 0 {
 		return ErrInvalidRequest
 	}
+	if len(ids) > 3 {
+		return ErrUnsupportedEffect
+	}
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
 	}
@@ -83,6 +86,12 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 	projected := *s
 	projected.Actors = slices.Clone(s.Actors)
 	context := *c
+	// A category cure can fail in every slot; retain that branch for consumption.
+	originalActor := s.actor(c.ActorID)
+	minimumTension := make(map[string]float64, len(s.Actors))
+	for _, a := range s.Actors {
+		minimumTension[a.ID] = a.Tension
+	}
 	admission := statUpAdmission{mayReplace: make(map[string]float64)}
 	for i, id := range ids {
 		e := TargetEffect{TargetID: targetID, Category: CategoryMagic, Payload: CallbackPayload{Number: 1}}
@@ -103,7 +112,7 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 					e.Payload.Number *= 1.5
 				}
 			}
-			consumes := !projected.actor(c.ActorID).categorySealed(e.Category)
+			consumes, mayConsume := !originalActor.categorySealed(e.Category), false
 			for _, target := range targets {
 				e.TargetID = target
 				if err := projected.validatePartyTarget(context.TargetContext, e, rng); err != nil {
@@ -121,11 +130,17 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 					}
 					if projected.actor(candidate.TargetID).HP <= 0 || candidate.Payload.Number <= 0 || value == 0 {
 						consumes = false
+					} else {
+						mayConsume = true
 					}
 				}
 			}
+			if mayConsume {
+				minimumTension[c.ActorID] = min(minimumTension[c.ActorID], 1)
+			}
 			if consumes {
 				projected.actor(c.ActorID).Tension = 1
+				minimumTension[c.ActorID] = 1
 				admission.powerMayChange = false
 			}
 		case 28, 29, 30, 31, 32, 33:
@@ -140,10 +155,12 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 			if err := projected.validateStatUp(&context, e, stat, rng, admission); err != nil {
 				return err
 			}
-			consumes, self205 := !projected.actor(c.ActorID).categorySealed(e.Category), false
+			consumes, self205 := !originalActor.categorySealed(e.Category), false
+			mayConsume := false
 			for _, candidate := range projected.partyTargetCandidates(context.TargetContext, e, admission.mayReplace) {
 				t := projected.actor(candidate.TargetID)
 				power := projected.finalEffectPower(&context, projected.initialEffectPower(&context, candidate, ModifierStatUp))
+				mayConsume = mayConsume || projected.statUpTailPossible(&context, candidate, stat, admission.powerMayChange)
 				if !projected.statUpTailPossible(&context, candidate, stat, false) || int(float64(t.baseStat(stat))*power*min(1, projected.actor(c.ActorID).Tension)) == 0 {
 					consumes = false
 				}
@@ -153,8 +170,12 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 				}
 			}
 			projected.recordStatUp205(&context, e, stat, &admission)
+			if mayConsume {
+				minimumTension[c.ActorID] = min(minimumTension[c.ActorID], 1)
+			}
 			if consumes {
 				projected.actor(c.ActorID).Tension = 1
+				minimumTension[c.ActorID] = 1
 				if self205 {
 					projected.actor(c.ActorID).Tension = 3 // Upper bound after205 and optional145 recursion.
 				}
@@ -165,6 +186,7 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 		case 69:
 			for i := range projected.Actors {
 				projected.Actors[i].Tension = 1
+				minimumTension[projected.Actors[i].ID] = 1
 			}
 			admission.powerMayChange = false
 			continue
@@ -180,11 +202,25 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 			}
 			for _, target := range targets {
 				t := projected.actor(target.TargetID)
+				lower := *t
+				lower.Tension = minimumTension[t.ID]
+				if _, err := projected.gemTensionCeiling(&context, &lower, calls); err != nil {
+					return err
+				}
 				ceiling, err := projected.gemTensionCeiling(&context, t, calls)
 				if err != nil {
 					return err
 				}
 				t.Tension = ceiling
+				// Base stages always run;145 recursion and the high-stage roll may not.
+				for range calls {
+					if err := lower.AdvanceTension(0, nil); err != nil {
+						return err
+					}
+				}
+				if len(targets) == 1 {
+					minimumTension[t.ID] = lower.Tension
+				}
 				if t.Status != StatusSabaku {
 					//161 can replace covering/reflection/null with a defense.
 					if hasItem(t.ItemDefinitionIDs, "item-161") && t.Temporary != TemporaryDefense && t.Temporary != TemporaryStrongDefense && t.Temporary != TemporaryOneHitDefense {
@@ -207,14 +243,16 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 			if err != nil {
 				return err
 			}
-			if id == 68 && len(c.EnemyIDs) > 0 && !projected.actor(c.ActorID).categorySealed(converted.Category) {
+			if id == 68 && len(c.EnemyIDs) > 0 {
 				candidates := projected.damageCandidatesAfter(&DamageContext{EffectContext: context}, converted, admission.mayReplace)
 				selfOnly := len(candidates) > 0
 				for _, candidate := range candidates {
 					selfOnly = selfOnly && candidate.TargetID == c.ActorID
+					minimumTension[candidate.TargetID] = min(minimumTension[candidate.TargetID], 1)
 				}
-				if selfOnly {
+				if selfOnly && !originalActor.categorySealed(converted.Category) {
 					projected.actor(c.ActorID).Tension = 1
+					minimumTension[c.ActorID] = 1
 					admission.powerMayChange = false
 				}
 			}
@@ -236,6 +274,9 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 						power := projected.finalEffectPower(&context, projected.initialEffectPower(&context, candidate, ModifierStatDown))
 						eligible := power > 0 && t.HP > 0 && t.BaseStats.Defense <= 999 && !hasItem(t.ItemDefinitionIDs, "item-159") && (stat != StatAttack || t.HP <= 999) && float64(*t.currentStat(stat)) > float64(t.baseStat(stat))*.2 && (stat != StatHit || (*t.currentStat(stat) > 50 && !hasItem(t.ItemDefinitionIDs, "item-197")))
 						invocationConsumes = invocationConsumes && eligible
+						if eligible {
+							minimumTension[c.ActorID] = min(minimumTension[c.ActorID], 1)
+						}
 						// A reduction can reopen a later stat-up cap guard.
 						if eligible && (admission.powerMayChange || int(float64(*t.currentStat(stat))*power*projected.actor(c.ActorID).Tension) > 0) {
 							*t.currentStat(stat) = min(*t.currentStat(stat), int(float64(t.baseStat(stat))*.2))
@@ -243,8 +284,9 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 					}
 					consumes = consumes || invocationConsumes
 				}
-				if consumes && !projected.actor(c.ActorID).categorySealed(e.Category) {
+				if consumes && !originalActor.categorySealed(e.Category) {
 					projected.actor(c.ActorID).Tension = 1
+					minimumTension[c.ActorID] = 1
 					admission.powerMayChange = false
 				}
 			}

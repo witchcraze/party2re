@@ -743,11 +743,20 @@ source IDs, target/category roles and individual CMP contributions. Explicit
 `BattleDefinitions.RegisterRecoveryStatGems` binds these complete bodies to the
 existing invocation catalog; the batch scalar registry remains separate.
 `RecoveryStatAction` and `ApplyRecoveryStatGems` share whole-slot admission before
-outer costs or committed draws. Repeated slots keep the original submitted target;
+outer costs or committed draws. Both boundaries reject more than three positions,
+matching `_skill.cgi:302–307` and `_npc_action.cgi:220–222`; empty positions do not
+permit a fourth position. Player synthesis separately enforces weighted gem capacity
+(`custom_skill.cgi:144`, `internal/customskill/synthesis.go`); NPC template loading
+does not apply that player synthesis gate (`_npc_action.cgi:623–627`).
+Repeated slots keep the original submitted target;
 custom commands normalize an absent target to the actor before the helpers,
 while naked callbacks retain helper fallback. A complete custom body can be bound
 with `RecoveryStatInvocation`; its enclosing admission projects reachable205
 temporary changes, tension stages, category cures/confusion and stat-cap reopening.
+Category cures remain conditional: a seal can block every matching helper in the
+sequence. Admission retains both possible tension consumption and retention, so an
+initial tension8 cap cannot hide a lower stage that later needs requester context.
+An accepted stat-cap outcome still retains tension (`_skill.cgi:9318–9338`).
 An arbitrary preceding callback, or a reachable201 damage tail followed by another
 slot, needs that owner's transition projection and remains rejected here.
 

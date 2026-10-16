@@ -214,3 +214,36 @@ func TestRecoveryGemArgumentRoles(t *testing.T) {
 		}
 	}
 }
+
+func TestRecoveryGemSlotLimitSharedByDiscoveryAndInvocation(t *testing.T) {
+	for _, ids := range [][]string{
+		{"gem_buff_atk_1", "gem_divine_tension_sky", "gem_buff_atk_1", "gem_divine_tension_sky"},
+		{"gem_heal_1", "gem_buff_atk_1", "gem_divine_tension_sky", "gem_buff_atk_1"},
+		{"gem_buff_atk_1", "", "gem_divine_tension_sky", "gem_buff_atk_1"},
+	} {
+		s, c := recoveryGemFixture(false)
+		c.RequesterLevel = nil
+		var d BattleDefinitions
+		d.RegisterRecoveryStatGems(&c)
+		d.Invocations.Entries["oversized"] = d.RecoveryStatInvocation(&c, ids)
+		frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self"}}
+		before, err := json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contextBefore := c
+		if _, err := d.RecoveryStatAction(&s, &c, ids, "self", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+			t.Fatal(ids, err)
+		}
+		if _, err := d.InvocationAction(&s, &frame, []string{"oversized"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+			t.Fatal(ids, err)
+		}
+		if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "oversized"}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+			t.Fatal(ids, err)
+		}
+		after, err := json.Marshal(s)
+		if err != nil || string(before) != string(after) || !reflect.DeepEqual(c, contextBefore) || !reflect.DeepEqual(frame.Arguments, []string{"self"}) {
+			t.Fatal("oversized invocation mutated input/state/counters", ids, err, s, c, frame)
+		}
+	}
+}

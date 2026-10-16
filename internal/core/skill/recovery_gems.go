@@ -25,6 +25,9 @@ func (d *BattleDefinitions) RegisterRecoveryStatGems(c *corebattle.EffectContext
 // RecoveryStatAction shares whole-slot admission with the executor. Returned
 // CMP contributions are charged only by the consumer after this gate succeeds.
 func (d BattleDefinitions) RecoveryStatAction(s *corebattle.LifetimeState, c *corebattle.EffectContext, ids []string, targetID string, rng random.Generator) ([]corebattle.RecoveryStatGemEntry, error) {
+	if len(ids) > 3 {
+		return nil, corebattle.ErrUnsupportedEffect
+	}
 	var entries []corebattle.RecoveryStatGemEntry
 	var sources []int
 	for _, id := range ids {
