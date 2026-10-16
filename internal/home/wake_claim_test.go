@@ -8,7 +8,9 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/job"
 )
 
 func newWakeTestService(t *testing.T, tm TimerService, chars map[string]corecharacter.Character) (*Service, *mockCharRepo) {
@@ -288,3 +290,155 @@ func TestWake_AbortsFinalizationIfNewSleepTimerActive(t *testing.T) {
 type costumeResetFunc func(context.Context, string) error
 
 func (f costumeResetFunc) ResetCostume(ctx context.Context, id string) error { return f(ctx, id) }
+
+func TestSleep_TimerSetFailurePreservesTemporaryJobMemoryAndRevertsPendingWake(t *testing.T) {
+	ctx := context.Background()
+	errTimerWrite := errors.New("valkey timer write failed")
+
+	for _, useRunner := range []bool{false, true} {
+		for _, failCategory := range []string{timer.CategorySleep, timer.CategoryAsleep} {
+			mode := "char_updater"
+			if useRunner {
+				mode = "tx_runner"
+			}
+			t.Run(mode+"/"+failCategory, func(t *testing.T) {
+				initialChar := corecharacter.Character{
+					ID:       "c1",
+					Name:     "Hero",
+					JobID:    "warrior",
+					SP:       10,
+					OldJobID: "novice",
+					OldSP:    5,
+					JobMemory: &corecharacter.JobMemory{
+						Kind:     corecharacter.JobMemoryKindTemporary,
+						JobID:    "mage",
+						SP:       20,
+						OldJobID: "apprentice",
+						OldSP:    15,
+					},
+				}
+				chars := map[string]corecharacter.Character{"c1": initialChar}
+				mt := &mockTimer{
+					setLockErrs: map[string]error{failCategory: errTimerWrite},
+				}
+				initialJobState, _ := corejob.NewCharacterJob("c1", "warrior")
+				jobRepo := &mockJobRepo{state: initialJobState}
+				jobSvc, err := job.NewService(jobRepo)
+				if err != nil {
+					t.Fatalf("job.NewService: %v", err)
+				}
+
+				var svc *Service
+				var charRepo *mockCharRepo
+				var runner *mockTransactionRunner
+				if useRunner {
+					runner = &mockTransactionRunner{chars: chars}
+					svc, err = NewService(newMockHomeRepo(chars), &mockCharReader{chars: chars}, WithTimer(mt), WithTransactionRunner(runner), WithJobStateRestorer(jobSvc))
+				} else {
+					charRepo = &mockCharRepo{chars: chars}
+					svc, err = NewService(newMockHomeRepo(), charRepo, WithTimer(mt), WithCharacterUpdater(charRepo), WithJobStateRestorer(jobSvc))
+				}
+				if err != nil {
+					t.Fatalf("NewService: %v", err)
+				}
+
+				_, err = svc.Sleep(ctx, "c1", "c1")
+				if !errors.Is(err, errTimerWrite) {
+					t.Fatalf("Sleep err = %v, want %v", err, errTimerWrite)
+				}
+
+				var got corecharacter.Character
+				if useRunner {
+					got = runner.chars["c1"]
+				} else {
+					got = charRepo.chars["c1"]
+				}
+				if got.PendingWake {
+					t.Fatalf("expected PendingWake=false after timer write failure")
+				}
+				if got.JobID != "warrior" || got.SP != 10 {
+					t.Fatalf("expected JobID=warrior SP=10 preserved, got JobID=%s SP=%d", got.JobID, got.SP)
+				}
+				if got.JobMemory == nil || got.JobMemory.JobID != "mage" || !got.JobMemory.IsTemporary() {
+					t.Fatalf("expected temporary JobMemory (mage) preserved, got %+v", got.JobMemory)
+				}
+				if jobRepo.state.CurrentJobID != "warrior" {
+					t.Fatalf("expected character_jobs.current_job_id=warrior preserved, got %s", jobRepo.state.CurrentJobID)
+				}
+				if locked, _ := mt.IsLocked(ctx, timer.CategorySleep, "c1"); locked {
+					t.Fatalf("expected CategorySleep lock released")
+				}
+				if locked, _ := mt.IsLocked(ctx, timer.CategoryAsleep, "c1"); locked {
+					t.Fatalf("expected CategoryAsleep lock released")
+				}
+				if locked, _ := mt.IsLocked(ctx, timer.CategoryWaking, "c1"); locked {
+					t.Fatalf("expected CategoryWaking lock released")
+				}
+			})
+		}
+	}
+}
+
+func TestSleep_RollbackSucceedsOnCanceledContextAndSurfacesRollbackError(t *testing.T) {
+	t.Run("canceled_context_still_rolls_back_pending_wake_and_locks", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		mt := &mockTimer{
+			onSetLock: func(_ context.Context, category string) error {
+				if category == timer.CategoryAsleep {
+					cancel()
+					return context.Canceled
+				}
+				return nil
+			},
+		}
+		svc, repo := newWakeTestService(t, mt, map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero"},
+		})
+
+		_, err := svc.Sleep(ctx, "c1", "c1")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Sleep err = %v, want context.Canceled", err)
+		}
+		if repo.chars["c1"].PendingWake {
+			t.Fatalf("expected PendingWake=false rolled back even after caller context cancellation")
+		}
+		checkCtx := context.Background()
+		if locked, _ := mt.IsLocked(checkCtx, timer.CategorySleep, "c1"); locked {
+			t.Fatalf("expected CategorySleep lock released even after caller context cancellation")
+		}
+		if locked, _ := mt.IsLocked(checkCtx, timer.CategoryWaking, "c1"); locked {
+			t.Fatalf("expected CategoryWaking lock released even after caller context cancellation")
+		}
+	})
+
+	t.Run("rollback_error_is_joined_and_surfaced", func(t *testing.T) {
+		ctx := context.Background()
+		errTimerWrite := errors.New("valkey sleep lock write failed")
+		errRollbackDB := errors.New("sql pending_wake rollback failed")
+
+		var repo *mockCharRepo
+		mt := &mockTimer{
+			onSetLock: func(_ context.Context, category string) error {
+				if category == timer.CategorySleep {
+					repo.updateErr = errRollbackDB
+					return errTimerWrite
+				}
+				return nil
+			},
+		}
+		var svc *Service
+		svc, repo = newWakeTestService(t, mt, map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero"},
+		})
+
+		_, err := svc.Sleep(ctx, "c1", "c1")
+		if !errors.Is(err, errTimerWrite) {
+			t.Fatalf("Sleep err = %v, want errors.Is(errTimerWrite)", err)
+		}
+		if !errors.Is(err, errRollbackDB) {
+			t.Fatalf("Sleep err = %v, want joined errors.Is(errRollbackDB)", err)
+		}
+	})
+}

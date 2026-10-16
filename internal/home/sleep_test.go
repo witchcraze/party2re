@@ -27,10 +27,16 @@ func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.C
 }
 
 func (m *mockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	if err := ctx.Err(); err != nil {
+		return corecharacter.Character{}, err
+	}
 	return m.FindByID(ctx, id)
 }
 
 func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if m.updateErr != nil {
 		return m.updateErr
 	}

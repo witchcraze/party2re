@@ -692,4 +692,101 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatalf("expected CategoryAsleep unlocked after settling Wake, got %v (err=%v)", asleep, err)
 		}
 	})
+
+	t.Run("sleep_timer_failure_preserves_job_memory_and_rolls_back_on_canceled_ctx", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeCycleRollback")
+		char.JobID = "warrior"
+		char.SP = 12
+		char.OldJobID = "novice"
+		char.OldSP = 4
+		char.JobMemory = &corecharacter.JobMemory{
+			Kind:     corecharacter.JobMemoryKindTemporary,
+			JobID:    "mage",
+			SP:       25,
+			OldJobID: "apprentice",
+			OldSP:    8,
+		}
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		reqCtx, reqCancel := context.WithCancel(ctx)
+		defer reqCancel()
+
+		var jobRestoreCalls int
+		ft := &failingSleepTimer{
+			TimerService: timers,
+			onSetLock: func(_ context.Context, category string) error {
+				if category == timer.CategoryAsleep {
+					reqCancel()
+					return context.Canceled
+				}
+				return nil
+			},
+		}
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(ft),
+			home.WithJobStateRestorer(wakeJobRestorerHook(func(context.Context, string, string) error {
+				jobRestoreCalls++
+				return nil
+			})),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = svc.Sleep(reqCtx, char.ID, char.ID)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Sleep err = %v, want context.Canceled", err)
+		}
+		if jobRestoreCalls != 0 {
+			t.Fatalf("expected JobStateRestorer not called on timer failure, got %d calls", jobRestoreCalls)
+		}
+
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if persisted.PendingWake {
+			t.Fatalf("expected SQL PendingWake=false rolled back even after request context cancellation")
+		}
+		if persisted.JobID != "warrior" || persisted.SP != 12 {
+			t.Fatalf("expected SQL JobID=warrior SP=12 preserved, got JobID=%s SP=%d", persisted.JobID, persisted.SP)
+		}
+		if persisted.JobMemory == nil || persisted.JobMemory.JobID != "mage" || !persisted.JobMemory.IsTemporary() {
+			t.Fatalf("expected SQL temporary JobMemory preserved, got %+v", persisted.JobMemory)
+		}
+		if sleepLocked, err := timers.IsLocked(ctx, timer.CategorySleep, char.ID); err != nil || sleepLocked {
+			t.Fatalf("expected Valkey CategorySleep released, got %v err=%v", sleepLocked, err)
+		}
+		if wakingLocked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID); err != nil || wakingLocked {
+			t.Fatalf("expected Valkey CategoryWaking released, got %v err=%v", wakingLocked, err)
+		}
+	})
+}
+
+type failingSleepTimer struct {
+	home.TimerService
+	onSetLock func(ctx context.Context, category string) error
+}
+
+func (f *failingSleepTimer) SetLock(ctx context.Context, category, targetID string, duration time.Duration) error {
+	if f.onSetLock != nil {
+		if err := f.onSetLock(ctx, category); err != nil {
+			return err
+		}
+	}
+	return f.TimerService.SetLock(ctx, category, targetID, duration)
+}
+
+type wakeJobRestorerHook func(context.Context, string, string) error
+
+func (f wakeJobRestorerHook) RestoreActiveJob(ctx context.Context, characterID, jobID string) error {
+	return f(ctx, characterID, jobID)
 }

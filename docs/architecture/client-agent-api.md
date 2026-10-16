@@ -802,8 +802,10 @@ and accepts dead or fatigued actors. Duration scales with online player count.
 `home_character_id` and `message`. Sleep shares the `timer.CategoryWaking` exclusion boundary
 with Wake, rejects requests while Wake is in progress (`409 HOME_WAKE_IN_PROGRESS`) or while
 an active sleep timer or pending wake recovery remains (`409 HOME_ALREADY_SLEEPING`), persists
-`pending_wake = 1` in MariaDB `characters` (Issue #1118), and sets `timer.CategorySleep` and
-`timer.CategoryAsleep` in Valkey.
+`pending_wake = 1` in MariaDB `characters` (Issue #1118), sets `timer.CategorySleep` and
+`timer.CategoryAsleep` in Valkey, and then reverts any temporary Job Memory. On timer or job-memory
+failure, Sleep rolls back established locks and `pending_wake = 0` using a detached timeout context
+and joins any rollback error onto the returned failure.
 
 `home_wake` accepts no parameters (`{}` or omitted). It is an explicit exception
 to the ordinary sleep action guard:

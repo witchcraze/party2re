@@ -4,11 +4,58 @@ import (
 	"context"
 	"time"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
-// TransactionRunner defines the interface for running atomic cross-domain transactions.
+// CharacterUpdater abstracts updating full character state.
+type CharacterUpdater interface {
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
+	Update(ctx context.Context, char corecharacter.Character) error
+}
+
+// TimerService manages sleep timers and daily quotas.
+type TimerService interface {
+	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+	TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error)
+	IsLocked(ctx context.Context, category, targetID string) (bool, error)
+	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
+	ReleaseLock(ctx context.Context, category, targetID string) error
+	ResetDailyQuota(ctx context.Context, action, targetID string) error
+}
+
+// FullnessResetter resets character eating/fullness state upon rest.
+type FullnessResetter interface {
+	ResetFullness(ctx context.Context, characterID string) error
+}
+
+// BlessingCleaner clears chapel daily prayers and blessings upon rest.
+type BlessingCleaner interface {
+	ClearBlessing(ctx context.Context, characterID string) error
+}
+
+// AlchemyCompleter completes ongoing alchemy synthesis upon rest.
+type AlchemyCompleter interface {
+	CompleteOngoingSynthesis(ctx context.Context, characterID string) error
+}
+
+// CostumeResetter resets rented costume state upon rest.
+type CostumeResetter interface {
+	ResetCostume(ctx context.Context, characterID string) error
+}
+
+// JobStateRestorer restores character_jobs.current_job_id upon rest when reverting JobMemory.
+type JobStateRestorer interface {
+	RestoreActiveJob(ctx context.Context, characterID, jobID string) error
+}
+
+// OnlineCounter counts currently logged in players for sleep duration scaling.
+type OnlineCounter interface {
+	GetOnlineCount(ctx context.Context) (int, error)
+}
+
+// TransactionRunner defines the interface for running atomic transactions.
 type TransactionRunner interface {
 	ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error)
 }

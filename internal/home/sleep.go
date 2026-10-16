@@ -23,53 +23,11 @@ const (
 
 	// wakeClaimTTL bounds the per-character Wake claim if the process dies mid-Wake.
 	wakeClaimTTL = 30 * time.Second
+
+	// sleepRollbackTimeout bounds best-effort SQL/Valkey cleanup when Sleep fails
+	// even if the caller's request context was canceled or timed out.
+	sleepRollbackTimeout = 5 * time.Second
 )
-
-// CharacterUpdater abstracts updating full character state.
-type CharacterUpdater interface {
-	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
-	Update(ctx context.Context, char corecharacter.Character) error
-}
-
-// TimerService manages sleep timers and daily quotas.
-type TimerService interface {
-	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
-	TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error)
-	IsLocked(ctx context.Context, category, targetID string) (bool, error)
-	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
-	ReleaseLock(ctx context.Context, category, targetID string) error
-	ResetDailyQuota(ctx context.Context, action, targetID string) error
-}
-
-// FullnessResetter resets character eating/fullness state upon rest.
-type FullnessResetter interface {
-	ResetFullness(ctx context.Context, characterID string) error
-}
-
-// BlessingCleaner clears chapel daily prayers and blessings upon rest.
-type BlessingCleaner interface {
-	ClearBlessing(ctx context.Context, characterID string) error
-}
-
-// AlchemyCompleter completes ongoing alchemy synthesis upon rest.
-type AlchemyCompleter interface {
-	CompleteOngoingSynthesis(ctx context.Context, characterID string) error
-}
-
-// CostumeResetter resets rented costume state upon rest.
-type CostumeResetter interface {
-	ResetCostume(ctx context.Context, characterID string) error
-}
-
-// JobStateRestorer restores character_jobs.current_job_id upon rest when reverting JobMemory.
-type JobStateRestorer interface {
-	RestoreActiveJob(ctx context.Context, characterID, jobID string) error
-}
-
-// OnlineCounter counts currently logged in players for sleep duration scaling.
-type OnlineCounter interface {
-	GetOnlineCount(ctx context.Context) (int, error)
-}
 
 // SleepResult represents the outcome of entering sleep.
 type SleepResult struct {
@@ -152,10 +110,7 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	if !claimed {
 		return SleepResult{}, ErrWakeInProgress
 	}
-	defer func() {
-		//lint:ignore error-swallow best-effort claim release; the claim also expires by TTL
-		_ = s.timer.ReleaseLock(ctx, timer.CategoryWaking, characterID)
-	}()
+	defer s.releaseWakingClaim(ctx, characterID)
 
 	if isSleeping, err := s.timer.IsLocked(ctx, timer.CategorySleep, characterID); err != nil {
 		return SleepResult{}, err
@@ -176,20 +131,23 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	}
 	duration := CalculateSleepDuration(s.baseSleepDuration, onlineCount)
 
-	if err := s.persistSleepStart(ctx, characterID, char.PendingWake); err != nil {
+	hasTempJob, err := s.markPendingWake(ctx, characterID, char)
+	if err != nil {
 		return SleepResult{}, err
 	}
 
 	if err := s.timer.SetLock(ctx, timer.CategorySleep, characterID, duration); err != nil {
-		s.revertPendingWake(ctx, characterID)
-		return SleepResult{}, err
+		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, err, false, false)
 	}
 	// Ephemeral pending wake flag valid up to 365 days (retained for backward-compatibility with ephemeral query observers)
 	if err := s.timer.SetLock(ctx, timer.CategoryAsleep, characterID, 365*24*time.Hour); err != nil {
-		//lint:ignore error-swallow best-effort sleep lock cleanup on asleep lock failure
-		_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
-		s.revertPendingWake(ctx, characterID)
-		return SleepResult{}, err
+		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, err, true, false)
+	}
+
+	if hasTempJob {
+		if err := s.revertSleepJobMemory(ctx, characterID, char); err != nil {
+			return SleepResult{}, s.rollbackSleepStart(ctx, characterID, err, true, true)
+		}
 	}
 
 	return SleepResult{
@@ -201,59 +159,70 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	}, nil
 }
 
-func (s *Service) persistSleepStart(ctx context.Context, characterID string, initialPending bool) error {
-	apply := func(txCtx context.Context, c *corecharacter.Character) error {
+func (s *Service) releaseWakingClaim(ctx context.Context, characterID string) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sleepRollbackTimeout)
+	defer cancel()
+	//lint:ignore error-swallow best-effort claim release; the claim also expires by TTL
+	_ = s.timer.ReleaseLock(cleanupCtx, timer.CategoryWaking, characterID)
+}
+
+func (s *Service) markPendingWake(ctx context.Context, characterID string, initialChar corecharacter.Character) (bool, error) {
+	var hasTempJob bool
+	_, err := s.mutateCharacter(ctx, characterID, initialChar, func(_ context.Context, c *corecharacter.Character) error {
 		if c.PendingWake {
 			return ErrAlreadySleeping
 		}
 		c.PendingWake = true
+		hasTempJob = c.JobMemory != nil && c.JobMemory.IsTemporary()
+		return nil
+	})
+	return hasTempJob, err
+}
+
+func (s *Service) revertSleepJobMemory(ctx context.Context, characterID string, initialChar corecharacter.Character) error {
+	_, err := s.mutateCharacter(ctx, characterID, initialChar, func(txCtx context.Context, c *corecharacter.Character) error {
 		if c.JobMemory != nil && c.JobMemory.IsTemporary() {
 			memoryJobID := c.JobMemory.JobID
 			c.RevertJobMemory()
 			if s.jobRestorer != nil {
-				if err := s.jobRestorer.RestoreActiveJob(txCtx, characterID, memoryJobID); err != nil {
-					return err
-				}
+				return s.jobRestorer.RestoreActiveJob(txCtx, characterID, memoryJobID)
 			}
 		}
 		return nil
-	}
-	if s.runner != nil {
-		_, err := s.runner.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: characterID}, func(tc *economy.TxContext) error {
-			return apply(tc.Context, &tc.Character)
-		})
-		return err
-	}
-	if s.charUpdater != nil {
-		c, err := s.charUpdater.FindByIDForUpdate(ctx, characterID)
-		if err != nil {
-			return err
-		}
-		if err := apply(ctx, &c); err != nil {
-			return err
-		}
-		return s.charUpdater.Update(ctx, c)
-	}
-	if initialPending {
-		return ErrAlreadySleeping
-	}
-	return nil
+	})
+	return err
 }
 
-func (s *Service) revertPendingWake(ctx context.Context, characterID string) {
-	if s.runner != nil {
-		//lint:ignore error-swallow best-effort rollback of pending_wake on timer write failure
-		_, _ = s.runner.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: characterID}, func(tc *economy.TxContext) error {
-			tc.Character.PendingWake = false
-			return nil
-		})
-	} else if s.charUpdater != nil {
-		if c, err := s.charUpdater.FindByIDForUpdate(ctx, characterID); err == nil {
-			c.PendingWake = false
-			//lint:ignore error-swallow best-effort rollback of pending_wake on timer write failure
-			_ = s.charUpdater.Update(ctx, c)
+func (s *Service) rollbackSleepStart(ctx context.Context, characterID string, cause error, releaseSleep, releaseAsleep bool) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sleepRollbackTimeout)
+	defer cancel()
+
+	errs := []error{cause}
+	if releaseAsleep {
+		if err := s.timer.ReleaseLock(cleanupCtx, timer.CategoryAsleep, characterID); err != nil {
+			errs = append(errs, fmt.Errorf("release asleep lock: %w", err))
 		}
 	}
+	if releaseSleep {
+		if err := s.timer.ReleaseLock(cleanupCtx, timer.CategorySleep, characterID); err != nil {
+			errs = append(errs, fmt.Errorf("release sleep lock: %w", err))
+		}
+	}
+	if err := s.revertPendingWake(cleanupCtx, characterID); err != nil {
+		errs = append(errs, fmt.Errorf("revert pending_wake: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+func (s *Service) revertPendingWake(ctx context.Context, characterID string) error {
+	if s.runner == nil && s.charUpdater == nil {
+		return nil
+	}
+	_, err := s.mutateCharacter(ctx, characterID, corecharacter.Character{}, func(_ context.Context, c *corecharacter.Character) error {
+		c.PendingWake = false
+		return nil
+	})
+	return err
 }
 
 // GetSleepStatus checks whether the character is currently sleeping or ready to wake.
@@ -352,10 +321,7 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	if !claimed {
 		return WakeResult{}, ErrWakeInProgress
 	}
-	defer func() {
-		//lint:ignore error-swallow best-effort claim release; the claim also expires by TTL
-		_ = s.timer.ReleaseLock(ctx, timer.CategoryWaking, characterID)
-	}()
+	defer s.releaseWakingClaim(ctx, characterID)
 
 	if err := s.checkNotSleeping(ctx, characterID); err != nil {
 		return WakeResult{}, err
