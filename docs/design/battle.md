@@ -951,6 +951,25 @@ missing job/custom effects. Evidence: `_skill.cgi:9834–9931`;
 `_data.cgi:1197,2170`. These are descendants of existing job/custom/tool commands,
 not new transport actions; #1329/#1330 own service/Gateway integration.
 
+`NPCJobEntries` retains job95's two separate SP0/MP50 positions under one
+generic summon name, and job99's SP0/MP0 escape position. `RegisterNPCJobs`
+binds these complete tables through the same `RosterInvocation` admission as
+direct execution. Job95 uses tool78's unguarded stage summon, including when
+two or more enemies exist; it does not use gem82's extra enemy-count guard.
+Job99 writes only the acting participant's HP0: no reset, defeat, reward,
+automatic revival or immediate roster removal. Evidence:
+`_skill.cgi:7183–7189,7409–7412`; `_battle.cgi:518–529`.
+
+NPC selection retains duplicate eligible names as weights and resolves each
+through the last eligible name binding after current-job, previous-job and
+custom entries are appended. The selected cost is charged once after the
+callback, including accepted no-effect summons. The selector and action tails
+remain the NPC consumer's responsibility; these bindings do not initialize or
+execute a spawned NPC's next action. Persist the frozen stage pool/appearance
+weights and resulting ordered roster, then rebuild operation-local registrations
+after reload. Committed retries replay the consumer's receipt rather than call
+the effects again. Evidence: `_npc_action.cgi:177–224,313–322`.
+
 #### Temporary transformation and job memory
 
 Transformation separates run job identity, participant copying, previous-job
