@@ -727,3 +727,100 @@ func TestWake_ClaimLostImmediatelyBeforeDungeonReset_AbortsWithoutAlteringState(
 		t.Fatal("successor waking lock was erroneously released")
 	}
 }
+
+// Issue #1228: If a recovery hook pauses/blocks, loses claim ownership to a successor Wake,
+// and the successor completes and player resumes play (modifying state), the resumed old hook
+// must detect ownership loss and never corrupt the successor's refreshed state.
+func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 80, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
+		},
+	}
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(tm),
+		WithCharacterUpdater(repo),
+		WithWakeClaimTTL(50*time.Millisecond, 15*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	hookEntered := make(chan struct{})
+	releaseHook := make(chan struct{})
+
+	// Simulate external state modified after successor completion (e.g. rented costume, eaten meal)
+	var activeCostume atomic.Pointer[string]
+	costumeVal := "valkyrie-armor"
+
+	// Mock costume resetter that checks context cancellation before clearing
+	costumeResetter := costumeResetFunc(func(hookCtx context.Context, id string) error {
+		close(hookEntered)
+		<-releaseHook
+
+		// When resumed, if context is canceled or claim is lost, do not mutate state
+		if err := hookCtx.Err(); err != nil {
+			return err
+		}
+		activeCostume.Store(nil)
+		return nil
+	})
+	svc.SetCostumeResetter(costumeResetter)
+
+	wakeDone := make(chan error, 1)
+	go func() {
+		_, err := svc.Wake(ctx, "c1")
+		wakeDone <- err
+	}()
+
+	select {
+	case <-hookEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hook never entered")
+	}
+
+	// While old Wake hook is paused:
+	// 1. Successor takes over claim
+	const successorToken = "successor-token-final"
+	_ = tm.ReleaseLock(ctx, timer.CategoryWaking, "c1")
+	claimed, err := tm.TryLockWithToken(ctx, timer.CategoryWaking, "c1", successorToken, time.Hour)
+	if err != nil || !claimed {
+		t.Fatalf("successor claim setup failed: %v", err)
+	}
+
+	// 2. Successor completes wake: marks character awake in DB
+	c := repo.chars["c1"]
+	c.PendingWake = false
+	c.Stats.HP = 100
+	c.Tired = 0
+	repo.chars["c1"] = c
+
+	// 3. Player resumes play and rents a costume
+	activeCostume.Store(&costumeVal)
+
+	// Now resume the old hook
+	close(releaseHook)
+
+	select {
+	case err := <-wakeDone:
+		if err == nil {
+			t.Fatal("expected old Wake to abort with error after claim loss")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Wake timed out")
+	}
+
+	// Verification: The player's post-wake state MUST NOT be corrupted by the old hook
+	if current := activeCostume.Load(); current == nil || *current != costumeVal {
+		t.Fatalf("player's rented costume was corrupted by old hook: got %v, want %s", current, costumeVal)
+	}
+
+	// Character must remain in awake state
+	if repo.chars["c1"].PendingWake {
+		t.Fatal("character PendingWake was reverted to true")
+	}
+}

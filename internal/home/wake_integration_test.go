@@ -892,13 +892,13 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			<-releaseHook
 
 			// Successor overwrites claim in real Valkey with new token
-			_ = timers.ReleaseLock(hookCtx, timer.CategoryWaking, id)
-			claimed, err := timers.TryLockWithToken(hookCtx, timer.CategoryWaking, id, successorToken, time.Hour)
+			_ = timers.ReleaseLock(ctx, timer.CategoryWaking, id)
+			claimed, err := timers.TryLockWithToken(ctx, timer.CategoryWaking, id, successorToken, time.Hour)
 			if err != nil || !claimed {
 				t.Fatalf("successor claim setup failed: %v", err)
 			}
-			_ = timers.SetLock(hookCtx, timer.CategoryDungeonOnce, id, time.Hour)
-			_, _ = timers.ConsumeDailyQuota(hookCtx, "dungeon_once", id, time.Now())
+			_ = timers.SetLock(ctx, timer.CategoryDungeonOnce, id, time.Hour)
+			_, _ = timers.ConsumeDailyQuota(ctx, "dungeon_once", id, time.Now())
 			return nil
 		}))
 
@@ -1047,6 +1047,111 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		}
 		if !persisted.PendingWake {
 			t.Fatal("SQL PendingWake was erroneously cleared after lease expiry")
+		}
+	})
+
+	t.Run("wake_hook_paused_lease_expiry_preserves_successor_play_state_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "WakeRealHookPaused")
+		char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 50
+		char.PendingWake = true
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		skippedTimer := &failingRenewTimer{TimerService: timers}
+
+		svc1, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(skippedTimer),
+			home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		svc2, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hookEntered := make(chan struct{})
+		releaseHook := make(chan struct{})
+		costumeKey := "party2:daily:costume:" + char.ID
+
+		svc1.SetCostumeResetter(wakeCostumeHook(func(hookCtx context.Context, id string) error {
+			skippedTimer.dropRenew.Store(true)
+			close(hookEntered)
+			<-releaseHook
+
+			// Resumed old hook attempts to execute the real costume reset under hookCtx
+			cmd := client.B().Del().Key(costumeKey).Build()
+			return client.Do(hookCtx, cmd).Error()
+		}))
+
+		wakeDone := make(chan error, 1)
+		go func() {
+			_, err := svc1.Wake(ctx, char.ID)
+			wakeDone <- err
+		}()
+
+		select {
+		case <-hookEntered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never entered")
+		}
+
+		// Sleep 1250ms (> 1000ms TTL) so old Wake's claim expires in real Valkey
+		time.Sleep(1250 * time.Millisecond)
+
+		// 1. Successor Wake runs and completes successfully
+		res2, err := svc2.Wake(ctx, char.ID)
+		if err != nil || !res2.Success {
+			t.Fatalf("successor Wake failed: %+v, %v", res2, err)
+		}
+
+		// 2. Player resumes play and rents a costume in real Valkey
+		setCmd := client.B().Set().Key(costumeKey).Value("cat-ears").Ex(time.Hour).Build()
+		if err := client.Do(ctx, setCmd).Error(); err != nil {
+			t.Fatalf("failed to rent costume: %v", err)
+		}
+
+		// 3. Resume the old hook
+		close(releaseHook)
+
+		select {
+		case err := <-wakeDone:
+			if err == nil {
+				t.Fatal("expected old Wake to abort with error after claim loss")
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("old Wake timed out")
+		}
+
+		// 4. Verify player's rented costume in real Valkey was NOT deleted by the old hook
+		getCmd := client.B().Get().Key(costumeKey).Build()
+		val, err := client.Do(ctx, getCmd).ToString()
+		if err != nil || val != "cat-ears" {
+			t.Fatalf("player's costume in real Valkey was corrupted: val=%q err=%v", val, err)
+		}
+
+		// 5. Verify SQL PendingWake remains false (completed by successor)
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if persisted.PendingWake {
+			t.Fatal("SQL PendingWake was reverted to true")
 		}
 	})
 
