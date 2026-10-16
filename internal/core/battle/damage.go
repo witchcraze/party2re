@@ -12,6 +12,9 @@ type DamageContext struct {
 	Reset, Defeat          func(string) error
 	Cursor                 TargetCursor
 	ToolCategory           ToolCategoryContext
+	// Native enclosing callbacks can own resource writes at target resolution;
+	// primitive callers otherwise consume the returned TargetResolution facts.
+	targetResources func(TargetResolution)
 }
 
 // ToolCategoryContext records the only checked package-category producers.
@@ -109,6 +112,9 @@ func (s *LifetimeState) ApplyDamage(c *DamageContext, e TargetEffect, rng random
 	}
 	target, err := s.ResolveEnemyTarget(c.TargetContext, e, rng)
 	r.TargetResolution = target
+	if err == nil && c.targetResources != nil {
+		c.targetResources(target)
+	}
 	if err != nil || !target.Resolved || target.Payload.Number == 0 {
 		return r, err
 	}

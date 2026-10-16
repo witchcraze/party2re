@@ -330,6 +330,32 @@ support; successful original branches retain their concrete implementation gates
 | Delegated gems | Gem 86 tries the current job's last extended callback before the previous job. Finding an extended callback returns “handled” even when SP/MP prevents execution, so it does not fall back in that case; job 73 has a separate 1-MP stat increase. Gems 87–92 prefer a calling previous job, otherwise current job, and invoke its named command/first non-command non-extended callback without normal SP or listed MP charging | `_data.cgi:2174–2180`; `_skill.cgi:10841–10918` |
 | Two-target book use | Allow the same encounter participant twice and require MP ≥floor(book cost×1.5). Death after the first callback skips the second, internal charge and return. After a normally returning second callback, charge and return even if the actor died during it. Ordinary one-target use does not return the book. Parsing and asset context follow the contract below | `_skill.cgi:6868–6897,10538–10557`; native ID authorization remains mandatory |
 
+Active weapon seals are player-only choices: discovery and submission require
+an equipped weapon, its matching seal, enemies, no cursed ability, previous-job
+SP ≥90 and affordable MP. Current-job SP does not substitute for previous-job
+SP. All three original names are absent from the item-249 magician-name list,
+so item249 **doubles** their listed MP costs, including the two magic callbacks
+(`_battle.cgi:1804–1825`). Ordinary MP is debited after the callback, including
+accepted no-effect outcomes and caster death, using the same adjusted cost as
+discovery (`_battle.cgi:761–778`). NPC selection appends job callbacks, without
+the player seal additions (`_npc_action.cgi:156–218`).
+
+`BattleDefinitions.RegisterWeaponSeals` binds `seal-7-breath`, `seal-8-magic`
+and `seal-9-magic` to the shared ordered area-damage pipeline.
+`WeaponSealAction` and invocation execution share whole-effect admission;
+the returned MP cost belongs to the consumer's post-effect debit. Seal identity
+is retained in the serialized lifetime actor alongside its equipped weapon and
+previous-job SP. These native callbacks apply magic-absorption MP recovery at
+target resolution, before HP damage/defeat; returned recovery facts are already
+applied and must not be charged again. Operation-local damage/reset/defeat context and callback
+closures must be rebuilt after reload. Missing reachable descendants reject
+before state, counters, RNG or costs; accepted one-hit defense/immune outcomes
+do not require unreachable tail context. An unprojected preceding callback
+remains unsupported. The batch participant builder supplies no active seal
+scalar attacks. Production supply, SQL receipts/retry charging and published
+choices retain their integration gates in [#1329](https://github.com/witchcraze/party2re/issues/1329)
+and [#1330](https://github.com/witchcraze/party2re/issues/1330).
+
 #### Combat books, stored tools and purchases
 
 The requesting player, temporary combat actor, durable held-tool projection and

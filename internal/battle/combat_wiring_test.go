@@ -245,37 +245,25 @@ func TestCombatWiring_WeaponSealsSkillsAndAbilities(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name          string
-		sealID        int
-		equipWeapon   bool
-		wantSkillName string
-		wantSkillMP   int
-		wantSkillElem string
-		wantAbility   string
+		name        string
+		sealID      int
+		equipWeapon bool
+		wantAbility string
 	}{
 		{
-			name:          "Seal 7: しゃくねつ",
-			sealID:        7,
-			equipWeapon:   true,
-			wantSkillName: "しゃくねつ",
-			wantSkillMP:   40,
-			wantSkillElem: "fire",
+			name:        "Seal 7 requires explicit callback admission",
+			sealID:      7,
+			equipWeapon: true,
 		},
 		{
-			name:          "Seal 8: マヒャド",
-			sealID:        8,
-			equipWeapon:   true,
-			wantSkillName: "マヒャド",
-			wantSkillMP:   27,
-			wantSkillElem: "water",
+			name:        "Seal 8 requires explicit callback admission",
+			sealID:      8,
+			equipWeapon: true,
 		},
 		{
-			name:          "Seal 9: ギガデイン",
-			sealID:        9,
-			equipWeapon:   true,
-			wantSkillName: "ギガデイン",
-			wantSkillMP:   40,
-			wantSkillElem: "light",
+			name:        "Seal 9 requires explicit callback admission",
+			sealID:      9,
+			equipWeapon: true,
 		},
 		{
 			name:        "Seal 10: 神速 (seal_shinsoku)",
@@ -347,26 +335,8 @@ func TestCombatWiring_WeaponSealsSkillsAndAbilities(t *testing.T) {
 				t.Fatalf("BuildParticipant failed: %v", err)
 			}
 
-			if tt.wantSkillName != "" {
-				found := false
-				for _, sk := range p.Skills {
-					if sk.Name == tt.wantSkillName {
-						found = true
-						if sk.MPCost != tt.wantSkillMP {
-							t.Errorf("skill MPCost = %d, want %d", sk.MPCost, tt.wantSkillMP)
-						}
-						if sk.Element != tt.wantSkillElem {
-							t.Errorf("skill Element = %s, want %s", sk.Element, tt.wantSkillElem)
-						}
-						if sk.TargetScope != corebattle.TargetScopeAllEnemies {
-							t.Errorf("skill TargetScope = %s, want all_enemies", sk.TargetScope)
-						}
-						break
-					}
-				}
-				if !found {
-					t.Errorf("expected skill %s not found in participant skills: %+v", tt.wantSkillName, p.Skills)
-				}
+			if tt.sealID >= 7 && tt.sealID <= 9 && len(p.Skills) != 0 {
+				t.Errorf("active seal bypassed explicit admission: %+v", p.Skills)
 			}
 
 			if tt.wantAbility != "" {
