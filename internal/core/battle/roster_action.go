@@ -12,8 +12,11 @@ func (s *LifetimeState) ValidateRoster(c *RosterContext, id, targetID string, rn
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
 	}
-	if id == "tool-78" || id == "gem-82" {
+	if id == "tool-78" || id == "gem-82" || npcRosterCommand(id) == "summon" {
 		return s.validateEnemySummon(c, id)
+	}
+	if npcRosterCommand(id) == "escape" {
+		return nil
 	}
 	if p, ok := toolHelper(id); ok {
 		if s.rosterIdentity(p.Identity) != nil {
@@ -173,8 +176,12 @@ func (s *LifetimeState) ApplyRoster(c *RosterContext, id, targetID string, rng r
 	if err := s.ValidateRoster(c, id, targetID, rng); err != nil {
 		return r, err
 	}
-	if id == "tool-78" || id == "gem-82" {
+	if id == "tool-78" || id == "gem-82" || npcRosterCommand(id) == "summon" {
 		return s.summonEnemy(c, id, rng)
+	}
+	if npcRosterCommand(id) == "escape" {
+		s.actor(c.ActorID).HP = 0
+		return RosterResult{Applied: true}, nil
 	}
 	if p, ok := toolHelper(id); ok {
 		if id == "extension-244" && s.rosterIdentity(p.Identity) == nil {
