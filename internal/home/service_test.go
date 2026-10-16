@@ -56,6 +56,7 @@ type mockHomeRepo struct {
 	phrases     map[string][]CompanionPhrase
 	notices     map[string][]DeliveryNotice
 	chars       map[string]corecharacter.Character
+	getHomeErr  error
 	saveHomeErr error
 }
 
@@ -76,6 +77,9 @@ func newMockHomeRepo(chars ...map[string]corecharacter.Character) *mockHomeRepo 
 }
 
 func (m *mockHomeRepo) GetHome(ctx context.Context, characterID string) (CharacterHome, error) {
+	if m.getHomeErr != nil {
+		return CharacterHome{}, m.getHomeErr
+	}
 	h, ok := m.homes[characterID]
 	if !ok {
 		return CharacterHome{

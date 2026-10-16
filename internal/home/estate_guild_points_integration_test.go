@@ -54,6 +54,17 @@ func (f *failSaveHomeRepo) SaveHome(ctx context.Context, h home.CharacterHome) e
 	return f.HomeRepository.SaveHome(ctx, h)
 }
 
+// canceledGetHomeRepo wraps HomeRepository and runs GetHome with a canceled child context.
+type canceledGetHomeRepo struct {
+	*database.HomeRepository
+}
+
+func (c *canceledGetHomeRepo) GetHome(ctx context.Context, characterID string) (home.CharacterHome, error) {
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	return c.HomeRepository.GetHome(canceledCtx, characterID)
+}
+
 // transientFailGP simulates a transient failure on the first call and succeeds thereafter.
 type transientFailGP struct {
 	real   *database.GuildRepository
@@ -265,6 +276,166 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 		}
 		if pts := getGuildPoints(t, guildID); pts != 0 {
 			t.Errorf("expected guild points to be rolled back to 0, got %d", pts)
+		}
+	})
+
+	t.Run("GetHome read failure aborts purchase and preserves existing home, settings, money, and GP", func(t *testing.T) {
+		char, err := database.CreateTestCharacterWithFunds(ctx, db, "UnreadableHomeOwner", 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		guildID := createGuildWithMember(t, char.ID, 120)
+
+		now := time.Now().UTC().Truncate(time.Second)
+		initialExpires := now.Add(72 * time.Hour)
+		initialHome := home.CharacterHome{
+			CharacterID:   char.ID,
+			TownID:        "town2",
+			HouseStyle:    "005",
+			ExpiresAt:     &initialExpires,
+			CompanionName: "Saved companion",
+			BgImg:         "saved-wallpaper",
+			UpdatedAt:     now,
+		}
+		if err := realHomeRepo.SaveHome(ctx, initialHome); err != nil {
+			t.Fatalf("failed to seed initial home: %v", err)
+		}
+
+		faultHomeRepo := &canceledGetHomeRepo{HomeRepository: realHomeRepo}
+		faultSvc, err := home.NewService(
+			faultHomeRepo,
+			charRepo,
+			home.WithEconomy(eco),
+			home.WithGuildPoints(guildRepo),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = faultSvc.BuildHouse(ctx, char.ID, "town1", "001")
+		if err == nil {
+			t.Fatal("expected error from BuildHouse when GetHome fails, got nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled from GetHome failure, got %v", err)
+		}
+
+		// Verify persisted state is completely untouched
+		reloadedChar, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloadedChar.Money != 10000 {
+			t.Errorf("expected money to remain 10000, got %d", reloadedChar.Money)
+		}
+		reloadedHome, err := realHomeRepo.GetHome(ctx, char.ID)
+		if err != nil {
+			t.Fatalf("failed to reload home: %v", err)
+		}
+		if reloadedHome.TownID != "town2" || reloadedHome.HouseStyle != "005" {
+			t.Errorf("expected town2/005 to be preserved, got %s/%s", reloadedHome.TownID, reloadedHome.HouseStyle)
+		}
+		if reloadedHome.ExpiresAt == nil || !reloadedHome.ExpiresAt.Equal(initialExpires) {
+			t.Errorf("expected expires_at %v, got %v", initialExpires, reloadedHome.ExpiresAt)
+		}
+		if reloadedHome.CompanionName != "Saved companion" {
+			t.Errorf("expected companion_name 'Saved companion', got %q", reloadedHome.CompanionName)
+		}
+		if reloadedHome.BgImg != "saved-wallpaper" {
+			t.Errorf("expected bgimg 'saved-wallpaper', got %q", reloadedHome.BgImg)
+		}
+		if pts := getGuildPoints(t, guildID); pts != 120 {
+			t.Errorf("expected guild points to remain 120, got %d", pts)
+		}
+
+		// Healthy contrast on the same fixture rejects with ErrAlreadyOwnsHouse
+		healthySvc, err := home.NewService(
+			realHomeRepo,
+			charRepo,
+			home.WithEconomy(eco),
+			home.WithGuildPoints(guildRepo),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = healthySvc.BuildHouse(ctx, char.ID, "town1", "001")
+		if !errors.Is(err, home.ErrAlreadyOwnsHouse) {
+			t.Fatalf("expected ErrAlreadyOwnsHouse on healthy read of active house, got %v", err)
+		}
+		reloadedCharAfter, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloadedCharAfter.Money != 10000 {
+			t.Errorf("expected money to remain 10000 after ErrAlreadyOwnsHouse, got %d", reloadedCharAfter.Money)
+		}
+		if pts := getGuildPoints(t, guildID); pts != 120 {
+			t.Errorf("expected guild points to remain 120 after ErrAlreadyOwnsHouse, got %d", pts)
+		}
+	})
+
+	t.Run("expired house allows repurchase while preserving custom companion_name and bgimg", func(t *testing.T) {
+		char, err := database.CreateTestCharacterWithFunds(ctx, db, "ExpiredHomeOwner", 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		guildID := createGuildWithMember(t, char.ID, 10)
+
+		now := time.Now().UTC().Truncate(time.Second)
+		expiredAt := now.Add(-1 * time.Hour)
+		expiredHome := home.CharacterHome{
+			CharacterID:   char.ID,
+			TownID:        "town2",
+			HouseStyle:    "005",
+			ExpiresAt:     &expiredAt,
+			CompanionName: "CustomPet",
+			BgImg:         "custom-bg",
+			UpdatedAt:     now.Add(-24 * time.Hour),
+		}
+		if err := realHomeRepo.SaveHome(ctx, expiredHome); err != nil {
+			t.Fatalf("failed to seed expired home: %v", err)
+		}
+
+		svc, err := home.NewService(
+			realHomeRepo,
+			charRepo,
+			home.WithEconomy(eco),
+			home.WithGuildPoints(guildRepo),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res, err := svc.BuildHouse(ctx, char.ID, "town1", "001")
+		if err != nil {
+			t.Fatalf("expected repurchase of expired home to succeed, got %v", err)
+		}
+		if res.TownID != "town1" || res.HouseStyle != "001" {
+			t.Errorf("unexpected build result: %+v", res)
+		}
+
+		reloadedChar, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloadedChar.Money != 9500 {
+			t.Errorf("expected money 9500, got %d", reloadedChar.Money)
+		}
+		reloadedHome, err := realHomeRepo.GetHome(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloadedHome.TownID != "town1" || reloadedHome.HouseStyle != "001" {
+			t.Errorf("expected town1/001, got %s/%s", reloadedHome.TownID, reloadedHome.HouseStyle)
+		}
+		if reloadedHome.CompanionName != "CustomPet" {
+			t.Errorf("expected companion_name 'CustomPet' to be preserved, got %q", reloadedHome.CompanionName)
+		}
+		if reloadedHome.BgImg != "custom-bg" {
+			t.Errorf("expected bgimg 'custom-bg' to be preserved, got %q", reloadedHome.BgImg)
+		}
+		if pts := getGuildPoints(t, guildID); pts != 60 {
+			t.Errorf("expected guild points 60 (10 + 50), got %d", pts)
 		}
 	})
 

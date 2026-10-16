@@ -574,4 +574,56 @@ func TestBuildHouse_Transactional(t *testing.T) {
 			t.Error("expected house to be saved in repository")
 		}
 	})
+
+	t.Run("get home read failure aborts transaction without overwriting existing home or charging gold", func(t *testing.T) {
+		chars := map[string]corecharacter.Character{
+			"tx-read-fail": {ID: "tx-read-fail", PlayerID: "p-read", Name: "ReadFailHero", Money: 10000},
+		}
+		repo := newMockHomeRepo(chars)
+		exp := fixedTime.Add(72 * time.Hour)
+		repo.homes["tx-read-fail"] = CharacterHome{
+			CharacterID:   "tx-read-fail",
+			TownID:        "town2",
+			HouseStyle:    "005",
+			ExpiresAt:     &exp,
+			CompanionName: "Saved companion",
+			BgImg:         "saved-wallpaper",
+			UpdatedAt:     fixedTime,
+		}
+		readErr := errors.New("database read error on get home")
+		repo.getHomeErr = readErr
+		gp := &mockGuildPoints{}
+		tmr := &mockTimer{}
+		runner := &mockTransactionRunner{chars: chars}
+
+		svc, err := NewService(
+			repo,
+			&mockCharReader{chars: chars},
+			WithNowFunc(func() time.Time { return fixedTime }),
+			WithGuildPoints(gp),
+			WithTimer(tmr),
+			WithTransactionRunner(runner),
+		)
+		if err != nil {
+			t.Fatalf("NewService failed: %v", err)
+		}
+
+		_, err = svc.BuildHouse(ctx, "tx-read-fail", "town1", "001")
+		if !errors.Is(err, readErr) {
+			t.Fatalf("expected error %v, got %v", readErr, err)
+		}
+		if chars["tx-read-fail"].Money != 10000 {
+			t.Errorf("expected money to remain 10000, got %d", chars["tx-read-fail"].Money)
+		}
+		saved := repo.homes["tx-read-fail"]
+		if saved.TownID != "town2" || saved.HouseStyle != "005" || saved.CompanionName != "Saved companion" || saved.BgImg != "saved-wallpaper" {
+			t.Errorf("existing home was overwritten: %+v", saved)
+		}
+		if gp.points["tx-read-fail"] != 0 {
+			t.Errorf("expected 0 guild points, got %d", gp.points["tx-read-fail"])
+		}
+		if len(tmr.locks) != 0 {
+			t.Errorf("expected no timer locks set on failure, got %v", tmr.locks)
+		}
+	})
 }
