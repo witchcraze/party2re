@@ -23,6 +23,9 @@ func (s *LifetimeState) ApplyHealing(c *EffectContext, e TargetEffect, rng rando
 		return r, err
 	}
 	target, err := s.ResolvePartyTarget(c.TargetContext, e, rng)
+	if err == nil && c.targetResources != nil {
+		c.targetResources(target)
+	}
 	r.TargetResolution = target
 	if err != nil || !target.Resolved {
 		return r, err

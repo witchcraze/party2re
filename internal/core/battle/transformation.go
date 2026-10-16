@@ -201,7 +201,7 @@ func (a *LifetimeActor) switchForm(from, to string) bool {
 
 func (s *LifetimeState) validateFormTune(c *TransformationContext, rng random.Generator) error {
 	e := TargetEffect{TargetID: c.ActorID, Payload: CallbackPayload{Number: .5}}
-	admission := statUpAdmission{mayDouble: make(map[string]bool)}
+	admission := statUpAdmission{mayReplace: make(map[string]float64)}
 	for _, stat := range []BattleStat{StatAgility, StatDefense, StatAttack} {
 		if err := s.validateStatUp(&c.EffectContext, e, stat, rng, statUpAdmission{}); err != nil {
 			return err

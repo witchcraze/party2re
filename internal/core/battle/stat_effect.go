@@ -70,7 +70,7 @@ func (s *LifetimeState) statUpTailPossible(c *EffectContext, e TargetEffect, sta
 
 type statUpAdmission struct {
 	powerMayChange bool
-	mayDouble      map[string]bool
+	mayReplace     map[string]float64
 }
 
 func (s *LifetimeState) recordStatUp205(c *EffectContext, e TargetEffect, stat BattleStat, admission *statUpAdmission) {
@@ -78,13 +78,13 @@ func (s *LifetimeState) recordStatUp205(c *EffectContext, e TargetEffect, stat B
 		return
 	}
 	var changed []string
-	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e, admission.mayDouble) {
+	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e, admission.mayReplace) {
 		if hasItem(s.actor(candidate.TargetID).ItemDefinitionIDs, "item-205") && s.statUpTailPossible(c, candidate, stat, admission.powerMayChange) {
 			changed = append(changed, candidate.TargetID)
 		}
 	}
 	for _, id := range changed {
-		admission.mayDouble[id] = true
+		admission.mayReplace[id] = 2
 		admission.powerMayChange = true
 	}
 }
@@ -114,7 +114,7 @@ func (s *LifetimeState) validateStatUp(c *EffectContext, e TargetEffect, stat Ba
 	if e.Payload.Number == 0 {
 		return nil
 	}
-	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e, admission.mayDouble) {
+	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e, admission.mayReplace) {
 		a := s.actor(candidate.TargetID)
 		if !s.statUpTailPossible(c, candidate, stat, admission.powerMayChange) {
 			continue
@@ -137,6 +137,9 @@ func (s *LifetimeState) ApplyStatUp(c *EffectContext, e TargetEffect, stat Battl
 		return r, err
 	}
 	target, err := s.ResolvePartyTarget(c.TargetContext, e, rng)
+	if err == nil && c.targetResources != nil {
+		c.targetResources(target)
+	}
 	r.TargetResolution = target
 	if err != nil || !target.Resolved {
 		return r, err
@@ -188,10 +191,15 @@ func (s *LifetimeState) ApplyStatUp(c *EffectContext, e TargetEffect, stat Battl
 }
 
 func (s *LifetimeState) statTension(c *EffectContext, t *LifetimeActor, recursive bool, rng random.Generator) error {
+	c.TensionCalls++
 	if t.Status == StatusSabaku {
 		return nil
 	}
-	if err := t.AdvanceTension(*c.RequesterLevel, rng); err != nil {
+	level := 0
+	if c.RequesterLevel != nil {
+		level = *c.RequesterLevel
+	}
+	if err := t.AdvanceTension(level, rng); err != nil {
 		return err
 	}
 	a := s.actor(c.ActorID)
@@ -220,6 +228,9 @@ func (s *LifetimeState) ApplyStatDown(c *EffectContext, e TargetEffect, stat Bat
 		return r, ErrUnsupportedEffect
 	}
 	target, err := s.ResolveEnemyTarget(c.TargetContext, e, rng)
+	if err == nil && c.targetResources != nil {
+		c.targetResources(target)
+	}
 	r.TargetResolution = target
 	if err != nil || !target.Resolved {
 		return r, err
@@ -265,7 +276,7 @@ func (s *LifetimeState) ApplyPartyStat(c *EffectContext, coefficient float64, ca
 			return nil, ErrUnsupportedEffect
 		}
 	} else {
-		admission := statUpAdmission{mayDouble: make(map[string]bool)}
+		admission := statUpAdmission{mayReplace: make(map[string]float64)}
 		for _, id := range c.PartyIDs {
 			e.TargetID = id
 			if err := s.validateStatUp(c, e, stat, rng, admission); err != nil {
