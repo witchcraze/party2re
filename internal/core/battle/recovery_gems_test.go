@@ -211,6 +211,7 @@ func TestRecoveryGemMagicSealAndSelfRoles(t *testing.T) {
 
 func TestRecoveryGemResourcesPrecedeStatTails(t *testing.T) {
 	s, c := recoveryFixture()
+	s.actor("self").MP = -3
 	s.actor("ally").Temporary = TemporaryAbsorbMagic
 	s.actor("ally").MP, s.actor("ally").MaxMP = 90, 100
 	s.actor("ally").ItemDefinitionIDs = []string{"item-201"}
@@ -222,7 +223,7 @@ func TestRecoveryGemResourcesPrecedeStatTails(t *testing.T) {
 		return nil
 	}
 	r, err := s.ApplyRecoveryStatGem(33, &c, "ally", &targetRNG{t: t, draws: []float64{0}})
-	if err != nil || r[0].MPRecovery != 30 || s.actor("ally").MP != 97 {
+	if err != nil || r[0].MPRecovery != 30 || s.actor("ally").MP != 97 || s.actor("self").MP != -3 {
 		t.Fatal(r, err, s)
 	}
 }
@@ -357,6 +358,45 @@ func TestRecoveryGemUsesRequesterLevel(t *testing.T) {
 			t.Fatal(level, err, s, c)
 		}
 		rng.done()
+	}
+}
+
+func TestRecoveryGemSelfTensionDoesNotCureOrActivateTargetHelpers(t *testing.T) {
+	s, c := recoveryFixture()
+	c.Item195Activated = true
+	s.actor("self").Status = StatusMagicSeal
+	s.actor("self").Agility = 250
+	s.actor("enemy").ItemDefinitionIDs = []string{"item-201"}
+	r, err := s.ApplyRecoveryStatGems([]int{67, 32}, &c, "self", &targetRNG{t: t})
+	if err != nil || r[1][0].Applied || !r[1][0].Returned || s.actor("self").Status != StatusMagicSeal {
+		t.Fatal(r, err, s, c)
+	}
+}
+
+func TestRecoveryGemStatAndEnemyResetConsumeTensionBeforeLaterSlots(t *testing.T) {
+	for _, id := range []int{28, 94, 68} {
+		s, c := recoveryFixture()
+		s.actor("self").Tension = 5
+		if id == 68 {
+			s.actor("enemy").Temporary = TemporaryReflectAttack
+		}
+		r, err := s.ApplyRecoveryStatGems([]int{id, 67}, &c, "enemy", &targetRNG{t: t})
+		if err != nil || len(r) != 2 || s.actor("self").Tension != 3 {
+			t.Fatal(id, r, err, s, c)
+		}
+	}
+}
+
+func TestRecoveryGemZeroHealingRetainsTensionForAdmission(t *testing.T) {
+	s, c := recoveryFixture()
+	s.actor("self").Tension = 5
+	s.actor("ally").Temporary = TemporaryStrongDefense
+	s.actor("ally").Status = StatusVirulentPoison
+	c.Item185Activated = true
+	before := reloadLifetime(t, s)
+	_, err := s.ApplyRecoveryStatGems([]int{19, 67}, &c, "ally", &targetRNG{t: t})
+	if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.HealCalls != 0 || c.TensionCalls != 0 {
+		t.Fatal(err, s, c)
 	}
 }
 

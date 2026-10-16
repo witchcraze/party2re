@@ -89,12 +89,19 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 		stat := StatAttack
 		switch id {
 		case 19, 20, 21, 22, 23:
+			e.Payload.Number = 300
+			if id == 19 || id == 22 {
+				e.Payload.Number = 100
+			}
 			if id == 20 {
 				e.TargetID, e.Category = c.ActorID, CategoryUntyped
 			}
 			targets := []string{e.TargetID}
 			if id == 22 || id == 23 {
 				targets = c.PartyIDs
+				if projected.actor(c.ActorID).Extended == ExtendedAdditional {
+					e.Payload.Number *= 1.5
+				}
 			}
 			consumes := !projected.actor(c.ActorID).categorySealed(e.Category)
 			for _, target := range targets {
@@ -103,7 +110,16 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 					return err
 				}
 				for _, candidate := range projected.partyTargetCandidates(context.TargetContext, e, admission.mayReplace) {
-					if projected.actor(candidate.TargetID).HP <= 0 || candidate.Payload.Number <= 0 || projected.finalEffectPower(&context, projected.initialEffectPower(&context, candidate, ModifierHPHealing)) == 0 {
+					power := candidate
+					power.Payload.Number = projected.healingBasePower(&context, candidate)
+					value := projected.finalEffectPower(&context, projected.initialEffectPower(&context, power, ModifierHPHealing))
+					if projected.actor(c.ActorID).Status == StatusSabaku {
+						value *= .7
+					}
+					if projected.actor(candidate.TargetID).Status == StatusVirulentPoison {
+						value = float64(int(value * .1))
+					}
+					if projected.actor(candidate.TargetID).HP <= 0 || candidate.Payload.Number <= 0 || value == 0 {
 						consumes = false
 					}
 				}
@@ -124,13 +140,26 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 			if err := projected.validateStatUp(&context, e, stat, rng, admission); err != nil {
 				return err
 			}
+			consumes, self205 := !projected.actor(c.ActorID).categorySealed(e.Category), false
 			for _, candidate := range projected.partyTargetCandidates(context.TargetContext, e, admission.mayReplace) {
 				t := projected.actor(candidate.TargetID)
+				power := projected.finalEffectPower(&context, projected.initialEffectPower(&context, candidate, ModifierStatUp))
+				if !projected.statUpTailPossible(&context, candidate, stat, false) || int(float64(t.baseStat(stat))*power*min(1, projected.actor(c.ActorID).Tension)) == 0 {
+					consumes = false
+				}
+				self205 = self205 || (stat != StatAttack && t.ID == c.ActorID && hasItem(t.ItemDefinitionIDs, "item-205"))
 				if stat == StatAgility && hasItem(t.ItemDefinitionIDs, "item-201") && projected.statUpTailPossible(&context, candidate, stat, admission.powerMayChange) && i+1 < len(ids) {
 					return ErrUnsupportedEffect
 				}
 			}
 			projected.recordStatUp205(&context, e, stat, &admission)
+			if consumes {
+				projected.actor(c.ActorID).Tension = 1
+				if self205 {
+					projected.actor(c.ActorID).Tension = 3 // Upper bound after205 and optional145 recursion.
+				}
+				admission.powerMayChange = false
+			}
 		case 54:
 			continue
 		case 69:
@@ -163,6 +192,9 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 					}
 				}
 			}
+			if id == 67 {
+				continue // Direct tension invokes no category/target helper.
+			}
 		case 68, 93, 94, 95, 96:
 			e.Payload.Number = .25
 			if id == 96 {
@@ -175,6 +207,17 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 			if err != nil {
 				return err
 			}
+			if id == 68 && len(c.EnemyIDs) > 0 && !projected.actor(c.ActorID).categorySealed(converted.Category) {
+				candidates := projected.damageCandidatesAfter(&DamageContext{EffectContext: context}, converted, admission.mayReplace)
+				selfOnly := len(candidates) > 0
+				for _, candidate := range candidates {
+					selfOnly = selfOnly && candidate.TargetID == c.ActorID
+				}
+				if selfOnly {
+					projected.actor(c.ActorID).Tension = 1
+					admission.powerMayChange = false
+				}
+			}
 			if id >= 93 {
 				if id == 94 {
 					stat = StatDefense
@@ -183,16 +226,26 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 				} else if id == 96 {
 					stat = StatHit
 				}
+				consumes := false
 				for _, enemy := range c.EnemyIDs {
 					converted.TargetID = enemy
-					for _, candidate := range projected.damageCandidatesAfter(&DamageContext{EffectContext: context}, converted, admission.mayReplace) {
+					candidates := projected.damageCandidatesAfter(&DamageContext{EffectContext: context}, converted, admission.mayReplace)
+					invocationConsumes := len(candidates) > 0
+					for _, candidate := range candidates {
 						t := projected.actor(candidate.TargetID)
 						power := projected.finalEffectPower(&context, projected.initialEffectPower(&context, candidate, ModifierStatDown))
+						eligible := power > 0 && t.HP > 0 && t.BaseStats.Defense <= 999 && !hasItem(t.ItemDefinitionIDs, "item-159") && (stat != StatAttack || t.HP <= 999) && float64(*t.currentStat(stat)) > float64(t.baseStat(stat))*.2 && (stat != StatHit || (*t.currentStat(stat) > 50 && !hasItem(t.ItemDefinitionIDs, "item-197")))
+						invocationConsumes = invocationConsumes && eligible
 						// A reduction can reopen a later stat-up cap guard.
-						if power > 0 && (admission.powerMayChange || int(float64(*t.currentStat(stat))*power*projected.actor(c.ActorID).Tension) > 0) && t.HP > 0 && t.BaseStats.Defense <= 999 && !hasItem(t.ItemDefinitionIDs, "item-159") && (stat != StatAttack || t.HP <= 999) {
+						if eligible && (admission.powerMayChange || int(float64(*t.currentStat(stat))*power*projected.actor(c.ActorID).Tension) > 0) {
 							*t.currentStat(stat) = min(*t.currentStat(stat), int(float64(t.baseStat(stat))*.2))
 						}
 					}
+					consumes = consumes || invocationConsumes
+				}
+				if consumes && !projected.actor(c.ActorID).categorySealed(e.Category) {
+					projected.actor(c.ActorID).Tension = 1
+					admission.powerMayChange = false
 				}
 			}
 		default:

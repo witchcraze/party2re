@@ -17,8 +17,10 @@ func (s *LifetimeState) ApplyRecoveryStatGem(sourceID int, c *EffectContext, tar
 	}
 	previous := c.targetResources
 	c.targetResources = func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
+		if r.MPDebit != 0 {
+			a := s.actor(c.ActorID)
+			a.MP = max(0, a.MP-r.MPDebit)
+		}
 		if r.MPRecoveryTarget != "" {
 			t := s.actor(r.MPRecoveryTarget)
 			t.MP = min(t.MaxMP, t.MP+r.MPRecovery)
