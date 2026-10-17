@@ -22,6 +22,12 @@
       "target_module": "core/inventory",
       "relation_type": "consumer_interface",
       "source_ref": "internal/adventure/adventure.go#InventoryRepository"
+    },
+    {
+      "name": "transaction_provider",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/options.go#TransactionProvider"
     }
   ],
   "transaction_boundaries": [
@@ -30,7 +36,39 @@
       "source_ref": "internal/adventure/adventure.go#Service.StartStage",
       "transaction_type": "Delegated",
       "lock_sequence": [],
-      "note": "StartStage performs ordinary access reads and delegates immediate crawl execution; battle settlement uses internal/battle. This wrapper is not a single RunInTx boundary. Legacy access parity is tracked in docs/migration/documentation-audit.md."
+      "note": "StartStage performs ordinary access reads and delegates immediate crawl execution to ExecuteCrawl."
+    },
+    {
+      "method": "ExecuteCrawl",
+      "source_ref": "internal/adventure/adventure.go#Service.ExecuteCrawl",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
+          "note": "Lock participating characters ascending by ID and apply rewards/vitality"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
+          "note": "Lock inventories and deliver Floor 11 treasure drops"
+        },
+        {
+          "table": "character_depots / depot_items",
+          "tier": 5,
+          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
+          "note": "Conditional overflow delivery when inventory is full"
+        },
+        {
+          "table": "adventures",
+          "tier": 8,
+          "mode": "INSERT ... ON DUPLICATE KEY UPDATE",
+          "note": "Persist resolved adventure history record for each participant in the same transaction"
+        }
+      ],
+      "note": "Wraps post-battle reward/item settlement and adventure history persistence in a single RunInTx boundary; VictoryHook and PostAdventureHook execute after commit."
     }
   ]
 }

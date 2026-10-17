@@ -90,6 +90,14 @@ type Service struct {
 	battleSettler      PostBattleSettler
 	blessingProvider   BlessingProvider
 	timer              TimerService
+	txProvider         TransactionProvider
+}
+
+func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) error) error {
+	if s.txProvider != nil {
+		return s.txProvider.RunInTx(ctx, fn)
+	}
+	return fn(ctx)
 }
 
 func (s *Service) now() time.Time {
@@ -343,81 +351,88 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}
 
 	result := session.Result()
-	if err := s.settlePostBattle(ctx, req, &result); err != nil {
+	now := s.now()
+	if err := s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.settlePostBattle(txCtx, req, &result); err != nil {
+			return err
+		}
+
+		// Persist adventure record for each participating character
+		for _, c := range characters {
+			advID := id.New()
+			result.AdventureIDs[c.ID] = advID
+
+			adv := Adventure{
+				ID:               advID,
+				CharacterID:      c.ID,
+				Type:             stage.ID,
+				StageID:          stage.ID,
+				StartedAt:        now,
+				FloorsCleared:    result.FloorsCleared,
+				IsCleared:        result.StageCleared,
+				PartySize:        len(characters),
+				ExperienceReward: result.TotalEXP,
+				Resolved:         true,
+				BattleResult: corebattle.Result{
+					Outcome:  result.Outcome,
+					WinnerID: characters[0].ID,
+					Turns:    result.TotalTurns,
+					Reward: corebattle.Reward{
+						Experience: result.TotalEXP,
+						Currency:   result.TotalGold,
+						Crystals:   result.TotalCrystals,
+					},
+				},
+			}
+
+			if s.adventures != nil {
+				if err := s.adventures.Save(txCtx, adv); err != nil {
+					return fmt.Errorf("saving adventure record: %w", err)
+				}
+			}
+
+			// Apply fallback experience, gold, crystal, and surviving HP/MP if battleSettler is not configured
+			if s.battleSettler == nil {
+				if hp, ok := result.ParticipantHPs[c.ID]; ok {
+					if hp <= 0 {
+						c.Stats.HP = 1
+					} else {
+						c.Stats.HP = hp
+					}
+				}
+				if mp, ok := result.ParticipantMPs[c.ID]; ok {
+					c.Stats.MP = mp
+				}
+
+				if result.Outcome == corebattle.OutcomeWin {
+					if result.TotalEXP > 0 {
+						_, _ = progression.ApplyExperience(&c, result.TotalEXP)
+					}
+					if result.TotalGold > 0 {
+						if err := c.AddMoney(result.TotalGold); err != nil {
+							return fmt.Errorf("adding gold for character %s: %w", c.ID, err)
+						}
+					}
+					if result.TotalCrystals > 0 {
+						if err := c.AddCrystal(result.TotalCrystals); err != nil {
+							return fmt.Errorf("adding crystals for character %s: %w", c.ID, err)
+						}
+					}
+				}
+
+				if updater, ok := s.characters.(CharacterUpdater); ok {
+					if err := updater.Update(txCtx, c); err != nil {
+						return fmt.Errorf("updating character %s: %w", c.ID, err)
+					}
+				}
+			}
+		}
+		return nil
+	}); err != nil {
 		return DungeonCrawlResult{}, err
 	}
 
-	// Persist adventure record for each participating character
-	now := s.now()
 	for _, c := range characters {
-		advID := id.New()
-		result.AdventureIDs[c.ID] = advID
-
-		adv := Adventure{
-			ID:               advID,
-			CharacterID:      c.ID,
-			Type:             stage.ID,
-			StageID:          stage.ID,
-			StartedAt:        now,
-			FloorsCleared:    result.FloorsCleared,
-			IsCleared:        result.StageCleared,
-			PartySize:        len(characters),
-			ExperienceReward: result.TotalEXP,
-			Resolved:         true,
-			BattleResult: corebattle.Result{
-				Outcome:  result.Outcome,
-				WinnerID: characters[0].ID,
-				Turns:    result.TotalTurns,
-				Reward: corebattle.Reward{
-					Experience: result.TotalEXP,
-					Currency:   result.TotalGold,
-					Crystals:   result.TotalCrystals,
-				},
-			},
-		}
-
-		if s.adventures != nil {
-			if err := s.adventures.Save(ctx, adv); err != nil {
-				return DungeonCrawlResult{}, fmt.Errorf("saving adventure record: %w", err)
-			}
-		}
-
-		// Apply fallback experience, gold, crystal, and surviving HP/MP if battleSettler is not configured
-		if s.battleSettler == nil {
-			if hp, ok := result.ParticipantHPs[c.ID]; ok {
-				if hp <= 0 {
-					c.Stats.HP = 1
-				} else {
-					c.Stats.HP = hp
-				}
-			}
-			if mp, ok := result.ParticipantMPs[c.ID]; ok {
-				c.Stats.MP = mp
-			}
-
-			if result.Outcome == corebattle.OutcomeWin {
-				if result.TotalEXP > 0 {
-					_, _ = progression.ApplyExperience(&c, result.TotalEXP)
-				}
-				if result.TotalGold > 0 {
-					if err := c.AddMoney(result.TotalGold); err != nil {
-						return DungeonCrawlResult{}, fmt.Errorf("adding gold for character %s: %w", c.ID, err)
-					}
-				}
-				if result.TotalCrystals > 0 {
-					if err := c.AddCrystal(result.TotalCrystals); err != nil {
-						return DungeonCrawlResult{}, fmt.Errorf("adding crystals for character %s: %w", c.ID, err)
-					}
-				}
-			}
-
-			if updater, ok := s.characters.(CharacterUpdater); ok {
-				if err := updater.Update(ctx, c); err != nil {
-					return DungeonCrawlResult{}, fmt.Errorf("updating character %s: %w", c.ID, err)
-				}
-			}
-		}
-
 		if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {
 			if err := s.victoryHook(ctx, c.ID, result.FloorsCleared, result.TotalGold); err != nil {
 				s.logger.Warn("adventure victory hook failed for character %s: %v", c.ID, err)

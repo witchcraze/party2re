@@ -11,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/character"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
@@ -448,6 +449,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		clock,
 		adventure.WithParticipantBuilder(battleAdapter),
 		adventure.WithPostBattleSettler(battleAdapter),
+		adventure.WithTransactionProvider(txProvider),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -543,5 +545,261 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	}
 	if savedWeakling.Stats.HP != 1 {
 		t.Errorf("expected defeated hero HP=1 in MariaDB, got %d", savedWeakling.Stats.HP)
+	}
+}
+
+type failingSaveAdventureRepo struct {
+	adventure.Repository
+	failOnCall int
+	calls      int
+	onSave     func(ctx context.Context, value adventure.Adventure)
+}
+
+func (r *failingSaveAdventureRepo) Save(ctx context.Context, value adventure.Adventure) error {
+	r.calls++
+	if r.onSave != nil {
+		r.onSave(ctx, value)
+	}
+	if r.failOnCall > 0 && r.calls == r.failOnCall {
+		return errors.New("injected adventure history save failure")
+	}
+	return r.Repository.Save(ctx, value)
+}
+
+func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	characterService, err := character.NewService(charRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equipRepo, err := database.NewEquipmentRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseAdvRepo, err := database.NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	makeHero := func(name string) corecharacter.Character {
+		c, err := characterService.Create(ctx, player.ID, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.Level = 10
+		c.Stats.HP = 500
+		c.Stats.MaxHP = 500
+		c.Stats.MP = 100
+		c.Stats.MaxMP = 100
+		c.Stats.Attack = 200
+		c.Stats.Defense = 100
+		c.Stats.Agility = 100
+		if err := charRepo.Update(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+
+	hero1 := makeHero("AtomicSolo")
+	hero2 := makeHero("AtomicParty")
+
+	battleAdapter := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithDepotRepository(depotRepo),
+		battle.WithBattleEngine(corebattle.Engine{}),
+		battle.WithTransactionProvider(txProvider),
+	)
+
+	clock := &fixedClock{now: time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)}
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	advRepo := &failingSaveAdventureRepo{Repository: baseAdvRepo}
+	advService, err := adventure.NewServiceWithCatalogs(
+		advRepo,
+		charRepo,
+		invRepo,
+		stages,
+		monsters,
+		corebattle.Engine{},
+		nil,
+		nil,
+		clock,
+		adventure.WithParticipantBuilder(battleAdapter),
+		adventure.WithPostBattleSettler(battleAdapter),
+		adventure.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var victoryHooks, postHooks int
+	advService.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
+		victoryHooks++
+		return nil
+	})
+	advService.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
+		postHooks++
+		return nil
+	})
+
+	// 1. Solo history save error rolls back rewards, inventory drops, and chronicle
+	advRepo.calls = 0
+	advRepo.failOnCall = 1
+	_, err = advService.StartStage(ctx, hero1.ID, adventure.StarterAdventure)
+	if err == nil {
+		t.Fatal("expected StartStage to fail when adventure Save fails")
+	}
+	if victoryHooks != 0 || postHooks != 0 {
+		t.Fatalf("hooks must not run on rolled-back crawl: victory=%d post=%d", victoryHooks, postHooks)
+	}
+
+	afterFail1, err := charRepo.FindByID(ctx, hero1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterFail1.Money != hero1.Money || afterFail1.Experience != hero1.Experience || afterFail1.Level != hero1.Level {
+		t.Fatalf("expected hero1 rewards rolled back, before=(money:%d exp:%d lvl:%d) after=(money:%d exp:%d lvl:%d)",
+			hero1.Money, hero1.Experience, hero1.Level, afterFail1.Money, afterFail1.Experience, afterFail1.Level)
+	}
+	invAfterFail1, err := invRepo.FindByCharacterID(ctx, hero1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(invAfterFail1.Items) != 0 {
+		t.Fatalf("expected hero1 inventory drops rolled back, got %d items", len(invAfterFail1.Items))
+	}
+	chronAfterFail1, err := advService.GetChronicle(ctx, hero1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chronAfterFail1.TotalAdventures != 0 || chronAfterFail1.TotalVictories != 0 {
+		t.Fatalf("expected hero1 chronicle empty after rollback, got %+v", chronAfterFail1)
+	}
+
+	// 2. Multi-participant partial history save error (2nd participant fails) rolls back both participants' rewards and 1st participant's history
+	advRepo.calls = 0
+	advRepo.failOnCall = 2
+	_, err = advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{hero1.ID, hero2.ID},
+		StageID:      adventure.StarterAdventure,
+	})
+	if err == nil {
+		t.Fatal("expected ExecuteCrawl to fail when 2nd participant adventure Save fails")
+	}
+	if victoryHooks != 0 || postHooks != 0 {
+		t.Fatalf("hooks must not run on multi-participant rollback: victory=%d post=%d", victoryHooks, postHooks)
+	}
+
+	for _, h := range []corecharacter.Character{hero1, hero2} {
+		reloaded, err := charRepo.FindByID(ctx, h.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloaded.Money != h.Money || reloaded.Experience != h.Experience {
+			t.Fatalf("expected %s rewards rolled back, got money=%d exp=%d", h.Name, reloaded.Money, reloaded.Experience)
+		}
+		hist, err := advService.ListHistory(ctx, h.ID, 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hist.Total != 0 || len(hist.Items) != 0 {
+			t.Fatalf("expected %s history rolled back, got total=%d len=%d", h.Name, hist.Total, len(hist.Items))
+		}
+	}
+
+	// 3. Success commits rewards and history together in the same transaction; post-commit hooks run outside tx and hook errors do not revert committed state
+	advRepo.calls = 0
+	advRepo.failOnCall = 0
+	var outsideMoneyDuringSave int
+	var hookSawCommittedHistory bool
+	advRepo.onSave = func(_ context.Context, _ adventure.Adventure) {
+		// Outside context (non-tx) must not see uncommitted reward changes before Save finishes and tx commits
+		outsideChar, err := charRepo.FindByID(context.Background(), hero1.ID)
+		if err == nil {
+			outsideMoneyDuringSave = outsideChar.Money
+		}
+	}
+	advService.SetVictoryHook(func(hookCtx context.Context, characterID string, _ int, _ int) error {
+		victoryHooks++
+		if database.TxFromContext(hookCtx) != nil {
+			t.Errorf("expected victoryHook context to have no active transaction")
+		}
+		hist, err := advService.ListHistory(context.Background(), characterID, 10, 0)
+		if err == nil && hist.Total == 1 {
+			hookSawCommittedHistory = true
+		}
+		return errors.New("victory hook failure after commit")
+	})
+	advService.SetPostAdventureHook(func(hookCtx context.Context, _ string) error {
+		postHooks++
+		if database.TxFromContext(hookCtx) != nil {
+			t.Errorf("expected postAdventureHook context to have no active transaction")
+		}
+		return errors.New("post adventure hook failure after commit")
+	})
+
+	adv, err := advService.StartStage(ctx, hero1.ID, adventure.StarterAdventure)
+	if err != nil {
+		t.Fatalf("expected StartStage to succeed even when post-commit hooks return errors, got: %v", err)
+	}
+	if outsideMoneyDuringSave != hero1.Money {
+		t.Fatalf("expected rewards to be uncommitted during adventure Save, but outside reader saw money=%d (initial=%d)",
+			outsideMoneyDuringSave, hero1.Money)
+	}
+	if !hookSawCommittedHistory || victoryHooks != 1 || postHooks != 1 {
+		t.Fatalf("expected hooks to run after commit and observe committed history: sawHistory=%v victory=%d post=%d",
+			hookSawCommittedHistory, victoryHooks, postHooks)
+	}
+
+	committedHero1, err := charRepo.FindByID(ctx, hero1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if committedHero1.Money <= hero1.Money {
+		t.Fatalf("expected committed money > %d, got %d", hero1.Money, committedHero1.Money)
+	}
+	chronAfterCommit, err := advService.GetChronicle(ctx, hero1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chronAfterCommit.TotalAdventures != 1 || chronAfterCommit.TotalVictories != 1 || !adv.IsCleared {
+		t.Fatalf("expected committed chronicle and cleared adventure, got chron=%+v adv=%+v", chronAfterCommit, adv)
 	}
 }
