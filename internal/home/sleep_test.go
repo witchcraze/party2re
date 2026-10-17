@@ -1127,4 +1127,295 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 			t.Errorf("expected sleeping=false, can_wake=false, got: %+v", status)
 		}
 	})
+
+	t.Run("SQL pending_wake read failure propagates when duration lock expired and asleep unlocked", func(t *testing.T) {
+		dbReadErr := errors.New("sql pending_wake read failure")
+		reader := &failingCharReader{err: dbReadErr}
+		mt := &mockTimer{}
+		svc, err := NewService(newMockHomeRepo(), reader, WithTimer(mt))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetSleepStatus(ctx, "c1")
+		if !errors.Is(err, dbReadErr) {
+			t.Fatalf("expected %v, got status=%+v err=%v", dbReadErr, status, err)
+		}
+		if status.Sleeping || status.CanWake || status.Message != "" {
+			t.Errorf("expected empty SleepStatus on read error, got: %+v", status)
+		}
+	})
+
+	t.Run("SQL pending_wake canceled context propagates when duration lock expired", func(t *testing.T) {
+		canceledCtx, cancel := context.WithCancel(ctx)
+		cancel()
+		reader := &failingCharReader{respectCtx: true, chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", PendingWake: true},
+		}}
+		mt := &mockTimer{}
+		svc, err := NewService(newMockHomeRepo(), reader, WithTimer(mt))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetSleepStatus(canceledCtx, "c1")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got status=%+v err=%v", status, err)
+		}
+	})
+
+	t.Run("true non-existent character returns ErrCharacterNotFound", func(t *testing.T) {
+		reader := &mockCharReader{chars: map[string]corecharacter.Character{}}
+		mt := &mockTimer{}
+		svc, err := NewService(newMockHomeRepo(), reader, WithTimer(mt))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetSleepStatus(ctx, "nonexistent")
+		if !errors.Is(err, ErrCharacterNotFound) {
+			t.Fatalf("expected ErrCharacterNotFound, got status=%+v err=%v", status, err)
+		}
+	})
+}
+
+type failingCharReader struct {
+	chars      map[string]corecharacter.Character
+	err        error
+	failOnCall int
+	calls      int
+	respectCtx bool
+	onCall     func(call int)
+}
+
+func (f *failingCharReader) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	f.calls++
+	if f.onCall != nil {
+		f.onCall(f.calls)
+	}
+	if f.respectCtx {
+		if err := ctx.Err(); err != nil {
+			return corecharacter.Character{}, err
+		}
+	}
+	if f.failOnCall > 0 && f.calls == f.failOnCall {
+		return corecharacter.Character{}, f.err
+	}
+	if f.failOnCall == 0 && f.err != nil {
+		return corecharacter.Character{}, f.err
+	}
+	c, ok := f.chars[id]
+	if !ok {
+		return corecharacter.Character{}, corecharacter.ErrNotFound
+	}
+	return c, nil
+}
+
+type callTrackingTimer struct {
+	*mockTimer
+	isLockedCalls   map[string]int
+	failIsLockedAt  map[string]int
+	failIsLockedErr map[string]error
+	respectCtx      bool
+}
+
+func (c *callTrackingTimer) IsLocked(ctx context.Context, category, targetID string) (bool, error) {
+	if c.respectCtx {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+	}
+	if c.isLockedCalls == nil {
+		c.isLockedCalls = make(map[string]int)
+	}
+	c.isLockedCalls[category]++
+	if c.failIsLockedAt != nil && c.failIsLockedAt[category] > 0 && c.isLockedCalls[category] == c.failIsLockedAt[category] {
+		return false, c.failIsLockedErr[category]
+	}
+	return c.mockTimer.IsLocked(ctx, category, targetID)
+}
+
+func TestWake_PostClaimRecheckReadFailures(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("post-claim SQL FindByID failure halts Wake without running hooks, clearing pending_wake, or leaking claim", func(t *testing.T) {
+		dbErr := errors.New("post-claim sql find_by_id error")
+		charRepo := &mockCharRepo{
+			chars: map[string]corecharacter.Character{
+				"c1": {
+					ID:          "c1",
+					Name:        "Hero",
+					Tired:       60,
+					PendingWake: true,
+					Stats:       corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50},
+				},
+			},
+		}
+		reader := &failingCharReader{
+			chars:      charRepo.chars,
+			err:        dbErr,
+			failOnCall: 2, // 1st call before claim succeeds; 2nd call after claim fails
+		}
+		mt := &mockTimer{}
+		_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+		_ = mt.SetLock(ctx, timer.CategoryDungeonOnce, "c1", 24*time.Hour)
+
+		fullness := &mockFullnessResetter{}
+		blessing := &mockBlessingCleaner{}
+		alchemy := &mockAlchemyCompleter{}
+		costume := &mockCostumeResetter{}
+
+		svc, err := NewService(
+			newMockHomeRepo(),
+			reader,
+			WithTimer(mt),
+			WithCharacterUpdater(charRepo),
+			WithFullnessResetter(fullness),
+			WithBlessingCleaner(blessing),
+		)
+		if err != nil {
+			t.Fatalf("NewService: %v", err)
+		}
+		svc.SetAlchemyCompleter(alchemy)
+		svc.SetCostumeResetter(costume)
+
+		res, err := svc.Wake(ctx, "c1")
+		if !errors.Is(err, dbErr) {
+			t.Fatalf("expected error %v, got res=%+v err=%v", dbErr, res, err)
+		}
+		if res.Success {
+			t.Errorf("expected WakeResult.Success = false")
+		}
+		if fullness.calledFor != "" || blessing.calledFor != "" || alchemy.calledFor != "" || costume.calledFor != "" {
+			t.Errorf("expected 0 recovery hooks executed, got fullness=%q blessing=%q alchemy=%q costume=%q",
+				fullness.calledFor, blessing.calledFor, alchemy.calledFor, costume.calledFor)
+		}
+		got := charRepo.chars["c1"]
+		if !got.PendingWake || got.Stats.HP != 10 || got.Stats.MP != 5 || got.Tired != 60 {
+			t.Errorf("expected character state and PendingWake unchanged, got %+v", got)
+		}
+		if asleep, _ := mt.IsLocked(ctx, timer.CategoryAsleep, "c1"); !asleep {
+			t.Errorf("expected CategoryAsleep lock retained")
+		}
+		if dungeon, _ := mt.IsLocked(ctx, timer.CategoryDungeonOnce, "c1"); !dungeon {
+			t.Errorf("expected CategoryDungeonOnce lock retained")
+		}
+		if waking, _ := mt.IsLocked(ctx, timer.CategoryWaking, "c1"); waking {
+			t.Errorf("expected CategoryWaking claim released on cleanup")
+		}
+	})
+
+	t.Run("post-claim Valkey CategoryAsleep IsLocked failure halts Wake without running hooks or leaking claim", func(t *testing.T) {
+		asleepErr := errors.New("post-claim valkey asleep check error")
+		charRepo := &mockCharRepo{
+			chars: map[string]corecharacter.Character{
+				"c1": {
+					ID:          "c1",
+					Name:        "Hero",
+					Tired:       60,
+					PendingWake: false, // PendingWake false in SQL so Wake relies on CategoryAsleep
+					Stats:       corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50},
+				},
+			},
+		}
+		mt := &mockTimer{}
+		_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+		_ = mt.SetLock(ctx, timer.CategoryDungeonOnce, "c1", 24*time.Hour)
+
+		ct := &callTrackingTimer{
+			mockTimer:       mt,
+			failIsLockedAt:  map[string]int{timer.CategoryAsleep: 2}, // 1st pre-claim check succeeds; 2nd post-claim check fails
+			failIsLockedErr: map[string]error{timer.CategoryAsleep: asleepErr},
+		}
+
+		fullness := &mockFullnessResetter{}
+		blessing := &mockBlessingCleaner{}
+		alchemy := &mockAlchemyCompleter{}
+		costume := &mockCostumeResetter{}
+
+		svc, err := NewService(
+			newMockHomeRepo(),
+			charRepo,
+			WithTimer(ct),
+			WithCharacterUpdater(charRepo),
+			WithFullnessResetter(fullness),
+			WithBlessingCleaner(blessing),
+		)
+		if err != nil {
+			t.Fatalf("NewService: %v", err)
+		}
+		svc.SetAlchemyCompleter(alchemy)
+		svc.SetCostumeResetter(costume)
+
+		res, err := svc.Wake(ctx, "c1")
+		if !errors.Is(err, asleepErr) {
+			t.Fatalf("expected error %v, got res=%+v err=%v", asleepErr, res, err)
+		}
+		if res.Success || strings.Contains(res.Message, "すでに目覚めています") {
+			t.Errorf("expected no false awake success, got %+v", res)
+		}
+		if fullness.calledFor != "" || blessing.calledFor != "" || alchemy.calledFor != "" || costume.calledFor != "" {
+			t.Errorf("expected 0 recovery hooks executed, got fullness=%q blessing=%q alchemy=%q costume=%q",
+				fullness.calledFor, blessing.calledFor, alchemy.calledFor, costume.calledFor)
+		}
+		got := charRepo.chars["c1"]
+		if got.Stats.HP != 10 || got.Stats.MP != 5 || got.Tired != 60 {
+			t.Errorf("expected character vitality unchanged, got %+v", got)
+		}
+		if asleep, _ := mt.IsLocked(ctx, timer.CategoryAsleep, "c1"); !asleep {
+			t.Errorf("expected CategoryAsleep lock retained")
+		}
+		if waking, _ := mt.IsLocked(ctx, timer.CategoryWaking, "c1"); waking {
+			t.Errorf("expected CategoryWaking claim released on cleanup")
+		}
+	})
+
+	t.Run("post-claim canceled context propagates and releases claim without running hooks", func(t *testing.T) {
+		wakeCtx, cancel := context.WithCancel(ctx)
+		charRepo := &mockCharRepo{
+			chars: map[string]corecharacter.Character{
+				"c1": {
+					ID:          "c1",
+					Name:        "Hero",
+					Tired:       60,
+					PendingWake: true,
+					Stats:       corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50},
+				},
+			},
+		}
+		reader := &failingCharReader{
+			chars:      charRepo.chars,
+			respectCtx: true,
+			onCall: func(call int) {
+				if call == 2 {
+					cancel()
+				}
+			},
+		}
+		mt := &mockTimer{}
+		_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+
+		fullness := &mockFullnessResetter{}
+		svc, err := NewService(
+			newMockHomeRepo(),
+			reader,
+			WithTimer(mt),
+			WithCharacterUpdater(charRepo),
+			WithFullnessResetter(fullness),
+		)
+		if err != nil {
+			t.Fatalf("NewService: %v", err)
+		}
+
+		res, err := svc.Wake(wakeCtx, "c1")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got res=%+v err=%v", res, err)
+		}
+		if fullness.calledFor != "" {
+			t.Errorf("expected fullness hook not called")
+		}
+		if !charRepo.chars["c1"].PendingWake || charRepo.chars["c1"].Stats.HP != 10 {
+			t.Errorf("expected character state unchanged, got %+v", charRepo.chars["c1"])
+		}
+		if waking, _ := mt.IsLocked(ctx, timer.CategoryWaking, "c1"); waking {
+			t.Errorf("expected CategoryWaking claim released via detached cleanup context")
+		}
+	})
 }

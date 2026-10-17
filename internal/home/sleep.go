@@ -70,6 +70,9 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 
 	char, err := s.charReader.FindByID(ctx, characterID)
 	if err != nil {
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return SleepResult{}, ErrCharacterNotFound
+		}
 		return SleepResult{}, err
 	}
 
@@ -82,7 +85,10 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 		// not a paid town lease. lib/system.cgi:418-435 checks for the private home.cgi file,
 		// which is created when the character is registered.
 		if _, err := s.charReader.FindByID(ctx, targetHomeID); err != nil {
-			return SleepResult{}, ErrCharacterNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) || errors.Is(err, ErrCharacterNotFound) {
+				return SleepResult{}, ErrCharacterNotFound
+			}
+			return SleepResult{}, err
 		}
 	}
 
@@ -300,9 +306,14 @@ func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (Sleep
 
 	var isPendingWake bool
 	if s.charReader != nil {
-		if c, err := s.charReader.FindByID(ctx, characterID); err == nil && c.PendingWake {
-			isPendingWake = true
+		c, err := s.charReader.FindByID(ctx, characterID)
+		if err != nil {
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return SleepStatus{}, ErrCharacterNotFound
+			}
+			return SleepStatus{}, err
 		}
+		isPendingWake = c.PendingWake
 	}
 	if !isPendingWake {
 		asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
