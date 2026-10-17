@@ -29,7 +29,7 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 		if err != nil {
 			return err
 		}
-		if existing != nil {
+		if existing != nil && existing.Status == StatusExploring {
 			return ErrActiveExpeditionExists
 		}
 		if s.activityChecker != nil {
@@ -63,34 +63,11 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	if exp == nil {
+	if exp == nil || exp.Status != StatusExploring {
 		return ExpeditionStepResult{}, ErrNoActiveExpedition
 	}
 	if exp.CharacterID != characterID {
 		return ExpeditionStepResult{}, ErrForbidden
-	}
-	if exp.Status != StatusExploring {
-		if exp.PartyID != "" {
-			if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
-				return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
-			}
-			if cur, cErr := s.activeStore.GetActiveExpedition(ctx, characterID); cErr == nil && cur != nil && cur.ID == exp.ID {
-				//lint:ignore error-swallow best-effort post-commit cache eviction
-				_ = s.activeStore.DeleteActiveExpedition(ctx, characterID)
-				//lint:ignore error-swallow best-effort post-commit fallback cleanup
-				_ = s.repo.DeleteActiveExpedition(ctx, characterID)
-			}
-
-			return ExpeditionStepResult{
-				Expedition:  *exp,
-				EventType:   EventEscape,
-				ExpEarned:   exp.AccumulatedExp,
-				GoldFound:   exp.AccumulatedGold,
-				MedalsFound: exp.AccumulatedMedals,
-				IsFinished:  true,
-			}, nil
-		}
-		return ExpeditionStepResult{}, ErrNoActiveExpedition
 	}
 
 	dungeon, ok := s.dungeonMap[exp.DungeonID]

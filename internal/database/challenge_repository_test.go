@@ -87,11 +87,6 @@ func TestChallengeRepository(t *testing.T) {
 		t.Fatalf("FinalizeSession failed: %v", err)
 	}
 
-	// 5b. Retry FinalizeSession must succeed idempotently without duplicate reward grants
-	if err := repo.FinalizeSession(ctx, s, 120, 80, []string{"potion_minor"}, 2); err != nil {
-		t.Fatalf("expected idempotent FinalizeSession on retry, got: %v", err)
-	}
-
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

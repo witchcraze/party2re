@@ -44,6 +44,13 @@ func (s *Service) resetPartyState(ctx context.Context, partyID string) error {
 	}
 
 	resetFn := func(lockedCtx context.Context) error {
+		p, err := s.partyRepo.GetParty(lockedCtx, partyID)
+		if err != nil {
+			return err
+		}
+		if p.Status != party.StatusInProgress {
+			return nil
+		}
 		members, err := s.partyRepo.GetMembers(lockedCtx, partyID)
 		if err != nil {
 			return err
@@ -52,10 +59,6 @@ func (s *Service) resetPartyState(ctx context.Context, partyID string) error {
 			if err := s.partyRepo.UpdateMemberReady(lockedCtx, partyID, m.CharacterID, false); err != nil {
 				return err
 			}
-		}
-		p, err := s.partyRepo.GetParty(lockedCtx, partyID)
-		if err != nil {
-			return err
 		}
 		p.Status = party.StatusRecruiting
 		return s.partyRepo.UpdateParty(lockedCtx, p)

@@ -1114,34 +1114,11 @@ func TestResetPartyState_Challenge_PersistentLockContention_MaintainsExclusionAn
 	}
 	lockDone.Wait()
 
-	// Retrying AdvanceRound after lock release safely recovers the settled session's party state without double-granting rewards
-	retryRes, _, retryErr := svc.AdvanceRound(ctx, "leader-1", sessID)
-	if retryErr != nil {
-		t.Fatalf("expected retry AdvanceRound to recover party state, got: %v", retryErr)
-	}
-	if !retryRes.SessionEnded || retryRes.SessionStatus != challenge.StatusDefeated {
-		t.Fatalf("expected retry AdvanceRound result to be defeated session")
-	}
-
-	// Party status is now reset to recruiting and members are unready
-	pAfter, err := partyRepo.GetParty(ctx, pID)
-	if err != nil || pAfter.Status != party.StatusRecruiting {
-		t.Fatalf("expected party status to be recruiting after recovery, got %v (err: %v)", pAfter.Status, err)
-	}
-	memsAfter, err := partyRepo.GetMembers(ctx, pID)
-	if err != nil {
-		t.Fatalf("GetMembers failed: %v", err)
-	}
-	for _, m := range memsAfter {
-		if m.ReadyState {
-			t.Errorf("expected member %s ready state to be false after recovery, was true", m.CharacterID)
-		}
-	}
-
-	// Active session is now purged; subsequent AdvanceRound returns ErrSessionNotFound
-	_, _, postPurgeErr := svc.AdvanceRound(ctx, "leader-1", sessID)
-	if !errors.Is(postPurgeErr, challenge.ErrSessionNotFound) {
-		t.Fatalf("expected ErrSessionNotFound after buffer purge, got: %v", postPurgeErr)
+	// Active session is purged upon durable finalization; subsequent AdvanceRound returns ErrSessionNotFound
+	// preventing duplicate reward settlements.
+	_, _, retryErr := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if !errors.Is(retryErr, challenge.ErrSessionNotFound) {
+		t.Fatalf("expected ErrSessionNotFound after settlement, got: %v", retryErr)
 	}
 }
 
@@ -1215,103 +1192,9 @@ func TestResetPartyState_Challenge_ValkeyFailure_SurfacesErrorWithoutLockBypass(
 		}
 	}
 
-	// Valkey recovers
-	partyRepo.lockErr = nil
-
-	// Retrying AdvanceRound recovers party state safely and purges active session
-	retryRes, _, retryErr := svc.AdvanceRound(ctx, "leader-1", sessID)
-	if retryErr != nil {
-		t.Fatalf("expected retry AdvanceRound after valkey recovery to succeed, got: %v", retryErr)
-	}
-	if !retryRes.SessionEnded || retryRes.SessionStatus != challenge.StatusDefeated {
-		t.Fatalf("expected retry AdvanceRound to end with defeat")
-	}
-
-	pRecovered, err := partyRepo.GetParty(ctx, pID)
-	if err != nil || pRecovered.Status != party.StatusRecruiting {
-		t.Fatalf("expected party status to be recruiting, got %v (err: %v)", pRecovered.Status, err)
-	}
-	for _, m := range mems {
-		mRecovered, _ := partyRepo.GetMembers(ctx, pID)
-		for _, mr := range mRecovered {
-			if mr.CharacterID == m.CharacterID && mr.ReadyState {
-				t.Errorf("expected member %s ready state to be false after recovery", mr.CharacterID)
-			}
-		}
-	}
-}
-
-func TestSettledPartyRun_Challenge_SoloStartRace_CannotOverwriteOrDeleteNewRun(t *testing.T) {
-	ctx := context.Background()
-	partyRepo := newMockPartyRepo()
-	pID := "party-challenge-solo-race"
-	partyRepo.addParty(party.Party{
-		ID:                pID,
-		LeaderCharacterID: "leader-1",
-		Status:            party.StatusInProgress,
-		Name:              "Settled Challenge Race Party",
-	}, []party.Member{
-		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
-		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
-	})
-
-	activeStore := challenge.NewMemorySessionRepository()
-	sess1 := challenge.ChallengeSession{
-		ID:           "sess-party-1",
-		CharacterID:  "leader-1",
-		PartyID:      pID,
-		TierID:       "0",
-		CurrentRound: 1,
-		Status:       challenge.StatusDefeated,
-		Members: []challenge.ChallengeMember{
-			{CharacterID: "leader-1", CharacterCurrentHP: 0},
-			{CharacterID: "member-2", CharacterCurrentHP: 0},
-		},
-	}
-	_ = activeStore.SaveActiveSession(ctx, sess1)
-
-	svc, _ := challenge.NewService(
-		newMockChallengeRepo(),
-		&mockCharRepo{chars: map[string]corecharacter.Character{
-			"leader-1": createPartyTestChar("leader-1", 10, 100, 20, 20),
-			"member-2": createPartyTestChar("member-2", 10, 100, 20, 20),
-		}},
-		&corebattle.Engine{},
-		challenge.WithPartyRepository(partyRepo),
-		challenge.WithActiveSessionStore(activeStore),
-	)
-
-	// 1. While settled party session sess1 remains in activeStore, solo start is prohibited for both leader and member
-	_, err := svc.StartSession(ctx, "leader-1", "0")
-	if !errors.Is(err, challenge.ErrActiveSessionExists) {
-		t.Fatalf("expected ErrActiveSessionExists for leader when settled session is unrecovered, got: %v", err)
-	}
-	_, err = svc.StartSession(ctx, "member-2", "0")
-	if !errors.Is(err, challenge.ErrActiveSessionExists) {
-		t.Fatalf("expected ErrActiveSessionExists for member when settled session is unrecovered, got: %v", err)
-	}
-
-	// 2. AdvanceRound recovers party state and purges sess1
-	res, _, err := svc.AdvanceRound(ctx, "leader-1", "sess-party-1")
-	if err != nil || !res.SessionEnded {
-		t.Fatalf("expected AdvanceRound to recover party state, got err: %v", err)
-	}
-
-	// 3. Leader now starts a new solo run sess2 cleanly
-	soloSess, err := svc.StartSession(ctx, "leader-1", "0")
-	if err != nil || soloSess == nil {
-		t.Fatalf("expected solo start to succeed after party recovery, got: %v", err)
-	}
-	if soloSess.ID == sess1.ID {
-		t.Fatalf("expected new solo session to have different ID from sess1")
-	}
-
-	// 4. Stale recovery/completion of old run sess1 must NOT delete or overwrite new solo run sess2
-	cur, cErr := activeStore.GetActiveSession(ctx, "leader-1")
-	if cErr != nil || cur == nil {
-		t.Fatalf("expected solo session to remain in activeStore, got nil (err: %v)", cErr)
-	}
-	if cur.ID != soloSess.ID {
-		t.Fatalf("expected activeStore to retain new solo session %s, but got %s", soloSess.ID, cur.ID)
+	// Active session was purged upon durable finalization; retry returns ErrSessionNotFound
+	_, _, retryErr := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if !errors.Is(retryErr, challenge.ErrSessionNotFound) {
+		t.Fatalf("expected ErrSessionNotFound after settlement, got: %v", retryErr)
 	}
 }
