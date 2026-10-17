@@ -364,6 +364,8 @@ func TestRecoveryGemFallenEnemySharedByDiscoveryAndInvocation(t *testing.T) {
 		target      string
 		enemyIDs    []string
 		allAlive    bool
+		confused    bool
+		bossField   bool
 		requester   bool
 		draws       []float64
 		wantTension float64
@@ -394,6 +396,33 @@ func TestRecoveryGemFallenEnemySharedByDiscoveryAndInvocation(t *testing.T) {
 			wantErr:     nil,
 		},
 		{
+			name:        "confused_self_target_admitted_without_requester_despite_fallen_enemy",
+			target:      "self",
+			enemyIDs:    []string{"enemy", "dead_enemy"},
+			confused:    true,
+			requester:   false,
+			draws:       nil,
+			wantTension: 3,
+			wantErr:     nil,
+		},
+		{
+			name:      "confused_ally_target_rejects_without_requester",
+			target:    "ally",
+			enemyIDs:  []string{"enemy", "dead_enemy"},
+			confused:  true,
+			requester: false,
+			wantErr:   corebattle.ErrUnsupportedEffect,
+		},
+		{
+			name:      "confused_self_target_boss_field_rejects_without_requester",
+			target:    "self",
+			enemyIDs:  []string{"enemy", "dead_enemy"},
+			confused:  true,
+			bossField: true,
+			requester: false,
+			wantErr:   corebattle.ErrUnsupportedEffect,
+		},
+		{
 			name:        "mixed_fallback_admitted_with_requester_fallen_chosen",
 			target:      "ally",
 			enemyIDs:    []string{"enemy", "dead_enemy"},
@@ -421,6 +450,12 @@ func TestRecoveryGemFallenEnemySharedByDiscoveryAndInvocation(t *testing.T) {
 				})
 			}
 			c.EnemyIDs = tc.enemyIDs
+			if tc.confused {
+				s.Actors[0].Status = corebattle.StatusConfusion
+			}
+			if tc.bossField {
+				s.SpecialBossField = true
+			}
 			s.Actors[0].Hit = 50
 			s.Actors[0].Tension = 3
 			s.Actors[3].Temporary = corebattle.TemporaryReflectAttack
