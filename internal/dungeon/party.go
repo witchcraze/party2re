@@ -48,76 +48,88 @@ func (s *Service) StartPartyExpedition(
 		return nil, errors.New("party repository not configured")
 	}
 
-	p, err := s.partyRepo.GetParty(ctx, partyID)
-	if err != nil {
-		return nil, ErrPartyNotFound
-	}
-	if p.LeaderCharacterID != leaderCharID {
-		return nil, ErrNotPartyLeader
-	}
-	if p.Status != party.StatusRecruiting {
-		return nil, ErrPartyNotRecruiting
-	}
-
-	partyMembers, err := s.partyRepo.GetMembers(ctx, partyID)
-	if err != nil || len(partyMembers) == 0 {
-		return nil, ErrPartyEmpty
-	}
-	if len(partyMembers) > 4 {
-		return nil, ErrTooManyPartyMembers
-	}
-
-	seen := make(map[string]bool, len(partyMembers))
-	for _, m := range partyMembers {
-		if !m.ReadyState {
-			return nil, ErrPartyNotReady
-		}
-		if seen[m.CharacterID] {
-			return nil, ErrDuplicatePartyMember
-		}
-		seen[m.CharacterID] = true
-	}
-
-	memberIDs := make([]string, 0, len(partyMembers))
-	memberIDs = append(memberIDs, leaderCharID)
-	for _, m := range partyMembers {
-		if m.CharacterID != leaderCharID {
-			memberIDs = append(memberIDs, m.CharacterID)
-		}
-	}
-
-	for _, mID := range memberIDs {
-		existing, err := s.activeStore.GetActiveExpedition(ctx, mID)
+	var exp *ActiveExpedition
+	err := s.partyRepo.WithPartyLock(ctx, partyID, func(lockedCtx context.Context) error {
+		p, err := s.partyRepo.GetParty(lockedCtx, partyID)
 		if err != nil {
-			return nil, err
+			return ErrPartyNotFound
 		}
-		if existing != nil && existing.Status == StatusExploring {
-			return nil, ErrActiveExpeditionExists
+		if p.LeaderCharacterID != leaderCharID {
+			return ErrNotPartyLeader
 		}
-	}
+		if p.Status != party.StatusRecruiting {
+			return ErrPartyNotRecruiting
+		}
 
-	if s.activityChecker != nil {
+		partyMembers, err := s.partyRepo.GetMembers(lockedCtx, partyID)
+		if err != nil || len(partyMembers) == 0 {
+			return ErrPartyEmpty
+		}
+		if len(partyMembers) > 4 {
+			return ErrTooManyPartyMembers
+		}
+
+		seen := make(map[string]bool, len(partyMembers))
+		for _, m := range partyMembers {
+			if !m.ReadyState {
+				return ErrPartyNotReady
+			}
+			if seen[m.CharacterID] {
+				return ErrDuplicatePartyMember
+			}
+			seen[m.CharacterID] = true
+		}
+
+		memberIDs := make([]string, 0, len(partyMembers))
+		memberIDs = append(memberIDs, leaderCharID)
+		for _, m := range partyMembers {
+			if m.CharacterID != leaderCharID {
+				memberIDs = append(memberIDs, m.CharacterID)
+			}
+		}
+
 		for _, mID := range memberIDs {
-			busy, err := s.activityChecker.HasActiveActivity(ctx, mID)
+			existing, err := s.activeStore.GetActiveExpedition(lockedCtx, mID)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			if busy {
-				return nil, ErrActiveExpeditionExists
+			if existing != nil && existing.Status == StatusExploring {
+				return ErrActiveExpeditionExists
 			}
 		}
-	}
 
-	p.Status = party.StatusInProgress
-	if err := s.partyRepo.UpdateParty(ctx, p); err != nil {
-		return nil, err
-	}
+		if s.activityChecker != nil {
+			for _, mID := range memberIDs {
+				busy, err := s.activityChecker.HasActiveActivity(lockedCtx, mID)
+				if err != nil {
+					return err
+				}
+				if busy {
+					return ErrActiveExpeditionExists
+				}
+			}
+		}
 
-	exp, err := s.startExpeditionRoster(ctx, leaderCharID, memberIDs, dungeonID, partyID, p.Name)
+		p.Status = party.StatusInProgress
+		if err := s.partyRepo.UpdateParty(lockedCtx, p); err != nil {
+			return err
+		}
+
+		expRes, err := s.startExpeditionRoster(lockedCtx, leaderCharID, memberIDs, dungeonID, partyID, p.Name)
+		if err != nil {
+			p.Status = party.StatusRecruiting
+			//lint:ignore error-swallow compensatory rollback on start failure
+			_ = s.partyRepo.UpdateParty(lockedCtx, p)
+			return err
+		}
+
+		exp = expRes
+		return nil
+	})
 	if err != nil {
-		p.Status = party.StatusRecruiting
-		//lint:ignore error-swallow compensatory rollback on start failure
-		_ = s.partyRepo.UpdateParty(ctx, p)
+		if errors.Is(err, party.ErrPartyNotRecruiting) {
+			return nil, ErrPartyNotRecruiting
+		}
 		return nil, err
 	}
 

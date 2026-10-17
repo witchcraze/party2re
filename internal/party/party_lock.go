@@ -22,3 +22,8 @@ func isPartyAdventureLocked(ctx context.Context, partyID string) bool {
 func withPartyAdventureLockedContext(ctx context.Context, partyID string) context.Context {
 	return context.WithValue(ctx, partyAdventureLockContextKey{}, partyID)
 }
+
+// PartyLocker provides party-level distributed locking for atomic run and adventure serialization (Rank 0).
+type PartyLocker interface {
+	WithPartyLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error
+}

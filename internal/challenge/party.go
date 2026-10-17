@@ -37,89 +37,101 @@ func (s *Service) StartPartySession(
 		return nil, errors.New("party repository not configured")
 	}
 
-	p, err := s.partyRepo.GetParty(ctx, partyID)
-	if err != nil {
-		return nil, ErrPartyNotFound
-	}
-	if p.LeaderCharacterID != leaderCharID {
-		return nil, ErrNotPartyLeader
-	}
-	if p.Status != party.StatusRecruiting {
-		return nil, ErrPartyNotRecruiting
-	}
-
-	tier, err := s.GetTier(tierID)
-	if err != nil {
-		return nil, err
-	}
-
-	partyMembers, err := s.partyRepo.GetMembers(ctx, partyID)
-	if err != nil || len(partyMembers) == 0 {
-		return nil, ErrPartyEmpty
-	}
-
-	maxParts := tier.MaxParticipants
-	if maxParts <= 0 {
-		maxParts = 4
-	}
-	if len(partyMembers) > maxParts {
-		return nil, ErrTooManyPartyMembers
-	}
-
-	seen := make(map[string]bool, len(partyMembers))
-	for _, m := range partyMembers {
-		if !m.ReadyState {
-			return nil, ErrPartyNotReady
-		}
-		if seen[m.CharacterID] {
-			return nil, ErrDuplicatePartyMember
-		}
-		seen[m.CharacterID] = true
-	}
-
-	memberIDs := make([]string, 0, len(partyMembers))
-	memberIDs = append(memberIDs, leaderCharID)
-	for _, m := range partyMembers {
-		if m.CharacterID != leaderCharID {
-			memberIDs = append(memberIDs, m.CharacterID)
-		}
-	}
-
-	for _, mID := range memberIDs {
-		existing, err := s.activeStore.GetActiveSession(ctx, mID)
+	var session *ChallengeSession
+	err := s.partyRepo.WithPartyLock(ctx, partyID, func(lockedCtx context.Context) error {
+		p, err := s.partyRepo.GetParty(lockedCtx, partyID)
 		if err != nil {
-			return nil, err
+			return ErrPartyNotFound
 		}
-		if existing != nil && existing.Status == StatusActive {
-			return nil, ErrActiveSessionExists
+		if p.LeaderCharacterID != leaderCharID {
+			return ErrNotPartyLeader
 		}
-	}
+		if p.Status != party.StatusRecruiting {
+			return ErrPartyNotRecruiting
+		}
 
-	if s.activityChecker != nil {
+		tier, err := s.GetTier(tierID)
+		if err != nil {
+			return err
+		}
+
+		partyMembers, err := s.partyRepo.GetMembers(lockedCtx, partyID)
+		if err != nil || len(partyMembers) == 0 {
+			return ErrPartyEmpty
+		}
+
+		maxParts := tier.MaxParticipants
+		if maxParts <= 0 {
+			maxParts = 4
+		}
+		if len(partyMembers) > maxParts {
+			return ErrTooManyPartyMembers
+		}
+
+		seen := make(map[string]bool, len(partyMembers))
+		for _, m := range partyMembers {
+			if !m.ReadyState {
+				return ErrPartyNotReady
+			}
+			if seen[m.CharacterID] {
+				return ErrDuplicatePartyMember
+			}
+			seen[m.CharacterID] = true
+		}
+
+		memberIDs := make([]string, 0, len(partyMembers))
+		memberIDs = append(memberIDs, leaderCharID)
+		for _, m := range partyMembers {
+			if m.CharacterID != leaderCharID {
+				memberIDs = append(memberIDs, m.CharacterID)
+			}
+		}
+
 		for _, mID := range memberIDs {
-			busy, err := s.activityChecker.HasActiveActivity(ctx, mID)
+			existing, err := s.activeStore.GetActiveSession(lockedCtx, mID)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			if busy {
-				return nil, ErrActiveSessionExists
+			if existing != nil && existing.Status == StatusActive {
+				return ErrActiveSessionExists
 			}
 		}
-	}
 
-	partyName := p.Name
-	partyColor := "#FFFFFF"
+		if s.activityChecker != nil {
+			for _, mID := range memberIDs {
+				busy, err := s.activityChecker.HasActiveActivity(lockedCtx, mID)
+				if err != nil {
+					return err
+				}
+				if busy {
+					return ErrActiveSessionExists
+				}
+			}
+		}
 
-	p.Status = party.StatusInProgress
-	if err := s.partyRepo.UpdateParty(ctx, p); err != nil {
-		return nil, err
-	}
+		partyName := p.Name
+		partyColor := "#FFFFFF"
 
-	session, err := s.startSessionRoster(ctx, leaderCharID, memberIDs, tier, partyID, partyName, partyColor)
+		p.Status = party.StatusInProgress
+		if err := s.partyRepo.UpdateParty(lockedCtx, p); err != nil {
+			return err
+		}
+
+		sess, err := s.startSessionRoster(lockedCtx, leaderCharID, memberIDs, tier, partyID, partyName, partyColor)
+		if err != nil {
+			p.Status = party.StatusRecruiting
+			//lint:ignore error-swallow compensatory rollback on start failure
+			_ = s.partyRepo.UpdateParty(lockedCtx, p)
+			return err
+		}
+
+		session = sess
+		return nil
+	})
 	if err != nil {
-		p.Status = party.StatusRecruiting
-		//lint:ignore error-swallow compensatory rollback on start failure
-		_ = s.partyRepo.UpdateParty(ctx, p)
+		if errors.Is(err, party.ErrPartyNotRecruiting) {
+			return nil, ErrPartyNotRecruiting
+		}
 		return nil, err
 	}
 
@@ -243,6 +255,8 @@ func (s *Service) startSessionRoster(
 	}
 
 	if err := s.repo.SaveSession(ctx, session); err != nil {
+		//lint:ignore error-swallow best-effort active session cleanup on persistence failure
+		_ = s.activeStore.DeleteActiveSession(ctx, leaderCharID)
 		return nil, fmt.Errorf("saving challenge session: %w", err)
 	}
 

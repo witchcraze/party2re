@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -27,18 +28,44 @@ func (m *mockInventoryRepo) FindByCharacterID(ctx context.Context, characterID s
 }
 
 type mockPartyRepo struct {
-	parties map[string]party.Party
-	members map[string][]party.Member
+	mu            sync.Mutex
+	lockedParties map[string]bool
+	parties       map[string]party.Party
+	members       map[string][]party.Member
 }
 
 func newMockPartyRepo() *mockPartyRepo {
 	return &mockPartyRepo{
-		parties: make(map[string]party.Party),
-		members: make(map[string][]party.Member),
+		lockedParties: make(map[string]bool),
+		parties:       make(map[string]party.Party),
+		members:       make(map[string][]party.Member),
 	}
 }
 
+func (m *mockPartyRepo) WithPartyLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error {
+	m.mu.Lock()
+	if m.lockedParties == nil {
+		m.lockedParties = make(map[string]bool)
+	}
+	if m.lockedParties[partyID] {
+		m.mu.Unlock()
+		return party.ErrPartyNotRecruiting
+	}
+	m.lockedParties[partyID] = true
+	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		delete(m.lockedParties, partyID)
+		m.mu.Unlock()
+	}()
+
+	return fn(ctx)
+}
+
 func (m *mockPartyRepo) GetParty(ctx context.Context, id string) (party.Party, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	p, ok := m.parties[id]
 	if !ok {
 		return party.Party{}, party.ErrNotFound
@@ -47,6 +74,8 @@ func (m *mockPartyRepo) GetParty(ctx context.Context, id string) (party.Party, e
 }
 
 func (m *mockPartyRepo) GetMembers(ctx context.Context, partyID string) ([]party.Member, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	mems, ok := m.members[partyID]
 	if !ok {
 		return nil, party.ErrNotFound
@@ -55,11 +84,15 @@ func (m *mockPartyRepo) GetMembers(ctx context.Context, partyID string) ([]party
 }
 
 func (m *mockPartyRepo) UpdateParty(ctx context.Context, p party.Party) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.parties[p.ID] = p
 	return nil
 }
 
 func (m *mockPartyRepo) UpdateMemberReady(ctx context.Context, partyID string, characterID string, ready bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	mems, ok := m.members[partyID]
 	if !ok {
 		return party.ErrNotFound
@@ -74,6 +107,8 @@ func (m *mockPartyRepo) UpdateMemberReady(ctx context.Context, partyID string, c
 }
 
 func (m *mockPartyRepo) addParty(p party.Party, members []party.Member) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.parties[p.ID] = p
 	m.members[p.ID] = members
 }
@@ -832,5 +867,65 @@ func TestPartyExpedition_ActivityChecker(t *testing.T) {
 	_, err = svc.StartExpedition(ctx, "member-2", "dungeon-01")
 	if !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
 		t.Errorf("expected ErrActiveExpeditionExists when solo character has active activity, got %v", err)
+	}
+}
+
+func TestStartPartyExpedition_Concurrent(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "party-concurrent",
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-concurrent", CharacterID: "leader-1", ReadyState: true, IsLeader: true},
+		{PartyID: "party-concurrent", CharacterID: "member-2", ReadyState: true},
+	})
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+	)
+
+	const concurrency = 5
+	errs := make(chan error, concurrency)
+	successes := make(chan *dungeon.ActiveExpedition, concurrency)
+	var wg sync.WaitGroup
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			exp, err := svc.StartPartyExpedition(ctx, "leader-1", "party-concurrent", "dungeon-01")
+			if err != nil {
+				errs <- err
+			} else {
+				successes <- exp
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+	close(successes)
+
+	var successCount int
+	for range successes {
+		successCount++
+	}
+
+	if successCount != 1 {
+		t.Fatalf("expected exactly 1 start to succeed, got %d", successCount)
+	}
+
+	for err := range errs {
+		if !errors.Is(err, dungeon.ErrPartyNotRecruiting) {
+			t.Errorf("expected concurrent failure ErrPartyNotRecruiting, got %v", err)
+		}
 	}
 }

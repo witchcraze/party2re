@@ -84,3 +84,8 @@ func (r *ValkeyRepository) WithPartyAdventureLock(ctx context.Context, partyID s
 	lockedCtx := withPartyAdventureLockedContext(ctx, partyID)
 	return fn(lockedCtx)
 }
+
+// WithPartyLock executes fn inside an exclusive distributed party lock in Valkey Master (Rank 0).
+func (r *ValkeyRepository) WithPartyLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error {
+	return r.WithPartyAdventureLock(ctx, partyID, fn)
+}

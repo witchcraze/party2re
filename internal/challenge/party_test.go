@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/challenge"
@@ -13,18 +14,44 @@ import (
 )
 
 type mockPartyRepo struct {
-	parties map[string]party.Party
-	members map[string][]party.Member
+	mu            sync.Mutex
+	lockedParties map[string]bool
+	parties       map[string]party.Party
+	members       map[string][]party.Member
 }
 
 func newMockPartyRepo() *mockPartyRepo {
 	return &mockPartyRepo{
-		parties: make(map[string]party.Party),
-		members: make(map[string][]party.Member),
+		lockedParties: make(map[string]bool),
+		parties:       make(map[string]party.Party),
+		members:       make(map[string][]party.Member),
 	}
 }
 
+func (m *mockPartyRepo) WithPartyLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error {
+	m.mu.Lock()
+	if m.lockedParties == nil {
+		m.lockedParties = make(map[string]bool)
+	}
+	if m.lockedParties[partyID] {
+		m.mu.Unlock()
+		return party.ErrPartyNotRecruiting
+	}
+	m.lockedParties[partyID] = true
+	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		delete(m.lockedParties, partyID)
+		m.mu.Unlock()
+	}()
+
+	return fn(ctx)
+}
+
 func (m *mockPartyRepo) GetParty(ctx context.Context, id string) (party.Party, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	p, ok := m.parties[id]
 	if !ok {
 		return party.Party{}, party.ErrNotFound
@@ -33,6 +60,8 @@ func (m *mockPartyRepo) GetParty(ctx context.Context, id string) (party.Party, e
 }
 
 func (m *mockPartyRepo) GetMembers(ctx context.Context, partyID string) ([]party.Member, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	mems, ok := m.members[partyID]
 	if !ok {
 		return nil, party.ErrNotFound
@@ -41,11 +70,15 @@ func (m *mockPartyRepo) GetMembers(ctx context.Context, partyID string) ([]party
 }
 
 func (m *mockPartyRepo) UpdateParty(ctx context.Context, p party.Party) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.parties[p.ID] = p
 	return nil
 }
 
 func (m *mockPartyRepo) UpdateMemberReady(ctx context.Context, partyID string, characterID string, ready bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	mems, ok := m.members[partyID]
 	if !ok {
 		return party.ErrNotFound
@@ -60,6 +93,8 @@ func (m *mockPartyRepo) UpdateMemberReady(ctx context.Context, partyID string, c
 }
 
 func (m *mockPartyRepo) addParty(p party.Party, members []party.Member) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.parties[p.ID] = p
 	m.members[p.ID] = members
 }
@@ -609,5 +644,132 @@ func TestPartySession_DefeatResetsPartyState(t *testing.T) {
 		if m.ReadyState {
 			t.Errorf("expected member %s ready state to be false after defeat", m.CharacterID)
 		}
+	}
+}
+
+func TestStartPartySession_Concurrent(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "party-challenge-concurrent",
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-challenge-concurrent", CharacterID: "leader-1", ReadyState: true, IsLeader: true},
+		{PartyID: "party-challenge-concurrent", CharacterID: "member-2", ReadyState: true},
+	})
+
+	svc, _ := challenge.NewService(
+		newMockChallengeRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createPartyTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createPartyTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+	)
+
+	const concurrency = 5
+	errs := make(chan error, concurrency)
+	successes := make(chan *challenge.ChallengeSession, concurrency)
+	var wg sync.WaitGroup
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sess, err := svc.StartPartySession(ctx, "leader-1", "party-challenge-concurrent", "2")
+			if err != nil {
+				errs <- err
+			} else {
+				successes <- sess
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+	close(successes)
+
+	var successCount int
+	for range successes {
+		successCount++
+	}
+
+	if successCount != 1 {
+		t.Fatalf("expected exactly 1 start to succeed, got %d", successCount)
+	}
+
+	for err := range errs {
+		if !errors.Is(err, challenge.ErrPartyNotRecruiting) {
+			t.Errorf("expected concurrent failure ErrPartyNotRecruiting, got %v", err)
+		}
+	}
+}
+
+type failSaveSessionRepo struct {
+	challenge.Repository
+}
+
+func (f failSaveSessionRepo) SaveSession(ctx context.Context, session challenge.ChallengeSession) error {
+	return errors.New("database connection failed")
+}
+
+func TestStartPartySession_SaveSessionFailureRollback(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "party-fail-save",
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-fail-save", CharacterID: "leader-1", ReadyState: true, IsLeader: true},
+		{PartyID: "party-fail-save", CharacterID: "member-2", ReadyState: true},
+	})
+
+	activeStore := challenge.NewMemorySessionRepository()
+	baseRepo := newMockChallengeRepo()
+	repo := failSaveSessionRepo{Repository: baseRepo}
+
+	svc, _ := challenge.NewService(
+		repo,
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createPartyTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createPartyTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+		challenge.WithActiveSessionStore(activeStore),
+	)
+
+	_, err := svc.StartPartySession(ctx, "leader-1", "party-fail-save", "2")
+	if err == nil {
+		t.Fatal("expected StartPartySession to fail when SaveSession fails")
+	}
+
+	// Active store should have NO active session for leader or member (cleaned up)
+	leadSess, err := activeStore.GetActiveSession(ctx, "leader-1")
+	if err != nil {
+		t.Fatalf("GetActiveSession for leader returned error: %v", err)
+	}
+	if leadSess != nil {
+		t.Errorf("expected active session to be purged from activeStore for leader, got %+v", leadSess)
+	}
+
+	memSess, err := activeStore.GetActiveSession(ctx, "member-2")
+	if err != nil {
+		t.Fatalf("GetActiveSession for member returned error: %v", err)
+	}
+	if memSess != nil {
+		t.Errorf("expected active session to be purged from activeStore for member, got %+v", memSess)
+	}
+
+	// Party status should be rolled back to recruiting
+	p, err := partyRepo.GetParty(ctx, "party-fail-save")
+	if err != nil {
+		t.Fatalf("GetParty returned error: %v", err)
+	}
+	if p.Status != party.StatusRecruiting {
+		t.Errorf("expected party status to remain StatusRecruiting, got %v", p.Status)
 	}
 }

@@ -246,6 +246,7 @@ type PartyRepository interface {
 	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
 	UpdateParty(ctx context.Context, p party.Party) error
 	UpdateMemberReady(ctx context.Context, partyID string, characterID string, ready bool) error
+	WithPartyLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error
 }
 
 // ActivityChecker validates whether a character has an active activity in another domain.
