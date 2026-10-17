@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 )
 
@@ -454,4 +455,129 @@ func (r *ctxCheckAdvRepo) Save(ctx context.Context, a adventure.Adventure) error
 		r.onSave(ctx)
 	}
 	return r.memoryAdvRepo.Save(ctx, a)
+}
+
+type staticBlessingProvider struct {
+	blessing string
+}
+
+func (p staticBlessingProvider) GetActiveBlessing(_ context.Context, _ string) (string, error) {
+	return p.blessing, nil
+}
+
+type fixedBattleRand struct{ val int }
+
+func (r fixedBattleRand) Intn(n int) (int, error) {
+	if n <= 0 {
+		return 0, nil
+	}
+	return r.val % n, nil
+}
+
+func (r fixedBattleRand) Float64() float64 { return 0 }
+
+type memoryInvRepo struct {
+	invs map[string]coreinventory.Inventory
+}
+
+func (r *memoryInvRepo) FindByCharacterID(_ context.Context, id string) (coreinventory.Inventory, error) {
+	inv, ok := r.invs[id]
+	if !ok {
+		return coreinventory.New(id)
+	}
+	return inv, nil
+}
+
+func (r *memoryInvRepo) FindByCharacterIDForUpdate(ctx context.Context, id string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, id)
+}
+
+func (r *memoryInvRepo) Save(_ context.Context, inv coreinventory.Inventory) error {
+	r.invs[inv.CharacterID] = inv
+	return nil
+}
+
+func (r *memoryInvRepo) Update(ctx context.Context, inv coreinventory.Inventory) error {
+	return r.Save(ctx, inv)
+}
+
+func (r *memoryInvRepo) AddInstance(ctx context.Context, charID string, inst coreitem.Instance) error {
+	inv, _ := r.FindByCharacterID(ctx, charID)
+	_ = inv.Add(inst)
+	return r.Save(ctx, inv)
+}
+
+func (r *memoryInvRepo) RemoveInstance(_ context.Context, _ string, _ string, _ int) error {
+	return nil
+}
+
+func (r *memoryInvRepo) CountInstances(ctx context.Context, charID string) (int, error) {
+	inv, _ := r.FindByCharacterID(ctx, charID)
+	return len(inv.Items), nil
+}
+
+func (c *memoryCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return c.FindByID(ctx, id)
+}
+
+func TestAdventure_TreasureBlessing_SingleChestGenerationNoItemDuplication(t *testing.T) {
+	aliases := []string{"DROP", "4", "treasure_wish", "宝箱がほしい"}
+	for _, blessing := range aliases {
+		t.Run("blessing_"+blessing, func(t *testing.T) {
+			ctx := context.Background()
+			char, err := corecharacter.New("BlessedSolo")
+			if err != nil {
+				t.Fatal(err)
+			}
+			char.Level = 50
+			char.Stats = corecharacter.Stats{HP: 500, MaxHP: 500, MP: 100, MaxMP: 100, Attack: 150, Defense: 100}
+
+			charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
+			invRepo := &memoryInvRepo{invs: make(map[string]coreinventory.Inventory)}
+			advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
+			clock := &fixedAdvClock{now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)}
+			stages, _ := adventure.InitialStageCatalog()
+			monsters, _ := adventure.InitialMonsterCatalog()
+
+			blessingProv := staticBlessingProvider{blessing: blessing}
+			battleSvc := battle.NewService(
+				battle.WithCharacterRepository(charRepo),
+				battle.WithInventoryRepository(invRepo),
+				battle.WithBlessingProvider(blessingProv),
+				battle.WithRandomSource(fixedBattleRand{val: 0}), // Lucky roll (0 % 5 == 0)
+				battle.WithMaxInventoryCapacity(10),
+			)
+
+			svc, err := adventure.NewServiceWithCatalogs(
+				advRepo, charRepo, nil, stages, monsters, corebattle.Engine{}, nil, nil, clock,
+				adventure.WithPostBattleSettler(battleSvc),
+				adventure.WithBlessingProvider(blessingProv),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Lucky roll (rng=0): 1 base chest + 1 blessing chest = 2 chests spawned.
+			// Without Master Key, solo character examines only 1 chest (1 opened, 1 unopened).
+			// Settlement must deliver 1 item and NOT duplicate the acquired item.
+			res, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+				CharacterIDs: []string{char.ID},
+				StageID:      "stage-01",
+				Rng:          func(n int) int { return 0 },
+			})
+			if err != nil {
+				t.Fatalf("ExecuteCrawl failed: %v", err)
+			}
+			if len(res.TreasureBoxes) != 2 {
+				t.Fatalf("expected 2 treasure boxes with lucky blessing roll, got %d", len(res.TreasureBoxes))
+			}
+			if res.TreasureBoxes[0].OpenedBy != char.ID || res.TreasureBoxes[1].OpenedBy != "" {
+				t.Fatalf("expected only 1 box opened by solo character without Master Key, got %+v", res.TreasureBoxes)
+			}
+			inv, _ := invRepo.FindByCharacterID(ctx, char.ID)
+			if len(inv.Items) != 1 {
+				t.Fatalf("expected exactly 1 item in inventory (no duplication on unopened extra chest), got %d", len(inv.Items))
+			}
+		})
+	}
 }

@@ -63,6 +63,7 @@ type Service struct {
 	battleSettler      PostBattleSettler
 	depotRepo          DepotRepository
 	blessingProvider   BlessingProvider
+	rng                func(n int) int
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {

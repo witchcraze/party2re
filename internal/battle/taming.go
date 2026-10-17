@@ -204,15 +204,6 @@ func isMonsterBlessing(blessing string) bool {
 	}
 }
 
-func isDropBlessing(blessing string) bool {
-	switch blessing {
-	case "drop", "4", "treasure_wish", "宝箱がほしい":
-		return true
-	default:
-		return false
-	}
-}
-
 // checkMonsterBlessing queries whether the character has an active monster blessing (wish 3).
 func (s *Service) checkMonsterBlessing(ctx context.Context, charID string) bool {
 	return isMonsterBlessing(s.queryBlessing(ctx, charID))

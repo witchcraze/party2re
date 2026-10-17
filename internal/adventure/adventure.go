@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -320,11 +319,8 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	if s.blessingProvider != nil {
 		for _, c := range characters {
 			if b, err := s.blessingProvider.GetActiveBlessing(ctx, c.ID); err == nil {
-				switch strings.ToLower(strings.TrimSpace(b)) {
-				case "drop", "4", "treasure_wish", "宝箱がほしい":
+				if IsTreasureBlessing(b) {
 					session.HasTreasureBlessing = true
-				}
-				if session.HasTreasureBlessing {
 					break
 				}
 			}

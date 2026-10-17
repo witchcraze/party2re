@@ -15,7 +15,7 @@ const (
 	BlessingGold    BlessingType = "GOLD"    // お金がほしい (+50% Gold chance)
 	BlessingExp     BlessingType = "EXP"     // 強くなりたい (+50% EXP chance)
 	BlessingMonster BlessingType = "MONSTER" // モンスターと仲良くしたい (モンスターが仲間になりやすくなる)
-	BlessingDrop    BlessingType = "DROP"    // 宝箱がほしい (+10% Drop rate boost)
+	BlessingDrop    BlessingType = "DROP"    // 宝箱がほしい (+1 treasure chest 20% chance)
 	BlessingCasino  BlessingType = "CASINO"  // コインがほしい (Casino bonus luck)
 )
 
