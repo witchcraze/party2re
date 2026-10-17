@@ -71,6 +71,10 @@ func (r *ValkeySessionRepository) rewardsKey(charID string) string {
 	return fmt.Sprintf("party2:challenge:{char:%s}:rewards", charID)
 }
 
+func (r *ValkeySessionRepository) leaderKey(charID string) string {
+	return fmt.Sprintf("party2:challenge:{char:%s}:leader", charID)
+}
+
 func mapLuaError(err error) error {
 	if err == nil {
 		return nil
@@ -88,11 +92,7 @@ func mapLuaError(err error) error {
 	return err
 }
 
-func (r *ValkeySessionRepository) GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error) {
-	if r.client == nil {
-		return r.fallback.GetActiveSession(ctx, characterID)
-	}
-
+func (r *ValkeySessionRepository) getActiveSessionDirect(ctx context.Context, characterID string) (*ChallengeSession, error) {
 	sKey := r.sessionKey(characterID)
 	rKey := r.rewardsKey(characterID)
 
@@ -152,6 +152,50 @@ func (r *ValkeySessionRepository) GetActiveSession(ctx context.Context, characte
 	return session, nil
 }
 
+func (r *ValkeySessionRepository) GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error) {
+	if r.client == nil {
+		return r.fallback.GetActiveSession(ctx, characterID)
+	}
+
+	session, err := r.getActiveSessionDirect(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	if session != nil {
+		return session, nil
+	}
+
+	// Check if characterID is a non-leader member mapped to a leader
+	leaderID, err := r.client.Do(ctx, r.client.B().Get().Key(r.leaderKey(characterID)).Build()).ToString()
+	if err != nil || leaderID == "" {
+		return nil, nil
+	}
+
+	leaderSession, err := r.getActiveSessionDirect(ctx, leaderID)
+	if err != nil {
+		return nil, err
+	}
+	if leaderSession == nil {
+		_ = r.client.Do(ctx, r.client.B().Del().Key(r.leaderKey(characterID)).Build())
+		return nil, nil
+	}
+
+	// Privacy check: verify characterID is an authorized member of leaderSession
+	found := false
+	for _, m := range leaderSession.Members {
+		if m.CharacterID == characterID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		_ = r.client.Do(ctx, r.client.B().Del().Key(r.leaderKey(characterID)).Build())
+		return nil, nil
+	}
+
+	return leaderSession, nil
+}
+
 func (r *ValkeySessionRepository) SaveActiveSession(ctx context.Context, session ChallengeSession) error {
 	if r.client == nil {
 		return r.fallback.SaveActiveSession(ctx, session)
@@ -164,7 +208,7 @@ func (r *ValkeySessionRepository) SaveActiveSession(ctx context.Context, session
 	membersJSON := EncodeJSON(session.Members)
 	ttlSec := int64(r.ttl.Seconds())
 
-	cmds := r.client.DoMulti(ctx,
+	cmds := []valkeygo.Completed{
 		r.client.B().Hset().Key(sKey).FieldValue().
 			FieldValue("session_id", session.ID).
 			FieldValue("character_id", session.CharacterID).
@@ -186,9 +230,18 @@ func (r *ValkeySessionRepository) SaveActiveSession(ctx context.Context, session
 			Build(),
 		r.client.B().Expire().Key(sKey).Seconds(ttlSec).Build(),
 		r.client.B().Expire().Key(rKey).Seconds(ttlSec).Build(),
-	)
+	}
 
-	for _, cmd := range cmds {
+	for _, mem := range session.Members {
+		if mem.CharacterID != session.CharacterID {
+			cmds = append(cmds,
+				r.client.B().Set().Key(r.leaderKey(mem.CharacterID)).Value(session.CharacterID).Ex(r.ttl).Build(),
+			)
+		}
+	}
+
+	res := r.client.DoMulti(ctx, cmds...)
+	for _, cmd := range res {
 		if err := cmd.Error(); err != nil {
 			return err
 		}
@@ -202,19 +255,32 @@ func (r *ValkeySessionRepository) DeleteActiveSession(ctx context.Context, chara
 		return r.fallback.DeleteActiveSession(ctx, characterID)
 	}
 
-	sKey := r.sessionKey(characterID)
-	rKey := r.rewardsKey(characterID)
-
-	cmds := r.client.DoMulti(ctx,
-		r.client.B().Del().Key(sKey).Build(),
-		r.client.B().Del().Key(rKey).Build(),
-	)
-	for _, cmd := range cmds {
-		if err := cmd.Error(); err != nil {
-			return err
+	leaderID := characterID
+	sess, _ := r.getActiveSessionDirect(ctx, characterID)
+	if sess == nil {
+		lid, err := r.client.Do(ctx, r.client.B().Get().Key(r.leaderKey(characterID)).Build()).ToString()
+		if err == nil && lid != "" {
+			leaderID = lid
+			sess, _ = r.getActiveSessionDirect(ctx, leaderID)
 		}
 	}
 
+	sKey := r.sessionKey(leaderID)
+	rKey := r.rewardsKey(leaderID)
+
+	delCmds := []valkeygo.Completed{
+		r.client.B().Del().Key(sKey).Build(),
+		r.client.B().Del().Key(rKey).Build(),
+	}
+	if sess != nil {
+		for _, m := range sess.Members {
+			delCmds = append(delCmds, r.client.B().Del().Key(r.leaderKey(m.CharacterID)).Build())
+		}
+	} else {
+		delCmds = append(delCmds, r.client.B().Del().Key(r.leaderKey(characterID)).Build())
+	}
+
+	_ = r.client.DoMulti(ctx, delCmds...)
 	return nil
 }
 
@@ -223,8 +289,13 @@ func (r *ValkeySessionRepository) AdvanceRound(ctx context.Context, characterID 
 		return r.fallback.AdvanceRound(ctx, characterID, params)
 	}
 
-	sKey := r.sessionKey(characterID)
-	rKey := r.rewardsKey(characterID)
+	targetID := characterID
+	if lid, err := r.client.Do(ctx, r.client.B().Get().Key(r.leaderKey(characterID)).Build()).ToString(); err == nil && lid != "" {
+		targetID = lid
+	}
+
+	sKey := r.sessionKey(targetID)
+	rKey := r.rewardsKey(targetID)
 
 	res := r.roundScript.Exec(ctx, r.client, []string{sKey, rKey}, []string{
 		params.ExpectedSessionID,
@@ -259,7 +330,7 @@ func (r *ValkeySessionRepository) AdvanceRound(ctx context.Context, characterID 
 
 	session := ChallengeSession{
 		ID:                 params.ExpectedSessionID,
-		CharacterID:        characterID,
+		CharacterID:        targetID,
 		TierID:             tierID,
 		CurrentRound:       newRound,
 		CharacterCurrentHP: survivingHP,

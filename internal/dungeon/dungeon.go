@@ -13,6 +13,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/party"
 )
 
 var (
@@ -239,6 +240,12 @@ func (defaultRandomSource) Float64() float64 {
 	return float64(val&(1<<53-1)) / float64(1<<53)
 }
 
+type PartyRepository interface {
+	GetParty(ctx context.Context, id string) (party.Party, error)
+	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
+	UpdateParty(ctx context.Context, p party.Party) error
+}
+
 // ParticipantBuilder constructs a Participant from character ID with current HP.
 type ParticipantBuilder interface {
 	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
@@ -250,6 +257,7 @@ type Service struct {
 	invRepo             InventoryProvider
 	battleEngine        corebattle.Resolver
 	activeStore         ActiveExpeditionStore
+	partyRepo           PartyRepository
 	dungeons            []Dungeon
 	dungeonMap          map[string]Dungeon
 	monsterDefeatedHook MonsterDefeatedHook
@@ -261,8 +269,21 @@ func (s *Service) SetMonsterDefeatedHook(hook MonsterDefeatedHook) {
 	s.monsterDefeatedHook = hook
 }
 
+func (s *Service) Configure(opts ...Option) {
+	for _, opt := range opts {
+		opt(s)
+	}
+}
+
 // Option configures optional parameters on Service.
 type Option func(*Service)
+
+// WithPartyRepository configures the PartyRepository for party roster derivation.
+func WithPartyRepository(repo PartyRepository) Option {
+	return func(s *Service) {
+		s.partyRepo = repo
+	}
+}
 
 // WithActiveExpeditionStore configures the transient active expedition store (e.g. ValkeyExpeditionRepository).
 func WithActiveExpeditionStore(store ActiveExpeditionStore) Option {

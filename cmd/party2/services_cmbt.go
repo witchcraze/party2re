@@ -254,6 +254,13 @@ func newCmbtServices(
 		})),
 	)
 
+	dungeonService.Configure(
+		dungeon.WithPartyRepository(partyRepo),
+	)
+	challengeService.Configure(
+		challenge.WithPartyRepository(partyRepo),
+	)
+
 	return &cmbtServices{
 		pvp:         pvpService,
 		gvg:         gvgService,

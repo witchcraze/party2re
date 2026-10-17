@@ -243,16 +243,7 @@
           "application/json": {
             "schema": {
               "properties": {
-                "member_ids": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "party_color": {
-                  "type": "string"
-                },
-                "party_name": {
+                "party_id": {
                   "type": "string"
                 },
                 "tier_id": {
@@ -260,6 +251,7 @@
                 }
               },
               "required": [
+                "party_id",
                 "tier_id"
               ],
               "type": "object"
@@ -308,6 +300,16 @@
             }
           },
           "description": "Forbidden"
+        },
+        "422": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unprocessable entity - member unready, busy, unconscious, duplicate, or requirements not met"
         },
         "500": {
           "content": {

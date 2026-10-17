@@ -78,6 +78,10 @@ func (r *ValkeyExpeditionRepository) rewardsKey(charID string) string {
 	return fmt.Sprintf("party2:dungeon:{char:%s}:rewards", charID)
 }
 
+func (r *ValkeyExpeditionRepository) leaderKey(charID string) string {
+	return fmt.Sprintf("party2:dungeon:{char:%s}:leader", charID)
+}
+
 func mapLuaError(err error) error {
 	if err == nil {
 		return nil
@@ -95,11 +99,7 @@ func mapLuaError(err error) error {
 	return err
 }
 
-func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error) {
-	if r.client == nil {
-		return r.fallback.GetActiveExpedition(ctx, characterID)
-	}
-
+func (r *ValkeyExpeditionRepository) getActiveExpeditionDirect(ctx context.Context, characterID string) (*ActiveExpedition, error) {
 	sKey := r.stateKey(characterID)
 	rKey := r.rewardsKey(characterID)
 
@@ -167,6 +167,50 @@ func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 	return active, nil
 }
 
+func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error) {
+	if r.client == nil {
+		return r.fallback.GetActiveExpedition(ctx, characterID)
+	}
+
+	active, err := r.getActiveExpeditionDirect(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	if active != nil {
+		return active, nil
+	}
+
+	// Check if characterID is a non-leader member mapped to a leader
+	leaderID, err := r.client.Do(ctx, r.client.B().Get().Key(r.leaderKey(characterID)).Build()).ToString()
+	if err != nil || leaderID == "" {
+		return nil, nil
+	}
+
+	leaderExp, err := r.getActiveExpeditionDirect(ctx, leaderID)
+	if err != nil {
+		return nil, err
+	}
+	if leaderExp == nil {
+		_ = r.client.Do(ctx, r.client.B().Del().Key(r.leaderKey(characterID)).Build())
+		return nil, nil
+	}
+
+	// Privacy check: verify characterID is an authorized member of leaderExp
+	found := false
+	for _, m := range leaderExp.Members {
+		if m.CharacterID == characterID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		_ = r.client.Do(ctx, r.client.B().Del().Key(r.leaderKey(characterID)).Build())
+		return nil, nil
+	}
+
+	return leaderExp, nil
+}
+
 func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, exp ActiveExpedition) error {
 	if r.client == nil {
 		return r.fallback.SaveActiveExpedition(ctx, exp)
@@ -179,7 +223,7 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	membersJSON := EncodeMembers(exp.Members)
 	ttlSec := int64(r.ttl.Seconds())
 
-	cmds := r.client.DoMulti(ctx,
+	cmds := []valkeygo.Completed{
 		r.client.B().Hset().Key(sKey).FieldValue().
 			FieldValue("expedition_id", exp.ID).
 			FieldValue("character_id", exp.CharacterID).
@@ -204,9 +248,18 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 			Build(),
 		r.client.B().Expire().Key(sKey).Seconds(ttlSec).Build(),
 		r.client.B().Expire().Key(rKey).Seconds(ttlSec).Build(),
-	)
+	}
 
-	for _, cmd := range cmds {
+	for _, mem := range exp.Members {
+		if mem.CharacterID != exp.CharacterID {
+			cmds = append(cmds,
+				r.client.B().Set().Key(r.leaderKey(mem.CharacterID)).Value(exp.CharacterID).Ex(r.ttl).Build(),
+			)
+		}
+	}
+
+	res := r.client.DoMulti(ctx, cmds...)
+	for _, cmd := range res {
 		if err := cmd.Error(); err != nil {
 			return err
 		}
@@ -220,13 +273,32 @@ func (r *ValkeyExpeditionRepository) DeleteActiveExpedition(ctx context.Context,
 		return r.fallback.DeleteActiveExpedition(ctx, characterID)
 	}
 
-	sKey := r.stateKey(characterID)
-	rKey := r.rewardsKey(characterID)
+	leaderID := characterID
+	exp, _ := r.getActiveExpeditionDirect(ctx, characterID)
+	if exp == nil {
+		lid, err := r.client.Do(ctx, r.client.B().Get().Key(r.leaderKey(characterID)).Build()).ToString()
+		if err == nil && lid != "" {
+			leaderID = lid
+			exp, _ = r.getActiveExpeditionDirect(ctx, leaderID)
+		}
+	}
 
-	_ = r.client.DoMulti(ctx,
+	sKey := r.stateKey(leaderID)
+	rKey := r.rewardsKey(leaderID)
+
+	delCmds := []valkeygo.Completed{
 		r.client.B().Del().Key(sKey).Build(),
 		r.client.B().Del().Key(rKey).Build(),
-	)
+	}
+	if exp != nil {
+		for _, m := range exp.Members {
+			delCmds = append(delCmds, r.client.B().Del().Key(r.leaderKey(m.CharacterID)).Build())
+		}
+	} else {
+		delCmds = append(delCmds, r.client.B().Del().Key(r.leaderKey(characterID)).Build())
+	}
+
+	_ = r.client.DoMulti(ctx, delCmds...)
 
 	return nil
 }
@@ -236,8 +308,13 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		return r.fallback.Step(ctx, characterID, params)
 	}
 
-	sKey := r.stateKey(characterID)
-	rKey := r.rewardsKey(characterID)
+	targetID := characterID
+	if lid, err := r.client.Do(ctx, r.client.B().Get().Key(r.leaderKey(characterID)).Build()).ToString(); err == nil && lid != "" {
+		targetID = lid
+	}
+
+	sKey := r.stateKey(targetID)
+	rKey := r.rewardsKey(targetID)
 
 	res := r.stepScript.Exec(ctx, r.client, []string{sKey, rKey}, []string{
 		params.ExpectedExpeditionID,

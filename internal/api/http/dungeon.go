@@ -14,7 +14,7 @@ import (
 type DungeonService interface {
 	ListDungeons(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
 	StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
-	StartPartyExpedition(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
+	StartPartyExpedition(ctx context.Context, leaderID string, partyID string, dungeonID string) (*dungeon.ActiveExpedition, error)
 	Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
 	Escape(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
 	GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
@@ -37,9 +37,8 @@ type startDungeonRequest struct {
 }
 
 type startPartyDungeonRequest struct {
-	DungeonID string   `json:"dungeon_id"`
-	MemberIDs []string `json:"member_ids"`
-	PartyID   string   `json:"party_id"`
+	PartyID   string `json:"party_id"`
+	DungeonID string `json:"dungeon_id"`
 }
 
 type moveDungeonRequest struct {
@@ -133,23 +132,26 @@ func (h *Handler) handleStartPartyDungeon(w http.ResponseWriter, r *http.Request
 			return
 		}
 
+		if req.PartyID == "" {
+			writeError(w, http.StatusBadRequest, errors.New("party_id is required"))
+			return
+		}
 		if req.DungeonID == "" {
 			writeError(w, http.StatusBadRequest, errors.New("dungeon_id is required"))
 			return
 		}
 
-		memberIDs := req.MemberIDs
-		if len(memberIDs) == 0 {
-			memberIDs = []string{char.ID}
-		}
-
-		exp, err := h.dungeons.StartPartyExpedition(r.Context(), char.ID, memberIDs, req.DungeonID, req.PartyID)
+		exp, err := h.dungeons.StartPartyExpedition(r.Context(), char.ID, req.PartyID, req.DungeonID)
 		if err != nil {
-			if errors.Is(err, dungeon.ErrDungeonNotFound) || errors.Is(err, dungeon.ErrCharacterNotFound) {
+			if errors.Is(err, dungeon.ErrDungeonNotFound) || errors.Is(err, dungeon.ErrCharacterNotFound) || errors.Is(err, dungeon.ErrPartyNotFound) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
-			if errors.Is(err, dungeon.ErrLevelRequirementNotMet) || errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, dungeon.ErrTooManyPartyMembers) {
+			if errors.Is(err, dungeon.ErrNotPartyLeader) {
+				writeError(w, http.StatusForbidden, err)
+				return
+			}
+			if errors.Is(err, dungeon.ErrLevelRequirementNotMet) || errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, dungeon.ErrTooManyPartyMembers) || errors.Is(err, dungeon.ErrPartyNotRecruiting) || errors.Is(err, dungeon.ErrPartyNotReady) || errors.Is(err, dungeon.ErrDuplicatePartyMember) || errors.Is(err, dungeon.ErrCharacterUnconscious) || errors.Is(err, dungeon.ErrPartyEmpty) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

@@ -2,6 +2,7 @@ package dungeon_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/dungeon"
+	"github.com/witchcraze/party2re/internal/party"
 )
 
 type mockInventoryRepo struct {
@@ -24,9 +26,48 @@ func (m *mockInventoryRepo) FindByCharacterID(ctx context.Context, characterID s
 	return inv, nil
 }
 
-func setupPartyTestService() (*dungeon.Service, *mockDungeonRepo, *mockCharRepo) {
+type mockPartyRepo struct {
+	parties map[string]party.Party
+	members map[string][]party.Member
+}
+
+func newMockPartyRepo() *mockPartyRepo {
+	return &mockPartyRepo{
+		parties: make(map[string]party.Party),
+		members: make(map[string][]party.Member),
+	}
+}
+
+func (m *mockPartyRepo) GetParty(ctx context.Context, id string) (party.Party, error) {
+	p, ok := m.parties[id]
+	if !ok {
+		return party.Party{}, party.ErrNotFound
+	}
+	return p, nil
+}
+
+func (m *mockPartyRepo) GetMembers(ctx context.Context, partyID string) ([]party.Member, error) {
+	mems, ok := m.members[partyID]
+	if !ok {
+		return nil, party.ErrNotFound
+	}
+	return mems, nil
+}
+
+func (m *mockPartyRepo) UpdateParty(ctx context.Context, p party.Party) error {
+	m.parties[p.ID] = p
+	return nil
+}
+
+func (m *mockPartyRepo) addParty(p party.Party, members []party.Member) {
+	m.parties[p.ID] = p
+	m.members[p.ID] = members
+}
+
+func setupPartyTestService() (*dungeon.Service, *mockDungeonRepo, *mockCharRepo, *mockPartyRepo) {
 	repo := newMockDungeonRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	partyRepo := newMockPartyRepo()
 	engine := &corebattle.Engine{}
 
 	c1 := createTestChar("char-1", 10, 150, 40, 30)
@@ -49,21 +90,32 @@ func setupPartyTestService() (*dungeon.Service, *mockDungeonRepo, *mockCharRepo)
 	c4.JobID = "78" // Treasure Hunter
 	charRepo.chars[c4.ID] = c4
 
-	svc, err := dungeon.NewService(repo, charRepo, engine)
+	partyRepo.addParty(party.Party{
+		ID:                "party-01",
+		LeaderCharacterID: "char-1",
+		Name:              "勇者パーティ",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-01", CharacterID: "char-1", CharacterName: "リーダー勇者", ReadyState: true, IsLeader: true},
+		{PartyID: "party-01", CharacterID: "char-2", CharacterName: "盗賊シーフ", ReadyState: true},
+		{PartyID: "party-01", CharacterID: "char-3", CharacterName: "魔法使いメイジ", ReadyState: true},
+		{PartyID: "party-01", CharacterID: "char-4", CharacterName: "トレハン冒険者", ReadyState: true},
+	})
+
+	svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithPartyRepository(partyRepo))
 	if err != nil {
 		panic(err)
 	}
 
-	return svc, repo, charRepo
+	return svc, repo, charRepo, partyRepo
 }
 
 func TestStartPartyExpedition(t *testing.T) {
-	svc, _, _ := setupPartyTestService()
+	svc, _, charRepo, partyRepo := setupPartyTestService()
 	ctx := context.Background()
 
-	// 1. Success with up to 4 members
-	memberIDs := []string{"char-1", "char-2", "char-3", "char-4"}
-	exp, err := svc.StartPartyExpedition(ctx, "char-1", memberIDs, "dungeon-01", "party-01")
+	// 1. Success deriving roster from authorized party
+	exp, err := svc.StartPartyExpedition(ctx, "char-1", "party-01", "dungeon-01")
 	if err != nil {
 		t.Fatalf("unexpected error starting party expedition: %v", err)
 	}
@@ -87,28 +139,153 @@ func TestStartPartyExpedition(t *testing.T) {
 		t.Errorf("expected member 1 job 9, got %s", exp.Members[1].JobID)
 	}
 
-	// 2. Reject if more than 4 members
-	c5 := createTestChar("char-5", 10, 100, 30, 20)
-	svc5, _, charRepo := setupPartyTestService()
-	charRepo.chars[c5.ID] = c5
-	_, err = svc5.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2", "char-3", "char-4", "char-5"}, "dungeon-01", "")
-	if err == nil {
-		t.Fatal("expected error for party exceeding 4 members")
+	// Verify party status transitioned to in_progress
+	pUpdated, _ := partyRepo.GetParty(ctx, "party-01")
+	if pUpdated.Status != party.StatusInProgress {
+		t.Errorf("expected party status in_progress, got %s", pUpdated.Status)
 	}
 
-	// 3. Reject if non-existent member
-	_, err = svc5.StartPartyExpedition(ctx, "char-1", []string{"char-1", "non-existent"}, "dungeon-01", "")
-	if err == nil {
-		t.Fatal("expected error for non-existent member")
+	// 2. Multi-member active indexing and privacy
+	// Non-leader member can fetch the active expedition
+	memExp, err := svc.GetActiveExpedition(ctx, "char-2")
+	if err != nil || memExp == nil {
+		t.Fatalf("expected member char-2 to find active expedition, err: %v", err)
+	}
+	if memExp.ID != exp.ID {
+		t.Errorf("expected member expedition ID %s, got %s", exp.ID, memExp.ID)
+	}
+
+	// Outside character querying gets nil (privacy check)
+	outsiderExp, err := svc.GetActiveExpedition(ctx, "outsider-char")
+	if err != nil {
+		t.Fatalf("unexpected error for outsider: %v", err)
+	}
+	if outsiderExp != nil {
+		t.Errorf("expected nil expedition for outsider, got %v", outsiderExp)
+	}
+
+	// 3. Busy member rejection: starting again while active returns ErrActiveExpeditionExists
+	partyRepo.addParty(party.Party{
+		ID:                "party-busy",
+		LeaderCharacterID: "char-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-busy", CharacterID: "char-1", ReadyState: true, IsLeader: true},
+	})
+	_, err = svc.StartPartyExpedition(ctx, "char-1", "party-busy", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+		t.Fatalf("expected ErrActiveExpeditionExists, got: %v", err)
+	}
+
+	// 4. Non-existent party
+	_, err = svc.StartPartyExpedition(ctx, "char-1", "party-missing", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrPartyNotFound) {
+		t.Fatalf("expected ErrPartyNotFound, got: %v", err)
+	}
+
+	// 5. Non-leader actor
+	partyRepo.addParty(party.Party{
+		ID:                "party-leader-test",
+		LeaderCharacterID: "char-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-leader-test", CharacterID: "char-1", ReadyState: true, IsLeader: true},
+		{PartyID: "party-leader-test", CharacterID: "char-2", ReadyState: true},
+	})
+	_, err = svc.StartPartyExpedition(ctx, "char-2", "party-leader-test", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrNotPartyLeader) {
+		t.Fatalf("expected ErrNotPartyLeader, got: %v", err)
+	}
+
+	// 6. Party not recruiting
+	partyRepo.addParty(party.Party{
+		ID:                "party-not-recruiting",
+		LeaderCharacterID: "char-1",
+		Status:            party.StatusInProgress,
+	}, []party.Member{
+		{PartyID: "party-not-recruiting", CharacterID: "char-1", ReadyState: true, IsLeader: true},
+	})
+	_, err = svc.StartPartyExpedition(ctx, "char-1", "party-not-recruiting", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrPartyNotRecruiting) {
+		t.Fatalf("expected ErrPartyNotRecruiting, got: %v", err)
+	}
+
+	// 7. Member not ready
+	partyRepo.addParty(party.Party{
+		ID:                "party-unready",
+		LeaderCharacterID: "char-notready-lead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-unready", CharacterID: "char-notready-lead", ReadyState: true, IsLeader: true},
+		{PartyID: "party-unready", CharacterID: "char-unready-2", ReadyState: false},
+	})
+	charRepo.chars["char-notready-lead"] = createTestChar("char-notready-lead", 10, 100, 30, 20)
+	charRepo.chars["char-unready-2"] = createTestChar("char-unready-2", 10, 100, 30, 20)
+	_, err = svc.StartPartyExpedition(ctx, "char-notready-lead", "party-unready", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrPartyNotReady) {
+		t.Fatalf("expected ErrPartyNotReady, got: %v", err)
+	}
+
+	// 8. Duplicate party members
+	partyRepo.addParty(party.Party{
+		ID:                "party-dup",
+		LeaderCharacterID: "char-dup-lead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-dup", CharacterID: "char-dup-lead", ReadyState: true, IsLeader: true},
+		{PartyID: "party-dup", CharacterID: "char-dup-lead", ReadyState: true},
+	})
+	charRepo.chars["char-dup-lead"] = createTestChar("char-dup-lead", 10, 100, 30, 20)
+	_, err = svc.StartPartyExpedition(ctx, "char-dup-lead", "party-dup", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrDuplicatePartyMember) {
+		t.Fatalf("expected ErrDuplicatePartyMember, got: %v", err)
+	}
+
+	// 9. Party exceeding 4 members
+	partyRepo.addParty(party.Party{
+		ID:                "party-5mem",
+		LeaderCharacterID: "p5-lead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-5mem", CharacterID: "p5-lead", ReadyState: true, IsLeader: true},
+		{PartyID: "party-5mem", CharacterID: "p5-2", ReadyState: true},
+		{PartyID: "party-5mem", CharacterID: "p5-3", ReadyState: true},
+		{PartyID: "party-5mem", CharacterID: "p5-4", ReadyState: true},
+		{PartyID: "party-5mem", CharacterID: "p5-5", ReadyState: true},
+	})
+	charRepo.chars["p5-lead"] = createTestChar("p5-lead", 10, 100, 30, 20)
+	charRepo.chars["p5-2"] = createTestChar("p5-2", 10, 100, 30, 20)
+	charRepo.chars["p5-3"] = createTestChar("p5-3", 10, 100, 30, 20)
+	charRepo.chars["p5-4"] = createTestChar("p5-4", 10, 100, 30, 20)
+	charRepo.chars["p5-5"] = createTestChar("p5-5", 10, 100, 30, 20)
+	_, err = svc.StartPartyExpedition(ctx, "p5-lead", "party-5mem", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrTooManyPartyMembers) {
+		t.Fatalf("expected ErrTooManyPartyMembers, got: %v", err)
+	}
+
+	// 10. Unconscious character
+	partyRepo.addParty(party.Party{
+		ID:                "party-dead",
+		LeaderCharacterID: "p-dead-lead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-dead", CharacterID: "p-dead-lead", ReadyState: true, IsLeader: true},
+	})
+	deadChar := createTestChar("p-dead-lead", 10, 100, 30, 20)
+	deadChar.Stats.HP = 0
+	charRepo.chars["p-dead-lead"] = deadChar
+	_, err = svc.StartPartyExpedition(ctx, "p-dead-lead", "party-dead", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrCharacterUnconscious) {
+		t.Fatalf("expected ErrCharacterUnconscious, got: %v", err)
 	}
 }
 
 func TestPartyMapScouting(t *testing.T) {
-	svc, _, charRepo := setupPartyTestService()
+	svc, _, charRepo, partyRepo := setupPartyTestService()
 	ctx := context.Background()
 
 	// 1. Solo warrior: base view radius = 1 (3x3 grid)
-	_, err := svc.StartPartyExpedition(ctx, "char-1", []string{"char-1"}, "dungeon-01", "")
+	_, err := svc.StartExpedition(ctx, "char-1", "dungeon-01")
 	if err != nil {
 		t.Fatalf("failed to start solo expedition: %v", err)
 	}
@@ -134,7 +311,15 @@ func TestPartyMapScouting(t *testing.T) {
 
 	// 2. Party with Thief (job 9): expanded view radius = 2 (5x5 grid)
 	_, _ = svc.Escape(ctx, "char-1") // end solo expedition
-	_, err = svc.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2"}, "dungeon-01", "")
+	partyRepo.addParty(party.Party{
+		ID:                "party-thief-pair",
+		LeaderCharacterID: "char-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-thief-pair", CharacterID: "char-1", ReadyState: true, IsLeader: true},
+		{PartyID: "party-thief-pair", CharacterID: "char-2", ReadyState: true},
+	})
+	_, err = svc.StartPartyExpedition(ctx, "char-1", "party-thief-pair", "dungeon-01")
 	if err != nil {
 		t.Fatalf("failed to start party expedition: %v", err)
 	}
@@ -164,8 +349,17 @@ func TestPartyMapScouting(t *testing.T) {
 			"lead":   c1Lead(10),
 			cTest.ID: cTest,
 		}}
-		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{})
-		_, err := tSvc.StartPartyExpedition(ctx, "lead", []string{"lead", cTest.ID}, "dungeon-01", "")
+		tPartyRepo := newMockPartyRepo()
+		tPartyRepo.addParty(party.Party{
+			ID:                "p-" + jobID,
+			LeaderCharacterID: "lead",
+			Status:            party.StatusRecruiting,
+		}, []party.Member{
+			{PartyID: "p-" + jobID, CharacterID: "lead", ReadyState: true, IsLeader: true},
+			{PartyID: "p-" + jobID, CharacterID: cTest.ID, ReadyState: true},
+		})
+		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{}, dungeon.WithPartyRepository(tPartyRepo))
+		_, err := tSvc.StartPartyExpedition(ctx, "lead", "p-"+jobID, "dungeon-01")
 		if err != nil {
 			t.Fatalf("failed to start for job %s: %v", jobID, err)
 		}
@@ -194,7 +388,7 @@ func TestPartyMapScouting(t *testing.T) {
 	_ = inv.Add(coreitem.Instance{ID: "scope-inst", DefinitionID: "197", Quantity: 1})
 	invRepo.invs[cItem.ID] = inv
 
-	_, err = itemSvc.StartPartyExpedition(ctx, cItem.ID, []string{cItem.ID}, "dungeon-01", "")
+	_, err = itemSvc.StartExpedition(ctx, cItem.ID, "dungeon-01")
 	if err != nil {
 		t.Fatalf("failed to start item expedition: %v", err)
 	}
@@ -224,7 +418,7 @@ func TestPartyMapScouting(t *testing.T) {
 		&corebattle.Engine{},
 		dungeon.WithInventoryProvider(stackInvRepo),
 	)
-	_, err = stackSvc.StartPartyExpedition(ctx, cBoth.ID, []string{cBoth.ID}, "dungeon-01", "")
+	_, err = stackSvc.StartExpedition(ctx, cBoth.ID, "dungeon-01")
 	if err != nil {
 		t.Fatalf("failed to start stack expedition: %v", err)
 	}
@@ -256,13 +450,24 @@ func TestPartyMapScouting(t *testing.T) {
 	_ = goggleInv.Add(coreitem.Instance{ID: "goggle-inst", DefinitionID: "197", Quantity: 1})
 	multiInvRepo.invs[cGoggleUser.ID] = goggleInv
 
+	multiPartyRepo := newMockPartyRepo()
+	multiPartyRepo.addParty(party.Party{
+		ID:                "p-multi-stack",
+		LeaderCharacterID: cScout.ID,
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-multi-stack", CharacterID: cScout.ID, ReadyState: true, IsLeader: true},
+		{PartyID: "p-multi-stack", CharacterID: cGoggleUser.ID, ReadyState: true},
+	})
+
 	multiSvc, _ := dungeon.NewService(
 		newMockDungeonRepo(),
 		multiCharRepo,
 		&corebattle.Engine{},
 		dungeon.WithInventoryProvider(multiInvRepo),
+		dungeon.WithPartyRepository(multiPartyRepo),
 	)
-	_, err = multiSvc.StartPartyExpedition(ctx, cScout.ID, []string{cScout.ID, cGoggleUser.ID}, "dungeon-01", "")
+	_, err = multiSvc.StartPartyExpedition(ctx, cScout.ID, "p-multi-stack", "dungeon-01")
 	if err != nil {
 		t.Fatalf("failed to start multi-party expedition: %v", err)
 	}
@@ -311,6 +516,16 @@ func TestPartyTrapDamageDistribution(t *testing.T) {
 			},
 		},
 	}
+	tPartyRepo := newMockPartyRepo()
+	tPartyRepo.addParty(party.Party{
+		ID:                "p-trap",
+		LeaderCharacterID: "p1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-trap", CharacterID: "p1", ReadyState: true, IsLeader: true},
+		{PartyID: "p-trap", CharacterID: "p2", ReadyState: true},
+		{PartyID: "p-trap", CharacterID: "p3", ReadyState: true},
+	})
 	tSvc, _ := dungeon.NewService(
 		newMockDungeonRepo(),
 		&mockCharRepo{chars: map[string]corecharacter.Character{
@@ -320,9 +535,10 @@ func TestPartyTrapDamageDistribution(t *testing.T) {
 		}},
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons(customCatalog),
+		dungeon.WithPartyRepository(tPartyRepo),
 	)
 
-	_, err := tSvc.StartPartyExpedition(ctx, "p1", []string{"p1", "p2", "p3"}, "trap-dungeon", "")
+	_, err := tSvc.StartPartyExpedition(ctx, "p1", "p-trap", "trap-dungeon")
 	if err != nil {
 		t.Fatalf("failed to start expedition: %v", err)
 	}
@@ -397,7 +613,7 @@ func TestTreasureHunterBonusChests(t *testing.T) {
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons(customCatalog),
 	)
-	_, _ = normalSvc.StartPartyExpedition(ctx, "p1", []string{"p1"}, "chest-dungeon", "")
+	_, _ = normalSvc.StartExpedition(ctx, "p1", "chest-dungeon")
 	resNormal, err := normalSvc.Move(ctx, "p1", dungeon.DirectionEast)
 	if err != nil {
 		t.Fatalf("move failed: %v", err)
@@ -412,6 +628,15 @@ func TestTreasureHunterBonusChests(t *testing.T) {
 	// 2. Party with Treasure Hunter (job 78)
 	thChar := createTestChar("th-char", 10, 120, 30, 20)
 	thChar.JobID = "78" // Treasure Hunter
+	thPartyRepo := newMockPartyRepo()
+	thPartyRepo.addParty(party.Party{
+		ID:                "p-th",
+		LeaderCharacterID: "p1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-th", CharacterID: "p1", ReadyState: true, IsLeader: true},
+		{PartyID: "p-th", CharacterID: "th", ReadyState: true},
+	})
 	thSvc, _ := dungeon.NewService(
 		newMockDungeonRepo(),
 		&mockCharRepo{chars: map[string]corecharacter.Character{
@@ -420,8 +645,9 @@ func TestTreasureHunterBonusChests(t *testing.T) {
 		}},
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons(customCatalog),
+		dungeon.WithPartyRepository(thPartyRepo),
 	)
-	_, _ = thSvc.StartPartyExpedition(ctx, "p1", []string{"p1", "th"}, "chest-dungeon", "")
+	_, _ = thSvc.StartPartyExpedition(ctx, "p1", "p-th", "chest-dungeon")
 	resTH, err := thSvc.Move(ctx, "p1", dungeon.DirectionEast)
 	if err != nil {
 		t.Fatalf("move failed: %v", err)

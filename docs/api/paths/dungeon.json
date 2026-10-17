@@ -350,18 +350,13 @@
                 "dungeon_id": {
                   "type": "string"
                 },
-                "member_ids": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "party_id": {
                   "type": "string"
                 }
               },
               "required": [
-                "dungeon_id"
+                "dungeon_id",
+                "party_id"
               ],
               "type": "object"
             }
@@ -409,6 +404,16 @@
             }
           },
           "description": "Forbidden"
+        },
+        "422": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unprocessable entity - member unready, busy, unconscious, or duplicate"
         },
         "500": {
           "content": {

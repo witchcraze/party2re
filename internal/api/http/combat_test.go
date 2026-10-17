@@ -21,7 +21,7 @@ type stubChallengeService struct {
 	advanceRoundFn        func(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
 	retireSessionFn       func(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	getCharacterRecordsFn func(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
-	startPartySessionFn   func(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
+	startPartySessionFn   func(ctx context.Context, leaderID string, partyID string, tierID string) (*challenge.ChallengeSession, error)
 	getHallOfFameFn       func(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
 	listHallOfFameFn      func(ctx context.Context) ([]challenge.HallOfFameEntry, error)
 }
@@ -44,11 +44,11 @@ func (s *stubChallengeService) StartSession(ctx context.Context, characterID str
 	}
 	return &challenge.ChallengeSession{ID: "sess-1", CharacterID: characterID, TierID: tierID, Status: challenge.StatusActive}, nil
 }
-func (s *stubChallengeService) StartPartySession(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error) {
+func (s *stubChallengeService) StartPartySession(ctx context.Context, leaderID string, partyID string, tierID string) (*challenge.ChallengeSession, error) {
 	if s.startPartySessionFn != nil {
-		return s.startPartySessionFn(ctx, leaderID, memberIDs, tierID, partyName, partyColor)
+		return s.startPartySessionFn(ctx, leaderID, partyID, tierID)
 	}
-	return &challenge.ChallengeSession{ID: "sess-party-1", CharacterID: leaderID, TierID: tierID, PartyName: partyName, PartyColor: partyColor, Status: challenge.StatusActive}, nil
+	return &challenge.ChallengeSession{ID: "sess-party-1", CharacterID: leaderID, TierID: tierID, PartyID: partyID, Status: challenge.StatusActive}, nil
 }
 func (s *stubChallengeService) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
 	if s.advanceRoundFn != nil {
@@ -119,7 +119,7 @@ type stubDungeonService struct {
 	moveFn                 func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
 	escapeFn               func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
 	getActiveExpeditionFn  func(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
-	startPartyExpeditionFn func(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
+	startPartyExpeditionFn func(ctx context.Context, leaderID string, partyID string, dungeonID string) (*dungeon.ActiveExpedition, error)
 	viewMapFn              func(ctx context.Context, characterID string) (dungeon.MapView, error)
 }
 
@@ -135,9 +135,9 @@ func (s *stubDungeonService) StartExpedition(ctx context.Context, characterID st
 	}
 	return &dungeon.ActiveExpedition{ID: "exp-1", CharacterID: characterID, DungeonID: dungeonID, Status: dungeon.StatusExploring}, nil
 }
-func (s *stubDungeonService) StartPartyExpedition(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error) {
+func (s *stubDungeonService) StartPartyExpedition(ctx context.Context, leaderID string, partyID string, dungeonID string) (*dungeon.ActiveExpedition, error) {
 	if s.startPartyExpeditionFn != nil {
-		return s.startPartyExpeditionFn(ctx, leaderID, memberIDs, dungeonID, partyID)
+		return s.startPartyExpeditionFn(ctx, leaderID, partyID, dungeonID)
 	}
 	return &dungeon.ActiveExpedition{ID: "exp-party-1", CharacterID: leaderID, DungeonID: dungeonID, PartyID: partyID, Status: dungeon.StatusExploring}, nil
 }
@@ -341,13 +341,24 @@ func TestCombatEndpoints(t *testing.T) {
 	})
 
 	t.Run("POST /characters/{id}/dungeons/party-start", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/party-start", `{"dungeon_id":"d1","member_ids":["c1","c2"],"party_id":"p1"}`)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/party-start", `{"dungeon_id":"d1","party_id":"p1"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/dungeons/party-start - missing party_id", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/party-start", `{"dungeon_id":"d1"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request, got %d", rec.Code)
 		}
 	})
 
@@ -363,13 +374,70 @@ func TestCombatEndpoints(t *testing.T) {
 	})
 
 	t.Run("POST /characters/{id}/challenges/party-start", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/party-start", `{"tier_id":"novice","member_ids":["c1","c2"],"party_name":"Party","party_color":"#FF0000"}`)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/party-start", `{"tier_id":"novice","party_id":"p1"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/challenges/party-start - missing party_id", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/party-start", `{"tier_id":"novice"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/challenges/party-start - not leader", func(t *testing.T) {
+		hNotLeader := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithChallenge(&stubChallengeService{
+				startPartySessionFn: func(ctx context.Context, leaderID, partyID, tierID string) (*challenge.ChallengeSession, error) {
+					return nil, challenge.ErrNotPartyLeader
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/party-start", `{"tier_id":"novice","party_id":"p1"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hNotLeader.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/challenges/party-start - party not ready", func(t *testing.T) {
+		hUnready := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithChallenge(&stubChallengeService{
+				startPartySessionFn: func(ctx context.Context, leaderID, partyID, tierID string) (*challenge.ChallengeSession, error) {
+					return nil, challenge.ErrPartyNotReady
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/party-start", `{"tier_id":"novice","party_id":"p1"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hUnready.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 Unprocessable Entity, got %d", rec.Code)
 		}
 	})
 

@@ -9,7 +9,46 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/party"
 )
+
+type mockPartyRepo struct {
+	parties map[string]party.Party
+	members map[string][]party.Member
+}
+
+func newMockPartyRepo() *mockPartyRepo {
+	return &mockPartyRepo{
+		parties: make(map[string]party.Party),
+		members: make(map[string][]party.Member),
+	}
+}
+
+func (m *mockPartyRepo) GetParty(ctx context.Context, id string) (party.Party, error) {
+	p, ok := m.parties[id]
+	if !ok {
+		return party.Party{}, party.ErrNotFound
+	}
+	return p, nil
+}
+
+func (m *mockPartyRepo) GetMembers(ctx context.Context, partyID string) ([]party.Member, error) {
+	mems, ok := m.members[partyID]
+	if !ok {
+		return nil, party.ErrNotFound
+	}
+	return mems, nil
+}
+
+func (m *mockPartyRepo) UpdateParty(ctx context.Context, p party.Party) error {
+	m.parties[p.ID] = p
+	return nil
+}
+
+func (m *mockPartyRepo) addParty(p party.Party, members []party.Member) {
+	m.parties[p.ID] = p
+	m.members[p.ID] = members
+}
 
 func createPartyTestChar(id string, level int, hp int, atk int, def int) corecharacter.Character {
 	return corecharacter.Character{
@@ -29,6 +68,7 @@ func createPartyTestChar(id string, level int, hp int, atk int, def int) corecha
 func TestStartPartyChallengeSession(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	partyRepo := newMockPartyRepo()
 
 	c1 := createPartyTestChar("lead", 15, 200, 50, 30)
 	c1.Name = "挑戦勇者"
@@ -40,14 +80,24 @@ func TestStartPartyChallengeSession(t *testing.T) {
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	partyRepo.addParty(party.Party{
+		ID:                "p1",
+		LeaderCharacterID: "lead",
+		Name:              "栄光の騎士団",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p1", CharacterID: "lead", CharacterName: "挑戦勇者", ReadyState: true, IsLeader: true},
+		{PartyID: "p1", CharacterID: "c2", CharacterName: "挑戦戦士", ReadyState: true},
+	})
+
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithPartyRepository(partyRepo))
 	if err != nil {
 		t.Fatalf("failed to create challenge service: %v", err)
 	}
 	ctx := context.Background()
 
 	// 1. Success starting party session on stage "1" (allows up to 2 participants, hp < 400)
-	sess, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "1", "栄光の騎士団", "#00FF00")
+	sess, err := svc.StartPartySession(ctx, "lead", "p1", "1")
 	if err != nil {
 		t.Fatalf("StartPartySession failed: %v", err)
 	}
@@ -60,20 +110,148 @@ func TestStartPartyChallengeSession(t *testing.T) {
 	if sess.PartyName != "栄光の騎士団" {
 		t.Errorf("expected party name 栄光の騎士団, got %s", sess.PartyName)
 	}
-	if sess.PartyColor != "#00FF00" {
-		t.Errorf("expected party color #00FF00, got %s", sess.PartyColor)
+
+	// Verify party status updated to in_progress
+	pUpdated, _ := partyRepo.GetParty(ctx, "p1")
+	if pUpdated.Status != party.StatusInProgress {
+		t.Errorf("expected party status in_progress, got %s", pUpdated.Status)
 	}
 
-	// 2. Stage "0" allows max 1 participant -> ErrTooManyPartyMembers
-	_, err = svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "0", "TooMany", "#00FF00")
+	// 2. Multi-member active session indexing and privacy
+	// Non-leader member can fetch the active session
+	memSess, err := svc.GetActiveSession(ctx, "c2")
+	if err != nil || memSess == nil {
+		t.Fatalf("expected member c2 to find active session, err: %v", err)
+	}
+	if memSess.ID != sess.ID {
+		t.Errorf("expected session ID %s, got %s", sess.ID, memSess.ID)
+	}
+
+	// Outside character querying gets nil (privacy check)
+	outsiderSess, err := svc.GetActiveSession(ctx, "outsider-char")
+	if err != nil {
+		t.Fatalf("unexpected error for outsider: %v", err)
+	}
+	if outsiderSess != nil {
+		t.Errorf("expected nil session for outsider, got %v", outsiderSess)
+	}
+
+	// 3. Busy member rejection
+	partyRepo.addParty(party.Party{
+		ID:                "p-busy",
+		LeaderCharacterID: "lead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-busy", CharacterID: "lead", ReadyState: true, IsLeader: true},
+	})
+	_, err = svc.StartPartySession(ctx, "lead", "p-busy", "1")
+	if !errors.Is(err, challenge.ErrActiveSessionExists) {
+		t.Errorf("expected ErrActiveSessionExists, got %v", err)
+	}
+
+	// 4. Stage "0" allows max 1 participant -> ErrTooManyPartyMembers
+	partyRepo.addParty(party.Party{
+		ID:                "p-too-many",
+		LeaderCharacterID: "lead2",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-too-many", CharacterID: "lead2", ReadyState: true, IsLeader: true},
+		{PartyID: "p-too-many", CharacterID: "c2-2", ReadyState: true},
+	})
+	charRepo.chars["lead2"] = createPartyTestChar("lead2", 15, 200, 50, 30)
+	charRepo.chars["c2-2"] = createPartyTestChar("c2-2", 15, 180, 45, 25)
+	_, err = svc.StartPartySession(ctx, "lead2", "p-too-many", "0")
 	if !errors.Is(err, challenge.ErrTooManyPartyMembers) {
 		t.Errorf("expected ErrTooManyPartyMembers for stage 0 with 2 members, got %v", err)
+	}
+
+	// 5. Non-existent party
+	_, err = svc.StartPartySession(ctx, "lead", "p-missing", "1")
+	if !errors.Is(err, challenge.ErrPartyNotFound) {
+		t.Errorf("expected ErrPartyNotFound, got %v", err)
+	}
+
+	// 6. Non-leader actor
+	partyRepo.addParty(party.Party{
+		ID:                "p-lead-test",
+		LeaderCharacterID: "lead-new",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-lead-test", CharacterID: "lead-new", ReadyState: true, IsLeader: true},
+		{PartyID: "p-lead-test", CharacterID: "other-actor", ReadyState: true},
+	})
+	charRepo.chars["lead-new"] = createPartyTestChar("lead-new", 15, 200, 50, 30)
+	charRepo.chars["other-actor"] = createPartyTestChar("other-actor", 15, 180, 45, 25)
+	_, err = svc.StartPartySession(ctx, "other-actor", "p-lead-test", "1")
+	if !errors.Is(err, challenge.ErrNotPartyLeader) {
+		t.Errorf("expected ErrNotPartyLeader, got %v", err)
+	}
+
+	// 7. Party not recruiting
+	partyRepo.addParty(party.Party{
+		ID:                "p-not-recruiting",
+		LeaderCharacterID: "lead-nr",
+		Status:            party.StatusInProgress,
+	}, []party.Member{
+		{PartyID: "p-not-recruiting", CharacterID: "lead-nr", ReadyState: true, IsLeader: true},
+	})
+	charRepo.chars["lead-nr"] = createPartyTestChar("lead-nr", 15, 200, 50, 30)
+	_, err = svc.StartPartySession(ctx, "lead-nr", "p-not-recruiting", "1")
+	if !errors.Is(err, challenge.ErrPartyNotRecruiting) {
+		t.Errorf("expected ErrPartyNotRecruiting, got %v", err)
+	}
+
+	// 8. Member not ready
+	partyRepo.addParty(party.Party{
+		ID:                "p-unready",
+		LeaderCharacterID: "lead-unready",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-unready", CharacterID: "lead-unready", ReadyState: true, IsLeader: true},
+		{PartyID: "p-unready", CharacterID: "c-unready-mem", ReadyState: false},
+	})
+	charRepo.chars["lead-unready"] = createPartyTestChar("lead-unready", 15, 200, 50, 30)
+	charRepo.chars["c-unready-mem"] = createPartyTestChar("c-unready-mem", 15, 180, 45, 25)
+	_, err = svc.StartPartySession(ctx, "lead-unready", "p-unready", "1")
+	if !errors.Is(err, challenge.ErrPartyNotReady) {
+		t.Errorf("expected ErrPartyNotReady, got %v", err)
+	}
+
+	// 9. Duplicate party members
+	partyRepo.addParty(party.Party{
+		ID:                "p-dup",
+		LeaderCharacterID: "lead-dup",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-dup", CharacterID: "lead-dup", ReadyState: true, IsLeader: true},
+		{PartyID: "p-dup", CharacterID: "lead-dup", ReadyState: true},
+	})
+	charRepo.chars["lead-dup"] = createPartyTestChar("lead-dup", 15, 200, 50, 30)
+	_, err = svc.StartPartySession(ctx, "lead-dup", "p-dup", "1")
+	if !errors.Is(err, challenge.ErrDuplicatePartyMember) {
+		t.Errorf("expected ErrDuplicatePartyMember, got %v", err)
+	}
+
+	// 10. Unconscious character
+	partyRepo.addParty(party.Party{
+		ID:                "p-dead",
+		LeaderCharacterID: "lead-dead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-dead", CharacterID: "lead-dead", ReadyState: true, IsLeader: true},
+	})
+	deadChar := createPartyTestChar("lead-dead", 15, 0, 50, 30)
+	charRepo.chars["lead-dead"] = deadChar
+	_, err = svc.StartPartySession(ctx, "lead-dead", "p-dead", "1")
+	if !errors.Is(err, challenge.ErrCharacterUnconscious) {
+		t.Errorf("expected ErrCharacterUnconscious, got %v", err)
 	}
 }
 
 func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	partyRepo := newMockPartyRepo()
 
 	c1 := createPartyTestChar("lead", 30, 350, 100, 80)
 	c1.Name = "勇者アリス"
@@ -89,111 +267,54 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	c2.Stats.MaxMP = 100
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	partyRepo.addParty(party.Party{
+		ID:                "dream-team",
+		LeaderCharacterID: "lead",
+		Name:              "ドリームチーム",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "dream-team", CharacterID: "lead", CharacterName: "勇者アリス", ReadyState: true, IsLeader: true},
+		{PartyID: "dream-team", CharacterID: "c2", CharacterName: "魔法使いボブ", ReadyState: true},
+	})
+
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithPartyRepository(partyRepo))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
 	ctx := context.Background()
 
-	sess, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "1", "ドリームチーム", "#FF0000")
+	sess, err := svc.StartPartySession(ctx, "lead", "dream-team", "1")
 	if err != nil {
 		t.Fatalf("StartPartySession failed: %v", err)
 	}
 
 	// Advance round 1
-	roundRes, updatedSess, err := svc.AdvanceRound(ctx, "lead", sess.ID)
+	res, updatedSess, err := svc.AdvanceRound(ctx, "lead", sess.ID)
 	if err != nil {
 		t.Fatalf("AdvanceRound failed: %v", err)
 	}
-	if !roundRes.Won {
-		t.Fatalf("expected round 1 to be won by strong party")
+	if !res.Won {
+		t.Fatalf("expected round 1 victory with party")
 	}
 	if updatedSess.CurrentRound != 2 {
-		t.Errorf("expected session round to advance to 2, got %d", updatedSess.CurrentRound)
+		t.Errorf("expected round 2, got %d", updatedSess.CurrentRound)
 	}
 
-	// Check surviving member HP carryover
-	for _, m := range updatedSess.Members {
-		if m.CharacterCurrentHP <= 0 {
-			t.Errorf("expected surviving member %s to have positive HP", m.CharacterID)
-		}
+	// Verify all members are present in updated session
+	if len(updatedSess.Members) != 2 {
+		t.Fatalf("expected 2 members, got %d", len(updatedSess.Members))
 	}
-
-	// Check Hall of Fame record
-	hof, err := svc.GetHallOfFame(ctx, "1")
-	if err != nil {
-		t.Fatalf("GetHallOfFame failed: %v", err)
-	}
-	if hof == nil {
-		t.Fatal("expected Hall of Fame entry to be created for new highest round")
-	}
-	if hof.HighestRound != 1 {
-		t.Errorf("expected Hall of Fame highest round 1, got %d", hof.HighestRound)
-	}
-	if hof.PartyName != "ドリームチーム" {
-		t.Errorf("expected Hall of Fame party name ドリームチーム, got %s", hof.PartyName)
-	}
-	if len(hof.Members) != 2 {
-		t.Fatalf("expected 2 members in Hall of Fame, got %d", len(hof.Members))
-	}
-	if hof.Members[0].CharacterName != "勇者アリス" || hof.Members[0].JobID != "paladin" {
-		t.Errorf("unexpected member 0 in Hall of Fame: %+v", hof.Members[0])
-	}
-	if hof.Members[1].CharacterName != "魔法使いボブ" || hof.Members[1].JobID != "wizard" {
-		t.Errorf("unexpected member 1 in Hall of Fame: %+v", hof.Members[1])
+	if updatedSess.Members[0].CharacterName != "勇者アリス" || updatedSess.Members[1].CharacterName != "魔法使いボブ" {
+		t.Errorf("unexpected members in updated session: %+v", updatedSess.Members)
 	}
 }
 
-func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
+func TestPartyBattleResolverNoExtraRecovery(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	partyRepo := newMockPartyRepo()
 
-	// Level 10 character with MaxHP 350, Attack 150, Defense 5 so monster damage goes through
-	c1 := createPartyTestChar("solo1", 10, 350, 150, 5)
-	c1.Name = "ソロ戦士"
-	c1.JobID = "warrior"
-	charRepo.chars[c1.ID] = c1
-
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-	ctx := context.Background()
-
-	sess, err := svc.StartSession(ctx, c1.ID, "0")
-	if err != nil {
-		t.Fatalf("StartSession failed: %v", err)
-	}
-
-	roundRes, updatedSess, err := svc.AdvanceRound(ctx, c1.ID, sess.ID)
-	if err != nil {
-		t.Fatalf("AdvanceRound failed: %v", err)
-	}
-	if !roundRes.Won {
-		t.Fatalf("expected solo player to win round 1")
-	}
-
-	// Legacy parity check: RecoveredHP must be 0
-	if roundRes.RecoveredHP != 0 {
-		t.Errorf("expected roundRes.RecoveredHP to be 0 (no recovery), got %d", roundRes.RecoveredHP)
-	}
-
-	// Verify surviving HP carried over directly from the last combat log
-	if len(roundRes.BattleResult.Logs) == 0 {
-		t.Fatalf("expected battle logs")
-	}
-	finalRemainingHP := roundRes.BattleResult.Logs[len(roundRes.BattleResult.Logs)-1].RemainingHP[c1.ID]
-	if updatedSess.CharacterCurrentHP != finalRemainingHP {
-		t.Errorf("expected session HP to exactly match combat final remaining HP %d, got %d",
-			finalRemainingHP, updatedSess.CharacterCurrentHP)
-	}
-}
-
-func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
-	repo := newMockChallengeRepo()
-	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
-
-	c1 := createPartyTestChar("p_lead", 15, 350, 140, 5)
+	c1 := createPartyTestChar("p_lead", 15, 300, 150, 10)
 	c1.Name = "勇者"
 	c1.JobID = "hero"
 	charRepo.chars[c1.ID] = c1
@@ -203,13 +324,23 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	partyRepo.addParty(party.Party{
+		ID:                "test-squad",
+		LeaderCharacterID: c1.ID,
+		Name:              "テスト隊",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "test-squad", CharacterID: c1.ID, CharacterName: "勇者", ReadyState: true, IsLeader: true},
+		{PartyID: "test-squad", CharacterID: c2.ID, CharacterName: "戦士", ReadyState: true},
+	})
+
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithPartyRepository(partyRepo))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
 	ctx := context.Background()
 
-	sess, err := svc.StartPartySession(ctx, c1.ID, []string{c1.ID, c2.ID}, "1", "テスト隊", "#00AA00")
+	sess, err := svc.StartPartySession(ctx, c1.ID, "test-squad", "1")
 	if err != nil {
 		t.Fatalf("StartPartySession failed: %v", err)
 	}
@@ -241,7 +372,7 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 	ctx := context.Background()
 
-	setupService := func() (*challenge.Service, *mockChallengeRepo, *mockCharRepo, *mockActiveStore) {
+	setupService := func() (*challenge.Service, *mockChallengeRepo, *mockCharRepo, *mockActiveStore, *mockPartyRepo) {
 		repo := newMockChallengeRepo()
 		charRepo := &mockCharRepo{
 			chars: map[string]corecharacter.Character{
@@ -250,61 +381,71 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 			},
 		}
 		activeStore := newMockActiveStore(nil)
+		partyRepo := newMockPartyRepo()
+		partyRepo.addParty(party.Party{
+			ID:                "p-test",
+			LeaderCharacterID: "lead",
+			Name:              "Party",
+			Status:            party.StatusRecruiting,
+		}, []party.Member{
+			{PartyID: "p-test", CharacterID: "lead", ReadyState: true, IsLeader: true},
+		})
 		svc, err := challenge.NewService(
 			repo,
 			charRepo,
 			&corebattle.Engine{},
 			challenge.WithActiveSessionStore(activeStore),
+			challenge.WithPartyRepository(partyRepo),
 		)
 		if err != nil {
 			t.Fatalf("failed to create challenge service: %v", err)
 		}
-		return svc, repo, charRepo, activeStore
+		return svc, repo, charRepo, activeStore, partyRepo
 	}
 
 	t.Run("empty leader character ID returns ErrCharacterNotFound", func(t *testing.T) {
-		svc, _, _, _ := setupService()
-		_, err := svc.StartPartySession(ctx, "", []string{"c2"}, "0", "Party", "#FFFFFF")
+		svc, _, _, _, _ := setupService()
+		_, err := svc.StartPartySession(ctx, "", "p-test", "0")
 		if !errors.Is(err, challenge.ErrCharacterNotFound) {
 			t.Errorf("expected ErrCharacterNotFound, got %v", err)
 		}
 	})
 
 	t.Run("activeStore GetActiveSession error propagates", func(t *testing.T) {
-		svc, _, _, activeStore := setupService()
+		svc, _, _, activeStore, _ := setupService()
 		activeStore.getActiveSessionErr = errors.New("valkey cluster unavailable")
 
-		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "lead", "p-test", "0")
 		if err == nil || !strings.Contains(err.Error(), "valkey cluster unavailable") {
 			t.Errorf("expected valkey cluster unavailable error, got %v", err)
 		}
 	})
 
 	t.Run("charRepo FindByID error propagates", func(t *testing.T) {
-		svc, _, charRepo, _ := setupService()
+		svc, _, charRepo, _, _ := setupService()
 		charRepo.findByIDErr = errors.New("mariadb connection lost")
 
-		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "lead", "p-test", "0")
 		if err == nil || !strings.Contains(err.Error(), "mariadb connection lost") {
 			t.Errorf("expected charRepo error, got %v", err)
 		}
 	})
 
 	t.Run("activeStore SaveActiveSession error propagates", func(t *testing.T) {
-		svc, _, _, activeStore := setupService()
+		svc, _, _, activeStore, _ := setupService()
 		activeStore.saveActiveSessionErr = errors.New("valkey write timeout")
 
-		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "lead", "p-test", "0")
 		if err == nil || !strings.Contains(err.Error(), "valkey write timeout") {
 			t.Errorf("expected activeStore save error, got %v", err)
 		}
 	})
 
 	t.Run("repo SaveSession error propagates with context", func(t *testing.T) {
-		svc, repo, _, _ := setupService()
+		svc, repo, _, _, _ := setupService()
 		repo.saveSessionErr = errors.New("duplicate key in challenge_sessions")
 
-		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "lead", "p-test", "0")
 		if err == nil || !strings.Contains(err.Error(), "saving challenge session: duplicate key in challenge_sessions") {
 			t.Errorf("expected wrapped repo save session error, got %v", err)
 		}

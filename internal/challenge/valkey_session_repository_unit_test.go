@@ -155,8 +155,8 @@ func TestValkeySessionRepository_SaveActiveSession(t *testing.T) {
 	}
 
 	cmds := client.RecordedCommandStrings()
-	if len(cmds) != 4 {
-		t.Fatalf("expected 4 recorded commands, got %d: %v", len(cmds), cmds)
+	if len(cmds) != 5 {
+		t.Fatalf("expected 5 recorded commands, got %d: %v", len(cmds), cmds)
 	}
 
 	// Command 0: HSET sessionKey
@@ -194,12 +194,17 @@ func TestValkeySessionRepository_SaveActiveSession(t *testing.T) {
 	if cmds[3][0] != "EXPIRE" || cmds[3][2] != "3600" {
 		t.Errorf("unexpected EXPIRE rewards command: %v", cmds[3])
 	}
+	// Command 4: SET leaderKey for non-leader member char-101
+	if cmds[4][0] != "SET" || !strings.Contains(cmds[4][1], "char:char-101}:leader") {
+		t.Errorf("expected SET leaderKey command for char-101, got %v", cmds[4])
+	}
 
 	// 2. Error case: DoMulti command returns error
 	errDoMulti := errors.New("valkey domulti error")
 	clientErr := valkeytest.NewMockClient(valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
 		return []valkeygo.ValkeyResult{
 			valkeytest.MakeErrorResult(errDoMulti),
+			valkeytest.MakeOKResult(),
 			valkeytest.MakeOKResult(),
 			valkeytest.MakeOKResult(),
 			valkeytest.MakeOKResult(),
@@ -345,10 +350,11 @@ func TestValkeySessionRepository_DeleteActiveSession(t *testing.T) {
 	ctx := context.Background()
 
 	client := valkeytest.NewMockClient(valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
-		return []valkeygo.ValkeyResult{
-			valkeytest.MakeOKResult(),
-			valkeytest.MakeOKResult(),
+		res := make([]valkeygo.ValkeyResult, len(multi))
+		for i := range multi {
+			res[i] = valkeytest.MakeOKResult()
 		}
+		return res
 	}))
 	repo, _ := challenge.NewValkeySessionRepository(client)
 
@@ -357,14 +363,24 @@ func TestValkeySessionRepository_DeleteActiveSession(t *testing.T) {
 	}
 
 	cmds := client.RecordedCommandStrings()
-	if len(cmds) != 2 {
-		t.Fatalf("expected 2 delete commands, got %d: %v", len(cmds), cmds)
+	hasDelSession := false
+	hasDelRewards := false
+	hasDelLeader := false
+	for _, cmd := range cmds {
+		if len(cmd) >= 2 && cmd[0] == "DEL" {
+			if strings.Contains(cmd[1], "char:char-del-1}:session") {
+				hasDelSession = true
+			}
+			if strings.Contains(cmd[1], "char:char-del-1}:rewards") {
+				hasDelRewards = true
+			}
+			if strings.Contains(cmd[1], "char:char-del-1}:leader") {
+				hasDelLeader = true
+			}
+		}
 	}
-	if cmds[0][0] != "DEL" || !strings.Contains(cmds[0][1], "char:char-del-1}:session") {
-		t.Errorf("unexpected DEL session command: %v", cmds[0])
-	}
-	if cmds[1][0] != "DEL" || !strings.Contains(cmds[1][1], "char:char-del-1}:rewards") {
-		t.Errorf("unexpected DEL rewards command: %v", cmds[1])
+	if !hasDelSession || !hasDelRewards || !hasDelLeader {
+		t.Errorf("expected DEL commands for session, rewards, and leader, got %v", cmds)
 	}
 }
 

@@ -17,7 +17,17 @@ func (s *Service) GetActiveExpedition(ctx context.Context, characterID string) (
 }
 
 func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID string) (*ActiveExpedition, error) {
-	return s.StartPartyExpedition(ctx, characterID, []string{characterID}, dungeonID, "")
+	if strings.TrimSpace(characterID) == "" {
+		return nil, ErrCharacterNotFound
+	}
+	existing, err := s.activeStore.GetActiveExpedition(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil && existing.Status == StatusExploring {
+		return nil, ErrActiveExpeditionExists
+	}
+	return s.startExpeditionRoster(ctx, characterID, []string{characterID}, dungeonID, "", "")
 }
 
 func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (ExpeditionStepResult, error) {

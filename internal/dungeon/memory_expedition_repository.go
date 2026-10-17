@@ -9,18 +9,20 @@ import (
 // MemoryExpeditionRepository provides an in-memory, thread-safe implementation
 // of ActiveExpeditionStore matching the exact semantics and error codes of the Valkey Lua script.
 type MemoryExpeditionRepository struct {
-	mu          sync.RWMutex
-	expeditions map[string]ActiveExpedition
-	expirations map[string]time.Time
-	ttl         time.Duration
+	mu           sync.RWMutex
+	expeditions  map[string]ActiveExpedition
+	expirations  map[string]time.Time
+	memberLeader map[string]string
+	ttl          time.Duration
 }
 
 // NewMemoryExpeditionRepository creates a new thread-safe in-memory store.
 func NewMemoryExpeditionRepository(opts ...ValkeyOption) *MemoryExpeditionRepository {
 	repo := &MemoryExpeditionRepository{
-		expeditions: make(map[string]ActiveExpedition),
-		expirations: make(map[string]time.Time),
-		ttl:         DefaultExpeditionTTL,
+		expeditions:  make(map[string]ActiveExpedition),
+		expirations:  make(map[string]time.Time),
+		memberLeader: make(map[string]string),
+		ttl:          DefaultExpeditionTTL,
 	}
 	for _, opt := range opts {
 		cfg := &valkeyConfig{ttl: repo.ttl}
@@ -35,14 +37,46 @@ func (m *MemoryExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 	defer m.mu.Unlock()
 
 	exp, ok := m.expeditions[characterID]
-	if !ok {
+	if ok {
+		expTime, hasExp := m.expirations[characterID]
+		if hasExp && time.Now().UTC().After(expTime) {
+			m.deleteExpeditionLocked(characterID)
+			return nil, nil
+		}
+
+		cp := exp
+		cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
+		cp.Members = append([]ExpeditionMember(nil), exp.Members...)
+		return &cp, nil
+	}
+
+	leaderID, hasLeader := m.memberLeader[characterID]
+	if !hasLeader {
 		return nil, nil
 	}
 
-	expTime, hasExp := m.expirations[characterID]
+	exp, ok = m.expeditions[leaderID]
+	if !ok {
+		delete(m.memberLeader, characterID)
+		return nil, nil
+	}
+
+	expTime, hasExp := m.expirations[leaderID]
 	if hasExp && time.Now().UTC().After(expTime) {
-		delete(m.expeditions, characterID)
-		delete(m.expirations, characterID)
+		m.deleteExpeditionLocked(leaderID)
+		return nil, nil
+	}
+
+	// Privacy check: verify characterID is an authorized member of this expedition
+	found := false
+	for _, mem := range exp.Members {
+		if mem.CharacterID == characterID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		delete(m.memberLeader, characterID)
 		return nil, nil
 	}
 
@@ -61,6 +95,12 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	m.expeditions[exp.CharacterID] = cp
 	m.expirations[exp.CharacterID] = time.Now().UTC().Add(m.ttl)
+
+	for _, mem := range exp.Members {
+		if mem.CharacterID != exp.CharacterID {
+			m.memberLeader[mem.CharacterID] = exp.CharacterID
+		}
+	}
 	return nil
 }
 
@@ -68,24 +108,46 @@ func (m *MemoryExpeditionRepository) DeleteActiveExpedition(ctx context.Context,
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.expeditions, characterID)
-	delete(m.expirations, characterID)
+	if _, ok := m.expeditions[characterID]; ok {
+		m.deleteExpeditionLocked(characterID)
+		return nil
+	}
+	if leaderID, ok := m.memberLeader[characterID]; ok {
+		m.deleteExpeditionLocked(leaderID)
+		return nil
+	}
 	return nil
+}
+
+func (m *MemoryExpeditionRepository) deleteExpeditionLocked(leaderID string) {
+	if exp, ok := m.expeditions[leaderID]; ok {
+		for _, mem := range exp.Members {
+			delete(m.memberLeader, mem.CharacterID)
+		}
+	}
+	delete(m.expeditions, leaderID)
+	delete(m.expirations, leaderID)
 }
 
 func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID string, params StepParams) (StepOutcome, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	exp, ok := m.expeditions[characterID]
+	targetID := characterID
+	if _, ok := m.expeditions[targetID]; !ok {
+		if lid, hasLeader := m.memberLeader[targetID]; hasLeader {
+			targetID = lid
+		}
+	}
+
+	exp, ok := m.expeditions[targetID]
 	if !ok {
 		return StepOutcome{}, ErrExpeditionNotFound
 	}
 
-	expTime, hasExp := m.expirations[characterID]
+	expTime, hasExp := m.expirations[targetID]
 	if hasExp && time.Now().UTC().After(expTime) {
-		delete(m.expeditions, characterID)
-		delete(m.expirations, characterID)
+		m.deleteExpeditionLocked(targetID)
 		return StepOutcome{}, ErrExpeditionNotFound
 	}
 
@@ -141,8 +203,8 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 	exp.UpdatedAt = params.Now
 
-	m.expeditions[characterID] = exp
-	m.expirations[characterID] = time.Now().UTC().Add(m.ttl)
+	m.expeditions[targetID] = exp
+	m.expirations[targetID] = time.Now().UTC().Add(m.ttl)
 
 	cp := exp
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)

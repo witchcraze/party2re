@@ -14,7 +14,23 @@ import (
 )
 
 func (s *Service) StartSession(ctx context.Context, characterID string, tierID string) (*ChallengeSession, error) {
-	return s.StartPartySession(ctx, characterID, []string{characterID}, tierID, "", "#FFFFFF")
+	if strings.TrimSpace(characterID) == "" {
+		return nil, ErrCharacterNotFound
+	}
+	tier, err := s.GetTier(tierID)
+	if err != nil {
+		return nil, err
+	}
+
+	existing, err := s.activeStore.GetActiveSession(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil && existing.Status == StatusActive {
+		return nil, ErrActiveSessionExists
+	}
+
+	return s.startSessionRoster(ctx, characterID, []string{characterID}, tier, "", "", "#FFFFFF")
 }
 
 func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*RoundResult, *ChallengeSession, error) {

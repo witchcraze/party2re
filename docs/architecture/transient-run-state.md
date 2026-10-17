@@ -46,8 +46,12 @@ current key patterns use a Cluster Hash Tag `{char:<character_id>}`:
 | `party2:dungeon:{char:<character_id>}:state` | Hash | 7200s sliding |
 | `party2:dungeon:{char:<character_id>}:rewards` | Hash (items as JSON array) | 7200s sliding |
 | `party2:dungeon:{char:<character_id>}:revealed` | Set of visited coordinates | 7200s |
+| `party2:dungeon:{char:<character_id>}:leader` | String | 7200s sliding |
 | `party2:challenge:{char:<character_id>}:session` | Hash | 7200s sliding |
 | `party2:challenge:{char:<character_id>}:rewards` | Hash (items as JSON array) | 7200s sliding |
+| `party2:challenge:{char:<character_id>}:leader` | String | 7200s sliding |
+
+When a multi-member party expedition or challenge session is active, every participating member is indexed in Valkey via `party2:dungeon:{char:<character_id>}:leader` or `party2:challenge:{char:<character_id>}:leader` pointing to the leader character ID. Both memory and Valkey active stores index all participating members. Active run lookups for any participating member resolve the run while enforcing member privacy (non-members receive nil/404). This prevents any participating party member from initiating or joining another concurrent adventure, expedition, or challenge run ("二重活動" prevention).
 
 `dungeon_step` (`internal/dungeon/lua/dungeon_step.lua`) verifies expedition ID
 and active state, updates coordinates/HP/turns, accumulates provisional loot,

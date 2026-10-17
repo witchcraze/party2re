@@ -10,6 +10,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/party"
 )
 
 var (
@@ -19,17 +20,32 @@ var (
 	ErrNeedOverLvNotMet    = errors.New("character does not meet reincarnation requirement")
 )
 
-// StartPartySession initializes a survival challenge run for up to stage MaxParticipants party members.
+// StartPartySession initializes a survival challenge run for up to stage MaxParticipants party members from an authorized party lobby.
 func (s *Service) StartPartySession(
 	ctx context.Context,
 	leaderCharID string,
-	memberIDs []string,
+	partyID string,
 	tierID string,
-	partyName string,
-	partyColor string,
 ) (*ChallengeSession, error) {
 	if strings.TrimSpace(leaderCharID) == "" {
 		return nil, ErrCharacterNotFound
+	}
+	if strings.TrimSpace(partyID) == "" {
+		return nil, ErrPartyNotFound
+	}
+	if s.partyRepo == nil {
+		return nil, errors.New("party repository not configured")
+	}
+
+	p, err := s.partyRepo.GetParty(ctx, partyID)
+	if err != nil {
+		return nil, ErrPartyNotFound
+	}
+	if p.LeaderCharacterID != leaderCharID {
+		return nil, ErrNotPartyLeader
+	}
+	if p.Status != party.StatusRecruiting {
+		return nil, ErrPartyNotRecruiting
 	}
 
 	tier, err := s.GetTier(tierID)
@@ -37,38 +53,72 @@ func (s *Service) StartPartySession(
 		return nil, err
 	}
 
-	if len(memberIDs) == 0 {
-		memberIDs = []string{leaderCharID}
-	}
-
-	// Ensure leader is first
-	hasLeader := false
-	for _, mID := range memberIDs {
-		if mID == leaderCharID {
-			hasLeader = true
-			break
-		}
-	}
-	if !hasLeader {
-		memberIDs = append([]string{leaderCharID}, memberIDs...)
+	partyMembers, err := s.partyRepo.GetMembers(ctx, partyID)
+	if err != nil || len(partyMembers) == 0 {
+		return nil, ErrPartyEmpty
 	}
 
 	maxParts := tier.MaxParticipants
 	if maxParts <= 0 {
 		maxParts = 4
 	}
-	if len(memberIDs) > maxParts {
+	if len(partyMembers) > maxParts {
 		return nil, ErrTooManyPartyMembers
 	}
 
-	existing, err := s.activeStore.GetActiveSession(ctx, leaderCharID)
+	seen := make(map[string]bool, len(partyMembers))
+	for _, m := range partyMembers {
+		if !m.ReadyState {
+			return nil, ErrPartyNotReady
+		}
+		if seen[m.CharacterID] {
+			return nil, ErrDuplicatePartyMember
+		}
+		seen[m.CharacterID] = true
+	}
+
+	memberIDs := make([]string, 0, len(partyMembers))
+	memberIDs = append(memberIDs, leaderCharID)
+	for _, m := range partyMembers {
+		if m.CharacterID != leaderCharID {
+			memberIDs = append(memberIDs, m.CharacterID)
+		}
+	}
+
+	for _, mID := range memberIDs {
+		existing, err := s.activeStore.GetActiveSession(ctx, mID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil && existing.Status == StatusActive {
+			return nil, ErrActiveSessionExists
+		}
+	}
+
+	partyName := p.Name
+	partyColor := "#FFFFFF"
+
+	session, err := s.startSessionRoster(ctx, leaderCharID, memberIDs, tier, partyID, partyName, partyColor)
 	if err != nil {
 		return nil, err
 	}
-	if existing != nil && existing.Status == StatusActive {
-		return nil, ErrActiveSessionExists
-	}
 
+	p.Status = party.StatusInProgress
+	//lint:ignore error-swallow best-effort party status update
+	_ = s.partyRepo.UpdateParty(ctx, p)
+
+	return session, nil
+}
+
+func (s *Service) startSessionRoster(
+	ctx context.Context,
+	leaderCharID string,
+	memberIDs []string,
+	tier *ChallengeTier,
+	partyID string,
+	partyName string,
+	partyColor string,
+) (*ChallengeSession, error) {
 	members := make([]ChallengeMember, 0, len(memberIDs))
 	leaderHP := 0
 
@@ -79,6 +129,10 @@ func (s *Service) StartPartySession(
 				return nil, ErrCharacterNotFound
 			}
 			return nil, err
+		}
+
+		if char.Stats.HP <= 0 {
+			return nil, ErrCharacterUnconscious
 		}
 
 		level := char.Level
@@ -153,10 +207,11 @@ func (s *Service) StartPartySession(
 	session := ChallengeSession{
 		ID:                 id.New(),
 		CharacterID:        leaderCharID,
+		PartyID:            partyID,
 		PartyName:          partyName,
 		PartyColor:         partyColor,
 		Members:            members,
-		TierID:             tierID,
+		TierID:             tier.ID,
 		CurrentRound:       1,
 		CharacterCurrentHP: leaderHP,
 		AccumulatedExp:     0,

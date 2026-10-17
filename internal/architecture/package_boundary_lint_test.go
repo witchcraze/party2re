@@ -43,6 +43,8 @@ var compositionRoots = map[string]bool{
 var permittedCrossFeatureCouplings = map[string]map[string]bool{
 	"internal/party":       {"internal/adventure": true},                      // Multi-player party adventure 10-floor crawl loop
 	"internal/boss":        {"internal/party": true},                          // 4-player party recruitment for King sealing battles
+	"internal/dungeon":     {"internal/party": true},                          // 4-player party roster derivation for 2D dungeon expeditions
+	"internal/challenge":   {"internal/party": true},                          // 4-player party roster derivation for survival challenge runs
 	"internal/gvg":         {"internal/guild": true},                          // Guild battle room validation and guild standings
 	"internal/god":         {"internal/casino": true, "internal/guild": true}, // God wishes (WishCoin50000 and WishGuildPoint1000)
 	"internal/battle":      {"internal/customskill": true},                    // Battle Adapter equips custom skill gems

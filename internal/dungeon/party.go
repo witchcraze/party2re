@@ -7,11 +7,18 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/party"
 )
 
 var (
-	ErrTooManyPartyMembers = errors.New("dungeon party exceeds maximum 4 members")
-	ErrPartyEmpty          = errors.New("dungeon party must have at least 1 member")
+	ErrTooManyPartyMembers  = errors.New("dungeon party exceeds maximum 4 members")
+	ErrPartyEmpty           = errors.New("dungeon party must have at least 1 member")
+	ErrPartyNotFound        = errors.New("party not found")
+	ErrNotPartyLeader       = errors.New("only party leader can start party expedition")
+	ErrPartyNotRecruiting   = errors.New("party is not currently recruiting")
+	ErrPartyNotReady        = errors.New("all party members must be ready before starting")
+	ErrDuplicatePartyMember = errors.New("party has duplicate members")
+	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0)")
 )
 
 type ExpeditionMember struct {
@@ -24,49 +31,94 @@ type ExpeditionMember struct {
 	ItemIDs     []string `json:"item_ids,omitempty"`
 }
 
-// StartPartyExpedition begins a 2D dungeon exploration for up to 4 party members.
+// StartPartyExpedition begins a 2D dungeon exploration for an authorized party lobby.
 func (s *Service) StartPartyExpedition(
+	ctx context.Context,
+	leaderCharID string,
+	partyID string,
+	dungeonID string,
+) (*ActiveExpedition, error) {
+	if strings.TrimSpace(leaderCharID) == "" {
+		return nil, ErrCharacterNotFound
+	}
+	if strings.TrimSpace(partyID) == "" {
+		return nil, ErrPartyNotFound
+	}
+	if s.partyRepo == nil {
+		return nil, errors.New("party repository not configured")
+	}
+
+	p, err := s.partyRepo.GetParty(ctx, partyID)
+	if err != nil {
+		return nil, ErrPartyNotFound
+	}
+	if p.LeaderCharacterID != leaderCharID {
+		return nil, ErrNotPartyLeader
+	}
+	if p.Status != party.StatusRecruiting {
+		return nil, ErrPartyNotRecruiting
+	}
+
+	partyMembers, err := s.partyRepo.GetMembers(ctx, partyID)
+	if err != nil || len(partyMembers) == 0 {
+		return nil, ErrPartyEmpty
+	}
+	if len(partyMembers) > 4 {
+		return nil, ErrTooManyPartyMembers
+	}
+
+	seen := make(map[string]bool, len(partyMembers))
+	for _, m := range partyMembers {
+		if !m.ReadyState {
+			return nil, ErrPartyNotReady
+		}
+		if seen[m.CharacterID] {
+			return nil, ErrDuplicatePartyMember
+		}
+		seen[m.CharacterID] = true
+	}
+
+	memberIDs := make([]string, 0, len(partyMembers))
+	memberIDs = append(memberIDs, leaderCharID)
+	for _, m := range partyMembers {
+		if m.CharacterID != leaderCharID {
+			memberIDs = append(memberIDs, m.CharacterID)
+		}
+	}
+
+	for _, mID := range memberIDs {
+		existing, err := s.activeStore.GetActiveExpedition(ctx, mID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil && existing.Status == StatusExploring {
+			return nil, ErrActiveExpeditionExists
+		}
+	}
+
+	exp, err := s.startExpeditionRoster(ctx, leaderCharID, memberIDs, dungeonID, partyID, p.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	p.Status = party.StatusInProgress
+	//lint:ignore error-swallow best-effort party status update
+	_ = s.partyRepo.UpdateParty(ctx, p)
+
+	return exp, nil
+}
+
+func (s *Service) startExpeditionRoster(
 	ctx context.Context,
 	leaderCharID string,
 	memberIDs []string,
 	dungeonID string,
 	partyID string,
+	partyName string,
 ) (*ActiveExpedition, error) {
-	if strings.TrimSpace(leaderCharID) == "" {
-		return nil, ErrCharacterNotFound
-	}
-
 	dungeon, ok := s.dungeonMap[dungeonID]
 	if !ok {
 		return nil, ErrDungeonNotFound
-	}
-
-	if len(memberIDs) == 0 {
-		memberIDs = []string{leaderCharID}
-	}
-
-	// Ensure leader is first
-	hasLeader := false
-	for _, mID := range memberIDs {
-		if mID == leaderCharID {
-			hasLeader = true
-			break
-		}
-	}
-	if !hasLeader {
-		memberIDs = append([]string{leaderCharID}, memberIDs...)
-	}
-
-	if len(memberIDs) > 4 {
-		return nil, ErrTooManyPartyMembers
-	}
-
-	existing, err := s.activeStore.GetActiveExpedition(ctx, leaderCharID)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil && existing.Status == StatusExploring {
-		return nil, ErrActiveExpeditionExists
 	}
 
 	if len(dungeon.Floors) == 0 {
@@ -81,6 +133,10 @@ func (s *Service) StartPartyExpedition(
 		char, err := s.characterRepo.FindByID(ctx, mID)
 		if err != nil {
 			return nil, ErrCharacterNotFound
+		}
+
+		if char.Stats.HP <= 0 {
+			return nil, ErrCharacterUnconscious
 		}
 
 		if char.Level < dungeon.MinLevel {
@@ -128,6 +184,7 @@ func (s *Service) StartPartyExpedition(
 		ID:                id.New(),
 		CharacterID:       leaderCharID,
 		PartyID:           partyID,
+		PartyName:         partyName,
 		Members:           members,
 		DungeonID:         dungeon.ID,
 		CurrentFloor:      1,

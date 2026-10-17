@@ -11,20 +11,27 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/party"
 )
 
 //go:embed data/challenge_tiers.json
 var challengeTiersData []byte
 
 var (
-	ErrSessionNotFound     = errors.New("ERR_SESSION_NOT_FOUND: challenge session not found")
-	ErrSessionNotActive    = errors.New("ERR_SESSION_NOT_ACTIVE: challenge session is not active")
-	ErrSessionIDMismatch   = errors.New("ERR_SESSION_ID_MISMATCH: challenge session id mismatch")
-	ErrActiveSessionExists = errors.New("active challenge session already exists")
-	ErrTierNotFound        = errors.New("challenge tier not found")
-	ErrLevelTooLow         = errors.New("character level is too low for this tier")
-	ErrCharacterNotFound   = errors.New("character not found")
-	ErrForbidden           = errors.New("forbidden: character does not own this challenge session")
+	ErrSessionNotFound      = errors.New("ERR_SESSION_NOT_FOUND: challenge session not found")
+	ErrSessionNotActive     = errors.New("ERR_SESSION_NOT_ACTIVE: challenge session is not active")
+	ErrSessionIDMismatch    = errors.New("ERR_SESSION_ID_MISMATCH: challenge session id mismatch")
+	ErrActiveSessionExists  = errors.New("active challenge session already exists")
+	ErrTierNotFound         = errors.New("challenge tier not found")
+	ErrLevelTooLow          = errors.New("character level is too low for this tier")
+	ErrCharacterNotFound    = errors.New("character not found")
+	ErrForbidden            = errors.New("forbidden: character does not own this challenge session")
+	ErrPartyNotFound        = errors.New("party not found")
+	ErrNotPartyLeader       = errors.New("only party leader can start party session")
+	ErrPartyNotRecruiting   = errors.New("party is not currently recruiting")
+	ErrPartyNotReady        = errors.New("all party members must be ready before starting")
+	ErrDuplicatePartyMember = errors.New("party has duplicate members")
+	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0)")
 )
 
 type SessionStatus string
@@ -202,6 +209,12 @@ type Repository interface {
 	HallOfFameRepository
 }
 
+type PartyRepository interface {
+	GetParty(ctx context.Context, id string) (party.Party, error)
+	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
+	UpdateParty(ctx context.Context, p party.Party) error
+}
+
 // ParticipantBuilder constructs a Participant from character ID with current HP.
 type ParticipantBuilder interface {
 	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
@@ -212,12 +225,26 @@ type Service struct {
 	charRepo           CharacterRepository
 	battleEngine       corebattle.Resolver
 	activeStore        ActiveSessionStore
+	partyRepo          PartyRepository
 	tiers              map[string]ChallengeTier
 	participantBuilder ParticipantBuilder
 }
 
+func (s *Service) Configure(opts ...Option) {
+	for _, opt := range opts {
+		opt(s)
+	}
+}
+
 // Option configures optional parameters on Service.
 type Option func(*Service)
+
+// WithPartyRepository configures the PartyRepository for party roster derivation.
+func WithPartyRepository(repo PartyRepository) Option {
+	return func(s *Service) {
+		s.partyRepo = repo
+	}
+}
 
 // WithParticipantBuilder configures the ParticipantBuilder.
 func WithParticipantBuilder(builder ParticipantBuilder) Option {

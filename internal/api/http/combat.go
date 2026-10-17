@@ -15,7 +15,7 @@ type ChallengeService interface {
 	ListTiers() []challenge.ChallengeTier
 	GetTier(tierID string) (*challenge.ChallengeTier, error)
 	StartSession(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
-	StartPartySession(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
+	StartPartySession(ctx context.Context, leaderID string, partyID string, tierID string) (*challenge.ChallengeSession, error)
 	AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
 	GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
 	GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
@@ -38,10 +38,8 @@ type startChallengeRequest struct {
 }
 
 type startPartyChallengeRequest struct {
-	TierID     string   `json:"tier_id"`
-	MemberIDs  []string `json:"member_ids"`
-	PartyName  string   `json:"party_name"`
-	PartyColor string   `json:"party_color"`
+	PartyID string `json:"party_id"`
+	TierID  string `json:"tier_id"`
 }
 
 type advanceChallengeRequest struct {
@@ -141,23 +139,26 @@ func (h *Handler) handleStartPartyChallenge(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
+		if req.PartyID == "" {
+			writeError(w, http.StatusBadRequest, errors.New("party_id is required"))
+			return
+		}
 		if req.TierID == "" {
 			writeError(w, http.StatusBadRequest, errors.New("tier_id is required"))
 			return
 		}
 
-		memberIDs := req.MemberIDs
-		if len(memberIDs) == 0 {
-			memberIDs = []string{char.ID}
-		}
-
-		session, err := h.challenges.StartPartySession(r.Context(), char.ID, memberIDs, req.TierID, req.PartyName, req.PartyColor)
+		session, err := h.challenges.StartPartySession(r.Context(), char.ID, req.PartyID, req.TierID)
 		if err != nil {
-			if errors.Is(err, challenge.ErrTierNotFound) || errors.Is(err, challenge.ErrCharacterNotFound) {
+			if errors.Is(err, challenge.ErrTierNotFound) || errors.Is(err, challenge.ErrCharacterNotFound) || errors.Is(err, challenge.ErrPartyNotFound) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
-			if errors.Is(err, challenge.ErrLevelTooLow) || errors.Is(err, challenge.ErrActiveSessionExists) || errors.Is(err, challenge.ErrTooManyPartyMembers) {
+			if errors.Is(err, challenge.ErrNotPartyLeader) {
+				writeError(w, http.StatusForbidden, err)
+				return
+			}
+			if errors.Is(err, challenge.ErrLevelTooLow) || errors.Is(err, challenge.ErrActiveSessionExists) || errors.Is(err, challenge.ErrTooManyPartyMembers) || errors.Is(err, challenge.ErrPartyNotRecruiting) || errors.Is(err, challenge.ErrPartyNotReady) || errors.Is(err, challenge.ErrDuplicatePartyMember) || errors.Is(err, challenge.ErrCharacterUnconscious) || errors.Is(err, challenge.ErrPartyEmpty) || errors.Is(err, challenge.ErrNeedJoinNotMet) || errors.Is(err, challenge.ErrNeedOverLvNotMet) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
