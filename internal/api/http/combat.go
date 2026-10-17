@@ -110,6 +110,9 @@ func (h *Handler) handleStartChallenge(w http.ResponseWriter, r *http.Request) {
 
 		session, err := h.challenges.StartSession(r.Context(), char.ID, req.TierID)
 		if err != nil {
+			if writeCombatAdmissionError(w, err) {
+				return
+			}
 			if errors.Is(err, challenge.ErrTierNotFound) || errors.Is(err, challenge.ErrCharacterNotFound) {
 				writeError(w, http.StatusBadRequest, err)
 				return
@@ -146,13 +149,11 @@ func (h *Handler) handleStartPartyChallenge(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		memberIDs := req.MemberIDs
-		if len(memberIDs) == 0 {
-			memberIDs = []string{char.ID}
-		}
-
-		session, err := h.challenges.StartPartySession(r.Context(), char.ID, memberIDs, req.TierID, req.PartyName, req.PartyColor)
+		session, err := h.challenges.StartPartySession(r.Context(), char.ID, req.MemberIDs, req.TierID, req.PartyName, req.PartyColor)
 		if err != nil {
+			if writeCombatAdmissionError(w, err) {
+				return
+			}
 			if errors.Is(err, challenge.ErrTierNotFound) || errors.Is(err, challenge.ErrCharacterNotFound) {
 				writeError(w, http.StatusBadRequest, err)
 				return

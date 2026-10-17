@@ -161,6 +161,13 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock character"
+    },
+    {
+      "module": "combat admission",
+      "caller_method": "cmd/party2/combat_admission.go#combatAdmission.withMembers",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Serialize Dungeon/Challenge solo and Party starts with character IDs sorted; checks activity before publishing the admitted run"
     }
   ]
 }

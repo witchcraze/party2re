@@ -245,6 +245,7 @@ type ParticipantBuilder interface {
 }
 
 type Service struct {
+	admission           Admission
 	repo                Repository
 	characterRepo       CharacterRepository
 	invRepo             InventoryProvider

@@ -2,6 +2,7 @@ package dungeon_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -49,7 +50,7 @@ func setupPartyTestService() (*dungeon.Service, *mockDungeonRepo, *mockCharRepo)
 	c4.JobID = "78" // Treasure Hunter
 	charRepo.chars[c4.ID] = c4
 
-	svc, err := dungeon.NewService(repo, charRepo, engine)
+	svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithAdmission(approvedRoster{}))
 	if err != nil {
 		panic(err)
 	}
@@ -164,7 +165,7 @@ func TestPartyMapScouting(t *testing.T) {
 			"lead":   c1Lead(10),
 			cTest.ID: cTest,
 		}}
-		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{})
+		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{}, dungeon.WithAdmission(approvedRoster{}))
 		_, err := tSvc.StartPartyExpedition(ctx, "lead", []string{"lead", cTest.ID}, "dungeon-01", "")
 		if err != nil {
 			t.Fatalf("failed to start for job %s: %v", jobID, err)
@@ -188,6 +189,7 @@ func TestPartyMapScouting(t *testing.T) {
 		itemCharRepo,
 		&corebattle.Engine{},
 		dungeon.WithInventoryProvider(invRepo),
+		dungeon.WithAdmission(approvedRoster{}),
 	)
 	// Give item 197 to scope-hero
 	inv, _ := coreinventory.New(cItem.ID)
@@ -223,6 +225,7 @@ func TestPartyMapScouting(t *testing.T) {
 		stackCharRepo,
 		&corebattle.Engine{},
 		dungeon.WithInventoryProvider(stackInvRepo),
+		dungeon.WithAdmission(approvedRoster{}),
 	)
 	_, err = stackSvc.StartPartyExpedition(ctx, cBoth.ID, []string{cBoth.ID}, "dungeon-01", "")
 	if err != nil {
@@ -261,6 +264,7 @@ func TestPartyMapScouting(t *testing.T) {
 		multiCharRepo,
 		&corebattle.Engine{},
 		dungeon.WithInventoryProvider(multiInvRepo),
+		dungeon.WithAdmission(approvedRoster{}),
 	)
 	_, err = multiSvc.StartPartyExpedition(ctx, cScout.ID, []string{cScout.ID, cGoggleUser.ID}, "dungeon-01", "")
 	if err != nil {
@@ -320,6 +324,7 @@ func TestPartyTrapDamageDistribution(t *testing.T) {
 		}},
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons(customCatalog),
+		dungeon.WithAdmission(approvedRoster{}),
 	)
 
 	_, err := tSvc.StartPartyExpedition(ctx, "p1", []string{"p1", "p2", "p3"}, "trap-dungeon", "")
@@ -396,6 +401,7 @@ func TestTreasureHunterBonusChests(t *testing.T) {
 		}},
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons(customCatalog),
+		dungeon.WithAdmission(approvedRoster{}),
 	)
 	_, _ = normalSvc.StartPartyExpedition(ctx, "p1", []string{"p1"}, "chest-dungeon", "")
 	resNormal, err := normalSvc.Move(ctx, "p1", dungeon.DirectionEast)
@@ -410,7 +416,7 @@ func TestTreasureHunterBonusChests(t *testing.T) {
 	}
 
 	// 2. Party with Treasure Hunter (job 78)
-	thChar := createTestChar("th-char", 10, 120, 30, 20)
+	thChar := createTestChar("th", 10, 120, 30, 20)
 	thChar.JobID = "78" // Treasure Hunter
 	thSvc, _ := dungeon.NewService(
 		newMockDungeonRepo(),
@@ -420,6 +426,7 @@ func TestTreasureHunterBonusChests(t *testing.T) {
 		}},
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons(customCatalog),
+		dungeon.WithAdmission(approvedRoster{}),
 	)
 	_, _ = thSvc.StartPartyExpedition(ctx, "p1", []string{"p1", "th"}, "chest-dungeon", "")
 	resTH, err := thSvc.Move(ctx, "p1", dungeon.DirectionEast)
@@ -442,4 +449,28 @@ func c1Lead(lv int) corecharacter.Character {
 	c := createTestChar("lead", lv, 150, 40, 30)
 	c.JobID = "hero"
 	return c
+}
+
+// approvedRoster models a lobby that has already admitted these gameplay fixtures.
+// Authorization regressions use the real Party service in composition tests.
+type approvedRoster struct{}
+
+func (approvedRoster) AdmitParty(ctx context.Context, actor, partyID string, ids []string, start func(context.Context, string, []string) error) error {
+	if len(ids) == 0 {
+		ids = []string{actor}
+	}
+	return start(ctx, partyID, ids)
+}
+func (approvedRoster) AdmitSolo(ctx context.Context, actor string, start func(context.Context) error) error {
+	return start(ctx)
+}
+
+func TestPartyRequiresAdmission(t *testing.T) {
+	svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{}, &corebattle.Engine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartPartyExpedition(context.Background(), "leader", []string{"leader", "member"}, "dungeon-01", "p"); !errors.Is(err, dungeon.ErrPartyUnavailable) {
+		t.Fatalf("party start without consent port: %v", err)
+	}
 }

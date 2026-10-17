@@ -219,3 +219,19 @@ func TestActivityRoleAndPhaseControls(t *testing.T) {
 		})
 	}
 }
+
+func TestCombatMemberActivityHasNoLeaderControls(t *testing.T) {
+	f, pv, gv := &activityFixtures{}, &pvpActivityFixture{}, &gvgActivityFixture{}
+	f.exp = &dungeon.ActiveExpedition{ID: "run-d", CharacterID: "leader", Status: dungeon.StatusExploring, Members: []dungeon.ExpeditionMember{{CharacterID: "hero"}}}
+	f.session = &challenge.ChallengeSession{ID: "run-c", CharacterID: "leader", Status: challenge.StatusActive, Members: []challenge.ChallengeMember{{CharacterID: "hero"}}}
+	readers := contextActivityReaders{party: f, pvp: pv, gvg: gv, dungeon: f, challenge: f, casino: f}
+	facts, err := readers.read(context.Background(), "owner", "hero")
+	if err != nil || len(facts) != 2 {
+		t.Fatalf("member activity missing: %+v %v", facts, err)
+	}
+	for _, fact := range facts {
+		if fact.Role != "member" || len(fact.Actions) != 0 {
+			t.Fatalf("member received leader controls: %+v", fact)
+		}
+	}
+}

@@ -226,6 +226,7 @@
   },
   "/characters/{id}/challenges/party-start": {
     "post": {
+      "description": "Starts from the authenticated leader’s saved, ready Party roster. member_ids is optional; when supplied it must contain every saved member exactly once. Cross-account participants are allowed through their own lobby consent. Every member must be idle; nonleaders may observe their enrolled run but only the leader advances or ends it.",
       "operationId": "startPartyChallenge",
       "parameters": [
         {
@@ -244,10 +245,12 @@
             "schema": {
               "properties": {
                 "member_ids": {
+                  "description": "Optional assertion of the complete saved Party roster; arbitrary, duplicate or omitted members are rejected.",
                   "items": {
                     "type": "string"
                   },
-                  "type": "array"
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "party_color": {
                   "type": "string"
@@ -307,7 +310,17 @@
               }
             }
           },
-          "description": "Forbidden"
+          "description": "Only the saved party leader may start the run"
+        },
+        "422": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Party is not ready, a member is busy, or an entry condition is unmet"
         },
         "500": {
           "content": {

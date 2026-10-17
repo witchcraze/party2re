@@ -49,6 +49,7 @@ func WithParticipantBuilder(builder ParticipantBuilder) Option {
 }
 
 type Service struct {
+	activityCheck      func(context.Context, string) error
 	repo               Repository
 	charRepo           CharacterRepository
 	invRepo            InventoryRepository
@@ -300,7 +301,7 @@ func (s *Service) ListParties(ctx context.Context, status string, limit, offset 
 func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password string) (PartyDetail, error) {
 	var detail PartyDetail
 
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
+	err := s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
 		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
 		if err != nil {
 			return err
@@ -389,7 +390,7 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 
 // LeaveParty leaves the party. If the leader leaves, the party is disbanded.
 func (s *Service) LeaveParty(ctx context.Context, partyID, characterID string) error {
-	return s.runInTx(ctx, func(txCtx context.Context) error {
+	return s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
 		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
 		if err != nil {
 			return err
@@ -417,7 +418,7 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 		return ErrCannotKickSelf
 	}
 
-	return s.runInTx(ctx, func(txCtx context.Context) error {
+	return s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
 		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
 		if err != nil {
 			return err
@@ -437,7 +438,7 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 
 // DisbandParty disbands the entire party (leader only).
 func (s *Service) DisbandParty(ctx context.Context, partyID, leaderCharID string) error {
-	return s.runInTx(ctx, func(txCtx context.Context) error {
+	return s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
 		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
 		if err != nil {
 			return err
@@ -457,7 +458,7 @@ func (s *Service) DisbandParty(ctx context.Context, partyID, leaderCharID string
 func (s *Service) SetReady(ctx context.Context, partyID, characterID string, ready bool) (PartyDetail, error) {
 	var detail PartyDetail
 
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
+	err := s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
 		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
 		if err != nil {
 			return err

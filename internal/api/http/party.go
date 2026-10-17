@@ -329,6 +329,8 @@ func (h *Handler) handleStartPartyAdventure(w http.ResponseWriter, r *http.Reque
 		result, err := h.parties.StartPartyAdventure(r.Context(), partyID, char.ID)
 		if err != nil {
 			switch {
+			case errors.Is(err, party.ErrMemberBusy):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			case errors.Is(err, party.ErrNotPartyLeader),
 				errors.Is(err, party.ErrPartyNotRecruiting),
 				errors.Is(err, party.ErrPartyNotReady),

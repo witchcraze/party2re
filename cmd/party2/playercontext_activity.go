@@ -131,11 +131,14 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		return nil, fmt.Errorf("dungeon activity: %w", err)
 	}
 	if exp != nil {
-		if exp.CharacterID != actor {
+		if !exp.ContainsCharacter(actor) {
 			return nil, errors.New("dungeon activity ownership mismatch")
 		}
 		a := playercontext.Activity{Kind: "dungeon", ID: exp.ID, PartyID: exp.PartyID, Phase: string(exp.Status), Role: "actor", Round: exp.CurrentFloor, Actions: []string{}}
-		if exp.Status == dungeon.StatusExploring {
+		if exp.CharacterID != actor {
+			a.Role = "member"
+		}
+		if exp.CharacterID == actor && exp.Status == dungeon.StatusExploring {
 			a.Actions = []string{"dungeon_move", "dungeon_escape"}
 		}
 		// Terminal buffers still require their owner to finish settlement.
@@ -146,11 +149,14 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		return nil, fmt.Errorf("challenge activity: %w", err)
 	}
 	if session != nil {
-		if session.CharacterID != actor {
+		if !session.ContainsCharacter(actor) {
 			return nil, errors.New("challenge activity ownership mismatch")
 		}
 		a := playercontext.Activity{Kind: "challenge", ID: session.ID, PartyID: session.PartyID, Phase: string(session.Status), Role: "actor", Round: session.CurrentRound, Actions: []string{}}
-		if session.Status == challenge.StatusActive {
+		if session.CharacterID != actor {
+			a.Role = "member"
+		}
+		if session.CharacterID == actor && session.Status == challenge.StatusActive {
 			a.Actions = []string{"challenge_advance"}
 		}
 		facts = append(facts, a)

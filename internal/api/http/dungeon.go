@@ -102,6 +102,9 @@ func (h *Handler) handleStartDungeon(w http.ResponseWriter, r *http.Request) {
 
 		exp, err := h.dungeons.StartExpedition(r.Context(), char.ID, req.DungeonID)
 		if err != nil {
+			if writeCombatAdmissionError(w, err) {
+				return
+			}
 			if errors.Is(err, dungeon.ErrDungeonNotFound) || errors.Is(err, dungeon.ErrCharacterNotFound) {
 				writeError(w, http.StatusBadRequest, err)
 				return
@@ -138,13 +141,11 @@ func (h *Handler) handleStartPartyDungeon(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		memberIDs := req.MemberIDs
-		if len(memberIDs) == 0 {
-			memberIDs = []string{char.ID}
-		}
-
-		exp, err := h.dungeons.StartPartyExpedition(r.Context(), char.ID, memberIDs, req.DungeonID, req.PartyID)
+		exp, err := h.dungeons.StartPartyExpedition(r.Context(), char.ID, req.MemberIDs, req.DungeonID, req.PartyID)
 		if err != nil {
+			if writeCombatAdmissionError(w, err) {
+				return
+			}
 			if errors.Is(err, dungeon.ErrDungeonNotFound) || errors.Is(err, dungeon.ErrCharacterNotFound) {
 				writeError(w, http.StatusBadRequest, err)
 				return
@@ -179,6 +180,9 @@ func (h *Handler) handleMoveDungeon(w http.ResponseWriter, r *http.Request) {
 		dir := dungeon.Direction(req.Direction)
 		res, err := h.dungeons.Move(r.Context(), char.ID, dir)
 		if err != nil {
+			if writeCombatAdmissionError(w, err) {
+				return
+			}
 			if errors.Is(err, dungeon.ErrNoActiveExpedition) {
 				writeError(w, http.StatusNotFound, err)
 				return
@@ -207,6 +211,9 @@ func (h *Handler) handleEscapeDungeon(w http.ResponseWriter, r *http.Request) {
 	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.dungeons.Escape(r.Context(), char.ID)
 		if err != nil {
+			if writeCombatAdmissionError(w, err) {
+				return
+			}
 			if errors.Is(err, dungeon.ErrNoActiveExpedition) {
 				writeError(w, http.StatusNotFound, err)
 				return

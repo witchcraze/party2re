@@ -14,7 +14,19 @@ import (
 )
 
 func (s *Service) StartSession(ctx context.Context, characterID string, tierID string) (*ChallengeSession, error) {
-	return s.StartPartySession(ctx, characterID, []string{characterID}, tierID, "", "#FFFFFF")
+	var result *ChallengeSession
+	start := func(ctx context.Context) error {
+		var err error
+		result, err = s.startRoster(ctx, characterID, []string{characterID}, tierID, "", "#FFFFFF", "")
+		return err
+	}
+	var err error
+	if s.admission != nil {
+		err = s.admission.AdmitSolo(ctx, characterID, start)
+	} else {
+		err = start(ctx)
+	}
+	return result, err
 }
 
 func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*RoundResult, *ChallengeSession, error) {
@@ -22,7 +34,7 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		return nil, nil, ErrCharacterNotFound
 	}
 
-	session, err := s.activeStore.GetActiveSession(ctx, characterID)
+	session, err := s.GetActiveSession(ctx, characterID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -356,8 +368,11 @@ func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundRes
 }
 
 func (s *Service) GetSession(ctx context.Context, characterID string, sessionID string) (*ChallengeSession, error) {
-	active, err := s.activeStore.GetActiveSession(ctx, characterID)
-	if err == nil && active != nil && active.ID == sessionID {
+	active, err := s.GetActiveSession(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	if active != nil && active.ID == sessionID {
 		return active, nil
 	}
 
@@ -375,7 +390,14 @@ func (s *Service) GetActiveSession(ctx context.Context, characterID string) (*Ch
 	if strings.TrimSpace(characterID) == "" {
 		return nil, errors.New("character id is required")
 	}
-	return s.activeStore.GetActiveSession(ctx, characterID)
+	run, err := s.activeStore.GetActiveSession(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	if run != nil && !run.ContainsCharacter(characterID) {
+		return nil, ErrForbidden
+	}
+	return run, nil
 }
 
 func buildFallbackParticipantWithHP(char corecharacter.Character, currentHP int) corebattle.Participant {

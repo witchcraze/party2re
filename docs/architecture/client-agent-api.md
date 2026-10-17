@@ -270,8 +270,10 @@ An explicitly linked live Party roster and one Dungeon/Challenge run are one
 activity, with the run selecting the scene. Multiple runs still conflict; no
 missing relationship is inferred. Terminal run buffers remain observable until
 their feature owner removes them; observing them never replays settlement.
-Buffers indexed only by the controlling actor do not authorize other
-participants to execute that actor's commands or invent a participant index.
+Dungeon/Challenge discovery uses the consented
+[run-member references](transient-run-state.md#candidate-d-in-progress-run-buffers).
+An enrolled follower observes `role:member` with no leader continuation controls;
+membership never authorizes executing the controlling actor's commands.
 
 Continuation eligibility comes from actual membership, role and phase, instead
 of entry's town/cooldown/HP/fatigue/currency gates. Exact readiness, team setup,

@@ -40,7 +40,7 @@ func TestStartPartyChallengeSession(t *testing.T) {
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
 	if err != nil {
 		t.Fatalf("failed to create challenge service: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	c2.Stats.MaxMP = 100
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	c1.JobID = "warrior"
 	charRepo.chars[c1.ID] = c1
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -255,6 +255,7 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 			charRepo,
 			&corebattle.Engine{},
 			challenge.WithActiveSessionStore(activeStore),
+			challenge.WithAdmission(approvedRoster{}),
 		)
 		if err != nil {
 			t.Fatalf("failed to create challenge service: %v", err)
@@ -309,4 +310,28 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 			t.Errorf("expected wrapped repo save session error, got %v", err)
 		}
 	})
+}
+
+// approvedRoster models a lobby that has already admitted these gameplay fixtures.
+// Authorization regressions use the real Party service in composition tests.
+type approvedRoster struct{}
+
+func (approvedRoster) AdmitParty(ctx context.Context, actor, partyID string, ids []string, start func(context.Context, string, []string) error) error {
+	if len(ids) == 0 {
+		ids = []string{actor}
+	}
+	return start(ctx, partyID, ids)
+}
+func (approvedRoster) AdmitSolo(ctx context.Context, actor string, start func(context.Context) error) error {
+	return start(ctx)
+}
+
+func TestPartyRequiresAdmission(t *testing.T) {
+	svc, err := challenge.NewService(newMockChallengeRepo(), &mockCharRepo{}, &corebattle.Engine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartPartySession(context.Background(), "leader", []string{"leader", "member"}, "1", "Party", ""); !errors.Is(err, challenge.ErrPartyUnavailable) {
+		t.Fatalf("party start without consent port: %v", err)
+	}
 }

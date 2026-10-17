@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
@@ -253,6 +254,63 @@ func newCmbtServices(
 			return err
 		})),
 	)
+
+	admission := combatAdmission{party: partyService, characters: core.charRepo, tx: core.txProvider,
+		busy: func(ctx context.Context, actor string) error {
+			exp, err := dungeonService.GetActiveExpedition(ctx, actor)
+			if err != nil {
+				return err
+			}
+			if exp != nil {
+				return dungeon.ErrActiveExpeditionExists
+			}
+			session, err := challengeService.GetActiveSession(ctx, actor)
+			if err != nil {
+				return err
+			}
+			if session != nil {
+				return challenge.ErrActiveSessionExists
+			}
+			sleep, err := soc.home.GetSleepStatus(ctx, actor)
+			if err != nil {
+				return err
+			}
+			if sleep.Sleeping || sleep.CanWake {
+				return party.ErrMemberBusy
+			}
+			pending, err := soc.sched.FindPendingByActorID(ctx, actor)
+			if err != nil {
+				return err
+			}
+			if len(pending) > 0 {
+				return party.ErrMemberBusy
+			}
+			pv, err := pvpService.GetCharacterRoom(ctx, actor)
+			if err != nil && !errors.Is(err, pvp.ErrRoomNotFound) {
+				return err
+			}
+			if err == nil && pv.Room.Status != pvp.StatusDisbanded {
+				return party.ErrMemberBusy
+			}
+			gv, err := gvgService.GetCharacterRoom(ctx, actor)
+			if err != nil && !errors.Is(err, gvg.ErrRoomNotFound) {
+				return err
+			}
+			if err == nil && gv.Room.Status != gvg.StatusDisbanded {
+				return party.ErrMemberBusy
+			}
+			return nil
+		},
+	}
+	dungeonService.ConfigureAdmission(admission)
+	challengeService.ConfigureAdmission(admission)
+	partyService.SetMemberActivityCheck(func(ctx context.Context, actor string) error {
+		err := admission.busy(ctx, actor)
+		if errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, challenge.ErrActiveSessionExists) {
+			return errors.Join(party.ErrMemberBusy, err)
+		}
+		return err
+	})
 
 	return &cmbtServices{
 		pvp:         pvpService,

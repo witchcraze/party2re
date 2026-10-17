@@ -143,6 +143,10 @@ func TestValkeyExpeditionRepository_SaveActiveExpedition(t *testing.T) {
 	}
 
 	cmds := client.RecordedCommandStrings()
+	if len(cmds) != 5 || cmds[0][0] != "SET" || !strings.HasSuffix(cmds[0][1], "{char:char-101}:member") || len(cmds[0]) != 3 {
+		t.Fatalf("expected lifecycle-managed member reference before state write: %v", cmds)
+	}
+	cmds = cmds[1:]
 	if len(cmds) != 4 {
 		t.Fatalf("expected 4 recorded commands, got %d: %v", len(cmds), cmds)
 	}
@@ -265,7 +269,9 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 	}
 
 	// 2. Not found: empty stateMap
-	clientEmpty := valkeytest.NewMockClient(valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
+	clientEmpty := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
+		return valkeytest.MakeNilResult()
+	}), valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
 		return []valkeygo.ValkeyResult{
 			valkeytest.MakeStringMapResult(map[string]string{}),
 			valkeytest.MakeStringMapResult(map[string]string{}),
@@ -307,7 +313,12 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 func TestValkeyExpeditionRepository_DeleteActiveExpedition(t *testing.T) {
 	ctx := context.Background()
 
-	client := valkeytest.NewMockClient(valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
+		return valkeytest.MakeNilResult()
+	}), valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
+		if multi[0].Commands()[0] == "HGETALL" {
+			return []valkeygo.ValkeyResult{valkeytest.MakeStringMapResult(map[string]string{}), valkeytest.MakeStringMapResult(map[string]string{})}
+		}
 		return []valkeygo.ValkeyResult{
 			valkeytest.MakeOKResult(),
 			valkeytest.MakeOKResult(),
@@ -320,6 +331,10 @@ func TestValkeyExpeditionRepository_DeleteActiveExpedition(t *testing.T) {
 	}
 
 	cmds := client.RecordedCommandStrings()
+	if len(cmds) != 5 {
+		t.Fatalf("expected discovery followed by deletion, got %v", cmds)
+	}
+	cmds = cmds[3:]
 	if len(cmds) != 2 {
 		t.Fatalf("expected 2 delete commands, got %d: %v", len(cmds), cmds)
 	}
@@ -351,6 +366,7 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 		now.Format(time.RFC3339Nano),    // [10] updated_at
 		"dungeon-cave",                  // [11] dungeon_id
 		now.Format(time.RFC3339Nano),    // [12] started_at
+		"party-live", "Live Party", "[]",
 	}
 
 	params := dungeon.StepParams{
