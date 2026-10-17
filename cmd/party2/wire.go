@@ -23,7 +23,6 @@ import (
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
-	"github.com/witchcraze/party2re/internal/tavern"
 )
 
 type appWiring struct {
@@ -178,14 +177,7 @@ func wireHooks(
 	}
 	if misc.tavern != nil {
 		soc.home.SetFullnessResetter(misc.tavern)
-		postAdventureHook := func(ctx context.Context, characterID string) error {
-			_ = misc.tavern.ResetFullness(ctx, characterID)
-			_, err := misc.tavern.ClaimDelivery(ctx, characterID)
-			if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
-				return nil
-			}
-			return err
-		}
+		postAdventureHook := buildPostAdventureHook(misc.tavern)
 		if cmbt.adv != nil {
 			cmbt.adv.SetPostAdventureHook(postAdventureHook)
 		}

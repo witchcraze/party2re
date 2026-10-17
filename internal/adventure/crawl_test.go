@@ -487,3 +487,214 @@ func (r crystalRewardBattleResolver) ResolvePartyBattle(req corebattle.PartyBatt
 		},
 	}, nil
 }
+
+type multiTurnBattleResolver struct {
+	turnsPerFloor int
+	failOnCall    int
+	calls         int
+}
+
+func (r *multiTurnBattleResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	r.calls++
+	remHP := make(map[string]int)
+	outcome := corebattle.OutcomeWin
+	if r.failOnCall > 0 && r.calls == r.failOnCall {
+		outcome = corebattle.OutcomeDefeat
+		for _, a := range req.Allies {
+			remHP[a.ID] = 0
+		}
+	} else {
+		for _, a := range req.Allies {
+			remHP[a.ID] = a.HP
+		}
+	}
+	return corebattle.PartyBattleResult{
+		Outcome:     outcome,
+		Turns:       r.turnsPerFloor,
+		RemainingHP: remHP,
+		TotalReward: corebattle.Reward{
+			Experience: 15,
+			Currency:   10,
+		},
+	}, nil
+}
+
+func TestCalculateExitFatigue_NormalAndCalmModes(t *testing.T) {
+	cases := []struct {
+		round      int
+		wantNormal int
+		wantCalm   int
+	}{
+		{round: -1, wantNormal: 1, wantCalm: 0},
+		{round: 0, wantNormal: 1, wantCalm: 0},
+		{round: 1, wantNormal: 4, wantCalm: 2},
+		{round: 2, wantNormal: 7, wantCalm: 3},
+		{round: 3, wantNormal: 10, wantCalm: 5},
+		{round: 5, wantNormal: 16, wantCalm: 8},
+		{round: 8, wantNormal: 25, wantCalm: 12},
+		{round: 9, wantNormal: 28, wantCalm: 14},
+		{round: 10, wantNormal: 31, wantCalm: 15},
+		{round: 11, wantNormal: 34, wantCalm: 17},
+	}
+
+	for _, tc := range cases {
+		for _, mode := range []string{"", adventure.CrawlModeNormal, adventure.CrawlModeTry, adventure.CrawlModeHard} {
+			if got := adventure.CalculateExitFatigue(tc.round, mode); got != tc.wantNormal {
+				t.Errorf("CalculateExitFatigue(round=%d, mode=%q) = %d, want %d", tc.round, mode, got, tc.wantNormal)
+			}
+		}
+		if got := adventure.CalculateExitFatigue(tc.round, adventure.CrawlModeCalm); got != tc.wantCalm {
+			t.Errorf("CalculateExitFatigue(round=%d, mode=calm) = %d, want %d", tc.round, got, tc.wantCalm)
+		}
+	}
+}
+
+func TestCrawlSession_RoundAndTravelTransitions(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+	chars := createTestCharacters()[:1]
+	rng := func(n int) int { return 0 }
+
+	t.Run("0-round exit before advancing", func(t *testing.T) {
+		session, err := adventure.NewCrawlSession(stage, chars, rng)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if session.Round != 0 {
+			t.Fatalf("initial Round = %d, want 0", session.Round)
+		}
+		res := session.Result()
+		if res.Round != 0 || res.ExitFatigue != 1 {
+			t.Fatalf("normal 0-round result: Round=%d ExitFatigue=%d, want 0 and 1", res.Round, res.ExitFatigue)
+		}
+
+		session.SetMode(adventure.CrawlModeCalm)
+		calmRes := session.Result()
+		if calmRes.Round != 0 || calmRes.ExitFatigue != 0 {
+			t.Fatalf("calm 0-round result: Round=%d ExitFatigue=%d, want 0 and 0", calmRes.Round, calmRes.ExitFatigue)
+		}
+	})
+
+	t.Run("Floor 1 defeat sets Round=1 while FloorsCleared=0 and TotalTurns=7", func(t *testing.T) {
+		session, _ := adventure.NewCrawlSession(stage, chars, rng)
+		resolver := &multiTurnBattleResolver{turnsPerFloor: 7, failOnCall: 1}
+		_, err := session.AdvanceFloor(stages, monsters, resolver)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := session.Result()
+		if res.Round != 1 || res.FloorsCleared != 0 || res.TotalTurns != 7 || len(res.FloorResults) != 1 {
+			t.Fatalf("got Round=%d FloorsCleared=%d TotalTurns=%d len(FloorResults)=%d, want 1, 0, 7, 1",
+				res.Round, res.FloorsCleared, res.TotalTurns, len(res.FloorResults))
+		}
+		if res.ExitFatigue != 4 {
+			t.Errorf("Floor 1 defeat normal ExitFatigue = %d, want 4", res.ExitFatigue)
+		}
+		session.SetMode(adventure.CrawlModeCalm)
+		if got := session.Result().ExitFatigue; got != 2 {
+			t.Errorf("Floor 1 defeat calm ExitFatigue = %d, want 2", got)
+		}
+	})
+
+	t.Run("Full 10 floors + Floor 11 treasure room sets Round=11", func(t *testing.T) {
+		session, _ := adventure.NewCrawlSession(stage, chars, rng)
+		resolver := &multiTurnBattleResolver{turnsPerFloor: 5}
+		for f := 1; f <= 11; f++ {
+			if _, err := session.AdvanceFloor(stages, monsters, resolver); err != nil {
+				t.Fatalf("floor %d advance: %v", f, err)
+			}
+		}
+		res := session.Result()
+		if res.Round != 11 || res.FloorsCleared != 10 || res.TotalTurns != 50 {
+			t.Fatalf("got Round=%d FloorsCleared=%d TotalTurns=%d, want 11, 10, 50", res.Round, res.FloorsCleared, res.TotalTurns)
+		}
+		if res.ExitFatigue != 34 {
+			t.Errorf("Floor 11 normal ExitFatigue = %d, want 34", res.ExitFatigue)
+		}
+		session.SetMode(adventure.CrawlModeCalm)
+		if got := session.Result().ExitFatigue; got != 17 {
+			t.Errorf("Floor 11 calm ExitFatigue = %d, want 17", got)
+		}
+	})
+
+	t.Run("Travel destination floor 1 (tools 66-71, 104, 184)", func(t *testing.T) {
+		session, _ := adventure.NewCrawlSession(stage, chars, rng)
+		resolver := &multiTurnBattleResolver{turnsPerFloor: 4}
+		for f := 1; f <= 5; f++ {
+			if _, err := session.AdvanceFloor(stages, monsters, resolver); err != nil {
+				t.Fatal(err)
+			}
+		}
+		session.SetRound(1)
+		res := session.Result()
+		if res.Round != 1 || res.FloorsCleared != 5 || len(res.FloorResults) != 5 || res.TotalTurns != 20 {
+			t.Fatalf("got Round=%d FloorsCleared=%d len=%d turns=%d", res.Round, res.FloorsCleared, len(res.FloorResults), res.TotalTurns)
+		}
+		if res.ExitFatigue != 4 {
+			t.Errorf("destination floor 1 ExitFatigue = %d, want 4", res.ExitFatigue)
+		}
+	})
+
+	t.Run("Travel destination floor 10 (tool 107)", func(t *testing.T) {
+		session, _ := adventure.NewCrawlSession(stage, chars, rng)
+		resolver := &multiTurnBattleResolver{turnsPerFloor: 3}
+		for f := 1; f <= 2; f++ {
+			if _, err := session.AdvanceFloor(stages, monsters, resolver); err != nil {
+				t.Fatal(err)
+			}
+		}
+		session.SetRound(10)
+		res := session.Result()
+		if res.Round != 10 || res.FloorsCleared != 2 || len(res.FloorResults) != 2 {
+			t.Fatalf("got Round=%d FloorsCleared=%d len=%d", res.Round, res.FloorsCleared, len(res.FloorResults))
+		}
+		if res.ExitFatigue != 31 {
+			t.Errorf("destination floor 10 ExitFatigue = %d, want 31", res.ExitFatigue)
+		}
+		session.SetMode(adventure.CrawlModeCalm)
+		if got := session.Result().ExitFatigue; got != 15 {
+			t.Errorf("destination floor 10 calm ExitFatigue = %d, want 15", got)
+		}
+	})
+
+	t.Run("Tool 83 floor increment (round++ when < 9)", func(t *testing.T) {
+		session, _ := adventure.NewCrawlSession(stage, chars, rng)
+		session.SetRound(4)
+		session.AdvanceRoundIfBelow9()
+		if session.Round != 5 || session.ExitFatigue() != 16 {
+			t.Fatalf("from round 4: Round=%d ExitFatigue=%d, want 5 and 16", session.Round, session.ExitFatigue())
+		}
+
+		session.SetRound(9)
+		session.AdvanceRoundIfBelow9()
+		if session.Round != 9 || session.ExitFatigue() != 28 {
+			t.Fatalf("from round 9 (not < 9): Round=%d ExitFatigue=%d, want 9 and 28", session.Round, session.ExitFatigue())
+		}
+	})
+
+	t.Run("Tool 150 warp back to an earlier floor (1..10)", func(t *testing.T) {
+		session, _ := adventure.NewCrawlSession(stage, chars, rng)
+		resolver := &multiTurnBattleResolver{turnsPerFloor: 5}
+		for f := 1; f <= 8; f++ {
+			if _, err := session.AdvanceFloor(stages, monsters, resolver); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Warp back to floor 3
+		session.SetRound(3)
+		res := session.Result()
+		if res.Round != 3 || res.FloorsCleared != 8 || len(res.FloorResults) != 8 || res.TotalTurns != 40 {
+			t.Fatalf("got Round=%d FloorsCleared=%d len=%d turns=%d", res.Round, res.FloorsCleared, len(res.FloorResults), res.TotalTurns)
+		}
+		if res.ExitFatigue != 10 {
+			t.Errorf("warped back to floor 3 normal ExitFatigue = %d, want 10 (not 25 from FloorsCleared=8)", res.ExitFatigue)
+		}
+		session.SetMode(adventure.CrawlModeCalm)
+		if got := session.Result().ExitFatigue; got != 5 {
+			t.Errorf("warped back to floor 3 calm ExitFatigue = %d, want 5", got)
+		}
+	})
+}

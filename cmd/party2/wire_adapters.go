@@ -9,7 +9,26 @@ import (
 	"github.com/witchcraze/party2re/internal/collection"
 	"github.com/witchcraze/party2re/internal/contest"
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/tavern"
 )
+
+type postAdventureTavern interface {
+	ResetFullness(ctx context.Context, characterID string) error
+	ClaimDelivery(ctx context.Context, characterID string) (tavern.OrderResult, error)
+}
+
+func buildPostAdventureHook(t postAdventureTavern) func(ctx context.Context, characterID string) error {
+	return func(ctx context.Context, characterID string) error {
+		if err := t.ResetFullness(ctx, characterID); err != nil {
+			return err
+		}
+		_, err := t.ClaimDelivery(ctx, characterID)
+		if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
+			return nil
+		}
+		return err
+	}
+}
 
 type contestGuildAdapter struct {
 	guild *guild.Service

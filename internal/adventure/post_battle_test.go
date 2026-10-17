@@ -581,3 +581,187 @@ func TestAdventure_TreasureBlessing_SingleChestGenerationNoItemDuplication(t *te
 		})
 	}
 }
+
+func TestAdventure_ExitFatigue_NormalAndCalm_SettlerAndFallback(t *testing.T) {
+	ctx := context.Background()
+	stages, _ := adventure.InitialStageCatalog()
+	monsters, _ := adventure.InitialMonsterCatalog()
+	clock := &fixedAdvClock{now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)}
+
+	makeStrongHero := func(id string, initialTired int) corecharacter.Character {
+		return corecharacter.Character{
+			ID:    id,
+			Name:  id,
+			Level: 50,
+			Tired: initialTired,
+			Stats: corecharacter.Stats{HP: 500, MaxHP: 500, MP: 100, MaxMP: 100, Attack: 200, Defense: 100, Agility: 100},
+		}
+	}
+	makeWeakHero := func(id string, initialTired int) corecharacter.Character {
+		return corecharacter.Character{
+			ID:    id,
+			Name:  id,
+			Level: 1,
+			Tired: initialTired,
+			Stats: corecharacter.Stats{HP: 1, MaxHP: 1, MP: 0, MaxMP: 0, Attack: 1, Defense: 1},
+		}
+	}
+
+	t.Run("battleSettler normal win (Round 11 -> +34) and calm win (Round 11 -> +17)", func(t *testing.T) {
+		c1 := makeStrongHero("hero-norm", 10)
+		c2 := makeStrongHero("hero-calm", 10)
+		charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{c1.ID: c1, c2.ID: c2}}
+		invRepo := &memoryInvRepo{invs: make(map[string]coreinventory.Inventory)}
+		advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
+
+		battleSvc := battle.NewService(
+			battle.WithCharacterRepository(charRepo),
+			battle.WithInventoryRepository(invRepo),
+		)
+		svc, err := adventure.NewServiceWithCatalogs(
+			advRepo, charRepo, nil, stages, monsters, corebattle.Engine{}, nil, nil, clock,
+			adventure.WithPostBattleSettler(battleSvc),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		isFull := map[string]bool{c1.ID: true, c2.ID: true}
+		svc.SetPostAdventureHook(func(_ context.Context, characterID string) error {
+			isFull[characterID] = false
+			return nil
+		})
+
+		resNorm, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+			CharacterIDs: []string{c1.ID},
+			StageID:      "stage-00",
+			Mode:         adventure.CrawlModeNormal,
+		})
+		if err != nil {
+			t.Fatalf("normal crawl failed: %v", err)
+		}
+		if resNorm.Round != 11 || resNorm.ExitFatigue != 34 {
+			t.Fatalf("normal crawl Round=%d ExitFatigue=%d, want 11 and 34", resNorm.Round, resNorm.ExitFatigue)
+		}
+		if got := charRepo.chars[c1.ID].Tired; got != 44 {
+			t.Errorf("c1 Tired = %d, want 44 (10 + 34)", got)
+		}
+		if isFull[c1.ID] {
+			t.Errorf("expected c1 meal flag reset after adventure")
+		}
+
+		resCalm, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+			CharacterIDs: []string{c2.ID},
+			StageID:      "stage-00",
+			Mode:         adventure.CrawlModeCalm,
+		})
+		if err != nil {
+			t.Fatalf("calm crawl failed: %v", err)
+		}
+		if resCalm.Round != 11 || resCalm.ExitFatigue != 17 {
+			t.Fatalf("calm crawl Round=%d ExitFatigue=%d, want 11 and 17", resCalm.Round, resCalm.ExitFatigue)
+		}
+		if got := charRepo.chars[c2.ID].Tired; got != 27 {
+			t.Errorf("c2 Tired = %d, want 27 (10 + 17)", got)
+		}
+		if isFull[c2.ID] {
+			t.Errorf("expected c2 meal flag reset after calm adventure")
+		}
+	})
+
+	t.Run("battleSettler defeat on Floor 1 (Round 1, FloorsCleared 0 -> +4 normal, +2 calm) and resets meal flag", func(t *testing.T) {
+		w1 := makeWeakHero("weak-norm", 5)
+		w2 := makeWeakHero("weak-calm", 5)
+		charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{w1.ID: w1, w2.ID: w2}}
+		invRepo := &memoryInvRepo{invs: make(map[string]coreinventory.Inventory)}
+		advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
+
+		battleSvc := battle.NewService(
+			battle.WithCharacterRepository(charRepo),
+			battle.WithInventoryRepository(invRepo),
+		)
+		svc, err := adventure.NewServiceWithCatalogs(
+			advRepo, charRepo, nil, stages, monsters, corebattle.Engine{}, nil, nil, clock,
+			adventure.WithPostBattleSettler(battleSvc),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		isFull := map[string]bool{w1.ID: true, w2.ID: true}
+		svc.SetPostAdventureHook(func(_ context.Context, characterID string) error {
+			isFull[characterID] = false
+			return nil
+		})
+
+		res1, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+			CharacterIDs: []string{w1.ID},
+			StageID:      "stage-00",
+			Mode:         adventure.CrawlModeNormal,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res1.Outcome != corebattle.OutcomeDefeat || res1.FloorsCleared != 0 || res1.Round != 1 || res1.ExitFatigue != 4 {
+			t.Fatalf("got Outcome=%s FloorsCleared=%d Round=%d ExitFatigue=%d, want defeat, 0, 1, 4",
+				res1.Outcome, res1.FloorsCleared, res1.Round, res1.ExitFatigue)
+		}
+		if got := charRepo.chars[w1.ID].Tired; got != 9 {
+			t.Errorf("w1 Tired = %d, want 9 (5 + 4)", got)
+		}
+		if isFull[w1.ID] {
+			t.Errorf("expected w1 meal flag reset on defeat")
+		}
+
+		res2, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+			CharacterIDs: []string{w2.ID},
+			StageID:      "stage-00",
+			Mode:         adventure.CrawlModeCalm,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res2.Outcome != corebattle.OutcomeDefeat || res2.FloorsCleared != 0 || res2.Round != 1 || res2.ExitFatigue != 2 {
+			t.Fatalf("got Outcome=%s FloorsCleared=%d Round=%d ExitFatigue=%d, want defeat, 0, 1, 2",
+				res2.Outcome, res2.FloorsCleared, res2.Round, res2.ExitFatigue)
+		}
+		if got := charRepo.chars[w2.ID].Tired; got != 7 {
+			t.Errorf("w2 Tired = %d, want 7 (5 + 2)", got)
+		}
+		if isFull[w2.ID] {
+			t.Errorf("expected w2 meal flag reset on calm defeat")
+		}
+	})
+
+	t.Run("fallback settlement path applies exit fatigue for party and clamps at 100", func(t *testing.T) {
+		p1 := makeStrongHero("fb-1", 15)
+		p2 := makeStrongHero("fb-2", 80)
+		charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{p1.ID: p1, p2.ID: p2}}
+		advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
+
+		svc, err := adventure.NewServiceWithCatalogs(
+			advRepo, charRepo, nil, stages, monsters, corebattle.Engine{}, nil, nil, clock,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+			CharacterIDs: []string{p1.ID, p2.ID},
+			StageID:      "stage-00",
+			Mode:         adventure.CrawlModeNormal,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.ExitFatigue != 34 {
+			t.Fatalf("ExitFatigue = %d, want 34", res.ExitFatigue)
+		}
+		if got := charRepo.chars[p1.ID].Tired; got != 49 {
+			t.Errorf("p1 Tired = %d, want 49 (15 + 34)", got)
+		}
+		if got := charRepo.chars[p2.ID].Tired; got != 100 {
+			t.Errorf("p2 Tired = %d, want 100 (80 + 34 clamped to 100)", got)
+		}
+	})
+}

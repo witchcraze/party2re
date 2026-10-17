@@ -41,6 +41,7 @@ type DungeonFloorResult struct {
 type DungeonCrawlRequest struct {
 	CharacterIDs []string
 	StageID      string
+	Mode         string
 	Rng          func(n int) int
 }
 
@@ -49,6 +50,9 @@ type DungeonCrawlResult struct {
 	AdventureIDs   map[string]string                     `json:"adventure_ids"` // characterID -> adventureID
 	StageID        string                                `json:"stage_id"`
 	StageName      string                                `json:"stage_name"`
+	Mode           string                                `json:"mode,omitempty"`
+	Round          int                                   `json:"round"`
+	ExitFatigue    int                                   `json:"exit_fatigue"`
 	FloorsCleared  int                                   `json:"floors_cleared"`
 	StageCleared   bool                                  `json:"stage_cleared"`
 	Outcome        corebattle.Outcome                    `json:"outcome"`
@@ -71,9 +75,11 @@ type CrawlSession struct {
 	StageID             string                    `json:"stage_id"`
 	StageName           string                    `json:"stage_name"`
 	Stage               Stage                     `json:"-"`
+	Mode                string                    `json:"mode,omitempty"`
 	LeaderID            string                    `json:"leader_id"`
 	CharacterIDs        []string                  `json:"character_ids"`
 	Characters          []corecharacter.Character `json:"-"`
+	Round               int                       `json:"round"`
 	CurrentFloor        int                       `json:"current_floor"`
 	FloorsCleared       int                       `json:"floors_cleared"`
 	StageCleared        bool                      `json:"stage_cleared"`
@@ -140,9 +146,11 @@ func NewCrawlSessionWithParticipants(
 		StageID:      stage.ID,
 		StageName:    stage.Name,
 		Stage:        stage,
+		Mode:         CrawlModeNormal,
 		LeaderID:     characters[0].ID,
 		CharacterIDs: charIDs,
 		Characters:   characters,
+		Round:        0,
 		CurrentFloor: 1,
 		Participants: parts,
 		Rng:          rng,
@@ -186,6 +194,8 @@ func (s *CrawlSession) AdvanceFloor(
 		s.Concluded = true
 		return DungeonFloorResult{}, ErrDungeonCrawlFinished
 	}
+
+	s.Round = s.CurrentFloor
 
 	// Floor 11 is the treasure room
 	if s.CurrentFloor == TreasureRoomFloor {
@@ -331,7 +341,9 @@ func (s *CrawlSession) AdvanceFloor(
 	}
 
 	// Victory on floor
-	s.FloorsCleared = s.CurrentFloor
+	if s.CurrentFloor > s.FloorsCleared {
+		s.FloorsCleared = s.CurrentFloor
+	}
 	s.TotalEXP += battleRes.TotalReward.Experience
 	s.TotalGold += battleRes.TotalReward.Currency
 	s.TotalCrystals += battleRes.TotalReward.Crystals
@@ -440,10 +452,15 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		}
 	}
 
+	mode := NormalizeCrawlMode(s.Mode)
+
 	return DungeonCrawlResult{
 		AdventureIDs:   make(map[string]string),
 		StageID:        s.StageID,
 		StageName:      s.StageName,
+		Mode:           mode,
+		Round:          s.Round,
+		ExitFatigue:    CalculateExitFatigue(s.Round, mode),
 		FloorsCleared:  s.FloorsCleared,
 		StageCleared:   s.StageCleared,
 		Outcome:        outcome,

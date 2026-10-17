@@ -124,12 +124,13 @@ func TestRegisterWorkerHandlers_ChapelReset(t *testing.T) {
 
 type mockTavernService struct {
 	resetFullnessCalled bool
+	resetFullnessErr    error
 	claimedCharID       string
 }
 
 func (m *mockTavernService) ResetFullness(ctx context.Context, characterID string) error {
 	m.resetFullnessCalled = true
-	return nil
+	return m.resetFullnessErr
 }
 
 func (m *mockTavernService) ClaimDelivery(ctx context.Context, characterID string) (tavern.OrderResult, error) {
@@ -139,14 +140,7 @@ func (m *mockTavernService) ClaimDelivery(ctx context.Context, characterID strin
 
 func TestWirePostAdventureHook_ResetsFullnessAndClaimsDelivery(t *testing.T) {
 	tavernMock := &mockTavernService{}
-	postAdventureHook := func(ctx context.Context, characterID string) error {
-		_ = tavernMock.ResetFullness(ctx, characterID)
-		_, err := tavernMock.ClaimDelivery(ctx, characterID)
-		if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
-			return nil
-		}
-		return err
-	}
+	postAdventureHook := buildPostAdventureHook(tavernMock)
 
 	err := postAdventureHook(context.Background(), "char-42")
 	if err != nil {
@@ -157,6 +151,16 @@ func TestWirePostAdventureHook_ResetsFullnessAndClaimsDelivery(t *testing.T) {
 	}
 	if tavernMock.claimedCharID != "char-42" {
 		t.Errorf("expected ClaimDelivery for char-42, got %s", tavernMock.claimedCharID)
+	}
+
+	resetErr := errors.New("tavern fullness reset db error")
+	failingTavern := &mockTavernService{resetFullnessErr: resetErr}
+	failingHook := buildPostAdventureHook(failingTavern)
+	if err := failingHook(context.Background(), "char-42"); !errors.Is(err, resetErr) {
+		t.Fatalf("expected ResetFullness error %v, got %v", resetErr, err)
+	}
+	if failingTavern.claimedCharID != "" {
+		t.Errorf("expected ClaimDelivery not to run when ResetFullness fails, got %s", failingTavern.claimedCharID)
 	}
 }
 

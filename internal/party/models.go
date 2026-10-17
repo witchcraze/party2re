@@ -57,6 +57,7 @@ type Party struct {
 	Name              string    `json:"name"`
 	PasswordHash      string    `json:"-"`
 	StageID           string    `json:"stage_id"`
+	Mode              string    `json:"mode,omitempty"`
 	Speed             int       `json:"speed"`
 	MaxMembers        int       `json:"max_members"`
 	MinLevel          int       `json:"min_level"`
@@ -108,6 +109,7 @@ type PartySummary struct {
 type CreatePartyRequest struct {
 	Name       string `json:"name"`
 	StageID    string `json:"stage_id"`
+	Mode       string `json:"mode,omitempty"`
 	Password   string `json:"password,omitempty"`
 	Speed      int    `json:"speed,omitempty"`
 	MaxMembers int    `json:"max_members,omitempty"`
@@ -132,6 +134,8 @@ type PartyAdventureResult struct {
 	PartyID             string                   `json:"party_id"`
 	StageID             string                   `json:"stage_id"`
 	Outcome             string                   `json:"outcome"`
+	Round               int                      `json:"round,omitempty"`
+	ExitFatigue         int                      `json:"exit_fatigue,omitempty"`
 	FloorsCleared       int                      `json:"floors_cleared"`
 	Turns               int                      `json:"turns"`
 	TotalEXP            int                      `json:"total_exp"`

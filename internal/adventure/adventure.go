@@ -308,6 +308,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	if err != nil {
 		return DungeonCrawlResult{}, err
 	}
+	session.SetMode(req.Mode)
 	session.nowFunc = s.now
 
 	if stage.ID == "stage-26" && s.timer != nil {
@@ -387,7 +388,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 				}
 			}
 
-			// Apply fallback experience, gold, crystal, and surviving HP/MP if battleSettler is not configured
+			// Apply fallback experience, gold, crystal, fatigue, and surviving HP/MP if battleSettler is not configured
 			if s.battleSettler == nil {
 				if hp, ok := result.ParticipantHPs[c.ID]; ok {
 					if hp <= 0 {
@@ -399,6 +400,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 				if mp, ok := result.ParticipantMPs[c.ID]; ok {
 					c.Stats.MP = mp
 				}
+				c.AddTired(result.EffectiveExitFatigue(req.Mode))
 
 				if result.Outcome == corebattle.OutcomeWin {
 					if result.TotalEXP > 0 {
