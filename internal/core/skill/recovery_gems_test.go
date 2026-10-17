@@ -356,3 +356,115 @@ func TestRecoveryGemTargetAlternativesSharedByDiscoveryAndInvocation(t *testing.
 		})
 	}
 }
+
+func TestRecoveryGemFallenEnemySharedByDiscoveryAndInvocation(t *testing.T) {
+	ids := []string{"gem_mind_eye", "gem_calm_orb", "gem_divine_tension_sky"}
+	for _, tc := range []struct {
+		name        string
+		target      string
+		enemyIDs    []string
+		allAlive    bool
+		requester   bool
+		draws       []float64
+		wantTension float64
+		wantErr     error
+	}{
+		{
+			name:      "mixed_fallback_rejects_without_requester",
+			target:    "ally",
+			enemyIDs:  []string{"enemy", "dead_enemy"},
+			requester: false,
+			wantErr:   corebattle.ErrUnsupportedEffect,
+		},
+		{
+			name:      "explicit_fallen_target_rejects_without_requester",
+			target:    "dead_enemy",
+			enemyIDs:  []string{"enemy", "dead_enemy"},
+			requester: false,
+			wantErr:   corebattle.ErrUnsupportedEffect,
+		},
+		{
+			name:        "all_alive_reflected_admitted_without_requester",
+			target:      "ally",
+			enemyIDs:    []string{"enemy"},
+			allAlive:    true,
+			requester:   false,
+			draws:       []float64{0},
+			wantTension: 3,
+			wantErr:     nil,
+		},
+		{
+			name:        "mixed_fallback_admitted_with_requester_fallen_chosen",
+			target:      "ally",
+			enemyIDs:    []string{"enemy", "dead_enemy"},
+			requester:   true,
+			draws:       []float64{.9, 0},
+			wantTension: 8,
+			wantErr:     nil,
+		},
+		{
+			name:        "explicit_fallen_target_admitted_with_requester",
+			target:      "dead_enemy",
+			enemyIDs:    []string{"enemy", "dead_enemy"},
+			requester:   true,
+			draws:       []float64{0},
+			wantTension: 8,
+			wantErr:     nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, c := recoveryGemFixture(false)
+			if !tc.allAlive {
+				s.Actors = append(s.Actors, corebattle.LifetimeActor{
+					Participant: corebattle.Participant{ID: "dead_enemy", TeamID: "enemy", HP: 0, MaxHP: 1000},
+					NPC:         true,
+				})
+			}
+			c.EnemyIDs = tc.enemyIDs
+			s.Actors[0].Hit = 50
+			s.Actors[0].Tension = 3
+			s.Actors[3].Temporary = corebattle.TemporaryReflectAttack
+			if !tc.requester {
+				c.RequesterLevel = nil
+			}
+			var d BattleDefinitions
+			d.RegisterRecoveryStatGems(&c)
+			d.Invocations.Entries["custom"] = d.RecoveryStatInvocation(&c, ids)
+			frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{tc.target}}
+			before, err := json.Marshal(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			contextBefore := c
+			_, err = d.RecoveryStatAction(&s, &c, ids, tc.target, noArithmeticDraws{t})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("RecoveryStatAction err = %v, want %v", err, tc.wantErr)
+			}
+			ops, err := d.InvocationAction(&s, &frame, []string{"custom"}, noArithmeticDraws{t})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("InvocationAction err = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				err = s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "custom"}}, noArithmeticDraws{t})
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("ApplyInvocations err = %v, want %v", err, tc.wantErr)
+				}
+				after, err := json.Marshal(s)
+				if err != nil || string(before) != string(after) || !reflect.DeepEqual(c, contextBefore) {
+					t.Fatal("rejected composite mutated state or counters", s, c)
+				}
+				return
+			}
+			rng := &queuedRecoveryGemRNG{t: t, draws: tc.draws}
+			if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil {
+				t.Fatalf("ApplyInvocations unexpected error: %v", err)
+			}
+			if len(rng.draws) != 0 || s.Actors[0].Hit != 95 || s.Actors[0].Tension != tc.wantTension {
+				t.Fatalf("state unexpected: hit=%d, tension=%v, drawsLeft=%d", s.Actors[0].Hit, s.Actors[0].Tension, len(rng.draws))
+			}
+			if !tc.allAlive && s.Actors[4].HP != 0 {
+				t.Fatalf("dead_enemy.HP = %d, want 0", s.Actors[4].HP)
+			}
+		})
+	}
+}
