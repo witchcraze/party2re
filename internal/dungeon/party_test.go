@@ -3,6 +3,7 @@ package dungeon_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -927,5 +928,172 @@ func TestStartPartyExpedition_Concurrent(t *testing.T) {
 		if !errors.Is(err, dungeon.ErrPartyNotRecruiting) {
 			t.Errorf("expected concurrent failure ErrPartyNotRecruiting, got %v", err)
 		}
+	}
+}
+
+func TestPartyCompletion_ResetsReadyStates_PreventsStaleRestart(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-settle-test"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusRecruiting,
+		Name:              "Settle Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+	)
+
+	// 1. Start party expedition
+	exp, err := svc.StartPartyExpedition(ctx, "leader-1", pID, "dungeon-01")
+	if err != nil {
+		t.Fatalf("StartPartyExpedition failed: %v", err)
+	}
+
+	// Party is in progress
+	p, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusInProgress {
+		t.Fatalf("expected party to be in progress, got status %v (err: %v)", p.Status, err)
+	}
+
+	// 2. Simulate expedition completion / escape
+	_, err = svc.Escape(ctx, "leader-1")
+	if err != nil {
+		t.Fatalf("Escape failed: %v", err)
+	}
+
+	// 3. Verify party status reset to recruiting and member ready states reset to false
+	p, err = partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Fatalf("expected party to be recruiting after settlement, got status %v", p.Status)
+	}
+
+	members, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range members {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be reset to false, was true", m.CharacterID)
+		}
+	}
+
+	// 4. Attempting to start the party again immediately must fail with ErrPartyNotReady
+	_, err = svc.StartPartyExpedition(ctx, "leader-1", pID, "dungeon-01")
+	if !errors.Is(err, dungeon.ErrPartyNotReady) {
+		t.Fatalf("expected StartPartyExpedition to fail with ErrPartyNotReady due to unready members, got %v", err)
+	}
+
+	// 5. Active expedition store must be clean
+	active, _ := svc.GetActiveExpedition(ctx, "leader-1")
+	if active != nil {
+		t.Errorf("expected leader active expedition to be purged, got %+v", active)
+	}
+	activeMem, _ := svc.GetActiveExpedition(ctx, "member-2")
+	if activeMem != nil {
+		t.Errorf("expected member active expedition to be purged, got %+v", activeMem)
+	}
+	_ = exp
+}
+
+func TestConcurrent_PartyStart_Vs_SoloStart(t *testing.T) {
+	ctx := context.Background()
+
+	for iter := 0; iter < 10; iter++ {
+		partyRepo := newMockPartyRepo()
+		pID := fmt.Sprintf("party-race-%d", iter)
+		partyRepo.addParty(party.Party{
+			ID:                pID,
+			LeaderCharacterID: "leader-1",
+			Status:            party.StatusRecruiting,
+			Name:              "Race Party",
+		}, []party.Member{
+			{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+			{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+		})
+
+		activeStore := dungeon.NewMemoryExpeditionRepository()
+		svc, _ := dungeon.NewService(
+			newMockDungeonRepo(),
+			&mockCharRepo{chars: map[string]corecharacter.Character{
+				"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+				"member-2": createTestChar("member-2", 10, 100, 20, 20),
+			}},
+			&corebattle.Engine{},
+			dungeon.WithPartyRepository(partyRepo),
+			dungeon.WithActiveExpeditionStore(activeStore),
+		)
+
+		var wg sync.WaitGroup
+		var partyErr, soloErr error
+		var partyExp, soloExp *dungeon.ActiveExpedition
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			partyExp, partyErr = svc.StartPartyExpedition(ctx, "leader-1", pID, "dungeon-01")
+		}()
+		go func() {
+			defer wg.Done()
+			soloExp, soloErr = svc.StartExpedition(ctx, "member-2", "dungeon-01")
+		}()
+		wg.Wait()
+
+		partySuccess := partyErr == nil && partyExp != nil
+		soloSuccess := soloErr == nil && soloExp != nil
+
+		if partySuccess && soloSuccess {
+			t.Fatalf("iteration %d: both party start and solo start succeeded concurrently! dual activity violation", iter)
+		}
+		if !partySuccess && !soloSuccess {
+			t.Fatalf("iteration %d: neither party start nor solo start succeeded (partyErr=%v, soloErr=%v)", iter, partyErr, soloErr)
+		}
+
+		if partySuccess {
+			if !errors.Is(soloErr, dungeon.ErrActiveExpeditionExists) && !errors.Is(soloErr, dungeon.ErrPartyNotRecruiting) {
+				t.Errorf("iteration %d: expected solo start to fail with ErrActiveExpeditionExists or ErrPartyNotRecruiting, got %v", iter, soloErr)
+			}
+		} else {
+			if !errors.Is(partyErr, dungeon.ErrActiveExpeditionExists) && !errors.Is(partyErr, dungeon.ErrPartyNotRecruiting) {
+				t.Errorf("iteration %d: expected party start to fail with ErrActiveExpeditionExists or ErrPartyNotRecruiting, got %v", iter, partyErr)
+			}
+		}
+	}
+}
+
+func TestStartExpedition_LockedCharacter_ReturnsErrActiveExpeditionExists(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"solo-char": createTestChar("solo-char", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+	)
+
+	// Hold character lock (simulating another domain starting an adventure for this character)
+	err := partyRepo.WithPartyLock(ctx, "char:solo-char", func(lockedCtx context.Context) error {
+		_, err := svc.StartExpedition(ctx, "solo-char", "dungeon-01")
+		if !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+			t.Fatalf("expected ErrActiveExpeditionExists when character lock is held, got %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error holding lock: %v", err)
 	}
 }

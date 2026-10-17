@@ -255,19 +255,24 @@ func (s *Service) resetPartyState(ctx context.Context, partyID string) {
 	if partyID == "" || s.partyRepo == nil {
 		return
 	}
-	p, err := s.partyRepo.GetParty(ctx, partyID)
-	if err == nil {
-		p.Status = party.StatusRecruiting
-		//lint:ignore error-swallow best-effort party status reset upon run termination
-		_ = s.partyRepo.UpdateParty(ctx, p)
-	}
-	members, err := s.partyRepo.GetMembers(ctx, partyID)
-	if err == nil {
-		for _, m := range members {
-			//lint:ignore error-swallow best-effort member ready state reset upon run termination
-			_ = s.partyRepo.UpdateMemberReady(ctx, partyID, m.CharacterID, false)
+	//lint:ignore error-swallow best-effort party state reset upon run termination
+	_ = s.partyRepo.WithPartyLock(ctx, partyID, func(lockedCtx context.Context) error {
+		members, err := s.partyRepo.GetMembers(lockedCtx, partyID)
+		if err != nil {
+			return err
 		}
-	}
+		for _, m := range members {
+			if err := s.partyRepo.UpdateMemberReady(lockedCtx, partyID, m.CharacterID, false); err != nil {
+				return err
+			}
+		}
+		p, err := s.partyRepo.GetParty(lockedCtx, partyID)
+		if err != nil {
+			return err
+		}
+		p.Status = party.StatusRecruiting
+		return s.partyRepo.UpdateParty(lockedCtx, p)
+	})
 }
 
 // Option configures optional parameters on Service.

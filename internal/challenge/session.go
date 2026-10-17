@@ -11,6 +11,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/party"
 )
 
 func (s *Service) StartSession(ctx context.Context, characterID string, tierID string) (*ChallengeSession, error) {
@@ -22,24 +23,35 @@ func (s *Service) StartSession(ctx context.Context, characterID string, tierID s
 		return nil, err
 	}
 
-	existing, err := s.activeStore.GetActiveSession(ctx, characterID)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil && existing.Status == StatusActive {
-		return nil, ErrActiveSessionExists
-	}
-	if s.activityChecker != nil {
-		busy, err := s.activityChecker.HasActiveActivity(ctx, characterID)
+	var session *ChallengeSession
+	err = s.withCharacterLock(ctx, characterID, func(lockedCtx context.Context) error {
+		existing, err := s.activeStore.GetActiveSession(lockedCtx, characterID)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if busy {
+		if existing != nil && existing.Status == StatusActive {
+			return ErrActiveSessionExists
+		}
+		if s.activityChecker != nil {
+			busy, err := s.activityChecker.HasActiveActivity(lockedCtx, characterID)
+			if err != nil {
+				return err
+			}
+			if busy {
+				return ErrActiveSessionExists
+			}
+		}
+		var sErr error
+		session, sErr = s.startSessionRoster(lockedCtx, characterID, []string{characterID}, tier, "", "", "#FFFFFF")
+		return sErr
+	})
+	if err != nil {
+		if errors.Is(err, party.ErrPartyNotRecruiting) {
 			return nil, ErrActiveSessionExists
 		}
+		return nil, err
 	}
-
-	return s.startSessionRoster(ctx, characterID, []string{characterID}, tier, "", "", "#FFFFFF")
+	return session, nil
 }
 
 func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*RoundResult, *ChallengeSession, error) {

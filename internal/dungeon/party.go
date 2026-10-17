@@ -3,6 +3,7 @@ package dungeon
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,6 +21,79 @@ var (
 	ErrDuplicatePartyMember = errors.New("party has duplicate members")
 	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0)")
 )
+
+// PartyRepository defines the external party domain contracts required by dungeon.
+type PartyRepository interface {
+	GetParty(ctx context.Context, id string) (party.Party, error)
+	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
+	UpdateParty(ctx context.Context, p party.Party) error
+	UpdateMemberReady(ctx context.Context, partyID string, characterID string, ready bool) error
+	WithPartyLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error
+}
+
+// WithPartyRepository configures the PartyRepository for party roster derivation.
+func WithPartyRepository(repo PartyRepository) Option {
+	return func(s *Service) {
+		s.partyRepo = repo
+	}
+}
+
+func (s *Service) resetPartyState(ctx context.Context, partyID string) {
+	if partyID == "" || s.partyRepo == nil {
+		return
+	}
+	//lint:ignore error-swallow best-effort party state reset upon run termination
+	_ = s.partyRepo.WithPartyLock(ctx, partyID, func(lockedCtx context.Context) error {
+		members, err := s.partyRepo.GetMembers(lockedCtx, partyID)
+		if err != nil {
+			return err
+		}
+		for _, m := range members {
+			if err := s.partyRepo.UpdateMemberReady(lockedCtx, partyID, m.CharacterID, false); err != nil {
+				return err
+			}
+		}
+		p, err := s.partyRepo.GetParty(lockedCtx, partyID)
+		if err != nil {
+			return err
+		}
+		p.Status = party.StatusRecruiting
+		return s.partyRepo.UpdateParty(lockedCtx, p)
+	})
+}
+
+func (s *Service) withCharacterLock(ctx context.Context, characterID string, fn func(ctx context.Context) error) error {
+	if s.partyRepo == nil || characterID == "" {
+		return fn(ctx)
+	}
+	return s.partyRepo.WithPartyLock(ctx, "char:"+characterID, fn)
+}
+
+func (s *Service) withRosterLocks(ctx context.Context, memberIDs []string, fn func(ctx context.Context) error) error {
+	if s.partyRepo == nil || len(memberIDs) == 0 {
+		return fn(ctx)
+	}
+	seen := make(map[string]bool, len(memberIDs))
+	sorted := make([]string, 0, len(memberIDs))
+	for _, id := range memberIDs {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			sorted = append(sorted, id)
+		}
+	}
+	sort.Strings(sorted)
+
+	var acquireNext func(idx int, curCtx context.Context) error
+	acquireNext = func(idx int, curCtx context.Context) error {
+		if idx >= len(sorted) {
+			return fn(curCtx)
+		}
+		return s.partyRepo.WithPartyLock(curCtx, "char:"+sorted[idx], func(nextCtx context.Context) error {
+			return acquireNext(idx+1, nextCtx)
+		})
+	}
+	return acquireNext(0, ctx)
+}
 
 type ExpeditionMember struct {
 	CharacterID string   `json:"character_id"`
@@ -88,42 +162,51 @@ func (s *Service) StartPartyExpedition(
 			}
 		}
 
-		for _, mID := range memberIDs {
-			existing, err := s.activeStore.GetActiveExpedition(lockedCtx, mID)
-			if err != nil {
-				return err
-			}
-			if existing != nil && existing.Status == StatusExploring {
-				return ErrActiveExpeditionExists
-			}
-		}
-
-		if s.activityChecker != nil {
+		err = s.withRosterLocks(lockedCtx, memberIDs, func(rosterLockedCtx context.Context) error {
 			for _, mID := range memberIDs {
-				busy, err := s.activityChecker.HasActiveActivity(lockedCtx, mID)
+				existing, err := s.activeStore.GetActiveExpedition(rosterLockedCtx, mID)
 				if err != nil {
 					return err
 				}
-				if busy {
+				if existing != nil && existing.Status == StatusExploring {
 					return ErrActiveExpeditionExists
 				}
 			}
-		}
 
-		p.Status = party.StatusInProgress
-		if err := s.partyRepo.UpdateParty(lockedCtx, p); err != nil {
-			return err
-		}
+			if s.activityChecker != nil {
+				for _, mID := range memberIDs {
+					busy, err := s.activityChecker.HasActiveActivity(rosterLockedCtx, mID)
+					if err != nil {
+						return err
+					}
+					if busy {
+						return ErrActiveExpeditionExists
+					}
+				}
+			}
 
-		expRes, err := s.startExpeditionRoster(lockedCtx, leaderCharID, memberIDs, dungeonID, partyID, p.Name)
+			p.Status = party.StatusInProgress
+			if err := s.partyRepo.UpdateParty(rosterLockedCtx, p); err != nil {
+				return err
+			}
+
+			expRes, err := s.startExpeditionRoster(rosterLockedCtx, leaderCharID, memberIDs, dungeonID, partyID, p.Name)
+			if err != nil {
+				p.Status = party.StatusRecruiting
+				//lint:ignore error-swallow compensatory rollback on start failure
+				_ = s.partyRepo.UpdateParty(rosterLockedCtx, p)
+				return err
+			}
+
+			exp = expRes
+			return nil
+		})
 		if err != nil {
-			p.Status = party.StatusRecruiting
-			//lint:ignore error-swallow compensatory rollback on start failure
-			_ = s.partyRepo.UpdateParty(lockedCtx, p)
+			if errors.Is(err, party.ErrPartyNotRecruiting) {
+				return ErrActiveExpeditionExists
+			}
 			return err
 		}
-
-		exp = expRes
 		return nil
 	})
 	if err != nil {

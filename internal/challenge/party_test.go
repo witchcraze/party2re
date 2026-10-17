@@ -3,6 +3,7 @@ package challenge_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -771,5 +772,179 @@ func TestStartPartySession_SaveSessionFailureRollback(t *testing.T) {
 	}
 	if p.Status != party.StatusRecruiting {
 		t.Errorf("expected party status to remain StatusRecruiting, got %v", p.Status)
+	}
+}
+
+func TestPartySession_Defeat_ResetsReadyStates_PreventsStaleRestart(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-defeat-test"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusRecruiting,
+		Name:              "Defeat Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	activeStore := challenge.NewMemorySessionRepository()
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"leader-1": createPartyTestChar("leader-1", 10, 10, 1, 1), // weak stats to guarantee defeat
+		"member-2": createPartyTestChar("member-2", 10, 10, 1, 1),
+	}}
+
+	svc, _ := challenge.NewService(
+		newMockChallengeRepo(),
+		charRepo,
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+		challenge.WithActiveSessionStore(activeStore),
+	)
+
+	// 1. Start party session
+	sess, err := svc.StartPartySession(ctx, "leader-1", pID, "2")
+	if err != nil {
+		t.Fatalf("StartPartySession failed: %v", err)
+	}
+
+	p, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusInProgress {
+		t.Fatalf("expected party to be in progress, got status %v", p.Status)
+	}
+
+	// 2. Advance round until defeat
+	for i := 0; i < 10; i++ {
+		res, curSess, err := svc.AdvanceRound(ctx, "leader-1", sess.ID)
+		if err != nil {
+			t.Fatalf("AdvanceRound failed: %v", err)
+		}
+		if res.SessionEnded || curSess.Status == challenge.StatusDefeated {
+			break
+		}
+	}
+
+	// 3. Verify party status reset to recruiting and member ready states reset to false
+	p, err = partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Fatalf("expected party to be recruiting after defeat settlement, got status %v", p.Status)
+	}
+
+	members, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range members {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be reset to false, was true", m.CharacterID)
+		}
+	}
+
+	// 4. Attempting to restart party session immediately must fail with ErrPartyNotReady
+	_, err = svc.StartPartySession(ctx, "leader-1", pID, "2")
+	if !errors.Is(err, challenge.ErrPartyNotReady) {
+		t.Fatalf("expected StartPartySession to fail with ErrPartyNotReady, got %v", err)
+	}
+
+	// 5. Active session store must be purged
+	leadSess, _ := activeStore.GetActiveSession(ctx, "leader-1")
+	if leadSess != nil {
+		t.Errorf("expected leader active session to be purged, got %+v", leadSess)
+	}
+	memSess, _ := activeStore.GetActiveSession(ctx, "member-2")
+	if memSess != nil {
+		t.Errorf("expected member active session to be purged, got %+v", memSess)
+	}
+}
+
+func TestConcurrent_PartySession_Vs_SoloSession(t *testing.T) {
+	ctx := context.Background()
+
+	for iter := 0; iter < 10; iter++ {
+		partyRepo := newMockPartyRepo()
+		pID := fmt.Sprintf("party-race-%d", iter)
+		partyRepo.addParty(party.Party{
+			ID:                pID,
+			LeaderCharacterID: "leader-1",
+			Status:            party.StatusRecruiting,
+			Name:              "Race Party",
+		}, []party.Member{
+			{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+			{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+		})
+
+		activeStore := challenge.NewMemorySessionRepository()
+		svc, _ := challenge.NewService(
+			newMockChallengeRepo(),
+			&mockCharRepo{chars: map[string]corecharacter.Character{
+				"leader-1": createPartyTestChar("leader-1", 10, 100, 20, 20),
+				"member-2": createPartyTestChar("member-2", 10, 100, 20, 20),
+			}},
+			&corebattle.Engine{},
+			challenge.WithPartyRepository(partyRepo),
+			challenge.WithActiveSessionStore(activeStore),
+		)
+
+		var wg sync.WaitGroup
+		var partyErr, soloErr error
+		var partySess, soloSess *challenge.ChallengeSession
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			partySess, partyErr = svc.StartPartySession(ctx, "leader-1", pID, "2")
+		}()
+		go func() {
+			defer wg.Done()
+			soloSess, soloErr = svc.StartSession(ctx, "member-2", "2")
+		}()
+		wg.Wait()
+
+		partySuccess := partyErr == nil && partySess != nil
+		soloSuccess := soloErr == nil && soloSess != nil
+
+		if partySuccess && soloSuccess {
+			t.Fatalf("iteration %d: both party session and solo session succeeded concurrently! dual activity violation", iter)
+		}
+		if !partySuccess && !soloSuccess {
+			t.Fatalf("iteration %d: neither party session nor solo session succeeded (partyErr=%v, soloErr=%v)", iter, partyErr, soloErr)
+		}
+
+		if partySuccess {
+			if !errors.Is(soloErr, challenge.ErrActiveSessionExists) && !errors.Is(soloErr, challenge.ErrPartyNotRecruiting) {
+				t.Errorf("iteration %d: expected solo start to fail with ErrActiveSessionExists or ErrPartyNotRecruiting, got %v", iter, soloErr)
+			}
+		} else {
+			if !errors.Is(partyErr, challenge.ErrActiveSessionExists) && !errors.Is(partyErr, challenge.ErrPartyNotRecruiting) {
+				t.Errorf("iteration %d: expected party start to fail with ErrActiveSessionExists or ErrPartyNotRecruiting, got %v", iter, partyErr)
+			}
+		}
+	}
+}
+
+func TestStartSession_LockedCharacter_ReturnsErrActiveSessionExists(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+
+	svc, _ := challenge.NewService(
+		newMockChallengeRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"solo-char": createPartyTestChar("solo-char", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+	)
+
+	// Hold character lock (simulating another domain starting an adventure for this character)
+	err := partyRepo.WithPartyLock(ctx, "char:solo-char", func(lockedCtx context.Context) error {
+		_, err := svc.StartSession(ctx, "solo-char", "2")
+		if !errors.Is(err, challenge.ErrActiveSessionExists) {
+			t.Fatalf("expected ErrActiveSessionExists when character lock is held, got %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error holding lock: %v", err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,39 @@ var (
 	ErrNeedJoinNotMet      = errors.New("character does not meet stage join condition")
 	ErrNeedOverLvNotMet    = errors.New("character does not meet reincarnation requirement")
 )
+
+func (s *Service) withCharacterLock(ctx context.Context, characterID string, fn func(ctx context.Context) error) error {
+	if s.partyRepo == nil || characterID == "" {
+		return fn(ctx)
+	}
+	return s.partyRepo.WithPartyLock(ctx, "char:"+characterID, fn)
+}
+
+func (s *Service) withRosterLocks(ctx context.Context, memberIDs []string, fn func(ctx context.Context) error) error {
+	if s.partyRepo == nil || len(memberIDs) == 0 {
+		return fn(ctx)
+	}
+	seen := make(map[string]bool, len(memberIDs))
+	sorted := make([]string, 0, len(memberIDs))
+	for _, id := range memberIDs {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			sorted = append(sorted, id)
+		}
+	}
+	sort.Strings(sorted)
+
+	var acquireNext func(idx int, curCtx context.Context) error
+	acquireNext = func(idx int, curCtx context.Context) error {
+		if idx >= len(sorted) {
+			return fn(curCtx)
+		}
+		return s.partyRepo.WithPartyLock(curCtx, "char:"+sorted[idx], func(nextCtx context.Context) error {
+			return acquireNext(idx+1, nextCtx)
+		})
+	}
+	return acquireNext(0, ctx)
+}
 
 // StartPartySession initializes a survival challenge run for up to stage MaxParticipants party members from an authorized party lobby.
 func (s *Service) StartPartySession(
@@ -87,45 +121,54 @@ func (s *Service) StartPartySession(
 			}
 		}
 
-		for _, mID := range memberIDs {
-			existing, err := s.activeStore.GetActiveSession(lockedCtx, mID)
-			if err != nil {
-				return err
-			}
-			if existing != nil && existing.Status == StatusActive {
-				return ErrActiveSessionExists
-			}
-		}
-
-		if s.activityChecker != nil {
+		err = s.withRosterLocks(lockedCtx, memberIDs, func(rosterLockedCtx context.Context) error {
 			for _, mID := range memberIDs {
-				busy, err := s.activityChecker.HasActiveActivity(lockedCtx, mID)
+				existing, err := s.activeStore.GetActiveSession(rosterLockedCtx, mID)
 				if err != nil {
 					return err
 				}
-				if busy {
+				if existing != nil && existing.Status == StatusActive {
 					return ErrActiveSessionExists
 				}
 			}
-		}
 
-		partyName := p.Name
-		partyColor := "#FFFFFF"
+			if s.activityChecker != nil {
+				for _, mID := range memberIDs {
+					busy, err := s.activityChecker.HasActiveActivity(rosterLockedCtx, mID)
+					if err != nil {
+						return err
+					}
+					if busy {
+						return ErrActiveSessionExists
+					}
+				}
+			}
 
-		p.Status = party.StatusInProgress
-		if err := s.partyRepo.UpdateParty(lockedCtx, p); err != nil {
-			return err
-		}
+			partyName := p.Name
+			partyColor := "#FFFFFF"
 
-		sess, err := s.startSessionRoster(lockedCtx, leaderCharID, memberIDs, tier, partyID, partyName, partyColor)
+			p.Status = party.StatusInProgress
+			if err := s.partyRepo.UpdateParty(rosterLockedCtx, p); err != nil {
+				return err
+			}
+
+			sess, err := s.startSessionRoster(rosterLockedCtx, leaderCharID, memberIDs, tier, partyID, partyName, partyColor)
+			if err != nil {
+				p.Status = party.StatusRecruiting
+				//lint:ignore error-swallow compensatory rollback on start failure
+				_ = s.partyRepo.UpdateParty(rosterLockedCtx, p)
+				return err
+			}
+
+			session = sess
+			return nil
+		})
 		if err != nil {
-			p.Status = party.StatusRecruiting
-			//lint:ignore error-swallow compensatory rollback on start failure
-			_ = s.partyRepo.UpdateParty(lockedCtx, p)
+			if errors.Is(err, party.ErrPartyNotRecruiting) {
+				return ErrActiveSessionExists
+			}
 			return err
 		}
-
-		session = sess
 		return nil
 	})
 	if err != nil {

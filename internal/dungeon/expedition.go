@@ -7,6 +7,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"github.com/witchcraze/party2re/internal/party"
 )
 
 func (s *Service) GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error) {
@@ -20,23 +22,36 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 	if strings.TrimSpace(characterID) == "" {
 		return nil, ErrCharacterNotFound
 	}
-	existing, err := s.activeStore.GetActiveExpedition(ctx, characterID)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil && existing.Status == StatusExploring {
-		return nil, ErrActiveExpeditionExists
-	}
-	if s.activityChecker != nil {
-		busy, err := s.activityChecker.HasActiveActivity(ctx, characterID)
+
+	var exp *ActiveExpedition
+	err := s.withCharacterLock(ctx, characterID, func(lockedCtx context.Context) error {
+		existing, err := s.activeStore.GetActiveExpedition(lockedCtx, characterID)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if busy {
+		if existing != nil && existing.Status == StatusExploring {
+			return ErrActiveExpeditionExists
+		}
+		if s.activityChecker != nil {
+			busy, err := s.activityChecker.HasActiveActivity(lockedCtx, characterID)
+			if err != nil {
+				return err
+			}
+			if busy {
+				return ErrActiveExpeditionExists
+			}
+		}
+		var sErr error
+		exp, sErr = s.startExpeditionRoster(lockedCtx, characterID, []string{characterID}, dungeonID, "", "")
+		return sErr
+	})
+	if err != nil {
+		if errors.Is(err, party.ErrPartyNotRecruiting) {
 			return nil, ErrActiveExpeditionExists
 		}
+		return nil, err
 	}
-	return s.startExpeditionRoster(ctx, characterID, []string{characterID}, dungeonID, "", "")
+	return exp, nil
 }
 
 func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (ExpeditionStepResult, error) {
