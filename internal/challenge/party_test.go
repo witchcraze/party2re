@@ -1114,11 +1114,34 @@ func TestResetPartyState_Challenge_PersistentLockContention_MaintainsExclusionAn
 	}
 	lockDone.Wait()
 
-	// Retrying AdvanceRound after lock release returns ErrSessionNotFound because Two-Phase Settlement
-	// already committed and evicted the active session, preventing duplicate reward settlement
-	_, _, retryErr := svc.AdvanceRound(ctx, "leader-1", sessID)
-	if !errors.Is(retryErr, challenge.ErrSessionNotFound) {
-		t.Fatalf("expected ErrSessionNotFound on retry, got: %v", retryErr)
+	// Retrying AdvanceRound after lock release safely recovers the settled session's party state without double-granting rewards
+	retryRes, _, retryErr := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if retryErr != nil {
+		t.Fatalf("expected retry AdvanceRound to recover party state, got: %v", retryErr)
+	}
+	if !retryRes.SessionEnded || retryRes.SessionStatus != challenge.StatusDefeated {
+		t.Fatalf("expected retry AdvanceRound result to be defeated session")
+	}
+
+	// Party status is now reset to recruiting and members are unready
+	pAfter, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || pAfter.Status != party.StatusRecruiting {
+		t.Fatalf("expected party status to be recruiting after recovery, got %v (err: %v)", pAfter.Status, err)
+	}
+	memsAfter, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range memsAfter {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be false after recovery, was true", m.CharacterID)
+		}
+	}
+
+	// Active session is now purged; subsequent AdvanceRound returns ErrSessionNotFound
+	_, _, postPurgeErr := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if !errors.Is(postPurgeErr, challenge.ErrSessionNotFound) {
+		t.Fatalf("expected ErrSessionNotFound after buffer purge, got: %v", postPurgeErr)
 	}
 }
 
@@ -1189,6 +1212,31 @@ func TestResetPartyState_Challenge_ValkeyFailure_SurfacesErrorWithoutLockBypass(
 	for _, m := range mems {
 		if !m.ReadyState {
 			t.Errorf("expected member %s ready state to remain true, was false", m.CharacterID)
+		}
+	}
+
+	// Valkey recovers
+	partyRepo.lockErr = nil
+
+	// Retrying AdvanceRound recovers party state safely and purges active session
+	retryRes, _, retryErr := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if retryErr != nil {
+		t.Fatalf("expected retry AdvanceRound after valkey recovery to succeed, got: %v", retryErr)
+	}
+	if !retryRes.SessionEnded || retryRes.SessionStatus != challenge.StatusDefeated {
+		t.Fatalf("expected retry AdvanceRound to end with defeat")
+	}
+
+	pRecovered, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || pRecovered.Status != party.StatusRecruiting {
+		t.Fatalf("expected party status to be recruiting, got %v (err: %v)", pRecovered.Status, err)
+	}
+	for _, m := range mems {
+		mRecovered, _ := partyRepo.GetMembers(ctx, pID)
+		for _, mr := range mRecovered {
+			if mr.CharacterID == m.CharacterID && mr.ReadyState {
+				t.Errorf("expected member %s ready state to be false after recovery", mr.CharacterID)
+			}
 		}
 	}
 }

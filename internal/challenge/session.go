@@ -75,6 +75,22 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		return nil, nil, ErrForbidden
 	}
 	if session.Status != StatusActive {
+		// If session in activeStore was already settled, retry party reset and cleanup.
+		if session.Status == StatusDefeated || session.Status == StatusClaimed {
+			if session.PartyID != "" {
+				if err := s.resetPartyState(ctx, session.PartyID); err != nil {
+					return nil, nil, fmt.Errorf("resetting party state: %w", err)
+				}
+			}
+			//lint:ignore error-swallow best-effort post-commit cache eviction
+			_ = s.activeStore.DeleteActiveSession(ctx, characterID)
+			return &RoundResult{
+				Round:         session.CurrentRound,
+				Won:           false,
+				SessionEnded:  true,
+				SessionStatus: session.Status,
+			}, session, nil
+		}
 		return nil, nil, ErrSessionNotActive
 	}
 
@@ -365,12 +381,17 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		return nil, nil, err
 	}
 
-	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
-	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
+	// Update active store to reflect settled status before party reset
+	//lint:ignore error-swallow best-effort buffer update prior to party reset
+	_ = s.activeStore.SaveActiveSession(ctx, *session)
+
 	if err := s.resetPartyState(ctx, session.PartyID); err != nil {
 		return nil, nil, fmt.Errorf("resetting party state: %w", err)
 	}
+
+	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master
+	//lint:ignore error-swallow best-effort post-commit cache eviction
+	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
 
 	return &RoundResult{
 		Round:              round,

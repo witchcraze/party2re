@@ -321,7 +321,7 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 		err := executor.QueryRowContext(txCtx, `SELECT status FROM challenge_sessions WHERE id = ? FOR UPDATE`, s.ID).Scan(&existingStatus)
 		if err == nil {
 			if existingStatus == string(challenge.StatusDefeated) || existingStatus == string(challenge.StatusClaimed) {
-				return challenge.ErrSessionNotActive
+				return nil
 			}
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err

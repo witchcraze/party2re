@@ -2,7 +2,6 @@ package database_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -88,10 +87,9 @@ func TestChallengeRepository(t *testing.T) {
 		t.Fatalf("FinalizeSession failed: %v", err)
 	}
 
-	// 5b. Retry FinalizeSession must be rejected as ErrSessionNotActive to prevent duplicate grants
-	retryErr := repo.FinalizeSession(ctx, s, 120, 80, []string{"potion_minor"}, 2)
-	if !errors.Is(retryErr, challenge.ErrSessionNotActive) {
-		t.Fatalf("expected ErrSessionNotActive on duplicate FinalizeSession, got %v", retryErr)
+	// 5b. Retry FinalizeSession must succeed idempotently without duplicate reward grants
+	if err := repo.FinalizeSession(ctx, s, 120, 80, []string{"potion_minor"}, 2); err != nil {
+		t.Fatalf("expected idempotent FinalizeSession on retry, got: %v", err)
 	}
 
 	charRepo, err := database.NewCharacterRepository(db)

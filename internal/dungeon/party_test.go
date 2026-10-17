@@ -1253,11 +1253,34 @@ func TestResetPartyState_PersistentLockContention_MaintainsExclusionAndSurfacesE
 	}
 	lockDone.Wait()
 
-	// Retrying Escape after lock release returns ErrNoActiveExpedition because Two-Phase Settlement
-	// already committed and evicted the active expedition, preventing duplicate reward settlement
-	_, retryErr := svc.Escape(ctx, "leader-1")
-	if !errors.Is(retryErr, dungeon.ErrNoActiveExpedition) {
-		t.Fatalf("expected ErrNoActiveExpedition on retry, got: %v", retryErr)
+	// Retrying Escape after lock release safely recovers the settled run's party state without double-granting rewards
+	retryRes, retryErr := svc.Escape(ctx, "leader-1")
+	if retryErr != nil {
+		t.Fatalf("expected retry Escape to recover party state, got: %v", retryErr)
+	}
+	if !retryRes.IsFinished {
+		t.Fatalf("expected retry Escape result to be finished")
+	}
+
+	// Party status is now reset to recruiting and members are unready
+	pAfter, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || pAfter.Status != party.StatusRecruiting {
+		t.Fatalf("expected party status to be recruiting after recovery, got %v (err: %v)", pAfter.Status, err)
+	}
+	memsAfter, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range memsAfter {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be false after recovery, was true", m.CharacterID)
+		}
+	}
+
+	// Active expedition is now purged; subsequent Escape returns ErrNoActiveExpedition
+	_, postPurgeErr := svc.Escape(ctx, "leader-1")
+	if !errors.Is(postPurgeErr, dungeon.ErrNoActiveExpedition) {
+		t.Fatalf("expected ErrNoActiveExpedition after buffer purge, got: %v", postPurgeErr)
 	}
 }
 
@@ -1324,6 +1347,31 @@ func TestResetPartyState_ValkeyFailure_SurfacesErrorWithoutLockBypass(t *testing
 	for _, m := range mems {
 		if !m.ReadyState {
 			t.Errorf("expected member %s ready state to remain true, was false", m.CharacterID)
+		}
+	}
+
+	// Valkey recovers
+	partyRepo.lockErr = nil
+
+	// Retrying Escape recovers party state safely and purges active expedition
+	retryRes, retryErr := svc.Escape(ctx, "leader-1")
+	if retryErr != nil {
+		t.Fatalf("expected retry Escape after valkey recovery to succeed, got: %v", retryErr)
+	}
+	if !retryRes.IsFinished {
+		t.Fatalf("expected retry Escape to be finished")
+	}
+
+	pRecovered, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || pRecovered.Status != party.StatusRecruiting {
+		t.Fatalf("expected party status to be recruiting, got %v (err: %v)", pRecovered.Status, err)
+	}
+	for _, m := range mems {
+		mRecovered, _ := partyRepo.GetMembers(ctx, pID)
+		for _, mr := range mRecovered {
+			if mr.CharacterID == m.CharacterID && mr.ReadyState {
+				t.Errorf("expected member %s ready state to be false after recovery", mr.CharacterID)
+			}
 		}
 	}
 }

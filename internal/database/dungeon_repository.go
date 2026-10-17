@@ -189,7 +189,16 @@ func (r *DungeonRepository) FinalizeExpedition(
 		executor := ExecutorFromContext(txCtx, r.db)
 		now := time.Now().UTC()
 
-		// 1. Upsert Character Dungeon Record
+		// 1. Guard against duplicate settlement: verify history record is not already inserted
+		var existingID string
+		err := executor.QueryRowContext(txCtx, `SELECT id FROM dungeon_expedition_history WHERE id = ? FOR UPDATE`, history.ID).Scan(&existingID)
+		if err == nil {
+			return nil
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+
+		// 2. Upsert Character Dungeon Record
 		upsertRecordQuery := `
 			INSERT INTO character_dungeon_records (
 				character_id, highest_dungeon_cleared, total_expeditions,
@@ -204,7 +213,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 				total_monsters_slain = VALUES(total_monsters_slain),
 				updated_at = VALUES(updated_at)
 		`
-		_, err := executor.ExecContext(
+		_, err = executor.ExecContext(
 			txCtx,
 			upsertRecordQuery,
 			record.CharacterID,
