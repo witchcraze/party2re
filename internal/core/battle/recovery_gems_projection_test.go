@@ -188,3 +188,167 @@ func TestRecoveryGemTargetAlternativesDoNotAccumulateInSameSlot(t *testing.T) {
 		})
 	}
 }
+
+func TestRecoveryGemFallenEnemyRetainsNoEffectBranch(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		target      string
+		enemyIDs    []string
+		allAlive    bool
+		confused    bool
+		bossField   bool
+		requester   bool
+		draws       []float64
+		wantTension float64
+		wantErr     error
+	}{
+		{
+			name:      "mixed_fallback_rejects_without_requester",
+			target:    "ally",
+			enemyIDs:  []string{"enemy", "dead_enemy"},
+			requester: false,
+			wantErr:   ErrUnsupportedEffect,
+		},
+		{
+			name:      "mixed_fallback_non_initial_roster_rejects_without_requester",
+			target:    "ally",
+			enemyIDs:  []string{"dead_enemy", "enemy"},
+			requester: false,
+			wantErr:   ErrUnsupportedEffect,
+		},
+		{
+			name:      "explicit_fallen_target_rejects_without_requester",
+			target:    "dead_enemy",
+			enemyIDs:  []string{"enemy", "dead_enemy"},
+			requester: false,
+			wantErr:   ErrUnsupportedEffect,
+		},
+		{
+			name:        "all_alive_reflected_admitted_without_requester",
+			target:      "ally",
+			enemyIDs:    []string{"enemy"},
+			allAlive:    true,
+			requester:   false,
+			draws:       []float64{0},
+			wantTension: 3,
+			wantErr:     nil,
+		},
+		{
+			name:        "confused_self_target_admitted_without_requester_despite_fallen_enemy",
+			target:      "self",
+			enemyIDs:    []string{"enemy", "dead_enemy"},
+			confused:    true,
+			requester:   false,
+			draws:       nil,
+			wantTension: 3,
+			wantErr:     nil,
+		},
+		{
+			name:      "confused_ally_target_rejects_without_requester",
+			target:    "ally",
+			enemyIDs:  []string{"enemy", "dead_enemy"},
+			confused:  true,
+			requester: false,
+			wantErr:   ErrUnsupportedEffect,
+		},
+		{
+			name:      "confused_self_target_boss_field_rejects_without_requester",
+			target:    "self",
+			enemyIDs:  []string{"enemy", "dead_enemy"},
+			confused:  true,
+			bossField: true,
+			requester: false,
+			wantErr:   ErrUnsupportedEffect,
+		},
+		{
+			name:        "mixed_fallback_admitted_with_requester_fallen_chosen",
+			target:      "ally",
+			enemyIDs:    []string{"enemy", "dead_enemy"},
+			requester:   true,
+			draws:       []float64{.9, 0},
+			wantTension: 8,
+			wantErr:     nil,
+		},
+		{
+			name:        "mixed_fallback_admitted_with_requester_alive_reflected_chosen",
+			target:      "ally",
+			enemyIDs:    []string{"enemy", "dead_enemy"},
+			requester:   true,
+			draws:       []float64{0},
+			wantTension: 3,
+			wantErr:     nil,
+		},
+		{
+			name:        "explicit_fallen_target_admitted_with_requester",
+			target:      "dead_enemy",
+			enemyIDs:    []string{"enemy", "dead_enemy"},
+			requester:   true,
+			draws:       []float64{0},
+			wantTension: 8,
+			wantErr:     nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, c := recoveryFixture()
+			c.Custom = true
+			c.PartyIDs = []string{"self", "fallen", "ally"}
+			c.EnemyIDs = tc.enemyIDs
+			if tc.allAlive {
+				s.Actors = []LifetimeActor{*s.actor("self"), *s.actor("fallen"), *s.actor("ally"), *s.actor("enemy")}
+			}
+			if tc.confused {
+				s.actor("self").Status = StatusConfusion
+			}
+			if tc.bossField {
+				s.SpecialBossField = true
+			}
+			s.actor("self").Hit = 50
+			s.actor("self").Tension = 3
+			s.actor("enemy").Temporary = TemporaryReflectAttack
+			if tc.requester {
+				level := 99
+				c.RequesterLevel = &level
+			} else {
+				c.RequesterLevel = nil
+			}
+			ids := []int{54, 68, 67}
+			before, contextBefore := reloadLifetime(t, s), c
+			rng := &targetRNG{t: t}
+			if err := s.ValidateRecoveryStatGems(ids, &c, tc.target, rng); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("ValidateRecoveryStatGems err = %v, want %v", err, tc.wantErr)
+			}
+			rng.done()
+
+			if tc.wantErr != nil {
+				execRNG := &targetRNG{t: t}
+				if _, err := s.ApplyRecoveryStatGems(ids, &c, tc.target, execRNG); !errors.Is(err, tc.wantErr) {
+					t.Fatalf("ApplyRecoveryStatGems err = %v, want %v", err, tc.wantErr)
+				}
+				execRNG.done()
+				if !reflect.DeepEqual(s, before) || !reflect.DeepEqual(c, contextBefore) {
+					t.Fatalf("rejected sequence mutated state or context: state=%+v, context=%+v", s, c)
+				}
+				return
+			}
+
+			execRNG := &targetRNG{t: t, draws: tc.draws}
+			r, err := s.ApplyRecoveryStatGems(ids, &c, tc.target, execRNG)
+			if err != nil {
+				t.Fatalf("ApplyRecoveryStatGems unexpected error: %v", err)
+			}
+			execRNG.done()
+			if len(r) != 3 {
+				t.Fatalf("results len = %d, want 3", len(r))
+			}
+			if s.actor("self").Hit != 95 {
+				t.Fatalf("self.Hit = %d, want 95", s.actor("self").Hit)
+			}
+			if s.actor("self").Tension != tc.wantTension {
+				t.Fatalf("self.Tension = %v, want %v", s.actor("self").Tension, tc.wantTension)
+			}
+			if deadEnemy := s.actor("dead_enemy"); deadEnemy != nil && deadEnemy.HP != 0 {
+				t.Fatalf("dead_enemy.HP = %d, want 0", deadEnemy.HP)
+			}
+		})
+	}
+}

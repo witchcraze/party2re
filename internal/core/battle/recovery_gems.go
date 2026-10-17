@@ -254,10 +254,23 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 			}
 			if id == 68 && len(c.EnemyIDs) > 0 {
 				candidates := projected.damageCandidatesAfter(&DamageContext{EffectContext: context}, converted, admission.mayReplace)
-				selfOnly := len(candidates) > 0
+				selfOnly := len(candidates) > 0 && projected.actor(c.ActorID).HP > 0
 				for _, candidate := range candidates {
 					selfOnly = selfOnly && candidate.TargetID == c.ActorID
 					minimumTension[candidate.TargetID] = min(minimumTension[candidate.TargetID], 1)
+				}
+				fallback := false
+				if originalActor.Status != StatusConfusion {
+					target := projected.actor(converted.TargetID)
+					fallback = target == nil || target.TeamID == originalActor.TeamID
+				}
+				if fallback {
+					for _, enemyID := range c.EnemyIDs {
+						if enemy := projected.actor(enemyID); enemy == nil || enemy.HP <= 0 {
+							selfOnly = false
+							break
+						}
+					}
 				}
 				if selfOnly && !originalActor.categorySealed(converted.Category) {
 					projected.actor(c.ActorID).Tension = 1

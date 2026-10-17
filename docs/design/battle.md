@@ -776,6 +776,10 @@ accumulating multiple tension applications onto the same candidate in one slot.
 Category cures remain conditional: a seal can block every matching helper in the
 sequence. Admission retains both possible tension consumption and retention, so an
 initial tension8 cap cannot hide a lower stage that later needs requester context.
+Gem68 retains fallen-enemy and wrong-side fallback no-effect branches, preserving
+the unreset tension ceiling for subsequent slots unless all reachable selection paths
+are guaranteed to resolve to an alive self-reflecting actor or confusion deterministically
+targets self without a boss field.
 An accepted stat-cap outcome still retains tension (`_skill.cgi:9318–9338`).
 Possible reductions reopen later stat/equipment-tail admission, while the unchanged
 input cap remains a possible no-effect branch when proving tension consumption.
