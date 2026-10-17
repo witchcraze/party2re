@@ -770,6 +770,9 @@ custom commands normalize an absent target to the actor before the helpers,
 while naked callbacks retain helper fallback. A complete custom body can be bound
 with `RecoveryStatInvocation`; its enclosing admission projects reachable205
 temporary changes, tension stages, category cures/confusion and stat-cap reopening.
+Alternative target paths within a slot (such as fallen fallback and cover redirects
+converging on the same ally) are projected from that slot's starting bounds without
+accumulating multiple tension applications onto the same candidate in one slot.
 Category cures remain conditional: a seal can block every matching helper in the
 sequence. Admission retains both possible tension consumption and retention, so an
 initial tension8 cap cannot hide a lower stage that later needs requester context.

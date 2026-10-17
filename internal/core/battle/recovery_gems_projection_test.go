@@ -94,3 +94,97 @@ func TestRecoveryGemPossibleReductionStillRequiresStatTail(t *testing.T) {
 	}
 	rng.done()
 }
+
+func TestRecoveryGemTargetAlternativesDoNotAccumulateInSameSlot(t *testing.T) {
+	// All initial ally picks (self cover, fallen->self cover, ally) resolve to
+	// ally once. One slot advances 1.7->3 without requiring requester level.
+	s, c := recoveryFixture()
+	s.Actors = []LifetimeActor{*s.actor("self"), *s.actor("fallen"), *s.actor("ally"), *s.actor("enemy")}
+	c.PartyIDs, c.EnemyIDs, c.Custom = []string{"self", "fallen", "ally"}, []string{"enemy"}, true
+	s.actor("self").Temporary = TemporaryCover
+	s.actor("ally").Temporary, s.actor("ally").Tension = TemporaryCovering, 1.7
+	for i, draw := range []float64{0, .4, .9} {
+		state, op := reloadLifetime(t, s), c
+		rng := &targetRNG{t: t, draws: []float64{draw}}
+		if err := state.ValidateRecoveryStatGems([]int{74}, &op, "enemy", &targetRNG{t: t}); err != nil {
+			t.Fatal(i, err)
+		}
+		r, err := state.ApplyRecoveryStatGem(74, &op, "enemy", rng)
+		if err != nil || len(r) != 1 || r[0].TargetID != "ally" || !r[0].Applied || state.actor("ally").Tension != 3 || state.actor("self").Tension != 1 || op.TensionCalls != 1 {
+			t.Fatal(i, r, err, state, op)
+		}
+		rng.done()
+	}
+
+	// Converging alternatives also update minimum tension for a later slot.
+	s, c = recoveryFixture()
+	s.Actors = []LifetimeActor{*s.actor("self"), *s.actor("fallen"), *s.actor("ally"), *s.actor("enemy")}
+	c.PartyIDs, c.EnemyIDs = []string{"self", "fallen", "ally"}, []string{"enemy"}
+	s.actor("self").Temporary, s.actor("self").Tension = TemporaryCovering, 3
+	s.actor("ally").Temporary = TemporaryCover
+	before, contextBefore := reloadLifetime(t, s), c
+	if _, err := s.ApplyRecoveryStatGems([]int{74, 67}, &c, "enemy", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || !reflect.DeepEqual(c, contextBefore) {
+		t.Fatal(err, s, c)
+	}
+
+	// [94,28,74]: whether slot 28 cures physical seal and activates confusion or
+	// fails cure, slot 74 only reaches each candidate once.
+	for _, tc := range []struct {
+		name       string
+		confused   bool
+		allyStart  float64
+		enemyStart float64
+		draws      []float64
+		reqDraws   []float64
+		wantTarget string
+		wantErr    error
+	}{
+		{"seal_cure_fails_low_stage", true, 1.7, 8, []float64{.9, .9}, nil, "ally", nil},
+		{"seal_cure_succeeds_confused_picks_enemy_8", true, 1.7, 8, []float64{0, 0, 0, .9}, nil, "enemy", nil},
+		{"seal_cure_succeeds_confused_picks_covered_self", true, 1.7, 8, []float64{0, 0, 0, 0}, nil, "ally", nil},
+		{"seal_cure_succeeds_confused_enemy_high_stage_rejects", true, 1.7, 5, nil, []float64{.9, .9}, "", ErrUnsupportedEffect},
+		{"no_confusion_low_stage_cure_fails", false, 1.7, 5, []float64{.9, .9}, nil, "ally", nil},
+		{"no_confusion_low_stage_cure_succeeds", false, 1.7, 5, []float64{0, .9}, nil, "ally", nil},
+		{"no_confusion_ally_high_stage_rejects_upfront", false, 5, 8, nil, []float64{.9, .9, 0}, "", ErrUnsupportedEffect},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, c := recoveryFixture()
+			s.Actors = []LifetimeActor{*s.actor("self"), *s.actor("fallen"), *s.actor("ally"), *s.actor("enemy")}
+			c.PartyIDs, c.EnemyIDs = []string{"self", "fallen", "ally"}, []string{"enemy"}
+			c.Custom, c.Item195Activated = true, tc.confused
+			s.actor("self").Status, s.actor("self").Temporary, s.actor("self").Tension = StatusPhysicalSeal, TemporaryCover, 8
+			s.actor("ally").Temporary, s.actor("ally").Tension = TemporaryCovering, tc.allyStart
+			s.actor("enemy").Tension = tc.enemyStart
+			before, contextBefore := reloadLifetime(t, s), c
+			if err := s.ValidateRecoveryStatGems([]int{94, 28, 74}, &c, "enemy", &targetRNG{t: t}); !errors.Is(err, tc.wantErr) {
+				t.Fatal(err)
+			}
+			if tc.wantErr != nil {
+				if _, err := s.ApplyRecoveryStatGems([]int{94, 28, 74}, &c, "enemy", &targetRNG{t: t}); !errors.Is(err, tc.wantErr) {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(s, before) || !reflect.DeepEqual(c, contextBefore) {
+					t.Fatal("rejected sequence mutated state or counters", s, c)
+				}
+				level := 99
+				c.RequesterLevel = &level
+				rng := &targetRNG{t: t, draws: tc.reqDraws}
+				r, err := s.ApplyRecoveryStatGems([]int{94, 28, 74}, &c, "enemy", rng)
+				if err != nil || len(r) != 3 || s.actor("enemy").Defense != 20 || s.actor("self").Tension != 1 || s.actor("ally").Tension < 3 {
+					t.Fatal(r, err, s, c)
+				}
+				rng.done()
+				return
+			}
+			rng := &targetRNG{t: t, draws: tc.draws}
+			r, err := s.ApplyRecoveryStatGems([]int{94, 28, 74}, &c, "enemy", rng)
+			if err != nil || len(r) != 3 || r[2][0].TargetID != tc.wantTarget || s.actor("enemy").Defense != 20 || s.actor("self").Tension != 1 || c.PartyStatDownCalls != 1 || c.TensionCalls != 1 {
+				t.Fatal(r, err, s, c)
+			}
+			if tc.wantTarget == "ally" && s.actor("ally").Tension != 3 {
+				t.Fatal(s)
+			}
+			rng.done()
+		})
+	}
+}

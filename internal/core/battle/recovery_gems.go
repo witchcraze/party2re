@@ -202,7 +202,11 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 				}
 				targets = projected.partyTargetCandidates(context.TargetContext, e, admission.mayReplace)
 			}
+			seen := make(map[string]float64, len(targets))
 			for _, target := range targets {
+				if _, ok := seen[target.TargetID]; ok {
+					continue
+				}
 				t := projected.actor(target.TargetID)
 				lower := *t
 				lower.Tension = minimumTension[t.ID]
@@ -220,14 +224,17 @@ func (s *LifetimeState) ValidateRecoveryStatGems(ids []int, c *EffectContext, ta
 						return err
 					}
 				}
-				if len(targets) == 1 {
-					minimumTension[t.ID] = lower.Tension
-				}
+				seen[t.ID] = lower.Tension
 				if t.Status != StatusSabaku {
 					//161 can replace covering/reflection/null with a defense.
 					if hasItem(t.ItemDefinitionIDs, "item-161") && t.Temporary != TemporaryDefense && t.Temporary != TemporaryStrongDefense && t.Temporary != TemporaryOneHitDefense {
 						admission.mayReplace[t.ID] = max(admission.mayReplace[t.ID], .5)
 					}
+				}
+			}
+			if len(seen) == 1 {
+				for id, tension := range seen {
+					minimumTension[id] = tension
 				}
 			}
 			if id == 67 {

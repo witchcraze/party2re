@@ -247,3 +247,112 @@ func TestRecoveryGemSlotLimitSharedByDiscoveryAndInvocation(t *testing.T) {
 		}
 	}
 }
+
+type queuedRecoveryGemRNG struct {
+	t     *testing.T
+	draws []float64
+}
+
+func (r *queuedRecoveryGemRNG) Float64() float64 {
+	if len(r.draws) == 0 {
+		r.t.Fatal("unexpected float draw")
+	}
+	v := r.draws[0]
+	r.draws = r.draws[1:]
+	return v
+}
+
+func (r *queuedRecoveryGemRNG) Intn(int) int { panic("unexpected integer draw") }
+func (r *queuedRecoveryGemRNG) IntN(int) int { panic("unexpected integer draw") }
+
+func TestRecoveryGemTargetAlternativesSharedByDiscoveryAndInvocation(t *testing.T) {
+	// Single registered gem_inspire_sky (74): cover/fallen alternatives all
+	// converge on ally (1.7->3) without requiring requester level.
+	s, c := recoveryGemFixture(false)
+	c.RequesterLevel = nil
+	s.Actors[0].Temporary = corebattle.TemporaryCover
+	s.Actors[2].Temporary, s.Actors[2].Tension = corebattle.TemporaryCovering, 1.7
+	var d BattleDefinitions
+	d.RegisterRecoveryStatGems(&c)
+	entries, err := d.RecoveryStatAction(&s, &c, []string{"gem_inspire_sky"}, "enemy", noArithmeticDraws{t})
+	if err != nil || len(entries) != 1 || entries[0].SourceID != 74 {
+		t.Fatal(entries, err)
+	}
+	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
+	ops, err := d.InvocationAction(&s, &frame, []string{"gem_inspire_sky"}, noArithmeticDraws{t})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rng := &queuedRecoveryGemRNG{t: t, draws: []float64{.4}}
+	if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil {
+		t.Fatal(err)
+	}
+	if len(rng.draws) != 0 || s.Actors[2].Tension != 3 || s.Actors[0].Tension != 1 || c.TensionCalls != 1 {
+		t.Fatal(s, c, rng.draws)
+	}
+
+	// 3-slot composite [94, 28, 74]: discovery and invocation agree across cure
+	// failure/success, confusion presence, and requester presence.
+	ids := []string{"gem_debuff_def", "gem_buff_atk_1", "gem_inspire_sky"}
+	for _, tc := range []struct {
+		name       string
+		confused   bool
+		enemyStart float64
+		requester  bool
+		draws      []float64
+		wantErr    error
+	}{
+		{"confused_enemy_8_seal_cure_fails", true, 8, false, []float64{.9, .9}, nil},
+		{"confused_enemy_8_seal_cure_succeeds", true, 8, false, []float64{0, 0, 0, 0}, nil},
+		{"confused_enemy_5_rejects_without_requester", true, 5, false, nil, corebattle.ErrUnsupportedEffect},
+		{"confused_enemy_5_admitted_with_requester", true, 5, true, []float64{.9, .9}, nil},
+		{"no_confusion_enemy_5_seal_cure_fails", false, 5, false, []float64{.9, .9}, nil},
+		{"no_confusion_enemy_5_seal_cure_succeeds", false, 5, false, []float64{0, .9}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, c := recoveryGemFixture(false)
+			c.Item195Activated = tc.confused
+			if !tc.requester {
+				c.RequesterLevel = nil
+			}
+			s.Actors[0].Status, s.Actors[0].Temporary, s.Actors[0].Tension = corebattle.StatusPhysicalSeal, corebattle.TemporaryCover, 8
+			s.Actors[2].Temporary, s.Actors[2].Tension = corebattle.TemporaryCovering, 1.7
+			s.Actors[3].Tension = tc.enemyStart
+			var d BattleDefinitions
+			d.RegisterRecoveryStatGems(&c)
+			d.Invocations.Entries["custom"] = d.RecoveryStatInvocation(&c, ids)
+			frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
+			before, err := json.Marshal(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			contextBefore := c
+			_, err = d.RecoveryStatAction(&s, &c, ids, "enemy", noArithmeticDraws{t})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatal(err)
+			}
+			ops, err := d.InvocationAction(&s, &frame, []string{"custom"}, noArithmeticDraws{t})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatal(err)
+			}
+			if tc.wantErr != nil {
+				err = s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "custom"}}, noArithmeticDraws{t})
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatal(err)
+				}
+				after, err := json.Marshal(s)
+				if err != nil || string(before) != string(after) || !reflect.DeepEqual(c, contextBefore) {
+					t.Fatal("rejected composite mutated state or counters", s, c)
+				}
+				return
+			}
+			rng := &queuedRecoveryGemRNG{t: t, draws: tc.draws}
+			if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil {
+				t.Fatal(err)
+			}
+			if len(rng.draws) != 0 || s.Actors[3].Defense != 20 || s.Actors[0].Tension != 1 || s.Actors[2].Tension != 3 || c.PartyStatDownCalls != 1 || c.TensionCalls != 1 {
+				t.Fatal(s, c, rng.draws)
+			}
+		})
+	}
+}
