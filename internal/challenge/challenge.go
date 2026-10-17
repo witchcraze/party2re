@@ -255,8 +255,8 @@ func (s *Service) resetPartyState(ctx context.Context, partyID string) {
 	if partyID == "" || s.partyRepo == nil {
 		return
 	}
-	//lint:ignore error-swallow best-effort party state reset upon run termination
-	_ = s.partyRepo.WithPartyLock(ctx, partyID, func(lockedCtx context.Context) error {
+
+	resetFn := func(lockedCtx context.Context) error {
 		members, err := s.partyRepo.GetMembers(lockedCtx, partyID)
 		if err != nil {
 			return err
@@ -272,7 +272,50 @@ func (s *Service) resetPartyState(ctx context.Context, partyID string) {
 		}
 		p.Status = party.StatusRecruiting
 		return s.partyRepo.UpdateParty(lockedCtx, p)
-	})
+	}
+
+	// Use background context with a safety timeout so party reset is not aborted if the incoming HTTP request context is cancelled.
+	resetCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const maxRetries = 5
+	backoff := 20 * time.Millisecond
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err := s.partyRepo.WithPartyLock(resetCtx, partyID, resetFn)
+		if err == nil {
+			return
+		}
+		if resetCtx.Err() != nil {
+			break
+		}
+		if !errors.Is(err, party.ErrPartyNotRecruiting) {
+			break
+		}
+		select {
+		case <-resetCtx.Done():
+			break
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+	}
+
+	// Fallback: If lock could not be acquired due to persistent contention or Valkey failure,
+	// guarantee party status and member ready states are reset directly so the party
+	// is not permanently stuck in StatusInProgress.
+	members, err := s.partyRepo.GetMembers(resetCtx, partyID)
+	if err == nil {
+		for _, m := range members {
+			//lint:ignore error-swallow best-effort member ready state reset upon fallback
+			_ = s.partyRepo.UpdateMemberReady(resetCtx, partyID, m.CharacterID, false)
+		}
+	}
+	p, err := s.partyRepo.GetParty(resetCtx, partyID)
+	if err == nil {
+		p.Status = party.StatusRecruiting
+		//lint:ignore error-swallow best-effort party status reset upon fallback
+		_ = s.partyRepo.UpdateParty(resetCtx, p)
+	}
 }
 
 // Option configures optional parameters on Service.

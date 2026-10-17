@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -1096,4 +1097,149 @@ func TestStartExpedition_LockedCharacter_ReturnsErrActiveExpeditionExists(t *tes
 	if err != nil {
 		t.Fatalf("unexpected error holding lock: %v", err)
 	}
+}
+
+func TestResetPartyState_LockContention_RetriesAndSucceeds(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-contend-retry"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusInProgress,
+		Name:              "Contended Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+	)
+
+	// Simulate lock held momentarily by another process (50ms)
+	var lockHeld sync.WaitGroup
+	lockHeld.Add(1)
+	go func() {
+		_ = partyRepo.WithPartyLock(ctx, pID, func(lockedCtx context.Context) error {
+			lockHeld.Done()
+			time.Sleep(50 * time.Millisecond)
+			return nil
+		})
+	}()
+	lockHeld.Wait()
+
+	activeStore := dungeon.NewMemoryExpeditionRepository()
+	_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
+		ID:          "exp-contend",
+		CharacterID: "leader-1",
+		DungeonID:   "dungeon-01",
+		PartyID:     pID,
+		Status:      dungeon.StatusExploring,
+		Members: []dungeon.ExpeditionMember{
+			{CharacterID: "leader-1"},
+			{CharacterID: "member-2"},
+		},
+	})
+	svc.Configure(dungeon.WithActiveExpeditionStore(activeStore))
+
+	_, err := svc.Escape(ctx, "leader-1")
+	if err != nil {
+		t.Fatalf("Escape failed: %v", err)
+	}
+
+	p, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Fatalf("expected party to be recruiting, got status %v (err: %v)", p.Status, err)
+	}
+	mems, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range mems {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be false, was true", m.CharacterID)
+		}
+	}
+}
+
+func TestResetPartyState_PersistentLockContention_FallbackEnsuresReset(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-persistent-contend"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusInProgress,
+		Name:              "Persistent Contended Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	activeStore := dungeon.NewMemoryExpeditionRepository()
+	_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
+		ID:          "exp-persist",
+		CharacterID: "leader-1",
+		DungeonID:   "dungeon-01",
+		PartyID:     pID,
+		Status:      dungeon.StatusExploring,
+		Members: []dungeon.ExpeditionMember{
+			{CharacterID: "leader-1"},
+			{CharacterID: "member-2"},
+		},
+	})
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+		dungeon.WithActiveExpeditionStore(activeStore),
+	)
+
+	// Lock is held permanently for 2 seconds (exceeding all 5 retries of resetPartyState)
+	var lockHeld sync.WaitGroup
+	var lockDone sync.WaitGroup
+	lockHeld.Add(1)
+	lockDone.Add(1)
+	go func() {
+		defer lockDone.Done()
+		_ = partyRepo.WithPartyLock(ctx, pID, func(lockedCtx context.Context) error {
+			lockHeld.Done()
+			time.Sleep(2 * time.Second)
+			return nil
+		})
+	}()
+	lockHeld.Wait()
+
+	// Escape runs while lock is permanently occupied; fallback must reset party in DB
+	_, err := svc.Escape(ctx, "leader-1")
+	if err != nil {
+		t.Fatalf("Escape failed: %v", err)
+	}
+
+	p, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Fatalf("expected fallback to reset party status to recruiting, got status %v (err: %v)", p.Status, err)
+	}
+	mems, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range mems {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be false via fallback, was true", m.CharacterID)
+		}
+	}
+	lockDone.Wait()
 }

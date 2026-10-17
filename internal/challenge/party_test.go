@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -947,4 +948,159 @@ func TestStartSession_LockedCharacter_ReturnsErrActiveSessionExists(t *testing.T
 	if err != nil {
 		t.Fatalf("unexpected error holding lock: %v", err)
 	}
+}
+
+func TestResetPartyState_Challenge_LockContention_RetriesAndSucceeds(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-challenge-contend-retry"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusInProgress,
+		Name:              "Contended Challenge Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	activeStore := challenge.NewMemorySessionRepository()
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"leader-1": createPartyTestChar("leader-1", 10, 10, 1, 1),
+		"member-2": createPartyTestChar("member-2", 10, 10, 1, 1),
+	}}
+
+	svc, _ := challenge.NewService(
+		newMockChallengeRepo(),
+		charRepo,
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+		challenge.WithActiveSessionStore(activeStore),
+	)
+
+	// Set active session in progress
+	sessID := "sess-contend"
+	_ = activeStore.SaveActiveSession(ctx, challenge.ChallengeSession{
+		ID:           sessID,
+		CharacterID:  "leader-1",
+		PartyID:      pID,
+		TierID:       "2",
+		CurrentRound: 1,
+		Status:       challenge.StatusActive,
+		Members: []challenge.ChallengeMember{
+			{CharacterID: "leader-1", CharacterCurrentHP: 0},
+			{CharacterID: "member-2", CharacterCurrentHP: 0},
+		},
+	})
+
+	// Simulate lock held momentarily by another process (50ms)
+	var lockHeld sync.WaitGroup
+	lockHeld.Add(1)
+	go func() {
+		_ = partyRepo.WithPartyLock(ctx, pID, func(lockedCtx context.Context) error {
+			lockHeld.Done()
+			time.Sleep(50 * time.Millisecond)
+			return nil
+		})
+	}()
+	lockHeld.Wait()
+
+	// Advance round triggers defeat and resetPartyState
+	_, _, err := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+
+	p, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Fatalf("expected party to be recruiting, got status %v (err: %v)", p.Status, err)
+	}
+	mems, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range mems {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be false, was true", m.CharacterID)
+		}
+	}
+}
+
+func TestResetPartyState_Challenge_PersistentLockContention_FallbackEnsuresReset(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-challenge-persist-contend"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusInProgress,
+		Name:              "Persistent Contended Challenge Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	activeStore := challenge.NewMemorySessionRepository()
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"leader-1": createPartyTestChar("leader-1", 10, 10, 1, 1),
+		"member-2": createPartyTestChar("member-2", 10, 10, 1, 1),
+	}}
+
+	svc, _ := challenge.NewService(
+		newMockChallengeRepo(),
+		charRepo,
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+		challenge.WithActiveSessionStore(activeStore),
+	)
+
+	sessID := "sess-persist"
+	_ = activeStore.SaveActiveSession(ctx, challenge.ChallengeSession{
+		ID:           sessID,
+		CharacterID:  "leader-1",
+		PartyID:      pID,
+		TierID:       "2",
+		CurrentRound: 1,
+		Status:       challenge.StatusActive,
+		Members: []challenge.ChallengeMember{
+			{CharacterID: "leader-1", CharacterCurrentHP: 0},
+			{CharacterID: "member-2", CharacterCurrentHP: 0},
+		},
+	})
+
+	// Lock is held permanently for 2 seconds (exceeding retry attempts)
+	var lockHeld sync.WaitGroup
+	var lockDone sync.WaitGroup
+	lockHeld.Add(1)
+	lockDone.Add(1)
+	go func() {
+		defer lockDone.Done()
+		_ = partyRepo.WithPartyLock(ctx, pID, func(lockedCtx context.Context) error {
+			lockHeld.Done()
+			time.Sleep(2 * time.Second)
+			return nil
+		})
+	}()
+	lockHeld.Wait()
+
+	// AdvanceRound triggers defeat; fallback must guarantee party status and members are reset in DB
+	_, _, err := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+
+	p, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Fatalf("expected fallback to reset party status to recruiting, got status %v (err: %v)", p.Status, err)
+	}
+	mems, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range mems {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be false via fallback, was true", m.CharacterID)
+		}
+	}
+	lockDone.Wait()
 }
