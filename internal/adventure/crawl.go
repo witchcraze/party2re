@@ -452,7 +452,10 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		}
 	}
 
-	mode := NormalizeCrawlMode(s.Mode)
+	mode := s.Mode
+	if mode == "" {
+		mode = CrawlModeNormal
+	}
 
 	return DungeonCrawlResult{
 		AdventureIDs:   make(map[string]string),

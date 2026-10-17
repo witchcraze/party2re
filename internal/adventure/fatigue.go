@@ -1,6 +1,10 @@
 package adventure
 
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 const (
 	CrawlModeNormal = "normal"
@@ -9,17 +13,22 @@ const (
 	CrawlModeHard   = "hard"
 )
 
-// NormalizeCrawlMode normalizes a quest/crawl mode identifier, defaulting to CrawlModeNormal.
-func NormalizeCrawlMode(mode string) string {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case CrawlModeCalm:
-		return CrawlModeCalm
-	case CrawlModeTry:
-		return CrawlModeTry
-	case CrawlModeHard:
-		return CrawlModeHard
+var (
+	ErrInvalidCrawlMode = errors.New("invalid adventure crawl mode")
+)
+
+// ValidateCrawlMode validates that a crawl mode is one of the recognized modes.
+// Empty string defaults to CrawlModeNormal ("normal").
+func ValidateCrawlMode(mode string) (string, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(mode))
+	if trimmed == "" || trimmed == CrawlModeNormal {
+		return CrawlModeNormal, nil
+	}
+	switch trimmed {
+	case CrawlModeCalm, CrawlModeTry, CrawlModeHard:
+		return trimmed, nil
 	default:
-		return CrawlModeNormal
+		return "", fmt.Errorf("%w: %s", ErrInvalidCrawlMode, trimmed)
 	}
 }
 
@@ -30,15 +39,20 @@ func CalculateExitFatigue(round int, mode string) int {
 		round = 0
 	}
 	addTired := round*3 + 1
-	if NormalizeCrawlMode(mode) == CrawlModeCalm {
+	if strings.ToLower(strings.TrimSpace(mode)) == CrawlModeCalm {
 		addTired /= 2
 	}
 	return addTired
 }
 
 // SetMode configures the crawl mode (e.g. "normal", "calm", "try", "hard") on the session.
-func (s *CrawlSession) SetMode(mode string) {
-	s.Mode = NormalizeCrawlMode(mode)
+func (s *CrawlSession) SetMode(mode string) error {
+	validated, err := ValidateCrawlMode(mode)
+	if err != nil {
+		return err
+	}
+	s.Mode = validated
+	return nil
 }
 
 // SetRound sets the current/exit floor (legacy $round) directly and aligns CurrentFloor

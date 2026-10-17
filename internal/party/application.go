@@ -135,6 +135,10 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 	if err := ValidatePartyName(req.Name); err != nil {
 		return PartyDetail{}, err
 	}
+	mode, err := ValidatePartyMode(req.Mode)
+	if err != nil {
+		return PartyDetail{}, err
+	}
 
 	stage, err := s.stages.FindByID(req.StageID)
 	if err != nil {
@@ -206,7 +210,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			Name:              strings.TrimSpace(req.Name),
 			PasswordHash:      passHash,
 			StageID:           stage.ID,
-			Mode:              strings.TrimSpace(req.Mode),
+			Mode:              mode,
 			Speed:             speed,
 			MaxMembers:        maxMembers,
 			MinLevel:          minLevel,

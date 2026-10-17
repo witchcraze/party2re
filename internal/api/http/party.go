@@ -98,7 +98,9 @@ func (h *Handler) handleCreateParty(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(err, party.ErrInvalidPartyName),
 				errors.Is(err, party.ErrInvalidMaxMembers),
 				errors.Is(err, party.ErrAlreadyInParty),
-				errors.Is(err, party.ErrCharacterUnconscious):
+				errors.Is(err, party.ErrCharacterUnconscious),
+				errors.Is(err, party.ErrUnsupportedMode),
+				errors.Is(err, party.ErrInvalidMode):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			case errors.Is(err, party.ErrStageNotFound):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})

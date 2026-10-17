@@ -120,7 +120,11 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			if err != nil {
 				return err
 			}
-			session.SetMode(p.Mode)
+			if p.Mode != "" {
+				if err := session.SetMode(p.Mode); err != nil {
+					return err
+				}
+			}
 
 			if s.blessingProvider != nil {
 				for _, c := range participatingChars {

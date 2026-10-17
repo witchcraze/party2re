@@ -554,6 +554,9 @@ Multiplayer co-op quest rooms allow up to 4 adventurers to form an expedition lo
 - **Stage Access Gates (`$job_lv[$stage]`)**:
   - Each stage specifies a `RequiredJobLevel` based on the character's total job changes (`JobLevel`).
   - Novice stages require JobLevel 0, while advanced stages require up to JobLevel 7.
+- **Mode Settings (`mode`)**:
+  - `normal` (Default; empty string defaults to `normal`): Standard dungeon crawl mode.
+  - Unimplemented modes (`calm`, `try`, `hard`): Explicitly rejected on party creation (`ErrUnsupportedMode`) to prevent running crawls with incomplete reward/unlock rules until milestone unlocks and full reward scaling are reconciled. Unrecognized mode strings return `ErrInvalidMode`.
 - **Idle Lobby Auto-Disband**:
   - Waiting lobbies have a 30-minute idle TTL (`DefaultLobbyTTL = 30 * time.Minute`), matching legacy `quest.cgi` 30-minute auto-disband.
 

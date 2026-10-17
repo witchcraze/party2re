@@ -308,7 +308,11 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	if err != nil {
 		return DungeonCrawlResult{}, err
 	}
-	session.SetMode(req.Mode)
+	if req.Mode != "" {
+		if err := session.SetMode(req.Mode); err != nil {
+			return DungeonCrawlResult{}, err
+		}
+	}
 	session.nowFunc = s.now
 
 	if stage.ID == "stage-26" && s.timer != nil {

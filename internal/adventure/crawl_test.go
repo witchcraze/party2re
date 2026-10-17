@@ -549,6 +549,24 @@ func TestCalculateExitFatigue_NormalAndCalmModes(t *testing.T) {
 	}
 }
 
+func TestValidateCrawlMode(t *testing.T) {
+	for _, valid := range []string{"", "normal", "calm", "try", "hard", "NORMAL", "CALM"} {
+		got, err := adventure.ValidateCrawlMode(valid)
+		if err != nil {
+			t.Errorf("ValidateCrawlMode(%q) unexpected error: %v", valid, err)
+		}
+		if valid == "" && got != adventure.CrawlModeNormal {
+			t.Errorf("ValidateCrawlMode(\"\") = %q, want normal", got)
+		}
+	}
+
+	for _, invalid := range []string{"invalid", "unknown", "calmm"} {
+		if _, err := adventure.ValidateCrawlMode(invalid); err == nil {
+			t.Errorf("ValidateCrawlMode(%q) expected error, got nil", invalid)
+		}
+	}
+}
+
 func TestCrawlSession_RoundAndTravelTransitions(t *testing.T) {
 	stages, monsters := setupTestCatalogs(t)
 	stage, err := stages.FindByID("stage-01")
@@ -571,7 +589,7 @@ func TestCrawlSession_RoundAndTravelTransitions(t *testing.T) {
 			t.Fatalf("normal 0-round result: Round=%d ExitFatigue=%d, want 0 and 1", res.Round, res.ExitFatigue)
 		}
 
-		session.SetMode(adventure.CrawlModeCalm)
+		_ = session.SetMode(adventure.CrawlModeCalm)
 		calmRes := session.Result()
 		if calmRes.Round != 0 || calmRes.ExitFatigue != 0 {
 			t.Fatalf("calm 0-round result: Round=%d ExitFatigue=%d, want 0 and 0", calmRes.Round, calmRes.ExitFatigue)

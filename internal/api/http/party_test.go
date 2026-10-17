@@ -171,6 +171,41 @@ func TestPartyHTTPHandlers(t *testing.T) {
 		t.Fatalf("POST /parties returned %d (body: %s), want 201", w.Code, w.Body.String())
 	}
 
+	// 3b. POST /parties (unsupported mode -> 400 Bad Request)
+	partySvc.err = party.ErrUnsupportedMode
+	body, _ = json.Marshal(map[string]any{
+		"character_id": "c1",
+		"name":         "CalmParty",
+		"stage_id":     "forest",
+		"mode":         "calm",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/parties", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("POST /parties unsupported mode returned %d, want 400", w.Code)
+	}
+
+	// 3c. POST /parties (invalid mode -> 400 Bad Request)
+	partySvc.err = party.ErrInvalidMode
+	body, _ = json.Marshal(map[string]any{
+		"character_id": "c1",
+		"name":         "InvalidModeParty",
+		"stage_id":     "forest",
+		"mode":         "not_valid",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/parties", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("POST /parties invalid mode returned %d, want 400", w.Code)
+	}
+	partySvc.err = nil
+
 	// 4. POST /parties/party-1/join
 	body, _ = json.Marshal(map[string]any{
 		"character_id": "c1",

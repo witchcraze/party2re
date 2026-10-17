@@ -49,6 +49,8 @@ var (
 	ErrNeedJoinNotMet         = errors.New("character does not meet party join condition")
 	ErrStageNotFound          = errors.New("adventure stage not found")
 	ErrForbidden              = errors.New("forbidden: character does not belong to player")
+	ErrUnsupportedMode        = errors.New("adventure mode is unsupported")
+	ErrInvalidMode            = errors.New("invalid adventure mode")
 )
 
 type Party struct {
@@ -169,6 +171,23 @@ func ValidatePartyName(name string) error {
 		return ErrInvalidPartyName
 	}
 	return nil
+}
+
+// ValidatePartyMode validates the requested party expedition mode.
+// Only "normal" (and empty string defaulting to "normal") is currently supported.
+// Unimplemented modes ("calm", "try", "hard") return ErrUnsupportedMode, while
+// unrecognized mode strings return ErrInvalidMode.
+func ValidatePartyMode(mode string) (string, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(mode))
+	if trimmed == "" || trimmed == adventure.CrawlModeNormal {
+		return adventure.CrawlModeNormal, nil
+	}
+	switch trimmed {
+	case adventure.CrawlModeCalm, adventure.CrawlModeTry, adventure.CrawlModeHard:
+		return "", fmt.Errorf("%w: %s", ErrUnsupportedMode, trimmed)
+	default:
+		return "", fmt.Errorf("%w: %s", ErrInvalidMode, trimmed)
+	}
 }
 
 // ValidateNeedJoin validates participation condition constraints (quest.cgi).
