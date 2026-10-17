@@ -36,6 +36,9 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 	} else {
 		err = start(ctx)
 	}
+	if err != nil && result != nil {
+		return s.reconcileStart(ctx, result, err)
+	}
 	return result, err
 }
 

@@ -18,6 +18,9 @@ const (
 //go:embed lua/challenge_round.lua
 var challengeRoundLua string
 
+//go:embed lua/discard_session.lua
+var discardSessionLua string
+
 type valkeyConfig struct {
 	ttl time.Duration
 }
@@ -37,10 +40,11 @@ func WithSessionTTL(ttl time.Duration) ValkeyOption {
 // ValkeySessionRepository manages active challenge session buffers in Valkey Master
 // using atomic Lua scripts and sliding TTL eviction (Candidate D).
 type ValkeySessionRepository struct {
-	client      valkeygo.Client
-	roundScript *valkeygo.Lua
-	ttl         time.Duration
-	fallback    *MemorySessionRepository
+	client        valkeygo.Client
+	roundScript   *valkeygo.Lua
+	discardScript *valkeygo.Lua
+	ttl           time.Duration
+	fallback      *MemorySessionRepository
 }
 
 // NewValkeySessionRepository creates a new Valkey-backed challenge session store.
@@ -54,10 +58,11 @@ func NewValkeySessionRepository(client valkeygo.Client, opts ...ValkeyOption) (*
 	}
 
 	repo := &ValkeySessionRepository{
-		client:      client,
-		roundScript: valkeygo.NewLuaScript(challengeRoundLua),
-		ttl:         cfg.ttl,
-		fallback:    NewMemorySessionRepository(opts...),
+		client:        client,
+		roundScript:   valkeygo.NewLuaScript(challengeRoundLua),
+		discardScript: valkeygo.NewLuaScript(discardSessionLua),
+		ttl:           cfg.ttl,
+		fallback:      NewMemorySessionRepository(opts...),
 	}
 
 	return repo, nil
@@ -219,11 +224,6 @@ func (r *ValkeySessionRepository) DeleteActiveSession(ctx context.Context, chara
 	if run != nil && run.CharacterID != characterID {
 		return ErrForbidden
 	}
-	if run != nil {
-		if err := r.deleteMemberIndex(ctx, *run); err != nil {
-			return err
-		}
-	}
 
 	sKey := r.sessionKey(characterID)
 	rKey := r.rewardsKey(characterID)
@@ -236,6 +236,35 @@ func (r *ValkeySessionRepository) DeleteActiveSession(ctx context.Context, chara
 		if err := cmd.Error(); err != nil {
 			return err
 		}
+	}
+
+	if run != nil {
+		if err := r.deleteMemberIndex(ctx, *run); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DiscardActiveSession atomically deletes the active challenge session and rewards keys
+// if and only if the session_id matches session.ID. It also cleans up any member references
+// pointing specifically to session.ID, ensuring replacement sessions are never corrupted.
+func (r *ValkeySessionRepository) DiscardActiveSession(ctx context.Context, session ChallengeSession) error {
+	if r.client == nil {
+		return r.fallback.DiscardActiveSession(ctx, session)
+	}
+
+	sKey := r.sessionKey(session.CharacterID)
+	rKey := r.rewardsKey(session.CharacterID)
+
+	res := r.discardScript.Exec(ctx, r.client, []string{sKey, rKey}, []string{session.ID})
+	if err := res.Error(); err != nil {
+		return err
+	}
+
+	if err := r.deleteMemberIndex(ctx, session); err != nil {
+		return err
 	}
 
 	return nil

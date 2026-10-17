@@ -497,3 +497,104 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 		t.Fatalf("Valkey buffer was NOT purged after successful commit: %#v", valkeySessAfterSuccess)
 	}
 }
+
+func TestValkeySessionRepository_DiscardActiveSession(t *testing.T) {
+	client := openTestValkey(t)
+	defer client.Close()
+
+	repo, err := challenge.NewValkeySessionRepository(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	leadID := "discard-lead-01"
+	m1ID := "discard-m1-01"
+	m2ID := "discard-m2-01"
+
+	cleanupChallengeValkey(t, client, leadID, m1ID, m2ID)
+	defer cleanupChallengeValkey(t, client, leadID, m1ID, m2ID)
+
+	sess := sampleChallengeSession("sess-discard-01", leadID, "0")
+	sess.Members = []challenge.ChallengeMember{
+		{CharacterID: leadID, CharacterName: "Leader"},
+		{CharacterID: m1ID, CharacterName: "Member 1"},
+		{CharacterID: m2ID, CharacterName: "Member 2"},
+	}
+
+	if err := repo.SaveActiveSession(ctx, sess); err != nil {
+		t.Fatalf("SaveActiveSession failed: %v", err)
+	}
+
+	// Verify discovery works for leader and members
+	for _, id := range []string{leadID, m1ID, m2ID} {
+		active, err := repo.GetActiveSession(ctx, id)
+		if err != nil || active == nil || active.ID != sess.ID {
+			t.Fatalf("active session not found for %s: %+v %v", id, active, err)
+		}
+	}
+
+	// DiscardActiveSession purges the session and its member index
+	if err := repo.DiscardActiveSession(ctx, sess); err != nil {
+		t.Fatalf("DiscardActiveSession failed: %v", err)
+	}
+
+	for _, id := range []string{leadID, m1ID, m2ID} {
+		active, err := repo.GetActiveSession(ctx, id)
+		if err != nil || active != nil {
+			t.Fatalf("expected nil active session for %s after discard, got %+v %v", id, active, err)
+		}
+	}
+}
+
+func TestValkeySessionRepository_DiscardActiveSession_ReplacementPreserved(t *testing.T) {
+	client := openTestValkey(t)
+	defer client.Close()
+
+	repo, err := challenge.NewValkeySessionRepository(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	leadID := "discard-race-lead"
+	m1ID := "discard-race-m1"
+	m2ID := "discard-race-m2"
+
+	cleanupChallengeValkey(t, client, leadID, m1ID, m2ID)
+	defer cleanupChallengeValkey(t, client, leadID, m1ID, m2ID)
+
+	// 1. Initial session
+	sess1 := sampleChallengeSession("sess-old-01", leadID, "0")
+	sess1.Members = []challenge.ChallengeMember{
+		{CharacterID: leadID, CharacterName: "Leader"},
+		{CharacterID: m1ID, CharacterName: "Member 1"},
+	}
+	if err := repo.SaveActiveSession(ctx, sess1); err != nil {
+		t.Fatalf("SaveActiveSession sess1 failed: %v", err)
+	}
+
+	// 2. Replacement session supersedes sess1
+	sess2 := sampleChallengeSession("sess-replacement-02", leadID, "0")
+	sess2.Members = []challenge.ChallengeMember{
+		{CharacterID: leadID, CharacterName: "Leader"},
+		{CharacterID: m1ID, CharacterName: "Member 1"},
+		{CharacterID: m2ID, CharacterName: "Member 2"},
+	}
+	if err := repo.SaveActiveSession(ctx, sess2); err != nil {
+		t.Fatalf("SaveActiveSession sess2 failed: %v", err)
+	}
+
+	// 3. Discard sess1 (e.g. late abort cleanup from sess1)
+	if err := repo.DiscardActiveSession(ctx, sess1); err != nil {
+		t.Fatalf("DiscardActiveSession for sess1 failed: %v", err)
+	}
+
+	// 4. Assert replacement session and ALL its members are completely preserved!
+	for _, id := range []string{leadID, m1ID, m2ID} {
+		active, err := repo.GetActiveSession(ctx, id)
+		if err != nil || active == nil || active.ID != sess2.ID {
+			t.Fatalf("replacement session for %s was destroyed or lost: %+v %v", id, active, err)
+		}
+	}
+}

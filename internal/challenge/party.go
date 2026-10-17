@@ -37,6 +37,9 @@ func (s *Service) StartPartySession(
 		session, err = s.startRoster(ctx, leaderCharID, ids, tierID, partyName, partyColor, partyID)
 		return err
 	})
+	if err != nil && session != nil {
+		return s.reconcileStart(ctx, session, err)
+	}
 	return session, err
 }
 
@@ -172,12 +175,20 @@ func (s *Service) startRoster(
 		UpdatedAt:          now,
 	}
 
-	if err := s.activeStore.SaveActiveSession(ctx, session); err != nil {
-		return nil, err
-	}
-
+	// The SQL start row precedes Valkey publication: an insert failure then
+	// leaves nothing published, and the row is the commit evidence used by
+	// reconcileStart when the enclosing transaction fails afterwards.
 	if err := s.repo.SaveSession(ctx, session); err != nil {
 		return nil, fmt.Errorf("saving challenge session: %w", err)
+	}
+
+	if err := s.activeStore.SaveActiveSession(ctx, session); err != nil {
+		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startReconcileTimeout)
+		defer cancel()
+		if discardErr := s.discardPublished(dctx, &session); discardErr != nil {
+			return nil, errors.Join(ErrStartOutcomeUnknown, err, discardErr)
+		}
+		return nil, err
 	}
 
 	return &session, nil

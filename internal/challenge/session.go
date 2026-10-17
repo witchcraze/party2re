@@ -26,6 +26,9 @@ func (s *Service) StartSession(ctx context.Context, characterID string, tierID s
 	} else {
 		err = start(ctx)
 	}
+	if err != nil && result != nil {
+		return s.reconcileStart(ctx, result, err)
+	}
 	return result, err
 }
 

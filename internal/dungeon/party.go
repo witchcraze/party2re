@@ -41,6 +41,9 @@ func (s *Service) StartPartyExpedition(
 		exp, err = s.startRoster(ctx, leaderCharID, ids, dungeonID, resolvedParty)
 		return err
 	})
+	if err != nil && exp != nil {
+		return s.reconcileStart(ctx, exp, err)
+	}
 	return exp, err
 }
 
