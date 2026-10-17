@@ -92,15 +92,43 @@ func (m *MemorySessionRepository) DeleteActiveSession(ctx context.Context, chara
 		}
 	}
 
-	if run, ok := m.sessions[characterID]; ok {
+	run, ok := m.sessions[characterID]
+	delete(m.sessions, characterID)
+	delete(m.expirations, characterID)
+
+	if ok {
 		for _, member := range run.Members {
 			if m.members[member.CharacterID] == characterID {
 				delete(m.members, member.CharacterID)
 			}
 		}
 	}
-	delete(m.sessions, characterID)
-	delete(m.expirations, characterID)
+	return nil
+}
+
+// DiscardActiveSession atomically deletes the active challenge session if and only if
+// the ID matches session.ID, preserving any replacement session and its member mappings.
+func (m *MemorySessionRepository) DiscardActiveSession(ctx context.Context, session ChallengeSession) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	current, ok := m.sessions[session.CharacterID]
+	if ok && current.ID == session.ID {
+		delete(m.sessions, session.CharacterID)
+		delete(m.expirations, session.CharacterID)
+	}
+
+	for _, member := range session.Members {
+		if member.CharacterID == session.CharacterID {
+			continue
+		}
+		if leader, ok := m.members[member.CharacterID]; ok && leader == session.CharacterID {
+			if replacement, exists := m.sessions[session.CharacterID]; exists && replacement.ID != session.ID && replacement.ContainsCharacter(member.CharacterID) {
+				continue
+			}
+			delete(m.members, member.CharacterID)
+		}
+	}
 	return nil
 }
 

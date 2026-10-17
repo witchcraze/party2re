@@ -168,6 +168,7 @@ type ActiveSessionStore interface {
 	GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error)
 	SaveActiveSession(ctx context.Context, session ChallengeSession) error
 	DeleteActiveSession(ctx context.Context, characterID string) error
+	DiscardActiveSession(ctx context.Context, session ChallengeSession) error
 	AdvanceRound(ctx context.Context, characterID string, params AdvanceRoundParams) (AdvanceRoundOutcome, error)
 }
 

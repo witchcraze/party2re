@@ -195,11 +195,12 @@ func (m *mockChallengeRepo) ListHallOfFame(ctx context.Context) ([]challenge.Hal
 }
 
 type mockActiveStore struct {
-	underlying             challenge.ActiveSessionStore
-	getActiveSessionErr    error
-	saveActiveSessionErr   error
-	deleteActiveSessionErr error
-	advanceRoundErr        error
+	underlying              challenge.ActiveSessionStore
+	getActiveSessionErr     error
+	saveActiveSessionErr    error
+	deleteActiveSessionErr  error
+	discardActiveSessionErr error
+	advanceRoundErr         error
 }
 
 func newMockActiveStore(underlying challenge.ActiveSessionStore) *mockActiveStore {
@@ -228,6 +229,16 @@ func (m *mockActiveStore) DeleteActiveSession(ctx context.Context, characterID s
 		return m.deleteActiveSessionErr
 	}
 	return m.underlying.DeleteActiveSession(ctx, characterID)
+}
+
+func (m *mockActiveStore) DiscardActiveSession(ctx context.Context, session challenge.ChallengeSession) error {
+	if m.discardActiveSessionErr != nil {
+		return m.discardActiveSessionErr
+	}
+	if m.deleteActiveSessionErr != nil {
+		return m.deleteActiveSessionErr
+	}
+	return m.underlying.DiscardActiveSession(ctx, session)
 }
 
 func (m *mockActiveStore) AdvanceRound(ctx context.Context, characterID string, params challenge.AdvanceRoundParams) (challenge.AdvanceRoundOutcome, error) {

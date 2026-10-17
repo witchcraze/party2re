@@ -43,7 +43,10 @@ func (s *Service) reconcileStart(ctx context.Context, session *ChallengeSession,
 	case err == nil && stored != nil:
 		return session, nil
 	case errors.Is(err, ErrSessionNotFound):
-		return nil, errors.Join(admissionErr, s.discardPublished(rctx, session))
+		if discardErr := s.discardPublished(rctx, session); discardErr != nil {
+			return nil, errors.Join(ErrStartOutcomeUnknown, admissionErr, discardErr)
+		}
+		return nil, admissionErr
 	default:
 		return nil, errors.Join(ErrStartOutcomeUnknown, admissionErr, err)
 	}
@@ -52,14 +55,7 @@ func (s *Service) reconcileStart(ctx context.Context, session *ChallengeSession,
 // discardPublished removes the published session only while it is still the
 // leader's current run, so a replacement enrollment is never deleted.
 func (s *Service) discardPublished(ctx context.Context, session *ChallengeSession) error {
-	current, err := s.activeStore.GetActiveSession(ctx, session.CharacterID)
-	if err != nil {
-		return err
-	}
-	if current == nil || current.ID != session.ID {
-		return nil
-	}
-	return s.activeStore.DeleteActiveSession(ctx, session.CharacterID)
+	return s.activeStore.DiscardActiveSession(ctx, *session)
 }
 
 // ContainsCharacter authorizes the leader or an enrolled participant.

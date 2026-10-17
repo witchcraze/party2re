@@ -95,14 +95,14 @@ failed transaction and detached from request cancellation:
 |---|---|---|
 | Dungeon (no SQL writes) | Leader's canonical buffer still holds the run ID | Success; the run is the start result |
 | Challenge | `challenge_sessions` row for the run ID exists | Success (commit acknowledgement was lost) |
-| Challenge | Row confirmed absent (`ErrSessionNotFound`) | Aborted: remove the run and its member references only while it is still the leader's current run, then return the original error |
+| Challenge | Row confirmed absent (`ErrSessionNotFound`) | Aborted: remove the run and its member references atomically by run ID; return the original error on clean removal, or `ErrStartOutcomeUnknown` wrapping both causes if cleanup fails |
 | Either | Evidence unreadable or run no longer verifiable | Preserve all state; return `ErrStartOutcomeUnknown` wrapping the cause |
 
 The Challenge start inserts its SQL row before publishing, so an insert failure
 never publishes, and a failed publication write discards its partial run.
-A failed abort cleanup stays visible in the returned error and leaves the run
-discoverable; nothing deletes character keys blindly. HTTP maps an unknown outcome
-to `500` with only the sentinel message. Clients observe the active run through the
+A failed abort cleanup returns `ErrStartOutcomeUnknown` wrapping both the admission
+and cleanup errors, and leaves the run discoverable; nothing deletes character keys blindly.
+HTTP maps an unknown outcome to `500` with only the sentinel message. Clients observe the active run through the
 owned readers and never replay the POST. Limitation: an absent row is treated as an
 abort, so a commit still in flight server-side when it is read is not excluded;
 excluding it needs durable start receipts like the Adventure contract below.

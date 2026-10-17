@@ -127,7 +127,7 @@ func TestStartConfirmedAbortPreservesReplacementRun(t *testing.T) {
 		return postStartFailure{err: errCommit, rollback: func() {
 			fx.abort()
 			replacement := challenge.ChallengeSession{ID: "replacement", CharacterID: "lead", Status: challenge.StatusActive,
-				Members: []challenge.ChallengeMember{{CharacterID: "lead"}}}
+				Members: []challenge.ChallengeMember{{CharacterID: "lead"}, {CharacterID: "c2"}}}
 			if err := fx.memory.DeleteActiveSession(context.Background(), "lead"); err != nil {
 				t.Fatal(err)
 			}
@@ -139,8 +139,10 @@ func TestStartConfirmedAbortPreservesReplacementRun(t *testing.T) {
 	if _, err := startBoth(svc); !errors.Is(err, errCommit) {
 		t.Fatalf("expected original failure: %v", err)
 	}
-	if active, err := fx.memory.GetActiveSession(context.Background(), "lead"); err != nil || active == nil || active.ID != "replacement" {
-		t.Fatalf("replacement run must be preserved: %+v %v", active, err)
+	for _, id := range []string{"lead", "c2"} {
+		if active, err := fx.memory.GetActiveSession(context.Background(), id); err != nil || active == nil || active.ID != "replacement" {
+			t.Fatalf("replacement run for %s must be preserved: %+v %v", id, active, err)
+		}
 	}
 }
 
@@ -159,17 +161,17 @@ func TestStartUnresolvedCommitKeepsRunAndReportsUnknown(t *testing.T) {
 	}
 }
 
-func TestStartConfirmedAbortCleanupFailureStaysVisible(t *testing.T) {
+func TestStartConfirmedAbortCleanupFailureReportsUnknownAndPreservesEvidence(t *testing.T) {
 	cleanup := errors.New("valkey delete failed")
 	svc, fx := newOutcomeService(t, func(fx *outcomeFixture) challenge.Admission {
 		return postStartFailure{err: errCommit, rollback: func() {
 			fx.abort()
-			fx.store.deleteActiveSessionErr = cleanup
+			fx.store.discardActiveSessionErr = cleanup
 		}}
 	})
 	_, err := startBoth(svc)
-	if !errors.Is(err, errCommit) || !errors.Is(err, cleanup) {
-		t.Fatalf("both the admission and cleanup failures must be visible: %v", err)
+	if !errors.Is(err, challenge.ErrStartOutcomeUnknown) || !errors.Is(err, errCommit) || !errors.Is(err, cleanup) {
+		t.Fatalf("admission failure, cleanup failure, and unknown outcome must all be visible: %v", err)
 	}
 	if active, _ := fx.memory.GetActiveSession(context.Background(), "lead"); active == nil {
 		t.Fatal("failed cleanup must leave the run discoverable, not hidden")
