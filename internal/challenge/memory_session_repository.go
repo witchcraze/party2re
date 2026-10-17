@@ -13,6 +13,7 @@ type MemorySessionRepository struct {
 	sessions    map[string]ChallengeSession
 	expirations map[string]time.Time
 	ttl         time.Duration
+	members     map[string]string
 }
 
 // NewMemorySessionRepository creates a new thread-safe in-memory store.
@@ -20,6 +21,7 @@ func NewMemorySessionRepository(opts ...ValkeyOption) *MemorySessionRepository {
 	repo := &MemorySessionRepository{
 		sessions:    make(map[string]ChallengeSession),
 		expirations: make(map[string]time.Time),
+		members:     make(map[string]string),
 		ttl:         DefaultSessionTTL,
 	}
 	for _, opt := range opts {
@@ -34,15 +36,26 @@ func (m *MemorySessionRepository) GetActiveSession(ctx context.Context, characte
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	s, ok := m.sessions[characterID]
+	if expires, ok := m.expirations[characterID]; ok && time.Now().After(expires) {
+		delete(m.sessions, characterID)
+		delete(m.expirations, characterID)
+	}
+	owner := characterID
+	if leader, ok := m.members[characterID]; ok && m.sessions[characterID].ID == "" {
+		owner = leader
+	}
+	s, ok := m.sessions[owner]
+	if ok && !s.ContainsCharacter(characterID) {
+		return nil, nil
+	}
 	if !ok {
 		return nil, nil
 	}
 
-	expTime, hasExp := m.expirations[characterID]
+	expTime, hasExp := m.expirations[owner]
 	if hasExp && time.Now().UTC().After(expTime) {
-		delete(m.sessions, characterID)
-		delete(m.expirations, characterID)
+		delete(m.sessions, owner)
+		delete(m.expirations, owner)
 		return nil, nil
 	}
 
@@ -60,6 +73,11 @@ func (m *MemorySessionRepository) SaveActiveSession(ctx context.Context, session
 	cp.AccumulatedItems = append([]string(nil), session.AccumulatedItems...)
 	cp.Members = append([]ChallengeMember(nil), session.Members...)
 	m.sessions[session.CharacterID] = cp
+	for _, member := range session.Members {
+		if member.CharacterID != session.CharacterID {
+			m.members[member.CharacterID] = session.CharacterID
+		}
+	}
 	m.expirations[session.CharacterID] = time.Now().UTC().Add(m.ttl)
 	return nil
 }
@@ -68,6 +86,19 @@ func (m *MemorySessionRepository) DeleteActiveSession(ctx context.Context, chara
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if leader, ok := m.members[characterID]; ok && leader != characterID && m.sessions[characterID].ID == "" {
+		if run, exists := m.sessions[leader]; exists && run.ContainsCharacter(characterID) && time.Now().Before(m.expirations[leader]) {
+			return ErrForbidden
+		}
+	}
+
+	if run, ok := m.sessions[characterID]; ok {
+		for _, member := range run.Members {
+			if m.members[member.CharacterID] == characterID {
+				delete(m.members, member.CharacterID)
+			}
+		}
+	}
 	delete(m.sessions, characterID)
 	delete(m.expirations, characterID)
 	return nil

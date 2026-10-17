@@ -171,6 +171,20 @@ hashes (including JSON item arrays), not in hypothetical `active_nodes` or
 `turn_history` ZSets. Matchmaking/invitation patterns need an actual feature
 requirement before adding keys.
 
+Dungeon and Challenge additionally own
+`party2:<dungeon|challenge>:{char:<member_id>}:member` (String, JSON pair of
+leader character ID and run ID). These references have **no TTL**: a follower
+index must not expire while only the leader's canonical buffer is renewed.
+The canonical state/rewards retain their existing 7200s sliding TTL. Reads
+follow a reference once and verify both run ID and saved membership; a missing,
+replaced or unrelated canonical run never grants access. Reads perform no
+cleanup or renewal. Start writes references before publishing canonical state;
+explicit owner cleanup conditionally deletes only references matching that run,
+using each member key's own hash slot. A later enrollment can replace a stale
+reference. Natural run expiry or a failed start may leave at most one inert
+reference per character; it carries no rewards and never establishes activity
+without a matching live run. There is no cross-slot atomicity claim.
+
 ## Lua Script Registry
 
 The following registry describes current scripts. Exact arguments and error
@@ -185,6 +199,7 @@ a claim that every service operation consists of one atomic script.
 | `party_update_party` | `internal/party/valkey_repository.go` (`updatePartyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `lobbiesIndexKey` | `ARGV[1]`: Party JSON<br>`ARGV[2]`: Lobby TTL<br>`ARGV[3]`: Status (`"recruiting"`, `"disbanded"`, `"completed"`)<br>`ARGV[4]`: Party ID | Atomically updates party configuration (e.g. stage, speed, max members) and removes the party from the recruiting index set (`ZREM`) if transitioned to `disbanded` or `completed`. |
 | `dungeon_step` | `internal/dungeon/lua/dungeon_step.lua` (`dungeonStepLua`) | `KEYS[1]`: `party2:dungeon:{char:<id>}:state`<br>`KEYS[2]`: `party2:dungeon:{char:<id>}:rewards` | `ARGV[1]`: Expected Expedition ID<br>`ARGV[2]`: Floor<br>`ARGV[3]`: Pos X<br>`ARGV[4]`: Pos Y<br>`ARGV[5]`: HP Delta<br>`ARGV[6]`: Turns Delta<br>`ARGV[7]`: Exp Delta<br>`ARGV[8]`: Gold Delta<br>`ARGV[9]`: Medals Delta<br>`ARGV[10]`: Item ID<br>`ARGV[11]`: Timestamp<br>`ARGV[12]`: TTL (7200s) | Atomically advances exploration coordinates, updates HP/turns budget, and buffers provisional room loot without touching MariaDB during active run. |
 | `challenge_advance_round` | `internal/challenge/lua/challenge_round.lua` (`challengeRoundLua`) | `KEYS[1]`: `party2:challenge:{char:<id>}:session`<br>`KEYS[2]`: `party2:challenge:{char:<id>}:rewards` | `ARGV[1]`: Expected Session ID<br>`ARGV[2]`: Surviving HP<br>`ARGV[3]`: Exp Delta<br>`ARGV[4]`: Gold Delta<br>`ARGV[5]`: Item ID<br>`ARGV[6]`: Timestamp<br>`ARGV[7]`: TTL (7200s) | Atomically advances endurance challenge wave round, persists surviving HP, and accumulates wave rewards without touching MariaDB during active run. |
+| `combat_release_member` | `internal/{dungeon,challenge}/lua/release_member.lua` | `KEYS[1]`: owning feature's member reference | `ARGV[1]`: expected encoded leader/run pair | Deletes only the matching reference; old cleanup preserves a replacement enrollment. Each invocation operates on one member's hash slot. |
 | `casino_release_room_lock` | `internal/casino/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (`party2:casino:lock:room:<room_id>`) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks. |
 | `pvp_release_room_lock` | `internal/pvp/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (`party2:pvp:lock:room:<room_id>`) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks (Issue #652). |
 | `gvg_release_room_lock` | `internal/gvg/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (`party2:gvg:lock:room:<room_id>`) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks (Issue #652). |

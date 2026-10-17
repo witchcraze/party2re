@@ -1,0 +1,65 @@
+package dungeon
+
+import (
+	"context"
+	_ "embed"
+	"fmt"
+	valkey "github.com/valkey-io/valkey-go"
+)
+
+// References have an owner cleanup lifecycle and never expire before a renewed run.
+// shortcut: expired runs can leave one inert reference per member; add owner cleanup if storage use warrants it.
+func (r *ValkeyExpeditionRepository) memberKey(id string) string {
+	return fmt.Sprintf("party2:dungeon:{char:%s}:member", id)
+}
+
+func (r *ValkeyExpeditionRepository) getMemberRun(ctx context.Context, actor string) (*ActiveExpedition, error) {
+	value, err := r.client.Do(ctx, r.client.B().Get().Key(r.memberKey(actor)).Build()).ToString()
+	if valkey.IsValkeyNil(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	ids := DecodeItems(value)
+	if len(ids) != 2 || ids[0] == actor {
+		return nil, fmt.Errorf("invalid dungeon member reference")
+	}
+	run, err := r.getActiveExpedition(ctx, ids[0], false)
+	if err != nil {
+		return nil, err
+	}
+	if run == nil || run.ID != ids[1] || !run.ContainsCharacter(actor) {
+		return nil, nil
+	}
+	return run, nil
+}
+
+func (r *ValkeyExpeditionRepository) saveMemberIndex(ctx context.Context, run ActiveExpedition) error {
+	for _, m := range run.Members {
+		if m.CharacterID == run.CharacterID {
+			continue
+		}
+		value := EncodeItems([]string{run.CharacterID, run.ID})
+		if err := r.client.Do(ctx, r.client.B().Set().Key(r.memberKey(m.CharacterID)).Value(value).Build()).Error(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+//go:embed lua/release_member.lua
+var releaseMemberLua string
+var releaseMemberScript = valkey.NewLuaScript(releaseMemberLua)
+
+func (r *ValkeyExpeditionRepository) deleteMemberIndex(ctx context.Context, run ActiveExpedition) error {
+	for _, m := range run.Members {
+		if m.CharacterID == run.CharacterID {
+			continue
+		}
+		if err := releaseMemberScript.Exec(ctx, r.client, []string{r.memberKey(m.CharacterID)}, []string{EncodeItems([]string{run.CharacterID, run.ID})}).Error(); err != nil {
+			return err
+		}
+	}
+	return nil
+}

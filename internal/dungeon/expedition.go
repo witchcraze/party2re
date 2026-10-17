@@ -13,11 +13,30 @@ func (s *Service) GetActiveExpedition(ctx context.Context, characterID string) (
 	if characterID == "" {
 		return nil, ErrCharacterNotFound
 	}
-	return s.activeStore.GetActiveExpedition(ctx, characterID)
+	run, err := s.activeStore.GetActiveExpedition(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	if run != nil && !run.ContainsCharacter(characterID) {
+		return nil, ErrForbidden
+	}
+	return run, nil
 }
 
 func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID string) (*ActiveExpedition, error) {
-	return s.StartPartyExpedition(ctx, characterID, []string{characterID}, dungeonID, "")
+	var result *ActiveExpedition
+	start := func(ctx context.Context) error {
+		var err error
+		result, err = s.startRoster(ctx, characterID, []string{characterID}, dungeonID, "")
+		return err
+	}
+	var err error
+	if s.admission != nil {
+		err = s.admission.AdmitSolo(ctx, characterID, start)
+	} else {
+		err = start(ctx)
+	}
+	return result, err
 }
 
 func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (ExpeditionStepResult, error) {
@@ -31,6 +50,9 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	}
 	if exp == nil || exp.Status != StatusExploring {
 		return ExpeditionStepResult{}, ErrNoActiveExpedition
+	}
+	if exp.CharacterID != characterID {
+		return ExpeditionStepResult{}, ErrForbidden
 	}
 
 	dungeon, ok := s.dungeonMap[exp.DungeonID]

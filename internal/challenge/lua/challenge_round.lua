@@ -72,5 +72,9 @@ return {
     new_items_str,
     now_timestamp,
     tier_id,
-    created_at
+    created_at,
+    redis.call('HGET', session_key, 'party_id') or '',
+    redis.call('HGET', session_key, 'party_name') or '',
+    redis.call('HGET', session_key, 'party_color') or '',
+    redis.call('HGET', session_key, 'members') or '[]'
 }

@@ -96,6 +96,10 @@ func mapLuaError(err error) error {
 }
 
 func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error) {
+	return r.getActiveExpedition(ctx, characterID, true)
+}
+
+func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, characterID string, resolveMember bool) (*ActiveExpedition, error) {
 	if r.client == nil {
 		return r.fallback.GetActiveExpedition(ctx, characterID)
 	}
@@ -116,7 +120,10 @@ func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 		return nil, err
 	}
 	if len(sMap) == 0 {
-		return nil, nil
+		if !resolveMember {
+			return nil, nil
+		}
+		return r.getMemberRun(ctx, characterID)
 	}
 
 	rMap, err := cmds[1].AsStrMap()
@@ -172,6 +179,9 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 		return r.fallback.SaveActiveExpedition(ctx, exp)
 	}
 
+	if err := r.saveMemberIndex(ctx, exp); err != nil {
+		return err
+	}
 	sKey := r.stateKey(exp.CharacterID)
 	rKey := r.rewardsKey(exp.CharacterID)
 
@@ -220,13 +230,32 @@ func (r *ValkeyExpeditionRepository) DeleteActiveExpedition(ctx context.Context,
 		return r.fallback.DeleteActiveExpedition(ctx, characterID)
 	}
 
+	run, err := r.GetActiveExpedition(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	if run != nil && run.CharacterID != characterID {
+		return ErrForbidden
+	}
+	if run != nil {
+		if err := r.deleteMemberIndex(ctx, *run); err != nil {
+			return err
+		}
+	}
+
 	sKey := r.stateKey(characterID)
 	rKey := r.rewardsKey(characterID)
 
-	_ = r.client.DoMulti(ctx,
+	cmds := r.client.DoMulti(ctx,
 		r.client.B().Del().Key(sKey).Build(),
 		r.client.B().Del().Key(rKey).Build(),
 	)
+
+	for _, cmd := range cmds {
+		if err := cmd.Error(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -259,7 +288,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 13 {
+	if err != nil || len(vals) < 16 {
 		return StepOutcome{}, fmt.Errorf("unexpected lua step response format: %v", err)
 	}
 
@@ -278,6 +307,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	startedAt, _ := time.Parse(time.RFC3339Nano, vals[12])
 
 	exp := ActiveExpedition{
+		PartyID: vals[13], PartyName: vals[14], Members: DecodeMembers(vals[15]),
 		ID:                params.ExpectedExpeditionID,
 		CharacterID:       characterID,
 		DungeonID:         dungeonID,

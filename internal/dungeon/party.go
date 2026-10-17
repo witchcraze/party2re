@@ -32,6 +32,25 @@ func (s *Service) StartPartyExpedition(
 	dungeonID string,
 	partyID string,
 ) (*ActiveExpedition, error) {
+	if s.admission == nil {
+		return nil, ErrPartyUnavailable
+	}
+	var exp *ActiveExpedition
+	err := s.admission.AdmitParty(ctx, leaderCharID, partyID, memberIDs, func(ctx context.Context, resolvedParty string, ids []string) error {
+		var err error
+		exp, err = s.startRoster(ctx, leaderCharID, ids, dungeonID, resolvedParty)
+		return err
+	})
+	return exp, err
+}
+
+func (s *Service) startRoster(
+	ctx context.Context,
+	leaderCharID string,
+	memberIDs []string,
+	dungeonID string,
+	partyID string,
+) (*ActiveExpedition, error) {
 	if strings.TrimSpace(leaderCharID) == "" {
 		return nil, ErrCharacterNotFound
 	}
@@ -41,32 +60,8 @@ func (s *Service) StartPartyExpedition(
 		return nil, ErrDungeonNotFound
 	}
 
-	if len(memberIDs) == 0 {
-		memberIDs = []string{leaderCharID}
-	}
-
-	// Ensure leader is first
-	hasLeader := false
-	for _, mID := range memberIDs {
-		if mID == leaderCharID {
-			hasLeader = true
-			break
-		}
-	}
-	if !hasLeader {
-		memberIDs = append([]string{leaderCharID}, memberIDs...)
-	}
-
 	if len(memberIDs) > 4 {
 		return nil, ErrTooManyPartyMembers
-	}
-
-	existing, err := s.activeStore.GetActiveExpedition(ctx, leaderCharID)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil && existing.Status == StatusExploring {
-		return nil, ErrActiveExpeditionExists
 	}
 
 	if len(dungeon.Floors) == 0 {
@@ -78,6 +73,13 @@ func (s *Service) StartPartyExpedition(
 	leaderHP := 0
 
 	for _, mID := range memberIDs {
+		existing, err := s.activeStore.GetActiveExpedition(ctx, mID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return nil, ErrActiveExpeditionExists
+		}
 		char, err := s.characterRepo.FindByID(ctx, mID)
 		if err != nil {
 			return nil, ErrCharacterNotFound

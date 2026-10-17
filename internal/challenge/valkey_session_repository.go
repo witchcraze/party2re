@@ -89,6 +89,10 @@ func mapLuaError(err error) error {
 }
 
 func (r *ValkeySessionRepository) GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error) {
+	return r.getActiveSession(ctx, characterID, true)
+}
+
+func (r *ValkeySessionRepository) getActiveSession(ctx context.Context, characterID string, resolveMember bool) (*ChallengeSession, error) {
 	if r.client == nil {
 		return r.fallback.GetActiveSession(ctx, characterID)
 	}
@@ -109,7 +113,10 @@ func (r *ValkeySessionRepository) GetActiveSession(ctx context.Context, characte
 		return nil, err
 	}
 	if len(sMap) == 0 {
-		return nil, nil
+		if !resolveMember {
+			return nil, nil
+		}
+		return r.getMemberRun(ctx, characterID)
 	}
 
 	rMap, err := cmds[1].AsStrMap()
@@ -157,6 +164,9 @@ func (r *ValkeySessionRepository) SaveActiveSession(ctx context.Context, session
 		return r.fallback.SaveActiveSession(ctx, session)
 	}
 
+	if err := r.saveMemberIndex(ctx, session); err != nil {
+		return err
+	}
 	sKey := r.sessionKey(session.CharacterID)
 	rKey := r.rewardsKey(session.CharacterID)
 
@@ -202,6 +212,19 @@ func (r *ValkeySessionRepository) DeleteActiveSession(ctx context.Context, chara
 		return r.fallback.DeleteActiveSession(ctx, characterID)
 	}
 
+	run, err := r.GetActiveSession(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	if run != nil && run.CharacterID != characterID {
+		return ErrForbidden
+	}
+	if run != nil {
+		if err := r.deleteMemberIndex(ctx, *run); err != nil {
+			return err
+		}
+	}
+
 	sKey := r.sessionKey(characterID)
 	rKey := r.rewardsKey(characterID)
 
@@ -241,7 +264,7 @@ func (r *ValkeySessionRepository) AdvanceRound(ctx context.Context, characterID 
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 8 {
+	if err != nil || len(vals) < 12 {
 		return AdvanceRoundOutcome{}, fmt.Errorf("unexpected lua advance round response format: %v", err)
 	}
 
@@ -257,7 +280,12 @@ func (r *ValkeySessionRepository) AdvanceRound(ctx context.Context, characterID 
 	tierID := vals[6]
 	createdAt, _ := time.Parse(time.RFC3339Nano, vals[7])
 
+	members, err := DecodeJSON[[]ChallengeMember](vals[11])
+	if err != nil {
+		return AdvanceRoundOutcome{}, err
+	}
 	session := ChallengeSession{
+		PartyID: vals[8], PartyName: vals[9], PartyColor: vals[10], Members: members,
 		ID:                 params.ExpectedSessionID,
 		CharacterID:        characterID,
 		TierID:             tierID,

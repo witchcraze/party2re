@@ -13,6 +13,7 @@ type MemoryExpeditionRepository struct {
 	expeditions map[string]ActiveExpedition
 	expirations map[string]time.Time
 	ttl         time.Duration
+	members     map[string]string
 }
 
 // NewMemoryExpeditionRepository creates a new thread-safe in-memory store.
@@ -20,6 +21,7 @@ func NewMemoryExpeditionRepository(opts ...ValkeyOption) *MemoryExpeditionReposi
 	repo := &MemoryExpeditionRepository{
 		expeditions: make(map[string]ActiveExpedition),
 		expirations: make(map[string]time.Time),
+		members:     make(map[string]string),
 		ttl:         DefaultExpeditionTTL,
 	}
 	for _, opt := range opts {
@@ -34,15 +36,26 @@ func (m *MemoryExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	exp, ok := m.expeditions[characterID]
+	if expires, ok := m.expirations[characterID]; ok && time.Now().After(expires) {
+		delete(m.expeditions, characterID)
+		delete(m.expirations, characterID)
+	}
+	owner := characterID
+	if leader, ok := m.members[characterID]; ok && m.expeditions[characterID].ID == "" {
+		owner = leader
+	}
+	exp, ok := m.expeditions[owner]
+	if ok && !exp.ContainsCharacter(characterID) {
+		return nil, nil
+	}
 	if !ok {
 		return nil, nil
 	}
 
-	expTime, hasExp := m.expirations[characterID]
+	expTime, hasExp := m.expirations[owner]
 	if hasExp && time.Now().UTC().After(expTime) {
-		delete(m.expeditions, characterID)
-		delete(m.expirations, characterID)
+		delete(m.expeditions, owner)
+		delete(m.expirations, owner)
 		return nil, nil
 	}
 
@@ -60,6 +73,11 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	m.expeditions[exp.CharacterID] = cp
+	for _, member := range exp.Members {
+		if member.CharacterID != exp.CharacterID {
+			m.members[member.CharacterID] = exp.CharacterID
+		}
+	}
 	m.expirations[exp.CharacterID] = time.Now().UTC().Add(m.ttl)
 	return nil
 }
@@ -68,6 +86,19 @@ func (m *MemoryExpeditionRepository) DeleteActiveExpedition(ctx context.Context,
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if leader, ok := m.members[characterID]; ok && leader != characterID && m.expeditions[characterID].ID == "" {
+		if run, exists := m.expeditions[leader]; exists && run.ContainsCharacter(characterID) && time.Now().Before(m.expirations[leader]) {
+			return ErrForbidden
+		}
+	}
+
+	if run, ok := m.expeditions[characterID]; ok {
+		for _, member := range run.Members {
+			if m.members[member.CharacterID] == characterID {
+				delete(m.members, member.CharacterID)
+			}
+		}
+	}
 	delete(m.expeditions, characterID)
 	delete(m.expirations, characterID)
 	return nil

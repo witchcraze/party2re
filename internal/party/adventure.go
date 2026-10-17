@@ -54,20 +54,6 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 				}
 			}
 
-			// Transition party status to in_progress in Valkey
-			p.Status = StatusInProgress
-			if err := s.repo.UpdateParty(txCtx, p); err != nil {
-				return err
-			}
-			defer func() {
-				// If transaction aborts before success, reset status back to recruiting
-				if result.Outcome == "" {
-					p.Status = StatusRecruiting
-					//lint:ignore error-swallow compensatory rollback in defer
-					_ = s.repo.UpdateParty(txCtx, p)
-				}
-			}()
-
 			// 3. Lock all character rows in ascending order to prevent deadlocks
 			charIDs := make([]string, len(members))
 			for i, m := range members {
@@ -89,6 +75,27 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 				}
 				charMap[c.ID] = c
 			}
+			if s.activityCheck != nil {
+				for _, cID := range charIDs {
+					if err := s.activityCheck(txCtx, cID); err != nil {
+						return err
+					}
+				}
+			}
+
+			// Transition party status to in_progress in Valkey
+			p.Status = StatusInProgress
+			if err := s.repo.UpdateParty(txCtx, p); err != nil {
+				return err
+			}
+			defer func() {
+				// If transaction aborts before success, reset status back to recruiting
+				if result.Outcome == "" {
+					p.Status = StatusRecruiting
+					//lint:ignore error-swallow compensatory rollback in defer
+					_ = s.repo.UpdateParty(txCtx, p)
+				}
+			}()
 
 			// 4. Resolve stage
 			stage, err := s.stages.FindByID(p.StageID)

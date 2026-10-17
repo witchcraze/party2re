@@ -103,5 +103,8 @@ return {
     new_items_str,
     now_timestamp,
     dungeon_id,
-    started_at
+    started_at,
+    redis.call('HGET', state_key, 'party_id') or '',
+    redis.call('HGET', state_key, 'party_name') or '',
+    redis.call('HGET', state_key, 'members') or '[]'
 }

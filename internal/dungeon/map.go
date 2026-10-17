@@ -45,7 +45,7 @@ func (s *Service) ViewMap(ctx context.Context, characterID string) (MapView, err
 		return MapView{}, ErrCharacterNotFound
 	}
 
-	exp, err := s.activeStore.GetActiveExpedition(ctx, characterID)
+	exp, err := s.GetActiveExpedition(ctx, characterID)
 	if err != nil {
 		return MapView{}, err
 	}

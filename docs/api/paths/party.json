@@ -484,6 +484,16 @@
         },
         "404": {
           "description": "Party or stage not found"
+        },
+        "422": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "A member is already enrolled in another activity"
         }
       },
       "security": [

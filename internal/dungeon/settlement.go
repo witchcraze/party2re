@@ -22,6 +22,10 @@ func (s *Service) Escape(ctx context.Context, characterID string) (ExpeditionSte
 	if exp == nil || exp.Status != StatusExploring {
 		return ExpeditionStepResult{}, ErrNoActiveExpedition
 	}
+	if exp.CharacterID != characterID {
+		return ExpeditionStepResult{}, ErrForbidden
+	}
+
 	char, err := s.characterRepo.FindByID(ctx, characterID)
 	if err != nil {
 		return ExpeditionStepResult{}, ErrCharacterNotFound

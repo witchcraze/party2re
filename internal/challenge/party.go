@@ -28,6 +28,27 @@ func (s *Service) StartPartySession(
 	partyName string,
 	partyColor string,
 ) (*ChallengeSession, error) {
+	if s.admission == nil {
+		return nil, ErrPartyUnavailable
+	}
+	var session *ChallengeSession
+	err := s.admission.AdmitParty(ctx, leaderCharID, "", memberIDs, func(ctx context.Context, partyID string, ids []string) error {
+		var err error
+		session, err = s.startRoster(ctx, leaderCharID, ids, tierID, partyName, partyColor, partyID)
+		return err
+	})
+	return session, err
+}
+
+func (s *Service) startRoster(
+	ctx context.Context,
+	leaderCharID string,
+	memberIDs []string,
+	tierID string,
+	partyName string,
+	partyColor string,
+	partyID string,
+) (*ChallengeSession, error) {
 	if strings.TrimSpace(leaderCharID) == "" {
 		return nil, ErrCharacterNotFound
 	}
@@ -35,22 +56,6 @@ func (s *Service) StartPartySession(
 	tier, err := s.GetTier(tierID)
 	if err != nil {
 		return nil, err
-	}
-
-	if len(memberIDs) == 0 {
-		memberIDs = []string{leaderCharID}
-	}
-
-	// Ensure leader is first
-	hasLeader := false
-	for _, mID := range memberIDs {
-		if mID == leaderCharID {
-			hasLeader = true
-			break
-		}
-	}
-	if !hasLeader {
-		memberIDs = append([]string{leaderCharID}, memberIDs...)
 	}
 
 	maxParts := tier.MaxParticipants
@@ -61,18 +66,17 @@ func (s *Service) StartPartySession(
 		return nil, ErrTooManyPartyMembers
 	}
 
-	existing, err := s.activeStore.GetActiveSession(ctx, leaderCharID)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil && existing.Status == StatusActive {
-		return nil, ErrActiveSessionExists
-	}
-
 	members := make([]ChallengeMember, 0, len(memberIDs))
 	leaderHP := 0
 
 	for _, mID := range memberIDs {
+		existing, err := s.activeStore.GetActiveSession(ctx, mID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return nil, ErrActiveSessionExists
+		}
 		char, err := s.charRepo.FindByID(ctx, mID)
 		if err != nil {
 			if errors.Is(err, corecharacter.ErrNotFound) || errors.Is(err, ErrCharacterNotFound) {
@@ -152,6 +156,7 @@ func (s *Service) StartPartySession(
 	now := time.Now().UTC()
 	session := ChallengeSession{
 		ID:                 id.New(),
+		PartyID:            partyID,
 		CharacterID:        leaderCharID,
 		PartyName:          partyName,
 		PartyColor:         partyColor,

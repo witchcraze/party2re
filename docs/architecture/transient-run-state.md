@@ -62,6 +62,27 @@ Active Dungeon/Challenge observations propagate required state and reward-read
 failures. A terminal buffer still present in Valkey remains observable until
 owner cleanup; reading it never retries settlement or refreshes lifetime.
 
+Cooperative entry resolves the saved, ready roster through Party's public
+`WithReadyRoster` handoff, under its existing lobby lock. Lobby membership and
+ready writers share that lock. Optional `member_ids` asserts the complete roster;
+it cannot add, omit or duplicate participants. Consent belongs to each joining
+character, including characters owned by different accounts. The composition
+root then locks every participating Character in ascending ID order in a SQL
+transaction shared by solo and party Dungeon/Challenge starts. It checks all
+members for existing run buffers, sleep/pending wake, unfinished scheduled work,
+PvP/GvG admission, unconsciousness and exhaustion before starting.
+The ordinary Party adventure start reuses that activity check so it cannot
+bypass an existing Dungeon/Challenge enrollment.
+
+Each run retains one canonical leader buffer. A per-member reference discovers
+that buffer through its immutable run ID and saved roster, independently of the
+Party lobby's shorter TTL. Members can observe their current run; advance and
+Dungeon escape remain leader operations. PlayerContext exposes member activity
+without leader continuation controls. GET neither renews nor repairs state.
+References have an explicit cleanup lifecycle, detailed in the
+[keyspace owner](valkey-keyspace.md), and do not provide SQL/Valkey atomicity or
+change the existing settlement guarantees below.
+
 ## Two-Phase Settlement
 
 Valkey holds provisional rewards during a run. On clear, exit, cashout, or
