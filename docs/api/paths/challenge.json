@@ -330,7 +330,7 @@
               }
             }
           },
-          "description": "Internal server error"
+          "description": "Internal server error. For the start outcome sentinel (the start failed after publication and could not be confirmed) the run is preserved: observe the active run before retrying and never replay the start."
         }
       },
       "security": [
@@ -505,7 +505,7 @@
               }
             }
           },
-          "description": "Internal server error"
+          "description": "Internal server error. For the start outcome sentinel (the start failed after publication and could not be confirmed) the run is preserved: observe the active run before retrying and never replay the start."
         }
       },
       "security": [

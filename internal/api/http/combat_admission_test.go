@@ -2,8 +2,10 @@ package http_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
@@ -63,6 +65,47 @@ func TestPartyCombatAdmissionHTTP(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestStartOutcomeUnknownHTTP(t *testing.T) {
+	cause := errors.New("secret commit failure")
+	player := coreplayer.Player{ID: "p1"}
+	for _, tc := range []struct {
+		name, path, body string
+		sentinel         error
+	}{
+		{"dungeon solo", "/characters/c1/dungeons/start", `{"dungeon_id":"dungeon-01"}`, dungeon.ErrStartOutcomeUnknown},
+		{"dungeon party", "/characters/c1/dungeons/party-start", `{"dungeon_id":"dungeon-01"}`, dungeon.ErrStartOutcomeUnknown},
+		{"challenge solo", "/characters/c1/challenges/start", `{"tier_id":"1"}`, challenge.ErrStartOutcomeUnknown},
+		{"challenge party", "/characters/c1/challenges/party-start", `{"tier_id":"1"}`, challenge.ErrStartOutcomeUnknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			joined := errors.Join(tc.sentinel, cause)
+			ds := &stubDungeonService{
+				startExpeditionFn: func(context.Context, string, string) (*dungeon.ActiveExpedition, error) { return nil, joined },
+				startPartyExpeditionFn: func(context.Context, string, []string, string, string) (*dungeon.ActiveExpedition, error) {
+					return nil, joined
+				},
+			}
+			cs := &stubChallengeService{
+				startSessionFn: func(context.Context, string, string) (*challenge.ChallengeSession, error) { return nil, joined },
+				startPartySessionFn: func(context.Context, string, []string, string, string, string) (*challenge.ChallengeSession, error) {
+					return nil, joined
+				},
+			}
+			h := newTestHandler(t, &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}, &stubCharacterService{getFn: func(context.Context, string) (corecharacter.Character, error) {
+				return corecharacter.Character{ID: "c1", PlayerID: player.ID}, nil
+			}}, &stubAdventureService{}, &stubShopService{}, apihttp.WithDungeon(ds), apihttp.WithChallenge(cs))
+			req := jsonRequest(t, http.MethodPost, tc.path, tc.body)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			h.Router().ServeHTTP(rec, req)
+			body := rec.Body.String()
+			if rec.Code != http.StatusInternalServerError || !strings.Contains(body, tc.sentinel.Error()) || strings.Contains(body, "secret") {
+				t.Fatalf("status=%d body=%s", rec.Code, body)
+			}
+		})
 	}
 }
 

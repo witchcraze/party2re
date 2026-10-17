@@ -20,6 +20,11 @@ func writeCombatAdmissionError(w http.ResponseWriter, err error) bool {
 		errors.Is(err, party.ErrCharacterExhausted), errors.Is(err, dungeon.ErrActiveExpeditionExists),
 		errors.Is(err, challenge.ErrActiveSessionExists):
 		writeError(w, http.StatusUnprocessableEntity, err)
+	case errors.Is(err, dungeon.ErrStartOutcomeUnknown):
+		// Only the stable sentinel is exposed; joined causes may carry internals.
+		writeError(w, http.StatusInternalServerError, dungeon.ErrStartOutcomeUnknown)
+	case errors.Is(err, challenge.ErrStartOutcomeUnknown):
+		writeError(w, http.StatusInternalServerError, challenge.ErrStartOutcomeUnknown)
 	default:
 		return false
 	}

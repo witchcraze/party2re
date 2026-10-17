@@ -3,6 +3,7 @@ package dungeon
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var ErrForbidden = errors.New("character is not authorized for this expedition")
@@ -21,6 +22,28 @@ func WithAdmission(admission Admission) Option {
 }
 
 func (s *Service) ConfigureAdmission(admission Admission) { s.admission = admission }
+
+// ErrStartOutcomeUnknown reports that admission failed after the expedition was
+// published and the published run could not be verified afterwards. State is
+// preserved; callers observe the active expedition and must not replay the start.
+var ErrStartOutcomeUnknown = errors.New("expedition start outcome could not be confirmed; observe the active expedition before retrying")
+
+const startReconcileTimeout = 5 * time.Second
+
+// reconcileStart resolves an admission error raised after run was published.
+// Dungeon admission performs no SQL writes, so such an error (e.g. a failed
+// commit that only releases character locks) cannot undo the Valkey-owned run.
+// The identity-verified run is therefore the start result; anything else is
+// reported as unknown without deleting state.
+func (s *Service) reconcileStart(ctx context.Context, run *ActiveExpedition, admissionErr error) (*ActiveExpedition, error) {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startReconcileTimeout)
+	defer cancel()
+	current, err := s.activeStore.GetActiveExpedition(rctx, run.CharacterID)
+	if err == nil && current != nil && current.ID == run.ID {
+		return run, nil
+	}
+	return nil, errors.Join(ErrStartOutcomeUnknown, admissionErr, err)
+}
 
 // ContainsCharacter authorizes the leader or an enrolled participant.
 func (run ActiveExpedition) ContainsCharacter(id string) bool {

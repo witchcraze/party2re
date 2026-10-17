@@ -83,6 +83,31 @@ References have an explicit cleanup lifecycle, detailed in the
 [keyspace owner](valkey-keyspace.md), and do not provide SQL/Valkey atomicity or
 change the existing settlement guarantees below.
 
+### Start outcome after publication (#1493)
+
+**Decision status: approved 2026-10-18 in #1493.** Publication to Valkey precedes
+the shared SQL transaction's commit, which is not atomic with it. An admission
+error raised after the start callback succeeded therefore never implies that no
+run exists. The owning service reconciles it by the immutable run ID, outside the
+failed transaction and detached from request cancellation:
+
+| Feature | Evidence | Result |
+|---|---|---|
+| Dungeon (no SQL writes) | Leader's canonical buffer still holds the run ID | Success; the run is the start result |
+| Challenge | `challenge_sessions` row for the run ID exists | Success (commit acknowledgement was lost) |
+| Challenge | Row confirmed absent (`ErrSessionNotFound`) | Aborted: remove the run and its member references only while it is still the leader's current run, then return the original error |
+| Either | Evidence unreadable or run no longer verifiable | Preserve all state; return `ErrStartOutcomeUnknown` wrapping the cause |
+
+The Challenge start inserts its SQL row before publishing, so an insert failure
+never publishes, and a failed publication write discards its partial run.
+A failed abort cleanup stays visible in the returned error and leaves the run
+discoverable; nothing deletes character keys blindly. HTTP maps an unknown outcome
+to `500` with only the sentinel message. Clients observe the active run through the
+owned readers and never replay the POST. Limitation: an absent row is treated as an
+abort, so a commit still in flight server-side when it is read is not excluded;
+excluding it needs durable start receipts like the Adventure contract below.
+Terminal payout/history idempotency remains separate (#1205, #1211).
+
 ## Two-Phase Settlement
 
 Valkey holds provisional rewards during a run. On clear, exit, cashout, or
