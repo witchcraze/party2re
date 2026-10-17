@@ -528,6 +528,7 @@ Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons
   - When the inventory is full, items automatically route to the character's depot (`_npc_action.cgi:60-80`).
   - If the depot is also full, drops are tracked in `LostDrops` without silent phantom delivery or data loss.
   - Surviving HP and MP are persisted to `characters` in MariaDB. If defeated, fallen characters survive with 1 HP.
+  - **Exit Fatigue (`CalculateExitFatigue`, `_battle.cgi:1187-1188, 1216`)**: `CrawlSession.Round` tracks the current/exit floor (`$round`, starting at `0` on room creation, updated on floor entry `1..11` or travel floor transitions, distinct from `TotalTurns`, `FloorsCleared`, and `len(FloorResults)`). At crawl conclusion, each participating character gains `add_tired = round * 3 + 1` fatigue (halved with integer truncation `int(add_tired * 0.5)` when `mode == "calm"`), clamped to `MaxTired = 100`.
   - Standard job progression, EXP with job mastery triggers, gold, and crystal rewards are applied atomically.
 
 ---
@@ -553,6 +554,9 @@ Multiplayer co-op quest rooms allow up to 4 adventurers to form an expedition lo
 - **Stage Access Gates (`$job_lv[$stage]`)**:
   - Each stage specifies a `RequiredJobLevel` based on the character's total job changes (`JobLevel`).
   - Novice stages require JobLevel 0, while advanced stages require up to JobLevel 7.
+- **Mode Settings (`mode`)**:
+  - `normal` (Default; empty string defaults to `normal`): Standard dungeon crawl mode.
+  - Unimplemented modes (`calm`, `try`, `hard`): Explicitly rejected on party creation (`ErrUnsupportedMode`) to prevent running crawls with incomplete reward/unlock rules until milestone unlocks and full reward scaling are reconciled. Unrecognized mode strings return `ErrInvalidMode`.
 - **Idle Lobby Auto-Disband**:
   - Waiting lobbies have a 30-minute idle TTL (`DefaultLobbyTTL = 30 * time.Minute`), matching legacy `quest.cgi` 30-minute auto-disband.
 
@@ -569,9 +573,9 @@ Multi-player party crawls grant cooperative reward boosts:
 
 ### Event Hooks & Integrations
 - **Victory Hook (`adventure.VictoryHook`)**: Invoked when an adventure or party expedition concludes with a victory. Automatically records milestone achievements in `internal/medal` (`adventure_victories`, `monsters_slain`, `gold_earned`).
-- **Post-Adventure Hook (`adventure.PostAdventureHook`)**: Invoked after crawl rewards and character state are committed. Automatically triggers pre-ordered meal delivery from the Adventurer's Tavern (`internal/tavern`).
+- **Post-Adventure Hook (`adventure.PostAdventureHook` / `party.PostAdventureHook`)**: Invoked after crawl rewards, exit fatigue, and character state are committed (on both victory and defeat). Resets the character's Tavern meal fullness flag (`$m{is_eat} = 0` via `tavern.Service.ResetFullness`) and claims any pre-ordered meal delivery from the Adventurer's Tavern (`tavern.Service.ClaimDelivery`).
 - **Hook Error Semantics**: Both hooks execute as best-effort post-commit side-effects outside the settlement transaction. Errors returned by hook implementations are logged as warnings (`s.logger.Warn`) and do not fail the completed adventure or corrupt committed character/history state.
-- **Settlement & Persistence Atomicity**: Post-battle reward/item settlement (`settlePostBattle` or fallback character updates) and `adventures` history persistence (`Repository.Save`) execute within the same `TransactionProvider` (`RunInTx`) Unit of Work, ensuring that any history save error rolls back all rewards and partial participant records.
+- **Settlement & Persistence Atomicity**: Post-battle reward/item/fatigue settlement (`settlePostBattle` or fallback character updates) and `adventures` history persistence (`Repository.Save`) execute within the same `TransactionProvider` (`RunInTx`) Unit of Work, ensuring that any history save error rolls back all rewards, fatigue changes, and partial participant records without firing post-adventure hooks.
 
 ---
 

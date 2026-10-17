@@ -96,6 +96,7 @@ func (s *Service) settleWithBattleSettler(
 		},
 		RecipientDrops:  recipientDrops,
 		DefeatedEnemies: defeatedEnemies,
+		ExitFatigue:     crawlResult.EffectiveExitFatigue(""),
 	}
 
 	resp, err := s.battleSettler.ApplyPostBattleResult(ctx, postBattleReq)
@@ -121,6 +122,7 @@ func (s *Service) settleWithBattleSettler(
 		levelAfter := c.Level
 		if updatedChar, ok := resp.UpdatedCharacters[cID]; ok {
 			levelAfter = updatedChar.Level
+			charMap[cID] = updatedChar
 		}
 
 		var acquiredDrops []coreitem.Instance
@@ -155,6 +157,7 @@ func (s *Service) settleFallback(
 ) ([]MemberRewardSummary, map[string][]string, error) {
 	lostDrops := make(map[string][]string)
 	var rewardSummaries []MemberRewardSummary
+	exitFatigue := crawlResult.EffectiveExitFatigue("")
 
 	for _, m := range members {
 		cID := m.CharacterID
@@ -203,9 +206,15 @@ func (s *Service) settleFallback(
 			}
 		}
 
+		if lastBattleRes.BanishedIDs != nil && lastBattleRes.BanishedIDs[cID] {
+			c.AddTired(30)
+		}
+		c.AddTired(exitFatigue)
+
 		if err := s.charRepo.Update(ctx, c); err != nil {
 			return nil, nil, err
 		}
+		charMap[cID] = c
 
 		// Award drops from Floor 11 treasure boxes
 		var drops []coreitem.Instance

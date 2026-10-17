@@ -120,6 +120,11 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			if err != nil {
 				return err
 			}
+			if p.Mode != "" {
+				if err := session.SetMode(p.Mode); err != nil {
+					return err
+				}
+			}
 
 			if s.blessingProvider != nil {
 				for _, c := range participatingChars {
@@ -207,6 +212,8 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 				PartyID:             partyID,
 				StageID:             p.StageID,
 				Outcome:             outcome,
+				Round:               crawlResult.Round,
+				ExitFatigue:         crawlResult.EffectiveExitFatigue(p.Mode),
 				FloorsCleared:       crawlResult.FloorsCleared,
 				Turns:               crawlResult.TotalTurns,
 				TotalEXP:            crawlResult.TotalEXP,

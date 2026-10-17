@@ -112,21 +112,8 @@ func NewService(
 }
 
 // runInTx wraps execution within a MariaDB transaction if a TransactionProvider is configured.
-//
-// Concurrency & Persistence Boundaries (RFC #356, Issue #368, Issue #380):
-//  1. Ephemeral Waiting Lobby (Valkey Master):
-//     Lobby metadata, recruitment lists, member rosters, and ready states live exclusively
-//     in Valkey Master with automatic TTL (15m lobby, 60s ready check). Valkey operations
-//     (including atomic Lua scripts for capacity and single-party membership checks) ensure
-//     high-throughput, zero-lock-contention matchmaking without relational database tables.
-//     In lobby operations (CreateParty, JoinParty, etc.), runInTx is utilized solely to lock and
-//     validate the individual character row in MariaDB (Rank 2 lock hierarchy).
-//  2. Adventure Settlement & Durable Audit (MariaDB Master):
-//     Multiplayer adventure execution (StartPartyAdventure) executes within a MariaDB runInTx transaction.
-//     All participating character records are locked deterministically in ascending ID order (Rank 2)
-//     to prevent deadlocks across concurrent multi-character operations. Post-battle stat updates,
-//     EXP/Gold gains, item drops, and permanent audit logs (party_adventure_logs) are atomically
-//     committed to MariaDB before cleaning up the ephemeral Valkey lobby.
+// Lobby metadata lives in Valkey Master; adventure settlement and audit logs commit atomically in MariaDB
+// with Rank 2 character locks acquired in ascending ID order.
 func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) error) error {
 	if s.txProvider != nil {
 		return s.txProvider.RunInTx(ctx, fn)
@@ -146,6 +133,10 @@ func hashPassword(pass string) string {
 // CreateParty creates a new party with the creator as leader.
 func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req CreatePartyRequest) (PartyDetail, error) {
 	if err := ValidatePartyName(req.Name); err != nil {
+		return PartyDetail{}, err
+	}
+	mode, err := ValidatePartyMode(req.Mode)
+	if err != nil {
 		return PartyDetail{}, err
 	}
 
@@ -219,6 +210,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			Name:              strings.TrimSpace(req.Name),
 			PasswordHash:      passHash,
 			StageID:           stage.ID,
+			Mode:              mode,
 			Speed:             speed,
 			MaxMembers:        maxMembers,
 			MinLevel:          minLevel,

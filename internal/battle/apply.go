@@ -23,6 +23,7 @@ type ApplyPostBattleRequest struct {
 	RecipientCharacterID string              // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
 	DefeatedEnemies      []corebattle.Participant
 	Habitat              string // Habitat/stage name for monster book recording
+	ExitFatigue          int    // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
 	UnsealDemonKing      bool   // Completing Stage EX / unsealing demon king (vs_monster.cgi:218)
 }
 
@@ -82,7 +83,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		}
 
 		// 2. Apply HP, MP, fatigue
-		s.applyResourceUpdates(&tc.Character, charID, req.BattleResult)
+		s.applyResourceUpdates(&tc.Character, charID, req.BattleResult, req.ExitFatigue)
 
 		// 3. Process item consumption
 		consumed := s.applyConsumedItems(charID, req.BattleResult.ConsumedItems[charID], &tc.Inventory, &equip, &equipModified)
@@ -196,7 +197,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			equip := equips[id]
 			var equipModified bool
 
-			s.applyResourceUpdates(&char, id, req.BattleResult)
+			s.applyResourceUpdates(&char, id, req.BattleResult, req.ExitFatigue)
 
 			consumed := s.applyConsumedItems(id, req.BattleResult.ConsumedItems[id], &inv, &equip, &equipModified)
 			resp.ConsumedItems[id] = consumed
@@ -337,7 +338,7 @@ func (s *Service) recordDefeatedMonsters(ctx context.Context, charIDs []string, 
 	return nil
 }
 
-func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID string, res corebattle.PartyBattleResult) {
+func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID string, res corebattle.PartyBattleResult, exitFatigue int) {
 	if remHP, ok := res.RemainingHP[charID]; ok {
 		remMP := -1
 		if mp, hasMP := res.RemainingMP[charID]; hasMP && mp >= 0 {
@@ -351,6 +352,9 @@ func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID str
 
 	if res.BanishedIDs != nil && res.BanishedIDs[charID] {
 		char.AddTired(30)
+	}
+	if exitFatigue > 0 {
+		char.AddTired(exitFatigue)
 	}
 }
 

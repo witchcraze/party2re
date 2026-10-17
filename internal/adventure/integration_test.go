@@ -482,13 +482,16 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Fatal("expected items in DB inventory, got 0")
 	}
 
-	// Verify character HP & MP in MariaDB
+	// Verify character HP, MP & exit fatigue in MariaDB
 	updatedChar, err := charRepo.FindByID(ctx, char.ID)
 	if err != nil {
 		t.Fatalf("FindByID failed: %v", err)
 	}
 	if updatedChar.Stats.HP <= 0 || updatedChar.Stats.HP > updatedChar.Stats.MaxHP {
 		t.Errorf("unexpected HP in DB: %d", updatedChar.Stats.HP)
+	}
+	if updatedChar.Tired != 34 {
+		t.Errorf("expected Tired=34 after 1st Floor 11 clear in DB, got %d", updatedChar.Tired)
 	}
 
 	// 2. Second run: Inventory full -> Overflow delivered to depot_items in MariaDB
@@ -506,6 +509,14 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Errorf("expected box delivered to depot, got %s", crawlRes2.TreasureBoxes[0].DeliveredTo)
 	}
 
+	updatedChar2, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("FindByID after 2nd crawl failed: %v", err)
+	}
+	if updatedChar2.Tired != 68 {
+		t.Errorf("expected Tired=68 after 2nd Floor 11 clear in DB, got %d", updatedChar2.Tired)
+	}
+
 	// Verify depot in MariaDB
 	dep, err := depotRepo.FindByCharacterID(ctx, char.ID)
 	if err != nil {
@@ -515,7 +526,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Fatal("expected items in DB depot, got 0")
 	}
 
-	// 3. Defeat verification: A weak character defeated in crawl survives with 1 HP in MariaDB
+	// 3. Defeat verification: A weak character defeated in crawl survives with 1 HP and Tired=4 (Round 1) in MariaDB
 	weakling, err := characterService.Create(ctx, player.ID, "DefeatedHero")
 	if err != nil {
 		t.Fatal(err)
@@ -545,6 +556,9 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	}
 	if savedWeakling.Stats.HP != 1 {
 		t.Errorf("expected defeated hero HP=1 in MariaDB, got %d", savedWeakling.Stats.HP)
+	}
+	if savedWeakling.Tired != 4 {
+		t.Errorf("expected defeated hero Tired=4 (Round 1) in MariaDB, got %d", savedWeakling.Tired)
 	}
 }
 
@@ -679,7 +693,7 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		return nil
 	})
 
-	// 1. Solo history save error rolls back rewards, inventory drops, and chronicle
+	// 1. Solo history save error rolls back rewards, exit fatigue, inventory drops, and chronicle
 	advRepo.calls = 0
 	advRepo.failOnCall = 1
 	_, err = advService.StartStage(ctx, hero1.ID, adventure.StarterAdventure)
@@ -694,9 +708,9 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterFail1.Money != hero1.Money || afterFail1.Experience != hero1.Experience || afterFail1.Level != hero1.Level {
-		t.Fatalf("expected hero1 rewards rolled back, before=(money:%d exp:%d lvl:%d) after=(money:%d exp:%d lvl:%d)",
-			hero1.Money, hero1.Experience, hero1.Level, afterFail1.Money, afterFail1.Experience, afterFail1.Level)
+	if afterFail1.Money != hero1.Money || afterFail1.Experience != hero1.Experience || afterFail1.Level != hero1.Level || afterFail1.Tired != hero1.Tired {
+		t.Fatalf("expected hero1 rewards/tired rolled back, before=(money:%d exp:%d lvl:%d tired:%d) after=(money:%d exp:%d lvl:%d tired:%d)",
+			hero1.Money, hero1.Experience, hero1.Level, hero1.Tired, afterFail1.Money, afterFail1.Experience, afterFail1.Level, afterFail1.Tired)
 	}
 	invAfterFail1, err := invRepo.FindByCharacterID(ctx, hero1.ID)
 	if err != nil {
@@ -713,7 +727,7 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		t.Fatalf("expected hero1 chronicle empty after rollback, got %+v", chronAfterFail1)
 	}
 
-	// 2. Multi-participant partial history save error (2nd participant fails) rolls back both participants' rewards and 1st participant's history
+	// 2. Multi-participant partial history save error (2nd participant fails) rolls back both participants' rewards, exit fatigue, and 1st participant's history
 	advRepo.calls = 0
 	advRepo.failOnCall = 2
 	_, err = advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
@@ -732,8 +746,8 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		if err != nil {
 			t.Fatal(err)
 		}
-		if reloaded.Money != h.Money || reloaded.Experience != h.Experience {
-			t.Fatalf("expected %s rewards rolled back, got money=%d exp=%d", h.Name, reloaded.Money, reloaded.Experience)
+		if reloaded.Money != h.Money || reloaded.Experience != h.Experience || reloaded.Tired != h.Tired {
+			t.Fatalf("expected %s rewards/tired rolled back, got money=%d exp=%d tired=%d", h.Name, reloaded.Money, reloaded.Experience, reloaded.Tired)
 		}
 		hist, err := advService.ListHistory(ctx, h.ID, 10, 0)
 		if err != nil {
@@ -744,7 +758,7 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		}
 	}
 
-	// 3. Success commits rewards and history together in the same transaction; post-commit hooks run outside tx and hook errors do not revert committed state
+	// 3. Success commits rewards, exit fatigue, and history together in the same transaction; post-commit hooks run outside tx and hook errors do not revert committed state
 	advRepo.calls = 0
 	advRepo.failOnCall = 0
 	var outsideMoneyDuringSave int
@@ -794,6 +808,9 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 	}
 	if committedHero1.Money <= hero1.Money {
 		t.Fatalf("expected committed money > %d, got %d", hero1.Money, committedHero1.Money)
+	}
+	if committedHero1.Tired != hero1.Tired+34 {
+		t.Fatalf("expected committed Tired=%d, got %d", hero1.Tired+34, committedHero1.Tired)
 	}
 	chronAfterCommit, err := advService.GetChronicle(ctx, hero1.ID)
 	if err != nil {

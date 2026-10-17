@@ -1021,3 +1021,221 @@ func TestPartyAdventure_TreasureBlessing_ChestGenerationAndNoSettlementDuplicati
 		}
 	}
 }
+
+func TestPartyAdventure_ExitFatigueAndMealReset(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("normal and calm mode victory with battleSettler and fallback", func(t *testing.T) {
+		for _, useSettler := range []bool{true, false} {
+			for _, mode := range []string{adventure.CrawlModeNormal, adventure.CrawlModeCalm} {
+				wantFatigue := 34
+				if mode == adventure.CrawlModeCalm {
+					wantFatigue = 17
+				}
+
+				svc, partyRepo, charRepo, invRepo, depotRepo := setupPartyAdventureTestService(
+					t,
+					fixedBattleEngine{outcome: corebattle.OutcomeWin},
+				)
+				if useSettler {
+					svc.battleSettler = battle.NewService(
+						battle.WithCharacterRepository(charRepo),
+						battle.WithInventoryRepository(invRepo),
+						battle.WithDepotRepository(depotRepo),
+					)
+				}
+
+				leader := corecharacter.Character{
+					ID:    "lead-fat",
+					Name:  "Leader",
+					Level: 10,
+					Tired: 10,
+					Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+				}
+				ally := corecharacter.Character{
+					ID:    "ally-fat",
+					Name:  "Ally",
+					Level: 10,
+					Tired: 20,
+					Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+				}
+				charRepo.chars[leader.ID] = leader
+				charRepo.chars[ally.ID] = ally
+
+				isFull := map[string]bool{leader.ID: true, ally.ID: true}
+				svc.SetPostAdventureHook(func(_ context.Context, characterID string) error {
+					isFull[characterID] = false
+					return nil
+				})
+
+				pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+					Name:       "FatigueParty",
+					StageID:    "stage-01",
+					MaxMembers: 2,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if mode != adventure.CrawlModeNormal {
+					p, _ := partyRepo.GetParty(ctx, pDetail.Party.ID)
+					p.Mode = mode
+					_ = partyRepo.UpdateParty(ctx, p)
+				}
+				if _, err := svc.JoinParty(ctx, pDetail.Party.ID, ally.ID, ""); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := svc.SetReady(ctx, pDetail.Party.ID, ally.ID, true); err != nil {
+					t.Fatal(err)
+				}
+
+				res, err := svc.StartPartyAdventure(ctx, pDetail.Party.ID, leader.ID)
+				if err != nil {
+					t.Fatalf("StartPartyAdventure(settler=%v, mode=%s) failed: %v", useSettler, mode, err)
+				}
+				if res.Round != 11 || res.ExitFatigue != wantFatigue {
+					t.Fatalf("Round=%d ExitFatigue=%d, want 11 and %d", res.Round, res.ExitFatigue, wantFatigue)
+				}
+
+				savedLead, _ := charRepo.FindByID(ctx, leader.ID)
+				savedAlly, _ := charRepo.FindByID(ctx, ally.ID)
+				if savedLead.Tired != 10+wantFatigue {
+					t.Errorf("leader Tired = %d, want %d", savedLead.Tired, 10+wantFatigue)
+				}
+				if savedAlly.Tired != 20+wantFatigue {
+					t.Errorf("ally Tired = %d, want %d", savedAlly.Tired, 20+wantFatigue)
+				}
+				if isFull[leader.ID] || isFull[ally.ID] {
+					t.Errorf("expected meal flags reset for both party members, got %+v", isFull)
+				}
+			}
+		}
+	})
+
+	t.Run("defeat on Floor 1 applies Round 1 exit fatigue and resets meal flag; rollback does not", func(t *testing.T) {
+		txProvider := &mockTransactionProvider{}
+		svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+			t,
+			fixedBattleEngine{outcome: corebattle.OutcomeDefeat},
+			WithTransactionProvider(txProvider),
+		)
+
+		leader := corecharacter.Character{
+			ID:    "lead-def",
+			Name:  "Leader",
+			Level: 10,
+			Tired: 12,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+		}
+		ally := corecharacter.Character{
+			ID:    "ally-def",
+			Name:  "Ally",
+			Level: 10,
+			Tired: 15,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+		}
+		partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, ally)
+
+		isFull := map[string]bool{leader.ID: true, ally.ID: true}
+		svc.SetPostAdventureHook(func(_ context.Context, characterID string) error {
+			isFull[characterID] = false
+			return nil
+		})
+
+		// 1. Persistence failure rolls back transaction and does not reset meal flag
+		partyRepo.saveLogErr = errors.New("db log failure")
+		if _, err := svc.StartPartyAdventure(ctx, partyID, leader.ID); err == nil {
+			t.Fatal("expected error on log failure")
+		}
+		if !isFull[leader.ID] || !isFull[ally.ID] {
+			t.Fatalf("expected meal flags untouched on rollback, got %+v", isFull)
+		}
+
+		// Reset character map and log error for successful defeat commit
+		charRepo.chars[leader.ID] = leader
+		charRepo.chars[ally.ID] = ally
+		partyRepo.saveLogErr = nil
+
+		res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+		if err != nil {
+			t.Fatalf("StartPartyAdventure defeat failed: %v", err)
+		}
+		if res.Round != 1 || res.ExitFatigue != 4 {
+			t.Fatalf("defeat Round=%d ExitFatigue=%d, want 1 and 4", res.Round, res.ExitFatigue)
+		}
+		savedLead, _ := charRepo.FindByID(ctx, leader.ID)
+		savedAlly, _ := charRepo.FindByID(ctx, ally.ID)
+		if savedLead.Tired != 16 || savedAlly.Tired != 19 {
+			t.Errorf("Tired after Floor 1 defeat: lead=%d ally=%d, want 16 and 19", savedLead.Tired, savedAlly.Tired)
+		}
+		if isFull[leader.ID] || isFull[ally.ID] {
+			t.Errorf("expected meal flags reset on committed defeat, got %+v", isFull)
+		}
+	})
+}
+
+func TestCreateParty_ModeValidation(t *testing.T) {
+	ctx := context.Background()
+	svc, _, charRepo, _, _ := setupPartyAdventureTestService(t, nil)
+
+	leader := corecharacter.Character{
+		ID:    "mode-val-lead",
+		Name:  "Leader",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	charRepo.chars[leader.ID] = leader
+
+	t.Run("empty mode defaults to normal", func(t *testing.T) {
+		detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+			Name:    "PartyEmptyMode",
+			StageID: "stage-01",
+			Mode:    "",
+		})
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if detail.Party.Mode != adventure.CrawlModeNormal {
+			t.Errorf("expected Mode %q, got %q", adventure.CrawlModeNormal, detail.Party.Mode)
+		}
+		_ = svc.DisbandParty(ctx, detail.Party.ID, leader.ID)
+	})
+
+	t.Run("normal mode accepted case-insensitively", func(t *testing.T) {
+		detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+			Name:    "PartyNormalMode",
+			StageID: "stage-01",
+			Mode:    "NORMAL",
+		})
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if detail.Party.Mode != adventure.CrawlModeNormal {
+			t.Errorf("expected Mode %q, got %q", adventure.CrawlModeNormal, detail.Party.Mode)
+		}
+		_ = svc.DisbandParty(ctx, detail.Party.ID, leader.ID)
+	})
+
+	t.Run("unimplemented modes return ErrUnsupportedMode", func(t *testing.T) {
+		for _, unsupported := range []string{"calm", "try", "hard", "CALM"} {
+			_, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+				Name:    "PartyUnsupported",
+				StageID: "stage-01",
+				Mode:    unsupported,
+			})
+			if !errors.Is(err, ErrUnsupportedMode) {
+				t.Errorf("mode %q: expected ErrUnsupportedMode, got %v", unsupported, err)
+			}
+		}
+	})
+
+	t.Run("unrecognized mode returns ErrInvalidMode", func(t *testing.T) {
+		_, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+			Name:    "PartyInvalid",
+			StageID: "stage-01",
+			Mode:    "not_a_valid_mode",
+		})
+		if !errors.Is(err, ErrInvalidMode) {
+			t.Errorf("expected ErrInvalidMode, got %v", err)
+		}
+	})
+}
