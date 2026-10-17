@@ -185,6 +185,10 @@ func (h *Handler) handleMoveDungeon(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
+			if errors.Is(err, dungeon.ErrForbidden) {
+				writeError(w, http.StatusForbidden, err)
+				return
+			}
 			if errors.Is(err, dungeon.ErrInvalidDirection) || errors.Is(err, dungeon.ErrImpassableWall) {
 				writeError(w, http.StatusBadRequest, err)
 				return
@@ -211,6 +215,10 @@ func (h *Handler) handleEscapeDungeon(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if errors.Is(err, dungeon.ErrNoActiveExpedition) {
 				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			if errors.Is(err, dungeon.ErrForbidden) {
+				writeError(w, http.StatusForbidden, err)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)

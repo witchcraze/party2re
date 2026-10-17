@@ -167,7 +167,13 @@ func (r *ValkeySessionRepository) GetActiveSession(ctx context.Context, characte
 
 	// Check if characterID is a non-leader member mapped to a leader
 	leaderID, err := r.client.Do(ctx, r.client.B().Get().Key(r.leaderKey(characterID)).Build()).ToString()
-	if err != nil || leaderID == "" {
+	if err != nil {
+		if valkeygo.IsValkeyNil(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if leaderID == "" {
 		return nil, nil
 	}
 
@@ -328,9 +334,26 @@ func (r *ValkeySessionRepository) AdvanceRound(ctx context.Context, characterID 
 	tierID := vals[6]
 	createdAt, _ := time.Parse(time.RFC3339Nano, vals[7])
 
+	partyID := ""
+	partyName := ""
+	partyColor := ""
+	var members []ChallengeMember
+	if len(vals) >= 12 {
+		partyID = vals[8]
+		partyName = vals[9]
+		partyColor = vals[10]
+		if vals[11] != "" {
+			members, _ = DecodeJSON[[]ChallengeMember](vals[11])
+		}
+	}
+
 	session := ChallengeSession{
 		ID:                 params.ExpectedSessionID,
 		CharacterID:        targetID,
+		PartyID:            partyID,
+		PartyName:          partyName,
+		PartyColor:         partyColor,
+		Members:            members,
 		TierID:             tierID,
 		CurrentRound:       newRound,
 		CharacterCurrentHP: survivingHP,
@@ -340,6 +363,19 @@ func (r *ValkeySessionRepository) AdvanceRound(ctx context.Context, characterID 
 		Status:             StatusActive,
 		CreatedAt:          createdAt,
 		UpdatedAt:          updatedAt,
+	}
+
+	if len(members) > 0 {
+		var expireCmds []valkeygo.Completed
+		for _, m := range members {
+			if m.CharacterID != targetID {
+				expireCmds = append(expireCmds, r.client.B().Expire().Key(r.leaderKey(m.CharacterID)).Seconds(int64(r.ttl.Seconds())).Build())
+			}
+		}
+		if len(expireCmds) > 0 {
+			//lint:ignore error-swallow best-effort sliding TTL refresh on member indices
+			_ = r.client.DoMulti(ctx, expireCmds...)
+		}
 	}
 
 	return AdvanceRoundOutcome{

@@ -29,6 +29,15 @@ func (s *Service) StartSession(ctx context.Context, characterID string, tierID s
 	if existing != nil && existing.Status == StatusActive {
 		return nil, ErrActiveSessionExists
 	}
+	if s.activityChecker != nil {
+		busy, err := s.activityChecker.HasActiveActivity(ctx, characterID)
+		if err != nil {
+			return nil, err
+		}
+		if busy {
+			return nil, ErrActiveSessionExists
+		}
+	}
 
 	return s.startSessionRoster(ctx, characterID, []string{characterID}, tier, "", "", "#FFFFFF")
 }
@@ -347,6 +356,7 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
 	//lint:ignore error-swallow best-effort post-commit cache eviction
 	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
+	s.resetPartyState(ctx, session.PartyID)
 
 	return &RoundResult{
 		Round:              round,

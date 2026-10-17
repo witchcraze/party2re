@@ -497,3 +497,86 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 		t.Fatalf("Valkey buffer was NOT purged after successful commit: %#v", valkeySessAfterSuccess)
 	}
 }
+
+func TestValkeySessionRepository_AdvanceRound_SlidingTTLRefreshesMemberLeaderKey(t *testing.T) {
+	client := openTestValkey(t)
+	defer client.Close()
+
+	ttl := 2 * time.Hour
+	repo, err := challenge.NewValkeySessionRepository(client, challenge.WithSessionTTL(ttl))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	leaderID := "ttl-lead-chal"
+	memberID := "ttl-mem-chal"
+	cleanupChallengeValkey(t, client, leaderID, memberID)
+	defer cleanupChallengeValkey(t, client, leaderID, memberID)
+
+	sess := challenge.ChallengeSession{
+		ID:          "chal-ttl-01",
+		CharacterID: leaderID,
+		PartyID:     "party-ttl",
+		PartyName:   "TTL Party",
+		PartyColor:  "#00FF00",
+		Members: []challenge.ChallengeMember{
+			{CharacterID: leaderID, CharacterName: "Leader"},
+			{CharacterID: memberID, CharacterName: "Member"},
+		},
+		TierID:             "0",
+		CurrentRound:       1,
+		CharacterCurrentHP: 100,
+		Status:             challenge.StatusActive,
+		CreatedAt:          time.Now().UTC(),
+		UpdatedAt:          time.Now().UTC(),
+	}
+
+	if err := repo.SaveActiveSession(ctx, sess); err != nil {
+		t.Fatalf("SaveActiveSession failed: %v", err)
+	}
+
+	// Deliberately decay member leader key TTL to 60s
+	memberLeaderKey := fmt.Sprintf("party2:challenge:{char:%s}:leader", memberID)
+	if err := client.Do(ctx, client.B().Expire().Key(memberLeaderKey).Seconds(60).Build()).Error(); err != nil {
+		t.Fatalf("decaying TTL failed: %v", err)
+	}
+
+	// Execute AdvanceRound
+	outcome, err := repo.AdvanceRound(ctx, leaderID, challenge.AdvanceRoundParams{
+		ExpectedSessionID: "chal-ttl-01",
+		SurvivingHP:       95,
+		ExpDelta:          50,
+		GoldDelta:         100,
+		Now:               time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+	if outcome.Status != challenge.StatusActive {
+		t.Fatalf("expected StatusActive, got %s", outcome.Status)
+	}
+
+	// Verify member's leaderKey TTL was refreshed > 60s
+	memberTTL, err := client.Do(ctx, client.B().Ttl().Key(memberLeaderKey).Build()).AsInt64()
+	if err != nil {
+		t.Fatalf("checking TTL failed: %v", err)
+	}
+	if memberTTL <= 60 {
+		t.Errorf("expected member leaderKey TTL to be refreshed > 60s, got %d", memberTTL)
+	}
+
+	// Delete session
+	if err := repo.DeleteActiveSession(ctx, leaderID); err != nil {
+		t.Fatalf("DeleteActiveSession failed: %v", err)
+	}
+
+	// Verify member leader key was purged
+	exists, err := client.Do(ctx, client.B().Exists().Key(memberLeaderKey).Build()).AsInt64()
+	if err != nil {
+		t.Fatalf("checking exists failed: %v", err)
+	}
+	if exists != 0 {
+		t.Errorf("expected member leaderKey to be purged on session delete, got exists=%d", exists)
+	}
+}

@@ -567,3 +567,102 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 		t.Fatalf("Valkey buffer was NOT purged after successful commit: %#v", valkeyExpAfterSuccess)
 	}
 }
+
+func TestValkeyExpeditionRepository_Step_SlidingTTLRefreshesMemberLeaderKey(t *testing.T) {
+	client := openTestValkey(t)
+	defer client.Close()
+
+	ttl := 2 * time.Hour
+	repo, err := dungeon.NewValkeyExpeditionRepository(client, dungeon.WithExpeditionTTL(ttl))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	leaderID := "ttl-lead-01"
+	memberID := "ttl-mem-02"
+	cleanupDungeonValkey(t, client, leaderID, memberID)
+	defer cleanupDungeonValkey(t, client, leaderID, memberID)
+
+	exp := dungeon.ActiveExpedition{
+		ID:          "exp-ttl-01",
+		CharacterID: leaderID,
+		PartyID:     "party-ttl",
+		PartyName:   "TTL Party",
+		Members: []dungeon.ExpeditionMember{
+			{CharacterID: leaderID, Name: "Leader"},
+			{CharacterID: memberID, Name: "Member"},
+		},
+		DungeonID:      "dungeon-01",
+		CurrentFloor:   1,
+		PosX:           0,
+		PosY:           0,
+		CurrentHP:      100,
+		TurnsRemaining: 20,
+		Status:         dungeon.StatusExploring,
+		StartedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
+	}
+
+	if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+		t.Fatalf("SaveActiveExpedition failed: %v", err)
+	}
+
+	// Deliberately decay member leader key TTL to 60s
+	memberLeaderKey := fmt.Sprintf("party2:dungeon:{char:%s}:leader", memberID)
+	if err := client.Do(ctx, client.B().Expire().Key(memberLeaderKey).Seconds(60).Build()).Error(); err != nil {
+		t.Fatalf("decaying TTL failed: %v", err)
+	}
+
+	// Execute Step (exploring)
+	outcome, err := repo.Step(ctx, leaderID, dungeon.StepParams{
+		ExpectedExpeditionID: "exp-ttl-01",
+		NewFloor:             1,
+		NewX:                 1,
+		NewY:                 0,
+		HPDelta:              0,
+		TurnsDelta:           -1,
+		Now:                  time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("Step failed: %v", err)
+	}
+	if outcome.Status != dungeon.StatusExploring {
+		t.Fatalf("expected StatusExploring, got %s", outcome.Status)
+	}
+
+	// Verify member's leaderKey TTL was refreshed back up to ~7200s
+	memberTTL, err := client.Do(ctx, client.B().Ttl().Key(memberLeaderKey).Build()).AsInt64()
+	if err != nil {
+		t.Fatalf("checking TTL failed: %v", err)
+	}
+	if memberTTL <= 60 {
+		t.Errorf("expected member leaderKey TTL to be refreshed > 60s, got %d", memberTTL)
+	}
+
+	// Now execute wipeout Step (turnsDelta = -20)
+	wipeoutOutcome, err := repo.Step(ctx, leaderID, dungeon.StepParams{
+		ExpectedExpeditionID: "exp-ttl-01",
+		NewFloor:             1,
+		NewX:                 1,
+		NewY:                 0,
+		HPDelta:              0,
+		TurnsDelta:           -20,
+		Now:                  time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("wipeout Step failed: %v", err)
+	}
+	if wipeoutOutcome.Status != dungeon.StatusWipedOut {
+		t.Fatalf("expected StatusWipedOut, got %s", wipeoutOutcome.Status)
+	}
+
+	// Verify member's leaderKey was deleted on wipeout
+	exists, err := client.Do(ctx, client.B().Exists().Key(memberLeaderKey).Build()).AsInt64()
+	if err != nil {
+		t.Fatalf("checking exists failed: %v", err)
+	}
+	if exists != 0 {
+		t.Errorf("expected member leaderKey to be deleted on wipeout, got exists=%d", exists)
+	}
+}

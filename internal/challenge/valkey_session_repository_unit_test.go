@@ -344,6 +344,24 @@ func TestValkeySessionRepository_GetActiveSession(t *testing.T) {
 	if sessNoItems.AccumulatedItems == nil || len(sessNoItems.AccumulatedItems) != 0 {
 		t.Errorf("expected non-nil empty slice for items, got %v", sessNoItems.AccumulatedItems)
 	}
+
+	// 6. Error on leader key lookup propagates instead of treating as not found
+	errLeader := errors.New("connection reset by peer")
+	clientLeaderErr := valkeytest.NewMockClient(
+		valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
+			return []valkeygo.ValkeyResult{
+				valkeytest.MakeNilResult(),
+				valkeytest.MakeNilResult(),
+			}
+		}),
+		valkeytest.WithDoHandler(func(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
+			return valkeytest.MakeErrorResult(errLeader)
+		}),
+	)
+	repoLeaderErr, _ := challenge.NewValkeySessionRepository(clientLeaderErr)
+	if _, err := repoLeaderErr.GetActiveSession(ctx, "char-non-leader"); !errors.Is(err, errLeader) {
+		t.Fatalf("expected errLeader to propagate, got %v", err)
+	}
 }
 
 func TestValkeySessionRepository_DeleteActiveSession(t *testing.T) {

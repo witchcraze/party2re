@@ -59,6 +59,20 @@ func (m *mockPartyRepo) UpdateParty(ctx context.Context, p party.Party) error {
 	return nil
 }
 
+func (m *mockPartyRepo) UpdateMemberReady(ctx context.Context, partyID string, characterID string, ready bool) error {
+	mems, ok := m.members[partyID]
+	if !ok {
+		return party.ErrNotFound
+	}
+	for i := range mems {
+		if mems[i].CharacterID == characterID {
+			mems[i].ReadyState = ready
+			return nil
+		}
+	}
+	return nil
+}
+
 func (m *mockPartyRepo) addParty(p party.Party, members []party.Member) {
 	m.parties[p.ID] = p
 	m.members[p.ID] = members
@@ -668,4 +682,155 @@ func c1Lead(lv int) corecharacter.Character {
 	c := createTestChar("lead", lv, 150, 40, 30)
 	c.JobID = "hero"
 	return c
+}
+
+func TestPartyExpedition_NonLeaderForbidden(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "party-auth",
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-auth", CharacterID: "leader-1", ReadyState: true, IsLeader: true},
+		{PartyID: "party-auth", CharacterID: "member-2", ReadyState: true},
+	})
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+	)
+
+	_, err := svc.StartPartyExpedition(ctx, "leader-1", "party-auth", "dungeon-01")
+	if err != nil {
+		t.Fatalf("StartPartyExpedition failed: %v", err)
+	}
+
+	// Non-leader observation is permitted
+	exp, err := svc.GetActiveExpedition(ctx, "member-2")
+	if err != nil || exp == nil {
+		t.Fatalf("GetActiveExpedition for member failed: %v", err)
+	}
+	mv, err := svc.ViewMap(ctx, "member-2")
+	if err != nil || len(mv.Tiles) == 0 {
+		t.Fatalf("ViewMap for member failed: %v", err)
+	}
+
+	// Non-leader mutation is forbidden
+	_, err = svc.Move(ctx, "member-2", dungeon.DirectionEast)
+	if !errors.Is(err, dungeon.ErrForbidden) {
+		t.Errorf("expected ErrForbidden for non-leader Move, got %v", err)
+	}
+
+	_, err = svc.Escape(ctx, "member-2")
+	if !errors.Is(err, dungeon.ErrForbidden) {
+		t.Errorf("expected ErrForbidden for non-leader Escape, got %v", err)
+	}
+
+	// Leader can Move and Escape
+	_, err = svc.Move(ctx, "leader-1", dungeon.DirectionEast)
+	if err != nil {
+		t.Errorf("expected leader Move to succeed, got %v", err)
+	}
+
+	_, err = svc.Escape(ctx, "leader-1")
+	if err != nil {
+		t.Errorf("expected leader Escape to succeed, got %v", err)
+	}
+
+	// Party state and member ready states should be reset after escape
+	p, err := partyRepo.GetParty(ctx, "party-auth")
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Errorf("expected party status recruiting after escape, got %s (err: %v)", p.Status, err)
+	}
+	members, err := partyRepo.GetMembers(ctx, "party-auth")
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range members {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be false after escape", m.CharacterID)
+		}
+	}
+}
+
+func TestPartyExpedition_RollbackOnStartFailure(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "party-rollback",
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-rollback", CharacterID: "leader-1", ReadyState: true, IsLeader: true},
+	})
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+	)
+
+	// Attempt start with nonexistent dungeon -> startExpeditionRoster fails
+	_, err := svc.StartPartyExpedition(ctx, "leader-1", "party-rollback", "nonexistent-dungeon")
+	if err == nil {
+		t.Fatal("expected start to fail for nonexistent dungeon")
+	}
+
+	// Party status should be rolled back to recruiting
+	p, err := partyRepo.GetParty(ctx, "party-rollback")
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Errorf("expected party status to remain recruiting on start failure, got %s", p.Status)
+	}
+}
+
+func TestPartyExpedition_ActivityChecker(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "party-act",
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "party-act", CharacterID: "leader-1", ReadyState: true, IsLeader: true},
+		{PartyID: "party-act", CharacterID: "member-2", ReadyState: true},
+	})
+
+	checker := dungeon.ActivityCheckerFunc(func(ctx context.Context, charID string) (bool, error) {
+		if charID == "member-2" {
+			return true, nil
+		}
+		return false, nil
+	})
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+		dungeon.WithActivityChecker(checker),
+	)
+
+	// Party start fails because member-2 is active in another domain
+	_, err := svc.StartPartyExpedition(ctx, "leader-1", "party-act", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+		t.Errorf("expected ErrActiveExpeditionExists when member has active activity, got %v", err)
+	}
+
+	// Solo start for member-2 fails as well
+	_, err = svc.StartExpedition(ctx, "member-2", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+		t.Errorf("expected ErrActiveExpeditionExists when solo character has active activity, got %v", err)
+	}
 }

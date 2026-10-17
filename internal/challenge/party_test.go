@@ -45,6 +45,20 @@ func (m *mockPartyRepo) UpdateParty(ctx context.Context, p party.Party) error {
 	return nil
 }
 
+func (m *mockPartyRepo) UpdateMemberReady(ctx context.Context, partyID string, characterID string, ready bool) error {
+	mems, ok := m.members[partyID]
+	if !ok {
+		return party.ErrNotFound
+	}
+	for i := range mems {
+		if mems[i].CharacterID == characterID {
+			mems[i].ReadyState = ready
+			return nil
+		}
+	}
+	return nil
+}
+
 func (m *mockPartyRepo) addParty(p party.Party, members []party.Member) {
 	m.parties[p.ID] = p
 	m.members[p.ID] = members
@@ -450,4 +464,150 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 			t.Errorf("expected wrapped repo save session error, got %v", err)
 		}
 	})
+}
+
+func TestPartySession_RollbackOnStartFailure(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "p-fail",
+		LeaderCharacterID: "lead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-fail", CharacterID: "lead", ReadyState: true, IsLeader: true},
+	})
+
+	repo := newMockChallengeRepo()
+	repo.saveSessionErr = errors.New("db error")
+
+	svc, _ := challenge.NewService(
+		repo,
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"lead": createPartyTestChar("lead", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+	)
+
+	_, err := svc.StartPartySession(ctx, "lead", "p-fail", "0")
+	if err == nil {
+		t.Fatal("expected start to fail")
+	}
+
+	p, err := partyRepo.GetParty(ctx, "p-fail")
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Errorf("expected party status recruiting after rollback, got %s", p.Status)
+	}
+}
+
+func TestPartySession_ActivityChecker(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "p-act",
+		LeaderCharacterID: "lead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-act", CharacterID: "lead", ReadyState: true, IsLeader: true},
+		{PartyID: "p-act", CharacterID: "m2", ReadyState: true},
+	})
+
+	checker := challenge.ActivityCheckerFunc(func(ctx context.Context, charID string) (bool, error) {
+		if charID == "m2" {
+			return true, nil
+		}
+		return false, nil
+	})
+
+	svc, _ := challenge.NewService(
+		newMockChallengeRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"lead": createPartyTestChar("lead", 10, 100, 20, 20),
+			"m2":   createPartyTestChar("m2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+		challenge.WithActivityChecker(checker),
+	)
+
+	// Party start fails because m2 has active activity
+	_, err := svc.StartPartySession(ctx, "lead", "p-act", "2")
+	if !errors.Is(err, challenge.ErrActiveSessionExists) {
+		t.Errorf("expected ErrActiveSessionExists when member has active activity, got %v", err)
+	}
+
+	// Solo start fails for m2
+	_, err = svc.StartSession(ctx, "m2", "0")
+	if !errors.Is(err, challenge.ErrActiveSessionExists) {
+		t.Errorf("expected ErrActiveSessionExists when solo character has active activity, got %v", err)
+	}
+}
+
+type mockPartyLossResolver struct{}
+
+func (mockPartyLossResolver) Resolve(req corebattle.Request) (corebattle.Result, error) {
+	return corebattle.Result{
+		Outcome:  corebattle.OutcomeDefeat,
+		WinnerID: "monster",
+	}, nil
+}
+
+func (mockPartyLossResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	return corebattle.PartyBattleResult{
+		Outcome:     corebattle.OutcomeDefeat,
+		WinnerSide:  "enemies",
+		RemainingHP: map[string]int{"lead": 0, "m2": 0},
+	}, nil
+}
+
+func TestPartySession_DefeatResetsPartyState(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	partyRepo.addParty(party.Party{
+		ID:                "p-defeat",
+		LeaderCharacterID: "lead",
+		Status:            party.StatusRecruiting,
+	}, []party.Member{
+		{PartyID: "p-defeat", CharacterID: "lead", ReadyState: true, IsLeader: true},
+		{PartyID: "p-defeat", CharacterID: "m2", ReadyState: true},
+	})
+
+	svc, _ := challenge.NewService(
+		newMockChallengeRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"lead": createPartyTestChar("lead", 10, 100, 20, 20),
+			"m2":   createPartyTestChar("m2", 10, 100, 20, 20),
+		}},
+		mockPartyLossResolver{},
+		challenge.WithPartyRepository(partyRepo),
+	)
+
+	session, err := svc.StartPartySession(ctx, "lead", "p-defeat", "2")
+	if err != nil {
+		t.Fatalf("StartPartySession failed: %v", err)
+	}
+
+	// Advance round -> defeat
+	res, _, err := svc.AdvanceRound(ctx, "lead", session.ID)
+	if err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+	if res.Won {
+		t.Fatal("expected loss/defeat")
+	}
+
+	// Party status should be recruiting and members unready
+	p, err := partyRepo.GetParty(ctx, "p-defeat")
+	if err != nil || p.Status != party.StatusRecruiting {
+		t.Errorf("expected party status recruiting after defeat, got %s", p.Status)
+	}
+	members, err := partyRepo.GetMembers(ctx, "p-defeat")
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range members {
+		if m.ReadyState {
+			t.Errorf("expected member %s ready state to be false after defeat", m.CharacterID)
+		}
+	}
 }

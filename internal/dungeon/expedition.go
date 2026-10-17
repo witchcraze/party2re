@@ -27,6 +27,15 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 	if existing != nil && existing.Status == StatusExploring {
 		return nil, ErrActiveExpeditionExists
 	}
+	if s.activityChecker != nil {
+		busy, err := s.activityChecker.HasActiveActivity(ctx, characterID)
+		if err != nil {
+			return nil, err
+		}
+		if busy {
+			return nil, ErrActiveExpeditionExists
+		}
+	}
 	return s.startExpeditionRoster(ctx, characterID, []string{characterID}, dungeonID, "", "")
 }
 
@@ -41,6 +50,9 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	}
 	if exp == nil || exp.Status != StatusExploring {
 		return ExpeditionStepResult{}, ErrNoActiveExpedition
+	}
+	if exp.CharacterID != characterID {
+		return ExpeditionStepResult{}, ErrForbidden
 	}
 
 	dungeon, ok := s.dungeonMap[exp.DungeonID]

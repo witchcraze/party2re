@@ -25,6 +25,7 @@ var (
 	ErrInvalidDirection          = errors.New("invalid move direction")
 	ErrImpassableWall            = errors.New("cannot move into wall or out of map bounds")
 	ErrExpeditionAlreadyFinished = errors.New("expedition is already completed")
+	ErrForbidden                 = errors.New("forbidden: character is not the expedition leader")
 )
 
 type ExpeditionStatus string
@@ -244,6 +245,19 @@ type PartyRepository interface {
 	GetParty(ctx context.Context, id string) (party.Party, error)
 	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
 	UpdateParty(ctx context.Context, p party.Party) error
+	UpdateMemberReady(ctx context.Context, partyID string, characterID string, ready bool) error
+}
+
+// ActivityChecker validates whether a character has an active activity in another domain.
+type ActivityChecker interface {
+	HasActiveActivity(ctx context.Context, characterID string) (bool, error)
+}
+
+// ActivityCheckerFunc allows using a function as an ActivityChecker.
+type ActivityCheckerFunc func(ctx context.Context, characterID string) (bool, error)
+
+func (f ActivityCheckerFunc) HasActiveActivity(ctx context.Context, characterID string) (bool, error) {
+	return f(ctx, characterID)
 }
 
 // ParticipantBuilder constructs a Participant from character ID with current HP.
@@ -258,6 +272,7 @@ type Service struct {
 	battleEngine        corebattle.Resolver
 	activeStore         ActiveExpeditionStore
 	partyRepo           PartyRepository
+	activityChecker     ActivityChecker
 	dungeons            []Dungeon
 	dungeonMap          map[string]Dungeon
 	monsterDefeatedHook MonsterDefeatedHook
@@ -275,6 +290,25 @@ func (s *Service) Configure(opts ...Option) {
 	}
 }
 
+func (s *Service) resetPartyState(ctx context.Context, partyID string) {
+	if partyID == "" || s.partyRepo == nil {
+		return
+	}
+	p, err := s.partyRepo.GetParty(ctx, partyID)
+	if err == nil {
+		p.Status = party.StatusRecruiting
+		//lint:ignore error-swallow best-effort party status reset upon run termination
+		_ = s.partyRepo.UpdateParty(ctx, p)
+	}
+	members, err := s.partyRepo.GetMembers(ctx, partyID)
+	if err == nil {
+		for _, m := range members {
+			//lint:ignore error-swallow best-effort member ready state reset upon run termination
+			_ = s.partyRepo.UpdateMemberReady(ctx, partyID, m.CharacterID, false)
+		}
+	}
+}
+
 // Option configures optional parameters on Service.
 type Option func(*Service)
 
@@ -282,6 +316,13 @@ type Option func(*Service)
 func WithPartyRepository(repo PartyRepository) Option {
 	return func(s *Service) {
 		s.partyRepo = repo
+	}
+}
+
+// WithActivityChecker configures an optional external ActivityChecker on Service.
+func WithActivityChecker(checker ActivityChecker) Option {
+	return func(s *Service) {
+		s.activityChecker = checker
 	}
 }
 

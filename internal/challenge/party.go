@@ -95,17 +95,33 @@ func (s *Service) StartPartySession(
 		}
 	}
 
+	if s.activityChecker != nil {
+		for _, mID := range memberIDs {
+			busy, err := s.activityChecker.HasActiveActivity(ctx, mID)
+			if err != nil {
+				return nil, err
+			}
+			if busy {
+				return nil, ErrActiveSessionExists
+			}
+		}
+	}
+
 	partyName := p.Name
 	partyColor := "#FFFFFF"
 
-	session, err := s.startSessionRoster(ctx, leaderCharID, memberIDs, tier, partyID, partyName, partyColor)
-	if err != nil {
+	p.Status = party.StatusInProgress
+	if err := s.partyRepo.UpdateParty(ctx, p); err != nil {
 		return nil, err
 	}
 
-	p.Status = party.StatusInProgress
-	//lint:ignore error-swallow best-effort party status update
-	_ = s.partyRepo.UpdateParty(ctx, p)
+	session, err := s.startSessionRoster(ctx, leaderCharID, memberIDs, tier, partyID, partyName, partyColor)
+	if err != nil {
+		p.Status = party.StatusRecruiting
+		//lint:ignore error-swallow compensatory rollback on start failure
+		_ = s.partyRepo.UpdateParty(ctx, p)
+		return nil, err
+	}
 
 	return session, nil
 }

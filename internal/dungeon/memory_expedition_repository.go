@@ -204,7 +204,15 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	exp.UpdatedAt = params.Now
 
 	m.expeditions[targetID] = exp
-	m.expirations[targetID] = time.Now().UTC().Add(m.ttl)
+	if finalStatus == StatusWipedOut {
+		for _, mem := range exp.Members {
+			if mem.CharacterID != targetID {
+				delete(m.memberLeader, mem.CharacterID)
+			}
+		}
+	} else {
+		m.expirations[targetID] = time.Now().UTC().Add(m.ttl)
+	}
 
 	cp := exp
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)

@@ -22,6 +22,9 @@ func (s *Service) Escape(ctx context.Context, characterID string) (ExpeditionSte
 	if exp == nil || exp.Status != StatusExploring {
 		return ExpeditionStepResult{}, ErrNoActiveExpedition
 	}
+	if exp.CharacterID != characterID {
+		return ExpeditionStepResult{}, ErrForbidden
+	}
 	char, err := s.characterRepo.FindByID(ctx, characterID)
 	if err != nil {
 		return ExpeditionStepResult{}, ErrCharacterNotFound
@@ -103,6 +106,7 @@ func (s *Service) handleDungeonClear(
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	s.resetPartyState(ctx, exp.PartyID)
 
 	return ExpeditionStepResult{
 		Expedition:  *exp,
@@ -180,6 +184,7 @@ func (s *Service) handleEscape(
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	s.resetPartyState(ctx, exp.PartyID)
 
 	return ExpeditionStepResult{
 		Expedition:  *exp,
@@ -232,6 +237,7 @@ func (s *Service) handleWipeout(
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	s.resetPartyState(ctx, exp.PartyID)
 
 	return ExpeditionStepResult{
 		Expedition: *exp,

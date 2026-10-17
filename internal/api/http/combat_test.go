@@ -329,6 +329,29 @@ func TestCombatEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/dungeons/move - forbidden when non-leader", func(t *testing.T) {
+		hForbidden := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithDungeon(&stubDungeonService{
+				moveFn: func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error) {
+					return dungeon.ExpeditionStepResult{}, dungeon.ErrForbidden
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/move", `{"direction":"north"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hForbidden.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
 	t.Run("POST /characters/{id}/dungeons/escape", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/escape", "")
 		req.Header.Set("Authorization", "Bearer valid-token")
@@ -337,6 +360,29 @@ func TestCombatEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/dungeons/escape - forbidden when non-leader", func(t *testing.T) {
+		hForbidden := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithDungeon(&stubDungeonService{
+				escapeFn: func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error) {
+					return dungeon.ExpeditionStepResult{}, dungeon.ErrForbidden
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/escape", "")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hForbidden.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
 		}
 	})
 

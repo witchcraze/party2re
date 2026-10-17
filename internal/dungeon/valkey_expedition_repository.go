@@ -182,7 +182,13 @@ func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 
 	// Check if characterID is a non-leader member mapped to a leader
 	leaderID, err := r.client.Do(ctx, r.client.B().Get().Key(r.leaderKey(characterID)).Build()).ToString()
-	if err != nil || leaderID == "" {
+	if err != nil {
+		if valkeygo.IsValkeyNil(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if leaderID == "" {
 		return nil, nil
 	}
 
@@ -354,9 +360,23 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	dungeonID := vals[11]
 	startedAt, _ := time.Parse(time.RFC3339Nano, vals[12])
 
+	partyID := ""
+	partyName := ""
+	var members []ExpeditionMember
+	if len(vals) >= 16 {
+		partyID = vals[13]
+		partyName = vals[14]
+		if vals[15] != "" {
+			members = DecodeMembers(vals[15])
+		}
+	}
+
 	exp := ActiveExpedition{
 		ID:                params.ExpectedExpeditionID,
-		CharacterID:       characterID,
+		CharacterID:       targetID,
+		PartyID:           partyID,
+		PartyName:         partyName,
+		Members:           members,
 		DungeonID:         dungeonID,
 		CurrentFloor:      floor,
 		PosX:              posX,
@@ -370,6 +390,30 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		Status:            status,
 		StartedAt:         startedAt,
 		UpdatedAt:         updatedAt,
+	}
+
+	if status == StatusExploring && len(members) > 0 {
+		var expireCmds []valkeygo.Completed
+		for _, m := range members {
+			if m.CharacterID != targetID {
+				expireCmds = append(expireCmds, r.client.B().Expire().Key(r.leaderKey(m.CharacterID)).Seconds(int64(r.ttl.Seconds())).Build())
+			}
+		}
+		if len(expireCmds) > 0 {
+			//lint:ignore error-swallow best-effort sliding TTL refresh on member indices
+			_ = r.client.DoMulti(ctx, expireCmds...)
+		}
+	} else if status == StatusWipedOut && len(members) > 0 {
+		var delCmds []valkeygo.Completed
+		for _, m := range members {
+			if m.CharacterID != targetID {
+				delCmds = append(delCmds, r.client.B().Del().Key(r.leaderKey(m.CharacterID)).Build())
+			}
+		}
+		if len(delCmds) > 0 {
+			//lint:ignore error-swallow best-effort member index cleanup on wipeout
+			_ = r.client.DoMulti(ctx, delCmds...)
+		}
 	}
 
 	return StepOutcome{

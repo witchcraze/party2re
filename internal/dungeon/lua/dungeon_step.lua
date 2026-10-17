@@ -89,6 +89,9 @@ redis.call('EXPIRE', rewards_key, ttl_seconds)
 -- 8. Fetch static identifiers for full object reconstruction
 local dungeon_id = redis.call('HGET', state_key, 'dungeon_id') or ''
 local started_at = redis.call('HGET', state_key, 'started_at') or ''
+local party_id = redis.call('HGET', state_key, 'party_id') or ''
+local party_name = redis.call('HGET', state_key, 'party_name') or ''
+local members_str = redis.call('HGET', state_key, 'members') or ''
 
 return {
     final_status,
@@ -103,5 +106,8 @@ return {
     new_items_str,
     now_timestamp,
     dungeon_id,
-    started_at
+    started_at,
+    party_id,
+    party_name,
+    members_str
 }

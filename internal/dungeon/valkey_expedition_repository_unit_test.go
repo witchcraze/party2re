@@ -307,6 +307,24 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 	if _, err := repoErr.GetActiveExpedition(ctx, "char-200"); !errors.Is(err, errGet) {
 		t.Fatalf("expected errGet, got %v", err)
 	}
+
+	// 5. Error on leader key lookup propagates instead of treating as not found
+	errLeader := errors.New("connection reset by peer")
+	clientLeaderErr := valkeytest.NewMockClient(
+		valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
+			return []valkeygo.ValkeyResult{
+				valkeytest.MakeNilResult(),
+				valkeytest.MakeNilResult(),
+			}
+		}),
+		valkeytest.WithDoHandler(func(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
+			return valkeytest.MakeErrorResult(errLeader)
+		}),
+	)
+	repoLeaderErr, _ := dungeon.NewValkeyExpeditionRepository(clientLeaderErr)
+	if _, err := repoLeaderErr.GetActiveExpedition(ctx, "char-non-leader"); !errors.Is(err, errLeader) {
+		t.Fatalf("expected errLeader to propagate, got %v", err)
+	}
 }
 
 func TestValkeyExpeditionRepository_DeleteActiveExpedition(t *testing.T) {

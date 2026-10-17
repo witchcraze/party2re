@@ -63,6 +63,10 @@ redis.call('EXPIRE', rewards_key, ttl_seconds)
 -- 7. Fetch static identifiers for full session reconstruction
 local tier_id = redis.call('HGET', session_key, 'tier_id') or ''
 local created_at = redis.call('HGET', session_key, 'created_at') or ''
+local party_id = redis.call('HGET', session_key, 'party_id') or ''
+local party_name = redis.call('HGET', session_key, 'party_name') or ''
+local party_color = redis.call('HGET', session_key, 'party_color') or ''
+local members_str = redis.call('HGET', session_key, 'members') or ''
 
 return {
     tostring(new_round),
@@ -72,5 +76,9 @@ return {
     new_items_str,
     now_timestamp,
     tier_id,
-    created_at
+    created_at,
+    party_id,
+    party_name,
+    party_color,
+    members_str
 }

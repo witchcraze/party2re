@@ -256,9 +256,23 @@ func newCmbtServices(
 
 	dungeonService.Configure(
 		dungeon.WithPartyRepository(partyRepo),
+		dungeon.WithActivityChecker(dungeon.ActivityCheckerFunc(func(ctx context.Context, characterID string) (bool, error) {
+			sess, err := challengeService.GetActiveSession(ctx, characterID)
+			if err != nil {
+				return false, err
+			}
+			return sess != nil && sess.Status == challenge.StatusActive, nil
+		})),
 	)
 	challengeService.Configure(
 		challenge.WithPartyRepository(partyRepo),
+		challenge.WithActivityChecker(challenge.ActivityCheckerFunc(func(ctx context.Context, characterID string) (bool, error) {
+			exp, err := dungeonService.GetActiveExpedition(ctx, characterID)
+			if err != nil {
+				return false, err
+			}
+			return exp != nil && exp.Status == dungeon.StatusExploring, nil
+		})),
 	)
 
 	return &cmbtServices{
