@@ -716,3 +716,78 @@ func TestCrawlSession_RoundAndTravelTransitions(t *testing.T) {
 		}
 	})
 }
+
+func TestCrawlSession_SoloVsParty_SynergyMultipliers(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+
+	rng := func(n int) int { return 0 }
+	engine := corebattle.Engine{}
+
+	// 1. Solo Crawl (1 player -> 0% bonus)
+	soloChar := []corecharacter.Character{
+		{
+			ID:    "solo-hero",
+			Name:  "SoloHero",
+			Level: 99,
+			Stats: corecharacter.Stats{HP: 99999, MaxHP: 99999, Attack: 99999, Defense: 99999},
+		},
+	}
+	soloSess, err := adventure.NewCrawlSession(stage, soloChar, rng)
+	if err != nil {
+		t.Fatalf("NewCrawlSession solo: %v", err)
+	}
+	for f := 1; f <= 10; f++ {
+		res, err := soloSess.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("solo floor %d: %v", f, err)
+		}
+		if res.BattleResult.BonusPercent != 0 {
+			t.Errorf("solo floor %d bonusPercent = %d, want 0", f, res.BattleResult.BonusPercent)
+		}
+	}
+	soloResult := soloSess.Result()
+
+	// 2. 4-Player Crawl (4 players -> +30% bonus)
+	partyChars := []corecharacter.Character{
+		{ID: "p1", Name: "P1", Level: 99, Stats: corecharacter.Stats{HP: 99999, MaxHP: 99999, Attack: 99999, Defense: 99999}},
+		{ID: "p2", Name: "P2", Level: 99, Stats: corecharacter.Stats{HP: 99999, MaxHP: 99999, Attack: 99999, Defense: 99999}},
+		{ID: "p3", Name: "P3", Level: 99, Stats: corecharacter.Stats{HP: 99999, MaxHP: 99999, Attack: 99999, Defense: 99999}},
+		{ID: "p4", Name: "P4", Level: 99, Stats: corecharacter.Stats{HP: 99999, MaxHP: 99999, Attack: 99999, Defense: 99999}},
+	}
+	partySess, err := adventure.NewCrawlSession(stage, partyChars, rng)
+	if err != nil {
+		t.Fatalf("NewCrawlSession party: %v", err)
+	}
+	expectedPartyExp := 0
+	expectedPartyGold := 0
+	for f := 1; f <= 10; f++ {
+		res, err := partySess.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("party floor %d: %v", f, err)
+		}
+		if res.BattleResult.BonusPercent != 30 {
+			t.Errorf("party floor %d bonusPercent = %d, want 30", f, res.BattleResult.BonusPercent)
+		}
+		expectedPartyExp += res.BattleResult.TotalReward.Experience
+		expectedPartyGold += res.BattleResult.TotalReward.Currency
+	}
+	partyResult := partySess.Result()
+
+	if partyResult.TotalEXP != expectedPartyExp {
+		t.Errorf("party TotalEXP = %d, want %d", partyResult.TotalEXP, expectedPartyExp)
+	}
+	if partyResult.TotalGold != expectedPartyGold {
+		t.Errorf("party TotalGold = %d, want %d", partyResult.TotalGold, expectedPartyGold)
+	}
+
+	// Verify that 4-player rewards correctly scale by +30% over solo rewards, and are not doubled
+	approxScale := soloResult.TotalEXP * 130 / 100
+	if partyResult.TotalEXP < soloResult.TotalEXP || partyResult.TotalEXP > approxScale+20 {
+		t.Errorf("party TotalEXP (%d) unexpected relative to solo (%d), approx expected %d",
+			partyResult.TotalEXP, soloResult.TotalEXP, approxScale)
+	}
+}

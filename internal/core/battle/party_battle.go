@@ -473,9 +473,8 @@ func applyBonus(r Reward, bonusPercent int) Reward {
 	if bonusPercent <= 0 {
 		return r
 	}
-	mult := float64(100+bonusPercent) / 100.0
 	out := r
-	out.Experience = int(float64(r.Experience) * mult)
-	out.Currency = int(float64(r.Currency) * mult)
+	out.Experience = r.Experience * (100 + bonusPercent) / 100
+	out.Currency = r.Currency * (100 + bonusPercent) / 100
 	return out
 }
