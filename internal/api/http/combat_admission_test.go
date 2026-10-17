@@ -69,7 +69,8 @@ func TestPartyCombatAdmissionHTTP(t *testing.T) {
 }
 
 func TestStartOutcomeUnknownHTTP(t *testing.T) {
-	cause := errors.New("secret commit failure")
+	causeSave := errors.New("secret save response lost")
+	causeCleanup := errors.New("secret cleanup failure")
 	player := coreplayer.Player{ID: "p1"}
 	for _, tc := range []struct {
 		name, path, body string
@@ -81,7 +82,7 @@ func TestStartOutcomeUnknownHTTP(t *testing.T) {
 		{"challenge party", "/characters/c1/challenges/party-start", `{"tier_id":"1"}`, challenge.ErrStartOutcomeUnknown},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			joined := errors.Join(tc.sentinel, cause)
+			joined := errors.Join(tc.sentinel, causeSave, causeCleanup)
 			ds := &stubDungeonService{
 				startExpeditionFn: func(context.Context, string, string) (*dungeon.ActiveExpedition, error) { return nil, joined },
 				startPartyExpeditionFn: func(context.Context, string, []string, string, string) (*dungeon.ActiveExpedition, error) {

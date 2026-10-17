@@ -183,7 +183,12 @@ func (s *Service) startRoster(
 	}
 
 	if err := s.activeStore.SaveActiveSession(ctx, session); err != nil {
-		return nil, errors.Join(err, s.discardPublished(ctx, &session))
+		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startReconcileTimeout)
+		defer cancel()
+		if discardErr := s.discardPublished(dctx, &session); discardErr != nil {
+			return nil, errors.Join(ErrStartOutcomeUnknown, err, discardErr)
+		}
+		return nil, err
 	}
 
 	return &session, nil

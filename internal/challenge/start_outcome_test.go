@@ -203,3 +203,164 @@ func TestStartPublicationWriteFailureDiscardsPartialRun(t *testing.T) {
 		t.Fatalf("partial run left behind: %+v %v", run, err)
 	}
 }
+
+type publishAndDiscardFailStore struct {
+	challenge.ActiveSessionStore
+	saveErr    error
+	discardErr error
+}
+
+func (s publishAndDiscardFailStore) SaveActiveSession(ctx context.Context, session challenge.ChallengeSession) error {
+	if err := s.ActiveSessionStore.SaveActiveSession(ctx, session); err != nil {
+		return err
+	}
+	return s.saveErr
+}
+
+func (s publishAndDiscardFailStore) DiscardActiveSession(ctx context.Context, session challenge.ChallengeSession) error {
+	return s.discardErr
+}
+
+func TestStartPublicationLostResponseCleanupFailureReportsUnknownAndPreservesEvidence(t *testing.T) {
+	saveErr := errors.New("valkey save response lost")
+	discardErr := errors.New("valkey discard failed")
+	repo := newMockChallengeRepo()
+	memory := challenge.NewMemorySessionRepository()
+	chars := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"lead": createPartyTestChar("lead", 15, 200, 50, 30),
+		"c2":   createPartyTestChar("c2", 15, 180, 45, 25),
+	}}
+	store := publishAndDiscardFailStore{
+		ActiveSessionStore: memory,
+		saveErr:            saveErr,
+		discardErr:         discardErr,
+	}
+	svc, err := challenge.NewService(repo, chars, &corebattle.Engine{},
+		challenge.WithActiveSessionStore(store), challenge.WithAdmission(postStartFailure{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Solo start
+	run, err := svc.StartSession(context.Background(), "lead", "1")
+	if run != nil {
+		t.Fatalf("expected nil run on failure: %+v", run)
+	}
+	if !errors.Is(err, challenge.ErrStartOutcomeUnknown) || !errors.Is(err, saveErr) || !errors.Is(err, discardErr) {
+		t.Fatalf("expected ErrStartOutcomeUnknown, saveErr, and discardErr: %v", err)
+	}
+	if active, getErr := memory.GetActiveSession(context.Background(), "lead"); getErr != nil || active == nil {
+		t.Fatalf("session in active store must be preserved as evidence: %+v %v", active, getErr)
+	}
+
+	// Clean up memory store for next case
+	_ = memory.DeleteActiveSession(context.Background(), "lead")
+
+	// 2. Party start
+	run, err = svc.StartPartySession(context.Background(), "lead", []string{"lead", "c2"}, "1", "Party", "#FFFFFF")
+	if run != nil {
+		t.Fatalf("expected nil run on party failure: %+v", run)
+	}
+	if !errors.Is(err, challenge.ErrStartOutcomeUnknown) || !errors.Is(err, saveErr) || !errors.Is(err, discardErr) {
+		t.Fatalf("party start must return ErrStartOutcomeUnknown, saveErr, and discardErr: %v", err)
+	}
+	for _, id := range []string{"lead", "c2"} {
+		if active, getErr := memory.GetActiveSession(context.Background(), id); getErr != nil || active == nil {
+			t.Fatalf("member %s run in active store must be preserved as evidence: %+v %v", id, active, getErr)
+		}
+	}
+}
+
+type captureContextStore struct {
+	challenge.ActiveSessionStore
+	saveErr        error
+	discardErr     error
+	discardInvoked bool
+	discardCtxErr  error
+}
+
+func (s *captureContextStore) SaveActiveSession(ctx context.Context, session challenge.ChallengeSession) error {
+	_ = s.ActiveSessionStore.SaveActiveSession(ctx, session)
+	return s.saveErr
+}
+
+func (s *captureContextStore) DiscardActiveSession(ctx context.Context, session challenge.ChallengeSession) error {
+	s.discardInvoked = true
+	s.discardCtxErr = ctx.Err()
+	if s.discardErr != nil {
+		return s.discardErr
+	}
+	return s.ActiveSessionStore.DiscardActiveSession(ctx, session)
+}
+
+func TestStartPublicationCanceledContextUsesDetachedContextForCleanup(t *testing.T) {
+	repo := newMockChallengeRepo()
+	memory := challenge.NewMemorySessionRepository()
+	chars := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"lead": createPartyTestChar("lead", 15, 200, 50, 30),
+	}}
+	saveErr := context.Canceled
+	store := &captureContextStore{
+		ActiveSessionStore: memory,
+		saveErr:            saveErr,
+	}
+	svc, err := challenge.NewService(repo, chars, &corebattle.Engine{},
+		challenge.WithActiveSessionStore(store), challenge.WithAdmission(postStartFailure{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel() // canceled before calling StartSession
+
+	_, err = svc.StartSession(canceledCtx, "lead", "1")
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("expected saveErr: %v", err)
+	}
+	if errors.Is(err, challenge.ErrStartOutcomeUnknown) {
+		t.Fatalf("clean discard must not return ErrStartOutcomeUnknown: %v", err)
+	}
+
+	// Verify discard was invoked with a detached, uncanceled context!
+	if !store.discardInvoked {
+		t.Fatal("expected DiscardActiveSession to be invoked")
+	}
+	if store.discardCtxErr != nil {
+		t.Fatalf("cleanup context must not be canceled during execution: %v", store.discardCtxErr)
+	}
+	// Verify memory store was cleanly emptied
+	if active, _ := memory.GetActiveSession(context.Background(), "lead"); active != nil {
+		t.Fatalf("expected active session to be discarded, found: %+v", active)
+	}
+}
+
+func TestStartPublicationCanceledContextCleanupFailureReportsUnknown(t *testing.T) {
+	repo := newMockChallengeRepo()
+	memory := challenge.NewMemorySessionRepository()
+	chars := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"lead": createPartyTestChar("lead", 15, 200, 50, 30),
+	}}
+	saveErr := context.Canceled
+	discardErr := errors.New("valkey down during discard")
+	store := &captureContextStore{
+		ActiveSessionStore: memory,
+		saveErr:            saveErr,
+		discardErr:         discardErr,
+	}
+	svc, err := challenge.NewService(repo, chars, &corebattle.Engine{},
+		challenge.WithActiveSessionStore(store), challenge.WithAdmission(postStartFailure{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err = svc.StartSession(canceledCtx, "lead", "1")
+	if !errors.Is(err, challenge.ErrStartOutcomeUnknown) || !errors.Is(err, saveErr) || !errors.Is(err, discardErr) {
+		t.Fatalf("expected ErrStartOutcomeUnknown, saveErr, and discardErr: %v", err)
+	}
+	if active, _ := memory.GetActiveSession(context.Background(), "lead"); active == nil {
+		t.Fatal("session must remain in memory when cleanup fails")
+	}
+}
