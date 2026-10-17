@@ -31,6 +31,7 @@ func (m *mockInventoryRepo) FindByCharacterID(ctx context.Context, characterID s
 
 type mockPartyRepo struct {
 	mu            sync.Mutex
+	lockErr       error
 	lockedParties map[string]bool
 	parties       map[string]party.Party
 	members       map[string][]party.Member
@@ -46,6 +47,11 @@ func newMockPartyRepo() *mockPartyRepo {
 
 func (m *mockPartyRepo) WithPartyLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error {
 	m.mu.Lock()
+	if m.lockErr != nil {
+		err := m.lockErr
+		m.mu.Unlock()
+		return err
+	}
 	if m.lockedParties == nil {
 		m.lockedParties = make(map[string]bool)
 	}
@@ -1169,7 +1175,7 @@ func TestResetPartyState_LockContention_RetriesAndSucceeds(t *testing.T) {
 	}
 }
 
-func TestResetPartyState_PersistentLockContention_FallbackEnsuresReset(t *testing.T) {
+func TestResetPartyState_PersistentLockContention_MaintainsExclusionAndSurfacesError(t *testing.T) {
 	ctx := context.Background()
 	partyRepo := newMockPartyRepo()
 	pID := "party-persistent-contend"
@@ -1222,24 +1228,102 @@ func TestResetPartyState_PersistentLockContention_FallbackEnsuresReset(t *testin
 	}()
 	lockHeld.Wait()
 
-	// Escape runs while lock is permanently occupied; fallback must reset party in DB
+	// Escape runs while lock is permanently occupied; must NOT bypass lock and must return error
 	_, err := svc.Escape(ctx, "leader-1")
-	if err != nil {
-		t.Fatalf("Escape failed: %v", err)
+	if err == nil {
+		t.Fatalf("expected Escape to fail due to lock contention, got nil")
+	}
+	if !errors.Is(err, party.ErrPartyNotRecruiting) {
+		t.Fatalf("expected ErrPartyNotRecruiting, got %v", err)
 	}
 
+	// While lock was held, party status and ready states MUST NOT have been bypassed/mutated
 	p, err := partyRepo.GetParty(ctx, pID)
-	if err != nil || p.Status != party.StatusRecruiting {
-		t.Fatalf("expected fallback to reset party status to recruiting, got status %v (err: %v)", p.Status, err)
+	if err != nil || p.Status != party.StatusInProgress {
+		t.Fatalf("expected party status to remain StatusInProgress under lock, got %v (err: %v)", p.Status, err)
 	}
 	mems, err := partyRepo.GetMembers(ctx, pID)
 	if err != nil {
 		t.Fatalf("GetMembers failed: %v", err)
 	}
 	for _, m := range mems {
-		if m.ReadyState {
-			t.Errorf("expected member %s ready state to be false via fallback, was true", m.CharacterID)
+		if !m.ReadyState {
+			t.Errorf("expected member %s ready state to remain true while locked, was false", m.CharacterID)
 		}
 	}
 	lockDone.Wait()
+
+	// Retrying Escape after lock release returns ErrNoActiveExpedition because Two-Phase Settlement
+	// already committed and evicted the active expedition, preventing duplicate reward settlement
+	_, retryErr := svc.Escape(ctx, "leader-1")
+	if !errors.Is(retryErr, dungeon.ErrNoActiveExpedition) {
+		t.Fatalf("expected ErrNoActiveExpedition on retry, got: %v", retryErr)
+	}
+}
+
+func TestResetPartyState_ValkeyFailure_SurfacesErrorWithoutLockBypass(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-valkey-down"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusInProgress,
+		Name:              "Valkey Down Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	activeStore := dungeon.NewMemoryExpeditionRepository()
+	_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
+		ID:          "exp-valkey-fail",
+		CharacterID: "leader-1",
+		DungeonID:   "dungeon-01",
+		PartyID:     pID,
+		Status:      dungeon.StatusExploring,
+		Members: []dungeon.ExpeditionMember{
+			{CharacterID: "leader-1"},
+			{CharacterID: "member-2"},
+		},
+	})
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+		dungeon.WithActiveExpeditionStore(activeStore),
+	)
+
+	// Simulate Valkey failure on party lock
+	valkeyErr := errors.New("valkey: connection refused")
+	partyRepo.lockErr = valkeyErr
+
+	// Escape fails and surfaces the error, without bypassing the lock
+	_, err := svc.Escape(ctx, "leader-1")
+	if err == nil {
+		t.Fatalf("expected Escape to fail due to valkey failure, got nil")
+	}
+	if !errors.Is(err, valkeyErr) {
+		t.Fatalf("expected valkey failure error to propagate, got: %v", err)
+	}
+
+	// State in DB was NOT bypassed/mutated outside of lock
+	p, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusInProgress {
+		t.Fatalf("expected party status to remain StatusInProgress, got %v (err: %v)", p.Status, err)
+	}
+	mems, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range mems {
+		if !m.ReadyState {
+			t.Errorf("expected member %s ready state to remain true, was false", m.CharacterID)
+		}
+	}
 }

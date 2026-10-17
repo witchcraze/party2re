@@ -17,6 +17,7 @@ import (
 
 type mockPartyRepo struct {
 	mu            sync.Mutex
+	lockErr       error
 	lockedParties map[string]bool
 	parties       map[string]party.Party
 	members       map[string][]party.Member
@@ -32,6 +33,11 @@ func newMockPartyRepo() *mockPartyRepo {
 
 func (m *mockPartyRepo) WithPartyLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error {
 	m.mu.Lock()
+	if m.lockErr != nil {
+		err := m.lockErr
+		m.mu.Unlock()
+		return err
+	}
 	if m.lockedParties == nil {
 		m.lockedParties = make(map[string]bool)
 	}
@@ -1026,7 +1032,7 @@ func TestResetPartyState_Challenge_LockContention_RetriesAndSucceeds(t *testing.
 	}
 }
 
-func TestResetPartyState_Challenge_PersistentLockContention_FallbackEnsuresReset(t *testing.T) {
+func TestResetPartyState_Challenge_PersistentLockContention_MaintainsExclusionAndSurfacesError(t *testing.T) {
 	ctx := context.Background()
 	partyRepo := newMockPartyRepo()
 	pID := "party-challenge-persist-contend"
@@ -1083,24 +1089,106 @@ func TestResetPartyState_Challenge_PersistentLockContention_FallbackEnsuresReset
 	}()
 	lockHeld.Wait()
 
-	// AdvanceRound triggers defeat; fallback must guarantee party status and members are reset in DB
+	// AdvanceRound triggers defeat; must NOT bypass lock and must return error
 	_, _, err := svc.AdvanceRound(ctx, "leader-1", sessID)
-	if err != nil {
-		t.Fatalf("AdvanceRound failed: %v", err)
+	if err == nil {
+		t.Fatalf("expected AdvanceRound to fail due to lock contention, got nil")
+	}
+	if !errors.Is(err, party.ErrPartyNotRecruiting) {
+		t.Fatalf("expected ErrPartyNotRecruiting, got %v", err)
 	}
 
+	// While lock was held, party status and ready states MUST NOT have been bypassed/mutated
 	p, err := partyRepo.GetParty(ctx, pID)
-	if err != nil || p.Status != party.StatusRecruiting {
-		t.Fatalf("expected fallback to reset party status to recruiting, got status %v (err: %v)", p.Status, err)
+	if err != nil || p.Status != party.StatusInProgress {
+		t.Fatalf("expected party to remain in_progress under lock, got status %v (err: %v)", p.Status, err)
 	}
 	mems, err := partyRepo.GetMembers(ctx, pID)
 	if err != nil {
 		t.Fatalf("GetMembers failed: %v", err)
 	}
 	for _, m := range mems {
-		if m.ReadyState {
-			t.Errorf("expected member %s ready state to be false via fallback, was true", m.CharacterID)
+		if !m.ReadyState {
+			t.Errorf("expected member %s ready state to remain true under lock, was false", m.CharacterID)
 		}
 	}
 	lockDone.Wait()
+
+	// Retrying AdvanceRound after lock release returns ErrSessionNotFound because Two-Phase Settlement
+	// already committed and evicted the active session, preventing duplicate reward settlement
+	_, _, retryErr := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if !errors.Is(retryErr, challenge.ErrSessionNotFound) {
+		t.Fatalf("expected ErrSessionNotFound on retry, got: %v", retryErr)
+	}
+}
+
+func TestResetPartyState_Challenge_ValkeyFailure_SurfacesErrorWithoutLockBypass(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-challenge-valkey-down"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusInProgress,
+		Name:              "Challenge Valkey Down Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	activeStore := challenge.NewMemorySessionRepository()
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"leader-1": createPartyTestChar("leader-1", 10, 10, 1, 1),
+		"member-2": createPartyTestChar("member-2", 10, 10, 1, 1),
+	}}
+
+	svc, _ := challenge.NewService(
+		newMockChallengeRepo(),
+		charRepo,
+		&corebattle.Engine{},
+		challenge.WithPartyRepository(partyRepo),
+		challenge.WithActiveSessionStore(activeStore),
+	)
+
+	sessID := "sess-valkey-fail"
+	_ = activeStore.SaveActiveSession(ctx, challenge.ChallengeSession{
+		ID:           sessID,
+		CharacterID:  "leader-1",
+		PartyID:      pID,
+		TierID:       "2",
+		CurrentRound: 1,
+		Status:       challenge.StatusActive,
+		Members: []challenge.ChallengeMember{
+			{CharacterID: "leader-1", CharacterCurrentHP: 0},
+			{CharacterID: "member-2", CharacterCurrentHP: 0},
+		},
+	})
+
+	// Simulate Valkey failure on party lock
+	valkeyErr := errors.New("valkey: connection refused")
+	partyRepo.lockErr = valkeyErr
+
+	// AdvanceRound fails and surfaces the error, without bypassing the lock
+	_, _, err := svc.AdvanceRound(ctx, "leader-1", sessID)
+	if err == nil {
+		t.Fatalf("expected AdvanceRound to fail due to valkey failure, got nil")
+	}
+	if !errors.Is(err, valkeyErr) {
+		t.Fatalf("expected valkey failure error to propagate, got: %v", err)
+	}
+
+	// State in DB was NOT bypassed/mutated outside of lock
+	p, err := partyRepo.GetParty(ctx, pID)
+	if err != nil || p.Status != party.StatusInProgress {
+		t.Fatalf("expected party status to remain StatusInProgress, got %v (err: %v)", p.Status, err)
+	}
+	mems, err := partyRepo.GetMembers(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	for _, m := range mems {
+		if !m.ReadyState {
+			t.Errorf("expected member %s ready state to remain true, was false", m.CharacterID)
+		}
+	}
 }

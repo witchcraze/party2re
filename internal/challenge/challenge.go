@@ -251,9 +251,9 @@ func (s *Service) Configure(opts ...Option) {
 	}
 }
 
-func (s *Service) resetPartyState(ctx context.Context, partyID string) {
+func (s *Service) resetPartyState(ctx context.Context, partyID string) error {
 	if partyID == "" || s.partyRepo == nil {
-		return
+		return nil
 	}
 
 	resetFn := func(lockedCtx context.Context) error {
@@ -274,48 +274,34 @@ func (s *Service) resetPartyState(ctx context.Context, partyID string) {
 		return s.partyRepo.UpdateParty(lockedCtx, p)
 	}
 
-	// Use background context with a safety timeout so party reset is not aborted if the incoming HTTP request context is cancelled.
-	resetCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Use detached context with a safety timeout so party reset is not aborted if the incoming HTTP request context is cancelled.
+	resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 
 	const maxRetries = 5
 	backoff := 20 * time.Millisecond
+	var lastErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		err := s.partyRepo.WithPartyLock(resetCtx, partyID, resetFn)
-		if err == nil {
-			return
+		lastErr = s.partyRepo.WithPartyLock(resetCtx, partyID, resetFn)
+		if lastErr == nil {
+			return nil
 		}
 		if resetCtx.Err() != nil {
-			break
+			return resetCtx.Err()
 		}
-		if !errors.Is(err, party.ErrPartyNotRecruiting) {
-			break
+		if !errors.Is(lastErr, party.ErrPartyNotRecruiting) {
+			return lastErr
 		}
 		select {
 		case <-resetCtx.Done():
-			break
+			return resetCtx.Err()
 		case <-time.After(backoff):
 		}
 		backoff *= 2
 	}
 
-	// Fallback: If lock could not be acquired due to persistent contention or Valkey failure,
-	// guarantee party status and member ready states are reset directly so the party
-	// is not permanently stuck in StatusInProgress.
-	members, err := s.partyRepo.GetMembers(resetCtx, partyID)
-	if err == nil {
-		for _, m := range members {
-			//lint:ignore error-swallow best-effort member ready state reset upon fallback
-			_ = s.partyRepo.UpdateMemberReady(resetCtx, partyID, m.CharacterID, false)
-		}
-	}
-	p, err := s.partyRepo.GetParty(resetCtx, partyID)
-	if err == nil {
-		p.Status = party.StatusRecruiting
-		//lint:ignore error-swallow best-effort party status reset upon fallback
-		_ = s.partyRepo.UpdateParty(resetCtx, p)
-	}
+	return lastErr
 }
 
 // Option configures optional parameters on Service.

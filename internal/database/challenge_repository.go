@@ -316,7 +316,18 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 
-		// 1. Update session status
+		// 1. Guard against duplicate settlement: verify session is not already finalized
+		var existingStatus string
+		err := executor.QueryRowContext(txCtx, `SELECT status FROM challenge_sessions WHERE id = ? FOR UPDATE`, s.ID).Scan(&existingStatus)
+		if err == nil {
+			if existingStatus == string(challenge.StatusDefeated) || existingStatus == string(challenge.StatusClaimed) {
+				return challenge.ErrSessionNotActive
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+
+		// 2. Update session status
 		itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
 		var partyID sql.NullString
 		if s.PartyID != "" {

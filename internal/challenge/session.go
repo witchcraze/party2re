@@ -368,7 +368,9 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
 	//lint:ignore error-swallow best-effort post-commit cache eviction
 	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
-	s.resetPartyState(ctx, session.PartyID)
+	if err := s.resetPartyState(ctx, session.PartyID); err != nil {
+		return nil, nil, fmt.Errorf("resetting party state: %w", err)
+	}
 
 	return &RoundResult{
 		Round:              round,

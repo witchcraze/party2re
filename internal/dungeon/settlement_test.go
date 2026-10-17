@@ -439,3 +439,32 @@ func TestWipeout_ErrorPropagation(t *testing.T) {
 		}
 	})
 }
+
+func TestSettlement_HistoryIDMatchesExpeditionID(t *testing.T) {
+	ctx := context.Background()
+	repo, _, activeStore, service := setupSettlementTest(t)
+	now := time.Now().UTC()
+
+	expID := "exp-unique-id-12345"
+	_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
+		ID:          expID,
+		CharacterID: "hero",
+		DungeonID:   "test-dg-01",
+		Status:      dungeon.StatusExploring,
+		StartedAt:   now,
+		UpdatedAt:   now,
+	})
+
+	_, err := service.Escape(ctx, "hero")
+	if err != nil {
+		t.Fatalf("expected successful escape, got: %v", err)
+	}
+
+	histories, err := repo.GetHistory(ctx, "hero", 1)
+	if err != nil || len(histories) == 0 {
+		t.Fatalf("expected history record, got err: %v", err)
+	}
+	if histories[0].ID != expID {
+		t.Fatalf("expected history ID to match exp.ID %q, got %q", expID, histories[0].ID)
+	}
+}

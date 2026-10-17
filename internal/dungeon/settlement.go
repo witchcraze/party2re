@@ -82,7 +82,10 @@ func (s *Service) handleDungeonClear(
 	}
 
 	// 3. Save History
-	histID := id.New()
+	histID := exp.ID
+	if histID == "" {
+		histID = id.New()
+	}
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -106,7 +109,9 @@ func (s *Service) handleDungeonClear(
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
-	s.resetPartyState(ctx, exp.PartyID)
+	if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
+	}
 
 	return ExpeditionStepResult{
 		Expedition:  *exp,
@@ -160,7 +165,10 @@ func (s *Service) handleEscape(
 	rec.TotalExpeditions++
 	rec.TotalFloorsCleared += exp.CurrentFloor
 
-	histID := id.New()
+	histID := exp.ID
+	if histID == "" {
+		histID = id.New()
+	}
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -184,7 +192,9 @@ func (s *Service) handleEscape(
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
-	s.resetPartyState(ctx, exp.PartyID)
+	if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
+	}
 
 	return ExpeditionStepResult{
 		Expedition:  *exp,
@@ -213,7 +223,10 @@ func (s *Service) handleWipeout(
 	}
 	rec.TotalExpeditions++
 
-	histID := id.New()
+	histID := exp.ID
+	if histID == "" {
+		histID = id.New()
+	}
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -237,7 +250,9 @@ func (s *Service) handleWipeout(
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
-	s.resetPartyState(ctx, exp.PartyID)
+	if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
+	}
 
 	return ExpeditionStepResult{
 		Expedition: *exp,
