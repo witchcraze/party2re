@@ -272,3 +272,57 @@ func TestMemoryTimer_ResetDungeonOnceWithClaim(t *testing.T) {
 		t.Fatal("dungeon_once quota must be deleted")
 	}
 }
+
+func TestMemoryTimer_SetLockWithClaim(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+
+	ok, err := svc.TryLockWithToken(ctx, CategoryWaking, "c1", "tok-1", time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("TryLockWithToken: %v", err)
+	}
+
+	// Wrong token returns ErrClaimLost and does not set the lock
+	wrongCtx := WithClaim(ctx, CategoryWaking, "wrong-tok")
+	if err := svc.SetLock(wrongCtx, CategorySleep, "c1", time.Minute); !errors.Is(err, ErrClaimLost) {
+		t.Fatalf("SetLock wrong token err = %v, want ErrClaimLost", err)
+	}
+	if locked, _ := svc.IsLocked(ctx, CategorySleep, "c1"); locked {
+		t.Fatal("CategorySleep must not be set on claim mismatch")
+	}
+
+	// Matching token sets the lock
+	validCtx := WithClaim(ctx, CategoryWaking, "tok-1")
+	if err := svc.SetLock(validCtx, CategorySleep, "c1", time.Minute); err != nil {
+		t.Fatalf("SetLock matching token err = %v", err)
+	}
+	if locked, _ := svc.IsLocked(ctx, CategorySleep, "c1"); !locked {
+		t.Fatal("CategorySleep must be set on matching claim")
+	}
+}
+
+func TestValkeyTimer_SetLockWithClaim(t *testing.T) {
+	ctx := context.Background()
+	claimKey := PrefixTimer + CategoryWaking + ":c1"
+	targetKey := PrefixTimer + CategorySleep + ":c1"
+
+	var lastCmd []string
+	allowed := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		lastCmd = cmd.Commands()
+		return valkeytest.MakeIntResult(1)
+	}))
+	claimCtx := WithClaim(ctx, CategoryWaking, "tok-1")
+	if err := NewService(allowed).SetLock(claimCtx, CategorySleep, "c1", 60*time.Second); err != nil {
+		t.Fatalf("SetLock with claim err = %v", err)
+	}
+	if len(lastCmd) < 7 || (lastCmd[0] != "EVALSHA" && lastCmd[0] != "EVAL") || lastCmd[3] != claimKey || lastCmd[4] != targetKey || lastCmd[5] != "tok-1" || lastCmd[6] != "60" {
+		t.Fatalf("unexpected script command: %v", lastCmd)
+	}
+
+	denied := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, _ valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntResult(0)
+	}))
+	if err := NewService(denied).SetLock(claimCtx, CategorySleep, "c1", 60*time.Second); !errors.Is(err, ErrClaimLost) {
+		t.Fatalf("SetLock denied claim err = %v, want ErrClaimLost", err)
+	}
+}

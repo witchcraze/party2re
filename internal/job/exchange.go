@@ -14,6 +14,9 @@ func (s *Service) RestoreActiveJob(ctx context.Context, characterID, jobID strin
 	if s.repository == nil {
 		return errors.New("job repository is nil")
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	state, err := s.repository.FindByCharacterID(ctx, characterID)
 	if err != nil {
 		if isNotFound(err) {
@@ -24,6 +27,9 @@ func (s *Service) RestoreActiveJob(ctx context.Context, characterID, jobID strin
 		} else {
 			return err
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	state.RestoreCurrentJob(jobID)
 	return s.repository.Save(ctx, state)

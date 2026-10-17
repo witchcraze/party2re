@@ -1100,3 +1100,293 @@ func TestWake_PauseImmediatelyAfterOwnershipVerification_PreservesSuccessorNewCo
 		t.Fatalf("successor's new costume (item 99) was corrupted by resumed old Wake: %+v", activeCostume)
 	}
 }
+
+type interceptTimerService struct {
+	TimerService
+	onSetLock func(ctx context.Context, category string) error
+}
+
+func (i *interceptTimerService) SetLock(ctx context.Context, category, targetID string, duration time.Duration) error {
+	if i.onSetLock != nil {
+		if err := i.onSetLock(ctx, category); err != nil {
+			return err
+		}
+	}
+	return i.TimerService.SetLock(ctx, category, targetID, duration)
+}
+
+type jobRestoreHook func(ctx context.Context, characterID, jobID string) error
+
+func (f jobRestoreHook) RestoreActiveJob(ctx context.Context, characterID, jobID string) error {
+	return f(ctx, characterID, jobID)
+}
+
+// Issue #1450: Sleep must renew its waking claim lease during slow startup steps.
+func TestSleep_KeepAliveRenewsLeaseDuringSlowStartup(t *testing.T) {
+	ctx := context.Background()
+	tm := timer.NewService(nil)
+	repo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 40, Stats: corecharacter.Stats{HP: 10, MaxHP: 100}},
+		},
+	}
+
+	enteredAsleep := make(chan struct{})
+	releaseAsleep := make(chan struct{})
+	it := &interceptTimerService{
+		TimerService: tm,
+		onSetLock: func(_ context.Context, category string) error {
+			if category == timer.CategoryAsleep {
+				close(enteredAsleep)
+				<-releaseAsleep
+			}
+			return nil
+		},
+	}
+
+	svc, err := NewService(
+		newMockHomeRepo(),
+		repo,
+		WithTimer(it),
+		WithCharacterUpdater(repo),
+		WithWakeClaimTTL(60*time.Millisecond, 20*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	sleepDone := make(chan error, 1)
+	go func() {
+		_, err := svc.Sleep(ctx, "c1", "c1")
+		sleepDone <- err
+	}()
+
+	select {
+	case <-enteredAsleep:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Sleep never reached SetLock(CategoryAsleep)")
+	}
+
+	// Wait > 2x TTL while Sleep is paused
+	time.Sleep(150 * time.Millisecond)
+
+	if locked, err := tm.IsLocked(ctx, timer.CategoryWaking, "c1"); err != nil || !locked {
+		t.Fatalf("expected CategoryWaking still locked via Sleep keep-alive renewal, got %v err=%v", locked, err)
+	}
+
+	// Concurrent Wake (if CategorySleep expired) or Sleep must be rejected with ErrWakeInProgress
+	_ = tm.ReleaseLock(ctx, timer.CategorySleep, "c1")
+	if _, err := svc.Wake(ctx, "c1"); !errors.Is(err, ErrWakeInProgress) {
+		t.Fatalf("concurrent Wake err = %v, want ErrWakeInProgress", err)
+	}
+	if _, err := svc.Sleep(ctx, "c1", "c1"); !errors.Is(err, ErrWakeInProgress) {
+		t.Fatalf("concurrent Sleep err = %v, want ErrWakeInProgress", err)
+	}
+
+	// Re-establish CategorySleep before letting first Sleep finish
+	_ = tm.SetLock(ctx, timer.CategorySleep, "c1", time.Minute)
+	close(releaseAsleep)
+
+	select {
+	case err := <-sleepDone:
+		if err != nil {
+			t.Fatalf("first Sleep failed: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("first Sleep timed out")
+	}
+
+	if locked, _ := tm.IsLocked(ctx, timer.CategoryWaking, "c1"); locked {
+		t.Fatal("expected CategoryWaking released after Sleep completion")
+	}
+	if !repo.chars["c1"].PendingWake {
+		t.Fatal("expected PendingWake=true after Sleep completion")
+	}
+}
+
+// Issue #1450: When an earlier Sleep's waking claim expires while paused before SetLock(CategoryAsleep)
+// or revertSleepJobMemory, and a successor Wake + second Sleep complete, resuming the earlier Sleep
+// (whether the paused step errors or attempts to proceed) must NOT roll back or overwrite the
+// successor cycle's SQL pending_wake, CategorySleep / CategoryAsleep locks, or temporary JobMemory.
+func TestSleep_ExpiredClaimPreservesSuccessorSleepState(t *testing.T) {
+	ctx := context.Background()
+
+	for _, pausePoint := range []string{"asleep_error", "asleep_proceed", "job_revert_error", "job_revert_proceed"} {
+		t.Run(pausePoint, func(t *testing.T) {
+			tm := timer.NewService(nil)
+			repo := &mockCharRepo{
+				chars: map[string]corecharacter.Character{
+					"c1": {
+						ID:       "c1",
+						Name:     "Hero",
+						Tired:    60,
+						Stats:    corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50},
+						JobID:    "warrior",
+						SP:       10,
+						OldJobID: "novice",
+						OldSP:    5,
+						JobMemory: &corecharacter.JobMemory{
+							Kind:     corecharacter.JobMemoryKindTemporary,
+							JobID:    "mage",
+							SP:       20,
+							OldJobID: "apprentice",
+							OldSP:    15,
+						},
+					},
+				},
+			}
+			initialJobState, _ := corejob.NewCharacterJob("c1", "warrior")
+			jobRepo := &mockJobRepo{state: initialJobState}
+			jobSvc, err := job.NewService(jobRepo)
+			if err != nil {
+				t.Fatalf("job.NewService: %v", err)
+			}
+
+			paused := make(chan struct{})
+			resume := make(chan struct{})
+			var pauseOnce atomic.Bool
+
+			it := &interceptTimerService{
+				TimerService: tm,
+				onSetLock: func(_ context.Context, category string) error {
+					if (pausePoint == "asleep_error" || pausePoint == "asleep_proceed") &&
+						category == timer.CategoryAsleep && pauseOnce.CompareAndSwap(false, true) {
+						close(paused)
+						<-resume
+						if pausePoint == "asleep_error" {
+							return errors.New("late asleep write failure")
+						}
+					}
+					return nil
+				},
+			}
+
+			restorer := jobRestoreHook(func(rCtx context.Context, characterID, jobID string) error {
+				if (pausePoint == "job_revert_error" || pausePoint == "job_revert_proceed") &&
+					pauseOnce.CompareAndSwap(false, true) {
+					close(paused)
+					<-resume
+					if pausePoint == "job_revert_error" {
+						return errors.New("late job restore failure")
+					}
+				}
+				return jobSvc.RestoreActiveJob(rCtx, characterID, jobID)
+			})
+
+			svc1, err := NewService(
+				newMockHomeRepo(),
+				repo,
+				WithTimer(it),
+				WithCharacterUpdater(repo),
+				WithJobStateRestorer(restorer),
+				WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
+			)
+			if err != nil {
+				t.Fatalf("NewService svc1: %v", err)
+			}
+
+			svc2, err := NewService(
+				newMockHomeRepo(),
+				repo,
+				WithTimer(tm),
+				WithCharacterUpdater(repo),
+				WithJobStateRestorer(jobSvc),
+			)
+			if err != nil {
+				t.Fatalf("NewService svc2: %v", err)
+			}
+
+			firstSleepDone := make(chan error, 1)
+			go func() {
+				_, err := svc1.Sleep(ctx, "c1", "c1")
+				firstSleepDone <- err
+			}()
+
+			select {
+			case <-paused:
+			case <-time.After(5 * time.Second):
+				t.Fatal("first Sleep never reached pause point")
+			}
+
+			// Simulate first Sleep's waking claim TTL and sleep duration expiring
+			if err := tm.ReleaseLock(ctx, timer.CategoryWaking, "c1"); err != nil {
+				t.Fatal(err)
+			}
+			if err := tm.ReleaseLock(ctx, timer.CategorySleep, "c1"); err != nil {
+				t.Fatal(err)
+			}
+
+			// Successor Wake acquires a new waking claim and completes recovery
+			wakeRes, err := svc2.Wake(ctx, "c1")
+			if err != nil || !wakeRes.Success {
+				t.Fatalf("successor Wake failed: %+v, %v", wakeRes, err)
+			}
+
+			// Player equips a new temporary job memory before 2nd Sleep, or enters 2nd Sleep
+			c := repo.chars["c1"]
+			c.Stats.HP = 25
+			c.Tired = 40
+			c.JobID = "paladin"
+			c.SP = 30
+			c.OldJobID = "knight"
+			c.OldSP = 25
+			c.JobMemory = &corecharacter.JobMemory{
+				Kind:     corecharacter.JobMemoryKindTemporary,
+				JobID:    "sage",
+				SP:       50,
+				OldJobID: "priest",
+				OldSP:    40,
+			}
+			repo.chars["c1"] = c
+			_ = jobSvc.RestoreActiveJob(ctx, "c1", "paladin")
+
+			// Successor 2nd Sleep runs to completion
+			if _, err := svc2.Sleep(ctx, "c1", "c1"); err != nil {
+				t.Fatalf("second Sleep failed: %v", err)
+			}
+
+			// Verify 2nd Sleep established PendingWake=true, locks, and reverted temporary JobMemory to sage
+			if !repo.chars["c1"].PendingWake {
+				t.Fatal("expected PendingWake=true after second Sleep")
+			}
+			if repo.chars["c1"].JobID != "sage" || jobRepo.state.CurrentJobID != "sage" {
+				t.Fatalf("expected 2nd Sleep to revert job to sage, got char=%s jobState=%s", repo.chars["c1"].JobID, jobRepo.state.CurrentJobID)
+			}
+
+			// Resume the paused 1st Sleep
+			close(resume)
+			select {
+			case err := <-firstSleepDone:
+				if err == nil {
+					t.Fatal("expected first Sleep to fail after losing claim ownership")
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("first Sleep timed out")
+			}
+
+			// Successor 2nd Sleep state must remain completely intact!
+			got := repo.chars["c1"]
+			if !got.PendingWake {
+				t.Fatal("successor SQL PendingWake was erroneously cleared by stale first Sleep rollback")
+			}
+			if got.JobID != "sage" || got.SP != 50 || got.JobMemory != nil {
+				t.Fatalf("successor character job state was corrupted by stale first Sleep: %+v (jobMemory=%+v)", got, got.JobMemory)
+			}
+			if jobRepo.state.CurrentJobID != "sage" {
+				t.Fatalf("successor character_jobs.current_job_id was corrupted: got %s, want sage", jobRepo.state.CurrentJobID)
+			}
+			if rem, err := tm.GetRemainingLock(ctx, timer.CategorySleep, "c1"); err != nil || rem <= 0 {
+				t.Fatalf("successor CategorySleep lock was deleted by stale first Sleep: rem=%v err=%v", rem, err)
+			}
+			if asleep, err := tm.IsLocked(ctx, timer.CategoryAsleep, "c1"); err != nil || !asleep {
+				t.Fatalf("successor CategoryAsleep lock was deleted by stale first Sleep: asleep=%v err=%v", asleep, err)
+			}
+
+			// While 2nd Sleep timer is active, GetSleepStatus must report Sleeping=true, CanWake=false
+			status, err := svc2.GetSleepStatus(ctx, "c1")
+			if err != nil || !status.Sleeping || status.CanWake || status.RemainingSeconds <= 0 {
+				t.Fatalf("GetSleepStatus during 2nd Sleep = %+v, err=%v; want Sleeping=true CanWake=false RemainingSeconds>0", status, err)
+			}
+		})
+	}
+}

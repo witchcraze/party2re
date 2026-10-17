@@ -45,6 +45,9 @@ func (m *mockTimer) SetLock(ctx context.Context, category, targetID string, dura
 			return err
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err, ok := m.setLockErrs[category]; ok && err != nil {
 		return err
 	}

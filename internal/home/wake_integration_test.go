@@ -10,11 +10,13 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/job"
 	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/tavern"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -1260,6 +1262,392 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 
 		if calls := atomic.LoadInt32(&hookCalls); calls != 1 {
 			t.Fatalf("expected costume hook called exactly once, got %d", calls)
+		}
+	})
+
+	t.Run("sleep_keep_alive_renews_lease_in_real_valkey", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "SleepRealKeepAlive")
+		char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 60
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+
+		enteredAsleep := make(chan struct{})
+		releaseAsleep := make(chan struct{})
+		ft := &failingSleepTimer{
+			TimerService: timers,
+			onSetLock: func(_ context.Context, category string) error {
+				if category == timer.CategoryAsleep {
+					close(enteredAsleep)
+					<-releaseAsleep
+				}
+				return nil
+			},
+		}
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(ft),
+			home.WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sleepDone := make(chan error, 1)
+		go func() {
+			_, err := svc.Sleep(ctx, char.ID, char.ID)
+			sleepDone <- err
+		}()
+
+		select {
+		case <-enteredAsleep:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Sleep never reached SetLock(CategoryAsleep)")
+		}
+
+		// Hold for 1250ms (> 1s TTL in real Valkey). Background keeper must renew the waking claim.
+		time.Sleep(1250 * time.Millisecond)
+
+		locked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID)
+		if err != nil || !locked {
+			t.Fatalf("expected CategoryWaking lock renewed in Valkey during slow Sleep, got %v err=%v", locked, err)
+		}
+
+		// If CategorySleep expires while first Sleep is still starting, concurrent Wake/Sleep must get ErrWakeInProgress.
+		if err := timers.ReleaseLock(ctx, timer.CategorySleep, char.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Wake(ctx, char.ID); !errors.Is(err, home.ErrWakeInProgress) {
+			t.Fatalf("concurrent Wake err = %v, want ErrWakeInProgress", err)
+		}
+		if _, err := svc.Sleep(ctx, char.ID, char.ID); !errors.Is(err, home.ErrWakeInProgress) {
+			t.Fatalf("concurrent Sleep err = %v, want ErrWakeInProgress", err)
+		}
+
+		if err := timers.SetLock(ctx, timer.CategorySleep, char.ID, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		close(releaseAsleep)
+
+		select {
+		case err := <-sleepDone:
+			if err != nil {
+				t.Fatalf("first Sleep failed: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("first Sleep timed out")
+		}
+
+		persisted, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !persisted.PendingWake {
+			t.Fatal("expected PendingWake=true in MariaDB after Sleep completion")
+		}
+		if locked, _ := timers.IsLocked(ctx, timer.CategoryWaking, char.ID); locked {
+			t.Fatal("expected CategoryWaking released in Valkey after Sleep completion")
+		}
+	})
+
+	t.Run("sleep_expired_claim_preserves_successor_sleep_state_in_real_mariadb_and_valkey", func(t *testing.T) {
+		jobRepo, err := database.NewCharacterJobRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		jobSvc, err := job.NewService(jobRepo)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, mode := range []string{"asleep_error", "asleep_proceed", "job_revert_error", "job_revert_proceed"} {
+			t.Run(mode, func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				char := newChar(t, ctx, "SleepExpiredClaim_"+mode)
+				t.Cleanup(func() {
+					cleanupCtx := context.Background()
+					_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_job_masteries WHERE character_id = ?", char.ID)
+					_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_job_history WHERE character_id = ?", char.ID)
+					_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_jobs WHERE character_id = ?", char.ID)
+				})
+
+				char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 70
+				char.JobID = "warrior"
+				char.SP = 10
+				char.OldJobID = "novice"
+				char.OldSP = 5
+				char.JobMemory = &corecharacter.JobMemory{
+					Kind:     corecharacter.JobMemoryKindTemporary,
+					JobID:    "mage",
+					SP:       20,
+					OldJobID: "apprentice",
+					OldSP:    15,
+				}
+				if err := charRepo.Update(ctx, char); err != nil {
+					t.Fatal(err)
+				}
+				initialJobState, err := corejob.NewCharacterJob(char.ID, "warrior")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := jobRepo.Save(ctx, initialJobState); err != nil {
+					t.Fatal(err)
+				}
+
+				skippedTimer := &failingRenewTimer{Service: timers}
+				paused := make(chan struct{})
+				resume := make(chan struct{})
+				var pauseOnce atomic.Bool
+
+				ft := &failingSleepTimer{
+					TimerService: skippedTimer,
+					onSetLock: func(_ context.Context, category string) error {
+						if (mode == "asleep_error" || mode == "asleep_proceed") &&
+							category == timer.CategoryAsleep && pauseOnce.CompareAndSwap(false, true) {
+							skippedTimer.dropRenew.Store(true)
+							close(paused)
+							<-resume
+							if mode == "asleep_error" {
+								return errors.New("injected asleep lock error after lease expiry")
+							}
+						}
+						return nil
+					},
+				}
+
+				restorer := wakeJobRestorerHook(func(rCtx context.Context, characterID, jobID string) error {
+					if (mode == "job_revert_error" || mode == "job_revert_proceed") &&
+						pauseOnce.CompareAndSwap(false, true) {
+						skippedTimer.dropRenew.Store(true)
+						close(paused)
+						<-resume
+						if mode == "job_revert_error" {
+							return errors.New("injected job restore error after lease expiry")
+						}
+					}
+					return jobSvc.RestoreActiveJob(rCtx, characterID, jobID)
+				})
+
+				// For asleep_*, use WithEconomy(eco) (transaction runner).
+				// For job_revert_*, use WithCharacterUpdater(charRepo) so pausing inside RestoreActiveJob
+				// does not hold an uncommitted MariaDB row lock across the artificial pause barrier.
+				svc1Opts := []home.ServiceOption{
+					home.WithCharacterUpdater(charRepo),
+					home.WithTimer(ft),
+					home.WithJobStateRestorer(restorer),
+					home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
+				}
+				if mode == "asleep_error" || mode == "asleep_proceed" {
+					svc1Opts = append(svc1Opts, home.WithEconomy(eco))
+				}
+				svc1, err := home.NewService(homeRepo, charRepo, svc1Opts...)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				svc2, err := home.NewService(
+					homeRepo,
+					charRepo,
+					home.WithCharacterUpdater(charRepo),
+					home.WithEconomy(eco),
+					home.WithTimer(timers),
+					home.WithJobStateRestorer(jobSvc),
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				firstSleepDone := make(chan error, 1)
+				go func() {
+					_, err := svc1.Sleep(ctx, char.ID, char.ID)
+					firstSleepDone <- err
+				}()
+
+				select {
+				case <-paused:
+				case <-time.After(5 * time.Second):
+					t.Fatal("first Sleep never reached pause point")
+				}
+
+				// Wait 1250ms (> 1s TTL in real Valkey) with renewals dropped so first Sleep's waking claim expires.
+				time.Sleep(1250 * time.Millisecond)
+
+				if wakingLocked, err := timers.IsLocked(ctx, timer.CategoryWaking, char.ID); err != nil || wakingLocked {
+					t.Fatalf("expected first Sleep's waking claim to expire in Valkey, got %v err=%v", wakingLocked, err)
+				}
+
+				// Simulate first Sleep's duration lock expiring in Valkey.
+				if err := timers.ReleaseLock(ctx, timer.CategorySleep, char.ID); err != nil {
+					t.Fatal(err)
+				}
+
+				// 1. Successor Wake acquires a new waking claim and completes recovery in MariaDB + Valkey.
+				wakeRes, err := svc2.Wake(ctx, char.ID)
+				if err != nil || !wakeRes.Success {
+					t.Fatalf("successor Wake failed: %+v, %v", wakeRes, err)
+				}
+
+				// 2. Player resumes play, enters a new temporary job state, and starts a 2nd Sleep.
+				afterWake, err := charRepo.FindByID(ctx, char.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				afterWake.Stats.HP, afterWake.Stats.MP, afterWake.Tired = 20, 10, 45
+				afterWake.JobID = "paladin"
+				afterWake.SP = 30
+				afterWake.OldJobID = "knight"
+				afterWake.OldSP = 25
+				afterWake.JobMemory = &corecharacter.JobMemory{
+					Kind:     corecharacter.JobMemoryKindTemporary,
+					JobID:    "sage",
+					SP:       50,
+					OldJobID: "priest",
+					OldSP:    40,
+				}
+				if err := charRepo.Update(ctx, afterWake); err != nil {
+					t.Fatal(err)
+				}
+				if err := jobSvc.RestoreActiveJob(ctx, char.ID, "paladin"); err != nil {
+					t.Fatal(err)
+				}
+
+				secondSleepRes, err := svc2.Sleep(ctx, char.ID, char.ID)
+				if err != nil || !secondSleepRes.Sleeping {
+					t.Fatalf("second Sleep failed: %+v, %v", secondSleepRes, err)
+				}
+
+				// 3. Resume the paused 1st Sleep; it must abort and its rollback must NOT corrupt 2nd Sleep!
+				close(resume)
+				select {
+				case err := <-firstSleepDone:
+					if err == nil {
+						t.Fatal("expected stale first Sleep to fail after losing claim ownership")
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("first Sleep timed out")
+				}
+
+				// 4. Verify 2nd Sleep's MariaDB state (pending_wake = true, reverted job = sage) is preserved.
+				persisted, err := charRepo.FindByID(ctx, char.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !persisted.PendingWake {
+					t.Fatal("successor SQL PendingWake was erroneously cleared by stale first Sleep rollback")
+				}
+				if persisted.JobID != "sage" || persisted.SP != 50 || persisted.JobMemory != nil {
+					t.Fatalf("successor character job state in MariaDB was corrupted: %+v (jobMemory=%+v)", persisted, persisted.JobMemory)
+				}
+				persistedJobState, err := jobRepo.FindByCharacterID(ctx, char.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if persistedJobState.CurrentJobID != "sage" {
+					t.Fatalf("successor character_jobs.current_job_id in MariaDB was corrupted: got %s, want sage", persistedJobState.CurrentJobID)
+				}
+
+				// 5. Verify 2nd Sleep's Valkey locks (CategorySleep remaining duration > 0, CategoryAsleep locked) are preserved.
+				rem, err := timers.GetRemainingLock(ctx, timer.CategorySleep, char.ID)
+				if err != nil || rem <= 0 {
+					t.Fatalf("successor CategorySleep lock in Valkey was deleted by stale first Sleep: rem=%v err=%v", rem, err)
+				}
+				if asleep, err := timers.IsLocked(ctx, timer.CategoryAsleep, char.ID); err != nil || !asleep {
+					t.Fatalf("successor CategoryAsleep lock in Valkey was deleted by stale first Sleep: asleep=%v err=%v", asleep, err)
+				}
+
+				// 6. GetSleepStatus must report Sleeping=true, CanWake=false, RemainingSeconds>0 during 2nd Sleep.
+				status, err := svc2.GetSleepStatus(ctx, char.ID)
+				if err != nil || !status.Sleeping || status.CanWake || status.RemainingSeconds <= 0 {
+					t.Fatalf("GetSleepStatus during 2nd Sleep = %+v, err=%v; want Sleeping=true CanWake=false RemainingSeconds>0", status, err)
+				}
+
+				// 7. Healthy contrast: once 2nd Sleep's duration expires, CanWake=true and 2nd Wake recovers vitality.
+				if err := timers.ReleaseLock(ctx, timer.CategorySleep, char.ID); err != nil {
+					t.Fatal(err)
+				}
+				statusAfterExpiry, err := svc2.GetSleepStatus(ctx, char.ID)
+				if err != nil || !statusAfterExpiry.CanWake {
+					t.Fatalf("GetSleepStatus after 2nd Sleep expiry = %+v, err=%v; want CanWake=true", statusAfterExpiry, err)
+				}
+				secondWakeRes, err := svc2.Wake(ctx, char.ID)
+				if err != nil || !secondWakeRes.Success {
+					t.Fatalf("second Wake failed: %+v, %v", secondWakeRes, err)
+				}
+				finalChar, err := charRepo.FindByID(ctx, char.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if finalChar.PendingWake || finalChar.Stats.HP != finalChar.Stats.MaxHP || finalChar.Tired != 0 {
+					t.Fatalf("finalChar after 2nd Wake = %+v; want PendingWake=false and full vitality", finalChar)
+				}
+			})
+		}
+	})
+
+	t.Run("concurrent_sleep_claim_expiry_and_successor_cycle_stress", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		char := newChar(t, ctx, "SleepClaimStress")
+
+		svc, err := home.NewService(
+			homeRepo,
+			charRepo,
+			home.WithCharacterUpdater(charRepo),
+			home.WithEconomy(eco),
+			home.WithTimer(timers),
+			home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cfg := testutil.GetStressConfig()
+		res := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
+			switch worker % 3 {
+			case 0:
+				_, err := svc.Sleep(ctx, char.ID, char.ID)
+				if err == nil {
+					_ = timers.ReleaseLock(ctx, timer.CategorySleep, char.ID)
+					return nil
+				}
+				if errors.Is(err, home.ErrAlreadySleeping) || errors.Is(err, home.ErrWakeInProgress) {
+					return nil
+				}
+				return err
+			case 1:
+				_, err := svc.Wake(ctx, char.ID)
+				if err == nil || errors.Is(err, home.ErrStillSleeping) || errors.Is(err, home.ErrWakeInProgress) {
+					return nil
+				}
+				return err
+			default:
+				_, err := svc.GetSleepStatus(ctx, char.ID)
+				return err
+			}
+		})
+		if res.Failures != 0 || res.Deadlocks != 0 {
+			t.Fatalf("stress: %+v", res)
+		}
+
+		if err := timers.ReleaseLock(ctx, timer.CategorySleep, char.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Wake(ctx, char.ID); err != nil {
+			t.Fatalf("settling Wake: %v", err)
+		}
+		finalChar, err := charRepo.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if finalChar.PendingWake {
+			t.Fatal("expected PendingWake=false after settling Wake")
 		}
 	})
 }
