@@ -21,10 +21,14 @@ var releaseLockLua string
 //go:embed lua/release_with_claim.lua
 var releaseWithClaimLua string
 
+//go:embed lua/set_with_claim.lua
+var setWithClaimLua string
+
 var (
 	renewLockScript        = valkey.NewLuaScript(renewLockLua)
 	releaseLockScript      = valkey.NewLuaScript(releaseLockLua)
 	releaseWithClaimScript = valkey.NewLuaScript(releaseWithClaimLua)
+	setWithClaimScript     = valkey.NewLuaScript(setWithClaimLua)
 )
 
 const (
@@ -33,7 +37,7 @@ const (
 
 	CategorySleep  = "sleep"
 	CategoryAsleep = "asleep"
-	// CategoryWaking is a short-lived claim held while one Wake runs recovery.
+	// CategoryWaking is a short-lived claim held while one Wake or Sleep cycle runs.
 	CategoryWaking      = "waking"
 	CategoryHouse       = "house"
 	CategoryStore       = "store"
@@ -45,7 +49,24 @@ var (
 	ErrInvalidAction   = errors.New("invalid daily action")
 	ErrEmptyID         = errors.New("target id cannot be empty")
 	ErrEmptyToken      = errors.New("lock token cannot be empty")
+	ErrClaimLost       = errors.New("lock claim ownership lost")
 )
+
+type claimContextKey struct{}
+
+type claimSpec struct {
+	category string
+	token    string
+}
+
+// WithClaim binds a required claim category and token to ctx so SetLock
+// atomically verifies claim ownership before writing the target lock.
+func WithClaim(ctx context.Context, claimCategory, claimToken string) context.Context {
+	return context.WithValue(ctx, claimContextKey{}, claimSpec{
+		category: strings.TrimSpace(claimCategory),
+		token:    strings.TrimSpace(claimToken),
+	})
+}
 
 // JST is Japan Standard Time (UTC+9), used for canonical daily resets in Party2.
 var JST = time.FixedZone("JST", 9*60*60)
@@ -119,9 +140,51 @@ func timerKey(category, targetID string) (string, error) {
 }
 
 func (s *service) SetLock(ctx context.Context, category, targetID string, duration time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	k, err := timerKey(category, targetID)
 	if err != nil {
 		return err
+	}
+	if claim, ok := ctx.Value(claimContextKey{}).(claimSpec); ok {
+		if claim.token == "" {
+			return ErrEmptyToken
+		}
+		claimK, err := timerKey(claim.category, targetID)
+		if err != nil {
+			return err
+		}
+		if s.client != nil {
+			secs := int64(duration.Seconds())
+			if secs < 1 {
+				secs = 1
+			}
+			res := setWithClaimScript.Exec(ctx, s.client, []string{claimK, k}, []string{claim.token, strconv.FormatInt(secs, 10)})
+			if res.Error() != nil {
+				if valkey.IsValkeyNil(res.Error()) {
+					return ErrClaimLost
+				}
+				return res.Error()
+			}
+			n, err := res.AsInt64()
+			if err != nil {
+				return err
+			}
+			if n != 1 {
+				return ErrClaimLost
+			}
+			return nil
+		}
+
+		s.memMu.Lock()
+		defer s.memMu.Unlock()
+		exp, exists := s.memory[claimK]
+		if !exists || time.Now().After(exp.expiresAt) || exp.value != claim.token {
+			return ErrClaimLost
+		}
+		s.memory[k] = memTimerEntry{expiresAt: time.Now().Add(duration), value: "1"}
+		return nil
 	}
 	if s.client != nil {
 		secs := int64(duration.Seconds())

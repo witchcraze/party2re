@@ -104,6 +104,12 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	}
 	defer s.releaseWakingClaim(ctx, characterID, sleepClaimToken)
 
+	sleepCtx, sleepCancel := context.WithCancel(ctx)
+	defer sleepCancel()
+
+	keeper := s.newWakeClaimKeeper(characterID, sleepClaimToken, sleepCancel)
+	defer keeper.stop()
+
 	if isSleeping, err := s.timer.IsLocked(ctx, timer.CategorySleep, characterID); err != nil {
 		return SleepResult{}, err
 	} else if isSleeping {
@@ -123,22 +129,43 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	}
 	duration := CalculateSleepDuration(s.baseSleepDuration, onlineCount)
 
-	hasTempJob, err := s.markPendingWake(ctx, characterID, char)
-	if err != nil {
+	if err := keeper.checkOwnership(ctx); err != nil {
 		return SleepResult{}, err
 	}
 
-	if err := s.timer.SetLock(ctx, timer.CategorySleep, characterID, duration); err != nil {
-		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, err, false, false)
+	claimCtx := timer.WithClaim(newWakeClaimContext(sleepCtx, keeper), timer.CategoryWaking, sleepClaimToken)
+
+	hasTempJob, err := s.markPendingWake(ctx, characterID, char, keeper)
+	if err != nil {
+		return SleepResult{}, s.normalizeSleepClaimError(ctx, keeper, err)
+	}
+
+	if err := keeper.checkOwnership(ctx); err != nil {
+		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, sleepClaimToken, keeper, err, false, false)
+	}
+	if err := s.timer.SetLock(claimCtx, timer.CategorySleep, characterID, duration); err != nil {
+		err = s.normalizeSleepClaimError(ctx, keeper, err)
+		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, sleepClaimToken, keeper, err, false, false)
+	}
+	if err := keeper.checkOwnership(ctx); err != nil {
+		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, sleepClaimToken, keeper, err, true, false)
 	}
 	// Ephemeral pending wake flag valid up to 365 days (retained for backward-compatibility with ephemeral query observers)
-	if err := s.timer.SetLock(ctx, timer.CategoryAsleep, characterID, 365*24*time.Hour); err != nil {
-		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, err, true, false)
+	if err := s.timer.SetLock(claimCtx, timer.CategoryAsleep, characterID, 365*24*time.Hour); err != nil {
+		err = s.normalizeSleepClaimError(ctx, keeper, err)
+		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, sleepClaimToken, keeper, err, true, false)
+	}
+	if err := keeper.checkOwnership(ctx); err != nil {
+		return SleepResult{}, s.rollbackSleepStart(ctx, characterID, sleepClaimToken, keeper, err, true, true)
 	}
 
 	if hasTempJob {
-		if err := s.revertSleepJobMemory(ctx, characterID, char); err != nil {
-			return SleepResult{}, s.rollbackSleepStart(ctx, characterID, err, true, true)
+		if err := s.revertSleepJobMemory(ctx, characterID, char, keeper); err != nil {
+			err = s.normalizeSleepClaimError(ctx, keeper, err)
+			return SleepResult{}, s.rollbackSleepStart(ctx, characterID, sleepClaimToken, keeper, err, true, true)
+		}
+		if err := keeper.checkOwnership(ctx); err != nil {
+			return SleepResult{}, s.rollbackSleepStart(ctx, characterID, sleepClaimToken, keeper, err, true, true)
 		}
 	}
 
@@ -151,9 +178,12 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	}, nil
 }
 
-func (s *Service) markPendingWake(ctx context.Context, characterID string, initialChar corecharacter.Character) (bool, error) {
+func (s *Service) markPendingWake(ctx context.Context, characterID string, initialChar corecharacter.Character, keeper *wakeClaimKeeper) (bool, error) {
 	var hasTempJob bool
-	_, err := s.mutateCharacter(ctx, characterID, initialChar, func(_ context.Context, c *corecharacter.Character) error {
+	_, err := s.mutateCharacter(ctx, characterID, initialChar, func(txCtx context.Context, c *corecharacter.Character) error {
+		if err := keeper.checkOwnership(txCtx); err != nil {
+			return err
+		}
 		if c.PendingWake {
 			return ErrAlreadySleeping
 		}
@@ -164,49 +194,85 @@ func (s *Service) markPendingWake(ctx context.Context, characterID string, initi
 	return hasTempJob, err
 }
 
-func (s *Service) revertSleepJobMemory(ctx context.Context, characterID string, initialChar corecharacter.Character) error {
+func (s *Service) revertSleepJobMemory(ctx context.Context, characterID string, initialChar corecharacter.Character, keeper *wakeClaimKeeper) error {
 	_, err := s.mutateCharacter(ctx, characterID, initialChar, func(txCtx context.Context, c *corecharacter.Character) error {
+		if err := keeper.checkOwnership(txCtx); err != nil {
+			return err
+		}
 		if c.JobMemory != nil && c.JobMemory.IsTemporary() {
 			memoryJobID := c.JobMemory.JobID
 			c.RevertJobMemory()
 			if s.jobRestorer != nil {
-				return s.jobRestorer.RestoreActiveJob(txCtx, characterID, memoryJobID)
+				txClaimCtx := newWakeClaimContext(txCtx, keeper)
+				if err := s.jobRestorer.RestoreActiveJob(txClaimCtx, characterID, memoryJobID); err != nil {
+					return err
+				}
 			}
+			return keeper.checkOwnership(txCtx)
 		}
 		return nil
 	})
 	return err
 }
 
-func (s *Service) rollbackSleepStart(ctx context.Context, characterID string, cause error, releaseSleep, releaseAsleep bool) error {
+func (s *Service) normalizeSleepClaimError(callerCtx context.Context, keeper *wakeClaimKeeper, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, timer.ErrClaimLost) {
+		return ErrWakeInProgress
+	}
+	if keeper.lost.Load() || (errors.Is(err, context.Canceled) && callerCtx.Err() == nil) {
+		checkCtx, cancel := context.WithTimeout(context.Background(), sleepRollbackTimeout)
+		defer cancel()
+		if ownErr := keeper.checkOwnership(checkCtx); ownErr != nil {
+			return ownErr
+		}
+	}
+	return err
+}
+
+func (s *Service) rollbackSleepStart(ctx context.Context, characterID, claimToken string, keeper *wakeClaimKeeper, cause error, releaseSleep, releaseAsleep bool) error {
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sleepRollbackTimeout)
 	defer cancel()
 
 	errs := []error{cause}
 	if releaseAsleep {
-		if err := s.timer.ReleaseLock(cleanupCtx, timer.CategoryAsleep, characterID); err != nil {
+		if _, err := s.timer.ReleaseLockWithClaim(cleanupCtx, timer.CategoryAsleep, characterID, timer.CategoryWaking, claimToken); err != nil {
 			errs = append(errs, fmt.Errorf("release asleep lock: %w", err))
 		}
 	}
 	if releaseSleep {
-		if err := s.timer.ReleaseLock(cleanupCtx, timer.CategorySleep, characterID); err != nil {
+		if _, err := s.timer.ReleaseLockWithClaim(cleanupCtx, timer.CategorySleep, characterID, timer.CategoryWaking, claimToken); err != nil {
 			errs = append(errs, fmt.Errorf("release sleep lock: %w", err))
 		}
 	}
-	if err := s.revertPendingWake(cleanupCtx, characterID); err != nil {
+	if err := s.revertPendingWake(cleanupCtx, characterID, keeper); err != nil {
 		errs = append(errs, fmt.Errorf("revert pending_wake: %w", err))
 	}
 	return errors.Join(errs...)
 }
 
-func (s *Service) revertPendingWake(ctx context.Context, characterID string) error {
+func (s *Service) revertPendingWake(ctx context.Context, characterID string, keeper *wakeClaimKeeper) error {
 	if s.runner == nil && s.charUpdater == nil {
 		return nil
 	}
-	_, err := s.mutateCharacter(ctx, characterID, corecharacter.Character{}, func(_ context.Context, c *corecharacter.Character) error {
+	if err := keeper.checkOwnership(ctx); err != nil {
+		if errors.Is(err, ErrWakeInProgress) || keeper.lost.Load() {
+			return nil
+		}
+		return err
+	}
+	_, err := s.mutateCharacter(ctx, characterID, corecharacter.Character{}, func(txCtx context.Context, c *corecharacter.Character) error {
+		if err := keeper.checkOwnership(txCtx); err != nil {
+			return err
+		}
 		c.PendingWake = false
 		return nil
 	})
+	if errors.Is(err, ErrWakeInProgress) || keeper.lost.Load() {
+		return nil
+	}
 	return err
 }
 
