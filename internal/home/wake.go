@@ -193,6 +193,9 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 
 	char, err := s.charReader.FindByID(ctx, characterID)
 	if err != nil {
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return WakeResult{}, ErrCharacterNotFound
+		}
 		return WakeResult{}, err
 	}
 
@@ -238,8 +241,18 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 
 	// Re-verify after claim in case another Wake finished concurrently
 	if s.charReader != nil {
-		if c, err := s.charReader.FindByID(ctx, characterID); err == nil && !c.PendingWake {
-			asleep, _ := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+		c, err := s.charReader.FindByID(ctx, characterID)
+		if err != nil {
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return WakeResult{}, ErrCharacterNotFound
+			}
+			return WakeResult{}, err
+		}
+		if !c.PendingWake {
+			asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+			if err != nil {
+				return WakeResult{}, err
+			}
 			if !asleep {
 				return WakeResult{
 					Success:   true,

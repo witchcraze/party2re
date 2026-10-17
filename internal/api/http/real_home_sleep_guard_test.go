@@ -177,10 +177,17 @@ type inMemoryRealHomeRepo struct {
 
 type inMemoryRealCharRepo struct {
 	char        corecharacter.Character
+	findErr     error
 	updateCount int
 }
 
 func (c *inMemoryRealCharRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	if err := ctx.Err(); err != nil {
+		return corecharacter.Character{}, err
+	}
+	if c.findErr != nil {
+		return corecharacter.Character{}, c.findErr
+	}
 	if id == c.char.ID {
 		return c.char, nil
 	}
@@ -577,6 +584,115 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			}
 			if !parkPosted {
 				t.Errorf("expected park post to be created when awake")
+			}
+		}
+	})
+
+	t.Run("SQL pending_wake read failure in Home.GetSleepStatus halts REST and Gateway guards with 500 without mutating Bank, Park or Store", func(t *testing.T) {
+		charRepo := &inMemoryRealCharRepo{
+			char: corecharacter.Character{
+				ID:          "hero",
+				PlayerID:    "player-1",
+				Name:        "Hero",
+				PendingWake: true,
+			},
+		}
+		bankRepo := &inMemoryRealBankRepo{
+			char: corecharacter.Character{
+				ID:       "hero",
+				PlayerID: "player-1",
+				Name:     "Hero",
+				Money:    100,
+				Deposit:  1000,
+			},
+		}
+		timerSvc := newInMemoryRealTimer()
+		// Both Valkey sleep duration and asleep locks are absent; only SQL pending_wake=true exists.
+		timerSvc.remainingDurations[timer.CategorySleep+":hero"] = 0
+		timerSvc.locks[timer.CategoryAsleep+":hero"] = false
+
+		parkPosted := false
+		mockPark := &mockParkService{
+			postFn: func(ctx context.Context, charID, content, color, recipient string) (park.Post, error) {
+				parkPosted = true
+				return park.Post{}, nil
+			},
+		}
+
+		storeBuilt := false
+		mockStore := &stubStoreService{
+			buildStoreFn: func(ctx context.Context, characterID, townID, houseStyle, storeName string) (*store.StoreCheckResult, error) {
+				storeBuilt = true
+				return nil, nil
+			},
+		}
+
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark, mockStore)
+
+		// Contrast 1: With readable SQL pending_wake=true and no Valkey locks, Gateway bank_deposit and REST mutations return 409 Conflict
+		{
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/hero/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":10}}`))
+			req.Header.Set("Authorization", "Bearer valid-session")
+			req.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("expected 409 Conflict when SQL pending_wake=true, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if bankRepo.char.Money != 100 || bankRepo.char.Deposit != 1000 {
+				t.Fatalf("expected bank state unchanged on 409, got money=%d deposit=%d", bankRepo.char.Money, bankRepo.char.Deposit)
+			}
+		}
+
+		// Now inject a SQL read failure inside Home.GetSleepStatus (while auth character lookup still succeeds)
+		charRepo.findErr = errors.New("sql pending_wake lookup failure")
+
+		// 1. Gateway bank_deposit fails closed with 500 and 0 mutations
+		{
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/hero/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":10}}`))
+			req.Header.Set("Authorization", "Bearer valid-session")
+			req.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("expected 500 Internal Server Error on SQL pending_wake read failure, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if bankRepo.char.Money != 100 || bankRepo.char.Deposit != 1000 {
+				t.Errorf("expected bank state unmutated (money=100, deposit=1000), got money=%d, deposit=%d", bankRepo.char.Money, bankRepo.char.Deposit)
+			}
+		}
+
+		// 2. REST Park post fails closed with 500 and 0 mutations
+		{
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/park/posts", bytes.NewReader([]byte(`{"character_id":"hero","content":"hello"}`)))
+			req.Header.Set("Authorization", "Bearer valid-session")
+			req.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("expected 500 Internal Server Error for park post on SQL pending_wake read failure, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if parkPosted {
+				t.Errorf("expected park post callback not invoked on SQL pending_wake read failure")
+			}
+		}
+
+		// 3. REST Store build fails closed with 500 and 0 mutations
+		{
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/towns/town1/stores", bytes.NewReader([]byte(`{"character_id":"hero","house_style":"001","store_name":"Hero Shop"}`)))
+			req.Header.Set("Authorization", "Bearer valid-session")
+			req.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("expected 500 Internal Server Error for store build on SQL pending_wake read failure, got %d: %s", rec.Code, rec.Body.String())
+			}
+			if storeBuilt {
+				t.Errorf("expected store build callback not invoked on SQL pending_wake read failure")
 			}
 		}
 	})
