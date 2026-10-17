@@ -526,7 +526,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Fatal("expected items in DB depot, got 0")
 	}
 
-	// 3. Defeat verification: A weak character defeated in crawl survives with 1 HP and Tired=4 (Round 1) in MariaDB
+	// 3. Defeat verification: A weak character defeated in crawl survives with 1 HP and exit fatigue in MariaDB
 	weakling, err := characterService.Create(ctx, player.ID, "DefeatedHero")
 	if err != nil {
 		t.Fatal(err)
@@ -557,8 +557,9 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	if savedWeakling.Stats.HP != 1 {
 		t.Errorf("expected defeated hero HP=1 in MariaDB, got %d", savedWeakling.Stats.HP)
 	}
-	if savedWeakling.Tired != 4 {
-		t.Errorf("expected defeated hero Tired=4 (Round 1) in MariaDB, got %d", savedWeakling.Tired)
+	expectedDefeatTired := adventure.CalculateExitFatigue(crawlRes3.Round, crawlRes3.Mode)
+	if savedWeakling.Tired != expectedDefeatTired {
+		t.Errorf("expected defeated hero Tired=%d (Round %d) in MariaDB, got %d", expectedDefeatTired, crawlRes3.Round, savedWeakling.Tired)
 	}
 }
 
