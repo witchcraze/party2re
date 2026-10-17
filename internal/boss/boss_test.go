@@ -1317,3 +1317,87 @@ func TestStartSealingBattle_King99_PartyEncounterSnapshot_DifferentLevels(t *tes
 			r2, 400*50, 150*2, 100*2, expectedStrong2)
 	}
 }
+
+func TestBoss_RealEngine_SynergyMultiplier(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Party Sealing Battle with 4 players using real corebattle.Engine{}
+	bossRepo := newMockBossRepo()
+	chars := map[string]corecharacter.Character{
+		"lead": createTestChar("lead", 99, 500000, 999999, 99999),
+		"m1":   createTestChar("m1", 99, 500000, 999999, 99999),
+		"m2":   createTestChar("m2", 99, 500000, 999999, 99999),
+		"m3":   createTestChar("m3", 99, 500000, 999999, 99999),
+	}
+	charRepo := &mockCharRepo{chars: chars}
+	bossRepo.charRepo = charRepo
+
+	partyRepo := newMockPartyRepo()
+	pID := "party-synergy-boss"
+	partyRepo.parties[pID] = party.Party{
+		ID:                pID,
+		LeaderCharacterID: "lead",
+		StageID:           "king1",
+		Status:            party.StatusRecruiting,
+	}
+	partyRepo.members[pID] = []party.Member{
+		{PartyID: pID, CharacterID: "lead", CharacterName: "Hero_lead", ReadyState: true, IsLeader: true},
+		{PartyID: pID, CharacterID: "m1", CharacterName: "Hero_m1", ReadyState: true},
+		{PartyID: pID, CharacterID: "m2", CharacterName: "Hero_m2", ReadyState: true},
+		{PartyID: pID, CharacterID: "m3", CharacterName: "Hero_m3", ReadyState: true},
+	}
+
+	partyService, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	partyService.Configure(boss.WithPartyRepository(partyRepo))
+
+	res, err := partyService.StartSealingBattle(ctx, pID, "lead")
+	if err != nil {
+		t.Fatalf("StartSealingBattle with real engine failed: %v", err)
+	}
+	if res.Outcome != corebattle.OutcomeWin {
+		t.Fatalf("expected victory, got %v", res.Outcome)
+	}
+	if res.BattleResult.BonusPercent != 30 {
+		t.Errorf("4-player boss battle expected BonusPercent=30, got %d", res.BattleResult.BonusPercent)
+	}
+	// Verify base vs total reward: TotalReward = BaseReward * 130 / 100
+	expectedExp := res.BattleResult.BaseReward.Experience * 130 / 100
+	expectedGold := res.BattleResult.BaseReward.Currency * 130 / 100
+	if res.BattleResult.TotalReward.Experience != expectedExp {
+		t.Errorf("expected TotalReward.Experience=%d, got %d", expectedExp, res.BattleResult.TotalReward.Experience)
+	}
+	if res.BattleResult.TotalReward.Currency != expectedGold {
+		t.Errorf("expected TotalReward.Currency=%d, got %d", expectedGold, res.BattleResult.TotalReward.Currency)
+	}
+
+	// 2. Solo Boss Challenge with 1 player using real corebattle.Engine{}
+	soloChars := map[string]corecharacter.Character{
+		"solo": createTestChar("solo", 99, 500000, 999999, 99999),
+	}
+	soloCharRepo := &mockCharRepo{chars: soloChars}
+	soloBossRepo := newMockBossRepo()
+	soloBossRepo.charRepo = soloCharRepo
+
+	soloService, err := boss.NewService(soloBossRepo, soloCharRepo, corebattle.Engine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	soloRes, err := soloService.ChallengeBoss(ctx, "solo", "king1")
+	if err != nil {
+		t.Fatalf("ChallengeBoss with real engine failed: %v", err)
+	}
+	if soloRes.Outcome != corebattle.OutcomeWin {
+		t.Fatalf("expected victory, got %v", soloRes.Outcome)
+	}
+	if soloRes.BattleResult.BonusPercent != 0 {
+		t.Errorf("solo boss battle expected BonusPercent=0, got %d", soloRes.BattleResult.BonusPercent)
+	}
+	if soloRes.BattleResult.TotalReward.Experience != soloRes.BattleResult.BaseReward.Experience {
+		t.Errorf("solo boss battle TotalReward.Experience (%d) != BaseReward (%d)",
+			soloRes.BattleResult.TotalReward.Experience, soloRes.BattleResult.BaseReward.Experience)
+	}
+}

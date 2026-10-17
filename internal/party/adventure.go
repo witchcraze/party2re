@@ -162,16 +162,14 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			synergyBonus := (len(members) - 1) * 10
 			if synergyBonus < 0 {
 				synergyBonus = 0
+			} else if synergyBonus > 30 {
+				synergyBonus = 30
 			}
 
 			// 7. Post-Battle Settlement: rewards, surviving HP/MP, and Floor 11 treasure drops
 			outcome := string(crawlResult.Outcome)
 			if crawlResult.Outcome == battle.OutcomeWin {
 				defeatedMonsterCount = crawlResult.FloorsCleared
-				if synergyBonus > 0 {
-					crawlResult.TotalEXP = crawlResult.TotalEXP * (100 + synergyBonus) / 100
-					crawlResult.TotalGold = crawlResult.TotalGold * (100 + synergyBonus) / 100
-				}
 			}
 
 			rewardSummaries, lostDrops, err := s.settlePostBattle(txCtx, members, charMap, &crawlResult, lastBattleRes)
@@ -280,4 +278,11 @@ func WithBlessingProvider(provider BlessingProvider) Option {
 // SetBlessingProvider sets the BlessingProvider on an existing service.
 func (s *Service) SetBlessingProvider(provider BlessingProvider) {
 	s.blessingProvider = provider
+}
+
+// WithRNG configures a custom RNG function for adventure crawl execution.
+func WithRNG(rng func(n int) int) Option {
+	return func(s *Service) {
+		s.rng = rng
+	}
 }

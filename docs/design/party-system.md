@@ -52,15 +52,16 @@ a resumable battle state.
   - Allied party members and stage monsters take turns attacking opponents.
   - Active allies target enemies with lowest HP to coordinate takedowns.
 - **Synergy Multipliers**:
-  - `synergyBonus = max(0, (len(members) - 1) * 10)`
+  - `synergyBonus = min(30, max(0, (len(activeAllies) - 1) * 10))`
   - 1 Player: 0% bonus (base rewards)
   - 2 Players: +10% bonus EXP and Gold
   - 3 Players: +20% bonus EXP and Gold
   - 4 Players: +30% bonus EXP and Gold
   - Scaling Formula on Victory:
-    - $\text{FinalEXP} = \text{int}\left(\text{TotalEXP} \times \frac{100 + \text{synergyBonus}}{100}\right)$
-    - $\text{FinalGold} = \text{int}\left(\text{TotalGold} \times \frac{100 + \text{synergyBonus}}{100}\right)$
-  - Applied to `PartyAdventureResult`, `PartyAdventureLog`, and distributed to all participating character reward settlements.
+    - $\text{TotalReward.Experience} = \text{int}\left(\text{BaseReward.Experience} \times \frac{100 + \text{synergyBonus}}{100}\right)$
+    - $\text{TotalReward.Currency} = \text{int}\left(\text{BaseReward.Currency} \times \frac{100 + \text{synergyBonus}}{100}\right)$
+  - **Single Source of Truth & Ownership**: The combat engine (`corebattle.Engine.ResolvePartyBattle`) owns party synergy scaling per battle based on participating living allies. Crawl sessions accumulate floor battle `TotalReward` into `DungeonCrawlResult.TotalEXP` and `TotalGold`. Adventure settlement applies rewards directly without double-scaling.
+  - Recorded in `PartyAdventureResult.SynergyBonusPercent`, `PartyAdventureLog.SynergyBonusPercent`, and distributed to all participating character reward settlements.
 
 - **Participant Identity & Turn Resolution**:
   - Combat participants are strictly indexed and tracked by their canonical entity `ID` (`Participant.ID`), eliminating name collisions when multiple characters share the same display name.

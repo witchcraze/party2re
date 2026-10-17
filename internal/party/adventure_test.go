@@ -77,16 +77,32 @@ func (e fixedBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest)
 		outcome = corebattle.OutcomeWin
 	}
 
+	bonusPercent := (len(req.Allies) - 1) * 10
+	if bonusPercent < 0 {
+		bonusPercent = 0
+	} else if bonusPercent > 30 {
+		bonusPercent = 30
+	}
+
+	baseReward := corebattle.Reward{
+		Experience: 100,
+		Currency:   50,
+		Crystals:   5,
+	}
+	totalReward := corebattle.Reward{
+		Experience: baseReward.Experience * (100 + bonusPercent) / 100,
+		Currency:   baseReward.Currency * (100 + bonusPercent) / 100,
+		Crystals:   baseReward.Crystals,
+	}
+
 	return corebattle.PartyBattleResult{
-		Outcome:     outcome,
-		Turns:       1,
-		RemainingHP: remHP,
-		RemainingMP: remMP,
-		TotalReward: corebattle.Reward{
-			Experience: 100,
-			Currency:   50,
-			Crystals:   5,
-		},
+		Outcome:      outcome,
+		Turns:        1,
+		RemainingHP:  remHP,
+		RemainingMP:  remMP,
+		BaseReward:   baseReward,
+		BonusPercent: bonusPercent,
+		TotalReward:  totalReward,
 	}, nil
 }
 
@@ -1238,4 +1254,348 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 			t.Errorf("expected ErrInvalidMode, got %v", err)
 		}
 	})
+}
+
+type battleEngineFunc func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
+
+func (f battleEngineFunc) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	return f(req)
+}
+
+func TestPartyAdventure_SynergyMultiplier_RealBattleEngine(t *testing.T) {
+	ctx := context.Background()
+
+	zeroRNG := func(n int) int { return 0 }
+
+	type runResult struct {
+		exp   int
+		gold  int
+		bonus int
+	}
+	results := make(map[int]runResult)
+
+	for count := 1; count <= 4; count++ {
+		svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+			t,
+			corebattle.Engine{},
+			WithRNG(zeroRNG),
+		)
+
+		leader := corecharacter.Character{
+			ID:    fmt.Sprintf("real-lead-%d", count),
+			Name:  "RealLeader",
+			Level: 99,
+			Stats: corecharacter.Stats{HP: 99999, MaxHP: 99999, Attack: 99999, Defense: 99999, MP: 500, MaxMP: 500},
+		}
+
+		var members []corecharacter.Character
+		for i := 1; i < count; i++ {
+			members = append(members, corecharacter.Character{
+				ID:    fmt.Sprintf("real-mem-%d-%d", count, i),
+				Name:  fmt.Sprintf("RealMember%d", i),
+				Level: 99,
+				Stats: corecharacter.Stats{HP: 99999, MaxHP: 99999, Attack: 99999, Defense: 99999, MP: 500, MaxMP: 500},
+			})
+		}
+
+		partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, members...)
+
+		res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+		if err != nil {
+			t.Fatalf("%d-player StartPartyAdventure failed: %v", count, err)
+		}
+		if res.Outcome != "win" {
+			t.Fatalf("%d-player expected win, got %s", count, res.Outcome)
+		}
+
+		results[count] = runResult{
+			exp:   res.TotalEXP,
+			gold:  res.TotalGold,
+			bonus: res.SynergyBonusPercent,
+		}
+	}
+
+	if results[1].bonus != 0 {
+		t.Errorf("1-player expected bonus 0, got %d", results[1].bonus)
+	}
+	if results[2].bonus != 10 {
+		t.Errorf("2-player expected bonus 10, got %d", results[2].bonus)
+	}
+	if results[3].bonus != 20 {
+		t.Errorf("3-player expected bonus 20, got %d", results[3].bonus)
+	}
+	if results[4].bonus != 30 {
+		t.Errorf("4-player expected bonus 30, got %d", results[4].bonus)
+	}
+
+	// 4-player rewards must NOT be double-scaled (1.3 * 1.3 = 1.69)
+	expected4ExpApprox := results[1].exp * 130 / 100
+	buggy4ExpApprox := expected4ExpApprox * 130 / 100
+
+	if results[4].exp >= buggy4ExpApprox {
+		t.Errorf("4-player EXP (%d) was double-multiplied! Buggy expected ~%d, correct ~%d",
+			results[4].exp, buggy4ExpApprox, expected4ExpApprox)
+	}
+}
+
+func TestPartyAdventure_SynergyMultiplier_ExactBase100(t *testing.T) {
+	ctx := context.Background()
+
+	// 10 floors with base 10 EXP and 10 Gold per floor -> exactly 100 base EXP, 100 base Gold.
+	// 1 player (0%):  10 * 10 = 100 EXP, 100 Gold
+	// 2 player (10%): 10 * 11 = 110 EXP, 110 Gold
+	// 3 player (20%): 10 * 12 = 120 EXP, 120 Gold
+	// 4 player (30%): 10 * 13 = 130 EXP, 130 Gold (must NEVER be 169!)
+
+	tests := []struct {
+		members           int
+		wantBonus         int
+		expectedTotalEXP  int
+		expectedTotalGold int
+	}{
+		{members: 1, wantBonus: 0, expectedTotalEXP: 100, expectedTotalGold: 100},
+		{members: 2, wantBonus: 10, expectedTotalEXP: 110, expectedTotalGold: 110},
+		{members: 3, wantBonus: 20, expectedTotalEXP: 120, expectedTotalGold: 120},
+		{members: 4, wantBonus: 30, expectedTotalEXP: 130, expectedTotalGold: 130},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%d_members_base100", tc.members), func(t *testing.T) {
+			engine := battleEngineFunc(func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+				remHP := make(map[string]int)
+				for _, p := range req.Allies {
+					remHP[p.ID] = p.HP
+				}
+				bonusPercent := (len(req.Allies) - 1) * 10
+				if bonusPercent < 0 {
+					bonusPercent = 0
+				} else if bonusPercent > 30 {
+					bonusPercent = 30
+				}
+				return corebattle.PartyBattleResult{
+					Outcome:      corebattle.OutcomeWin,
+					Turns:        1,
+					RemainingHP:  remHP,
+					BonusPercent: bonusPercent,
+					TotalReward: corebattle.Reward{
+						Experience: 10 * (100 + bonusPercent) / 100,
+						Currency:   10 * (100 + bonusPercent) / 100,
+					},
+				}, nil
+			})
+
+			svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(t, engine)
+
+			leader := corecharacter.Character{
+				ID:    fmt.Sprintf("b100-lead-%d", tc.members),
+				Name:  "Leader",
+				Level: 10,
+				Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+			}
+			var members []corecharacter.Character
+			for i := 1; i < tc.members; i++ {
+				members = append(members, corecharacter.Character{
+					ID:    fmt.Sprintf("b100-mem-%d-%d", tc.members, i),
+					Name:  fmt.Sprintf("Member%d", i),
+					Level: 10,
+					Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+				})
+			}
+
+			partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, members...)
+
+			res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+			if err != nil {
+				t.Fatalf("StartPartyAdventure failed: %v", err)
+			}
+			if res.SynergyBonusPercent != tc.wantBonus {
+				t.Errorf("expected SynergyBonusPercent=%d, got %d", tc.wantBonus, res.SynergyBonusPercent)
+			}
+			if res.TotalEXP != tc.expectedTotalEXP {
+				t.Errorf("expected TotalEXP=%d, got %d", tc.expectedTotalEXP, res.TotalEXP)
+			}
+			if res.TotalGold != tc.expectedTotalGold {
+				t.Errorf("expected TotalGold=%d, got %d", tc.expectedTotalGold, res.TotalGold)
+			}
+		})
+	}
+}
+
+func TestPartyAdventure_SynergyMultiplier_FractionalRounding(t *testing.T) {
+	ctx := context.Background()
+
+	// Base reward per floor: 105 EXP, 103 Gold.
+	// Over 10 floors:
+	// 1 player (0%):  floor 105 EXP, 103 Gold -> total 1050 EXP, 1030 Gold
+	// 2 player (10%): floor int(105 * 1.1) = 115 EXP, int(103 * 1.1) = 113 Gold -> total 1150 EXP, 1130 Gold
+	// 3 player (20%): floor int(105 * 1.2) = 126 EXP, int(103 * 1.2) = 123 Gold -> total 1260 EXP, 1230 Gold
+	// 4 player (30%): floor int(105 * 1.3) = 136 EXP, int(103 * 1.3) = 133 Gold -> total 1360 EXP, 1330 Gold
+
+	tests := []struct {
+		members           int
+		wantBonus         int
+		expectedTotalEXP  int
+		expectedTotalGold int
+	}{
+		{members: 1, wantBonus: 0, expectedTotalEXP: 1050, expectedTotalGold: 1030},
+		{members: 2, wantBonus: 10, expectedTotalEXP: 1150, expectedTotalGold: 1130},
+		{members: 3, wantBonus: 20, expectedTotalEXP: 1260, expectedTotalGold: 1230},
+		{members: 4, wantBonus: 30, expectedTotalEXP: 1360, expectedTotalGold: 1330},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%d_members_fractional", tc.members), func(t *testing.T) {
+			engine := battleEngineFunc(func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+				remHP := make(map[string]int)
+				for _, p := range req.Allies {
+					remHP[p.ID] = p.HP
+				}
+				bonusPercent := (len(req.Allies) - 1) * 10
+				if bonusPercent < 0 {
+					bonusPercent = 0
+				} else if bonusPercent > 30 {
+					bonusPercent = 30
+				}
+				return corebattle.PartyBattleResult{
+					Outcome:      corebattle.OutcomeWin,
+					Turns:        1,
+					RemainingHP:  remHP,
+					BonusPercent: bonusPercent,
+					TotalReward: corebattle.Reward{
+						Experience: 105 * (100 + bonusPercent) / 100,
+						Currency:   103 * (100 + bonusPercent) / 100,
+					},
+				}, nil
+			})
+
+			svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(t, engine)
+
+			leader := corecharacter.Character{
+				ID:    fmt.Sprintf("frac-lead-%d", tc.members),
+				Name:  "Leader",
+				Level: 10,
+				Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+			}
+			var members []corecharacter.Character
+			for i := 1; i < tc.members; i++ {
+				members = append(members, corecharacter.Character{
+					ID:    fmt.Sprintf("frac-mem-%d-%d", tc.members, i),
+					Name:  fmt.Sprintf("Member%d", i),
+					Level: 10,
+					Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+				})
+			}
+
+			partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, members...)
+
+			res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+			if err != nil {
+				t.Fatalf("StartPartyAdventure failed: %v", err)
+			}
+			if res.TotalEXP != tc.expectedTotalEXP {
+				t.Errorf("expected TotalEXP=%d, got %d", tc.expectedTotalEXP, res.TotalEXP)
+			}
+			if res.TotalGold != tc.expectedTotalGold {
+				t.Errorf("expected TotalGold=%d, got %d", tc.expectedTotalGold, res.TotalGold)
+			}
+		})
+	}
+}
+
+func TestPartyAdventure_MidCrawlFallenAlly(t *testing.T) {
+	ctx := context.Background()
+
+	// 4 members start: leader, mem1, mem2, mem3.
+	// Base reward per floor: 100 EXP, 100 Gold.
+	// Floors 1-5: all 4 are alive -> 4 living allies earn +30% = 130 EXP, 130 Gold per floor (5 * 130 = 650).
+	// On floor 5, mem3 falls (HP = 0).
+	// Floors 6-10: 3 living allies -> earn +20% = 120 EXP, 120 Gold per floor (5 * 120 = 600).
+	// Total expected across crawl = 650 + 600 = 1250 EXP, 1250 Gold.
+
+	floorCounter := 0
+	engine := battleEngineFunc(func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+		floorCounter++
+		remHP := make(map[string]int)
+		var fallen []string
+		for _, p := range req.Allies {
+			if floorCounter >= 5 && p.ID == "mid-mem3" {
+				remHP[p.ID] = 0
+				fallen = append(fallen, p.ID)
+			} else {
+				remHP[p.ID] = p.HP
+			}
+		}
+
+		bonusPercent := (len(req.Allies) - 1) * 10
+		if bonusPercent < 0 {
+			bonusPercent = 0
+		} else if bonusPercent > 30 {
+			bonusPercent = 30
+		}
+
+		return corebattle.PartyBattleResult{
+			Outcome:      corebattle.OutcomeWin,
+			Turns:        1,
+			RemainingHP:  remHP,
+			AlliesFallen: fallen,
+			BonusPercent: bonusPercent,
+			TotalReward: corebattle.Reward{
+				Experience: 100 * (100 + bonusPercent) / 100,
+				Currency:   100 * (100 + bonusPercent) / 100,
+			},
+		}, nil
+	})
+
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(t, engine)
+
+	leader := corecharacter.Character{
+		ID:    "mid-lead",
+		Name:  "Leader",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	mem1 := corecharacter.Character{
+		ID:    "mid-mem1",
+		Name:  "Mem1",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	mem2 := corecharacter.Character{
+		ID:    "mid-mem2",
+		Name:  "Mem2",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	mem3 := corecharacter.Character{
+		ID:    "mid-mem3",
+		Name:  "Mem3",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, mem1, mem2, mem3)
+
+	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+
+	expectedEXP := 650 + 600  // 1250
+	expectedGold := 650 + 600 // 1250
+
+	if res.TotalEXP != expectedEXP {
+		t.Errorf("expected TotalEXP=%d, got %d", expectedEXP, res.TotalEXP)
+	}
+	if res.TotalGold != expectedGold {
+		t.Errorf("expected TotalGold=%d, got %d", expectedGold, res.TotalGold)
+	}
+
+	// Verify fallen member survives with 1 HP
+	updatedMem3, err := charRepo.FindByID(ctx, mem3.ID)
+	if err != nil {
+		t.Fatalf("FindByID for fallen member failed: %v", err)
+	}
+	if updatedMem3.Stats.HP != 1 {
+		t.Errorf("expected fallen member HP=1, got %d", updatedMem3.Stats.HP)
+	}
 }

@@ -301,6 +301,65 @@ func TestPartyBattleBonusPercent(t *testing.T) {
 		if res.BonusPercent != tt.wantPercent {
 			t.Errorf("allyCount %d bonusPercent = %d, want %d", tt.allyCount, res.BonusPercent, tt.wantPercent)
 		}
+		expectedReward := 100 * (100 + tt.wantPercent) / 100
+		if res.TotalReward.Experience != expectedReward {
+			t.Errorf("allyCount %d TotalReward.Experience = %d, want %d", tt.allyCount, res.TotalReward.Experience, expectedReward)
+		}
+		if res.TotalReward.Currency != expectedReward {
+			t.Errorf("allyCount %d TotalReward.Currency = %d, want %d", tt.allyCount, res.TotalReward.Currency, expectedReward)
+		}
+	}
+}
+
+func TestPartyBattleBonusPercent_FractionalRounding(t *testing.T) {
+	engine := Engine{}
+	enemy := Participant{ID: "boss", HP: 50, Attack: 5, Defense: 0}
+
+	tests := []struct {
+		allyCount int
+		baseExp   int
+		baseGold  int
+		wantExp   int
+		wantGold  int
+	}{
+		// 1 ally: 0%
+		{allyCount: 1, baseExp: 105, baseGold: 103, wantExp: 105, wantGold: 103},
+		// 2 allies: +10% -> 105 * 1.1 = 115.5 -> 115; 103 * 1.1 = 113.3 -> 113
+		{allyCount: 2, baseExp: 105, baseGold: 103, wantExp: 115, wantGold: 113},
+		// 3 allies: +20% -> 105 * 1.2 = 126; 103 * 1.2 = 123.6 -> 123
+		{allyCount: 3, baseExp: 105, baseGold: 103, wantExp: 126, wantGold: 123},
+		// 4 allies: +30% -> 105 * 1.3 = 136.5 -> 136; 103 * 1.3 = 133.9 -> 133
+		{allyCount: 4, baseExp: 105, baseGold: 103, wantExp: 136, wantGold: 133},
+		// Another odd base: 107 EXP, 109 Gold
+		{allyCount: 2, baseExp: 107, baseGold: 109, wantExp: 117, wantGold: 119},
+		{allyCount: 4, baseExp: 107, baseGold: 109, wantExp: 139, wantGold: 141},
+	}
+
+	for _, tt := range tests {
+		allies := make([]Participant, tt.allyCount)
+		for i := 0; i < tt.allyCount; i++ {
+			allies[i] = Participant{
+				ID:      string(rune('a' + i)),
+				HP:      100,
+				Attack:  50,
+				Defense: 10,
+			}
+		}
+
+		res, err := engine.ResolvePartyBattle(PartyBattleRequest{
+			Allies:        allies,
+			Enemies:       []Participant{enemy},
+			VictoryReward: Reward{Experience: tt.baseExp, Currency: tt.baseGold},
+		})
+		if err != nil {
+			t.Fatalf("allyCount %d failed: %v", tt.allyCount, err)
+		}
+		if res.TotalReward.Experience != tt.wantExp {
+			t.Errorf("allyCount %d exp = %d, want %d", tt.allyCount, res.TotalReward.Experience, tt.wantExp)
+		}
+		if res.TotalReward.Currency != tt.wantGold {
+			t.Errorf("allyCount %d gold = %d, want %d", tt.allyCount, res.TotalReward.Currency, tt.wantGold)
+		}
 	}
 }
 
