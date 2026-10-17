@@ -215,89 +215,50 @@ func TestApplyPostBattleResult_ExpBlessing_UnluckyRoll(t *testing.T) {
 	}
 }
 
-func TestApplyPostBattleResult_DropBlessing_LuckyRoll(t *testing.T) {
+func TestApplyPostBattleResult_DropBlessing_DoesNotDuplicateDrops(t *testing.T) {
 	ctx := context.Background()
-	// fixedRNG{val: 0}: 0 % 5 == 0 -> lucky roll (< 1 in 5, 20% chance)
-	svc, charRepo, invRepo := setupRewardTestService("DROP", 0)
+	for _, blessing := range []string{"DROP", "4", "treasure_wish", "宝箱がほしい"} {
+		t.Run(blessing, func(t *testing.T) {
+			// Even with lucky RNG roll (0 % 5 == 0), post-battle settlement must NOT duplicate acquired items;
+			// Chapel Blessing 4 ("宝箱がほしい") applies only at the chest-generation boundary.
+			svc, charRepo, invRepo := setupRewardTestService(blessing, 0)
 
-	char := corecharacter.Character{
-		ID:       "char-drop-blessed",
-		Name:     "ドロップ信者",
-		Level:    1,
-		JobLevel: 1,
-		Stats:    corecharacter.Stats{HP: 100, MaxHP: 100},
-	}
-	_ = charRepo.Update(ctx, char)
-	inv, _ := coreinventory.New(char.ID)
-	_ = invRepo.Save(ctx, inv)
+			char := corecharacter.Character{
+				ID:       "char-drop-" + blessing,
+				Name:     "ドロップ信者",
+				Level:    1,
+				JobLevel: 1,
+				Stats:    corecharacter.Stats{HP: 100, MaxHP: 100},
+			}
+			_ = charRepo.Update(ctx, char)
+			inv, _ := coreinventory.New(char.ID)
+			_ = invRepo.Save(ctx, inv)
 
-	battleRes := corebattle.PartyBattleResult{
-		Outcome:    corebattle.OutcomeWin,
-		WinnerSide: "allies",
-		RemainingHP: map[string]int{
-			char.ID: 100,
-		},
-		TotalReward: corebattle.Reward{
-			ItemDefinitionID: "item-001",
-			ItemQuantity:     1,
-		},
-	}
+			battleRes := corebattle.PartyBattleResult{
+				Outcome:    corebattle.OutcomeWin,
+				WinnerSide: "allies",
+				RemainingHP: map[string]int{
+					char.ID: 100,
+				},
+				TotalReward: corebattle.Reward{
+					ItemDefinitionID: "item-001",
+					ItemQuantity:     1,
+				},
+			}
 
-	resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
-		CharacterIDs: []string{char.ID},
-		BattleResult: battleRes,
-	})
-	if err != nil {
-		t.Fatalf("ApplyPostBattleResult failed: %v", err)
-	}
+			resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+				CharacterIDs: []string{char.ID},
+				BattleResult: battleRes,
+			})
+			if err != nil {
+				t.Fatalf("ApplyPostBattleResult failed: %v", err)
+			}
 
-	// Lucky drop roll adds +1 drop (total 2 drops)
-	drops := resp.InventoryDrops[char.ID]
-	if len(drops) != 2 {
-		t.Errorf("expected 2 inventory drops with lucky drop blessing roll, got %d", len(drops))
-	}
-}
-
-func TestApplyPostBattleResult_DropBlessing_UnluckyRoll(t *testing.T) {
-	ctx := context.Background()
-	// fixedRNG{val: 3}: 3 % 5 == 3 != 0 -> unlucky roll
-	svc, charRepo, invRepo := setupRewardTestService("DROP", 3)
-
-	char := corecharacter.Character{
-		ID:       "char-drop-unlucky",
-		Name:     "不運なドロップ信者",
-		Level:    1,
-		JobLevel: 1,
-		Stats:    corecharacter.Stats{HP: 100, MaxHP: 100},
-	}
-	_ = charRepo.Update(ctx, char)
-	inv, _ := coreinventory.New(char.ID)
-	_ = invRepo.Save(ctx, inv)
-
-	battleRes := corebattle.PartyBattleResult{
-		Outcome:    corebattle.OutcomeWin,
-		WinnerSide: "allies",
-		RemainingHP: map[string]int{
-			char.ID: 100,
-		},
-		TotalReward: corebattle.Reward{
-			ItemDefinitionID: "item-001",
-			ItemQuantity:     1,
-		},
-	}
-
-	resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
-		CharacterIDs: []string{char.ID},
-		BattleResult: battleRes,
-	})
-	if err != nil {
-		t.Fatalf("ApplyPostBattleResult failed: %v", err)
-	}
-
-	// Unlucky drop roll keeps 1 drop
-	drops := resp.InventoryDrops[char.ID]
-	if len(drops) != 1 {
-		t.Errorf("expected 1 inventory drop with unlucky drop blessing roll, got %d", len(drops))
+			drops := resp.InventoryDrops[char.ID]
+			if len(drops) != 1 {
+				t.Errorf("blessing %q: expected 1 inventory drop without settlement duplication, got %d", blessing, len(drops))
+			}
+		})
 	}
 }
 

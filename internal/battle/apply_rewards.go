@@ -101,11 +101,6 @@ func (s *Service) applyRewardsForCharacter(
 		}
 	}
 
-	// Chapel Blessing 4 ("宝箱がほしい"): 20% chance of +1 drop (party2/lib/_npc_action.cgi:501, rand(5) < 1)
-	if len(dropDefIDs) > 0 && isDropBlessing(blessing) && s.rollIntn(5) == 0 {
-		dropDefIDs = append(dropDefIDs, dropDefIDs[0])
-	}
-
 	var invDrops []coreitem.Instance
 	var depotDrops []coreitem.Instance
 

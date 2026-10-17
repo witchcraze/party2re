@@ -484,9 +484,9 @@ Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and
 Upon defeating the Floor 10 boss, the party enters Floor 11 (Treasure Room) per legacy `vs_monster.cgi` (`$boss_round + 1`) and `_npc_action.cgi` (`add_treasure`).
 
 ### Treasure Box Count Calculation
-The number of treasure chests generated in Floor 11 follows legacy Party2 rules (`vs_monster.cgi:90-100`):
+The number of treasure chests generated in Floor 11 follows legacy Party2 rules (`vs_monster.cgi:90-101`, `_npc_action.cgi:501`):
 
-$$\text{Count} = \text{BaseCount} + \text{MerchantBonus} + \text{TreasureHunterBonus} + \text{LuckyPendantBonus} + \text{GamblerBonus}$$
+$$\text{Count} = \text{BaseCount} + \text{MerchantBonus} + \text{TreasureHunterBonus} + \text{LuckyPendantBonus} + \text{GamblerBonus} + \text{TreasureBlessingBonus}$$
 
 1. **Base Count**:
    - Standard Stages: 1 treasure chest per surviving (alive) party member (`AliveMembers`).
@@ -495,7 +495,8 @@ $$\text{Count} = \text{BaseCount} + \text{MerchantBonus} + \text{TreasureHunterB
 3. **Treasure Hunter Job Bonus** (`treasure_hunter` / Job 78): +1 to +2 treasure chests ($1 + \text{rand}(2)$).
 4. **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest.
 5. **Gambler Job Bonus** (`gambler` / Job 81): $+\text{rand}(3) - \text{rand}(2)$ treasure chests. If the gambler holds a Lucky Pendant (`item-191`), the total cannot drop below $\text{BaseCount}$.
-6. **Lower Bound**: The total count is unclamped above zero, but clamped to a minimum of 0.
+6. **Chapel Treasure Blessing Bonus** (`DROP` / `4` / `treasure_wish` / `宝箱がほしい`): $1/5$ chance ($\text{rand}(5) == 0$) of +1 treasure chest (`_npc_action.cgi:501`), evaluated once when spawning chests in the treasure room.
+7. **Lower Bound**: The total count is unclamped above zero, but clamped to a minimum of 0.
 
 ### Treasure Box Loot Pool Distribution & Weekday Orbs
 Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons`, `treasure_armors`, `treasure_items`) per `_npc_action.cgi:540-550`:

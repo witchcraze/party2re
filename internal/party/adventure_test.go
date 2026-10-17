@@ -930,3 +930,94 @@ func TestPartyService_StartPartyAdventure_Defeat_UnboostedRewards(t *testing.T) 
 		t.Errorf("expected TotalEXP=0 on defeat, got %d", res.TotalEXP)
 	}
 }
+
+type mockPartyBlessingProvider struct {
+	blessings map[string]string
+}
+
+func (m mockPartyBlessingProvider) GetActiveBlessing(_ context.Context, characterID string) (string, error) {
+	return m.blessings[characterID], nil
+}
+
+type fixedPartyBattleRand struct{ val int }
+
+func (r fixedPartyBattleRand) Intn(n int) (int, error) {
+	if n <= 0 {
+		return 0, nil
+	}
+	return r.val % n, nil
+}
+
+func (r fixedPartyBattleRand) Float64() float64 { return 0 }
+
+func TestPartyAdventure_TreasureBlessing_ChestGenerationAndNoSettlementDuplication(t *testing.T) {
+	ctx := context.Background()
+
+	leader := corecharacter.Character{
+		ID:       "lead-bless",
+		Name:     "Leader",
+		Level:    10,
+		JobLevel: 5,
+		Stats:    corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	mem2 := corecharacter.Character{
+		ID:       "mem-bless-2",
+		Name:     "Member2",
+		Level:    10,
+		JobLevel: 5,
+		Stats:    corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+
+	blessingProv := mockPartyBlessingProvider{
+		blessings: map[string]string{
+			leader.ID: "宝箱がほしい",
+		},
+	}
+
+	svc, partyRepo, charRepo, invRepo, depotRepo := setupPartyAdventureTestService(
+		t,
+		fixedBattleEngine{outcome: corebattle.OutcomeWin},
+		WithBlessingProvider(blessingProv),
+	)
+	svc.rng = func(n int) int { return 0 } // Lucky chest blessing roll (0 % 5 == 0 -> +1 chest)
+
+	battleSvc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithDepotRepository(depotRepo),
+		battle.WithBlessingProvider(blessingProv),
+		battle.WithRandomSource(fixedPartyBattleRand{val: 0}), // Lucky roll in settlement too
+		battle.WithMaxInventoryCapacity(10),
+	)
+	svc.battleSettler = battleSvc
+
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, mem2)
+
+	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+
+	// 2 alive party members + 1 from lucky treasure blessing = 3 treasure chests spawned.
+	if len(res.TreasureBoxes) != 3 {
+		t.Fatalf("expected 3 treasure boxes (2 base + 1 blessing), got %d", len(res.TreasureBoxes))
+	}
+
+	// Each member examines 1 chest (total 2 opened, 1 unopened).
+	openedCount := 0
+	for _, box := range res.TreasureBoxes {
+		if box.OpenedBy != "" {
+			openedCount++
+		}
+	}
+	if openedCount != 2 {
+		t.Fatalf("expected 2 boxes opened by 2 members without Master Key, got %d", openedCount)
+	}
+
+	// Each member must receive 1 item in settlement without duplication.
+	for _, r := range res.Rewards {
+		if len(r.Drops) != 1 {
+			t.Errorf("member %s: expected 1 drop without settlement duplication, got %d", r.CharacterID, len(r.Drops))
+		}
+	}
+}

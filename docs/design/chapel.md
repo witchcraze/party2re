@@ -19,7 +19,7 @@ In accordance with `party2/lib/chapel.cgi`, characters can select from exactly f
 | **1** | `GOLD` | お金がほしい | モンスターを倒したとき、ゴールドが増えるかも？ | 25% chance of 1.5x Gold on battle victory (`rand(4) < 1`) |
 | **2** | `EXP` | 強くなりたい | モンスターを倒したとき、経験値が増えるかも？ | 25% chance of 1.5x EXP on battle victory (`rand(4) < 1`) |
 | **3** | `MONSTER` | モンスターと仲良くしたい | モンスターが仲間になりやすくなるかも？ | +0.25% Monster recruit rate bonus flat (`$par += 0.5` out of 200 in `rand(200) < $par`) |
-| **4** | `DROP` | 宝箱がほしい | 宝箱が増えるかも？ | 20% chance of +1 treasure chest / drop item (`rand(5) < 1`) |
+| **4** | `DROP` | 宝箱がほしい | 宝箱が増えるかも？ | 20% chance of +1 treasure chest at the chest-generation boundary (`_npc_action.cgi:501, 729`, `rand(5) < 1`); does not duplicate acquired items during post-battle settlement |
 | **5** | `CASINO` | コインがほしい | コインが増えるかも？ | Casino bonus coin luck (`rand(4) < 1`) |
 
 ---
@@ -56,8 +56,9 @@ For victory reward settlements, dungeon exploration chests, and drop evaluations
   $$\text{Final Gold} = \begin{cases} \lfloor \text{Base Gold} \times 1.5 \rfloor & \text{if } \text{Blessing} = \text{GOLD} \land \text{Random}(4) = 0 \\ \text{Base Gold} & \text{otherwise} \end{cases}$$
 - **Monster Recruitment Rate** (`_battle.cgi:237`):
   $$P(\text{Recruit}) = \frac{\text{par} + 0.5}{200} \quad (\text{if Blessing} = \text{MONSTER}, \text{equivalent to flat } +0.25\%)$$
-- **Treasure / Drop Bonus** (`_npc_action.cgi:501, 729`):
-  $$\text{Extra Chests / Drops} = \begin{cases} +1 & \text{if } \text{Blessing} = \text{DROP} \land \text{Random}(5) = 0 \\ 0 & \text{otherwise} \end{cases}$$
+- **Treasure Chest Generation Bonus** (`_npc_action.cgi:501, 729`):
+  $$\text{Extra Chests} = \begin{cases} +1 & \text{if } \text{Blessing} = \text{DROP} \land \text{Random}(5) = 0 \\ 0 & \text{otherwise} \end{cases}$$
+  Applied once per treasure room when chests are spawned; post-battle settlement delivers only the items actually claimed from opened chests without duplicating acquired drops.
 
 ---
 

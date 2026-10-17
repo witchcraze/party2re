@@ -100,6 +100,16 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 	return count
 }
 
+// IsTreasureBlessing reports whether the blessing string matches Chapel Blessing 4 ("宝箱がほしい") or its supported aliases.
+func IsTreasureBlessing(blessing string) bool {
+	switch strings.ToLower(strings.TrimSpace(blessing)) {
+	case "drop", "4", "treasure_wish", "宝箱がほしい":
+		return true
+	default:
+		return false
+	}
+}
+
 // StageTreasurePools defines candidate item pools across equipment and consumables for Floor 11.
 type StageTreasurePools struct {
 	Weapons []string

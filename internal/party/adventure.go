@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -114,9 +113,9 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 					}
 					participants[i] = part
 				}
-				session, err = adventure.NewCrawlSessionWithParticipants(stage, participatingChars, participants, nil)
+				session, err = adventure.NewCrawlSessionWithParticipants(stage, participatingChars, participants, s.rng)
 			} else {
-				session, err = adventure.NewCrawlSession(stage, participatingChars, nil)
+				session, err = adventure.NewCrawlSession(stage, participatingChars, s.rng)
 			}
 			if err != nil {
 				return err
@@ -125,11 +124,8 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			if s.blessingProvider != nil {
 				for _, c := range participatingChars {
 					if b, err := s.blessingProvider.GetActiveBlessing(ctx, c.ID); err == nil {
-						switch strings.ToLower(strings.TrimSpace(b)) {
-						case "drop", "4", "treasure_wish", "宝箱がほしい":
+						if adventure.IsTreasureBlessing(b) {
 							session.HasTreasureBlessing = true
-						}
-						if session.HasTreasureBlessing {
 							break
 						}
 					}
