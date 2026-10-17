@@ -569,8 +569,8 @@ Multi-player party crawls grant cooperative reward boosts:
 ### Event Hooks & Integrations
 - **Victory Hook (`adventure.VictoryHook`)**: Invoked when an adventure or party expedition concludes with a victory. Automatically records milestone achievements in `internal/medal` (`adventure_victories`, `monsters_slain`, `gold_earned`).
 - **Post-Adventure Hook (`adventure.PostAdventureHook`)**: Invoked after crawl rewards and character state are committed. Automatically triggers pre-ordered meal delivery from the Adventurer's Tavern (`internal/tavern`).
-- **Hook Error Semantics**: Both hooks execute as best-effort post-settlement side-effects. Errors returned by hook implementations are logged as warnings (`s.logger.Warn`) and do not fail the completed adventure or corrupt committed character state.
-- **Settlement & Persistence Error Propagation**: All durable state mutations—including saving the `adventures` record, adding currency (`AddMoney`, `AddCrystal`), and persisting character state (`updater.Update`) in fallback settlement—strictly check and propagate errors to prevent silent state loss.
+- **Hook Error Semantics**: Both hooks execute as best-effort post-commit side-effects outside the settlement transaction. Errors returned by hook implementations are logged as warnings (`s.logger.Warn`) and do not fail the completed adventure or corrupt committed character/history state.
+- **Settlement & Persistence Atomicity**: Post-battle reward/item settlement (`settlePostBattle` or fallback character updates) and `adventures` history persistence (`Repository.Save`) execute within the same `TransactionProvider` (`RunInTx`) Unit of Work, ensuring that any history save error rolls back all rewards and partial participant records.
 
 ---
 

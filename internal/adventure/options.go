@@ -98,3 +98,15 @@ func WithNowFunc(nowFunc func() time.Time) Option {
 		s.nowFunc = nowFunc
 	}
 }
+
+// TransactionProvider executes a callback within an ambient or new database transaction.
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// WithTransactionProvider configures the TransactionProvider.
+func WithTransactionProvider(txProvider TransactionProvider) Option {
+	return func(s *Service) {
+		s.txProvider = txProvider
+	}
+}

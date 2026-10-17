@@ -35,7 +35,7 @@ not SQL lock ranks.
 
 | Existing module index | Navigation purpose |
 |---|---|
-| [adventure](../../.arch/modules/adventure.json) | Delegated crawl/battle settlement; no transaction guarantee on the wrapper |
+| [adventure](../../.arch/modules/adventure.json) | Crawl reward settlement and history persistence in a single transaction boundary |
 | [alchemy](../../.arch/modules/alchemy.json) | Synthesis and item storage |
 | [auction](../../.arch/modules/auction.json) | Direct transfer, ascending character locks; no bidding |
 | [blackmarket](../../.arch/modules/blackmarket.json) | Dual-source consumption and rare points |

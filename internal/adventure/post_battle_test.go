@@ -343,3 +343,115 @@ func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
 		t.Errorf("expected settler.lastReq.UnsealDemonKing = false for stage-01, got true")
 	}
 }
+
+type txKey struct{}
+
+type spyTxProvider struct {
+	txCalls int
+}
+
+func (p *spyTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	p.txCalls++
+	return fn(context.WithValue(ctx, txKey{}, true))
+}
+
+func TestAdventure_SettlementAndHistoryInSameTxBoundary(t *testing.T) {
+	c1, _ := corecharacter.New("Hero1")
+	c1.Level, c1.Stats.HP, c1.Stats.MaxHP, c1.Stats.Attack, c1.Stats.Defense = 50, 500, 500, 150, 100
+	c2, _ := corecharacter.New("Hero2")
+	c2.Level, c2.Stats.HP, c2.Stats.MaxHP, c2.Stats.Attack, c2.Stats.Defense = 50, 500, 500, 150, 100
+
+	charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{c1.ID: c1, c2.ID: c2}}
+	stages, _ := adventure.InitialStageCatalog()
+	monsters, _ := adventure.InitialMonsterCatalog()
+	clock := &fixedAdvClock{now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)}
+	txProv := &spyTxProvider{}
+
+	var settlerInTx bool
+	settler := &mockPostBattleSettler{
+		respFn: func(req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+			return battle.ApplyPostBattleResponse{}, nil
+		},
+	}
+	// Wrap settler to inspect ctx
+	txCheckingSettler := &ctxCheckSettler{
+		inner: settler,
+		onCall: func(ctx context.Context) {
+			settlerInTx = ctx.Value(txKey{}) == true
+		},
+	}
+
+	var saveInTxCount int
+	advRepo := &ctxCheckAdvRepo{
+		memoryAdvRepo: &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)},
+		onSave: func(ctx context.Context) {
+			if ctx.Value(txKey{}) == true {
+				saveInTxCount++
+			}
+		},
+	}
+
+	svc, err := adventure.NewServiceWithCatalogs(
+		advRepo, charRepo, nil, stages, monsters, corebattle.Engine{}, nil, nil, clock,
+		adventure.WithPostBattleSettler(txCheckingSettler),
+		adventure.WithTransactionProvider(txProv),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hookInTx bool
+	var hooksCalled int
+	svc.SetVictoryHook(func(ctx context.Context, _ string, _ int, _ int) error {
+		hooksCalled++
+		if ctx.Value(txKey{}) == true {
+			hookInTx = true
+		}
+		return nil
+	})
+
+	_, err = svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{c1.ID, c2.ID},
+		StageID:      "stage-01",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl failed: %v", err)
+	}
+
+	if txProv.txCalls != 1 {
+		t.Fatalf("expected 1 RunInTx call, got %d", txProv.txCalls)
+	}
+	if !settlerInTx {
+		t.Fatal("expected PostBattleSettler to run inside txCtx")
+	}
+	if saveInTxCount != 2 {
+		t.Fatalf("expected 2 adventure Save calls inside txCtx, got %d", saveInTxCount)
+	}
+	if hooksCalled != 2 || hookInTx {
+		t.Fatalf("expected 2 post-commit hooks outside txCtx, got called=%d inTx=%v", hooksCalled, hookInTx)
+	}
+}
+
+type ctxCheckSettler struct {
+	inner  adventure.PostBattleSettler
+	onCall func(ctx context.Context)
+}
+
+func (s *ctxCheckSettler) ApplyPostBattleResult(ctx context.Context, req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+	if s.onCall != nil {
+		s.onCall(ctx)
+	}
+	return s.inner.ApplyPostBattleResult(ctx, req)
+}
+
+type ctxCheckAdvRepo struct {
+	*memoryAdvRepo
+	onSave func(ctx context.Context)
+}
+
+func (r *ctxCheckAdvRepo) Save(ctx context.Context, a adventure.Adventure) error {
+	if r.onSave != nil {
+		r.onSave(ctx)
+	}
+	return r.memoryAdvRepo.Save(ctx, a)
+}
