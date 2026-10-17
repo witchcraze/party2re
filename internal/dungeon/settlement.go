@@ -32,10 +32,12 @@ func (s *Service) Escape(ctx context.Context, characterID string) (ExpeditionSte
 			if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
 				return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
 			}
-			//lint:ignore error-swallow best-effort post-commit cache eviction
-			_ = s.activeStore.DeleteActiveExpedition(ctx, characterID)
-			//lint:ignore error-swallow best-effort post-commit fallback cleanup
-			_ = s.repo.DeleteActiveExpedition(ctx, characterID)
+			if cur, cErr := s.activeStore.GetActiveExpedition(ctx, characterID); cErr == nil && cur != nil && cur.ID == exp.ID {
+				//lint:ignore error-swallow best-effort post-commit cache eviction
+				_ = s.activeStore.DeleteActiveExpedition(ctx, characterID)
+				//lint:ignore error-swallow best-effort post-commit fallback cleanup
+				_ = s.repo.DeleteActiveExpedition(ctx, characterID)
+			}
 
 			return ExpeditionStepResult{
 				Expedition:  *exp,
@@ -129,19 +131,23 @@ func (s *Service) handleDungeonClear(
 		return ExpeditionStepResult{}, err
 	}
 
-	// Update active store to reflect settled status before party reset
-	//lint:ignore error-swallow best-effort buffer update prior to party reset
-	_ = s.activeStore.SaveActiveExpedition(ctx, *exp)
+	// Update active store to reflect settled status before party reset if still matching this expedition
+	if cur, cErr := s.activeStore.GetActiveExpedition(ctx, char.ID); cErr == nil && cur != nil && cur.ID == exp.ID {
+		//lint:ignore error-swallow best-effort buffer update prior to party reset
+		_ = s.activeStore.SaveActiveExpedition(ctx, *exp)
+	}
 
 	if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
 		return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
 	}
 
-	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master
-	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
-	//lint:ignore error-swallow best-effort post-commit fallback cleanup
-	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master if still matching this expedition
+	if cur, cErr := s.activeStore.GetActiveExpedition(ctx, char.ID); cErr == nil && cur != nil && cur.ID == exp.ID {
+		//lint:ignore error-swallow best-effort post-commit cache eviction
+		_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+		//lint:ignore error-swallow best-effort post-commit fallback cleanup
+		_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	}
 
 	return ExpeditionStepResult{
 		Expedition:  *exp,
@@ -217,19 +223,23 @@ func (s *Service) handleEscape(
 		return ExpeditionStepResult{}, err
 	}
 
-	// Update active store to reflect settled status before party reset
-	//lint:ignore error-swallow best-effort buffer update prior to party reset
-	_ = s.activeStore.SaveActiveExpedition(ctx, *exp)
+	// Update active store to reflect settled status before party reset if still matching this expedition
+	if cur, cErr := s.activeStore.GetActiveExpedition(ctx, char.ID); cErr == nil && cur != nil && cur.ID == exp.ID {
+		//lint:ignore error-swallow best-effort buffer update prior to party reset
+		_ = s.activeStore.SaveActiveExpedition(ctx, *exp)
+	}
 
 	if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
 		return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
 	}
 
-	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master
-	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
-	//lint:ignore error-swallow best-effort post-commit fallback cleanup
-	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master if still matching this expedition
+	if cur, cErr := s.activeStore.GetActiveExpedition(ctx, char.ID); cErr == nil && cur != nil && cur.ID == exp.ID {
+		//lint:ignore error-swallow best-effort post-commit cache eviction
+		_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+		//lint:ignore error-swallow best-effort post-commit fallback cleanup
+		_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	}
 
 	return ExpeditionStepResult{
 		Expedition:  *exp,
@@ -280,19 +290,23 @@ func (s *Service) handleWipeout(
 		return ExpeditionStepResult{}, err
 	}
 
-	// Update active store to reflect settled status before party reset
-	//lint:ignore error-swallow best-effort buffer update prior to party reset
-	_ = s.activeStore.SaveActiveExpedition(ctx, *exp)
+	// Update active store to reflect settled status before party reset if still matching this expedition
+	if cur, cErr := s.activeStore.GetActiveExpedition(ctx, char.ID); cErr == nil && cur != nil && cur.ID == exp.ID {
+		//lint:ignore error-swallow best-effort buffer update prior to party reset
+		_ = s.activeStore.SaveActiveExpedition(ctx, *exp)
+	}
 
 	if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
 		return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
 	}
 
-	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master
-	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
-	//lint:ignore error-swallow best-effort post-commit fallback cleanup
-	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master if still matching this expedition
+	if cur, cErr := s.activeStore.GetActiveExpedition(ctx, char.ID); cErr == nil && cur != nil && cur.ID == exp.ID {
+		//lint:ignore error-swallow best-effort post-commit cache eviction
+		_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+		//lint:ignore error-swallow best-effort post-commit fallback cleanup
+		_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	}
 
 	return ExpeditionStepResult{
 		Expedition: *exp,

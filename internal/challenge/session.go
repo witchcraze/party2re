@@ -29,7 +29,7 @@ func (s *Service) StartSession(ctx context.Context, characterID string, tierID s
 		if err != nil {
 			return err
 		}
-		if existing != nil && existing.Status == StatusActive {
+		if existing != nil {
 			return ErrActiveSessionExists
 		}
 		if s.activityChecker != nil {
@@ -82,8 +82,10 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 					return nil, nil, fmt.Errorf("resetting party state: %w", err)
 				}
 			}
-			//lint:ignore error-swallow best-effort post-commit cache eviction
-			_ = s.activeStore.DeleteActiveSession(ctx, characterID)
+			if cur, cErr := s.activeStore.GetActiveSession(ctx, characterID); cErr == nil && cur != nil && cur.ID == session.ID {
+				//lint:ignore error-swallow best-effort post-commit cache eviction
+				_ = s.activeStore.DeleteActiveSession(ctx, characterID)
+			}
 			return &RoundResult{
 				Round:         session.CurrentRound,
 				Won:           false,
@@ -381,17 +383,21 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		return nil, nil, err
 	}
 
-	// Update active store to reflect settled status before party reset
-	//lint:ignore error-swallow best-effort buffer update prior to party reset
-	_ = s.activeStore.SaveActiveSession(ctx, *session)
+	// Update active store to reflect settled status before party reset if still matching this session
+	if cur, cErr := s.activeStore.GetActiveSession(ctx, characterID); cErr == nil && cur != nil && cur.ID == session.ID {
+		//lint:ignore error-swallow best-effort buffer update prior to party reset
+		_ = s.activeStore.SaveActiveSession(ctx, *session)
+	}
 
 	if err := s.resetPartyState(ctx, session.PartyID); err != nil {
 		return nil, nil, fmt.Errorf("resetting party state: %w", err)
 	}
 
-	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master
-	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
+	// Upon successful MariaDB commit AND party reset, purge transient buffer from Valkey Master if still matching this session
+	if cur, cErr := s.activeStore.GetActiveSession(ctx, characterID); cErr == nil && cur != nil && cur.ID == session.ID {
+		//lint:ignore error-swallow best-effort post-commit cache eviction
+		_ = s.activeStore.DeleteActiveSession(ctx, characterID)
+	}
 
 	return &RoundResult{
 		Round:              round,

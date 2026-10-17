@@ -29,7 +29,7 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 		if err != nil {
 			return err
 		}
-		if existing != nil && existing.Status == StatusExploring {
+		if existing != nil {
 			return ErrActiveExpeditionExists
 		}
 		if s.activityChecker != nil {
@@ -74,10 +74,12 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 			if err := s.resetPartyState(ctx, exp.PartyID); err != nil {
 				return ExpeditionStepResult{}, fmt.Errorf("resetting party state: %w", err)
 			}
-			//lint:ignore error-swallow best-effort post-commit cache eviction
-			_ = s.activeStore.DeleteActiveExpedition(ctx, characterID)
-			//lint:ignore error-swallow best-effort post-commit fallback cleanup
-			_ = s.repo.DeleteActiveExpedition(ctx, characterID)
+			if cur, cErr := s.activeStore.GetActiveExpedition(ctx, characterID); cErr == nil && cur != nil && cur.ID == exp.ID {
+				//lint:ignore error-swallow best-effort post-commit cache eviction
+				_ = s.activeStore.DeleteActiveExpedition(ctx, characterID)
+				//lint:ignore error-swallow best-effort post-commit fallback cleanup
+				_ = s.repo.DeleteActiveExpedition(ctx, characterID)
+			}
 
 			return ExpeditionStepResult{
 				Expedition:  *exp,

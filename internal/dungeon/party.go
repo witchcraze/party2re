@@ -197,7 +197,7 @@ func (s *Service) StartPartyExpedition(
 				if err != nil {
 					return err
 				}
-				if existing != nil && existing.Status == StatusExploring {
+				if existing != nil {
 					return ErrActiveExpeditionExists
 				}
 			}

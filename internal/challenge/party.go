@@ -127,7 +127,7 @@ func (s *Service) StartPartySession(
 				if err != nil {
 					return err
 				}
-				if existing != nil && existing.Status == StatusActive {
+				if existing != nil {
 					return ErrActiveSessionExists
 				}
 			}

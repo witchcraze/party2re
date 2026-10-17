@@ -261,7 +261,7 @@ func newCmbtServices(
 			if err != nil {
 				return false, err
 			}
-			return sess != nil && sess.Status == challenge.StatusActive, nil
+			return sess != nil, nil
 		})),
 	)
 	challengeService.Configure(
@@ -271,7 +271,7 @@ func newCmbtServices(
 			if err != nil {
 				return false, err
 			}
-			return exp != nil && exp.Status == dungeon.StatusExploring, nil
+			return exp != nil, nil
 		})),
 	)
 

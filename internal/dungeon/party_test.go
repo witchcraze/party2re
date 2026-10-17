@@ -1375,3 +1375,77 @@ func TestResetPartyState_ValkeyFailure_SurfacesErrorWithoutLockBypass(t *testing
 		}
 	}
 }
+
+func TestSettledPartyRun_SoloStartRace_CannotOverwriteOrDeleteNewRun(t *testing.T) {
+	ctx := context.Background()
+	partyRepo := newMockPartyRepo()
+	pID := "party-settled-solo-race"
+	partyRepo.addParty(party.Party{
+		ID:                pID,
+		LeaderCharacterID: "leader-1",
+		Status:            party.StatusInProgress,
+		Name:              "Settled Race Party",
+	}, []party.Member{
+		{PartyID: pID, CharacterID: "leader-1", ReadyState: true},
+		{PartyID: pID, CharacterID: "member-2", ReadyState: true},
+	})
+
+	activeStore := dungeon.NewMemoryExpeditionRepository()
+	exp1 := dungeon.ActiveExpedition{
+		ID:          "exp-party-1",
+		CharacterID: "leader-1",
+		DungeonID:   "dungeon-01",
+		PartyID:     pID,
+		Status:      dungeon.StatusCleared,
+		Members: []dungeon.ExpeditionMember{
+			{CharacterID: "leader-1"},
+			{CharacterID: "member-2"},
+		},
+	}
+	_ = activeStore.SaveActiveExpedition(ctx, exp1)
+
+	svc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		&mockCharRepo{chars: map[string]corecharacter.Character{
+			"leader-1": createTestChar("leader-1", 10, 100, 20, 20),
+			"member-2": createTestChar("member-2", 10, 100, 20, 20),
+		}},
+		&corebattle.Engine{},
+		dungeon.WithPartyRepository(partyRepo),
+		dungeon.WithActiveExpeditionStore(activeStore),
+	)
+
+	// 1. While settled party run exp1 remains in activeStore, solo start is prohibited for both leader and member
+	_, err := svc.StartExpedition(ctx, "leader-1", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+		t.Fatalf("expected ErrActiveExpeditionExists for leader when settled run is unrecovered, got: %v", err)
+	}
+	_, err = svc.StartExpedition(ctx, "member-2", "dungeon-01")
+	if !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+		t.Fatalf("expected ErrActiveExpeditionExists for member when settled run is unrecovered, got: %v", err)
+	}
+
+	// 2. Escape recovers party state and purges exp1
+	res, err := svc.Escape(ctx, "leader-1")
+	if err != nil || !res.IsFinished {
+		t.Fatalf("expected Escape to succeed and recover party, got err: %v", err)
+	}
+
+	// 3. Leader now starts a new solo run exp2 cleanly
+	soloExp, err := svc.StartExpedition(ctx, "leader-1", "dungeon-01")
+	if err != nil || soloExp == nil {
+		t.Fatalf("expected solo start to succeed after party recovery, got: %v", err)
+	}
+	if soloExp.ID == exp1.ID {
+		t.Fatalf("expected new solo expedition to have different ID from exp1")
+	}
+
+	// 4. Stale recovery/completion of old run exp1 must NOT delete or overwrite new solo run exp2
+	cur, cErr := activeStore.GetActiveExpedition(ctx, "leader-1")
+	if cErr != nil || cur == nil {
+		t.Fatalf("expected solo expedition to remain in activeStore, got nil (err: %v)", cErr)
+	}
+	if cur.ID != soloExp.ID {
+		t.Fatalf("expected activeStore to retain new solo expedition %s, but got %s", soloExp.ID, cur.ID)
+	}
+}
