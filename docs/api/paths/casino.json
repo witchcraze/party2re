@@ -262,18 +262,21 @@
             "schema": {
               "properties": {
                 "coins": {
+                  "format": "int64",
+                  "maximum": 461168601842738790,
+                  "minimum": 1,
                   "type": "integer"
                 },
                 "direction": {
-                  "description": "Exchange direction (must be gold_to_coins; reverse exchange is not supported)",
+                  "description": "Optional; omission, an empty string, and gold_to_coins all buy coins with gold. Other directions are rejected.",
                   "enum": [
+                    "",
                     "gold_to_coins"
                   ],
                   "type": "string"
                 }
               },
               "required": [
-                "direction",
                 "coins"
               ],
               "type": "object"

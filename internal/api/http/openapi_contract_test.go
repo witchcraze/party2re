@@ -195,3 +195,67 @@ func TestOpenAPIConstraintBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenAPILetterAndCasinoRequestContracts(t *testing.T) {
+	var root map[string]any
+	decoder := json.NewDecoder(strings.NewReader(string(gamehttp.OpenAPISpec())))
+	decoder.UseNumber()
+	if err := decoder.Decode(&root); err != nil {
+		t.Fatal(err)
+	}
+	schemas := root["components"].(map[string]any)["schemas"].(map[string]any)
+	paths := root["paths"].(map[string]any)
+	letter := `{"sender_character_id":"c1","recipient_character_id":"c2","content":"こんにちは\nHello"}`
+	for _, tc := range []struct {
+		name, path, payload string
+		valid               bool
+	}{
+		{"letter without color", "/letters", letter, true},
+		{"letter with empty color", "/letters", strings.Replace(letter, "}", `,"color":""}`, 1), true},
+		{"letter with non-hex color", "/letters", strings.Replace(letter, "}", `,"color":"arbitrary color"}`, 1), true},
+		{"letter trimmed content at limit", "/letters", strings.Replace(letter, `こんにちは\nHello`, " "+strings.Repeat("あ", 1000)+" ", 1), true},
+		{"missing sender", "/letters", strings.Replace(letter, `"sender_character_id":"c1",`, "", 1), false},
+		{"missing recipient", "/letters", strings.Replace(letter, `"recipient_character_id":"c2",`, "", 1), false},
+		{"missing content", "/letters", `{"sender_character_id":"c1","recipient_character_id":"c2"}`, false},
+		{"empty sender", "/letters", strings.Replace(letter, `"c1"`, `""`, 1), false},
+		{"blank sender", "/letters", strings.Replace(letter, `"c1"`, `" \t\u3000"`, 1), false},
+		{"empty recipient", "/letters", strings.Replace(letter, `"c2"`, `""`, 1), false},
+		{"blank recipient", "/letters", strings.Replace(letter, `"c2"`, `"\u0085\u00a0"`, 1), false},
+		{"empty content", "/letters", strings.Replace(letter, `"こんにちは\nHello"`, `""`, 1), false},
+		{"blank content", "/letters", strings.Replace(letter, `"こんにちは\nHello"`, `" \t\r\n\u3000"`, 1), false},
+		{"omitted direction", "/characters/{id}/casino/exchange", `{"coins":10}`, true},
+		{"empty direction", "/characters/{id}/casino/exchange", `{"direction":"","coins":10}`, true},
+		{"gold to coins", "/characters/{id}/casino/exchange", `{"direction":"gold_to_coins","coins":10}`, true},
+		{"reverse direction", "/characters/{id}/casino/exchange", `{"direction":"coins_to_gold","coins":10}`, false},
+		{"unknown direction", "/characters/{id}/casino/exchange", `{"direction":"other","coins":10}`, false},
+		{"missing coins", "/characters/{id}/casino/exchange", `{}`, false},
+		{"zero coins", "/characters/{id}/casino/exchange", `{"coins":0}`, false},
+		{"negative coins", "/characters/{id}/casino/exchange", `{"coins":-1}`, false},
+		{"fractional coins", "/characters/{id}/casino/exchange", `{"coins":0.5}`, false},
+		{"maximum coins", "/characters/{id}/casino/exchange", `{"coins":` + strconv.FormatInt(int64(casino.MaxExchangeCoins), 10) + `}`, true},
+		{"overflowing coins", "/characters/{id}/casino/exchange", `{"coins":` + strconv.FormatInt(int64(casino.MaxExchangeCoins)+1, 10) + `}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			schema := paths[tc.path].(map[string]any)["post"].(map[string]any)["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+			var value any
+			decoder := json.NewDecoder(strings.NewReader(tc.payload))
+			decoder.UseNumber()
+			if err := decoder.Decode(&value); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkOpenAPIPayload(schemas, schema, value); (err == nil) != tc.valid {
+				t.Fatalf("valid=%t: %v", tc.valid, err)
+			}
+		})
+	}
+	// Check minLength independently of the nonblank pattern, counting Unicode characters.
+	for _, tc := range []struct {
+		value string
+		valid bool
+	}{{"", false}, {"あ", false}, {"あい", true}} {
+		schema := map[string]any{"type": "string", "minLength": json.Number("2")}
+		if err := checkOpenAPIPayload(nil, schema, tc.value); (err == nil) != tc.valid {
+			t.Errorf("minLength for %q: valid=%t: %v", tc.value, tc.valid, err)
+		}
+	}
+}

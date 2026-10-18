@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Check the payload shapes used by the contract fixtures, including exact integer bounds.
@@ -65,6 +67,25 @@ func checkOpenAPIPayload(schemas map[string]any, schema map[string]any, value an
 		}
 	}
 	switch value := value.(type) {
+	case string:
+		if minimum, ok := schema["minLength"].(json.Number); ok {
+			length, err := minimum.Int64()
+			if err != nil {
+				return err
+			}
+			if int64(utf8.RuneCountInString(value)) < length {
+				return fmt.Errorf("string violates minLength")
+			}
+		}
+		if pattern, ok := schema["pattern"].(string); ok {
+			matched, err := regexp.MatchString(pattern, value)
+			if err != nil {
+				return err
+			}
+			if !matched {
+				return fmt.Errorf("string violates pattern")
+			}
+		}
 	case map[string]any:
 		if required, ok := schema["required"].([]any); ok {
 			for _, key := range required {
