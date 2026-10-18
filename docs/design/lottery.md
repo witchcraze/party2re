@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Lottery and Raffle Feature Module (`internal/lottery`) implements the authentic Party2 town games:
+The Lottery and Raffle Feature Module (`internal/lottery`) implements the Party2 town games with the reconstruction decisions documented below:
 1. **Server-Wide 20-Cap Rare Item Lottery (宝くじ / Takarakuji)**: Periodic limited-entry lottery (`party2/lib/takarakuzi.cgi`, NPC `@クラゲ`) featuring 20 tickets per round, 1 ticket per player, 10-day drawing cycles, and direct delivery of rare equipment and alchemy recipes into the winner's Depot (`預かり所`).
 2. **Raffle (福引 / Fukubiki)**: Instant tavern coupon drawing facility (`party2/lib/lot.cgi`, NPC `@フクスケ`) using meal coupons from the Adventurer's Tavern to draw stat-boosting seeds, weekday secret treasures, and divine orbs.
 
@@ -93,14 +93,43 @@ On purchase, the NPC informs the player (`party2/lib/takarakuzi.cgi:124`):
 The domain purchase result returns only state (`Ticket`, `RemainingGold`, `DrawDate`); the dialogue is formatted from `DrawDate` (JST) at the HTTP layer (`npc_message`) per `.agents/rules/03-architecture.md §5`.
 
 ### 3. Prize Catalog & Candidate Lineup
-Each round rolls one distinct prize item for each tier alongside winner counts:
 
-- **1st Prize (1等 / Itto)**: Exactly 1 winner
-  - Candidates (5 entries, uniform random selection): `item-129` (神の錬金レシピ, 20%), `item-266` (奇跡の錬金レシピ, 20%), `item-265` (聖なる秘石, 2x weight = 40%), `item-255` (黄金の林檎, 20%)
-- **2nd Prize (2等 / Nito)**: 1 or 2 winners (`1 + rand(2)`)
-  - Candidates (9 entries, uniform random selection): `item-168`, `item-264` (2x weight = 22.2%), `item-150`, `item-173`, `item-207`, `armor-40` (流銀の鎧), `weapon-40` (流銀の剣), `item-265`
-- **3rd Prize (3等 / Santo)**: 2, 3, or 4 winners (`2 + rand(3)`)
-  - Candidates (9 entries, uniform random selection): `item-126` (超魔力水), `item-244`, `item-243`, `item-199`, `item-253`, `item-254`, `item-263` (2x weight = 22.2%), `item-264`
+**Approved decision ([#1249](https://github.com/witchcraze/party2re/issues/1249), 2026-10-18):** retain the current Go selection across all candidate slots and all remaining participant slots. This intentionally departs from the legacy execution behavior. Duplicate prize entries retain their weights; unique items are **not** equally likely. The rationale is to keep every participant slot and every listed prize reachable, without changing the current Go draw behavior. Restoring the legacy exclusions was considered and rejected. Depot-full behavior remains separately tracked in [#1139](https://github.com/witchcraze/party2re/issues/1139).
+
+Each tier selects one prize item per round. Winner quotas remain 1 for first prize, 1 or 2 with equal probability for second prize, and 2, 3, or 4 with equal probability for third prize (`party2/lib/takarakuzi.cgi:301-303`). These quotas include dummy winners.
+
+The legacy candidate tables (`party2/lib/takarakuzi.cgi:23-53`) have 5/9/9 rows with one-based labels. At lines 297-299, `rand($#list)` initially selects indices 0..3 or 0..7. Lines 308-310 then use the selected row's one-based label as an array index, so the **effective** prize indices are 1..4 or 1..8. Consequently the first prize entry is unreachable, while the last remains reachable. Merely restoring duplicate entries, as described in closed #800, does not reproduce these execution probabilities.
+
+The tables enumerate the complete prize support and weights for each tier, conditional on creating a new lineup. A zero probability denotes an unreachable prize. Go directly selects indices 0..4 or 0..8, with probability 1/5 or 1/9 per candidate slot.
+
+| First prize | Legacy execution | Adopted Go |
+| :--- | ---: | ---: |
+| `item-129` (神の錬金レシピ) | 0 | 1/5 (20%) |
+| `item-266` (奇跡の錬金レシピ) | 1/4 (25%) | 1/5 (20%) |
+| `item-265` (聖なる秘石) | 2/4 (50%) | 2/5 (40%) |
+| `item-255` (黄金の林檎) | 1/4 (25%) | 1/5 (20%) |
+
+| Second prize | Legacy execution | Adopted Go |
+| :--- | ---: | ---: |
+| `item-168` | 0 | 1/9 |
+| `item-264` | 2/8 (25%) | 2/9 |
+| `item-150` | 1/8 (12.5%) | 1/9 |
+| `item-173` | 1/8 (12.5%) | 1/9 |
+| `item-207` | 1/8 (12.5%) | 1/9 |
+| `armor-40` (流銀の鎧) | 1/8 (12.5%) | 1/9 |
+| `weapon-40` (流銀の剣) | 1/8 (12.5%) | 1/9 |
+| `item-265` (聖なる秘石) | 1/8 (12.5%) | 1/9 |
+
+| Third prize | Legacy execution | Adopted Go |
+| :--- | ---: | ---: |
+| `item-126` (超魔力水) | 0 | 1/9 |
+| `item-244` | 1/8 (12.5%) | 1/9 |
+| `item-243` | 1/8 (12.5%) | 1/9 |
+| `item-199` | 1/8 (12.5%) | 1/9 |
+| `item-253` | 1/8 (12.5%) | 1/9 |
+| `item-254` | 1/8 (12.5%) | 1/9 |
+| `item-263` | 2/8 (25%) | 2/9 |
+| `item-264` | 1/8 (12.5%) | 1/9 |
 
 Lineup inspection (`@しょうひん`) displays the active round's prizes, item names, and winner quotas.
 
@@ -114,8 +143,10 @@ When a drawing occurs (via background scheduler `takarakuji_draw` or scheduled h
    - Collects all purchased tickets for the round.
    - If fewer than 20 tickets were sold, dummy entries (`<dummy_0>`, `<dummy_1>`, ...) are added until the pool reaches exactly 20 slots.
 3. **Winner Selection**:
-   - For each prize rank and its winner count, a random slot is drawn from the pool.
+   - **Adopted Go:** for each prize rank and its winner count, select uniformly from every remaining slot (indices 0..N−1, probability 1/N each), including the last real or dummy slot.
    - The selected slot is removed from the pool so that no character or dummy can win more than once in the same round.
+   - **Legacy execution** (`party2/lib/takarakuzi.cgi:214-245`): `rand($#players)` selects only indices 0..N−2, each with probability 1/(N−1). Removing selected entries preserves the original final slot, which remains unreachable throughout the draw. With 20 sold tickets, the last purchaser cannot win; with fewer than 20, the excluded slot is the last appended dummy, so all real purchasers remain eligible.
+   - Conditional on quotas totaling M draws (4..7), an adopted Go slot has total winning probability M/20 and rank probabilities 1/20, amount2/20, amount3/20. Legacy eligible slots instead have M/19 and rank probabilities 1/19, amount2/19, amount3/19; the excluded final slot has zero for every rank. Selection is without replacement in both cases. This exclusion is intentionally not restored under #1249.
 4. **Depot-Direct Delivery (`send_item`) & Asset Protection**:
    - Deliveries to real winners are sorted in ascending order of `winnerID` to guarantee deterministic Rank 5 lock ordering and prevent deadlocks.
    - Prize items are instantiated (`coreitem.NewInstance`) and delivered directly into the character's Depot (`character_depots` / `depot_items`).

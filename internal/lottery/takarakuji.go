@@ -31,7 +31,7 @@ var (
 )
 
 // Legacy prize candidates from party2/lib/takarakuzi.cgi:23-53
-// Note: duplicate entries intentionally establish authentic weighted probabilities
+// Duplicate slots retain weights; #1249 approves full-slot selection instead of legacy exclusions.
 var (
 	IttoPrizeCandidates = []string{
 		"item-129", // 神の錬金レシピ
@@ -155,7 +155,8 @@ func NextDrawDateJST(t time.Time) time.Time {
 	}
 }
 
-// RollNewRoundPrizes generates random prizes and quantities for a new round matching lib/takarakuzi.cgi.
+// RollNewRoundPrizes selects across all candidate slots, as approved in #1249.
+// Winner quotas match lib/takarakuzi.cgi; legacy label-to-index shifting is not preserved.
 func RollNewRoundPrizes() (prize1 string, amount1 int, prize2 string, amount2 int, prize3 string, amount3 int, err error) {
 	idx1, err := rand.Int(rand.Reader, big.NewInt(int64(len(IttoPrizeCandidates))))
 	if err != nil {
