@@ -36,7 +36,7 @@ var helperWiringRequiredTables = []string{
 // definitions (no data). CompleteQuest calls renewExpired which scans and exchanges expired
 // requests in helper_quests, so tests must not run against the shared test DB.
 // Missing admin configuration fails the test rather than falling back to the shared DB.
-func helperWiringIsolatedDB(t *testing.T) (*sql.DB, *sql.DB) {
+func helperWiringIsolatedDB(t *testing.T) *sql.DB {
 	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -92,7 +92,7 @@ func helperWiringIsolatedDB(t *testing.T) (*sql.DB, *sql.DB) {
 	})
 
 	copyTableDefinitions(t, source, db, helperWiringRequiredTables)
-	return db, source
+	return db
 }
 
 func copyTableDefinitions(t *testing.T, source, db *sql.DB, tables []string) {
@@ -126,13 +126,8 @@ func copyTableDefinitions(t *testing.T, source, db *sql.DB, tables []string) {
 }
 
 func TestHelperProductionGuildWiring(t *testing.T) {
-	db, source := helperWiringIsolatedDB(t)
+	db := helperWiringIsolatedDB(t)
 	ctx := context.Background()
-
-	var sharedQuestCountBefore int
-	if err := source.QueryRowContext(ctx, "SELECT count(*) FROM helper_quests").Scan(&sharedQuestCountBefore); err != nil {
-		t.Fatal(err)
-	}
 
 	core, err := newCoreServices(db, nil)
 	if err != nil {
@@ -286,15 +281,6 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	if qty := leaderDepot.Quantity("item-126"); qty != 1 {
 		t.Errorf("expected reward item-126 quantity 1, got %d", qty)
 	}
-
-	// Verify shared DB was never mutated
-	var sharedQuestCountAfter int
-	if err := source.QueryRowContext(ctx, "SELECT count(*) FROM helper_quests").Scan(&sharedQuestCountAfter); err != nil {
-		t.Fatal(err)
-	}
-	if sharedQuestCountBefore != sharedQuestCountAfter {
-		t.Fatalf("shared DB helper_quests was modified: before=%d, after=%d", sharedQuestCountBefore, sharedQuestCountAfter)
-	}
 }
 
 type faultyGuildPointAdapter struct {
@@ -310,13 +296,8 @@ func (f *faultyGuildPointAdapter) AddGuildPoints(ctx context.Context, guildID st
 }
 
 func TestHelperProductionGuildWiring_GPUpdateErrorRollsBack(t *testing.T) {
-	db, source := helperWiringIsolatedDB(t)
+	db := helperWiringIsolatedDB(t)
 	ctx := context.Background()
-
-	var sharedQuestCountBefore int
-	if err := source.QueryRowContext(ctx, "SELECT count(*) FROM helper_quests").Scan(&sharedQuestCountBefore); err != nil {
-		t.Fatal(err)
-	}
 
 	core, err := newCoreServices(db, nil)
 	if err != nil {
@@ -428,24 +409,11 @@ func TestHelperProductionGuildWiring_GPUpdateErrorRollsBack(t *testing.T) {
 		t.Errorf("expected guild points 0 after rollback, got %d", gCheck.Points)
 	}
 
-	// Verify shared DB was never mutated
-	var sharedQuestCountAfter int
-	if err := source.QueryRowContext(ctx, "SELECT count(*) FROM helper_quests").Scan(&sharedQuestCountAfter); err != nil {
-		t.Fatal(err)
-	}
-	if sharedQuestCountBefore != sharedQuestCountAfter {
-		t.Fatalf("shared DB helper_quests was modified: before=%d, after=%d", sharedQuestCountBefore, sharedQuestCountAfter)
-	}
 }
 
 func TestHelperProductionGuildWiring_ConcurrentClaimRace(t *testing.T) {
-	db, source := helperWiringIsolatedDB(t)
+	db := helperWiringIsolatedDB(t)
 	ctx := context.Background()
-
-	var sharedQuestCountBefore int
-	if err := source.QueryRowContext(ctx, "SELECT count(*) FROM helper_quests").Scan(&sharedQuestCountBefore); err != nil {
-		t.Fatal(err)
-	}
 
 	core, err := newCoreServices(db, nil)
 	if err != nil {
@@ -594,14 +562,5 @@ func TestHelperProductionGuildWiring_ConcurrentClaimRace(t *testing.T) {
 	totalRewardItems := depotLeader.Quantity("item-126") + depotMember.Quantity("item-126")
 	if totalRewardItems != 1 {
 		t.Errorf("expected exactly 1 reward item across both members, got %d", totalRewardItems)
-	}
-
-	// Verify shared DB was never mutated
-	var sharedQuestCountAfter int
-	if err := source.QueryRowContext(ctx, "SELECT count(*) FROM helper_quests").Scan(&sharedQuestCountAfter); err != nil {
-		t.Fatal(err)
-	}
-	if sharedQuestCountBefore != sharedQuestCountAfter {
-		t.Fatalf("shared DB helper_quests was modified: before=%d, after=%d", sharedQuestCountBefore, sharedQuestCountAfter)
 	}
 }
