@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
@@ -16,6 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/god"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/job"
 	"github.com/witchcraze/party2re/internal/lottery"
@@ -121,10 +123,14 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
+	var helperGuild helperquest.GuildRepository
+	if soc != nil && soc.guild != nil {
+		helperGuild = &helperGuildAdapter{guild: soc.guild}
+	}
 	helperService := helperquest.NewService(
 		helperRepo,
 		core.charRepo,
-		nil,
+		helperGuild,
 		core.txProvider,
 		helperquest.WithDepotRepository(econ.depotRepo),
 		helperquest.WithFarmRepository(&helperFarmAdapter{repo: monsterRepo}),
@@ -443,4 +449,29 @@ func (a *helperFarmAdapter) ListRanchMonsters(ctx context.Context, characterID s
 
 func (a *helperFarmAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
+}
+
+type helperGuildAdapter struct {
+	guild *guild.Service
+}
+
+func (a *helperGuildAdapter) FindGuildIDByCharacterID(ctx context.Context, characterID string) (string, error) {
+	if a.guild == nil {
+		return "", nil
+	}
+	g, _, err := a.guild.GetByCharacter(ctx, characterID)
+	if err != nil {
+		if errors.Is(err, guild.ErrCharacterNotInGuild) {
+			return "", nil
+		}
+		return "", err
+	}
+	return g.ID, nil
+}
+
+func (a *helperGuildAdapter) AddGuildPoints(ctx context.Context, guildID string, points int) error {
+	if a.guild == nil {
+		return nil
+	}
+	return a.guild.AddPoints(ctx, guildID, int64(points))
 }

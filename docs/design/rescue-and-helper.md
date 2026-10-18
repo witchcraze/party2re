@@ -53,7 +53,7 @@ The Go migration `031_rescue_and_helper.sql` creates the table without inserting
 | `みる` → `miru` | `ListQuests` / `GET /helpers/quests` | Read existing requests; an empty result does not generate supply. |
 | `かいけつ` → `kaiketsu` | `CompleteQuest` / `POST /helpers/complete` | Complete an existing request and create its replacement; also exchanges expired non-target requests on every call (#1217). No bootstrap command. |
 
-A fresh installation therefore has no playable helper requests until initial request data is separately supplied. A nonzero automatic seed or provisioning tool would require an explicit new decision about its count, source and transaction/idempotency contract; none is authorized here. This decision does not certify the generator pools/reward weights ([#1216](https://github.com/witchcraze/party2re/issues/1216)) or production guild wiring ([#1218](https://github.com/witchcraze/party2re/issues/1218)).
+A fresh installation therefore has no playable helper requests until initial request data is separately supplied. A nonzero automatic seed or provisioning tool would require an explicit new decision about its count, source and transaction/idempotency contract; none is authorized here. Production guild wiring is connected via public port adapter in `cmd/party2` ([#1218](https://github.com/witchcraze/party2re/issues/1218)); this decision does not certify the generator pools/reward weights ([#1216](https://github.com/witchcraze/party2re/issues/1216)).
 
 ---
 
