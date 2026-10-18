@@ -3,7 +3,7 @@
 ## Overview
 
 The Player Store (`store`) subsystem reconstructs and modernizes the original Party2 `store.cgi` ("プレイヤーストア / バザール") mechanics.
-Player Stores represent permanent commercial real-estate built within the 4 towns (`town1`–`town4`). Adventurers invest substantial capital (50,000 G) to establish their own boutique, listing items from their warehouse (`depot`) for either direct gold purchase or item-for-item barter trade. Store owners can customize their storefront with customized signboard names, decorative wallpapers (52 legacy styles from `%kabes`, 0–50,000 G), and indoor furniture pieces (15 legacy furniture models) with custom labels.
+Player Stores represent permanent commercial real-estate built within the 4 towns (`town1`–`town4`). Adventurers invest substantial capital (50,000 G) to establish their own boutique, listing items from their warehouse (`depot`) for either direct gold purchase or item-for-item barter trade. Store owners can customize their storefront with customized signboard names, decorative wallpapers (50 legacy styles from `%kabes`, 0–50,000 G), and indoor furniture pieces (15 legacy furniture models) with custom labels.
 
 ---
 
@@ -20,7 +20,7 @@ Player Stores represent permanent commercial real-estate built within the 4 town
 | `かう` (ゴールド) | `&kau_gold` | `StoreService.BuyItem` | `POST /characters/{id}/store/sales/{sale_id}/buy` | **Reconciled (1:1)**: Buyer pays listed gold. Gold deposited into seller wallet, item moved into buyer depot. Collection discovery (`RecordItemDiscovered`) triggered for buyer (`party2/lib/store.cgi:175-176`). |
 | `かう` (物々交換) | `&kau_barter` | `StoreService.TradeItem` | `POST /characters/{id}/store/sales/{sale_id}/trade` | **Reconciled (1:1)**: Buyer exchanges matching depot item for listed item. Both items transferred atomically. Collection discovery (`RecordItemDiscovered`) triggered for buyer (`party2/lib/store.cgi:276-277`). |
 | `かんばん` | `&kanban` | `StoreService.ChangeStoreName` | `POST /characters/{id}/store/name` | **Reconciled (1:1)**: Modifies store signboard name for 5,000 G. Max 8 characters, validated and sanitized. |
-| `かべがみ` | `&kabegami` | `StoreService.ChangeWallpaper` | `POST /characters/{id}/store/wallpaper` | **Reconciled (1:1)**: Updates boutique wallpaper from 52 historical styles (`%kabes`) with tier pricing (0–50,000 G). |
+| `かべがみ` | `&kabegami` | `StoreService.ChangeWallpaper` | `POST /characters/{id}/store/wallpaper` | **Reconciled (1:1)**: Updates boutique wallpaper from 50 historical styles (`%kabes`) with tier pricing (0–50,000 G). |
 | `おく` (インテリア) | `&oku` | `StoreService.AddInterior` | `POST /characters/{id}/store/interiors` | **Reconciled (1:1)**: Places furniture from 15 available styles (`001`–`023`) for 1,000 G each (max 5 interiors). |
 | `なづける` | `&nazukeru` | `StoreService.RenameInterior` | `PUT /characters/{id}/store/interiors/{interior_id}/name` | **Reconciled (1:1)**: Renames placed furniture piece (max 8 characters). |
 | `そうじ` | `&souji` | `StoreService.CleanInteriors` | `DELETE /characters/{id}/store/interiors` | **Reconciled (1:1)**: Clears all placed furniture from the store. |
@@ -87,7 +87,7 @@ erDiagram
      - **Rank 5**: `depots` (`FindByCharacterIDForUpdate`) - Locked in ascending character ID order: `min(id1, id2)` -> `max(id1, id2)`.
 5. **Interior & Customization Limits**:
    - Max 5 furniture pieces per store (`MaxInteriorCount = 5`).
-   - Furniture costs 1,000 G per piece; wallpaper costs range from 0 G to 50,000 G across 52 legacy styles.
+   - Furniture costs 1,000 G per piece; wallpaper costs range from 0 G to 50,000 G across 50 legacy styles.
    - Store and interior names cannot exceed 8 characters and are validated against reserved delimiters.
 6. **Collection Discovery & Catalog Registration**:
    - Acquiring items or equipment through player store purchases (`BuyItem`) or barter exchanges (`TradeItem`) triggers collection discovery (`RecordItemDiscovered`) for the buyer character, registering the acquired item, weapon, or armor in their personal collection compendium (`party2/lib/store.cgi:175-176, 276-277`).
