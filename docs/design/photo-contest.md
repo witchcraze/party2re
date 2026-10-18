@@ -57,7 +57,12 @@ The Photo Contest and Gallery system (`internal/contest`, legacy `photo.cgi` / `
 4. **Optional Comment**: Voters can include an encouraging comment (up to 100 characters).
 
 ### 4.4 Prize Structure & Rewards
-When a contest is settled:
+The prize table in legacy `party2/contest.cgi:18–24` specifies the following
+amounts; Go currently credits these directly to the character's wallet and
+Small Medals counter. The approved contract below instead preserves the
+original's verified winner medal count and delivery model; it is not yet
+implemented.
+
 - **1st Place**: 15,000 Gold + 10 Small Medals + 700 Guild Points (EXP).
 - **2nd Place**: 7,000 Gold + 6 Small Medals + 300 Guild Points (EXP).
 - **3rd Place**: 3,000 Gold + 3 Small Medals + 100 Guild Points (EXP).
@@ -66,6 +71,67 @@ When a contest is settled:
 - **Voter Bonus**: Every voter who voted for the 1st place winner receives 1 Small Medal.
 - **Hall of Fame (殿堂入り)**: The 1st place entry is permanently archived into `contest_legends`.
 - **System Announcement**: Broadcasts news announcements for top 3 winners.
+
+#### Legacy delivery evidence
+
+At legacy revision `ff97fc549932a146cc945d7edf71b44c868a840e`:
+
+| Reward | Original execution | Current Go behavior |
+| --- | --- | --- |
+| Winner Gold | `contest.cgi:220–221` calls `lib/system.cgi:842–855` to append 15,000 / 7,000 / 3,000 G to the winner's pending remittances. Depot withdrawal receives them (`lib/depot.cgi:208–215,290–307`). | `SettleContest` credits the winner's wallet immediately. Excess over `MaxMoney` is clamped away. |
+| Winner medals | `contest.cgi:210–219` appends 9 / 5 / 2 items No.23 directly to each winner's Depot, then attempts one further delivery using an out-of-scope `$vname`. | Credits 10 / 6 / 3 directly to each winner's Small Medals counter. |
+| Champion voter bonus | `contest.cgi:203–207` sends one item No.23 to each named voter for the first-place entry, including the winner's own vote. | Credits one Small Medal directly to each champion voter's counter. |
+
+The voter loop's lexical `$vname` is not the package variable used by the later
+winner delivery. With that package variable unset, the extra medal normally has
+no recipient; with it set to another existing character, that character receives
+one extra item per placed entrant. It is not necessarily the last voter. The
+9 / 5 / 2 direct append (`213–215`) and the 10 / 6 / 3 prize table must not be
+conflated.
+
+Isolated execution of the original reward and delivery routines confirmed the
+unset/set package-variable cases, self-vote bonus and pending Gold. This does
+not establish a full CGI run under the unavailable operational configuration.
+Both the direct winner append and `send_item` (`system.cgi:818–837`) omit a
+capacity check; contest Gold delivery also has no Depot-full precondition.
+
+#### Approved delivery contract and implementation gap
+
+In [#1250](https://github.com/witchcraze/party2re/issues/1250), on 2026-10-18 the
+user explicitly selected the original delivery model and directed that the
+specification remain as close to the original as possible. On that basis, the
+contract preserves the verified delivery and winner counts:
+
+- Gold is a pending claim belonging to the placed entrant, not immediate wallet
+  income. Reuse the pending-remittance/receipt contract owned by
+  [#1109](https://github.com/witchcraze/party2re/issues/1109); preserve unpaid Gold
+  at the wallet cap and on failures/retries. Contest awards do not inherit the
+  player-to-player sender's Depot-full rejection.
+- Medals are `item-023` delivered to each recipient's Depot, not direct counter
+  increments. Merge an existing eligible stack, or append a new slot even when
+  full or already over capacity. This is a contest-award policy; the broader
+  caller-specific capacity decision remains
+  [#1139](https://github.com/witchcraze/party2re/issues/1139).
+- Settlement must durably create all awards and commit the round transition
+  atomically. Storage errors, retry and concurrent settlement/receipt must not
+  lose or duplicate awards. A separate delivery queue is not implied.
+- Each placed entrant receives **9 / 5 / 2 medal items**, respectively. Each
+  champion voter receives **one additional item**; overlapping eligibility adds
+  both awards (10 for a self-voting champion). Preserve the verified direct
+  append count rather than silently correcting it to the 10 / 6 / 3 prize
+  table. Do not deliver the extra item to an unresolved package-global name.
+
+This deliberately excludes erroneous extra delivery when a package-global
+`$vname` happens to identify an existing character. It does not assert that
+9 / 5 / 2 was the original author's intent, or that 10 / 6 / 3 was actually
+delivered. Increasing the winner awards to the prize table is not approved.
+
+`internal/contest/settlement.go` still uses direct `AddMoney` / `AddSmallMedals`.
+Pending remittances and capacity-permitting contest item delivery remain under
+[#1496](https://github.com/witchcraze/party2re/issues/1496), which adopts #1109's
+shared remittance contract and implements only the contest capacity exception.
+The current HTTP settlement response and routes remain unchanged by this
+specification decision; transport descriptions change with implementation.
 
 ### 4.5 Automated Scheduling & Settlement (`ContestSettlementHandler`)
 - Contest settlements are automatically scheduled as recurring actions (`ActionTypeContestSettlement = "contest_settlement"`) managed by `scheduling.Service`.
