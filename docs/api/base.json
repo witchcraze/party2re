@@ -496,51 +496,6 @@
         ],
         "type": "object"
       },
-      "BlackMarketPointsStatus": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "example": "闇市場",
-            "type": "string"
-          },
-          "npc_name": {
-            "example": "@闇商人",
-            "type": "string"
-          },
-          "prizes": {
-            "items": {
-              "$ref": "#/components/schemas/BlackMarketPrize"
-            },
-            "type": "array"
-          },
-          "rare_points": {
-            "example": 10,
-            "type": "integer"
-          },
-          "u_prizes": {
-            "items": {
-              "$ref": "#/components/schemas/BlackMarketPrize"
-            },
-            "type": "array"
-          },
-          "u_rare_points": {
-            "example": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "rare_points",
-          "u_rare_points",
-          "prizes",
-          "u_prizes"
-        ],
-        "type": "object"
-      },
       "BlackMarketPrize": {
         "properties": {
           "cost": {

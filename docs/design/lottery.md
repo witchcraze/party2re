@@ -174,14 +174,3 @@ When a drawing occurs (via background scheduler `takarakuji_draw` or scheduled h
 - `takarakuji_tickets`: Tracks character ticket purchases (1 per round, max 20 per round).
 - `migrations/098_correct_lottery_equipment_collection.sql`: Corrects legacy equipment items mistakenly recorded with category `'item'` in `character_item_collection` (Issue #1239).
 
----
-
-## HTTP REST Endpoints
-
-| Method | Endpoint | Description | Auth |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/lottery/takarakuji` | Get current Takarakuji status, prize lineup, remaining tickets, and talk phrases | Public |
-| `POST` | `/characters/{id}/lottery/takarakuji/buy` | Purchase Takarakuji ticket (30,000G, 1 per character per round, 20 max) | Character Auth |
-| `GET` | `/characters/{id}/lottery/takarakuji/ticket` | Get character's current round ticket and past participation history | Character Auth |
-| `GET` | `/characters/{id}/lottery/tickets` | Get character tavern raffle ticket count | Character Auth |
-| `POST` | `/characters/{id}/lottery/raffle` | Play raffle drawing mini-game (automatic mode: Special if >= 300 tickets [300 consumed], Standard if < 300 [3 consumed]) | Character Auth |

@@ -53,7 +53,4 @@ Characters may sacrifice available SP to increase their stats according to authe
 
 - **Domain Logic**: Handled in `internal/core/character/sp_exchange.go` via `Character.ApplySPExchange`. Invariants protect `Character.SP` and `Character.Stats` from external corruption.
 - **Service Layer**: `internal/wishingwell.Service` orchestrates validation, status reporting, and transactional execution.
-- **Lock Hierarchy**: Acquires only character row lock (`FindByIDForUpdate`) conforming to Rank 2 (`RankCharacter`), preserving the deadlock-free locking hierarchy.
-- **REST Endpoints**:
-  - `GET /characters/{id}/wishing-well`: Returns status, current SP, eligibility flags, and NPC dialogues.
-  - `POST /characters/{id}/wishing-well/exchange`: Sacrifices SP for permanent stat increase.
+- **Lock Hierarchy**: Acquires character row lock (`FindByIDForUpdate`) conforming to Rank 2 (`RankCharacter`).

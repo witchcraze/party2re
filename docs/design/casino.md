@@ -156,10 +156,9 @@ In `ValkeyRoomRepository.saveRoomDetail`:
 2. The active index is updated: `ZADD` with `UpdatedAt.Unix()` score for active rooms, or `ZREM` and member key deletion for disbanded rooms.
 3. Errors from both the payload SET and the subsequent active index ZADD/ZREM or member key operations are propagated truthfully to callers.
 
-Because Valkey operations are not cross-key transactional here:
-- If active index renewal (`ZADD`) fails, the room payload `SET` may already have succeeded in Valkey.
-- Write failures must never authorize blind command replay; clients must not assume payload rollback, as blindly retrying a failed command could double-deduct wagers or violate round action sequencing on an already-mutated payload.
-- In this partial-write state, the renewed room remains intact and queryable by ID (`GetRoom`), while lobby discovery (`ListRooms` / `ListActiveRooms`) relies on the active index score. When that score crosses the 30-minute cutoff, `PurgeIdleRooms` rechecks the locked payload timestamp and preserves the room, while `ListActiveRooms` prunes the stale index from lobby discovery until a subsequent successful renewal write restores the index score.
+Because Valkey operations across keys are not atomic:
+- If active index renewal (`ZADD`/`ZREM`) fails after the room payload `SET` succeeds, the error is handled as a secondary synchronization failure (`ErrSecondarySync`). See [Showdown Settlement Atomicity & Error Boundary](#showdown-settlement-atomicity--error-boundary).
+- Write failures must never authorize blind command replay; the room payload remains intact and queryable by ID (`GetRoom`), while `ListActiveRooms` prunes stale index entries until restored.
 
 ---
 
@@ -306,17 +305,9 @@ The Slot Machine (スロットマシン) is a single-player casino wagering game
 
 ---
 
-## 8. Concurrency & Lock Acquisition Hierarchy
+## 8. Concurrency & Error Boundaries
  
-Multi-player room lobbies and in-flight turns reside exclusively in Valkey Master (Candidate C Ephemeral Turn & Session Lobby Architecture). MariaDB transactional operations strictly follow the global lock acquisition hierarchy for financial settlements and prize exchange:
-```text
-Rank 2: characters (Character Primary Entity)
-  ↓
-Rank 5: character_depots, depot_items (Depot Storage)
-  ↓
-Rank 8: casino_accounts (Secondary Feature Records)
-```
-In `ExchangePrize`, the configured character repository locks the character (Rank 2) before the Depot (Rank 5) and Casino account (Rank 8). This serializes exchanges for the same character before reading depot items. A character lock/read failure aborts the exchange before any asset mutation.
+Multi-player room lobbies and in-flight turns reside in Valkey Master. MariaDB transactional operations strictly follow the global lock acquisition hierarchy: Character (Rank 2) -> Depot (Rank 5) -> Casino Account (Rank 8). In `ExchangePrize`, the character is locked before reading or mutating depot items.
 
 ### Showdown Settlement Atomicity & Error Boundary
 

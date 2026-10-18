@@ -90,10 +90,3 @@ When a character reaches or exceeds the required threshold:
   `PRIMARY KEY (character_id, medal_id)`
   Foreign key cascaded to `characters(id)`.
 
----
-
-## HTTP API Endpoints
-
-- `GET /characters/{id}/achievements`: Inspect character achievement milestones, current progress values, completion percentages, and claim statuses.
-- `POST /characters/{id}/achievements/{achievement_id}/claim`: Claim commemorative medal and bonus small medals for an unlocked milestone.
-- `GET /characters/{id}/medals`: Inspect character collection of awarded commemorative medals and honors.

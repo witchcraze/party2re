@@ -14,29 +14,10 @@ In Party2, player accounts and individual characters can be permanently removed 
 - Attempting to delete a nonexistent character returns HTTP `404 Not Found`.
 
 ### 2.2 Cascading Cleanup Order
-Character deletion executes within a database transaction and cleans up resources in reverse-dependency order:
-1. External domain cleanup hooks (`CleanupHook`) for cross-service cleanup.
-2. Character-linked feature tables:
-   - `casino_accounts`, `casino_poker_sessions`, `character_lottery`, `takarakuji_tickets`
-   - `character_blessings`, `banquet_toasts`
-   - `blackmarket_character_points`, `blackmarket_character_purchases`
-   - `tavern_deliveries`, `tavern_character_status`
-   - `park_posts`, `rescue_records`
-   - `contest_votes`, `contest_entries`, `character_photos`
-   - `fleamarket_listings`
-   - `character_letters` (sender or recipient), `character_companion_phrases`, `character_delivery_notices`, `character_homes`
-   - `character_boss_records`, `boss_challenge_history`
-   - `character_dungeon_records`, `dungeon_active_expeditions`, `dungeon_expedition_history`
-   - `character_challenge_records`, `challenge_sessions`
-   - `arena_ratings`, `arena_matches` (attacker or defender)
-   - `character_monsters`, `character_monster_book`, `character_item_collection`
-   - `guild_members`, `guilds` (clear `leader_character_id`)
-   - `activities`, `adventures`
-   - `character_custom_skills`, `equipment_slots`, `inventory_items`
-   - `depot_items`, `character_depots`
-   - `character_job_masteries`, `character_job_history`, `character_jobs`
-   - `character_profiles`
-3. Primary character record in `characters`.
+Character deletion executes within an atomic database transaction in reverse-dependency order:
+1. **Domain Cleanup Hooks (`CleanupHook`)**: External feature services register cleanup hooks to release active locks, ephemeral Valkey state (e.g., active room presence, navigation bookmarks), and cross-service associations.
+2. **Character-Linked Domain Data**: Cascading SQL deletion cleans up feature records (social posts/letters, mini-games, dungeon/challenge progression, guild memberships, inventories, depot, equipment, and job masteries).
+3. **Primary Character Record**: Deletes the character root in `characters`.
 
 ---
 
@@ -54,15 +35,5 @@ Player account deletion executes within a database transaction:
 3. Invalidate all active player sessions in Valkey Master via `SessionRepository.DeleteByPlayerID` (O(1) player session set and token deletion).
 4. Player-linked relational tables in MariaDB:
    - `player_notifications`
-   - `player_api_tokens`
+   - `player_api_tokens` (via foreign key `ON DELETE CASCADE`)
 5. Primary player record in `players`.
-
----
-
-## 4. API Endpoints
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `DELETE` | `/players/me` | Bearer (Player) | Delete authenticated player account and all associated characters/data. |
-| `DELETE` | `/players/{id}` | Bearer (Player / Admin) | Delete specified player account and associated characters/data. |
-| `DELETE` | `/characters/{id}` | Bearer (Player) | Delete specified character and associated progression/inventory/features. |

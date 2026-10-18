@@ -152,7 +152,6 @@ Use events selectively. Immediate operations that require a direct result should
 
 - [`overview.md`](overview.md) — overall architecture.
 - [`components.md`](components.md) — component responsibilities.
-- [`feature-modules.md`](feature-modules.md) — feature boundaries.
 - [`../../AGENTS.md`](../../AGENTS.md) — mandatory contract rules.
 
 ## Application API boundary
@@ -170,13 +169,12 @@ application service interfaces and exposes a `ServeMux` via `Router()`.
 
 **Routes and authentication:**
 
-The complete current transport contract is in [OpenAPI](../api/openapi.json),
-generated from `docs/api/base.json` and modular paths. Routes are unversioned.
-Session Bearer tokens and Personal Access Tokens authenticate player operations;
-administrative endpoints use their explicit admin credential contract.
-Public health, registration, login, and discovery routes do not all require a
-player session. Consult each operation's security definition rather than an
-obsolete blanket exception list.
+The complete transport contract is defined in [OpenAPI](../api/openapi.json), generated from `docs/api/base.json` and modular paths. Gateway routes use versioned paths (`/api/v1/characters/{id}/...`), while legacy-compatible operational REST endpoints remain unversioned until progressive retirement completes. Session Bearer tokens and Personal Access Tokens authenticate player operations; administrative endpoints use their explicit admin credential contract (`X-Admin-Key` or Admin Bearer token). Public health, registration, login, and discovery routes do not require a player session.
+
+- **Dual Authentication Routing (`Authorization: Bearer <token>`)**:
+  - `p2_sk_` prefix: Disambiguates Personal Access Tokens (PATs) from Valkey sessions. The SHA-256 digest is verified against MariaDB `player_api_tokens`. Plaintext secrets (32 bytes random entropy) are returned only once upon creation (`POST /player/tokens`), and are never stored or exposed in list/revocation queries.
+  - Non-prefixed tokens: Looked up as interactive session UUIDs in Valkey Master (`party2:session:<token>`).
+  - PATs cascade on account deletion (`player_api_tokens.player_id` foreign key `ON DELETE CASCADE`).
 
 **Request invariants and security headers enforced at the transport layer:**
 
@@ -232,20 +230,15 @@ HTTP handlers standardize API responses following pragmatic REST conventions and
 
 ### Client / Agent Gateway (CQRS Architecture)
 
-To support modern Web UI (Server-Driven UI), autonomous AI Agents, and Chatbot integrations (Line/Discord) without client-side routing sprawl or token bloat, the application plans a unified two-pillar CQRS Gateway. The HTTP boundaries below are not registered yet (#939/#646):
+To support modern Web UI (Server-Driven UI), autonomous AI Agents, and Chatbot integrations (Line/Discord) without client-side routing sprawl or token bloat, the application operates a unified two-pillar CQRS Gateway:
 
 | Pillar | Method & Path | Responsibility | Output |
 |---|---|---|---|
-| **Query (Observe)** | `GET /characters/{id}/context` | Character snapshot, active timers, and **authoritative whitelist of available actions**. | Lightweight snapshot + `available_actions` (with `required_params`) |
-| **Command (Execute)** | `POST /characters/{id}/actions` | Single-entry-point command dispatcher for all state mutations. | `{ success, result, context }` (updates client state in 1 round trip) |
+| **Query (Observe)** | `GET /api/v1/characters/{id}/context` | Character snapshot, active timers, and **authoritative whitelist of available actions**. | Lightweight snapshot + `available_actions` (with `required_params`) |
+| **Command (Execute)** | `POST /api/v1/characters/{id}/actions` | Single-entry-point command dispatcher for all state mutations. | `{ success, result, context }` (updates client state in 1 round trip) |
 
-See [`client-agent-api.md`](client-agent-api.md) for the proposed protocol and implementation status, LLM tool integration, and Server-Driven UI lifecycle.
+See [`client-agent-api.md`](client-agent-api.md) for the observation/command contracts, parameter validation schemas, and client recovery lifecycle.
 
 ## Application logging contract
 
-Application services that need operational diagnostics receive an injected
-logger rather than using global state. The contract accepts an operation name,
-structured attributes, and (for errors) an error value. Its implementation
-emits JSON and records only the error type, so error messages cannot expose
-passwords, sessions, or database credentials. See
-[`logging.md`](logging.md) for the safety and correlation rules.
+Application services that need operational diagnostics receive an injected `log/slog` logger rather than using global state. The contract accepts an operation name, structured attributes, and error values. Its implementation emits JSON and records only error types, strictly filtering passwords, session tokens, and database credentials. Correlation IDs (`logging.WithCorrelationID`) track execution context across service calls.

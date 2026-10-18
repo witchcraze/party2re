@@ -78,21 +78,6 @@ a resumable battle state.
   - **Cooperative QoL Policy vs Legacy CGI**: In legacy Party2 Perl CGI (`_battle.cgi:209`), fallen party members received 0 rewards (`next if $ms{$name}{hp} <= 0;`). In `party2re`, this behavior was intentionally revised: all participants who took part in a victorious expedition receive full synergy-boosted EXP/Gold/Crystals and revive with 1 HP. This deliberate modern cooperative QoL design fosters teamplay and prevents penalizing tanks/support characters who sacrifice themselves for the party's victory.
   - On Defeat: Half base EXP, 0 Gold, 0 Crystals, surviving MP is persisted, and characters survive with 1 HP.
 
----
-
-## Endpoints
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/parties` | Public | List recruiting parties with query filters (`status`, `limit`, `offset`) |
-| `POST` | `/parties` | Bearer Session | Create a new party with creator as leader |
-| `GET` | `/parties/{id}` | Public | Retrieve party detail and member roster |
-| `POST` | `/parties/{id}/join` | Bearer Session | Join an existing recruiting party |
-| `POST` | `/parties/{id}/leave` | Bearer Session | Leave the party (disbands if leader) |
-| `POST` | `/parties/{id}/kick` | Bearer Session | Kick a member (leader only) |
-| `DELETE` | `/parties/{id}` | Bearer Session | Disband the party (leader only) |
-| `POST` | `/parties/{id}/ready` | Bearer Session | Set member readiness state |
-| `POST` | `/parties/{id}/start` | Bearer Session | Initiate multiplayer co-op adventure (leader only) |
 
 ---
 

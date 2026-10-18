@@ -26,16 +26,31 @@ All `/admin/*` routes enforce strict credential verification:
 
 ---
 
-## 3. Player Administration
+## 3. System Maintenance Mode
 
-### 3.1 Player Listing (`GET /admin/players`)
+System Maintenance Mode allows administrators to temporarily disable general gameplay and user mutations during server upgrades, batch migrations, or emergency maintenance, while keeping health checks, OpenAPI metadata, and admin control channels active.
+
+### 3.1 Maintenance Invariants & Middleware
+- Stored as a singleton row in MariaDB `system_maintenance` (`id = 'global'`) with Valkey projection (`party2:maintenance:status`).
+- `enabled`: Boolean indicating whether maintenance mode is active.
+- `message`: Optional announcement message explaining the maintenance reason.
+- `estimated_end_time`: Optional estimated completion timestamp.
+- **Whitelisted routes**: `GET /health`, `GET /openapi.json`, and `GET /maintenance` bypass maintenance checks.
+- **Admin bypass**: Requests authenticated via `X-Admin-Key` or admin Bearer token bypass maintenance checks.
+- **Player rejection**: All other requests receive HTTP `503 Service Unavailable` with `Retry-After: 300` and error code `MAINTENANCE_MODE`.
+
+---
+
+## 4. Player Administration
+
+### 4.1 Player Listing (`GET /admin/players`)
 - **Query Parameter**: `sort` (optional)
   - `addr` (default): Sorted by `last_ip ASC, id ASC`. Reproduces legacy Party2 default sorting by user IP address.
   - `name`: Sorted by `username ASC`.
   - `updated_at` (or `ldate`): Sorted by `updated_at DESC, id ASC`. Displays most recently active players first.
 - **Response**: List of players containing `id`, `username`, `created_at`, `updated_at`, `last_ip`, `banned_at`, and `is_banned`.
 
-### 3.2 Account Soft-Ban (`POST /admin/players/{id}/ban`)
+### 4.2 Account Soft-Ban (`POST /admin/players/{id}/ban`)
 - **Semantics**: Sets `banned_at = CURRENT_TIMESTAMP(6)` in MariaDB `players` table.
 - **Session Revocation**: Synchronously purges all active player sessions from Valkey Master via `sessions.DeleteByPlayerID(ctx, playerID)`.
 - **Token Invalidation**: Deletes active Personal Access Tokens (PATs) for the player.
@@ -43,18 +58,6 @@ All `/admin/*` routes enforce strict credential verification:
 - **Enforcement**:
   - `POST /sessions` (Login): Returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
   - Authenticated character and gameplay requests: Returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
-
----
-
-## 4. API Endpoints
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/admin/maintenance` | Admin (`X-Admin-Key`) | Enables or configures system maintenance mode. |
-| `PUT` | `/admin/maintenance` | Admin (`X-Admin-Key`) | Updates system maintenance mode configuration. |
-| `GET` | `/admin/players` | Admin (`X-Admin-Key`) | Returns registered players list with optional sorting (`sort=addr\|name\|updated_at`). |
-| `POST` | `/admin/players/{id}/ban` | Admin (`X-Admin-Key`) | Soft-bans player account, revokes active sessions, and cleans up guild memberships. |
-| `POST` | `/admin/characters/{id}/unstuck` | Admin (`X-Admin-Key`) | Unstucks character by clearing active actions without saving a rescue record. |
 
 ---
 

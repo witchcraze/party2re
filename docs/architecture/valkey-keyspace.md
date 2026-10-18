@@ -71,7 +71,7 @@ Dungeon and Challenge additionally use the hash-tagged state/reward keys in
 [transient-run-state.md](transient-run-state.md), with 7200s sliding lifetimes.
 `party2:ranking:refresh` is a scheduled **action type**, not a separately stored
 Valkey key. The withdrawn Candidate E `party2:boss:` keys and `boss_damage`
-script are documented only in [the historical note](transient-boss-hp.md).
+script were purged (#479/#584) and are not part of the active keyspace.
 
 ## Scheduled terminal persistence and recovery
 
@@ -119,6 +119,24 @@ than replaying uncertain Processing actions. Queue discovery/enqueue errors are
 reported after SQL reconciliation; restarting or explicitly retrying that feature
 reconciliation repairs recurrence without repeating a committed settlement. See
 [ranking design](../design/ranking.md#durable-progress-and-scheduling-recovery).
+
+### Scheduling Registration, Due Fetching & Cancellation Semantics
+
+- **Registration (`Schedule`)**:
+  1. Action payload written (`SET party2:scheduled:action:<id>`).
+  2. If `ActorID` is non-empty, registered in actor set index (`SADD party2:scheduled:actor:<actor_id>`).
+  3. Action ID enqueued into pending sorted set (`ZADD party2:scheduled:pending`).
+  If step 2 or 3 fails, registration halts, partial entries are best-effort pruned (`DEL`/`SREM`), and the storage error is returned. Retries safely overwrite via idempotent commands.
+- **Due Action Fetching (`FetchDue`)**:
+  1. Candidate action IDs retrieved via `ZRANGEBYSCORE party2:scheduled:pending`.
+  2. Payload retrieved via `GET party2:scheduled:action:<id>`.
+  3. Absent payloads are cleaned up from pending (`ZREM`). Transient storage errors leave entries queued and propagate to the worker. Malformed JSON or validation failures are pruned from pending to prevent starvation loops.
+  4. Actions in `Processing` are preserved in storage/discovery but removed from pending so subsequent actions are not starved.
+- **Action Cancellation (`CancelByActorID` / `ClearActiveActions`)**:
+  1. Indexed action IDs retrieved via `SMEMBERS party2:scheduled:actor:<actor_id>`. Empty returns safe/idle (`cleared=false`).
+  2. For each action ID, removed from pending (`ZREM`), payload deleted (`DEL`), lock deleted (`DEL`).
+  3. If all actions are removed, actor set index is deleted (`DEL party2:scheduled:actor:<actor_id>`).
+  4. If any cleanup step fails, the actor index is preserved so unfinished work remains discoverable, returning `cleared=false, err`.
 
 ## Approved navigation storage boundary
 

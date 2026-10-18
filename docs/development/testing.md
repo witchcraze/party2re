@@ -81,34 +81,56 @@ Choose the smallest isolation boundary that preserves the behavior being verifie
 
 | Verification need | Approach |
 | --- | --- |
-| Assertions can identify the test's own records | Shared DB; use unique fixture identifiers and scope assertions/optional cleanup to those records and their dependents |
-| SQL/migration assertions fit entirely within a connection-local temporary table or a guaranteed rollback transaction | Keep that existing isolation when it cannot change unrelated data or compromise concurrent tests |
-| Global counts, capacity limits, resets or lifecycle operations cannot be checked reliably alongside unrelated data | Dedicated DB; freely create, update, delete or reset data inside it |
-| Real commits or independent worker transactions are part of the behavior | Retain those boundaries; use a dedicated DB if interference would otherwise prevent accurate verification |
+| Assertions can identify the test's own records | Shared DB; use unique fixture identifiers and scope assertions/cleanup to those records and their dependents |
+| SQL/migration assertions fit within a temporary table or rollback transaction | Keep existing isolation when it cannot change unrelated data or compromise concurrent tests |
+| Global counts, capacity limits, resets or lifecycle operations | Dedicated DB; freely create, update, delete or reset data inside it |
+| Real commits or independent worker transactions | Retain those boundaries; use a dedicated DB if interference would prevent accurate verification |
 
-Cleanup such as `DELETE ... WHERE character_id = ?` is appropriate when the character and affected dependent rows belong to that fixture. A common town ID, a test-like name prefix, absence of `t.Parallel()` or a cooperating test mutex does not establish ownership of all matching data. Go packages can run concurrently even when individual tests are sequential. Deleting shared rows and later restoring them can erase another test's writes.
+Cleanup such as `DELETE ... WHERE character_id = ?` is appropriate when the character and affected dependent rows belong to that fixture. Go packages run concurrently even when individual tests are sequential. Deleting shared rows and later restoring them can erase another test's writes.
 
-The existing repository reset assertion in [`ranking_extra_repository_test.go`](../../internal/database/ranking_extra_repository_test.go) keeps its mutation and reads in one transaction and rolls back before checking the fixture again outside it. This does not verify committed cross-connection behavior. If rollback cannot contain every write, or locking interferes with other tests, use a dedicated DB. Connection-local temporary tables in [`job_points_migration_test.go`](../../internal/database/job_points_migration_test.go) and [`replay_migration_test.go`](../../internal/database/replay_migration_test.go) isolate migration fixtures without clearing persistent tables; their connection boundary must be preserved.
-
-Environment-wide initialization/disposal is separate from per-test setup/cleanup. A fresh CI job may initialize and discard its whole environment; a developer may explicitly reset a local environment between uses. These permissions do not authorize an individual shared-DB test to clear unrelated rows. See [local reset procedures](development-environment.md#database-initialization-and-migration) and [CI environment lifetime](ci-cd.md#test-environment-lifetime).
-
-Future development with multiple concurrent sessions should isolate each environment's DB, cache and runtime resources. This policy does not add session provisioning or change the current Compose configuration.
-
-### 5.2 Existing Dedicated Database Setup
-
-[`weeklyRotationDB`](../../internal/ranking/weekly_rotation_integration_test.go), [`contestIntegrationDB`](../../internal/contest/integration_test.go), [`homeIsolatedDB`](../../internal/home/integration_test.go) (copies all table definitions for the capacity-sensitive house build test), [`depotIsolatedDB`](../../internal/database/depot_concurrency_test.go) (keeps item tables sparse for locking-plan regression coverage), [`replayArchiveDB`](../../internal/api/http/replay_authorization_integration_test.go), [`takarakujiIsolatedDB`](../../internal/lottery/integration_test.go) and [`lotteryIsolatedDB`](../../internal/database/lottery_repository_test.go) create unique databases, copy only required table definitions (including foreign keys) from `PARTY2_DB_DSN`, and drop only their own databases during cleanup. Weekly rotation workers retain separate connections and transactions; shared ranking rows are never cleared or restored by these fixtures.
-
-`PARTY2_TEST_DB_ADMIN_DSN` must allow creating/dropping these databases. It is supplied by `make test-integration`, `make check`, and the development Compose test runner. For direct host runs with the local Compose services, set it to `root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails these DB-enabled tests rather than falling back to the shared database. This administrator connection is for tests only; ordinary shared-DB tests do not require database-creation privileges.
-
-### 5.3 Known Implementation Gaps
-
-Currently, all test fixtures comply with the database ownership and isolation policy. Former gaps, including the [Lottery tests clearing shared ticket/round tables (#1396)](https://github.com/witchcraze/party2re/issues/1396), have been resolved into dedicated databases.
+Dedicated test fixtures create unique databases, copy only required table definitions (including foreign keys) from `PARTY2_DB_DSN`, and drop only their own databases during cleanup. `PARTY2_TEST_DB_ADMIN_DSN` must allow creating/dropping these databases (supplied by `make test-integration`, `make check`, and Compose test runners; or `root:root@tcp(127.0.0.1:3306)/?parseTime=true` on host). Missing admin configuration fails dedicated DB tests rather than falling back to the shared DB.
 
 ---
 
-## 6. Related Documents
+## 6. Mechanical AST Static Analysis Linters
 
-- [`../../AGENTS.md`](../../AGENTS.md) & [`.agents/rules/01-development-workflow.md`](../../.agents/rules/01-development-workflow.md) — mandatory TDD and DoD rules.
-- [`ast-linters.md`](ast-linters.md) — mechanical AST static analysis suite.
-- [`benchmarking.md`](benchmarking.md) — performance benchmarking and regression tracking.
-- [`issue-workflow.md`](issue-workflow.md) — acceptance criteria and PR review lifecycle.
+Party2 maintains an in-tree suite of automated Go AST (Abstract Syntax Tree) linters implemented as standard Go tests under `internal/architecture/` and subsystem directories. They run with zero external binary dependencies via `go test`, `make arch-lint`, and `make check`.
+
+### Key Enforced Rules
+
+- **Silent Error Suppression Prohibition (`error_swallow_lint_test.go`)**: Discarding errors returned from database repositories, persistent stores, or state mutations via blank identifiers (`_ =`, `_, _ =`, `val, _ :=`) or unassigned expressions is strictly prohibited. If a call is strictly best-effort or compensatory (e.g. post-commit cache eviction), annotate with `//lint:ignore error-swallow <reason>`.
+- **Lock Hierarchy Linter (`internal/database/lock_hierarchy_lint_test.go`)**: Enforces pessimistic row-lock acquisition hierarchy order (Rank 0 through Rank 8) across multi-table transactions.
+- **Guidance Layer Coordinates (`arch_test.go`)**: Verifies `.arch/*.json` module boundaries, exported symbols, and shared tables against real Go AST.
+- **Package & Layer Boundaries (`package_boundary_lint_test.go`)**: Enforces acyclic layered architecture (e.g. domain layers cannot import HTTP transport).
+- **Core Mutation Encapsulation (`core_lint_test.go`)**: Enforces that currency, inventory, and stats are mutated through encapsulated domain methods rather than direct field assignment.
+- **Auth Wrapper Compliance (`auth_lint_test.go`)**: Verifies mutating HTTP endpoints wrap execution with standard authentication helpers.
+- **Dead Code & Unused Definitions (`deadcode_lint_test.go`, `unused_definitions_lint_test.go`)**: Flags unreferenced top-level constants, DTOs, and orphaned domain methods.
+
+---
+
+## 7. Continuous Performance Verification & Benchmarking
+
+Party2 explicitly separates functional correctness from performance verification:
+
+1. **Functional Safety Verification (`go test`)**: Functional tests MUST NOT enforce sub-second wall-clock thresholds (fragile in CI/virtualized environments). Use liberal dead-man bounds (2.0s–5.0s) strictly to catch deadlocks and hangs. Emit informational timing via `t.Logf`.
+2. **Continuous Performance Verification (`make bench`)**: CPU-sensitive operations (AST linters, battle simulation, Valkey session persistence) use Go standard `testing.B` benchmarks.
+   - Run benchmarks: `make bench` (runs `./scripts/benchmark.sh`).
+   - Baseline recording: `./scripts/benchmark.sh --record` writes `.benchmarks/baseline.txt`.
+   - Regression comparator: `go run ./scripts/benchcompare .benchmarks/baseline.txt .benchmarks/current.txt` detects regressions beyond +30% threshold.
+
+---
+
+## 8. Continuous Integration & Environment Lifetime
+
+- **Disposable Per-Job Environment**: CI (`.github/workflows/ci.yml`) runs on GitHub-hosted runners using Docker Compose (`Dockerfile.dev` and `compose.yaml`). Compose initializes MariaDB from `migrations/` on first volume creation; runner disposal releases the environment afterward.
+- **Isolation in CI**: CI's disposable environment does not waive test database ownership rules for individual tests within a run.
+- **Pipeline Stages**: Formatting & static analysis -> AST linters -> migrations -> test suite with race detector -> production Docker smoke build.
+
+---
+
+## 9. Related Documents
+
+- [`../../AGENTS.md`](../../AGENTS.md) & [`.agents/rules/01-development-workflow.md`](../../.agents/rules/01-development-workflow.md) — mandatory TDD, DoD, and workflow rules.
+- [`development-environment.md`](development-environment.md) — local service configuration.
+- [`openapi.md`](openapi.md) — OpenAPI specification synchronization.
+- [`dependency-policy.md`](dependency-policy.md) — dependency and license governance.

@@ -89,16 +89,6 @@ Seals cannot be applied if:
 
 ---
 
-## 4. Concurrency & Row-Lock Hierarchy
+## 4. Concurrency & Transaction Boundary
 
-All operations execute within a single database transaction conforming strictly to the project lock hierarchy:
-
-```
-Rank 2: characters (SELECT ... FOR UPDATE)
-  ↓
-Rank 3: equipment_slots, inventory_items (SELECT ... FOR UPDATE)
-  ↓
-Rank 8: blacksmith_deposits (SELECT ... FOR UPDATE)
-```
-
-Deadlock is mathematically impossible because locks are always acquired in strictly monotonic rank order.
+All operations execute within a single database transaction following the monotonic lock hierarchy: Character (Rank 2) -> Equipment/Inventory (Rank 3) -> Blacksmith Deposits (Rank 8).

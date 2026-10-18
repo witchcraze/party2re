@@ -24,67 +24,33 @@ Both MariaDB and Valkey are mandatory runtime infrastructure dependencies for th
 
 ## Starting the environment
 
-From the repository root:
+From the repository root, start MariaDB and Valkey:
 
-```sh
-docker compose up -d mariadb valkey
+```bash
+make up
 ```
 
-Both services must be healthy before the `app` service starts.
-The `app` service waits for both health checks automatically.
-
-Start the application, including dependency startup checks, with:
-
-```sh
-docker compose run --rm app go run ./cmd/party2
-```
-
-## Database configuration
-
-The development connection string is supplied to the application through
-`PARTY2_DB_DSN` in `compose.yaml`.
-
-Running outside Compose also requires `PARTY2_DB_DSN`; startup fails when it is unset. For host execution, supply a DSN pointing to the local MariaDB service at `127.0.0.1:3306`.
+For host execution, `PARTY2_DB_DSN` (`root:root@tcp(127.0.0.1:3306)/party2?parseTime=true`) and `PARTY2_VALKEY_ADDR` (`127.0.0.1:6379`) connect directly to these local backing services.
 
 ## Database initialization and migration
 
 SQL files in `migrations/` define the relational schema.
 
-To apply pending migrations safely without dropping data:
+- Apply pending migrations: `make db-migrate`
+- Recreate database from scratch: `make db-reset`
 
-```bash
-make db-migrate
-```
-
-The local database persists across runs and normally serves both development and DB-backed tests. Temporary development/test data is allowed. See the [test DB ownership and isolation procedure](testing.md#51-database-ownership-and-isolation) before writing fixture setup or cleanup.
-
-To recreate the local database completely from all migration files:
-
-```bash
-make db-reset
-```
-
-This explicitly drops and recreates the local Compose `party2` database; it does not reset Valkey. `make check-clean` performs the same DB reset before forcing full verification. Stop tests and application processes using the environment before either command. These are environment operations, not individual test setup/cleanup, and are not required before every normal test run. Normal `make check` applies pending migrations without resetting the database.
-
-The database volume can also be wiped manually if needed:
-
-```sh
-docker compose down -v
-docker compose up -d mariadb valkey
-```
-
-`docker compose down -v` removes all Compose-managed named volumes, including MariaDB and Valkey data. Use it only when explicitly discarding that local environment's data.
+The local database persists across runs and serves development and shared-DB tests. See [Database Ownership and Isolation](testing.md#51-database-ownership-and-isolation) for test isolation rules.
 
 ## Stopping the environment
 
-```sh
+```bash
 docker compose down
 ```
 
-The named MariaDB volume remains after this command.
+To wipe volumes completely: `docker compose down -v`.
 
 ## Related documents
 
-- [`testing.md`](testing.md) — canonical formatting, test, and analysis commands.
+- [`testing.md`](testing.md) — canonical formatting, test, and verification procedures.
+- [`openapi.md`](openapi.md) — OpenAPI specification synchronization.
 - [`dependency-policy.md`](dependency-policy.md) — dependency and license rules.
-- [`ci-cd.md`](ci-cd.md) — continuous verification principles.

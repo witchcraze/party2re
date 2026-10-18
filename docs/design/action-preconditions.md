@@ -46,7 +46,7 @@ The gate descriptions below summarize the current implementation:
    - Ordinary actions remain blocked while the sleep duration is active or wake recovery is pending. `home_wake` is offered only when the duration has elapsed and recovery is pending.
    - **Emergency exception**: `rescue.cgi:53-65` accepts rescue during existing sleep and adds a penalty. `rescue_request` therefore has no awake requirement.
 4. **Cooldown Gate (`party2:scheduled:actor:<id>`)**:
-   - Characters with Pending or Processing ScheduledActions cannot execute cooldown-gated town or expedition actions. Passing ExecuteAt does not imply settlement; Completed/Failed records do not block. The actor Set is an index, not an exclusive lock ([Scheduled work lifecycle](scheduling.md)).
+   - Characters with Pending or Processing ScheduledActions cannot execute cooldown-gated town or expedition actions. Passing ExecuteAt does not imply settlement; Completed/Failed records do not block. The actor Set is an index, not an exclusive lock ([Scheduled work lifecycle](../architecture/valkey-keyspace.md#scheduled-terminal-persistence-and-recovery)).
 5. **Currency Gate (`$m{money} > 0`)**:
    - Currency-gated entry actions require positive wallet gold. Exact amounts, selected-item prices, alternate currencies and domain-specific prerequisites remain execution-service checks; the catalog has no request payload to evaluate them.
 6. **Location Gate**:
@@ -175,7 +175,7 @@ The table below documents the entry, navigation and recovery controls in `intern
 | `casino_room_create` | カジノ部屋作成 | `social` | `executeCharacterAction` | `["name", "game_type", "speed", "max_players", "rate", "allow_spectators"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `casino_room_join` | カジノ部屋参加 | `social` | `executeCharacterAction` | `["room_id"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
 | `casino_room_spectate` | カジノ部屋観戦 | `social` | `executeCharacterAction` | `["room_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `lottery_raffle` | 福引を引く | `entertainment` | `playRaffle` | `["raffle_type"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `lottery_raffle` | 福引を引く | `entertainment` | `playRaffle` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `lottery_takarakuji_buy` | 宝くじ購入 | `entertainment` | `buyTakarakujiTicket` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `tavern_order` | 酒場で食事注文 | `entertainment` | `orderTavernMeal` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `contest_enter` | フォトコンテスト応募 | `entertainment` | `enterContest` | `["photo_id", "title"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
@@ -210,7 +210,7 @@ No CharacterSnapshot or availability-result cache is introduced. The catalog is 
 
 ---
 
-## 5. Client & Agent Observation and Planned Command Contract (#939/#646)
+## 5. Client & Agent Observation and Command Contract
 
 When clients receive `available_actions` via `GET /context`:
 

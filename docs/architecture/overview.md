@@ -138,23 +138,15 @@ The architecture should make the next feature easier, not merely make the curren
 
 - [`AGENTS.md`](../../AGENTS.md) — mandatory architectural and development rules.
 - [`components.md`](components.md) — component responsibilities and boundaries.
-- [`feature-modules.md`](feature-modules.md) — feature ownership and extensibility.
 - [`interfaces.md`](interfaces.md) — component contracts.
+- [`client-agent-api.md`](client-agent-api.md) — CQRS Client & Agent Gateway architecture.
 - [`../design/game-overview.md`](../design/game-overview.md) — game/domain context.
 - [`../../STATUS.md`](../../STATUS.md) — current implementation status.
 
-
 ## UI-independent operations and external access
 
-Game behavior lives behind application services. The current HTTP JSON API is
-implemented and documented in [OpenAPI](../api/openapi.json). The public client
-presentation and the context/action Gateway remain planned (#140/#939/#646).
-See [client-agent-api.md](client-agent-api.md) for migration sequencing; API
-availability must not be confused with a completed browser client.
+Game behavior lives behind application services. The HTTP JSON API is implemented and documented in [OpenAPI](../api/openapi.json). The two-pillar Client/Agent Gateway (`GET /api/v1/characters/{id}/context` and `POST /api/v1/characters/{id}/actions`) is operational, providing Server-Driven UI observation and state transition dispatch. Remaining work includes the browser client presentation (#140) and connecting additional facility actions.
 
 ## Application logging
 
-Application services may receive the injectable logging contract described in
-[`logging.md`](logging.md). Logging is structured JSON infrastructure, not a
-Core or Feature Module responsibility. It carries operation and optional
-correlation fields while filtering authentication and credential data.
+Application services receive an injectable logging contract (`log/slog`). Logging is structured JSON infrastructure, not a Core or Feature Module responsibility. It emits operation names and optional correlation IDs (`logging.WithCorrelationID`), while strictly redacting sensitive attributes (passwords, tokens, sessions, credentials, and connection strings).

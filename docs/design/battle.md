@@ -113,7 +113,7 @@ selection, agility round order or automatic termination as the interaction rule.
 
 3. **Round Conclusion**:
    - Decrement `RemainingTurn` and `AntiFieldTurn` on active `FieldState`.
-   - Check termination conditions. If round 30 ends without a victor, outcome is `OutcomeDraw`.
+   - Check termination conditions. If round 100 (`maxTurns = 100`) ends without a victor, outcome is `OutcomeDraw`.
 
 ### Explicit-action resumption requirements
 
@@ -287,12 +287,10 @@ definitions cannot create these entries by matching an effect-kind string.
 The participant adapter omits a job entry without a validated native definition,
 and hydrates occupied custom slots in their original order (including duplicates)
 only when every slot passes. Missing definitions or an empty custom action omit
-the whole custom choice. The zero-value registry admits no catalog entries;
-no production legacy job/gem entry is certified by this admission work alone.
-Each future entry needs legacy evidence and whole-effect tests, including all
-descendants, before registration. Existing direct batch payloads remain the
-responsibility of their producers; primitive validation does not certify their
-legacy parity.
+the whole custom choice. The zero-value registry admits no catalog entries.
+Each registered entry requires verified legacy evidence and whole-effect tests
+before admission. Existing direct batch payloads remain the responsibility of
+their producers.
 
 The core returns `ErrUnsupportedEffect` for unsupported kinds or incomplete
 payloads. It preflights every participant's job/custom/item actions before batch
@@ -309,15 +307,10 @@ accepted and charged according to its existing resource contract.
 
 Evidence below uses `party2/lib/` at revision
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item/gem/job references are
-provenance identifiers, not authorization to reuse distinctive display names.
-The finite source-entry ledger and helper evidence are recorded in
-[#1333](https://github.com/witchcraze/party2re/issues/1333). Source-to-native
-body, descendant, registration, discovery, wiring and test evidence are separate
-obligations: [#1410](https://github.com/witchcraze/party2re/issues/1410) maps
-non-job and ordinary NPC entries to their implementation owners, while
-[#1409](https://github.com/witchcraze/party2re/issues/1409) owns shared player-job
-identities. Completing those ownership audits does not certify production
-support; successful original branches retain their concrete implementation gates.
+provenance identifiers. Concrete source-entry ledgers and helper evidence are
+referenced in [#1333](https://github.com/witchcraze/party2re/issues/1333),
+[#1409](https://github.com/witchcraze/party2re/issues/1409), and
+[#1410](https://github.com/witchcraze/party2re/issues/1410).
 
 | Dispatch | Enduring behavior / effect boundary | Evidence |
 | --- | --- | --- |
@@ -551,8 +544,7 @@ increase retention, actor death before later gems, helper/held-item/room changes
 and a hidden unsupported descendant after a supported custom slot. The last
 case rejects the **whole** outer action without spending MP/CMP/items or
 changing any state. Compare uninterrupted and serialized/reloaded results,
-including draws, ordering and asset receipts. Neither this source audit nor
-an executor tested against a synthetic catalog certifies production entries.
+including draws, ordering and asset receipts.
 
 #### Arithmetic selectors and digit reversal
 
@@ -584,10 +576,8 @@ counters; already-recorded end processing retains its normal owner and ordering.
 with an explicit allowlist of concrete arithmetic IDs separate from batch scalar
 payloads. A discovered unsupported last-match child rejects the whole selector,
 even when an earlier duplicate is supported. Reachable lethal effects require
-an already admitted shared defeat/drop/reset closure; the arithmetic owner does
-not certify that catalog. Accepted nonlethal/no-effect paths need no defeat hook.
-The registry remains empty by default. These finite callbacks neither populate
-complete job tables nor certify #1357 random closures or #1329/#1330 consumers.
+an already admitted shared defeat/drop/reset closure. Accepted nonlethal/no-effect
+paths need no defeat hook. The registry remains empty by default.
 
 #### Shared modifiers and callback outcomes
 
@@ -595,8 +585,7 @@ Behavioral evidence: `_skill.cgi:8807–9770,9948–10194,10384–10430,10559–
 11035–11104`; `_battle.cgi:28–142,748–1178,1390–1428,1715–1759,1855–1873`;
 revision and detailed reconciliation in
 [#1343](https://github.com/witchcraze/party2re/issues/1343).
-This contract does not certify native production formulas. Callback guards,
-coefficients and tails remain part of each entry's complete support boundary.
+Callback guards, coefficients and tails remain part of each entry's complete support boundary.
 
 Callback category (physical, magic, breath, dance, song or untyped) is independent
 of an elemental name and of direct/normal-attack flags. Category seals check only
@@ -875,11 +864,9 @@ outer command through the existing admission boundary.
 
 #### Callback context and failure admission
 
-Reference revision remains `ff97fc549932a146cc945d7edf71b44c868a840e`.
-[#1367](https://github.com/witchcraze/party2re/issues/1367) owns detailed dispatch,
-scope evidence and boundary vectors. The decision is to preserve evidenced
-bindings and reject broken or unrepresented contexts; no gameplay repair is
-approved. This specification does not register native production effects.
+[#1367](https://github.com/witchcraze/party2re/issues/1367) details dispatch,
+scope evidence and boundary vectors, preserving evidenced bindings and rejecting
+broken or unrepresented contexts.
 
 Keep the requesting player's data, current effect actor, submitted target,
 resolved target, callback category and operation-entry field snapshot distinct.
@@ -1221,8 +1208,8 @@ Deterministic 1v1 duel resolution utilizing the canonical damage formula:
 
 ### Legacy Defeat Synergies
 
-- A cursed revival from `item-260` revives the participant at 30% MaxHP and
-  grants +300 Attack, +300 Defense, and +300 Agility for the battle.
+- A cursed revival from `item-260` revives the participant at 30% MaxHP,
+  adds 300 Attack (capped at 999), and inflicts curse (`_battle.cgi:75–85`).
 - When an ally is defeated without revival, each living ally equipped with
   `item-037` and `item-038` gains half of the fallen ally's Attack. The
   resulting Attack is capped at 999.
@@ -1273,6 +1260,6 @@ The application-layer bridge (`internal/battle`) standardizes combat participant
 - **Context Isolation**: The Battle engine never queries database persistence or mutates external character state directly. It returns an immutable `Result` containing turn logs and rewards.
 - **Consumer Ownership**: Feature modules (`adventure`, `dungeon`, `boss`, `pvp`, `gvg`, `challenge`, `party`) utilize `internal/battle` to map character/monster models to `Participant` and handle post-battle reward persistence atomically via `economy.TransactionRunner` or `TransactionProvider`.
 - **Damage floor scope**: The physical base formula has a 1-or-2 damage fallback. Misses, evasion, immunity, and subsequent modifiers can yield zero; this is not a minimum for every attack or skill.
-- **Round Ceiling**: Party battles terminate at a maximum of 30 rounds to prevent infinite loops.
+- **Round Ceiling**: Party battles terminate at a maximum of 100 rounds (`maxTurns = 100`) to prevent infinite loops.
 - **File Size Constraint**: All battle module source files are kept $\le 500$ lines.
 

@@ -254,7 +254,6 @@ docker run --rm \
 - [`docs/design/game-overview.md`](docs/design/game-overview.md) — ゲームの概要・設計上の理解
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — アーキテクチャ概要
 - [`docs/architecture/components.md`](docs/architecture/components.md) — コンポーネント定義
-- [`docs/architecture/feature-modules.md`](docs/architecture/feature-modules.md) — Feature Moduleの設計
 - [`docs/architecture/interfaces.md`](docs/architecture/interfaces.md) — コンポーネント間のインターフェースと契約
 - [`docs/development/development-environment.md`](docs/development/development-environment.md) — コンテナ化された開発環境
 - [`docs/development/testing.md`](docs/development/testing.md) — テスト・整形・静的解析の実行方法

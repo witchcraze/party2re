@@ -63,34 +63,3 @@ classDiagram
 7. **Ownership-Validated Cancellation**: Only the seller who created the listing can cancel it (`ErrUnauthorizedSeller` / `403 Forbidden`). Cancelled listings immediately return the item to the seller's Depot.
 8. **Compare-And-Swap (CAS) Status Transition**: Listings can only be purchased or cancelled from `active` status. Double purchase or concurrent cancel attempts are rejected cleanly (`ErrListingNotActive`).
 
----
-
-## 3. API Endpoints
-
-| Method | Path | Summary | Authentication |
-|---|---|---|---|
-| `GET` | `/fleamarket/listings` | List paginated active flea market listings | Public |
-| `GET` | `/fleamarket/listings/{listing_id}` | Get specific flea market listing details | Public |
-| `GET` | `/characters/{id}/fleamarket/listings` | List authenticated character's own listings | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/fleamarket/listings` | Create a new flea market listing from Depot | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/fleamarket/listings/{listing_id}/purchase` | Purchase an active listing from another player into Depot | Bearer Token (Character Owner) |
-| `DELETE` | `/characters/{id}/fleamarket/listings/{listing_id}` | Cancel active listing and return item to Depot | Bearer Token (Character Owner) |
-
----
-
-## 4. Database Schema
-
-- `fleamarket_listings`:
-  - `id CHAR(32) PRIMARY KEY`
-  - `seller_character_id CHAR(32) NOT NULL` (Foreign key to `characters(id) ON DELETE CASCADE`)
-  - `seller_name VARCHAR(64) NOT NULL`
-  - `item_id VARCHAR(64) NOT NULL`
-  - `item_name VARCHAR(64) NOT NULL`
-  - `item_category VARCHAR(32) NOT NULL DEFAULT 'misc'`
-  - `price INT NOT NULL`
-  - `status VARCHAR(32) NOT NULL DEFAULT 'active'`
-  - `buyer_character_id CHAR(32) NULL` (Foreign key to `characters(id) ON DELETE SET NULL`)
-  - `buyer_name VARCHAR(64) NULL`
-  - `created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
-  - `sold_at TIMESTAMP NULL`
-  - Indexes on `(seller_character_id, status)` and `(status, created_at)`.

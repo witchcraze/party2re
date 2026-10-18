@@ -36,9 +36,7 @@ Update the file in the same Issue/PR that adds or changes a dependency. Keep
 Software dependency records do not replace the separate provenance and license
 records for images, fonts, or other creative assets.
 
-The development workflow runs Go and resolves dependencies inside Docker
-containers. Dependencies must not be installed into the host environment as
-part of normal project setup.
+Dependencies are resolved via Go standard modules (`go.mod`). Any addition of a third-party module must be audited and recorded in `THIRD_PARTY_LICENSES.md`.
 
 ## Project license
 
@@ -68,6 +66,5 @@ Do not add a dependency simply because it provides a small convenience that can 
 
 ## Related documents
 
-- [`../../AGENTS.md`](../../AGENTS.md) — mandatory dependency and license rules.
-- [`agent-workflow.md`](agent-workflow.md) — where dependency checks occur in the workflow.
+- [`../../AGENTS.md`](../../AGENTS.md) & [`.agents/rules/01-development-workflow.md`](../../.agents/rules/01-development-workflow.md) — mandatory dependency and license rules.
 - [`../../README.md`](../../README.md) — current project-level license candidates.

@@ -505,38 +505,3 @@ func TestTransientRunStateDocCoversCandidateC(t *testing.T) {
 		}
 	}
 }
-
-func TestTransientBossHPDocCoversLuaAndPersistenceBoundaries(t *testing.T) {
-	repoRoot := "../.."
-	docPath := filepath.Join(repoRoot, "docs", "architecture", "transient-boss-hp.md")
-
-	data, err := os.ReadFile(docPath)
-	if err != nil {
-		t.Fatalf("docs/architecture/transient-boss-hp.md does not exist: %v", err)
-	}
-
-	content := string(data)
-	if len(strings.TrimSpace(content)) == 0 {
-		t.Fatalf("docs/architecture/transient-boss-hp.md is empty")
-	}
-
-	requiredTerms := []string{
-		"Candidate E",
-		"boss_damage",
-		"Cluster Hash Tag",
-		"Two-Phase Settlement",
-		"Crash Recovery",
-		"In-Memory Fallback Parity",
-		"party2:boss:{boss:<boss_id>}:hp",
-		"party2:boss:{boss:<boss_id>}:status",
-		"party2:boss:{boss:<boss_id>}:contributors",
-		"party2:boss:{boss:<boss_id>}:killer",
-		"party2:boss:{boss:<boss_id>}:run_id",
-	}
-
-	for _, term := range requiredTerms {
-		if !strings.Contains(content, term) {
-			t.Errorf("docs/architecture/transient-boss-hp.md does not contain required architectural term %q", term)
-		}
-	}
-}

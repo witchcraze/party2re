@@ -386,7 +386,7 @@
       },
       "security": [
         {
-          "AdminKeyAuth": []
+          "AdminApiKey": []
         }
       ],
       "summary": "Settle active contest round (Admin)",
