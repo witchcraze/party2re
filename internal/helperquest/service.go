@@ -214,7 +214,10 @@ func (s *Service) completeQuest(ctx context.Context, characterID, questID string
 				return ErrGuildRequired
 			}
 			gID, err := s.guilds.FindGuildIDByCharacterID(txCtx, characterID)
-			if err != nil || gID == "" {
+			if err != nil {
+				return err
+			}
+			if gID == "" {
 				return ErrGuildRequired
 			}
 			guildID = gID

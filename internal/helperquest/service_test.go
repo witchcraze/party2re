@@ -696,3 +696,253 @@ func TestCompleteQuest_ReplacementQuestSaveErrorPropagates(t *testing.T) {
 		t.Error("expected transaction rollback to be triggered")
 	}
 }
+
+type mockGuildRepo struct {
+	charGuild   map[string]string
+	guildPoints map[string]int
+	findErr     error
+	addErr      error
+}
+
+func (m *mockGuildRepo) FindGuildIDByCharacterID(_ context.Context, characterID string) (string, error) {
+	if m.findErr != nil {
+		return "", m.findErr
+	}
+	return m.charGuild[characterID], nil
+}
+
+func (m *mockGuildRepo) AddGuildPoints(_ context.Context, guildID string, points int) error {
+	if m.addErr != nil {
+		return m.addErr
+	}
+	if m.guildPoints != nil {
+		m.guildPoints[guildID] += points
+	}
+	return nil
+}
+
+func TestCompleteQuest_GuildQuestUnaffiliatedRejected(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-unaffiliated": {ID: "char-unaffiliated", Name: "Solo", HelpCount: 0},
+		},
+	}
+	dep, _ := depot.NewDepotWithCapacity("char-unaffiliated", 5, 0, 0)
+	it, _ := item.NewInstance("item-001", 4)
+	_ = dep.AddItem(it)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
+	guildRepo := &mockGuildRepo{
+		charGuild:   map[string]string{}, // unaffiliated
+		guildPoints: make(map[string]int),
+	}
+	txProvider := &mockTxProvider{}
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		guildRepo,
+		txProvider,
+		helperquest.WithDepotRepository(depotRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-guild-unaff",
+		Title:         "ギルド専用依頼",
+		Kind:          helperquest.KindItem,
+		TargetID:      "item-001",
+		RequiredCount: 2,
+		RewardItemID:  "item-126",
+		IsGuild:       true,
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	_, err := svc.CompleteQuest(ctx, "char-unaffiliated", "q-guild-unaff", now)
+	if !errors.Is(err, helperquest.ErrGuildRequired) {
+		t.Fatalf("expected ErrGuildRequired for unaffiliated character, got %v", err)
+	}
+
+	// Verify items not consumed
+	savedDep, err := depotRepo.FindByCharacterIDForUpdate(ctx, "char-unaffiliated")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedDep.Quantity("item-001") != 4 {
+		t.Errorf("expected 4 items remaining, got %d", savedDep.Quantity("item-001"))
+	}
+}
+
+func TestCompleteQuest_GuildQuestFindGuildErrorPropagates(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Member", HelpCount: 0},
+		},
+	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	it, _ := item.NewInstance("item-001", 4)
+	_ = dep.AddItem(it)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
+	expectedErr := errors.New("database connection failed")
+	guildRepo := &mockGuildRepo{
+		findErr: expectedErr,
+	}
+	txProvider := &mockTxProvider{}
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		guildRepo,
+		txProvider,
+		helperquest.WithDepotRepository(depotRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-guild-err",
+		Title:         "ギルド専用依頼",
+		Kind:          helperquest.KindItem,
+		TargetID:      "item-001",
+		RequiredCount: 2,
+		RewardItemID:  "item-126",
+		IsGuild:       true,
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	_, err := svc.CompleteQuest(ctx, "char-1", "q-guild-err", now)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected findErr %v, got %v", expectedErr, err)
+	}
+	if !txProvider.rollbackCalled {
+		t.Error("expected transaction rollback when find guild fails")
+	}
+}
+
+func TestCompleteQuest_GuildQuestAddPointsErrorRollsBack(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Member", HelpCount: 0},
+		},
+	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	it, _ := item.NewInstance("item-001", 4)
+	_ = dep.AddItem(it)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
+	expectedErr := errors.New("guild points update deadlock")
+	guildRepo := &mockGuildRepo{
+		charGuild: map[string]string{"char-1": "guild-1"},
+		addErr:    expectedErr,
+	}
+	txProvider := &mockTxProvider{}
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		guildRepo,
+		txProvider,
+		helperquest.WithDepotRepository(depotRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-guild-add-err",
+		Title:         "ギルド専用依頼",
+		Kind:          helperquest.KindItem,
+		TargetID:      "item-001",
+		RequiredCount: 2,
+		RewardItemID:  "item-126",
+		IsGuild:       true,
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	_, err := svc.CompleteQuest(ctx, "char-1", "q-guild-add-err", now)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected addErr %v, got %v", expectedErr, err)
+	}
+	if !txProvider.rollbackCalled {
+		t.Error("expected transaction rollback when add guild points fails")
+	}
+}
+
+func TestCompleteQuest_GuildQuestSuccessAwardsPoints(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Member", HelpCount: 1},
+		},
+	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	it, _ := item.NewInstance("item-001", 4)
+	_ = dep.AddItem(it)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
+	guildRepo := &mockGuildRepo{
+		charGuild:   map[string]string{"char-1": "guild-1"},
+		guildPoints: make(map[string]int),
+	}
+	txProvider := &mockTxProvider{}
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		guildRepo,
+		txProvider,
+		helperquest.WithDepotRepository(depotRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-guild-success",
+		Title:         "ギルド専用依頼",
+		Kind:          helperquest.KindItem,
+		TargetID:      "item-001",
+		TargetName:    "薬草",
+		RequiredCount: 2,
+		RewardItemID:  "item-126", // 幸福袋
+		IsGuild:       true,
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	res, err := svc.CompleteQuest(ctx, "char-1", "q-guild-success", now)
+	if err != nil {
+		t.Fatalf("CompleteQuest failed: %v", err)
+	}
+
+	if res.Character.HelpCount != 2 {
+		t.Errorf("expected HelpCount 2, got %d", res.Character.HelpCount)
+	}
+	if guildRepo.guildPoints["guild-1"] != 100 {
+		t.Errorf("expected 100 guild points, got %d", guildRepo.guildPoints["guild-1"])
+	}
+	savedDep, err := depotRepo.FindByCharacterIDForUpdate(ctx, "char-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedDep.Quantity("item-001") != 2 {
+		t.Errorf("expected 2 items remaining, got %d", savedDep.Quantity("item-001"))
+	}
+	if savedDep.Quantity("item-126") != 1 {
+		t.Errorf("expected 1 reward item in depot, got %d", savedDep.Quantity("item-126"))
+	}
+}
