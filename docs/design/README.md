@@ -97,7 +97,7 @@ graph TD
 ### 4. Commerce, Storage & Economy
 - [`depot.md`](depot.md) — Central storage hub (up to 500 slots), tiered expansion, direct item delivery, and dual-source consumption.
 - [`shops.md`](shops.md) — Standard NPC shops (Weapon, Armor, Item) at 2x price / 50% resale, and Secret Underground Shop (@ヒミツジ, JobLv 7 gate, 3x price, puff-puff).
-- [`store.md`](store.md) — Player boutique real-estate (50,000G in towns 1–4, 90-day cycle), 26 wallpapers, 15 furnitures, and depot barter/gold sales.
+- [`store.md`](store.md) — Player boutique real-estate (50,000G in towns 1–4, 90-day cycle), 50 wallpapers, 15 furnitures, and depot barter/gold sales.
 - [`fleamarket.md`](fleamarket.md) — Player-to-player free market stalls (server-wide 120 listing ceiling, direct depot transfer).
 - [`auction.md`](auction.md) — Live P2P trade hall (`@おくる`/`@しらべる`) with uninitialized recipient depot auto-provisioning.
 - [`bank.md`](bank.md) — Gold savings deposits and withdrawals with 999,999G wallet clamp.

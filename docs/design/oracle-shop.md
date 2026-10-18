@@ -79,7 +79,7 @@ When a character consumes a costume item in `internal/home` (`UseHomeItem`):
 ### 2.4 Private Estate Wallpaper Boutique
 
 Adventurers can purchase decorative scenic backgrounds for their personal home estate:
-- Wallpapers are drawn from the comprehensive legacy `%kabes` catalog (26 variants, pricing between 0 G and 10,500 G).
+- Wallpapers are drawn from the comprehensive legacy `%kabes` catalog (50 variants, pricing between 0 G and 50,000 G).
 - Successful purchase persists `bgimg` to the `character_homes` relational table (`ON DUPLICATE KEY UPDATE bgimg = VALUES(bgimg)`).
 
 ### 2.5 NPC Inspection & Black Market Hint

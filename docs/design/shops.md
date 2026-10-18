@@ -203,7 +203,7 @@ Party2 features multiple commercial facilities with distinct roles and storage m
 | :--- | :--- | :--- | :--- | :--- |
 | **Town Shops** | `internal/shop` | NPC Merchant | Standard equipment & item retail (2x base) / resale (50%) | This document (`shops.md`) |
 | **Secret Shop** | `internal/secretshop` | NPC Secret | JobLv 7 gate, 8 rare items at 3x price, puff-puff | This document (`shops.md`) |
-| **Player Stores** | `internal/store` | Player Real-Estate | 50kG town boutiques, 26 wallpapers, 15 furnitures, depot barter/sales | [`store.md`](store.md) |
+| **Player Stores** | `internal/store` | Player Real-Estate | 50kG town boutiques, 50 wallpapers, 15 furnitures, depot barter/sales | [`store.md`](store.md) |
 | **Flea Market** | `internal/fleamarket` | Player Stalls | Fixed-price P2P stalls (120 server ceiling), depot delivery | [`fleamarket.md`](fleamarket.md) |
 | **Auction House** | `internal/auction` | P2P Trade Hall | Live player-to-player item sending (`@おくる`/`@しらべる`) | [`auction.md`](auction.md) |
 | **Black Market** | `internal/blackmarket` | Recycling Barter | Rare item sacrifice for Rare Points, 24 item/equipment exchanges | [`black-market.md`](black-market.md) |

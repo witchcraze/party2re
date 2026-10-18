@@ -311,8 +311,28 @@ func TestOracleService_GetOracleStatus(t *testing.T) {
 	if len(status.AvailableCostumes) != 17 {
 		t.Errorf("expected 17 costumes for job_lv 16, got %d", len(status.AvailableCostumes))
 	}
-	if len(status.AvailableWallpapers) == 0 {
-		t.Errorf("expected wallpapers to be listed")
+	if len(status.AvailableWallpapers) != 50 {
+		t.Errorf("expected 50 wallpapers to be listed, got %d", len(status.AvailableWallpapers))
+	}
+	wallpaperPrices := make(map[string]int, len(status.AvailableWallpapers))
+	for _, w := range status.AvailableWallpapers {
+		wallpaperPrices[w.Name] = w.Price
+	}
+	expectedRestored := map[string]int{
+		"stage26_3": 10000,
+		"stage26_4": 10000,
+		"map1":      3000,
+		"map2":      4500,
+		"map3":      5000,
+		"map14":     10000,
+	}
+	for name, wantPrice := range expectedRestored {
+		price, ok := wallpaperPrices[name]
+		if !ok {
+			t.Errorf("expected restored wallpaper %s to be listed", name)
+		} else if price != wantPrice {
+			t.Errorf("expected wallpaper %s price %d, got %d", name, wantPrice, price)
+		}
 	}
 	if status.ActiveCostume != nil {
 		t.Errorf("expected no active costume initially")
@@ -664,6 +684,108 @@ func TestOracleService_ResetCostumeWithClaim_PauseAfterOwnershipVerification(t *
 		// Ensure NO separate unconditional DEL command was sent to Valkey (only the atomic Lua script ran)
 		if delCalls != 0 {
 			t.Fatalf("expected 0 separate DEL calls to Valkey (atomic Lua only), got %d DEL calls", delCalls)
+		}
+	})
+}
+
+func TestOracleService_BuyHomeWallpaper_RestoredChoices(t *testing.T) {
+	cases := []struct {
+		key       string
+		wantPrice int
+	}{
+		{"stage26_3", 10000},
+		{"stage26_4", 10000},
+		{"map1", 3000},
+		{"map2", 4500},
+		{"map3", 5000},
+		{"map14", 10000},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			ctx := context.Background()
+			charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+			char := corecharacter.Character{
+				ID:    "char-1",
+				Name:  "ボブ",
+				Money: tc.wantPrice + 1000,
+			}
+			_ = charRepo.Save(ctx, char)
+
+			wallpaperRepo := &mockHomeWallpaperRepo{}
+			svc := store.NewService(
+				newMockStoreRepo(),
+				charRepo,
+				&mockDepotRepo{depots: make(map[string]depot.Depot)},
+				&mockCatalog{items: make(map[string]coreitem.Definition)},
+				&mockTxProvider{},
+				store.WithHomeWallpaperRepository(wallpaperRepo),
+			)
+
+			// 1. Successful purchase
+			res, err := svc.BuyHomeWallpaper(ctx, "char-1", tc.key)
+			if err != nil {
+				t.Fatalf("BuyHomeWallpaper(%s) failed: %v", tc.key, err)
+			}
+			expectedFile := tc.key + ".gif"
+			if res.Wallpaper != expectedFile {
+				t.Errorf("expected %s, got %s", expectedFile, res.Wallpaper)
+			}
+			if wallpaperRepo.wallpapers["char-1"] != expectedFile {
+				t.Errorf("expected home wallpaper %s, got %s", expectedFile, wallpaperRepo.wallpapers["char-1"])
+			}
+			char, _ = charRepo.FindByID(ctx, "char-1")
+			if char.Money != 1000 {
+				t.Errorf("expected 1000 G remaining, got %d", char.Money)
+			}
+
+			// 2. Insufficient funds
+			char.Money = tc.wantPrice - 1
+			_ = charRepo.Save(ctx, char)
+			_, err = svc.BuyHomeWallpaper(ctx, "char-1", tc.key)
+			if !errors.Is(err, store.ErrInsufficientFunds) {
+				t.Errorf("expected ErrInsufficientFunds, got: %v", err)
+			}
+			char, _ = charRepo.FindByID(ctx, "char-1")
+			if char.Money != tc.wantPrice-1 {
+				t.Errorf("money should be unchanged, got %d", char.Money)
+			}
+			if wallpaperRepo.wallpapers["char-1"] != expectedFile {
+				t.Errorf("home wallpaper should be unchanged, got %s", wallpaperRepo.wallpapers["char-1"])
+			}
+		})
+	}
+
+	t.Run("invalid_key_rejected", func(t *testing.T) {
+		ctx := context.Background()
+		charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+		char := corecharacter.Character{
+			ID:    "char-1",
+			Name:  "ボブ",
+			Money: 50000,
+		}
+		_ = charRepo.Save(ctx, char)
+
+		wallpaperRepo := &mockHomeWallpaperRepo{}
+		svc := store.NewService(
+			newMockStoreRepo(),
+			charRepo,
+			&mockDepotRepo{depots: make(map[string]depot.Depot)},
+			&mockCatalog{items: make(map[string]coreitem.Definition)},
+			&mockTxProvider{},
+			store.WithHomeWallpaperRepository(wallpaperRepo),
+		)
+
+		_, err := svc.BuyHomeWallpaper(ctx, "char-1", "invalid_key")
+		if !errors.Is(err, store.ErrInvalidWallpaper) {
+			t.Errorf("expected ErrInvalidWallpaper, got: %v", err)
+		}
+		char, _ = charRepo.FindByID(ctx, "char-1")
+		if char.Money != 50000 {
+			t.Errorf("money should be unchanged, got %d", char.Money)
+		}
+		if _, ok := wallpaperRepo.wallpapers["char-1"]; ok {
+			t.Errorf("home wallpaper should not be set")
 		}
 	})
 }
