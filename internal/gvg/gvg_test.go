@@ -3,6 +3,7 @@ package gvg_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -496,4 +497,116 @@ func TestGvGMatchFlow(t *testing.T) {
 			t.Errorf("expected 4 GP for Azure, got %d", stAzure.VictoryPoints)
 		}
 	})
+}
+
+func TestJoinRoom_GuildMemberLimit(t *testing.T) {
+	ctx := context.Background()
+	roomRepo := gvg.NewMemoryRoomRepository()
+	standingRepo := newMockStandingRepo()
+	guildRepo := newMockGuildRepo()
+	charRepo := newMockCharRepo()
+	battleEngine := &mockBattleEngine{outcome: corebattle.OutcomeWin}
+
+	svc, err := gvg.NewService(roomRepo, standingRepo, guildRepo, charRepo, battleEngine)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	guildRepo.guilds["g1"] = guild.Guild{ID: "g1", Name: "GuildOne", Color: "#FF0000"}
+	guildRepo.guilds["g2"] = guild.Guild{ID: "g2", Name: "GuildTwo", Color: "#0000FF"}
+
+	// 5 characters for Guild 1: g1_1 (leader), g1_2, g1_3, g1_4, g1_5
+	for i := 1; i <= 5; i++ {
+		cID := fmt.Sprintf("c_g1_%d", i)
+		charRepo.characters[cID] = createTestCharacter(cID, fmt.Sprintf("G1_Char%d", i), 100, 0)
+		guildRepo.charGuilds[cID] = "g1"
+	}
+
+	// 5 characters for Guild 2: g2_1, g2_2, g2_3, g2_4, g2_5
+	for i := 1; i <= 5; i++ {
+		cID := fmt.Sprintf("c_g2_%d", i)
+		charRepo.characters[cID] = createTestCharacter(cID, fmt.Sprintf("G2_Char%d", i), 100, 0)
+		guildRepo.charGuilds[cID] = "g2"
+	}
+
+	detail, err := svc.CreateRoom(ctx, "c_g1_1", gvg.CreateRoomRequest{
+		Name:       "GvG Guild Member Limit Test",
+		MaxMembers: 8,
+		TargetWins: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomID := detail.Room.ID
+
+	// 1. 同guild4人許可: 2nd, 3rd, 4th members of Guild 1 join successfully
+	for i := 2; i <= 4; i++ {
+		cID := fmt.Sprintf("c_g1_%d", i)
+		res, joinErr := svc.JoinRoom(ctx, cID, roomID, "")
+		if joinErr != nil {
+			t.Fatalf("expected member %d of guild 1 to join successfully, got %v", i, joinErr)
+		}
+		if len(res.Members) != i {
+			t.Fatalf("expected %d members, got %d", i, len(res.Members))
+		}
+	}
+
+	// 2. 同guild5人拒否: 5th member of Guild 1 is rejected
+	_, err5 := svc.JoinRoom(ctx, "c_g1_5", roomID, "")
+	if !errors.Is(err5, gvg.ErrGuildMemberLimitExceeded) {
+		t.Fatalf("expected ErrGuildMemberLimitExceeded for 5th member of guild 1, got %v", err5)
+	}
+
+	// 3. 拒否時membership不変: Verify membership and prize pool unchanged after rejection
+	afterReject, err := svc.GetRoom(ctx, roomID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(afterReject.Members) != 4 {
+		t.Fatalf("expected member count to remain 4 after rejection, got %d", len(afterReject.Members))
+	}
+	// Initial prize 2 GP + 3 joiners * 1 GP = 5 GP
+	if afterReject.Room.PrizePool != 5 {
+		t.Fatalf("expected prize pool to remain 5 GP, got %d", afterReject.Room.PrizePool)
+	}
+	for _, m := range afterReject.Members {
+		if m.CharacterID == "c_g1_5" {
+			t.Fatalf("rejected character c_g1_5 should not be in room members")
+		}
+	}
+	if _, err := svc.GetCharacterRoom(ctx, "c_g1_5"); !errors.Is(err, gvg.ErrRoomNotFound) {
+		t.Fatalf("expected c_g1_5 to have no active room, got %v", err)
+	}
+
+	// 4. 相手guild4人: 4 members of Guild 2 join successfully
+	for i := 1; i <= 4; i++ {
+		cID := fmt.Sprintf("c_g2_%d", i)
+		res, joinErr := svc.JoinRoom(ctx, cID, roomID, "")
+		if joinErr != nil {
+			t.Fatalf("expected member %d of guild 2 to join successfully, got %v", i, joinErr)
+		}
+		expectedTotal := 4 + i
+		if len(res.Members) != expectedTotal {
+			t.Fatalf("expected %d total members, got %d", expectedTotal, len(res.Members))
+		}
+	}
+
+	// Verify all 8 members are enrolled (4 from Guild 1, 4 from Guild 2)
+	roomFinal, err := svc.GetRoom(ctx, roomID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roomFinal.Members) != 8 {
+		t.Fatalf("expected 8 members in room, got %d", len(roomFinal.Members))
+	}
+	// Initial 2 GP + 7 joiners * 1 GP = 9 GP
+	if roomFinal.Room.PrizePool != 9 {
+		t.Fatalf("expected prize pool 9 GP, got %d", roomFinal.Room.PrizePool)
+	}
+
+	// 5th member of Guild 2 fails because room is full (8/8)
+	_, errFull := svc.JoinRoom(ctx, "c_g2_5", roomID, "")
+	if !errors.Is(errFull, gvg.ErrRoomFull) {
+		t.Fatalf("expected ErrRoomFull when room has 8 members, got %v", errFull)
+	}
 }

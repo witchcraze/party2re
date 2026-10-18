@@ -179,7 +179,8 @@ func (h *Handler) handleJoinGvGRoom(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, gvg.ErrRoomFull) || errors.Is(err, gvg.ErrMatchAlreadyStarted) ||
 				errors.Is(err, gvg.ErrAlreadyInRoom) || errors.Is(err, gvg.ErrNeedJoinNotMet) ||
 				errors.Is(err, gvg.ErrActorNotInGuild) || errors.Is(err, gvg.ErrFriendlyGuildCannotBattle) ||
-				errors.Is(err, gvg.ErrCharacterUnconscious) || errors.Is(err, gvg.ErrCharacterExhausted) {
+				errors.Is(err, gvg.ErrCharacterUnconscious) || errors.Is(err, gvg.ErrCharacterExhausted) ||
+				errors.Is(err, gvg.ErrGuildMemberLimitExceeded) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

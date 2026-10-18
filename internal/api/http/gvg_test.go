@@ -248,6 +248,22 @@ func TestGvGEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/gvg/rooms/{room_id}/join - guild member limit exceeded", func(t *testing.T) {
+		stubGvG.joinRoomFn = func(_ context.Context, _ string, _ string, _ string) (gvg.RoomDetail, error) {
+			return gvg.RoomDetail{}, gvg.ErrGuildMemberLimitExceeded
+		}
+		defer func() { stubGvG.joinRoomFn = nil }()
+
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/gvg/rooms/gvg-room-1/join", `{}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("POST /characters/{id}/gvg/rooms/{room_id}/leave - success", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/gvg/rooms/gvg-room-1/leave", `{}`)
 		req.Header.Set("Authorization", "Bearer valid-token")

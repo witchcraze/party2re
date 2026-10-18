@@ -291,10 +291,17 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 			return err
 		}
 
+		guildMembers := 0
 		for _, m := range detail.Members {
 			if m.CharacterID == charID {
 				return ErrAlreadyInRoom
 			}
+			if m.GuildID == g.ID {
+				guildMembers++
+			}
+		}
+		if guildMembers >= MaxGuildMembers {
+			return ErrGuildMemberLimitExceeded
 		}
 
 		now := time.Now().UTC()

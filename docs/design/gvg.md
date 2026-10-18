@@ -33,6 +33,7 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
   - Each joiner automatically adopts their guild's color as team color.
   - Each joiner adds **1 GP** to the room's accumulated prize pool (`add_bet($quest_id, 1)`).
   - Characters cannot join if unconscious (`HP <= 0`), exhausted (`Tired >= 100`), or already in an active room.
+  - **Guild Member Limit (`quest.cgi:1003-1005`)**: Independent of the room max member limit (up to 8), at most 4 members from the same guild can enroll in the battle room (`ErrGuildMemberLimitExceeded` / `"同じギルドメンバー５人以上は参加することができません"`).
 
 ---
 
