@@ -824,3 +824,37 @@ func TestNewServiceWithTransaction_DeprecatedCompatibility(t *testing.T) {
 		t.Fatal("expected non-nil service")
 	}
 }
+
+func TestSellWeapon40ResalePayout(t *testing.T) {
+	cat, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog(): %v", err)
+	}
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	depotRepo := newDepotRepoStub()
+	service, err := shop.NewService(charRepo, invRepo, cat, shop.WithDepotRepository(depotRepo))
+	if err != nil {
+		t.Fatalf("NewService(): %v", err)
+	}
+
+	char := createTestCharacter(t, charRepo, "Hero", 0)
+	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+	weaponInst, err := item.NewInstance("weapon-40", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = inv.Add(weaponInst)
+	_ = invRepo.Save(context.Background(), inv)
+
+	res, err := service.Sell(context.Background(), char.ID, weaponInst.ID, 1)
+	if err != nil {
+		t.Fatalf("Sell() error = %v", err)
+	}
+	if res.TotalPayout != 15000 {
+		t.Errorf("TotalPayout = %d, want 15000", res.TotalPayout)
+	}
+	if res.Character.Money != 15000 {
+		t.Errorf("Character.Money = %d, want 15000", res.Character.Money)
+	}
+}
