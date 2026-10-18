@@ -35,6 +35,7 @@ type Catalog struct {
 	prizesByID        map[string]Prize
 	regularPrizes     []Prize
 	uPrizes           []Prize
+	sacrifices        []SacrificeYield
 	sacrificesByDefID map[string]SacrificeYield
 }
 
@@ -83,8 +84,16 @@ func LoadAllCatalogs(prizesData, sacrificesData []byte) (*Catalog, error) {
 		prizesByID:        prizesByID,
 		regularPrizes:     regularPrizes,
 		uPrizes:           uPrizes,
+		sacrifices:        sacrifices,
 		sacrificesByDefID: sacrificesByDefID,
 	}, nil
+}
+
+// Sacrifices returns all sacrifice definitions.
+func (c *Catalog) Sacrifices() []SacrificeYield {
+	copied := make([]SacrificeYield, len(c.sacrifices))
+	copy(copied, c.sacrifices)
+	return copied
 }
 
 // Prizes returns all prize offerings.
