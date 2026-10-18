@@ -1,6 +1,7 @@
 {
   "/helpers/complete": {
     "post": {
+      "description": "Attempts completion and exchanges expired uncompleted requests one-for-one. Submitting an expired quest_id obtained from GET /helpers/quests returns 422 without turn-in or reward, but exchanges that expired request and the other expired requests. Fetch the board again after this response. An empty store is never seeded.",
       "operationId": "completeHelperQuest",
       "requestBody": {
         "content": {
@@ -75,7 +76,7 @@
         },
         "422": {
           "$ref": "#/components/responses/Error",
-          "description": "Unprocessable Content"
+          "description": "Completion rejected (including an expired target); expired requests may already have been exchanged. Fetch GET /helpers/quests again."
         },
         "500": {
           "content": {
@@ -105,6 +106,7 @@
   },
   "/helpers/quests": {
     "get": {
+      "description": "Read-only board of all uncompleted requests, including expired requests; completed requests are excluded. Submit an expired quest_id to POST /helpers/complete to trigger exchange, then fetch this board again even when completion returns 422. An empty board returns [] and is never seeded.",
       "operationId": "listHelperQuests",
       "responses": {
         "200": {
@@ -114,14 +116,11 @@
                 "items": {
                   "$ref": "#/components/schemas/HelperQuestQuest"
                 },
-                "type": [
-                  "array",
-                  "null"
-                ]
+                "type": "array"
               }
             }
           },
-          "description": "Active helper quests"
+          "description": "Uncompleted helper quests, including expired requests"
         },
         "400": {
           "content": {
@@ -149,7 +148,7 @@
         }
       },
       "security": [],
-      "summary": "List active helper delivery quests",
+      "summary": "List uncompleted helper delivery quests",
       "tags": [
         "Helpers"
       ]

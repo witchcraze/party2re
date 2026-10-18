@@ -50,6 +50,16 @@ func (r *mockQuestRepo) ListActive(_ context.Context, now time.Time) ([]helperqu
 	return list, nil
 }
 
+func (r *mockQuestRepo) ListUncompleted(_ context.Context) ([]helperquest.Quest, error) {
+	var list []helperquest.Quest
+	for _, q := range r.quests {
+		if q.CompletedAt == nil {
+			list = append(list, q)
+		}
+	}
+	return list, nil
+}
+
 func (r *mockQuestRepo) ListExpired(_ context.Context, now time.Time) ([]helperquest.Quest, error) {
 	var list []helperquest.Quest
 	for _, q := range r.quests {

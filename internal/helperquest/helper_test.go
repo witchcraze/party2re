@@ -42,6 +42,16 @@ func (r *stubQuestRepo) ListActive(_ context.Context, now time.Time) ([]Quest, e
 	return list, nil
 }
 
+func (r *stubQuestRepo) ListUncompleted(_ context.Context) ([]Quest, error) {
+	var list []Quest
+	for _, q := range r.quests {
+		if q.CompletedAt == nil {
+			list = append(list, q)
+		}
+	}
+	return list, nil
+}
+
 func (r *stubQuestRepo) ListExpired(_ context.Context, now time.Time) ([]Quest, error) {
 	var list []Quest
 	for _, q := range r.quests {
