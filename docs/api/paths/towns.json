@@ -15,22 +15,36 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/HomeCheckResult"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
-        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /towns/{town_id}/houses endpoint",
+      "security": [],
+      "summary": "List Town Houses",
       "tags": [
         "Towns"
       ]
@@ -48,24 +62,73 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/BuildHouseRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
-        "200": {
+        "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/HomeCheckResult"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /towns/{town_id}/houses endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Build House",
       "tags": [
         "Towns"
       ]
@@ -87,22 +150,32 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/Store"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            }
+          },
           "description": "Successful operation"
         },
-        "400": {
-          "description": "Bad request"
-        },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
-        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /towns/{town_id}/stores endpoint",
+      "security": [],
+      "summary": "List Town Stores",
       "tags": [
         "Towns"
       ]
@@ -120,27 +193,73 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/BuildStoreRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
-        "200": {
+        "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StoreCheckResult"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
+          "$ref": "#/components/responses/Error",
           "description": "Conflict"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /towns/{town_id}/stores endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Build Store",
       "tags": [
         "Towns"
       ]

@@ -138,6 +138,10 @@ func (f *gatewayFixture) router(action string, timers playercontext.TimerReader,
 		}, gatewayRejection)
 	} else if action == "rescue_request" {
 		command = withActionCommand(action, func(ctx context.Context, id string, p rescueActionParams) (any, error) { return f.execute(ctx, id, 0) }, gatewayRejection)
+	} else if action == "pvp_room_create" {
+		command = withActionCommand(action, func(ctx context.Context, id string, p pvpCreateRoomRequest) (any, error) {
+			return f.execute(ctx, id, 0)
+		}, gatewayRejection)
 	} else {
 		command = withActionCommand(action, func(ctx context.Context, id string, p struct{}) (any, error) { return f.execute(ctx, id, 0) }, gatewayRejection)
 	}
@@ -360,6 +364,11 @@ func TestActionGatewayUnsupported(t *testing.T) {
 	}{
 		{"unknown", "nonexistent", "ACTION_NOT_FOUND", 404, nil},
 		{"unconnected", "shop_purchase", "ACTION_NOT_IMPLEMENTED", 501, nil},
+		{"documented PvP inputs", "pvp_room_create", "ACTION_NOT_IMPLEMENTED", 501, nil},
+		{"documented seal inputs", "blacksmith_seal", "ACTION_NOT_IMPLEMENTED", 501, nil},
+		{"documented alchemy inputs", "alchemy_synthesize", "ACTION_NOT_IMPLEMENTED", 501, nil},
+		{"documented medal inputs", "medal_claim", "ACTION_NOT_IMPLEMENTED", 501, nil},
+		{"documented park inputs", "park_post", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"unconfigured query", "bank_deposit", "ACTION_NOT_IMPLEMENTED", 501, WithPlayerContext(nil)},
 		{"unconfigured adapter", "bank_withdraw", "ACTION_NOT_IMPLEMENTED", 501, withActionCommand[gatewayParams]("bank_withdraw", nil, nil)},
 	} {

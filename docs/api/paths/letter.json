@@ -6,25 +6,34 @@
         "content": {
           "application/json": {
             "schema": {
+              "additionalProperties": false,
               "properties": {
-                "body": {
+                "color": {
+                  "description": "Optional; trimmed, defaults to #000000 when blank, and is truncated to 7 bytes. No hexadecimal color validation is performed.",
                   "type": "string"
                 },
-                "receiver_character_id": {
+                "content": {
+                  "description": "Nonblank multiline text; validated after whitespace trimming and NFC normalization, with a maximum of 1000 Unicode characters. Disallowed controls, zero-width/bidi formatting and excessive combining marks return 422.",
+                  "minLength": 1,
+                  "pattern": "[^\t-\r    - \u2028\u2029  　]",
+                  "type": "string"
+                },
+                "recipient_character_id": {
+                  "description": "Recipient character ID; must differ from the sender after trimming whitespace.",
+                  "minLength": 1,
+                  "pattern": "[^\t-\r    - \u2028\u2029  　]",
                   "type": "string"
                 },
                 "sender_character_id": {
-                  "type": "string"
-                },
-                "title": {
+                  "minLength": 1,
+                  "pattern": "[^\t-\r    - \u2028\u2029  　]",
                   "type": "string"
                 }
               },
               "required": [
                 "sender_character_id",
-                "receiver_character_id",
-                "title",
-                "body"
+                "recipient_character_id",
+                "content"
               ],
               "type": "object"
             }
@@ -37,7 +46,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/Letter"
               }
             }
           },
@@ -73,6 +82,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -83,6 +96,14 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Invalid recipient, self-send, blank or overlong normalized content, or text validation failure. Missing or blank sender ID is rejected earlier by the ownership wrapper with 400."
+        },
         "500": {
           "content": {
             "application/json": {
@@ -92,6 +113,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -142,7 +167,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PageLetter"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PaginationCursorPageHomeLetter"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PageLetter"
+                  }
+                ]
               }
             }
           },
@@ -178,6 +210,14 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -187,6 +227,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -237,7 +281,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PageLetter"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PaginationCursorPageHomeLetter"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PageLetter"
+                  }
+                ]
               }
             }
           },
@@ -273,6 +324,14 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -282,6 +341,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -314,7 +377,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/UnreadCountResponse"
               }
             }
           },
@@ -350,6 +413,14 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -359,6 +430,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -396,15 +471,8 @@
         }
       ],
       "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Letter deleted"
+        "204": {
+          "description": "No content"
         },
         "400": {
           "content": {
@@ -436,6 +504,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -446,6 +518,10 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -455,6 +531,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -501,15 +581,8 @@
         "required": true
       },
       "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Letter contents"
+        "204": {
+          "description": "No content"
         },
         "400": {
           "content": {
@@ -541,6 +614,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -551,6 +628,10 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -560,6 +641,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

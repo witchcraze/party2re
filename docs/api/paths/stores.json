@@ -15,22 +15,41 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StoreDetails"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
           "description": "Successful operation"
         },
-        "400": {
-          "description": "Bad request"
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
         },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
+        "410": {
+          "$ref": "#/components/responses/Error",
+          "description": "Gone"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /stores/{store_id} endpoint",
+      "security": [],
+      "summary": "Get Store",
       "tags": [
         "Stores"
       ]

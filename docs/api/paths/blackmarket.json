@@ -19,11 +19,22 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BlackMarketStatus"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BlackMarketStatus"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           },
           "description": "Black market status and trade prize catalogs"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -64,6 +75,10 @@
             }
           },
           "description": "Unexpected storage or service failure"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -103,6 +118,10 @@
           },
           "description": "Merchant inspection dialogue"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
           "content": {
             "application/json": {
@@ -142,6 +161,10 @@
             }
           },
           "description": "Unexpected storage or service failure"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -175,11 +198,22 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BlackMarketStatus"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BlackMarketStatus"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           },
           "description": "Black Market points and prize catalogs status"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -220,6 +254,10 @@
             }
           },
           "description": "Unexpected storage or service failure"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -263,7 +301,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BlackMarketSacrificeResult"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BlackMarketSacrificeResult"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           },
@@ -309,6 +354,14 @@
           },
           "description": "Character or prize not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -318,6 +371,10 @@
             }
           },
           "description": "Unexpected storage or service failure"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -356,6 +413,10 @@
             }
           },
           "description": "Merchant dialogue"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -396,6 +457,10 @@
             }
           },
           "description": "Unexpected storage or service failure"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -439,7 +504,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BlackMarketTradeResult"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BlackMarketTradeResult"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           },
@@ -485,6 +557,14 @@
           },
           "description": "Character or prize not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -494,6 +574,10 @@
             }
           },
           "description": "Unexpected storage or service failure"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

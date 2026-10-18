@@ -4,22 +4,26 @@
       "operationId": "getGvgLeaderboard",
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GvGLeaderboardResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
-        "400": {
-          "description": "Bad request"
-        },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
-        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /gvg/leaderboard endpoint",
+      "security": [],
+      "summary": "Get GvGLeaderboard",
       "tags": [
         "Gvg"
       ]
@@ -30,22 +34,26 @@
       "operationId": "getGvgRooms",
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GvGRoomsResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
-        "400": {
-          "description": "Bad request"
-        },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
-        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /gvg/rooms endpoint",
+      "security": [],
+      "summary": "List GvGRooms",
       "tags": [
         "Gvg"
       ]
@@ -67,22 +75,34 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GvGRoomDetail"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /gvg/rooms/{room_id} endpoint",
+      "security": [],
+      "summary": "Get GvGRoom",
       "tags": [
         "Gvg"
       ]
@@ -104,22 +124,34 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GvGStanding"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /gvg/standings/{guild_id} endpoint",
+      "security": [],
+      "summary": "Get GvGStanding",
       "tags": [
         "Gvg"
       ]

@@ -18,7 +18,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ArmorCollectionResponse"
               }
             }
           },
@@ -54,6 +54,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -63,6 +67,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -104,7 +112,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ItemCollectionResponse"
               }
             }
           },
@@ -140,6 +148,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -149,6 +161,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -181,70 +197,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "entries": {
-                    "items": {
-                      "properties": {
-                        "agility": {
-                          "type": "integer"
-                        },
-                        "attack": {
-                          "type": "integer"
-                        },
-                        "character_id": {
-                          "type": "string"
-                        },
-                        "defeated_count": {
-                          "type": "integer"
-                        },
-                        "defense": {
-                          "type": "integer"
-                        },
-                        "exp_reward": {
-                          "type": "integer"
-                        },
-                        "first_defeated_at": {
-                          "format": "date-time",
-                          "type": "string"
-                        },
-                        "gold_reward": {
-                          "type": "integer"
-                        },
-                        "habitat": {
-                          "type": "string"
-                        },
-                        "hp": {
-                          "type": "integer"
-                        },
-                        "icon": {
-                          "type": "string"
-                        },
-                        "last_defeated_at": {
-                          "format": "date-time",
-                          "type": "string"
-                        },
-                        "monster_id": {
-                          "type": "string"
-                        },
-                        "monster_name": {
-                          "type": "string"
-                        },
-                        "mp": {
-                          "type": "integer"
-                        },
-                        "strong": {
-                          "type": "integer"
-                        }
-                      },
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "progress": {
-                    "type": "object"
-                  }
-                },
-                "type": "object"
+                "$ref": "#/components/schemas/MonsterBookResponse"
               }
             }
           },
@@ -280,6 +233,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -289,6 +246,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -321,7 +282,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/WeaponCollectionResponse"
               }
             }
           },
@@ -357,6 +318,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -366,6 +331,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

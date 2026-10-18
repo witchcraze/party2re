@@ -39,7 +39,7 @@ type openAPIMediaType struct {
 
 type openAPISchema struct {
 	Ref                  string                   `json:"$ref"`
-	Type                 string                   `json:"type"`
+	Type                 any                      `json:"type"` // JSON Schema accepts a name or an array of names.
 	Items                *openAPISchema           `json:"items"`
 	Properties           map[string]openAPISchema `json:"properties"`
 	Required             []string                 `json:"required"`

@@ -8,9 +8,12 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/RankingLegendCategoryInfo"
                 },
-                "type": "array"
+                "type": [
+                  "array",
+                  "null"
+                ]
               }
             }
           },
@@ -25,8 +28,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List Hall of Fame categories with induction counts",
       "tags": [
         "Legends"
@@ -52,7 +60,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/RankingLegendCategoryPage"
               }
             }
           },
@@ -77,8 +85,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get Hall of Fame inductees for category",
       "tags": [
         "Legends"

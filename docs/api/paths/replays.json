@@ -39,13 +39,16 @@
               "schema": {
                 "anyOf": [
                   {
+                    "$ref": "#/components/schemas/PaginationCursorPageReplayReplayHeader"
+                  },
+                  {
                     "items": {
                       "$ref": "#/components/schemas/ReplayHeader"
                     },
-                    "type": "array"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CursorPageReplayHeader"
+                    "type": [
+                      "array",
+                      "null"
+                    ]
                   }
                 ]
               }
@@ -72,8 +75,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Retrieve global public recent match feed with limit and cursor pagination",
       "tags": [
         "Replay"
@@ -82,7 +90,7 @@
   },
   "/replays/{id}": {
     "get": {
-      "description": "Personal archive detail requires a valid Bearer session owning the persisted archive recipient. Combat participation and UUID possession grant no access. Unknown/unclassified records and unauthorized IDs return the same 404. Invalid supplied credentials return authentication errors. Global display payloads remain unavailable until a verified publisher and safe scene contract exist.",
+      "description": "Personal archive detail requires a valid Bearer session owning the persisted archive recipient. Combat participation and UUID possession grant no access. Unknown/unclassified records and unauthorized IDs return the same 404. Invalid supplied credentials return authentication errors. Global display payloads remain unavailable until a verified publisher and safe scene contract exist. Anonymous reads are supported. Supplying Authorization requires a valid player credential; replay visibility is still enforced by the service.",
       "operationId": "getReplay",
       "parameters": [
         {
@@ -100,7 +108,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BattleReplay"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReplayBattleReplay"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           },
@@ -155,6 +170,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

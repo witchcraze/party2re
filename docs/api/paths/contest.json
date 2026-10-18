@@ -38,24 +38,63 @@
       },
       "responses": {
         "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnterContestResponse"
+              }
+            }
+          },
           "description": "Photo submitted to contest successfully"
         },
         "202": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnterContestResponse"
+              }
+            }
+          },
           "description": "Photo submitted to contest successfully, but settlement scheduling deferred or failed"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Invalid submission (duplicate title, already entered, or consecutive entry disallowed)"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Photo or Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
       "summary": "Enter photo into upcoming contest",
       "tags": [
         "Contest"
@@ -100,21 +139,53 @@
       },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContestContestVote"
+              }
+            }
+          },
           "description": "Vote cast successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Invalid vote (contest not active, already voted, or comment too long)"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Entry or Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
       "summary": "Vote for a contest entry",
       "tags": [
         "Contest"
@@ -138,18 +209,51 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/ContestPhoto"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            }
+          },
           "description": "Photos retrieved successfully"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Character not found"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
       "summary": "List character photos / screenshots",
       "tags": [
         "Contest"
@@ -201,21 +305,53 @@
       },
       "responses": {
         "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContestPhoto"
+              }
+            }
+          },
           "description": "Photo saved successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Invalid title or capacity reached"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
       "summary": "Capture and save a new photo / screenshot",
       "tags": [
         "Contest"
@@ -248,18 +384,57 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Photo deleted successfully"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Photo or Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
       "summary": "Delete a character photo",
       "tags": [
         "Contest"
@@ -272,12 +447,31 @@
       "operationId": "getContestCurrent",
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/ContestContestEntry"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            }
+          },
           "description": "Current contest entries retrieved successfully"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get current active contest submissions",
       "tags": [
         "Contest"
@@ -318,9 +512,15 @@
           "description": "Contest legends retrieved successfully"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List Hall of Fame contest legends",
       "tags": [
         "Contest"
@@ -333,12 +533,50 @@
       "operationId": "getContestPast",
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "entries": {
+                    "items": {
+                      "$ref": "#/components/schemas/ContestContestEntry"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "round": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/ContestContestRound"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "round",
+                  "entries"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Past contest results retrieved successfully"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get previous contest results",
       "tags": [
         "Contest"
@@ -366,22 +604,52 @@
       },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettleContestResponse"
+              }
+            }
+          },
           "description": "Contest round settled successfully"
         },
         "202": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettleContestResponse"
+              }
+            }
+          },
           "description": "Contest round settled successfully, but next settlement scheduling failed"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Contest round not ready to settle"
         },
+        "401": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unauthorized"
+        },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden (invalid or missing admin API key)"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Contest round not found"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -401,12 +669,25 @@
       "operationId": "getContestVenue",
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContestVenueResponse"
+              }
+            }
+          },
           "description": "Contest venue overview retrieved successfully"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get Photo Contest venue overview and dialogue",
       "tags": [
         "Contest"

@@ -18,18 +18,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "achievements": {
-                    "items": {
-                      "type": "object"
-                    },
-                    "type": "array"
-                  }
-                },
-                "required": [
-                  "achievements"
-                ],
-                "type": "object"
+                "$ref": "#/components/schemas/CharacterAchievementsResponse"
               }
             }
           },
@@ -84,6 +73,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -125,7 +118,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ClaimAchievementResponse"
               }
             }
           },
@@ -200,6 +193,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -232,18 +229,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "medals": {
-                    "items": {
-                      "type": "object"
-                    },
-                    "type": "array"
-                  }
-                },
-                "required": [
-                  "medals"
-                ],
-                "type": "object"
+                "$ref": "#/components/schemas/CharacterMedalsResponse"
               }
             }
           },
@@ -298,6 +284,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -318,17 +308,18 @@
         "content": {
           "application/json": {
             "schema": {
+              "additionalProperties": false,
               "properties": {
                 "character_id": {
                   "type": "string"
                 },
-                "reward_id": {
+                "item_id": {
                   "type": "string"
                 }
               },
               "required": [
                 "character_id",
-                "reward_id"
+                "item_id"
               ],
               "type": "object"
             }
@@ -341,7 +332,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ClaimMedalRewardResponse"
               }
             }
           },
@@ -377,6 +368,22 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -386,6 +393,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -407,7 +418,13 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "items": {
+                  "$ref": "#/components/schemas/MedalReward"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
               }
             }
           },
@@ -432,8 +449,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get small medal exchange rewards catalog",
       "tags": [
         "Medals"

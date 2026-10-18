@@ -17,7 +17,17 @@ route coverage alone does not prove schema completeness.
 
 Run `make openapi-sync` after source changes, then `make openapi-check` and the
 normal [verification workflow](testing.md#2-tiered-verification-strategy).
-`openapi-sync` formats and bundles; only `openapi-scaffold` adds missing routes.
+Both `openapi-sync` and `openapi-scaffold` fill missing route stubs, format and
+bundle. Complete those stubs against the handler before checking the result.
 The [synchronizer](../../scripts/sync_openapi/) uses Go AST route discovery,
 rejects duplicate path declarations, and checks route coverage and deterministic
 bundle equality. File sizes follow transport scope rather than the Go source ceiling.
+
+`make openapi-check` also rejects scaffold summaries, response schema omissions
+and implicit authentication. Public operations declare `security: []`; optional
+authenticated reads include an anonymous alternative. The HTTP tests compare
+these declarations with handler authentication paths and validate representative
+handler payloads against their schemas, including required fields, null arrays,
+fixed array sizes and exact integer bounds. Keep those fixtures current when a
+DTO or response envelope changes; route coverage and bundle equality alone do
+not verify payloads.
