@@ -29,6 +29,15 @@ Where:
 - Absolute minimum capacity: 5 slots.
 - Absolute maximum capacity: 500 slots.
 
+Current `Depot.AddItem` rejects a new slot at or above capacity, while an
+eligible existing stack may still accept items. The approved, not-yet-implemented
+[contest-award delivery contract](photo-contest.md#approved-delivery-contract-and-implementation-gap)
+permits medal delivery even at full/over-capacity storage. Its slot count may
+therefore exceed the calculated capacity; it does not increase the capacity
+itself. Other caller policies remain under
+[#1139](https://github.com/witchcraze/party2re/issues/1139); this exception does
+not authorize changing ordinary deposits or player transfers.
+
 ### Dynamic Capacity Recalculation (`RefreshCapacity`)
 
 Because `character_depots.capacity` is initialized at character creation and character job levels advance dynamically over time, commerce and delivery modules (`shop`, `secretshop`, `blackmarket`, `fleamarket`, `auction`, `store`, `god`, `altar`, `medal`, `plantation`) MUST synchronize the in-memory depot capacity using `dep.RefreshCapacity(char.JobLevel, char.OverDepot)` before performing capacity boundary checks. This guarantees that high-level characters enjoy their full dynamic depot capacity (up to 500 slots) across all trade and item receipt operations.
