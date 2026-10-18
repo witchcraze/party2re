@@ -54,7 +54,7 @@
               }
             }
           },
-          "description": "Invalid request envelope, malformed parameters, or domain rejection. Error codes: INVALID_ACTION_PARAMS, INVALID_SELECTION, BANK_INVALID_AMOUNT, BANK_INSUFFICIENT_FUNDS, BANK_INSUFFICIENT_BALANCE, BANK_DEPOSIT_LIMIT_EXCEEDED, BANK_INVALID_CHARACTER_ID, RESCUE_INVALID_CHARACTER_ID, SECRETSHOP_INVALID_QUANTITY, SECRETSHOP_INSUFFICIENT_FUNDS, SECRETSHOP_PRICE_OVERFLOW, SECRETSHOP_DEPOT_FULL, DEPOT_INSUFFICIENT_FUNDS, DEPOT_MAX_EXPANDED, DEPOT_EMPTY_ITEM_LIST, DEPOT_INVALID_AMOUNT, DEPOT_INVALID_QUANTITY, DEPOT_INVALID_ITEM_INSTANCE_ID, DEPOT_INVALID_CHARACTER_ID."
+          "description": "Invalid request envelope or missing action (ErrorResponse, no error code), invalid action parameters (CharacterActionFailure with code INVALID_ACTION_PARAMS), or domain rule rejection (CharacterActionRejection with refreshed context). See docs/architecture/client-agent-api.md#gateway-action-rejection-codes for domain rejection code mappings."
         },
         "401": {
           "content": {
@@ -81,7 +81,7 @@
               }
             }
           },
-          "description": "Ownership, authentication, or qualification rejection. Error codes: ADVENTURE_LEVEL_REQUIRED, ADVENTURE_JOB_LEVEL_REQUIRED, SCENE_ACCESS_DENIED, NAVIGATION_FORBIDDEN, SECRETSHOP_ACCESS_DENIED."
+          "description": "Character ownership check failure (ErrorResponse) or qualification/level gate rejection (CharacterActionRejection with refreshed context). See docs/architecture/client-agent-api.md#gateway-action-rejection-codes."
         },
         "404": {
           "content": {
@@ -101,7 +101,7 @@
               }
             }
           },
-          "description": "Target entity or action not found. Error codes: ACTION_NOT_FOUND, CHARACTER_NOT_FOUND, SECRETSHOP_CHARACTER_NOT_FOUND, SECRETSHOP_ITEM_NOT_FOUND, DEPOT_ITEM_NOT_FOUND, DEPOT_NOT_FOUND, HOME_HOUSE_NOT_FOUND, HOME_HOUSE_EXPIRED, SELECTION_NOT_FOUND."
+          "description": "Path character not found (ErrorResponse), unregistered ActionID (CharacterActionFailure with code ACTION_NOT_FOUND), or target domain entity not found (CharacterActionRejection with refreshed context). See docs/architecture/client-agent-api.md#gateway-action-rejection-codes."
         },
         "409": {
           "content": {
@@ -111,7 +111,7 @@
               }
             }
           },
-          "description": "Action unavailable due to character state, activity conflict, or recovery locks. Error codes: ACTION_UNAVAILABLE, HOME_ALREADY_SLEEPING, HOME_STILL_SLEEPING, HOME_NOT_SLEEPING, HOME_WAKE_IN_PROGRESS, SECRETSHOP_ITEM_UNAVAILABLE."
+          "description": "Action unavailable due to character state, activity conflict, or recovery locks (CharacterActionRejection with refreshed context). See docs/architecture/client-agent-api.md#gateway-action-rejection-codes."
         },
         "415": {
           "content": {
@@ -131,7 +131,7 @@
               }
             }
           },
-          "description": "Domain rule or precondition rejection. Error codes: ADVENTURE_STAGE_NOT_FOUND, ADVENTURE_UNCONSCIOUS, ADVENTURE_EXHAUSTED, ADVENTURE_DAILY_LIMIT, RESCUE_INVALID_REASON."
+          "description": "Domain rule or precondition rejection (CharacterActionRejection with refreshed context). See docs/architecture/client-agent-api.md#gateway-action-rejection-codes."
         },
         "500": {
           "content": {
@@ -148,7 +148,7 @@
               }
             }
           },
-          "description": "Internal preflight or execution failure without safe replay guarantee. Error codes: ACTION_PREFLIGHT_FAILED, EXECUTION_FAILED."
+          "description": "Internal preflight query failure or unexpected service execution failure (CharacterActionFailure with code ACTION_PREFLIGHT_FAILED or EXECUTION_FAILED, or ErrorResponse)."
         },
         "501": {
           "content": {
@@ -158,7 +158,7 @@
               }
             }
           },
-          "description": "Unconnected ActionID or unconfigured domain service adapter. Error code: ACTION_NOT_IMPLEMENTED."
+          "description": "Catalog-registered ActionID without connected domain adapter or configured service (CharacterActionFailure with code ACTION_NOT_IMPLEMENTED)."
         }
       },
       "security": [

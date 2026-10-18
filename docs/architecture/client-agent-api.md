@@ -534,14 +534,11 @@ as `character_id` or `player_id` inside `params`; operation-specific target IDs
 such as `target_home_id` remain valid. Use the standard ownership wrapper and
 propagate the request context to every service/read call.
 
-`params` is a JSON object when present. It may be omitted for commands with no
-required inputs. Missing/null required values, incorrect types, unknown fields,
-and actor overrides return `400 INVALID_ACTION_PARAMS` without executing a
-command. Preserve strict JSON decoding, the 64 KiB limit and existing transport
-errors for authentication, ownership, content type and malformed envelopes.
-Unknown actions return `404 ACTION_NOT_FOUND`; known but unconnected commands or
-unconfigured services return `501 ACTION_NOT_IMPLEMENTED`. These failures perform
-no command and expose no context.
+The Gateway enforces a strict multi-tier verification sequence before command execution:
+1. **HTTP Transport & Envelope Validation (`decodeJSON`)**: Enforces `Content-Type: application/json` (`415 Unsupported Media Type`), the 64 KiB request size limit, exactly one valid JSON document, and no unknown fields in the top-level envelope. Malformed JSON, extra JSON documents, or body size overflows return `400 Bad Request` with `ErrorResponse` (`{"error": "invalid JSON body", "status": 400}`). A missing or blank action field returns `400 Bad Request` with `ErrorResponse` (`{"error": "missing action", "status": 400}`). These transport failures do not return error codes or context.
+2. **ActionID Catalog Lookup**: Verifies `action` against `playercontext.DefaultCatalog`. If unrecognized, returns `404 Not Found` with `actionFailureResponse` (`{"success": false, "error": {"code": "ACTION_NOT_FOUND", "message": "Unknown action."}}`). If recognized but unconfigured or unconnected to a domain adapter, returns `501 Not Implemented` with `actionFailureResponse` (`{"success": false, "error": {"code": "ACTION_NOT_IMPLEMENTED", "message": "Action service not configured."}}`). No context is returned.
+3. **Action-Specific Parameter Decoding (`decodeActionParams`)**: Decodes `params` using strict reflection and field checking. Missing or null required parameters (per catalog definition), non-object `params`, forbidden actor identity overrides (`character_id` or `player_id`), unknown struct fields, or type mismatches return `400 Bad Request` with `actionFailureResponse` (`{"success": false, "error": {"code": "INVALID_ACTION_PARAMS", "message": "Invalid action parameters."}}`). No context is returned.
+4. **Preflight Eligibility & State Guards**: Evaluates current eligibility against `playerContext.Query`. Navigation access denial returns `403 Forbidden` (`NAVIGATION_FORBIDDEN`). Query read failures return `500 Internal Server Error` (`ACTION_PREFLIGHT_FAILED`, no context). If the action is not in `current.AvailableActions` (except an early wake request), the Gateway returns `409 Conflict` (`ACTION_UNAVAILABLE`) with refreshed `context`. For non-wake/non-rescue actions, active sleep checks return `409 Conflict` (`ACTION_UNAVAILABLE`) with refreshed `context`.
 
 Catalog entries migrated to `executeCharacterAction` validate against their own
 `CharacterActionRequest.allOf` condition in OpenAPI, selected by
@@ -558,10 +555,6 @@ Unmigrated entries retain their REST-operation checks. Removing a replaced REST
 operation therefore does not remove its migrated command's validation; route
 retirement still requires the tracked replacement verification.
 
-Re-read current entry eligibility before execution; reject an ineligible entry
-with `409 ACTION_UNAVAILABLE`. Scheduled/timer read errors stop execution with
-`500 ACTION_PREFLIGHT_FAILED`, without execution or context. An earlier
-`available_actions` list is never execution authorization.
 Preserve the shared Sleep/CanWake guard for ordinary commands and explicit
 Wake/Rescue exceptions. During an active sleep duration, an explicit Wake request
 reaches the service and returns its recognized early-wake rejection without
@@ -570,13 +563,18 @@ character's Wake request remains entry-ineligible. Duration expiry alone leaves
 ordinary commands blocked until explicit Wake clears pending recovery (enforced
 durably by `characters.pending_wake = 1` in SQL and `timer:asleep` in Valkey).
 Sleep and Wake cycle transitions are mutually excluded per character via
-`party2:timer:waking:<character_id>` claim leases with token ownership; if a lease
-expires or token ownership is lost, execution safely aborts without committing
-recovery state. If any mandatory recovery hook or timer cleanup fails during Wake,
-execution halts (`500 EXECUTION_FAILED`), leaving `pending_wake = 1` and `timer:asleep`
-locked without cross-store rollback. Clients must retry an explicit Wake once transient
-errors resolve. See [Home design](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)
-and [Valkey keyspace](valkey-keyspace.md#transient-state-inventory) for full lifecycle
+`party2:timer:waking:<character_id>` claim leases with token ownership. During `Wake`,
+Step 1 restores vitality (`hp`, `mp`, `tired`) in an initial SQL transaction that
+commits before downstream recovery hooks execute. If a lease expires, token
+ownership is lost, or a recovery hook/timer cleanup fails, subsequent execution
+safely aborts (`500 EXECUTION_FAILED` via Gateway). Claim ownership prevents concurrent
+wake execution and suppresses uncoordinated downstream side effects or double-releases;
+it does not roll back already committed SQL vitality mutations. Because
+`characters.pending_wake = 1` in SQL and `timer.CategoryAsleep` in Valkey remain uncleared
+until all steps succeed, the character remains locked in recovery (ordinary commands
+return `409 ACTION_UNAVAILABLE`), allowing a subsequent explicit `Wake` to safely
+re-execute and finalize recovery. See [Home design](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)
+(SSOT) and [Valkey keyspace](valkey-keyspace.md#current-key-inventory) for full lifecycle
 invariants.
 
 Domain services validate exact amounts, currencies, items, and state. Service adapters
@@ -596,14 +594,14 @@ Detailed action specifications and legacy evidence belong to their owning design
 
 ### Gateway action rejection codes
 
-When a connected command fails validation or domain rules, the Gateway responds with
-`actionRejectionResponse` (mapped HTTP 4xx, `success: false`, `error: { code, message }`,
-and refreshed `context` alongside `context_error` if refresh failed). Unmapped unexpected
-failures return `actionFailureResponse` (`500 EXECUTION_FAILED`) without context.
+The Gateway distinguishes three error response structures:
+1. **Transport / HTTP Errors (`ErrorResponse`)**: Returned for malformed request envelopes, payload size limit overflows, missing action fields, authentication failures, or ownership violations. Shape: `{"error": "...", "status": <int>}` (no `success` flag, no error code, no context).
+2. **Action Failures (`actionFailureResponse`)**: Returned for unknown ActionIDs (`404`), unconnected ActionIDs (`501`), parameter validation errors (`400 INVALID_ACTION_PARAMS`), preflight query read errors (`500 ACTION_PREFLIGHT_FAILED`), or unhandled service execution failures (`500 EXECUTION_FAILED`). Shape: `{"success": false, "error": {"code": "...", "message": "..."}}` (no context).
+3. **Domain Rejections (`actionRejectionResponse`)**: Returned when a connected action is rejected by preflight eligibility or domain business rules. Shape: `{"success": false, "error": {"code": "...", "message": "..."}, "context": <PlayerContextResponse>, "context_error": <ErrorDetail|null>}`. Always includes refreshed `context` (or `context: null` with `context_error: {"code": "CONTEXT_REFRESH_FAILED", ...}` if refresh query failed).
 
 | HTTP Status | Error Code | Action / Domain | Trigger Condition | Refreshed Context |
 |---|---|---|---|---|
-| **400 Bad Request** | `INVALID_ACTION_PARAMS` | Universal | Malformed JSON envelope, missing required fields, or unknown extra params | No |
+| **400 Bad Request** | `INVALID_ACTION_PARAMS` | Universal | Missing required action parameters, forbidden actor ID overrides, unknown fields in params, or non-object params | No |
 | | `INVALID_SELECTION` | `scene_enter`, `scene_select`, `scene_page` | Target destination, scene kind, page offset/cursor or limit is invalid | Yes |
 | | `BANK_INVALID_CHARACTER_ID` | `bank_deposit`, `bank_withdraw` | Provided actor ID is malformed or invalid | Yes |
 | | `BANK_INVALID_AMOUNT` | `bank_deposit`, `bank_withdraw` | Amount is zero, negative, or exceeds signed int64 bounds | Yes |
@@ -622,14 +620,14 @@ failures return `actionFailureResponse` (`500 EXECUTION_FAILED`) without context
 | | `DEPOT_INVALID_AMOUNT` | `depot_sell`, `depot_sell_batch` | Calculated sale price or gold amount is invalid | Yes |
 | | `DEPOT_INVALID_QUANTITY` | `depot_sell`, `depot_sell_batch` | Sale item quantity is zero or invalid | Yes |
 | | `DEPOT_INVALID_ITEM_INSTANCE_ID`| `depot_sell`, `depot_sell_batch` | Item instance ID string is empty or invalid | Yes |
-| **401 Unauthorized** | (Standard HTTP Error) | Universal | Missing, expired, or invalid session token | No |
+| **401 Unauthorized** | (Standard HTTP Error) | Universal | Missing, expired, or invalid session token (`ErrorResponse`) | No |
 | **403 Forbidden** | `ADVENTURE_LEVEL_REQUIRED` | `adventure_start` | Character level requirement for the stage is not met | Yes |
 | | `ADVENTURE_JOB_LEVEL_REQUIRED` | `adventure_start` | Job level requirement for the stage is not met | Yes |
 | | `SCENE_ACCESS_DENIED` | `scene_enter`, `scene_select` | Character does not qualify for target scene (e.g., job/level gate) | Yes |
-| | `NAVIGATION_FORBIDDEN` | Navigation | Character is not owned by the authenticated player session | No |
+| | `NAVIGATION_FORBIDDEN` | Navigation | Character is not owned by the authenticated player session | No / Yes |
 | | `SECRETSHOP_ACCESS_DENIED` | `secretshop_purchase` | Character does not meet Secret Shop requirement (Job Level < 7) | Yes |
-| **404 Not Found** | `ACTION_NOT_FOUND` | Universal | ActionID is not registered in the Gateway catalog | No |
-| | `CHARACTER_NOT_FOUND` | Universal | Character ID does not exist in persistence | No / Yes |
+| **404 Not Found** | `ACTION_NOT_FOUND` | Universal | ActionID is not registered in the Gateway catalog (`actionFailureResponse`) | No |
+| | `CHARACTER_NOT_FOUND` | Universal | Path character ID not found in session (`ErrorResponse`, no context), or target character ID not found by domain service (`actionRejectionResponse`, with context) | No / Yes |
 | | `HOME_HOUSE_NOT_FOUND` | `home_sleep` | Destination visited house does not exist | Yes |
 | | `HOME_HOUSE_EXPIRED` | `home_sleep` | Destination visited house lease has expired | Yes |
 | | `SELECTION_NOT_FOUND` | `scene_select` | Target entity or item selection not found in current scene | Yes |
@@ -643,17 +641,21 @@ failures return `actionFailureResponse` (`500 EXECUTION_FAILED`) without context
 | | `HOME_NOT_SLEEPING` | `home_wake` | Wake submitted when character is not in sleeping state | Yes |
 | | `HOME_WAKE_IN_PROGRESS` | `home_wake` | Concurrent Wake execution is already in progress | Yes |
 | | `SECRETSHOP_ITEM_UNAVAILABLE` | `secretshop_purchase` | Item purchase restricted during active Helper Quest | Yes |
-| **415 Unsupported Media** | (Standard HTTP Error) | Universal | Request Content-Type is not `application/json` | No |
+| **415 Unsupported Media** | (Standard HTTP Error) | Universal | Request Content-Type is not `application/json` (`ErrorResponse`) | No |
 | **422 Unprocessable Entity** | `ADVENTURE_STAGE_NOT_FOUND` | `adventure_start` | Specified stage ID does not exist in adventure stage catalog | Yes |
 | | `ADVENTURE_UNCONSCIOUS` | `adventure_start` | Character HP is 0; must be revived or rest before adventuring | Yes |
 | | `ADVENTURE_EXHAUSTED` | `adventure_start` | Character tiredness is at cap; must rest at home before adventuring | Yes |
 | | `ADVENTURE_DAILY_LIMIT` | `adventure_start` | Daily once-dungeon or adventure quota already consumed for today | Yes |
 | | `RESCUE_INVALID_REASON` | `rescue_request` | Emergency rescue reason string is empty or blank | Yes |
-| **500 Internal Server Error**| `ACTION_PREFLIGHT_FAILED` | Universal | State read or sleep timer verification failed before dispatch | No |
-| | `EXECUTION_FAILED` | Universal | Unhandled service error during execution; mutation outcome unconfirmed | No |
-| **501 Not Implemented** | `ACTION_NOT_IMPLEMENTED` | Universal | ActionID is recognized in catalog but domain adapter is unconnected | No |
+| **500 Internal Server Error**| `ACTION_PREFLIGHT_FAILED` | Universal | State read or sleep timer verification failed before dispatch (`actionFailureResponse`) | No |
+| | `EXECUTION_FAILED` | Universal | Unhandled service error during execution; mutation outcome unconfirmed (`actionFailureResponse`) | No |
+| **501 Not Implemented** | `ACTION_NOT_IMPLEMENTED` | Universal | ActionID is recognized in catalog but domain adapter is unconnected (`actionFailureResponse`) | No |
 
-*Note on Unconnected / Planned Commands:* Actions for Casino (`casino_bet`, `casino_join`), PvP/GvG match commands, and ordinary NPC shops (`weaponshop_buy`, `armorshop_buy`, `itemshop_buy`) remain catalog-registered but currently unconnected to the Gateway, returning `501 ACTION_NOT_IMPLEMENTED`.
+*Action Catalog and Connection States:*
+Gateway action execution strictly distinguishes three states:
+1. **Unregistered ActionID**: Any action not registered in `playercontext.DefaultCatalog`. The Gateway returns `404 Not Found` with code `ACTION_NOT_FOUND` (`actionFailureResponse`, no context).
+2. **Catalog-Registered, Gateway-Unconnected**: Actions defined in `DefaultCatalog` with `OperationID: "executeCharacterAction"` whose adapter handler is not configured (`prepare == nil` or `playerContext == nil`). Examples include Casino entry/continuation actions (`casino_exchange`, `casino_prize_exchange`, `casino_room_create`, `casino_room_join`, `casino_room_start`, `casino_room_action`, `casino_room_leave`), PvP/GvG match controls (`party_ready`, `party_start`, `pvp_*`, `gvg_*`), and dungeon continuation (`dungeon_move`, `dungeon_escape`, `challenge_advance`). The Gateway returns `501 Not Implemented` with code `ACTION_NOT_IMPLEMENTED` (`actionFailureResponse`, no context).
+3. **Gateway-Connected**: Actions registered in `DefaultCatalog` and wired to active domain service adapters (`scene_enter`, `scene_select`, `scene_page`, `scene_back`, `adventure_start`, `home_sleep`, `home_wake`, `bank_deposit`, `bank_withdraw`, `depot_sort`, `depot_expand`, `depot_sell`, `depot_sell_batch`, `secretshop_purchase`, `rescue_request`). The Gateway verifies parameters, checks preflight eligibility, executes the domain operation, and composes standardized responses with refreshed context.
 
 
 ### Command outcome and context refresh
