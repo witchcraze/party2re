@@ -421,7 +421,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Event Plaza
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",
-		"handlePostEventPlazaBanquetToast":     "eventplaza.go",
 		// Tavern
 		"handleTavernOrder":           "tavern.go",
 		"handleTavernReserveDelivery": "tavern.go",

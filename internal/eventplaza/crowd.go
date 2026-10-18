@@ -18,10 +18,12 @@ type PresenceSnapshot struct {
 	Active int
 }
 
-func (s *Service) recordVictoryCrowd(ctx context.Context, now time.Time) error {
+// RecordVictoryCrowd appends the temporary guests and props after a successful sealing.
+func (s *Service) RecordVictoryCrowd(ctx context.Context) error {
 	if s.presenceTracker == nil {
 		return nil
 	}
+	now := s.clock.Now()
 	guests, props := 2+s.rng.Intn(4), 1+s.rng.Intn(2)
 	crowd := make([]Presence, 0, guests+props)
 	// Generic identities replace legacy names/assets; repeated draws remain duplicates.

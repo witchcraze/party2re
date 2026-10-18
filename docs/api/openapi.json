@@ -1212,37 +1212,6 @@
         ],
         "type": "object"
       },
-      "BanquetToastResult": {
-        "properties": {
-          "banquet_id": {
-            "type": "string"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "current_character_gold": {
-            "type": "integer"
-          },
-          "gold_awarded": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          },
-          "toast_count": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "banquet_id",
-          "character_id",
-          "gold_awarded",
-          "current_character_gold",
-          "toast_count",
-          "message"
-        ],
-        "type": "object"
-      },
       "BattleConsumedItem": {
         "additionalProperties": false,
         "properties": {
@@ -3158,51 +3127,6 @@
           "payout_coins",
           "net_coins",
           "message"
-        ],
-        "type": "object"
-      },
-      "CelebrationBanquet": {
-        "properties": {
-          "boss_id": {
-            "type": "string"
-          },
-          "boss_name": {
-            "type": "string"
-          },
-          "celebrated_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "slayer_character_id": {
-            "type": "string"
-          },
-          "slayer_character_name": {
-            "type": "string"
-          },
-          "tier": {
-            "type": "integer"
-          },
-          "toast_count": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "boss_id",
-          "boss_name",
-          "slayer_character_id",
-          "slayer_character_name",
-          "tier",
-          "toast_count",
-          "celebrated_at",
-          "expires_at"
         ],
         "type": "object"
       },
@@ -9495,24 +9419,6 @@
         ],
         "type": "object"
       },
-      "ListBanquetsResponse": {
-        "properties": {
-          "banquets": {
-            "items": {
-              "$ref": "#/components/schemas/CelebrationBanquet"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "banquets",
-          "total"
-        ],
-        "type": "object"
-      },
       "ListBarterItemRequest": {
         "additionalProperties": false,
         "properties": {
@@ -11471,15 +11377,6 @@
       },
       "PlazaStatus": {
         "properties": {
-          "active_banquets": {
-            "items": {
-              "$ref": "#/components/schemas/CelebrationBanquet"
-            },
-            "type": "array"
-          },
-          "active_banquets_count": {
-            "type": "integer"
-          },
           "active_participants": {
             "description": "Displayed count after expiry and same-name cleanup, including the merchant when retained. It does not determine merchant_tier.",
             "type": "integer"
@@ -11503,8 +11400,7 @@
           "merchant_selection_count",
           "merchant_tier",
           "merchant_tier_name",
-          "next_tier_threshold",
-          "active_banquets_count"
+          "next_tier_threshold"
         ],
         "type": "object"
       },
@@ -14822,17 +14718,6 @@
           "location_name",
           "npc_name",
           "message"
-        ],
-        "type": "object"
-      },
-      "ToastBanquetRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id"
         ],
         "type": "object"
       },
@@ -32443,7 +32328,7 @@
     },
     "/eventplaza": {
       "get": {
-        "description": "Retrieves displayed active population and a separate merchant_selection_count taken before expiry/duplicate cleanup. Selects the merchant from that snapshot, adds its presence, then cleans records for display. Observations can change the next request's tier; no real visitor heartbeat or reward is added. Includes ongoing boss victory celebration banquets pending their retirement.",
+        "description": "Retrieves displayed active population and a separate merchant_selection_count taken before expiry/duplicate cleanup. Selects the merchant from that snapshot, adds its presence, then cleans records for display. Observations can change the next request's tier; no real visitor heartbeat or reward is added.",
         "operationId": "getEventPlaza",
         "responses": {
           "200": {
@@ -32473,169 +32358,6 @@
         },
         "security": [],
         "summary": "Get Event Plaza status",
-        "tags": [
-          "EventPlaza"
-        ]
-      }
-    },
-    "/eventplaza/banquets": {
-      "get": {
-        "description": "Retrieves the list of active celebration banquets held in honour of defeating legendary king bosses.",
-        "operationId": "listEventPlazaBanquets",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListBanquetsResponse"
-                }
-              }
-            },
-            "description": "Active celebration banquets retrieved successfully"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List ongoing victory celebration banquets",
-        "tags": [
-          "EventPlaza"
-        ]
-      }
-    },
-    "/eventplaza/banquets/{id}/toast": {
-      "post": {
-        "description": "Raises a celebratory toast for a victory banquet, awarding commemorative celebration gold to the participating character.",
-        "operationId": "toastEventPlazaBanquet",
-        "parameters": [
-          {
-            "description": "Unique identifier of the celebration banquet",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ToastBanquetRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BanquetToastResult"
-                }
-              }
-            },
-            "description": "Toast completed successfully and reward received"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid toast request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - character belongs to another player or lacks permission"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Banquet or character not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character has already toasted this banquet"
-          },
-          "410": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Banquet has already expired"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Participate in victory celebration toast",
         "tags": [
           "EventPlaza"
         ]
@@ -41095,7 +40817,7 @@
       "name": "Auctions"
     },
     {
-      "description": "Town event plaza, traveling merchant bazaar, and victory celebration banquets",
+      "description": "Town event plaza and traveling merchant bazaar",
       "name": "EventPlaza"
     },
     {

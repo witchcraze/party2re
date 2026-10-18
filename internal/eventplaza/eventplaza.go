@@ -23,9 +23,7 @@ const (
 	Tier2Threshold = 20
 	Tier3Threshold = 30
 
-	DefaultBanquetDuration = 24 * time.Hour
-	DefaultToastGoldReward = 300
-	MaxPurchaseQuantity    = 99
+	MaxPurchaseQuantity = 99
 )
 
 var (
@@ -39,9 +37,6 @@ var (
 	ErrDepotNotConfigured = errors.New("depot repository not configured")
 	ErrInvalidQuantity    = errors.New("invalid purchase quantity")
 	ErrPriceOverflow      = economy.ErrGoldOverflow
-	ErrBanquetNotFound    = errors.New("celebration banquet not found")
-	ErrBanquetExpired     = errors.New("celebration banquet has already ended")
-	ErrAlreadyToasted     = errors.New("character has already toasted this victory celebration banquet")
 	ErrMerchantNotPresent = errors.New("traveling merchant is not present in event plaza")
 )
 
@@ -58,23 +53,16 @@ type BazaarItem struct {
 
 // PlazaStatus represents the public state and unlocked features of the Event Plaza.
 type PlazaStatus struct {
-	ActiveParticipants     int                  `json:"active_participants"`
-	MerchantSelectionCount int                  `json:"merchant_selection_count"`
-	MerchantTier           int                  `json:"merchant_tier"`
-	MerchantTierName       string               `json:"merchant_tier_name"`
-	NextTierThreshold      int                  `json:"next_tier_threshold"`
-	ActiveBanquetsCount    int                  `json:"active_banquets_count"`
-	ActiveBanquets         []CelebrationBanquet `json:"active_banquets,omitempty"`
+	ActiveParticipants     int    `json:"active_participants"`
+	MerchantSelectionCount int    `json:"merchant_selection_count"`
+	MerchantTier           int    `json:"merchant_tier"`
+	MerchantTierName       string `json:"merchant_tier_name"`
+	NextTierThreshold      int    `json:"next_tier_threshold"`
 }
 
 type Repository interface {
 	RecordPresence(ctx context.Context, characterID string, at time.Time) error
 	CountActiveParticipants(ctx context.Context, cutoff time.Time) (int, error)
-	SaveBanquet(ctx context.Context, banquet CelebrationBanquet) error
-	FindBanquetByID(ctx context.Context, id string) (CelebrationBanquet, error)
-	ListActiveBanquets(ctx context.Context, now time.Time) ([]CelebrationBanquet, error)
-	RecordToast(ctx context.Context, banquetID string, characterID string, toastedAt time.Time) error
-	HasToasted(ctx context.Context, banquetID string, characterID string) (bool, error)
 }
 
 type PresenceTracker interface {
@@ -299,20 +287,12 @@ func (s *Service) GetPlazaStatus(ctx context.Context) (PlazaStatus, error) {
 
 	tier, tierName, nextThreshold := CalculateMerchantTier(participants.Stored)
 
-	now := s.clock.Now()
-	banquets, err := s.repo.ListActiveBanquets(ctx, now)
-	if err != nil {
-		return PlazaStatus{}, fmt.Errorf("failed to list active banquets: %w", err)
-	}
-
 	return PlazaStatus{
 		ActiveParticipants:     participants.Active,
 		MerchantSelectionCount: participants.Stored,
 		MerchantTier:           tier,
 		MerchantTierName:       tierName,
 		NextTierThreshold:      nextThreshold,
-		ActiveBanquetsCount:    len(banquets),
-		ActiveBanquets:         banquets,
 	}, nil
 }
 

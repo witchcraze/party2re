@@ -17,8 +17,6 @@ type EventPlazaService interface {
 	GetPlazaStatus(ctx context.Context) (eventplaza.PlazaStatus, error)
 	ListAvailableBazaarItems(ctx context.Context) ([]eventplaza.BazaarItem, int, error)
 	PurchaseBazaarItem(ctx context.Context, characterID string, itemID string, quantity int) (eventplaza.BazaarPurchaseResult, error)
-	ListActiveBanquets(ctx context.Context) ([]eventplaza.CelebrationBanquet, error)
-	ToastBanquet(ctx context.Context, banquetID string, characterID string) (eventplaza.BanquetToastResult, error)
 }
 
 // WithEventPlaza configures the EventPlazaService for the HTTP handler.
@@ -47,15 +45,6 @@ type purchaseBazaarItemRequest struct {
 type purchaseBazaarItemResponse struct {
 	eventplaza.BazaarPurchaseResult
 	NPCMessage string `json:"npc_message"`
-}
-
-type listBanquetsResponse struct {
-	Banquets []eventplaza.CelebrationBanquet `json:"banquets"`
-	Total    int                             `json:"total"`
-}
-
-type toastBanquetRequest struct {
-	CharacterID string `json:"character_id"`
 }
 
 func (h *Handler) handleGetEventPlaza(w http.ResponseWriter, r *http.Request) {
@@ -173,63 +162,5 @@ func (h *Handler) handlePostEventPlazaMerchantPurchase(w http.ResponseWriter, r 
 			BazaarPurchaseResult: result,
 			NPCMessage:           message,
 		})
-	})
-}
-
-func (h *Handler) handleGetEventPlazaBanquets(w http.ResponseWriter, r *http.Request) {
-	if h.eventplaza == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("event plaza service not configured"))
-		return
-	}
-
-	banquets, err := h.eventplaza.ListActiveBanquets(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	if banquets == nil {
-		banquets = []eventplaza.CelebrationBanquet{}
-	}
-
-	writeJSON(w, http.StatusOK, listBanquetsResponse{
-		Banquets: banquets,
-		Total:    len(banquets),
-	})
-}
-
-func (h *Handler) handlePostEventPlazaBanquetToast(w http.ResponseWriter, r *http.Request) {
-	if h.eventplaza == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("event plaza service not configured"))
-		return
-	}
-
-	banquetID := r.PathValue("id")
-	if banquetID == "" {
-		writeError(w, http.StatusBadRequest, errors.New("banquet id is required"))
-		return
-	}
-
-	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *toastBanquetRequest) string {
-		return req.CharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req toastBanquetRequest) {
-		result, err := h.eventplaza.ToastBanquet(r.Context(), banquetID, char.ID)
-		if err != nil {
-			switch {
-			case errors.Is(err, eventplaza.ErrBanquetNotFound):
-				writeError(w, http.StatusNotFound, err)
-			case errors.Is(err, eventplaza.ErrCharacterNotFound):
-				writeError(w, http.StatusNotFound, err)
-			case errors.Is(err, eventplaza.ErrAlreadyToasted):
-				writeError(w, http.StatusConflict, err)
-			case errors.Is(err, eventplaza.ErrBanquetExpired):
-				writeError(w, http.StatusGone, err)
-			default:
-				writeError(w, http.StatusInternalServerError, err)
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, result)
 	})
 }

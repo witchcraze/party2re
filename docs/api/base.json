@@ -101,7 +101,7 @@
       "name": "Auctions"
     },
     {
-      "description": "Town event plaza, traveling merchant bazaar, and victory celebration banquets",
+      "description": "Town event plaza and traveling merchant bazaar",
       "name": "EventPlaza"
     },
     {
@@ -229,37 +229,6 @@
           "expires_at",
           "status",
           "created_at"
-        ],
-        "type": "object"
-      },
-      "BanquetToastResult": {
-        "properties": {
-          "banquet_id": {
-            "type": "string"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "current_character_gold": {
-            "type": "integer"
-          },
-          "gold_awarded": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          },
-          "toast_count": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "banquet_id",
-          "character_id",
-          "gold_awarded",
-          "current_character_gold",
-          "toast_count",
-          "message"
         ],
         "type": "object"
       },
@@ -688,51 +657,6 @@
           "remaining_rare",
           "remaining_u_rare",
           "message"
-        ],
-        "type": "object"
-      },
-      "CelebrationBanquet": {
-        "properties": {
-          "boss_id": {
-            "type": "string"
-          },
-          "boss_name": {
-            "type": "string"
-          },
-          "celebrated_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "slayer_character_id": {
-            "type": "string"
-          },
-          "slayer_character_name": {
-            "type": "string"
-          },
-          "tier": {
-            "type": "integer"
-          },
-          "toast_count": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "boss_id",
-          "boss_name",
-          "slayer_character_id",
-          "slayer_character_name",
-          "tier",
-          "toast_count",
-          "celebrated_at",
-          "expires_at"
         ],
         "type": "object"
       },
@@ -1321,24 +1245,6 @@
         ],
         "type": "object"
       },
-      "ListBanquetsResponse": {
-        "properties": {
-          "banquets": {
-            "items": {
-              "$ref": "#/components/schemas/CelebrationBanquet"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "banquets",
-          "total"
-        ],
-        "type": "object"
-      },
       "AdminBanPlayerResponse": {
         "properties": {
           "message": {
@@ -1890,15 +1796,6 @@
       },
       "PlazaStatus": {
         "properties": {
-          "active_banquets": {
-            "items": {
-              "$ref": "#/components/schemas/CelebrationBanquet"
-            },
-            "type": "array"
-          },
-          "active_banquets_count": {
-            "type": "integer"
-          },
           "active_participants": {
             "description": "Displayed count after expiry and same-name cleanup, including the merchant when retained. It does not determine merchant_tier.",
             "type": "integer"
@@ -1922,8 +1819,7 @@
           "merchant_selection_count",
           "merchant_tier",
           "merchant_tier_name",
-          "next_tier_threshold",
-          "active_banquets_count"
+          "next_tier_threshold"
         ],
         "type": "object"
       },
@@ -2292,17 +2188,6 @@
           "location_name",
           "npc_name",
           "message"
-        ],
-        "type": "object"
-      },
-      "ToastBanquetRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id"
         ],
         "type": "object"
       },

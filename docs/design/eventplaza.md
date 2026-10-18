@@ -1,8 +1,8 @@
-# Event Plaza, Traveling Merchant Bazaar, and Victory Celebration Banquets Design
+# Event Plaza, Traveling Merchant Bazaar, and Victory Celebrations Design
 
 ## Overview
 
-The Event Plaza Feature Module (`internal/eventplaza`) owns the town gathering plaza (`イベント広場`), traveling merchant bazaar and the temporary crowd added after King Boss sealing. Ordinary presence uses a 5-minute window (`party2/config.cgi_origin:81–82`). The adopted celebration contract and the remaining differences from Go are separated in [§3](#3-victory-celebrations-legacy-contract-and-implementation-gaps); existing banquet records and toast rewards do not establish legacy parity.
+The Event Plaza Feature Module (`internal/eventplaza`) owns the town gathering plaza (`イベント広場`), traveling merchant bazaar and the temporary crowd added after King Boss sealing. Ordinary presence uses a 5-minute window (`party2/config.cgi_origin:81–82`). The adopted celebration contract and its runtime boundary are described in [§3](#3-victory-celebrations-legacy-contract-and-implementation-gaps). Historical banquet records and previously awarded toast Gold are preserved without runtime listing or claims.
 
 ---
 
@@ -14,7 +14,7 @@ The traveling merchant's inventory uses thresholds of 10/20/30 plaza members. Le
 
 - **Presence Window (`PresenceWindow = 5 * time.Minute`)**: Adventurers who visited or refreshed the plaza within the last 5 minutes are counted as active participants.
 - **Current Storage**: The injected Valkey tracker retains display names (shared by real and virtual guests), insertion order and per-record time markers; heartbeats use the character name and victories append records. Its [keyspace contract](../architecture/valkey-keyspace.md) owns migration and observation-based cleanup. Without that tracker, the MariaDB `eventplaza_presences (character_id, last_seen_at)` adapter counts active real characters only and does not reproduce crowd/merchant ordering. Production injects Valkey and never automatically falls back on a tracker error.
-- **Heartbeat (`POST /eventplaza/presence`)**: Adventurers emit presence heartbeats upon entering or interacting with the plaza. Purchases and the currently implemented toast also update presence; the adopted contract removes toast.
+- **Heartbeat (`POST /eventplaza/presence`)**: Adventurers emit presence heartbeats upon entering or interacting with the plaza. Purchases also update presence. Victory crowds are appended through the sealing hook; there is no toast action.
 
 | Tier | Merchant Selection Count | Merchant Title | Catalog Unlocks (Legacy `lib/event.cgi`) |
 | :--- | :--- | :--- | :--- |
@@ -94,36 +94,25 @@ Reconstruct the behavior within current feature/storage boundaries; do not copy 
 
 | Legacy path/action | Current Go service / transport | Adopted treatment |
 | :--- | :--- | :--- |
-| `vs_king.cgi` `ふういん` → `_win_vs_king.cgi` | Boss victory hook → `RecordVictoryBanquet` in `cmd/party2/wire.go`; no standalone celebration command | Sealing appends independently drawn guests/props and per-record markers through the existing hook, regardless of boss tier. Other Boss actions remain owned by [Boss design](boss.md). |
+| `vs_king.cgi` `ふういん` → `_win_vs_king.cgi` | Boss victory hook → `RecordVictoryCrowd` through `cmd/party2/wire_adapters.go`; no standalone celebration command | Sealing appends independently drawn guests/props and per-record markers through the existing hook, regardless of boss tier. Other Boss actions remain owned by [Boss design](boss.md). |
 | `event.cgi` load → raw count, merchant row → `system.cgi` `read_member` | `GetPlazaStatus`, `ListAvailableBazaarItems`, purchase tier checks; `GET /eventplaza`, `GET /eventplaza/merchant/items` | Each entry point selects from the stored snapshot, appends the merchant when present, then performs display cleanup. Status exposes both counts. HTTP transport does not justify changing the game rule. |
 | `event.cgi` `かう` → `kau(target)` | `ListAvailableBazaarItems` / `PurchaseBazaarItem`; `GET /eventplaza/merchant/items`, `POST /eventplaza/merchant/purchase` | Retain list/buy behavior and §2 safeguards. No toast is part of this action. |
-| No legacy counterpart | `ListActiveBanquets`; `GET /eventplaza/banquets`; `active_banquets*` in plaza status | Retire the independent 24-hour display and its public fields/read path. |
-| No legacy counterpart | `ToastBanquet`; `POST /eventplaza/banquets/{id}/toast` | Remove action, reward, messages and public contract rather than migrate them to a new command. |
+| No legacy counterpart | Former `GET /eventplaza/banquets` and `active_banquets*` fields | Unregistered (404); status has no independent banquet fields or SQL read path. |
+| No legacy counterpart | Former `POST /eventplaza/banquets/{id}/toast` | Unregistered (404), with no service call, reward or presence update. No replacement command. |
 
-#### Current implementation gaps and bounded follow-ups
+#### Runtime boundary
 
-Crowd and merchant observations implement the adopted contract. Independent banquet display and toast remain separate implementation gaps; their retirement must preserve the crowd hook.
+The Boss sealing hook calls `RecordVictoryCrowd` directly. It appends guests/props through the injected presence tracker, using the service clock and the independent draws above; no SQL banquet record is needed. Tracker errors propagate to the Boss hook, whose existing best-effort handling and sealing news remain unchanged. Production supplies Valkey; the crowd side effect is not rolled back with SQL if a later sealing operation fails.
 
-| Concern | Current Go | Required implementation |
-| :--- | :--- | :--- |
-| Crowd generation | Two independent count draws append 2–5 guests and 1–2 props with per-record +3600–7199s markers (`crowd.go`). Generic guest/decoration identity pools permit repeated names without reusing legacy names or assets. | Preserve accumulation, tier independence and first-valid-name cleanup. |
-| Presence and merchant selection | `valkey.go` preserves insertion order and takes the stored count before merchant insertion and expiry/name cleanup; the 300-second boundary is inclusive. Observation owns removal, without a key TTL. | Keep status/catalog/purchase snapshot semantics aligned and retain expired rows until their next observation. |
-| Independent banquet display | `DefaultBanquetDuration = 24h`; SQL records supply banquet listing/status. | Remove independent display/runtime bookkeeping while preserving the sealing crowd and news. |
-| Toast and Gold | `ToastBanquet` awards `300 * tier` Gold, with a 300-Gold fallback for a nonpositive computed reward. | Remove toast and all new payouts, DTOs, handlers and obsolete service/repository methods; retain historical data and existing balances. |
-
-Crowd/merchant reconciliation is tracked by [#1500](https://github.com/witchcraze/party2re/issues/1500); [#1501](https://github.com/witchcraze/party2re/issues/1501) owns retirement of independent banquet/toast contracts and must preserve that crowd path. Neither #355's general event RFC nor an unrelated API migration is a prerequisite. Full Event Plaza parity remains uncertified while independent banquet/toast contracts remain.
+Status, catalog and purchase retain the crowd/merchant snapshot semantics in §1. The separate banquet listing, toast action, Gold payout and related DTO/repository contracts have no runtime implementation. Crowd and merchant restoration does not certify unexamined Event Plaza behavior; the action mapping above bounds this reconciliation.
 
 ---
 
-## Current Database Persistence (Pending Banquet Runtime Retirement)
+## Database Persistence
 
-These are existing tables, not a requirement to preserve the separate banquet or toast feature. Keep historical migrations/data; follow-up implementation retires their runtime use without destructive cleanup.
+`eventplaza_presences` (`migrations/080_eventplaza_presences.sql`) remains the SQL adapter for ordinary character presence when no tracker is injected. Production injects the authoritative Valkey tracker described in §1.
 
-### Schema Migrations:
-- `migrations/038_eventplaza.sql`: Celebration banquets and toasts tables.
-- `migrations/080_eventplaza_presences.sql`: Plaza participant concurrency tracking table.
-
-SQL definitions are owned by [migrations](../../migrations/).
+`celebration_banquets` and `banquet_toasts` (`migrations/038_eventplaza.sql`) are historical storage only: runtime no longer creates, lists, reads or claims these records. Existing migrations, records and previously awarded Gold remain intact. Existing foreign-key deletion behavior still applies when a character is deleted. SQL definitions are owned by [migrations](../../migrations/).
 
 ---
 

@@ -4,7 +4,7 @@
 
 The King Sealing Battle Feature Module (`internal/boss`) provides high-tier endgame cooperative sealing battles (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`) using the shared Multi-Participant Core Battle engine (`internal/core/battle`).
 
-Up to 6 players (4 for `king99`) form a party in the Multiplayer Party System (`internal/party`) under quest mode "封印戦" (quest type 6) to challenge ancient sealed kings and calamitous deities. Characters face devastating enemy skills like **Dejon** (デジョン; dimensional banishment of unconscious members with severe fatigue penalties). Victorious adventurers achieve resealing via **`@ふういん`**, gaining Hero Count (勇者カウント / `$m{hero_c}`), rare treasures, clear-time scaled crystals (刻印晶), worldwide server news broadcasts, and hosting a celebratory banquet in the town Event Plaza (`internal/eventplaza`).
+Up to 6 players (4 for `king99`) form a party in the Multiplayer Party System (`internal/party`) under quest mode "封印戦" (quest type 6) to challenge ancient sealed kings and calamitous deities. Characters face devastating enemy skills like **Dejon** (デジョン; dimensional banishment of unconscious members with severe fatigue penalties). Victorious adventurers achieve resealing via **`@ふういん`**, gaining Hero Count (勇者カウント / `$m{hero_c}`), rare treasures, clear-time scaled crystals (刻印晶), worldwide server news broadcasts, and adding a temporary celebration crowd in the town Event Plaza (`internal/eventplaza`).
 
 ---
 
@@ -14,7 +14,7 @@ Up to 6 players (4 for `king99`) form a party in the Multiplayer Party System (`
 - **Stage Catalog**: The Go catalog represents 11 legacy stages (`stage/king1.cgi` through `stage/king10.cgi`, and dynamic clone stage `king99.cgi`). The original definitions remain authoritative; catalog presence alone does not certify all mechanics.
 - **Capacity Parity**: `king1` through `king10` support parties of up to **6 players** (`MaxMembers: 6`), whereas `king99` retains a **4-player limit** (`MaxMembers: 4`).
 - **No Fictional Daily Limits**: Legacy Party2 has no daily attempt caps (the previously fabricated 3-entry solo raid limit has been completely removed). Entrance is governed solely by character fatigue (`tired < 100`) and stage-specific `need_join` conditions (e.g. `hp_400_o`).
-- **Transactional Consistency**: Post-battle state transitions (HeroCount increment, entry fatigue +20%, dejon fatigue +30%, loot awards, crystal rewards, news broadcast, banquet hooks, party disbandment) are committed within a single database transaction.
+- **Transactional Consistency**: SQL post-battle state transitions (HeroCount increment, entry fatigue +20%, dejon fatigue +30%, loot awards, crystal rewards, news broadcast, party disbandment) use the sealing transaction. The celebration hook also runs in that context, but its Valkey crowd append is best-effort and cannot roll back with SQL; it does not save a separate banquet record.
 
 ---
 
@@ -102,7 +102,7 @@ Upon defeating all enemy boss participants:
      - Sunday: Random choice among `item-060`..`item-065`.
    - Reward delivery uses `coreinventory.Inventory` capacity enforcement; overflow items route to `depot.Depot` storage (Rank 5 lock); items overflowing a full depot are treated as lost drops (`_npc_action.cgi:74-75`).
 5. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
-6. **Victory Celebration**: Adds a temporary crowd to Event Plaza (`_win_vs_king.cgi`). [Event Plaza design §3](eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) owns generation, presence retention, merchant-selection order and the remaining Go gaps; there is no independent fixed two-hour banquet window.
+6. **Victory Celebration**: Adds a temporary crowd to Event Plaza (`_win_vs_king.cgi`). [Event Plaza design §3](eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) owns generation, presence retention, merchant-selection order and runtime boundaries; there is no independent fixed two-hour banquet window.
 7. **Lobby Disbandment**: The temporary staging party is deleted upon conclusion.
 
 ---

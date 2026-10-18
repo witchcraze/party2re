@@ -26,15 +26,11 @@ func (m *mockClock) Now() time.Time {
 type memoryRepo struct {
 	mu        sync.Mutex
 	presences map[string]time.Time
-	banquets  map[string]CelebrationBanquet
-	toasts    map[string]map[string]time.Time
 }
 
 func newMemoryRepo() *memoryRepo {
 	return &memoryRepo{
 		presences: make(map[string]time.Time),
-		banquets:  make(map[string]CelebrationBanquet),
-		toasts:    make(map[string]map[string]time.Time),
 	}
 }
 
@@ -55,64 +51,6 @@ func (m *memoryRepo) CountActiveParticipants(ctx context.Context, cutoff time.Ti
 		}
 	}
 	return count, nil
-}
-
-func (m *memoryRepo) SaveBanquet(ctx context.Context, banquet CelebrationBanquet) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.banquets[banquet.ID] = banquet
-	return nil
-}
-
-func (m *memoryRepo) FindBanquetByID(ctx context.Context, id string) (CelebrationBanquet, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	b, ok := m.banquets[id]
-	if !ok {
-		return CelebrationBanquet{}, ErrBanquetNotFound
-	}
-	return b, nil
-}
-
-func (m *memoryRepo) ListActiveBanquets(ctx context.Context, now time.Time) ([]CelebrationBanquet, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var list []CelebrationBanquet
-	for _, b := range m.banquets {
-		if now.Before(b.ExpiresAt) {
-			list = append(list, b)
-		}
-	}
-	return list, nil
-}
-
-func (m *memoryRepo) RecordToast(ctx context.Context, banquetID string, characterID string, toastedAt time.Time) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	b, ok := m.banquets[banquetID]
-	if !ok {
-		return ErrBanquetNotFound
-	}
-	if m.toasts[banquetID] == nil {
-		m.toasts[banquetID] = make(map[string]time.Time)
-	}
-	if _, exists := m.toasts[banquetID][characterID]; exists {
-		return ErrAlreadyToasted
-	}
-	m.toasts[banquetID][characterID] = toastedAt
-	b.ToastCount++
-	m.banquets[banquetID] = b
-	return nil
-}
-
-func (m *memoryRepo) HasToasted(ctx context.Context, banquetID string, characterID string) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.toasts[banquetID] == nil {
-		return false, nil
-	}
-	_, exists := m.toasts[banquetID][characterID]
-	return exists, nil
 }
 
 type memoryCharacterRepo struct {
@@ -620,79 +558,4 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 		t.Errorf("expected collection error %v on depot delivery, got %v", colErr, err)
 	}
 	recorderMock.err = nil
-}
-
-func TestVictoryBanquetAndToast(t *testing.T) {
-	ctx := context.Background()
-	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
-	clock := &mockClock{now: now}
-
-	repo := newMemoryRepo()
-	charRepo := newMemoryCharacterRepo()
-	invRepo := newMemoryInventoryRepo()
-
-	slayerID := id.New()
-	slayer, _ := corecharacter.New("SlayerHero")
-	slayer.ID = slayerID
-	slayer.PlayerID = "player-1"
-	charRepo.characters[slayerID] = slayer
-
-	toasterID := id.New()
-	toaster, _ := corecharacter.New("TownVillager")
-	toaster.ID = toasterID
-	toaster.PlayerID = "player-2"
-	toaster.Money = 500
-	charRepo.characters[toasterID] = toaster
-
-	svc, err := NewService(repo, charRepo, invRepo, WithClock(clock))
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	// 1. Record victory banquet
-	banquet, err := svc.RecordVictoryBanquet(ctx, "boss-dragon-king", "Ancient Dragon King", slayerID, "SlayerHero", 3)
-	if err != nil {
-		t.Fatalf("failed to record victory banquet: %v", err)
-	}
-	if banquet.BossName != "Ancient Dragon King" || banquet.Tier != 3 {
-		t.Errorf("unexpected banquet: %+v", banquet)
-	}
-
-	// 2. List active banquets
-	banquets, err := svc.ListActiveBanquets(ctx)
-	if err != nil || len(banquets) != 1 {
-		t.Fatalf("expected 1 active banquet, got %d (err: %v)", len(banquets), err)
-	}
-
-	// 3. Toast banquet
-	toastRes, err := svc.ToastBanquet(ctx, banquet.ID, toasterID)
-	if err != nil {
-		t.Fatalf("toast failed: %v", err)
-	}
-	// DefaultToastGoldReward (300) * Tier (3) = 900
-	if toastRes.GoldAwarded != 900 {
-		t.Errorf("expected 900 G reward, got %d", toastRes.GoldAwarded)
-	}
-	if toastRes.CurrentCharacterGold != 1400 {
-		t.Errorf("expected 1400 G total, got %d", toastRes.CurrentCharacterGold)
-	}
-
-	// Verify toaster presence was recorded
-	presenceCount, _ := repo.CountActiveParticipants(ctx, now.Add(-5*time.Minute))
-	if presenceCount != 1 {
-		t.Errorf("expected toaster presence recorded, got count %d", presenceCount)
-	}
-
-	// 4. Duplicate toast fails
-	_, err = svc.ToastBanquet(ctx, banquet.ID, toasterID)
-	if !errors.Is(err, ErrAlreadyToasted) {
-		t.Errorf("expected ErrAlreadyToasted, got %v", err)
-	}
-
-	// 5. Expired banquet toast fails
-	clock.now = clock.now.Add(25 * time.Hour) // Advance past expiration
-	_, err = svc.ToastBanquet(ctx, banquet.ID, slayerID)
-	if !errors.Is(err, ErrBanquetExpired) {
-		t.Errorf("expected ErrBanquetExpired, got %v", err)
-	}
 }
