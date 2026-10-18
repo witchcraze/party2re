@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Monster system (`internal/monster`, legacy `farm.cgi` / `monster.cgi`) provides monster storage, pet companionship at player home estates, monster renaming, peer gifting, and wild releases. Defeated monsters encountered during adventures can be captured/tamed and sent to the Monster Grandpa facility (`@モンジィ`).
+The Monster system (`internal/monster`, legacy `farm.cgi` / `monster.cgi`) provides monster storage, pet companionship at player home estates, monster renaming, peer gifting, and wild releases. Defeated monsters encountered during adventures can be captured/tamed and sent to the Monster Grandpa facility (`@モンジィ`) exclusively via post-battle recruitment (Section 7). The facility itself provides management of already stored monsters.
 
 ---
 
@@ -43,11 +43,12 @@ The Monster system (`internal/monster`, legacy `farm.cgi` / `monster.cgi`) provi
 
 ## 4. Supported Operations
 
+In alignment with legacy `farm.cgi:38-47`, the Monster Grandpa facility provides 5 character-directed management operations for owned monsters, alongside dialogue and summary queries. Monster capture/taming occurs solely as a post-battle resolution outcome (Section 7) and is not a player-invoked facility action.
+
 | Action | Legacy Command | HTTP Endpoint | Description |
 | :--- | :--- | :--- | :--- |
 | **Dialogue** | `はなす` | `GET /monster/dialogue` | Retrieves `@モンジィ` dialogue and tips. |
 | **List & Summary** | `みる` | `GET /characters/{id}/monsters?location=box\|home` | Lists stored monsters/pets with capacity counts. |
-| **Tame / Capture** | `モンスターゲット` | `POST /characters/{id}/monsters/tame` | Adds a captured monster to Grandpa box (fails if box full). |
 | **Bring to Home** | `つれてく` | `POST /characters/{id}/monsters/{instance_id}/bring-home` | Moves a monster from box to home pets (max 8, unique name check). |
 | **Deposit to Box** | `あずける` | `POST /characters/{id}/monsters/{instance_id}/deposit` | Moves a pet from home back to Grandpa box. |
 | **Rename** | `なづける` | `POST /characters/{id}/monsters/{instance_id}/rename` | Renames a monster instance (max 8 characters, sanitization rules). |

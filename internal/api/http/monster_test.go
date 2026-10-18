@@ -16,7 +16,6 @@ import (
 
 type stubMonsterService struct {
 	getSummaryFn     func(ctx context.Context, characterID, locationFilter string) (monster.MonsterBoxSummary, error)
-	tameMonsterFn    func(ctx context.Context, characterID, monsterID, customName string) (monster.MonsterInstance, error)
 	bringToHomeFn    func(ctx context.Context, characterID, instanceID string) (monster.MonsterInstance, error)
 	depositToBoxFn   func(ctx context.Context, characterID, instanceID string) (monster.MonsterInstance, error)
 	renameFn         func(ctx context.Context, characterID, instanceID, newName string) (monster.MonsterInstance, error)
@@ -30,13 +29,6 @@ func (s *stubMonsterService) GetSummary(ctx context.Context, characterID, locati
 		return s.getSummaryFn(ctx, characterID, locationFilter)
 	}
 	return monster.MonsterBoxSummary{}, nil
-}
-
-func (s *stubMonsterService) TameMonster(ctx context.Context, characterID, monsterID, customName string) (monster.MonsterInstance, error) {
-	if s.tameMonsterFn != nil {
-		return s.tameMonsterFn(ctx, characterID, monsterID, customName)
-	}
-	return monster.MonsterInstance{}, nil
 }
 
 func (s *stubMonsterService) BringToHome(ctx context.Context, characterID, instanceID string) (monster.MonsterInstance, error) {
@@ -111,9 +103,6 @@ func TestMonsterEndpoints(t *testing.T) {
 				},
 			}, nil
 		},
-		tameMonsterFn: func(ctx context.Context, characterID, monsterID, customName string) (monster.MonsterInstance, error) {
-			return monster.MonsterInstance{ID: "m2", CharacterID: characterID, MonsterID: monsterID, CustomName: customName, Location: monster.LocationBox}, nil
-		},
 		bringToHomeFn: func(ctx context.Context, characterID, instanceID string) (monster.MonsterInstance, error) {
 			return monster.MonsterInstance{ID: instanceID, CharacterID: characterID, MonsterID: "slime", CustomName: "スラりん", Location: monster.LocationHome}, nil
 		},
@@ -176,7 +165,7 @@ func TestMonsterEndpoints(t *testing.T) {
 		}
 	}
 
-	// 3. POST /characters/c1/monsters/tame
+	// 3. POST /characters/c1/monsters/tame (unregistered route negative test)
 	{
 		payload := []byte(`{"monster_id":"slime","custom_name":"スラりん"}`)
 		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/monsters/tame", bytes.NewReader(payload))
@@ -186,15 +175,10 @@ func TestMonsterEndpoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("POST /characters/c1/monsters/tame failed: %v", err)
 		}
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200, got %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404 for removed tame endpoint, got %d", resp.StatusCode)
 		}
-		var inst monster.MonsterInstance
-		_ = json.NewDecoder(resp.Body).Decode(&inst)
 		resp.Body.Close()
-		if inst.CustomName != "スラりん" {
-			t.Errorf("expected custom_name スラりん, got %s", inst.CustomName)
-		}
 	}
 
 	// 4. POST /characters/c1/monsters/m1/bring-home
