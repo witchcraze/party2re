@@ -24,7 +24,36 @@ Quests are randomly generated across four categories:
 ### Lifecycle and Expiration
 - Quests remain active for **6 days** (`ExpiresAt = CreatedAt + 6 days`).
 - Upon completion, required items/equipment are deducted from the player's **Depot** (`check_depot`), or monsters are deducted from the **Monster Ranch** box (`check_farm`), quest rewards are delivered directly to the player's **Depot** (`send_item`), the character's `help_count` is incremented, and a fresh replacement quest is generated.
-- Stale expired quests are refreshed with newly generated quests.
+- Legacy `party2/lib/helper.cgi:128–140` replaces an expired non-target request during `かいけつ`, one existing row for one new row. Go currently only hides expired requests in `ListActive`; restoring their replacement remains [#1217](https://github.com/witchcraze/party2re/issues/1217). This is distinct from creating requests in a store that has no rows.
+
+### Initial Supply and Empty Stores
+
+Decision: [#1226](https://github.com/witchcraze/party2re/issues/1226). Following the maintainer's direction to match the original (「原点に合わせてね」), **automatic initial supply is zero**. Do not add startup seeding, a minimum board size, periodic replenishment, or read-triggered generation when the store is empty.
+
+The evidence has two different limits:
+
+- The recovered original repository's `docker-entrypoint.sh:7–10` creates a missing `helper_quest.cgi` as an empty file and preserves an existing file. This also holds at the audit revision `ff97fc549932a146cc945d7edf71b44c868a840e`; it is evidence for the recovered container's fresh-start behavior, not proof of historical live-server provisioning.
+- Game code `party2/lib/helper.cgi:60–86,92–148` registers `みる` / `かいけつ`, reads existing rows, and only generates replacements while processing an existing completed or expired request. An empty file stays empty. The original live server's initial request count/data remains **unknown**; no positive count may be presented as an established legacy rule.
+
+The Go migration `031_rescue_and_helper.sql` creates the table without inserting requests. `cmd/party2` constructs the service without a supply step, and `ListQuests` / `GetActiveHelperItemIDs` read `ListActive` without generating requests. These match the adopted zero-bootstrap rule.
+
+| Situation | Expected behavior |
+| :--- | :--- |
+| Fresh, correctly migrated DB with no requests | Startup creates no requests; a successful list returns an empty board. Shop exclusion readers return no requested targets. No request generation, RNG consumption or save occurs. |
+| Existing requests and application restart | Preserve the stored requests; do not append, reset, or top up to an invented initial count. |
+| Several instances, repeated reads or restart retries | All instances create zero initial requests. No initialization marker, leader election or once-only seed lock is needed. |
+| No active requests, but expired/completed rows exist | Do not infer a fresh installation from active count zero. Existing expired-row replacement belongs to #1217; never use it to fill an arbitrary board size. |
+| Missing table or failed storage read | Return the storage error through the existing error path; do not reinterpret failure as an empty board, create a schema, or seed requests. |
+| Retry after a failed read | Read the authoritative store again. If it is empty, it remains empty; no partial bootstrap or duplicate generation exists. |
+| Save failure | Bootstrap performs no save. Completion/replacement failures retain their transaction rollback behavior; their recovery is not an excuse to seed an empty store. |
+
+| Original action / path | Go service / current transport | Supply effect |
+| :--- | :--- | :--- |
+| Container startup creates the missing request file | Schema migration and `cmd/party2` service composition | No initial requests; retain existing data. |
+| `みる` → `miru` | `ListQuests` / `GET /helpers/quests` | Read existing requests; an empty result does not generate supply. |
+| `かいけつ` → `kaiketsu` | `CompleteQuest` / `POST /helpers/complete` | Complete an existing request and create its replacement; no bootstrap command. Expiration renewal remains the separate #1217 gap. |
+
+A fresh installation therefore has no playable helper requests until initial request data is separately supplied. A nonzero automatic seed or provisioning tool would require an explicit new decision about its count, source and transaction/idempotency contract; none is authorized here. This decision does not certify the generator pools/reward weights ([#1216](https://github.com/witchcraze/party2re/issues/1216)), expiration replacement (#1217), or production guild wiring ([#1218](https://github.com/witchcraze/party2re/issues/1218)).
 
 ---
 
