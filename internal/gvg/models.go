@@ -15,6 +15,7 @@ const (
 	MatchParticipantGP = 4
 	MinMembers         = 2
 	MaxMembers         = 8
+	MaxGuildMembers    = 4
 	MinTargetWins      = 1
 	MaxTargetWins      = 3
 	MaxRounds          = 10
@@ -43,6 +44,7 @@ var (
 	ErrFriendlyGuildCannotBattle = errors.New("仲良しギルドはギルド戦をすることはできません")
 	ErrNeedAtLeastTwoGuilds      = errors.New("対戦するギルドがいません")
 	ErrNotEnoughParticipants     = errors.New("at least 2 participants are required to start")
+	ErrGuildMemberLimitExceeded  = errors.New("同じギルドメンバー５人以上は参加することができません")
 	ErrMatchAlreadyStarted       = errors.New("match has already started")
 	ErrMatchNotInProgress        = errors.New("match is not in progress")
 	ErrMatchCompleted            = errors.New("match is already completed")

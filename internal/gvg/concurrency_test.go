@@ -309,3 +309,117 @@ func TestGVG_ConcurrentJoinRoom_Valkey(t *testing.T) {
 	}
 	testConcurrentGvGJoinRoomStress(t, repo)
 }
+
+func testConcurrentGvGGuildMemberLimitStress(t *testing.T, roomRepo gvg.RoomRepository) {
+	t.Helper()
+	ctx := context.Background()
+
+	standingRepo := newMockStandingRepo()
+	guildRepo := newMockGuildRepo()
+	charRepo := newMockCharRepo()
+	battleEngine := &mockBattleEngine{outcome: corebattle.OutcomeWin}
+
+	svc, err := gvg.NewService(roomRepo, standingRepo, guildRepo, charRepo, battleEngine)
+	if err != nil {
+		t.Fatalf("failed to create gvg service: %v", err)
+	}
+
+	gID := "guild-target"
+	guildRepo.guilds[gID] = guild.Guild{ID: gID, Name: "TargetGuild", Color: "#FF0000"}
+
+	// Create leader and 2 initial members for Guild (bringing total to 3 members in room)
+	leader := createTestCharacter("char-leader", "Leader", 100, 0)
+	charRepo.characters[leader.ID] = leader
+	guildRepo.charGuilds[leader.ID] = gID
+
+	created, err := svc.CreateRoom(ctx, leader.ID, gvg.CreateRoomRequest{
+		Name:       "GuildLimitStressGvG",
+		MaxMembers: 8, // Room has plenty of total capacity
+	})
+	if err != nil {
+		t.Fatalf("failed to create gvg room: %v", err)
+	}
+	roomID := created.Room.ID
+
+	// Join member 2 and member 3 sequentially
+	for i := 2; i <= 3; i++ {
+		cID := fmt.Sprintf("char-init-%d", i)
+		charRepo.characters[cID] = createTestCharacter(cID, fmt.Sprintf("Init%d", i), 100, 0)
+		guildRepo.charGuilds[cID] = gID
+		if _, err := svc.JoinRoom(ctx, cID, roomID, ""); err != nil {
+			t.Fatalf("failed to join init member %d: %v", i, err)
+		}
+	}
+
+	// Now room has 3 members from TargetGuild. Only 1 more slot is available for this guild!
+	// Concurrently attempt to join 10 candidates from TargetGuild (同時4/5人目)
+	const totalConcurrentCandidates = 10
+	for i := 1; i <= totalConcurrentCandidates; i++ {
+		cID := fmt.Sprintf("char-conc-%d", i)
+		charRepo.characters[cID] = createTestCharacter(cID, fmt.Sprintf("ConcurrentCand%d", i), 100, 0)
+		guildRepo.charGuilds[cID] = gID
+	}
+
+	var wg sync.WaitGroup
+	var successCount int32
+	var limitExceededCount int32
+	errCh := make(chan error, totalConcurrentCandidates)
+
+	for i := 1; i <= totalConcurrentCandidates; i++ {
+		wg.Add(1)
+		candidateID := fmt.Sprintf("char-conc-%d", i)
+		go func(cID string) {
+			defer wg.Done()
+			_, joinErr := svc.JoinRoom(ctx, cID, roomID, "")
+			if joinErr == nil {
+				atomic.AddInt32(&successCount, 1)
+			} else if errors.Is(joinErr, gvg.ErrGuildMemberLimitExceeded) {
+				atomic.AddInt32(&limitExceededCount, 1)
+			} else {
+				errCh <- joinErr
+			}
+		}(candidateID)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	for e := range errCh {
+		t.Errorf("unexpected JoinRoom error: %v", e)
+	}
+
+	// Exactly 1 concurrent candidate should succeed (the 4th member of TargetGuild)
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 successful joiner (4th guild member), got %d", successCount)
+	}
+	// The remaining 9 candidates must be rejected with ErrGuildMemberLimitExceeded
+	if limitExceededCount != 9 {
+		t.Errorf("expected exactly 9 ErrGuildMemberLimitExceeded rejections, got %d", limitExceededCount)
+	}
+
+	// Verify room state
+	detail, err := svc.GetRoom(ctx, roomID)
+	if err != nil {
+		t.Fatalf("failed to get room: %v", err)
+	}
+	if len(detail.Members) != 4 {
+		t.Errorf("expected exactly 4 room members, got %d", len(detail.Members))
+	}
+	// PrizePool should be 2 (initial) + 2 (init joiners) + 1 (successful concurrent joiner) = 5 GP
+	if detail.Room.PrizePool != 5 {
+		t.Errorf("expected PrizePool 5 GP, got %d", detail.Room.PrizePool)
+	}
+}
+
+func TestGVG_ConcurrentJoinRoom_GuildMemberLimit_Memory(t *testing.T) {
+	testConcurrentGvGGuildMemberLimitStress(t, gvg.NewMemoryRoomRepository())
+}
+
+func TestGVG_ConcurrentJoinRoom_GuildMemberLimit_Valkey(t *testing.T) {
+	client := newTestValkeyClient()
+	repo, err := gvg.NewValkeyRoomRepository(client)
+	if err != nil {
+		t.Fatalf("failed to create valkey room repo: %v", err)
+	}
+	testConcurrentGvGGuildMemberLimitStress(t, repo)
+}
