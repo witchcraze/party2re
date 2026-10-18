@@ -12,7 +12,6 @@ import (
 
 type MonsterService interface {
 	GetSummary(ctx context.Context, characterID, locationFilter string) (monster.MonsterBoxSummary, error)
-	TameMonster(ctx context.Context, characterID, monsterID, customName string) (monster.MonsterInstance, error)
 	BringToHome(ctx context.Context, characterID, instanceID string) (monster.MonsterInstance, error)
 	DepositToBox(ctx context.Context, characterID, instanceID string) (monster.MonsterInstance, error)
 	Rename(ctx context.Context, characterID, instanceID, newName string) (monster.MonsterInstance, error)
@@ -26,11 +25,6 @@ func WithMonster(m MonsterService) Option {
 	return func(h *Handler) {
 		h.monster = m
 	}
-}
-
-type tameMonsterRequest struct {
-	MonsterID  string `json:"monster_id"`
-	CustomName string `json:"custom_name"`
 }
 
 type renameMonsterRequest struct {
@@ -72,38 +66,6 @@ func (h *Handler) handleGetCharacterMonsters(w http.ResponseWriter, r *http.Requ
 		}
 
 		writeJSON(w, http.StatusOK, summary)
-	})
-}
-
-func (h *Handler) handleTameMonster(w http.ResponseWriter, r *http.Request) {
-	if h.monster == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("monster service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req tameMonsterRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		inst, err := h.monster.TameMonster(r.Context(), char.ID, req.MonsterID, req.CustomName)
-		if err != nil {
-			switch {
-			case errors.Is(err, monster.ErrBoxFull),
-				errors.Is(err, monster.ErrInvalidName),
-				errors.Is(err, monster.ErrNameTooLong):
-				writeError(w, http.StatusBadRequest, err)
-			case errors.Is(err, monster.ErrCharacterNotFound):
-				writeError(w, http.StatusNotFound, err)
-			default:
-				writeError(w, http.StatusInternalServerError, err)
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, inst)
 	})
 }
 

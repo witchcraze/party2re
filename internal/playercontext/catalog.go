@@ -408,14 +408,6 @@ var DefaultCatalog = append(append([]ActionDefinition{
 	// Category: social (Companions, Quests & Public Facilities)
 	// =========================================================================
 	{
-		ID:             "monster_tame",
-		Label:          "モンスター捕獲・預託",
-		Category:       "social",
-		OperationID:    "tameMonster",
-		RequiredParams: []string{"monster_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
 		ID:             "helper_complete",
 		Label:          "何でも屋クエスト報告",
 		Category:       "social",

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/contest"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -24,6 +25,7 @@ import (
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/tavern"
@@ -1262,5 +1264,82 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	}
 	if g.Points != int64(expectedTotalGP) {
 		t.Errorf("guild points should not change on ErrAlreadyOwnsHouse: expected %d, got %d", expectedTotalGP, g.Points)
+	}
+}
+
+type wireMockMonsterRepo struct {
+	monsters map[string]monster.MonsterInstance
+}
+
+func (m *wireMockMonsterRepo) ListByCharacterID(_ context.Context, _ string) ([]monster.MonsterInstance, error) {
+	return nil, nil
+}
+
+func (m *wireMockMonsterRepo) ListByCharacterIDAndLocation(_ context.Context, _, _ string) ([]monster.MonsterInstance, error) {
+	return nil, nil
+}
+
+func (m *wireMockMonsterRepo) FindByID(_ context.Context, _ string) (monster.MonsterInstance, error) {
+	return monster.MonsterInstance{}, nil
+}
+
+func (m *wireMockMonsterRepo) FindByIDForUpdate(_ context.Context, _ string) (monster.MonsterInstance, error) {
+	return monster.MonsterInstance{}, nil
+}
+
+func (m *wireMockMonsterRepo) Save(_ context.Context, inst monster.MonsterInstance) error {
+	if m.monsters == nil {
+		m.monsters = make(map[string]monster.MonsterInstance)
+	}
+	m.monsters[inst.ID] = inst
+	return nil
+}
+
+func (m *wireMockMonsterRepo) Delete(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *wireMockMonsterRepo) CountByLocation(_ context.Context, _ string, _ string) (int, error) {
+	return len(m.monsters), nil
+}
+
+func TestMonsterTamerAdapter(t *testing.T) {
+	ctx := context.Background()
+	char := corecharacter.Character{
+		ID:       "char-tamer-1",
+		Name:     "TamerHero",
+		JobLevel: 1,
+	}
+	charRepo := &wireMockCharRepo{char: char}
+	monRepo := &wireMockMonsterRepo{monsters: make(map[string]monster.MonsterInstance)}
+	svc := monster.NewService(charRepo, monRepo)
+	adapter := monsterTamerAdapter{svc: svc}
+
+	// 1. Successful recruitment via battle adapter
+	err := adapter.TameMonster(ctx, "char-tamer-1", "slime", "スラりん")
+	if err != nil {
+		t.Fatalf("expected successful tame, got %v", err)
+	}
+	if len(monRepo.monsters) != 1 {
+		t.Fatalf("expected 1 monster saved, got %d", len(monRepo.monsters))
+	}
+
+	// 2. Box capacity full translates to battle.ErrMonsterBoxFull
+	for i := 1; i < 50; i++ {
+		monRepo.monsters[fmt.Sprintf("m-%d", i)] = monster.MonsterInstance{
+			ID:          fmt.Sprintf("m-%d", i),
+			CharacterID: "char-tamer-1",
+			Location:    monster.LocationBox,
+		}
+	}
+	err = adapter.TameMonster(ctx, "char-tamer-1", "dragon", "ドラごん")
+	if !errors.Is(err, battle.ErrMonsterBoxFull) {
+		t.Fatalf("expected battle.ErrMonsterBoxFull, got %v", err)
+	}
+
+	// 3. Other errors (e.g. character not found) are propagated directly
+	err = adapter.TameMonster(ctx, "unknown-char", "slime", "スラりん")
+	if !errors.Is(err, monster.ErrCharacterNotFound) {
+		t.Fatalf("expected ErrCharacterNotFound for missing character, got %v", err)
 	}
 }

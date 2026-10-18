@@ -656,7 +656,6 @@ func (h *Handler) Router() http.Handler {
 	// Monster Grandpa & Pet Companions
 	mux.HandleFunc("GET /monster/dialogue", h.handleGetMonsterDialogue)
 	mux.HandleFunc("GET /characters/{id}/monsters", h.handleGetCharacterMonsters)
-	mux.HandleFunc("POST /characters/{id}/monsters/tame", h.handleTameMonster)
 	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/bring-home", h.handleBringMonsterToHome)
 	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/deposit", h.handleDepositMonsterToBox)
 	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/rename", h.handleRenameMonster)
