@@ -18,48 +18,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "companion_phrase_count": {
-                    "type": "integer"
-                  },
-                  "home": {
-                    "type": "object"
-                  },
-                  "is_owner": {
-                    "type": "boolean"
-                  },
-                  "owner": {
-                    "type": "object"
-                  },
-                  "recent_delivery_count": {
-                    "type": "integer"
-                  },
-                  "resident_pets": {
-                    "items": {
-                      "properties": {
-                        "custom_name": {
-                          "type": "string"
-                        },
-                        "id": {
-                          "type": "string"
-                        },
-                        "monster_id": {
-                          "type": "string"
-                        }
-                      },
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "unread_letter_count": {
-                    "type": "integer"
-                  }
-                },
-                "type": "object"
+                "$ref": "#/components/schemas/SleepStatusResponse"
               }
             }
           },
           "description": "Current sleep status"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -81,6 +48,10 @@
           },
           "description": "Forbidden - player does not own requested character"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -90,6 +61,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -136,7 +111,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/SleepResponse"
               }
             }
           },
@@ -192,6 +167,10 @@
           },
           "description": "Conflict - character is already sleeping, has pending wake recovery, or wake is currently in progress"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -201,6 +180,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -233,11 +216,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/WakeResponse"
               }
             }
           },
           "description": "Character woke up with full recovery"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -259,6 +246,10 @@
           },
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -278,6 +269,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -293,7 +288,7 @@
   },
   "/homes/{id}": {
     "get": {
-      "description": "Without visitor_id, returns only whitelisted public fields. A supplied visitor_id requires its owner session and is verified again by Home; it cannot authorize private fields by itself.",
+      "description": "Without visitor_id, returns only whitelisted public fields. A supplied visitor_id requires its owner session and is verified again by Home; it cannot authorize private fields by itself. Anonymous reads are supported. Supplying visitor_id requires Bearer authentication and visitor character ownership.",
       "operationId": "getHomeView",
       "parameters": [
         {
@@ -376,6 +371,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -411,20 +410,12 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "properties": {
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "phrase": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
+                  "$ref": "#/components/schemas/HomeCompanionPhrase"
                 },
-                "type": "array"
+                "type": [
+                  "array",
+                  "null"
+                ]
               }
             }
           },
@@ -459,8 +450,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List companion greeting phrases",
       "tags": [
         "Homes"
@@ -502,7 +498,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/HomeCompanionPhrase"
               }
             }
           },
@@ -538,6 +534,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -547,6 +547,10 @@
             }
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
         },
         "422": {
           "content": {
@@ -567,6 +571,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -604,26 +612,8 @@
         }
       ],
       "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "dialogue": {
-                    "type": "string"
-                  },
-                  "pet_name": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "dialogue"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "description": "Phrase forgotten"
+        "204": {
+          "description": "No content"
         },
         "400": {
           "content": {
@@ -655,6 +645,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -674,6 +668,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -706,7 +704,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/CompanionTalkResponse"
               }
             }
           },
@@ -751,8 +749,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Talk to private home companion",
       "tags": [
         "Homes"
@@ -778,7 +781,13 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "items": {
+                  "$ref": "#/components/schemas/HomeDeliveryNotice"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
               }
             }
           },
@@ -814,6 +823,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -823,6 +836,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -851,15 +868,8 @@
         }
       ],
       "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Delivery notices cleared"
+        "204": {
+          "description": "No content"
         },
         "400": {
           "content": {
@@ -891,6 +901,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -910,6 +924,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -960,7 +978,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/HomeCharacterHome"
               }
             }
           },
@@ -996,6 +1014,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -1006,6 +1028,10 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -1015,6 +1041,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

@@ -25,7 +25,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ParkDivinationResult"
               }
             }
           },
@@ -61,6 +61,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -71,6 +75,10 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -80,6 +88,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -101,7 +113,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ParkDialogueResponse"
               }
             }
           },
@@ -126,8 +138,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Inspect town park NPC status",
       "tags": [
         "Park"
@@ -160,7 +177,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ParkDialogueResponse"
               }
             }
           },
@@ -196,6 +213,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -206,6 +227,10 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -215,6 +240,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -267,10 +296,10 @@
               "schema": {
                 "anyOf": [
                   {
-                    "$ref": "#/components/schemas/PageParkPost"
+                    "$ref": "#/components/schemas/PaginationCursorPageParkPost"
                   },
                   {
-                    "$ref": "#/components/schemas/CursorPageParkPost"
+                    "$ref": "#/components/schemas/PageParkPost"
                   }
                 ]
               }
@@ -297,8 +326,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get town park bulletin board posts",
       "tags": [
         "Park"
@@ -310,17 +344,24 @@
         "content": {
           "application/json": {
             "schema": {
+              "additionalProperties": false,
               "properties": {
                 "character_id": {
                   "type": "string"
                 },
-                "message": {
+                "color": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "recipient_name": {
                   "type": "string"
                 }
               },
               "required": [
                 "character_id",
-                "message"
+                "content"
               ],
               "type": "object"
             }
@@ -333,7 +374,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ParkPost"
               }
             }
           },
@@ -369,6 +410,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -379,6 +424,18 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
+        "429": {
+          "$ref": "#/components/responses/Error",
+          "description": "Too Many Requests"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -388,6 +445,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

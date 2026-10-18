@@ -25,14 +25,33 @@
           },
           "description": "Tavern status retrieved successfully"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Authentication required"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -63,16 +82,50 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Delivery reservation cancelled successfully"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Authentication required"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "No active delivery reservation"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -110,14 +163,33 @@
           },
           "description": "Delivery reservation retrieved successfully"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Authentication required"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "No active delivery reservation"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -166,16 +238,36 @@
           "description": "Delivery order reserved successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Insufficient gold or invalid request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Authentication required"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Character or menu item not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -216,16 +308,32 @@
           "description": "Delivery claimed and meal consumed successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Insufficient gold"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Authentication required"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "No active delivery reservation or character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -276,19 +384,36 @@
           "description": "Meal ordered and consumed successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Insufficient gold or invalid request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Authentication required"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Character or menu item not found"
         },
         "409": {
+          "$ref": "#/components/responses/Error",
           "description": "Character is already full"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -328,14 +453,33 @@
           },
           "description": "Barkeep conversation dialogue returned"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Authentication required"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -374,8 +518,13 @@
             }
           },
           "description": "Menu retrieved successfully"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List tavern menu",
       "tags": [
         "Tavern"

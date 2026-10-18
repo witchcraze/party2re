@@ -4,22 +4,29 @@
       "operationId": "getCasinoPrizes",
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "prizes": {
+                    "items": {
+                      "$ref": "#/components/schemas/CasinoPrize"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "prizes"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Successful operation"
-        },
-        "400": {
-          "description": "Bad request"
-        },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
-        },
-        "500": {
-          "description": "Internal server error"
         }
       },
-      "summary": "GET /casino/prizes endpoint",
+      "security": [],
+      "summary": "Get Casino Prizes",
       "tags": [
         "Casino"
       ]
@@ -54,9 +61,11 @@
           "description": "Bounded lobby; empty rooms is []"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Required expiry or storage failure"
         },
         "501": {
+          "$ref": "#/components/responses/Error",
           "description": "Casino service not configured"
         }
       },
@@ -113,21 +122,27 @@
           "description": "Whitelisted viewer projection"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Character belongs to another player or is not admitted to this room"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Character or room missing, disbanded or expired"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
         },
         "501": {
+          "$ref": "#/components/responses/Error",
           "description": "Casino service not configured"
         }
       },
@@ -161,7 +176,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/GetCasinoAccountResponse"
               }
             }
           },
@@ -197,6 +212,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -206,6 +225,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -264,7 +287,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/CasinoExchangeResponse"
               }
             }
           },
@@ -300,6 +323,18 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "422": {
           "content": {
             "application/json": {
@@ -319,6 +354,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -346,24 +385,70 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CasinoPrizeExchangeRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasinoPrizeExchangeResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /characters/{id}/casino/prizes/exchange endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Casino Exchange Prize",
       "tags": [
         "Casino"
       ]
@@ -383,24 +468,70 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreateCasinoRoomRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
-        "200": {
+        "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasinoRoomResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /characters/{id}/casino/rooms endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Create Casino Room",
       "tags": [
         "Casino"
       ]
@@ -429,24 +560,70 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CasinoRoomActionRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasinoRoomResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /characters/{id}/casino/rooms/{roomId}/action endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Play Casino Room Action",
       "tags": [
         "Casino"
       ]
@@ -475,24 +652,70 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/JoinCasinoRoomRequest"
+            }
+          }
+        },
+        "required": false
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasinoRoomResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /characters/{id}/casino/rooms/{roomId}/join endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Join Casino Room",
       "tags": [
         "Casino"
       ]
@@ -521,24 +744,74 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/KickCasinoRoomMemberRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "success"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /characters/{id}/casino/rooms/{roomId}/kick endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Kick Casino Room Member",
       "tags": [
         "Casino"
       ]
@@ -569,22 +842,54 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "success"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /characters/{id}/casino/rooms/{roomId}/leave endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Leave Casino Room",
       "tags": [
         "Casino"
       ]
@@ -613,24 +918,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/JoinCasinoRoomRequest"
+            }
+          }
+        },
+        "required": false
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasinoRoomResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /characters/{id}/casino/rooms/{roomId}/spectate endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Spectate Casino Room",
       "tags": [
         "Casino"
       ]
@@ -661,22 +1008,54 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasinoRoomResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /characters/{id}/casino/rooms/{roomId}/start endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Start Casino Room Game",
       "tags": [
         "Casino"
       ]
@@ -719,7 +1098,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/CasinoSlotResponse"
               }
             }
           },
@@ -755,6 +1134,18 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "422": {
           "content": {
             "application/json": {
@@ -774,6 +1165,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

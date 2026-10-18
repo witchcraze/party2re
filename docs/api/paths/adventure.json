@@ -29,7 +29,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/AdventureResponse"
               }
             }
           },
@@ -64,6 +64,22 @@
             }
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
         },
         "500": {
           "content": {
@@ -106,7 +122,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/AdventureChronicle"
               }
             }
           },
@@ -142,6 +158,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -151,6 +171,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -201,7 +225,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PageAdventureHistoryEntry"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PaginationCursorPageAdventureAdventureHistoryEntry"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PageAdventureHistoryEntry"
+                  }
+                ]
               }
             }
           },
@@ -237,6 +268,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -246,6 +281,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

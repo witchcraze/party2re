@@ -19,109 +19,22 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "active_costume": {
-                    "nullable": true,
-                    "properties": {
-                      "expires_at": {
-                        "format": "date-time",
-                        "nullable": true,
-                        "type": "string"
-                      },
-                      "icon": {
-                        "type": "string"
-                      },
-                      "item_no": {
-                        "type": "integer"
-                      },
-                      "name": {
-                        "type": "string"
-                      }
-                    },
-                    "type": "object"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StoreOracleStatus"
                   },
-                  "character_id": {
-                    "type": "string"
-                  },
-                  "items": {
-                    "items": {
-                      "properties": {
-                        "gender": {
-                          "type": "integer"
-                        },
-                        "icon": {
-                          "type": "string"
-                        },
-                        "item_no": {
-                          "type": "integer"
-                        },
-                        "job_req": {
-                          "type": "integer"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "price": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "item_no",
-                        "name",
-                        "price",
-                        "gender",
-                        "icon",
-                        "job_req"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "location_name": {
-                    "type": "string"
-                  },
-                  "npc_name": {
-                    "type": "string"
-                  },
-                  "wallpapers": {
-                    "items": {
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "image": {
-                          "type": "string"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "price": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "name",
-                        "price",
-                        "image"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
+                  {
+                    "type": "null"
                   }
-                },
-                "required": [
-                  "character_id",
-                  "location_name",
-                  "npc_name",
-                  "items",
-                  "wallpapers"
-                ],
-                "type": "object"
+                ]
               }
             }
           },
           "description": "Oracle Shop status retrieved successfully"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -133,6 +46,10 @@
           },
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
           "content": {
             "application/json": {
@@ -142,6 +59,14 @@
             }
           },
           "description": "Character not found"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -193,6 +118,10 @@
           },
           "description": "Black Market discovery eligibility verified"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
           "content": {
             "application/json": {
@@ -222,6 +151,14 @@
             }
           },
           "description": "Character not found"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -325,6 +262,10 @@
           },
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
           "content": {
             "application/json": {
@@ -334,6 +275,18 @@
             }
           },
           "description": "Character not found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -396,6 +349,10 @@
           },
           "description": "NPC description and optional hint retrieved"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
           "content": {
             "application/json": {
@@ -406,6 +363,10 @@
           },
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
           "content": {
             "application/json": {
@@ -415,6 +376,14 @@
             }
           },
           "description": "Character not found"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -474,6 +443,10 @@
           },
           "description": "NPC dialogue returned successfully"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "401": {
           "content": {
             "application/json": {
@@ -484,6 +457,10 @@
           },
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
           "content": {
             "application/json": {
@@ -493,6 +470,14 @@
             }
           },
           "description": "Character not found"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -545,27 +530,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  },
-                  "price": {
-                    "type": "integer"
-                  },
-                  "remaining_gold": {
-                    "type": "integer"
-                  },
-                  "wallpaper": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "wallpaper",
-                  "price",
-                  "remaining_gold",
-                  "message"
-                ],
-                "type": "object"
+                "$ref": "#/components/schemas/OracleBuyWallpaperResponse"
               }
             }
           },
@@ -591,6 +556,10 @@
           },
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
           "content": {
             "application/json": {
@@ -600,6 +569,18 @@
             }
           },
           "description": "Character not found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

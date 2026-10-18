@@ -52,8 +52,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List published news announcements",
       "tags": [
         "News"
@@ -65,7 +70,14 @@
         "content": {
           "application/json": {
             "schema": {
+              "additionalProperties": false,
               "properties": {
+                "author": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
                 "content": {
                   "type": "string"
                 },
@@ -88,7 +100,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/NewsItem"
               }
             }
           },
@@ -104,6 +116,22 @@
           },
           "description": "Bad request - invalid input or JSON syntax"
         },
+        "401": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unauthorized"
+        },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -113,6 +141,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -145,7 +177,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/NewsItem"
               }
             }
           },
@@ -161,6 +193,10 @@
           },
           "description": "Bad request - invalid input or JSON syntax"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -170,8 +206,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get news article by ID",
       "tags": [
         "News"

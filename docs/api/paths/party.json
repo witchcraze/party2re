@@ -39,8 +39,17 @@
             }
           },
           "description": "List of parties"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List parties",
       "tags": [
         "Party"
@@ -71,10 +80,32 @@
           "description": "Party created successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Invalid party parameters or character already in party"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
+        },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -122,16 +153,50 @@
       },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Party disbanded"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Not party leader"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Party not found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -168,10 +233,24 @@
           },
           "description": "Party details"
         },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Party not found"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get party detail",
       "tags": [
         "Party"
@@ -214,13 +293,32 @@
           "description": "Joined party successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Party full, invalid password, requirement not met, or already in party"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Party not found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -260,16 +358,50 @@
       },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Member kicked successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Not party leader or cannot kick self"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Party or member not found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -317,16 +449,50 @@
       },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              }
+            }
+          },
           "description": "Left party successfully"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Character not in party"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Party not found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -376,13 +542,32 @@
           "description": "Ready state updated"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Character not in party"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Party not found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -410,24 +595,70 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StartSealingBattleRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SealingBattleResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /parties/{id}/sealing-battle endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Start Sealing Battle",
       "tags": [
         "Party"
       ]
@@ -477,13 +708,24 @@
           "description": "Adventure completed"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Not leader, not all members ready, or party not recruiting"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Party or stage not found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
         },
         "422": {
           "content": {
@@ -494,6 +736,14 @@
             }
           },
           "description": "A member is already enrolled in another activity"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal Server Error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

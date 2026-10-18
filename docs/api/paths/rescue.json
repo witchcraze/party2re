@@ -18,7 +18,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/RescuePenaltyResponse"
               }
             }
           },
@@ -34,6 +34,18 @@
           },
           "description": "Bad request - invalid input or JSON syntax"
         },
+        "401": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unauthorized"
+        },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -43,8 +55,17 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
       "summary": "Get emergency rescue penalty status",
       "tags": [
         "Rescues"
@@ -81,7 +102,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/RescueRescueRecord"
               }
             }
           },
@@ -117,6 +138,18 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -126,6 +159,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

@@ -8,9 +8,12 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ChallengeHallOfFameEntry"
                 },
-                "type": "array"
+                "type": [
+                  "array",
+                  "null"
+                ]
               }
             }
           },
@@ -25,8 +28,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List all challenge tier Hall of Fame records",
       "tags": [
         "Combat"
@@ -52,11 +60,22 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChallengeHallOfFameEntry"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           },
           "description": "Hall of fame entry"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "404": {
           "content": {
@@ -77,8 +96,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get Hall of Fame record for a challenge tier",
       "tags": [
         "Combat"
@@ -94,9 +118,12 @@
             "application/json": {
               "schema": {
                 "items": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ChallengeTier"
                 },
-                "type": "array"
+                "type": [
+                  "array",
+                  "null"
+                ]
               }
             }
           },
@@ -121,8 +148,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List continuous challenge tier definitions",
       "tags": [
         "Combat"
@@ -166,7 +198,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/AdvanceChallengeResponse"
               }
             }
           },
@@ -202,6 +234,22 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -211,6 +259,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -276,7 +328,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ChallengeSessionResponse"
               }
             }
           },
@@ -312,6 +364,18 @@
           },
           "description": "Only the saved party leader may start the run"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "422": {
           "content": {
             "application/json": {
@@ -331,6 +395,10 @@
             }
           },
           "description": "Internal server error. For the start outcome sentinel (the start failed after publication and could not be confirmed) the run is preserved: observe the active run before retrying and never replay the start."
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -363,10 +431,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "items": {
-                  "type": "object"
-                },
-                "type": "array"
+                "$ref": "#/components/schemas/ChallengeRecordsResponse"
               }
             }
           },
@@ -402,6 +467,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -411,6 +480,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -461,7 +534,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/ChallengeSessionResponse"
               }
             }
           },
@@ -497,6 +570,22 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -506,6 +595,10 @@
             }
           },
           "description": "Internal server error. For the start outcome sentinel (the start failed after publication and could not be confirmed) the run is preserved: observe the active run before retrying and never replay the start."
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

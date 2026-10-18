@@ -6,25 +6,23 @@
         "content": {
           "application/json": {
             "schema": {
+              "additionalProperties": false,
               "properties": {
-                "body": {
+                "color": {
                   "type": "string"
                 },
-                "receiver_character_id": {
+                "content": {
+                  "type": "string"
+                },
+                "recipient_character_id": {
                   "type": "string"
                 },
                 "sender_character_id": {
                   "type": "string"
-                },
-                "title": {
-                  "type": "string"
                 }
               },
               "required": [
-                "sender_character_id",
-                "receiver_character_id",
-                "title",
-                "body"
+                "sender_character_id"
               ],
               "type": "object"
             }
@@ -37,7 +35,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/Letter"
               }
             }
           },
@@ -73,6 +71,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -83,6 +85,14 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -92,6 +102,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -142,7 +156,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PageLetter"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PaginationCursorPageHomeLetter"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PageLetter"
+                  }
+                ]
               }
             }
           },
@@ -178,6 +199,14 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -187,6 +216,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -237,7 +270,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PageLetter"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PaginationCursorPageHomeLetter"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PageLetter"
+                  }
+                ]
               }
             }
           },
@@ -273,6 +313,14 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -282,6 +330,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -314,7 +366,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/UnreadCountResponse"
               }
             }
           },
@@ -350,6 +402,14 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -359,6 +419,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -396,15 +460,8 @@
         }
       ],
       "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Letter deleted"
+        "204": {
+          "description": "No content"
         },
         "400": {
           "content": {
@@ -436,6 +493,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -446,6 +507,10 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -455,6 +520,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -501,15 +570,8 @@
         "required": true
       },
       "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Letter contents"
+        "204": {
+          "description": "No content"
         },
         "400": {
           "content": {
@@ -541,6 +603,10 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "409": {
           "content": {
             "application/json": {
@@ -551,6 +617,10 @@
           },
           "description": "Conflict - character is currently sleeping or awaiting wake-up"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -560,6 +630,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

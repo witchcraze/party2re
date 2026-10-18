@@ -93,7 +93,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		Label:          "対戦部屋作成",
 		Category:       "adventure",
 		OperationID:    "postCharactersIdPvpRooms",
-		RequiredParams: []string{},
+		RequiredParams: []string{"name", "bet"},
 		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 
@@ -280,7 +280,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		Label:          "鍛冶屋で刻印強化",
 		Category:       "crafting",
 		OperationID:    "postCharactersIdBlacksmithSeal",
-		RequiredParams: []string{},
+		RequiredParams: []string{"seal_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
@@ -288,7 +288,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		Label:          "錬金調合",
 		Category:       "crafting",
 		OperationID:    "postCharactersIdAlchemySynthesize",
-		RequiredParams: []string{},
+		RequiredParams: []string{"recipe_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
@@ -400,7 +400,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		Label:          "小さなメダル景品交換",
 		Category:       "growth",
 		OperationID:    "claimMedalReward",
-		RequiredParams: []string{"reward_id"},
+		RequiredParams: []string{"item_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 
@@ -428,7 +428,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		Label:          "交流広場に伝言投稿",
 		Category:       "social",
 		OperationID:    "postParkMessage",
-		RequiredParams: []string{"message"},
+		RequiredParams: []string{"content"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{

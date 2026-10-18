@@ -31,7 +31,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/MonsterMonsterBoxSummary"
               }
             }
           },
@@ -86,6 +86,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -139,7 +143,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/MonsterMonsterInstance"
               }
             }
           },
@@ -185,6 +189,10 @@
           },
           "description": "Character not found"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -194,6 +202,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -235,7 +247,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/MonsterMonsterInstance"
               }
             }
           },
@@ -290,6 +302,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -331,7 +347,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/MonsterMonsterInstance"
               }
             }
           },
@@ -386,6 +402,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -427,11 +447,23 @@
           "content": {
             "application/json": {
               "schema": {
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message"
+                ],
                 "type": "object"
               }
             }
           },
           "description": "Monster released successfully"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -472,6 +504,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -531,7 +567,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/MonsterMonsterInstance"
               }
             }
           },
@@ -577,6 +613,10 @@
           },
           "description": "Monster not found"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -586,6 +626,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -645,6 +689,14 @@
           "content": {
             "application/json": {
               "schema": {
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message"
+                ],
                 "type": "object"
               }
             }
@@ -691,6 +743,10 @@
           },
           "description": "Recipient or monster not found"
         },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -700,6 +756,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -721,7 +781,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/MonsterDialogue"
               }
             }
           },
@@ -736,8 +796,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get Monster Grandpa NPC dialogue",
       "tags": [
         "Monster"

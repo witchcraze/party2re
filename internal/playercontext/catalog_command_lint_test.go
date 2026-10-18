@@ -136,6 +136,11 @@ func TestCatalog_GatewayDriftDiagnostics(t *testing.T) {
 			p.Type = "string"
 			s.AllOf[0].Then.Properties["params"] = p
 		}},
+		{"nullable params", "bank_deposit", "params must be a strict object", func(_ *openAPISpec, s *openAPISchema) {
+			p := s.AllOf[0].Then.Properties["params"]
+			p.Type = []string{"object", "null"}
+			s.AllOf[0].Then.Properties["params"] = p
+		}},
 		{"unknown fields allowed", "bank_deposit", "params must be a strict object", func(_ *openAPISpec, s *openAPISchema) {
 			p := s.AllOf[0].Then.Properties["params"]
 			p.AdditionalProperties = nil

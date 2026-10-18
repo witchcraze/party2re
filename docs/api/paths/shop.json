@@ -40,25 +40,16 @@
             "application/json": {
               "schema": {
                 "properties": {
-                  "character_id": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseResponse"
+                  },
+                  "message": {
                     "type": "string"
-                  },
-                  "item_definition_id": {
-                    "type": "string"
-                  },
-                  "npc_message": {
-                    "type": "string"
-                  },
-                  "quantity": {
-                    "type": "integer"
-                  },
-                  "total_cost": {
-                    "type": "integer"
-                  },
-                  "transferred_to_depot": {
-                    "type": "boolean"
                   }
                 },
+                "required": [
+                  "data"
+                ],
                 "type": "object"
               }
             }
@@ -94,6 +85,18 @@
             }
           },
           "description": "Forbidden - player does not own requested character"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
         },
         "422": {
           "content": {
@@ -146,48 +149,24 @@
           "content": {
             "application/json": {
               "schema": {
-                "items": {
-                  "properties": {
-                    "id": {
-                      "type": "string"
+                "properties": {
+                  "data": {
+                    "items": {
+                      "$ref": "#/components/schemas/ShopSynthesisRecipe"
                     },
-                    "legacy_name": {
-                      "type": "string"
-                    },
-                    "material1_count": {
-                      "type": "integer"
-                    },
-                    "material1_definition_id": {
-                      "type": "string"
-                    },
-                    "material1_name": {
-                      "type": "string"
-                    },
-                    "material2_count": {
-                      "type": "integer"
-                    },
-                    "material2_definition_id": {
-                      "type": "string"
-                    },
-                    "material2_name": {
-                      "type": "string"
-                    },
-                    "product_definition_id": {
-                      "type": "string"
-                    },
-                    "product_name": {
-                      "type": "string"
-                    },
-                    "success_rate": {
-                      "type": "integer"
-                    },
-                    "target": {
-                      "type": "string"
-                    }
+                    "type": [
+                      "array",
+                      "null"
+                    ]
                   },
-                  "type": "object"
+                  "message": {
+                    "type": "string"
+                  }
                 },
-                "type": "array"
+                "required": [
+                  "data"
+                ],
+                "type": "object"
               }
             }
           },
@@ -222,6 +201,10 @@
             }
           },
           "description": "Forbidden - player does not own requested character"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
         },
         "500": {
           "content": {
@@ -286,19 +269,16 @@
             "application/json": {
               "schema": {
                 "properties": {
-                  "character_id": {
+                  "data": {
+                    "$ref": "#/components/schemas/SaleResponse"
+                  },
+                  "message": {
                     "type": "string"
-                  },
-                  "instance_id": {
-                    "type": "string"
-                  },
-                  "quantity": {
-                    "type": "integer"
-                  },
-                  "total_payout": {
-                    "type": "integer"
                   }
                 },
+                "required": [
+                  "data"
+                ],
                 "type": "object"
               }
             }
@@ -334,6 +314,18 @@
             }
           },
           "description": "Forbidden - player does not own requested character"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
         },
         "422": {
           "content": {
@@ -408,19 +400,16 @@
             "application/json": {
               "schema": {
                 "properties": {
-                  "npc_message": {
+                  "data": {
+                    "$ref": "#/components/schemas/AccessorySynthesizeResponse"
+                  },
+                  "message": {
                     "type": "string"
-                  },
-                  "recipe": {
-                    "type": "object"
-                  },
-                  "success": {
-                    "type": "boolean"
-                  },
-                  "used_hiyaku": {
-                    "type": "boolean"
                   }
                 },
+                "required": [
+                  "data"
+                ],
                 "type": "object"
               }
             }
@@ -456,6 +445,18 @@
             }
           },
           "description": "Forbidden - player does not own requested character"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
         },
         "422": {
           "content": {
@@ -600,6 +601,18 @@
           },
           "description": "Forbidden - player does not own requested character"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "422": {
           "content": {
             "application/json": {
@@ -694,6 +707,14 @@
             }
           },
           "description": "Forbidden - player does not own requested character"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
         },
         "422": {
           "content": {
@@ -831,6 +852,14 @@
           },
           "description": "Forbidden - player does not own requested character"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -931,6 +960,14 @@
           },
           "description": "Forbidden - player does not own requested character"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -987,12 +1024,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "dialogue": {
-                    "type": "string"
-                  }
-                },
-                "type": "object"
+                "$ref": "#/components/schemas/NpcDialogueResponse"
               }
             }
           },
@@ -1027,6 +1059,18 @@
             }
           },
           "description": "Forbidden - player does not own requested character"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
         },
         "500": {
           "content": {
@@ -1083,7 +1127,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/PurchaseResponse"
               }
             }
           },
@@ -1118,6 +1162,22 @@
             }
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
         },
         "500": {
           "content": {
@@ -1174,7 +1234,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/SaleResponse"
               }
             }
           },
@@ -1209,6 +1269,22 @@
             }
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
         },
         "500": {
           "content": {

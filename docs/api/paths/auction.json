@@ -33,9 +33,15 @@
           "description": "Venue info and NPC dialogue"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get auction hall information and NPC dialogue",
       "tags": [
         "Auctions"
@@ -80,22 +86,46 @@
       },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuctionSendResult"
+              }
+            }
+          },
           "description": "Successful transfer"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Target or item not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -143,22 +173,38 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuctionInspectResult"
+              }
+            }
+          },
           "description": "Inspected character information and equipped gear"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Target character not found"
         },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -215,22 +261,46 @@
       },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuctionSendResult"
+              }
+            }
+          },
           "description": "Successful transfer"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
         "404": {
+          "$ref": "#/components/responses/Error",
           "description": "Target or item not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [

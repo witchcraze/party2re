@@ -18,11 +18,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "array"
+                "items": {
+                  "$ref": "#/components/schemas/FleaMarketListing"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
               }
             }
           },
           "description": "Character's flea market listings"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -44,6 +54,10 @@
           },
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -53,6 +67,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -105,7 +123,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/FleaMarketListing"
               }
             }
           },
@@ -141,6 +159,18 @@
           },
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -150,6 +180,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -191,7 +225,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/FleaMarketListing"
               }
             }
           },
@@ -237,6 +271,10 @@
           },
           "description": "Listing not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -246,6 +284,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -287,7 +329,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/FleaMarketPurchaseResult"
               }
             }
           },
@@ -333,6 +375,10 @@
           },
           "description": "Listing not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -342,6 +388,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -399,6 +449,14 @@
           },
           "description": "Bad request"
         },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -408,8 +466,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List active flea market listings",
       "tags": [
         "FleaMarket"
@@ -435,11 +498,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/FleaMarketListing"
               }
             }
           },
           "description": "Flea market listing details"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
+        },
+        "403": {
+          "$ref": "#/components/responses/Error",
+          "description": "Forbidden"
         },
         "404": {
           "content": {
@@ -460,8 +531,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get flea market listing by ID",
       "tags": [
         "FleaMarket"

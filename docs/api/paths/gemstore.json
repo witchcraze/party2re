@@ -18,11 +18,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/GemStoreGemBox"
               }
             }
           },
           "description": "Character gem box storage"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -63,6 +67,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -95,11 +103,27 @@
           "content": {
             "application/json": {
               "schema": {
+                "properties": {
+                  "gem_box": {
+                    "$ref": "#/components/schemas/GemStoreGemBox"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "gem_box",
+                  "message"
+                ],
                 "type": "object"
               }
             }
           },
           "description": "Sorted gem box storage"
+        },
+        "400": {
+          "$ref": "#/components/responses/Error",
+          "description": "Bad Request"
         },
         "401": {
           "content": {
@@ -131,6 +155,10 @@
           },
           "description": "Not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -140,6 +168,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -190,7 +222,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/GemStoreAppraiseResult"
               }
             }
           },
@@ -236,6 +268,14 @@
           },
           "description": "Not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -245,6 +285,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -295,7 +339,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/GemStoreBuyResult"
               }
             }
           },
@@ -341,6 +385,14 @@
           },
           "description": "Not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -350,6 +402,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -400,7 +456,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/GemStoreSellResult"
               }
             }
           },
@@ -446,6 +502,14 @@
           },
           "description": "Not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -455,6 +519,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -509,7 +577,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/GemStoreSendResult"
               }
             }
           },
@@ -555,6 +623,14 @@
           },
           "description": "Not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -564,6 +640,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -614,7 +694,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/GemStoreSynthesizeResult"
               }
             }
           },
@@ -660,6 +740,14 @@
           },
           "description": "Not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -669,6 +757,10 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
       "security": [
@@ -687,20 +779,22 @@
       "operationId": "getGemStoreCatalog",
       "parameters": [
         {
-          "description": "Character level requirement filter",
+          "description": "Compatibility alias used only when job_level is absent.",
           "in": "query",
           "name": "level",
           "required": false,
           "schema": {
+            "default": 0,
             "type": "integer"
           }
         },
         {
-          "description": "Character job level requirement filter",
+          "description": "Job level used to filter the catalog.",
           "in": "query",
           "name": "job_level",
           "required": false,
           "schema": {
+            "default": 0,
             "type": "integer"
           }
         }
@@ -710,6 +804,28 @@
           "content": {
             "application/json": {
               "schema": {
+                "properties": {
+                  "gems": {
+                    "items": {
+                      "$ref": "#/components/schemas/GemStoreGem"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "job_level": {
+                    "type": "integer"
+                  },
+                  "level": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "gems",
+                  "job_level",
+                  "level"
+                ],
                 "type": "object"
               }
             }
@@ -725,8 +841,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get gem catalog by level",
       "tags": [
         "GemStore"
@@ -741,6 +862,20 @@
           "content": {
             "application/json": {
               "schema": {
+                "properties": {
+                  "dialogue": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "dialogue"
+                ],
                 "type": "object"
               }
             }
@@ -756,8 +891,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "Get gem shopkeeper dialogue",
       "tags": [
         "GemStore"
@@ -772,6 +912,20 @@
           "content": {
             "application/json": {
               "schema": {
+                "properties": {
+                  "recipes": {
+                    "items": {
+                      "$ref": "#/components/schemas/GemStoreRecipe"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "recipes"
+                ],
                 "type": "object"
               }
             }
@@ -787,8 +941,13 @@
             }
           },
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
+      "security": [],
       "summary": "List all gem synthesis recipes",
       "tags": [
         "GemStore"

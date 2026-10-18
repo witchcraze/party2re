@@ -4,22 +4,44 @@
       "operationId": "getGuilds",
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/Guild"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
-        "401": {
-          "description": "Unauthorized"
-        },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /guilds endpoint",
+      "security": [],
+      "summary": "List Guilds",
       "tags": [
         "Guilds"
       ]
@@ -52,23 +74,55 @@
         "required": true
       },
       "responses": {
-        "200": {
+        "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGuildResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /guilds endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Create Guild",
       "tags": [
         "Guilds"
       ]
@@ -88,24 +142,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GuildActionCharacterRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "DELETE /guilds/{id} endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Disband Guild",
       "tags": [
         "Guilds"
       ]
@@ -125,22 +221,38 @@
       ],
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildDetail"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
-        "401": {
-          "description": "Unauthorized"
-        },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "GET /guilds/{id} endpoint",
+      "security": [],
+      "summary": "Get Guild",
       "tags": [
         "Guilds"
       ]
@@ -169,24 +281,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApproveGuildApplicationRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /guilds/{id}/applications/{applicant_id}/approve endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Approve Guild Application",
       "tags": [
         "Guilds"
       ]
@@ -215,24 +369,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GuildActionCharacterRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /guilds/{id}/applications/{applicant_id}/reject endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Reject Guild Application",
       "tags": [
         "Guilds"
       ]
@@ -252,24 +448,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GuildActionCharacterRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /guilds/{id}/apply endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Apply Guild",
       "tags": [
         "Guilds"
       ]
@@ -289,24 +527,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/BroadcastGuildCalloutRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /guilds/{id}/callout endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Broadcast Guild Callout",
       "tags": [
         "Guilds"
       ]
@@ -326,24 +606,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CustomizeGuildRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "PUT /guilds/{id}/customization endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Customize Guild",
       "tags": [
         "Guilds"
       ]
@@ -363,24 +685,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GuildActionCharacterRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "POST /guilds/{id}/leave endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Leave Guild",
       "tags": [
         "Guilds"
       ]
@@ -409,24 +773,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GuildActionCharacterRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "DELETE /guilds/{id}/members/{char_id} endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Kick Guild Member",
       "tags": [
         "Guilds"
       ]
@@ -455,24 +861,66 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AssignGuildRoleTitleRequest"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildMessageResponse"
+              }
+            }
+          },
           "description": "Successful operation"
         },
         "400": {
+          "$ref": "#/components/responses/Error",
           "description": "Bad request"
         },
         "401": {
+          "$ref": "#/components/responses/Error",
           "description": "Unauthorized"
         },
         "403": {
+          "$ref": "#/components/responses/Error",
           "description": "Forbidden"
         },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
+        "415": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unsupported Media Type"
+        },
         "500": {
+          "$ref": "#/components/responses/Error",
           "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
         }
       },
-      "summary": "PUT /guilds/{id}/members/{char_id}/title endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Assign Guild Role Title",
       "tags": [
         "Guilds"
       ]

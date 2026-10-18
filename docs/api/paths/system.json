@@ -14,7 +14,8 @@
           "description": "Service is healthy"
         }
       },
-      "summary": "Health check endpoint",
+      "security": [],
+      "summary": "Health",
       "tags": [
         "System"
       ]
@@ -45,6 +46,7 @@
           "description": "Internal server error"
         }
       },
+      "security": [],
       "summary": "Get system maintenance status",
       "tags": [
         "System"
@@ -59,13 +61,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/OpenAPIDocument"
               }
             }
           },
           "description": "OpenAPI 3.1 JSON specification"
         }
       },
+      "security": [],
       "summary": "Get OpenAPI 3.1 specification",
       "tags": [
         "System"
