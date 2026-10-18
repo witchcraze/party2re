@@ -812,3 +812,85 @@ func TestStoreService_CollectionRecordingOnBuyAndTrade(t *testing.T) {
 	// Suppress unused charRepo warning
 	_ = charRepo
 }
+
+func TestStoreService_ChangeWallpaper_RestoredChoices(t *testing.T) {
+	cases := []struct {
+		key       string
+		wantPrice int
+	}{
+		{"stage26_3", 10000},
+		{"stage26_4", 10000},
+		{"map1", 3000},
+		{"map2", 4500},
+		{"map3", 5000},
+		{"map14", 10000},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			svc, repo, charRepo, _, _ := setupTestService(t)
+			ctx := context.Background()
+
+			_, err := svc.BuildStore(ctx, "c1", "town1", "001", "テスト店")
+			if err != nil {
+				t.Fatalf("BuildStore failed: %v", err)
+			}
+
+			char, _ := charRepo.FindByID(ctx, "c1")
+			char.Money = tc.wantPrice + 1000
+			_ = charRepo.Save(ctx, char)
+
+			// 1. Successful change
+			err = svc.ChangeWallpaper(ctx, "c1", tc.key)
+			if err != nil {
+				t.Fatalf("ChangeWallpaper(%s) failed: %v", tc.key, err)
+			}
+			char, _ = charRepo.FindByID(ctx, "c1")
+			if char.Money != 1000 {
+				t.Errorf("expected 1000 G remaining, got %d", char.Money)
+			}
+			st, _ := repo.GetStoreByCharacterID(ctx, "c1")
+			if st.Wallpaper != tc.key {
+				t.Errorf("expected store wallpaper %s, got %s", tc.key, st.Wallpaper)
+			}
+
+			// 2. Insufficient funds
+			char.Money = tc.wantPrice - 1
+			_ = charRepo.Save(ctx, char)
+			err = svc.ChangeWallpaper(ctx, "c1", tc.key)
+			if !errors.Is(err, store.ErrInsufficientFunds) {
+				t.Errorf("expected ErrInsufficientFunds, got: %v", err)
+			}
+			char, _ = charRepo.FindByID(ctx, "c1")
+			if char.Money != tc.wantPrice-1 {
+				t.Errorf("money should be unchanged, got %d", char.Money)
+			}
+			st, _ = repo.GetStoreByCharacterID(ctx, "c1")
+			if st.Wallpaper != tc.key {
+				t.Errorf("wallpaper should remain unchanged, got %s", st.Wallpaper)
+			}
+		})
+	}
+
+	t.Run("invalid_key_rejected", func(t *testing.T) {
+		svc, repo, charRepo, _, _ := setupTestService(t)
+		ctx := context.Background()
+		_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "テスト店")
+		char, _ := charRepo.FindByID(ctx, "c1")
+		char.Money = 50000
+		_ = charRepo.Save(ctx, char)
+
+		err := svc.ChangeWallpaper(ctx, "c1", "invalid_key")
+		if !errors.Is(err, store.ErrInvalidWallpaper) {
+			t.Errorf("expected ErrInvalidWallpaper, got: %v", err)
+		}
+		char, _ = charRepo.FindByID(ctx, "c1")
+		if char.Money != 50000 {
+			t.Errorf("money should be unchanged, got %d", char.Money)
+		}
+		st, _ := repo.GetStoreByCharacterID(ctx, "c1")
+		if st.Wallpaper != "none" {
+			t.Errorf("wallpaper should remain none, got %s", st.Wallpaper)
+		}
+	})
+}
