@@ -590,51 +590,6 @@
         ],
         "type": "object"
       },
-      "BlackMarketPointsStatus": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "example": "闇市場",
-            "type": "string"
-          },
-          "npc_name": {
-            "example": "@闇商人",
-            "type": "string"
-          },
-          "prizes": {
-            "items": {
-              "$ref": "#/components/schemas/BlackMarketPrize"
-            },
-            "type": "array"
-          },
-          "rare_points": {
-            "example": 10,
-            "type": "integer"
-          },
-          "u_prizes": {
-            "items": {
-              "$ref": "#/components/schemas/BlackMarketPrize"
-            },
-            "type": "array"
-          },
-          "u_rare_points": {
-            "example": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "rare_points",
-          "u_rare_points",
-          "prizes",
-          "u_prizes"
-        ],
-        "type": "object"
-      },
       "BlackMarketPrize": {
         "properties": {
           "cost": {
@@ -6672,7 +6627,7 @@
         "type": "apiKey"
       },
       "BearerAuth": {
-        "description": "Player session token returned by POST /sessions.",
+        "description": "Player session or Personal Access Token (p2_sk_...).",
         "scheme": "bearer",
         "type": "http"
       }
@@ -6905,7 +6860,7 @@
         },
         "security": [
           {
-            "AdminKey": []
+            "AdminApiKey": []
           }
         ],
         "summary": "Enable or configure system maintenance mode (Admin)",
@@ -6969,7 +6924,7 @@
         },
         "security": [
           {
-            "AdminKey": []
+            "AdminApiKey": []
           }
         ],
         "summary": "Update system maintenance mode (Admin)",
@@ -7229,7 +7184,7 @@
     },
     "/api/v1/characters/{id}/actions": {
       "post": {
-        "description": "Authenticated dispatch with strict parameters and uncached entry/activity/sleep checks. Connected commands: bank_deposit/bank_withdraw with required signed 64-bit integer amount call Deposit/Withdraw; adventure_start with required string stage_id calls StartStage; rescue_request with required string reason calls EmergencyRescue, including during sleep/cooldown and unfinished work; home_sleep with optional target_home_id calls Sleep; home_wake with no inputs calls Wake. Home sleep is free and accepts dead/fatigued actors under existing service rules; omitted/empty target_home_id retains the actor's own-home default, while a different target is a destination only. Ordinary entry/navigation commands are blocked by actual activity, sleep and pending recovery. Continuation eligibility uses verified activity kind, role and phase; verified leave/recovery may remain eligible in conflict without generic entry gates. Early Wake reaches the service and returns HOME_STILL_SLEEPING without recovering; concurrent Wake returns HOME_WAKE_IN_PROGRESS; elapsed duration still requires explicit Wake to run recovery hooks, restore HP/MP/fatigue and clear recovery. If a mandatory recovery hook or timer cleanup fails, Wake returns EXECUTION_FAILED without clearing pending recovery. GET offers Wake only when ready; awake Wake remains ACTION_UNAVAILABLE. Empty stage_id retains the starter-stage default; empty/blank reason is rejected by Rescue. Other catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation. Navigation commands scene_enter/scene_select/scene_page/scene_back replace one owned selection record with a seven-day TTL, without gameplay effects. Back clears a subject first, otherwise selects the registered parent. Missing/expired selection defaults to town. Selected product availability uses the existing Shop catalog. Refresh uses the same typed scene composer as GET: actual activity/conflict overrides saved selection, otherwise Home and Shop details use ordinary selection. Required activity-read failures preserve an already known command outcome with CONTEXT_REFRESH_FAILED. Party/PvP/GvG/Dungeon/Challenge/Casino continuation commands and Shop mutations remain unconnected. Depot expansion command depot_expand calls the existing Expand service once with the owned actor and request context. Selected Depot context quotes the next expansion cost or null at the purchased cap; quotes do not reserve a tier. Service-owned funds/cap validation returns DEPOT_INSUFFICIENT_FUNDS or DEPOT_MAX_EXPANDED (400); invalid actor IDs return DEPOT_INVALID_CHARACTER_ID (400), and character absence returns CHARACTER_NOT_FOUND (404). Success reuses the Depot response; known success/rejection survives refresh failure with GET-only recovery. Depot sale commands depot_sell/depot_sell_batch delegate once to SellItem/SellItems with explicit owned instance IDs and the request context. They return the existing depot/gold_earned result. Missing targets/storage or character use DEPOT_ITEM_NOT_FOUND/DEPOT_NOT_FOUND/CHARACTER_NOT_FOUND (404); invalid character/instance IDs, empty lists and invalid amount/quantity use explicit DEPOT-prefixed 400 rejections. Catalog/provider/repository/cancellation/overflow failures use sanitized EXECUTION_FAILED (500) without context or safe replay. Five Depot inventory/transfer REST operations remain registered: deposit, withdraw, send-item, send-money and sort. Status, expansion and single/batch sale REST operations are retired; sales use depot_sell/depot_sell_batch through the Gateway.",
+        "description": "Executes a typed command for the authenticated owner. Validates catalog parameters, current eligibility and sleep/recovery state before service dispatch. Known success or rejection includes refreshed context; an observation failure preserves the known result or rejection with requires_context_refresh=true. Recover by GET context without replaying the command. Unknown, unconnected and unexpected failures use their documented error responses. Per-action schemas are supplied by context; domain services validate exact prerequisites.",
         "operationId": "executeCharacterAction",
         "parameters": [
           {
@@ -7402,7 +7357,7 @@
     },
     "/api/v1/characters/{id}/context": {
       "get": {
-        "description": "After ownership verification, reads current Sleep, Pending/Processing work and public Party/PvP/GvG/Dungeon/Challenge/Casino services. Actual activity overrides ordinary saved selection; explicit matching party/run links represent one activity, while contradictory exclusive facts produce activity_conflict with every fact and only verified leave/recovery controls. Completed/Failed scheduled records do not block entry; expired Pending/Processing records still do. Persisted terminal run buffers remain visible until native cleanup, without GET settlement. Required feature reads fail the whole observation. Activity data is a whitelist of kind, ID, role, phase, round, eligible action IDs and optional parent party ID. Continuation support uses mode and connected independently of entry_eligible; unconnected controls are absent from available_actions. Observation never wakes, settles, advances or replays gameplay. Shares selected-scene composition with post-command refresh. Observes ordinary navigation without writes or TTL renewal. Expired selection is town; disappeared subjects use selection_unavailable. Home and the four ordinary Shops provide typed details; Bank provides controls. Shop catalogs use existing GetCatalog eligibility/prices and offset-only pages (default 20, max 100); product detail supplies explicit purchase IDs and quantity bounds 1..9999. Observation/selection never purchases or invokes random talk. Shop purchase commands remain unconnected. Required adapter/catalog/helper/inspect reads and price errors fail the whole observation. Offered connected commands include strict params_schema and explicit params_template values.",
+        "description": "Observes the authenticated owner character, selected scene, unfinished work/sleep recovery and connected eligible commands with typed parameter metadata. Reads do not execute commands, renew navigation or claim rewards. Deadlines indicate readiness rather than completed settlement. Commands revalidate state; observations are not a cross-store transaction. Failed required reads return an error without partial context.",
         "operationId": "getCharacterContext",
         "parameters": [
           {
@@ -9441,16 +9396,44 @@
             "description": "Black market status and trade prize catalogs"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character or prize not found"
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected storage or service failure"
           }
         },
         "security": [
@@ -9491,16 +9474,44 @@
             "description": "Merchant inspection dialogue"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character or prize not found"
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected storage or service failure"
           }
         },
         "security": [
@@ -9534,23 +9545,51 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlackMarketPointsStatus"
+                  "$ref": "#/components/schemas/BlackMarketStatus"
                 }
               }
             },
             "description": "Black Market points and prize catalogs status"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character or prize not found"
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected storage or service failure"
           }
         },
         "security": [
@@ -9601,19 +9640,54 @@
             "description": "Item sacrifice successful"
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request or rejected trade"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character or prize not found"
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected storage or service failure"
           }
         },
         "security": [
@@ -9654,16 +9728,44 @@
             "description": "Merchant dialogue"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character or prize not found"
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected storage or service failure"
           }
         },
         "security": [
@@ -9714,19 +9816,54 @@
             "description": "Prize trade exchange successful"
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request or rejected trade"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character or prize not found"
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected storage or service failure"
           }
         },
         "security": [
@@ -16408,7 +16545,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Get Oracle Shop status, costume catalog, wallpapers, and active rental",
@@ -16488,7 +16625,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Check Black Market discovery from Oracle Shop",
@@ -16600,7 +16737,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Buy a costume consumable item",
@@ -16681,7 +16818,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Inspect Oracle NPC @ラクル",
@@ -16759,7 +16896,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Talk to Oracle NPC @ラクル",
@@ -16866,7 +17003,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Purchase home wallpaper",
@@ -17999,7 +18136,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Inspect Secret Shop NPC @ヒミツジ",
@@ -18083,7 +18220,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Experience Secret Shop @ぱふぱふ service",
@@ -18167,7 +18304,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Talk to Secret Shop NPC @ヒミツジ",
@@ -19736,7 +19873,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Get character tavern status",
@@ -19776,7 +19913,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Cancel tavern delivery reservation",
@@ -19821,7 +19958,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Get current tavern delivery reservation",
@@ -19879,7 +20016,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Reserve tavern delivery order",
@@ -19929,7 +20066,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Claim and consume tavern delivery meal",
@@ -19992,7 +20129,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Order and eat a tavern meal",
@@ -20039,7 +20176,7 @@
         },
         "security": [
           {
-            "bearerAuth": []
+            "BearerAuth": []
           }
         ],
         "summary": "Talk to tavern barkeep NPC",
@@ -20347,7 +20484,7 @@
         },
         "security": [
           {
-            "AdminKeyAuth": []
+            "AdminApiKey": []
           }
         ],
         "summary": "Settle active contest round (Admin)",

@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-In Party2, player accounts and individual characters can be permanently removed from the system. Due to the modular monolithic design and relational database integrity constraints, deletion must handle cascading dependency cleanup in a deterministic, consistent order within an atomic database transaction.
+In Party2, player accounts and individual characters can be permanently removed from the system. Due to the modular monolithic design and relational database integrity constraints, deletion must handle cascading dependency cleanup in a deterministic, consistent order with explicit SQL and external cleanup boundaries.
 
 ---
 
@@ -13,32 +13,17 @@ In Party2, player accounts and individual characters can be permanently removed 
 - Attempting to delete another player's character returns HTTP `403 Forbidden`.
 - Attempting to delete a nonexistent character returns HTTP `404 Not Found`.
 
-### 2.2 Cascading Cleanup Order
-Character deletion executes within a database transaction and cleans up resources in reverse-dependency order:
-1. External domain cleanup hooks (`CleanupHook`) for cross-service cleanup.
-2. Character-linked feature tables:
-   - `casino_accounts`, `casino_poker_sessions`, `character_lottery`, `takarakuji_tickets`
-   - `character_blessings`, `banquet_toasts`
-   - `blackmarket_character_points`, `blackmarket_character_purchases`
-   - `tavern_deliveries`, `tavern_character_status`
-   - `park_posts`, `rescue_records`
-   - `contest_votes`, `contest_entries`, `character_photos`
-   - `fleamarket_listings`
-   - `character_letters` (sender or recipient), `character_companion_phrases`, `character_delivery_notices`, `character_homes`
-   - `character_boss_records`, `boss_challenge_history`
-   - `character_dungeon_records`, `dungeon_active_expeditions`, `dungeon_expedition_history`
-   - `character_challenge_records`, `challenge_sessions`
-   - `arena_ratings`, `arena_matches` (attacker or defender)
-   - `character_monsters`, `character_monster_book`, `character_item_collection`
-   - `guild_members`, `guilds` (clear `leader_character_id`)
-   - `activities`, `adventures`
-   - `character_custom_skills`, `equipment_slots`, `inventory_items`
-   - `depot_items`, `character_depots`
-   - `character_job_masteries`, `character_job_history`, `character_jobs`
-   - `character_profiles`
-3. Primary character record in `characters`.
+### 2.2 Cleanup boundary
 
----
+`CleanupHook` lets feature owners release associations and ephemeral state before
+character deletion; SQL repository cleanup removes dependent records before the
+character root in one transaction. The concrete table list belongs to the
+[repository](../../internal/database/character_repository.go) and migrations.
+
+Current `character.Service.Delete` invokes hooks **before** its SQL transaction
+and treats hook errors as best-effort. SQL rollback therefore does not restore
+Valkey/external cleanup. This is not an atomic cross-store cascade; callers must
+not infer full rollback from a later deletion failure.
 
 ## 3. Player Account Deletion (`DELETE /players/me` and `DELETE /players/{id}`)
 
@@ -59,10 +44,4 @@ Player account deletion executes within a database transaction:
 
 ---
 
-## 4. API Endpoints
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `DELETE` | `/players/me` | Bearer (Player) | Delete authenticated player account and all associated characters/data. |
-| `DELETE` | `/players/{id}` | Bearer (Player / Admin) | Delete specified player account and associated characters/data. |
-| `DELETE` | `/characters/{id}` | Bearer (Player) | Delete specified character and associated progression/inventory/features. |
+Transport operations and schemas: [OpenAPI](../api/openapi.json).

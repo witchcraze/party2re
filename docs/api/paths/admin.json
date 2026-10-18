@@ -219,7 +219,7 @@
       },
       "security": [
         {
-          "AdminKey": []
+          "AdminApiKey": []
         }
       ],
       "summary": "Enable or configure system maintenance mode (Admin)",
@@ -283,7 +283,7 @@
       },
       "security": [
         {
-          "AdminKey": []
+          "AdminApiKey": []
         }
       ],
       "summary": "Update system maintenance mode (Admin)",

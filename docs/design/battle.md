@@ -113,7 +113,9 @@ selection, agility round order or automatic termination as the interaction rule.
 
 3. **Round Conclusion**:
    - Decrement `RemainingTurn` and `AntiFieldTurn` on active `FieldState`.
-   - Check termination conditions. If round 30 ends without a victor, outcome is `OutcomeDraw`.
+   - Check termination conditions. The current Go batch resolver returns `OutcomeDraw` after 100 iterations
+     (`party_battle.go:maxTurns`); this safeguard is not the legacy explicit-action
+     termination rule described below.
 
 ### Explicit-action resumption requirements
 
@@ -1222,7 +1224,8 @@ Deterministic 1v1 duel resolution utilizing the canonical damage formula:
 ### Legacy Defeat Synergies
 
 - A cursed revival from `item-260` revives the participant at 30% MaxHP and
-  grants +300 Attack, +300 Defense, and +300 Agility for the battle.
+  grants +300 Attack, +300 Defense, and +300 Agility, then adds curse
+  (`party2/lib/_battle.cgi:75–87`). These are all three stats, not Attack alone.
 - When an ally is defeated without revival, each living ally equipped with
   `item-037` and `item-038` gains half of the fallen ally's Attack. The
   resulting Attack is capped at 999.
@@ -1273,6 +1276,5 @@ The application-layer bridge (`internal/battle`) standardizes combat participant
 - **Context Isolation**: The Battle engine never queries database persistence or mutates external character state directly. It returns an immutable `Result` containing turn logs and rewards.
 - **Consumer Ownership**: Feature modules (`adventure`, `dungeon`, `boss`, `pvp`, `gvg`, `challenge`, `party`) utilize `internal/battle` to map character/monster models to `Participant` and handle post-battle reward persistence atomically via `economy.TransactionRunner` or `TransactionProvider`.
 - **Damage floor scope**: The physical base formula has a 1-or-2 damage fallback. Misses, evasion, immunity, and subsequent modifiers can yield zero; this is not a minimum for every attack or skill.
-- **Round Ceiling**: Party battles terminate at a maximum of 30 rounds to prevent infinite loops.
+- **Round Ceiling**: The current Go batch resolver has a 100-iteration safety ceiling; normal-adventure explicit commands retain the separate legacy interaction contract.
 - **File Size Constraint**: All battle module source files are kept $\le 500$ lines.
-

@@ -156,7 +156,6 @@ The target is the game's meaningful behavior and design, not its historical impl
 ### Architecture & Rules
 - [`../architecture/overview.md`](../architecture/overview.md) — how the game is structured in software.
 - [`../architecture/components.md`](../architecture/components.md) — component ownership.
-- [`../architecture/feature-modules.md`](../architecture/feature-modules.md) — feature expansion model.
+- [`../architecture/components.md#feature-modules`](../architecture/components.md#feature-modules) — feature expansion model.
 - [`../../.agents/rules/`](../../.agents/rules/) — mandatory development rules.
 - [`../../STATUS.md`](../../STATUS.md) — current reconstruction status.
-

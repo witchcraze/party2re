@@ -69,5 +69,5 @@ Do not add a dependency simply because it provides a small convenience that can 
 ## Related documents
 
 - [`../../AGENTS.md`](../../AGENTS.md) — mandatory dependency and license rules.
-- [`agent-workflow.md`](agent-workflow.md) — where dependency checks occur in the workflow.
+- [Workflow rules](../../.agents/rules/01-development-workflow.md#6-dependency-and-license-gate) — dependency review gate.
 - [`../../README.md`](../../README.md) — current project-level license candidates.

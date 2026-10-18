@@ -132,16 +132,4 @@ Guilds on the GvG leaderboard are ranked strictly by prestige, sorting descendin
 
 ---
 
-## API Endpoints Reference
-
-| Method | Route | Description | Auth Wrapper |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/characters/{id}/gvg/rooms` | Create new GvG room (seeds 2 GP) | `withAuthenticatedCharacter` |
-| `GET` | `/gvg/rooms` | List active recruiting GvG rooms | Public |
-| `GET` | `/gvg/rooms/{room_id}` | Inspect GvG room details and members | Public |
-| `POST` | `/characters/{id}/gvg/rooms/{room_id}/join` | Join GvG room (adds 1 GP) | `withAuthenticatedCharacter` |
-| `POST` | `/characters/{id}/gvg/rooms/{room_id}/leave` | Leave room or disband (if leader) | `withAuthenticatedCharacter` |
-| `POST` | `/characters/{id}/gvg/rooms/{room_id}/start` | Start Round 1 match (`@かいし`) | `withAuthenticatedCharacter` |
-| `POST` | `/characters/{id}/gvg/rooms/{room_id}/advance` | Execute round battle & advance (`@かいし`) | `withAuthenticatedCharacter` |
-| `GET` | `/gvg/standings/{guild_id}` | Fetch guild GvG standing & medals | Public |
-| `GET` | `/gvg/leaderboard` | View global GvG guild leaderboard | Public |
+Transport operations and schemas: [OpenAPI](../api/openapi.json).

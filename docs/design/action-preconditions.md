@@ -46,7 +46,7 @@ The gate descriptions below summarize the current implementation:
    - Ordinary actions remain blocked while the sleep duration is active or wake recovery is pending. `home_wake` is offered only when the duration has elapsed and recovery is pending.
    - **Emergency exception**: `rescue.cgi:53-65` accepts rescue during existing sleep and adds a penalty. `rescue_request` therefore has no awake requirement.
 4. **Cooldown Gate (`party2:scheduled:actor:<id>`)**:
-   - Characters with Pending or Processing ScheduledActions cannot execute cooldown-gated town or expedition actions. Passing ExecuteAt does not imply settlement; Completed/Failed records do not block. The actor Set is an index, not an exclusive lock ([Scheduled work lifecycle](scheduling.md)).
+   - Characters with Pending or Processing ScheduledActions cannot execute cooldown-gated town or expedition actions. Passing ExecuteAt does not imply settlement; Completed/Failed records do not block. The actor Set is an index, not an exclusive lock ([Scheduled work lifecycle](../architecture/valkey-keyspace.md#scheduled-work-lifecycle)).
 5. **Currency Gate (`$m{money} > 0`)**:
    - Currency-gated entry actions require positive wallet gold. Exact amounts, selected-item prices, alternate currencies and domain-specific prerequisites remain execution-service checks; the catalog has no request payload to evaluate them.
 6. **Location Gate**:
@@ -137,61 +137,17 @@ const (
 
 ---
 
-## 4. Action Catalog Precondition Matrix
+## 4. Action catalog ownership
 
-The table below documents the entry, navigation and recovery controls in `internal/playercontext/catalog.go`, their OpenAPI 3.1 mapping, required execution parameters, and precondition gates. Activity continuations in `catalog_continuation.go` use membership/role/phase facts instead of these entry gates; their strict parameters are defined in the OpenAPI source and their native-service mapping is owned by [the Gateway contract](../architecture/client-agent-api.md#entry-and-continuation).
-
-| ID | Label | Category | OpenAPI OperationID | Required Params | Dead Gate (HP>0) | Fatigue Gate (<100) | Sleep Gate (Awake) | Cooldown Gate | Currency Gate |
-|---|---|---|---|---|:---:|:---:|:---:|:---:|:---:|
-| `adventure_start` | 冒険に出る | `adventure` | `executeCharacterAction` | `["stage_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `challenge_start` | 試練の道（連戦チャレンジ） | `adventure` | `startChallengeSession` | `["tier_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `dungeon_start` | ダンジョン探索 | `adventure` | `startDungeonExpedition` | `["dungeon_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `boss_fight` | ボス討伐 | `adventure` | `fightBoss` | `["boss_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `pvp_room_create` | 対戦部屋作成 | `adventure` | `postCharactersIdPvpRooms` | `[]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `home_sleep` | 自宅・宿屋で休む | `home` | `executeCharacterAction` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `home_wake` | 目を覚ます | `home` | `executeCharacterAction` | `[]` | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `chapel_pray` | 礼拝堂で祈る（祈願） | `home` | `prayAtChapel` | `["blessing"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `bank_deposit` | 銀行に預金する | `economy` | `executeCharacterAction` | `["amount"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `bank_withdraw` | 銀行から引き出す | `economy` | `executeCharacterAction` | `["amount"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `depot_deposit` | 預かり所にアイテムを預ける | `economy` | `postCharactersIdDepotDeposit` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `depot_withdraw` | 預かり所からアイテムを引き出す | `economy` | `postCharactersIdDepotWithdraw` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `auction_send` | 仕送り・送金 | `economy` | `postCharactersIdAuctionSend` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `fleamarket_list` | フリーマーケット出品 | `economy` | `createFleaMarketListing` | `["item_id", "price"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `fleamarket_purchase` | フリーマーケット購入 | `economy` | `purchaseFleaMarketListing` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `shop_purchase` | 店でアイテム購入 | `shop` | `shopPurchase` | `["item_definition_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `shop_sell` | 店にアイテム売却 | `shop` | `shopSell` | `["item_instance_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `shop_accessory_buy` | 装飾品購入 | `shop` | `shopAccessoryBuy` | `["item_definition_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `gemstore_buy` | 宝石購入 | `shop` | `buyGem` | `["gem_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `secretshop_purchase` | ヒミツの店で購入 | `shop` | `executeCharacterAction` | `["item_id", "quantity"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `blackmarket_trade` | 闇市景品交換 | `shop` | `tradeBlackMarketPrize` | `["prize_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `blacksmith_seal` | 鍛冶屋で刻印強化 | `crafting` | `postCharactersIdBlacksmithSeal` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `alchemy_synthesize` | 錬金調合 | `crafting` | `postCharactersIdAlchemySynthesize` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `custom_skill_set` | カスタムスキル作成 | `crafting` | `setCustomSkill` | `["name"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `plantation_sow` | 種菜園に種まき | `crafting` | `postCharactersIdPlantationSow` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `plantation_harvest` | 種菜園から収穫 | `crafting` | `postCharactersIdPlantationHarvest` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `casino_slot` | カジノスロット | `entertainment` | `playCasinoSlot` | `["bet"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
-| `casino_exchange` | コイン両替 | `entertainment` | `executeCharacterAction` | `["coins"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `casino_prize_exchange` | 賞品交換 | `entertainment` | `executeCharacterAction` | `["cost_coins", "count"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `casino_room_create` | カジノ部屋作成 | `social` | `executeCharacterAction` | `["name", "game_type", "speed", "max_players", "rate", "allow_spectators"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `casino_room_join` | カジノ部屋参加 | `social` | `executeCharacterAction` | `["room_id"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
-| `casino_room_spectate` | カジノ部屋観戦 | `social` | `executeCharacterAction` | `["room_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `lottery_raffle` | 福引を引く | `entertainment` | `playRaffle` | `["raffle_type"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `lottery_takarakuji_buy` | 宝くじ購入 | `entertainment` | `buyTakarakujiTicket` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `tavern_order` | 酒場で食事注文 | `entertainment` | `orderTavernMeal` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `contest_enter` | フォトコンテスト応募 | `entertainment` | `enterContest` | `["photo_id", "title"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `wishingwell_exchange` | 願いの泉でSP交換 | `growth` | `exchangeWishingWellSP` | `["stat", "sp"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `altar_pray` | 復活の祭壇（祈り） | `growth` | `prayAltarRamia` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `god_wish` | 神の願い・限界突破 | `growth` | `grantGodWish` | `["wish_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `job_change` | ダーマ神殿で転職 | `growth` | `changeCharacterJob` | `["job_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `medal_claim` | 小さなメダル景品交換 | `growth` | `claimMedalReward` | `["reward_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `monster_tame` | モンスター捕獲・預託 | `social` | `tameMonster` | `["monster_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `helper_complete` | 何でも屋クエスト報告 | `social` | `completeHelperQuest` | `["quest_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `park_post` | 交流広場に伝言投稿 | `social` | `postParkMessage` | `["message"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `rescue_request` | 緊急救出要請 | `social` | `executeCharacterAction` | `["reason"]` | ❌ | ❌ | ❌ | ❌ | ❌ |
+The [catalog](../../internal/playercontext/catalog.go) owns current entry IDs,
+operation mappings, required inputs and gate flags. Activity continuations use
+membership/role/phase facts rather than ordinary entry gates. The HTTP adapter
+and [OpenAPI](../api/openapi.json) own connected command schemas; neither a
+catalog entry nor a passing drift check proves adapter connection or legacy
+parity. `lottery_raffle` has no required parameters; deprecated `raffle_type` is
+ignored by the retained REST operation.
 
 *(Note: All facility actions implicitly require `GateLocationCheck` except `rescue_request`, which is a global recovery action. In legacy Party2, only combat/expedition quests under `lib/quest.cgi:479, 902` require living HP; town actions under `lib/system.cgi:639–655` execute regardless of character HP).*
-
-`home_wake` also requires wakeable lifecycle state even though it has no Sleep flag. An already-awake character is not offered a redundant wake action. Dead awake characters retain noncombat entries; sleeping characters have only rescue; characters awaiting wake recovery have wake and rescue, in catalog order. Entry counts follow the current catalog, while exposed controls also require scene eligibility and a connected adapter.
 
 ### Evaluation and read contract
 
@@ -210,9 +166,9 @@ No CharacterSnapshot or availability-result cache is introduced. The catalog is 
 
 ---
 
-## 5. Client & Agent Observation and Planned Command Contract (#939/#646)
+## 5. Client & Agent Observation and Command Contract
 
-When clients receive `available_actions` via `GET /context`:
+When clients receive `available_actions` via `GET /api/v1/characters/{id}/context`:
 
 ```json
 {
@@ -230,7 +186,7 @@ When clients receive `available_actions` via `GET /context`:
 }
 ```
 
-The AI agent or bot can immediately construct the payload for `POST /characters/{id}/actions`:
+The AI agent or bot can immediately construct the payload for `POST /api/v1/characters/{id}/actions`:
 
 ```json
 {

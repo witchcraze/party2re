@@ -67,9 +67,4 @@ World adventures yield 6 elemental orbs across different days of the week. Chara
   - `expires_at TIMESTAMP NOT NULL`
   - `INDEX idx_altar_expires (expires_at)`
 
-## HTTP API Endpoints
-
-- `GET /characters/{id}/altar`: Retrieve altar status, current orbs, Ramia presence, and dialogue.
-- `POST /characters/{id}/altar/offer`: Offer an orb (`{"orb": "silver"}`).
-- `POST /characters/{id}/altar/pray`: Awaken Ramia (`@いのる`).
-- `POST /characters/{id}/altar/wish`: Choose secret travel item (`@ねがう`).
+Transport operations and schemas: [OpenAPI](../api/openapi.json).

@@ -86,15 +86,4 @@ Conversing with `@エレナ` provides randomized lore, dining recommendations, a
 
 ---
 
-## REST Endpoints Summary
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/tavern/menu` | List all available drinks, desserts, foods, and courses. |
-| `GET` | `/characters/{id}/tavern` | Get current character stats, fullness status, and delivery. |
-| `POST` | `/characters/{id}/tavern/order` | Order and consume a meal immediately. |
-| `POST` | `/characters/{id}/tavern/delivery` | Reserve a meal for delivery. |
-| `GET` | `/characters/{id}/tavern/delivery` | Inspect active delivery reservation. |
-| `DELETE` | `/characters/{id}/tavern/delivery` | Cancel active delivery reservation. |
-| `POST` | `/characters/{id}/tavern/delivery/claim` | Claim and eat the reserved delivery meal. |
-| `POST` | `/characters/{id}/tavern/talk` | Chat with tavern barkeep Elena for lore and hints. |
+Transport operations and schemas: [OpenAPI](../api/openapi.json).

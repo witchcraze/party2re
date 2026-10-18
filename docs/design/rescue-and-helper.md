@@ -81,13 +81,4 @@ A fresh installation therefore has no playable helper requests until initial req
 
 ---
 
-## 4. HTTP API Endpoints
-
-### Helper Quests
-- `GET /helpers/quests`: Lists all currently active and uncompleted helper quests on the request board.
-- `POST /helpers/complete`: Submits requested items to fulfill a helper quest (`{"character_id": "...", "quest_id": "..."}`) with session authentication and character ownership verification.
-
-### Emergency Rescue
-- `GET /rescues/penalty?character_id=...`: Checks if the specified character is under a rescue penalty cooldown, returning `is_under_penalty` and `remaining_seconds`.
-- `POST /rescues/request`: Triggers an emergency unstuck rescue (`{"character_id": "...", "reason": "..."}`) with session authentication and character ownership verification.
-
+Transport operations and schemas: [OpenAPI](../api/openapi.json).

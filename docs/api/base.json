@@ -496,51 +496,6 @@
         ],
         "type": "object"
       },
-      "BlackMarketPointsStatus": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "example": "闇市場",
-            "type": "string"
-          },
-          "npc_name": {
-            "example": "@闇商人",
-            "type": "string"
-          },
-          "prizes": {
-            "items": {
-              "$ref": "#/components/schemas/BlackMarketPrize"
-            },
-            "type": "array"
-          },
-          "rare_points": {
-            "example": 10,
-            "type": "integer"
-          },
-          "u_prizes": {
-            "items": {
-              "$ref": "#/components/schemas/BlackMarketPrize"
-            },
-            "type": "array"
-          },
-          "u_rare_points": {
-            "example": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "rare_points",
-          "u_rare_points",
-          "prizes",
-          "u_prizes"
-        ],
-        "type": "object"
-      },
       "BlackMarketPrize": {
         "properties": {
           "cost": {
@@ -4867,7 +4822,9 @@
                   "type": "string"
                 }
               },
-              "required": ["action"],
+              "required": [
+                "action"
+              ],
               "type": "object"
             },
             "then": {
@@ -4915,19 +4872,29 @@
                   "type": "string"
                 }
               },
-              "required": ["action"],
+              "required": [
+                "action"
+              ],
               "type": "object"
             },
             "then": {
               "properties": {
                 "params": {
                   "type": "object",
-                  "properties": {"item_id": {"type": "string"}},
+                  "properties": {
+                    "item_id": {
+                      "type": "string"
+                    }
+                  },
                   "additionalProperties": false,
-                  "required": ["item_id"]
+                  "required": [
+                    "item_id"
+                  ]
                 }
               },
-              "required": ["params"],
+              "required": [
+                "params"
+              ],
               "type": "object"
             }
           },
@@ -4939,19 +4906,32 @@
                   "type": "string"
                 }
               },
-              "required": ["action"],
+              "required": [
+                "action"
+              ],
               "type": "object"
             },
             "then": {
               "properties": {
                 "params": {
                   "type": "object",
-                  "properties": {"item_ids": {"type": "array", "items": {"type": "string"}}},
+                  "properties": {
+                    "item_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
                   "additionalProperties": false,
-                  "required": ["item_ids"]
+                  "required": [
+                    "item_ids"
+                  ]
                 }
               },
-              "required": ["params"],
+              "required": [
+                "params"
+              ],
               "type": "object"
             }
           }
@@ -6761,7 +6741,7 @@
         "type": "apiKey"
       },
       "BearerAuth": {
-        "description": "Player session token returned by POST /sessions.",
+        "description": "Player session or Personal Access Token (p2_sk_...).",
         "scheme": "bearer",
         "type": "http"
       }

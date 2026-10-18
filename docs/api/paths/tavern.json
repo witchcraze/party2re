@@ -37,7 +37,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Get character tavern status",
@@ -77,7 +77,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Cancel tavern delivery reservation",
@@ -122,7 +122,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Get current tavern delivery reservation",
@@ -180,7 +180,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Reserve tavern delivery order",
@@ -230,7 +230,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Claim and consume tavern delivery meal",
@@ -293,7 +293,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Order and eat a tavern meal",
@@ -340,7 +340,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Talk to tavern barkeep NPC",

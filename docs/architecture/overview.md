@@ -132,13 +132,17 @@ Implement feature
 
 rather than repeatedly modifying a central game object.
 
-The architecture should make the next feature easier, not merely make the current feature work.
+Keeping Core small and features independently owned localizes future additions.
+Battle is shared because multiple modes need combat; Scheduling shares time
+processing while features own settlement. Domain events suit optional reactions,
+but mandatory cross-feature work retains an explicit contract. A single Go
+process keeps initial operation simple; extraction or another language requires
+a concrete need rather than speculative infrastructure.
 
 ## Related documents
 
 - [`AGENTS.md`](../../AGENTS.md) — mandatory architectural and development rules.
 - [`components.md`](components.md) — component responsibilities and boundaries.
-- [`feature-modules.md`](feature-modules.md) — feature ownership and extensibility.
 - [`interfaces.md`](interfaces.md) — component contracts.
 - [`../design/game-overview.md`](../design/game-overview.md) — game/domain context.
 - [`../../STATUS.md`](../../STATUS.md) — current implementation status.
@@ -147,14 +151,15 @@ The architecture should make the next feature easier, not merely make the curren
 ## UI-independent operations and external access
 
 Game behavior lives behind application services. The current HTTP JSON API is
-implemented and documented in [OpenAPI](../api/openapi.json). The public client
-presentation and the context/action Gateway remain planned (#140/#939/#646).
+implemented and documented in [OpenAPI](../api/openapi.json). The versioned context/action Gateway is registered at
+`/api/v1/characters/{id}/context` and `/api/v1/characters/{id}/actions`. Browser
+presentation (#140) and further facility migration remain separate work.
 See [client-agent-api.md](client-agent-api.md) for migration sequencing; API
 availability must not be confused with a completed browser client.
 
 ## Application logging
 
 Application services may receive the injectable logging contract described in
-[`logging.md`](logging.md). Logging is structured JSON infrastructure, not a
+[interfaces.md](interfaces.md#application-logging-contract). Logging is structured JSON infrastructure, not a
 Core or Feature Module responsibility. It carries operation and optional
 correlation fields while filtering authentication and credential data.

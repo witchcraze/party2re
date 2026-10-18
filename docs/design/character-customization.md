@@ -64,18 +64,7 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 
 ---
 
-## 6. HTTP API Specification
-
-| Action | HTTP Endpoint | Auth | Description |
-| :--- | :--- | :--- | :--- |
-| **Naming Hall Dialogue** | `GET /naming-hall/dialogue` | Public | Returns `@マリナン` dialogue and pricing. |
-| **Change Name** | `POST /characters/{id}/name` | Session + Character | Renames character (500,000 G, validates guild & flea market). |
-| **Change Gender** | `POST /characters/{id}/gender` | Session + Character | Changes gender/appearance (10,000 G). |
-| **Get Profile** | `GET /characters/{id}/profile` | Public | Returns character stats and profile data. |
-| **Update Profile** | `POST /characters/{id}/profile`, `PUT /characters/{id}/profile` | Session + Character | Updates comment, avatar URL, or bio data. |
-| **Upload Avatar** | `POST /characters/{id}/avatar` | Session + Character | Uploads avatar file (multipart form or JSON). |
-
----
+Transport schemas: [OpenAPI](../api/openapi.json). Storage key lifetimes: [Valkey keyspace](../architecture/valkey-keyspace.md).
 
 ## 7. Concurrency & Security Guarantees
 
@@ -87,4 +76,3 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 - **IDOR Protection**: All mutating `/characters/{id}/*` endpoints enforce session token authentication and verify that the character belongs to the authenticated player (`withAuthenticatedCharacter`).
 - **Unique Name Integrity**: Character name uniqueness is validated and supported by an index on `characters(name)`.
 - **Profile Read & Update Integrity**: Querying or updating a profile propagates storage and cancellation errors; unreadable persisted data does not become a default profile. Partial updates require a successful prerequisite read of existing profile data, preventing silent overwrite of avatar or bio fields on storage failure.
-

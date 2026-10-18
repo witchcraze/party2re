@@ -117,4 +117,4 @@ flowchart TD
 
 - **Valkey Key**: `party2:daily:costume:<character_id>`
 - **TTL**: Seconds until next midnight JST (`time.Until(NextMidnightJST())`).
-- **Relational Updates**: Gold deduction and inventory/depot delivery strictly follow the lock hierarchy (Rank 0 Character -> Rank 3 Inventory -> Rank 5 Depot).
+- **Relational Updates**: Gold deduction and inventory/depot delivery strictly follow the lock hierarchy (Rank 2 Character -> Rank 3 Inventory -> Rank 5 Depot).

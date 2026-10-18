@@ -65,18 +65,7 @@ classDiagram
 
 ---
 
-## 3. API Endpoints
-
-| Method | Path | Summary | Authentication |
-|---|---|---|---|
-| `GET` | `/fleamarket/listings` | List paginated active flea market listings | Public |
-| `GET` | `/fleamarket/listings/{listing_id}` | Get specific flea market listing details | Public |
-| `GET` | `/characters/{id}/fleamarket/listings` | List authenticated character's own listings | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/fleamarket/listings` | Create a new flea market listing from Depot | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/fleamarket/listings/{listing_id}/purchase` | Purchase an active listing from another player into Depot | Bearer Token (Character Owner) |
-| `DELETE` | `/characters/{id}/fleamarket/listings/{listing_id}` | Cancel active listing and return item to Depot | Bearer Token (Character Owner) |
-
----
+Transport operations and schemas: [OpenAPI](../api/openapi.json).
 
 ## 4. Database Schema
 

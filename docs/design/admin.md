@@ -46,19 +46,23 @@ All `/admin/*` routes enforce strict credential verification:
 
 ---
 
-## 4. API Endpoints
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/admin/maintenance` | Admin (`X-Admin-Key`) | Enables or configures system maintenance mode. |
-| `PUT` | `/admin/maintenance` | Admin (`X-Admin-Key`) | Updates system maintenance mode configuration. |
-| `GET` | `/admin/players` | Admin (`X-Admin-Key`) | Returns registered players list with optional sorting (`sort=addr\|name\|updated_at`). |
-| `POST` | `/admin/players/{id}/ban` | Admin (`X-Admin-Key`) | Soft-bans player account, revokes active sessions, and cleans up guild memberships. |
-| `POST` | `/admin/characters/{id}/unstuck` | Admin (`X-Admin-Key`) | Unstucks character by clearing active actions without saving a rescue record. |
-
----
+Transport schemas: [OpenAPI](../api/openapi.json). Storage key lifetimes: [Valkey keyspace](../architecture/valkey-keyspace.md).
 
 ## 5. Scope & Boundary Constraints
 
 - **Physical Deletion**: Hard physical database deletions are prohibited for administrative banning. Soft-banning preserves database integrity, foreign keys, and audit logs while immediately blocking access.
 - **Inventory/Gold Manipulation**: Arbitrary gold or item cheating/modifications by admin endpoints are explicitly excluded from scope (YAGNI). Economy invariants remain strictly enforced by core domain aggregates.
+
+## System maintenance mode
+
+Maintenance state is the `system_maintenance` singleton `global`, projected into
+Valkey. The schema is owned by [migrations](../../migrations/). It records enabled
+state, a message (up to 500 characters) and optional estimated end time; a new
+installation is disabled with message `System is operating normally.`
+
+After security headers, CORS and rate limiting, maintenance middleware rejects
+ordinary requests with 503, code `MAINTENANCE_MODE`, estimated end time and
+`Retry-After: 300`. Health, OpenAPI and public maintenance status remain readable;
+valid `X-Admin-Key` or Admin Bearer credentials bypass the gate. See
+[admin operations](../api/paths/admin.json) and [system operations](../api/paths/system.json)
+for the transport contract. This mode does not replace authentication/ownership checks.

@@ -152,7 +152,6 @@ Use events selectively. Immediate operations that require a direct result should
 
 - [`overview.md`](overview.md) — overall architecture.
 - [`components.md`](components.md) — component responsibilities.
-- [`feature-modules.md`](feature-modules.md) — feature boundaries.
 - [`../../AGENTS.md`](../../AGENTS.md) — mandatory contract rules.
 
 ## Application API boundary
@@ -171,7 +170,8 @@ application service interfaces and exposes a `ServeMux` via `Router()`.
 **Routes and authentication:**
 
 The complete current transport contract is in [OpenAPI](../api/openapi.json),
-generated from `docs/api/base.json` and modular paths. Routes are unversioned.
+generated from `docs/api/base.json` and modular paths. Gateway context/actions use
+`/api/v1/characters/{id}/...`; retained operational REST routes are unversioned.
 Session Bearer tokens and Personal Access Tokens authenticate player operations;
 administrative endpoints use their explicit admin credential contract.
 Public health, registration, login, and discovery routes do not all require a
@@ -232,20 +232,38 @@ HTTP handlers standardize API responses following pragmatic REST conventions and
 
 ### Client / Agent Gateway (CQRS Architecture)
 
-To support modern Web UI (Server-Driven UI), autonomous AI Agents, and Chatbot integrations (Line/Discord) without client-side routing sprawl or token bloat, the application plans a unified two-pillar CQRS Gateway. The HTTP boundaries below are not registered yet (#939/#646):
-
-| Pillar | Method & Path | Responsibility | Output |
-|---|---|---|---|
-| **Query (Observe)** | `GET /characters/{id}/context` | Character snapshot, active timers, and **authoritative whitelist of available actions**. | Lightweight snapshot + `available_actions` (with `required_params`) |
-| **Command (Execute)** | `POST /characters/{id}/actions` | Single-entry-point command dispatcher for all state mutations. | `{ success, result, context }` (updates client state in 1 round trip) |
-
-See [`client-agent-api.md`](client-agent-api.md) for the proposed protocol and implementation status, LLM tool integration, and Server-Driven UI lifecycle.
+`GET /api/v1/characters/{id}/context` observes the owned character and available
+commands; `POST /api/v1/characters/{id}/actions` validates and dispatches typed
+commands, then composes refreshed context. See [client-agent-api.md](client-agent-api.md)
+for admission, partial outcomes and recovery. Connected coverage remains in
+[STATUS](../../STATUS.md), and request/response schemas in OpenAPI.
 
 ## Application logging contract
 
-Application services that need operational diagnostics receive an injected
-logger rather than using global state. The contract accepts an operation name,
-structured attributes, and (for errors) an error value. Its implementation
-emits JSON and records only the error type, so error messages cannot expose
-passwords, sessions, or database credentials. See
-[`logging.md`](logging.md) for the safety and correlation rules.
+Application services receive an injected logger (`log/slog` implementation),
+with operation name, structured attributes and optional context correlation via
+`logging.WithCorrelationID`. The composition root emits JSON to stderr; tests
+can inject a buffer/no-op implementation. No global logger or Core dependency
+is introduced. Errors record concrete types rather than raw error text.
+
+Secret keys, nested groups and common `key=value` text are filtered for passwords,
+tokens, sessions, authorization, credentials and connection strings. Callers
+still must not pass raw secrets or secret-bearing domain objects. Player logs
+contain safe identifiers/outcome categories only. A service records an operation
+failure once; repositories do not duplicate it.
+
+
+## Personal Access Tokens and dual authentication
+
+PATs use `p2_sk_` plus 64 hexadecimal characters from 32 cryptographically random
+bytes. The prefix distinguishes them from interactive session UUIDs.
+Creation returns the secret exactly once; MariaDB `player_api_tokens` stores its
+SHA-256 digest. Listing/revocation never exposes either secret or hash.
+
+Authentication routes prefixed tokens to digest lookup and other tokens to the
+Valkey session store. Missing/expired credentials fail authentication; a PAT's
+last-used timestamp is updated best-effort. Both forms authenticate the same player
+and retain ownership/ban checks. Revocation is owner-scoped; account deletion
+cascades token removal. Token creation accepts a trimmed 1–64-character name and
+optional future RFC3339 expiry. Operation schemas/statuses belong to
+[player paths](../api/paths/player.json), not a duplicate endpoint table.

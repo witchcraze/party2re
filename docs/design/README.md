@@ -62,16 +62,16 @@ graph TD
 
 ### Client boundary and scheduling
 - [`action-preconditions.md`](action-preconditions.md) — Current catalog snapshot, availability gates, and known legacy differences.
-- [`scheduling.md`](scheduling.md) — Unfinished work and terminal retention lifecycle.
+- [Scheduling](../architecture/valkey-keyspace.md#scheduled-work-lifecycle) — unfinished work and terminal recovery.
 - [`accessory-shop.md`](accessory-shop.md) — Accessory sales and synthesis.
 - [`admin.md`](admin.md) — Administrative character inspection and controls.
 
 ### 1. Account, Identity & Character Foundation
 - [`player-and-character.md`](player-and-character.md) — Account authentication, character identity, wallet (999,999G), vitality, crystal currency, and fatigue caps.
 - [`character-customization.md`](character-customization.md) — Naming hall, gender changes, title display, and custom font colors (`#RRGGBB`).
-- [`api-tokens.md`](api-tokens.md) — Personal Access Tokens (`p2_sk_...`) and dual authentication.
+- [PAT authentication](../architecture/interfaces.md#personal-access-tokens-and-dual-authentication) — token lifecycle and dual authentication.
 - [`player-deletion.md`](player-deletion.md) — Account deletion, asset cleanup, and maintenance lifecycle.
-- [`system-maintenance.md`](system-maintenance.md) — Maintenance mode toggle, admin controls, and 503 middleware.
+- [Maintenance mode](admin.md#system-maintenance-mode) — admin controls and request gating.
 - [`notifications.md`](notifications.md) — Server news articles and character notification inboxes.
 
 ### 2. Character Progression, Jobs & Skills

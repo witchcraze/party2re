@@ -23,7 +23,7 @@ Core does not import database adapters. Features receive persistence contracts
 through composition; `internal/depot` owns item/money mailing, and Tavern owns
 meal reservations. There is no `internal/delivery` package. Adventure resolves
 immediately and delegates battle settlement rather than scheduling a claim.
-The client Gateway is planned in [client-agent-api.md](client-agent-api.md).
+The versioned client context/action Gateway is registered; its contract is defined in [client-agent-api.md](client-agent-api.md).
 
 ## Selection and existing inventory
 
