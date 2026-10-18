@@ -59,10 +59,10 @@ The Monster system (`internal/monster`, legacy `farm.cgi` / `monster.cgi`) provi
 ## 5. Monster Naming Constraints
 
 Custom monster pet nicknames must satisfy:
-1. Length: $1 \le \text{Length} \le 8$ (UTF-8 character count).
+1. Length: $1 \le \text{Length} \le 8$ (UTF-8 character count / rune count).
 2. Prohibited Characters:
-   - Whitespace (ASCII spaces and fullwidth Japanese space `\u3000`).
-   - Special characters: `,`, `;`, `"`, `'`, `&`, `<`, `>`, `@`.
+   - Whitespace (any ASCII whitespace such as spaces or tabs, and fullwidth Japanese space `\u3000`). Names containing leading, trailing, or internal whitespace are rejected without modification or trimming.
+   - Special characters: `,`, `;`, `"`, `'`, `&`, `<`, `>`, and full-width `＠` (`\uFF20`, legacy command marker). Standard ASCII `@` is permitted in alignment with legacy `lib/farm.cgi:273-286`.
 
 ---
 

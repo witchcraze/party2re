@@ -2,6 +2,7 @@ package monster_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -121,32 +122,111 @@ func TestValidateMonsterName(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		wantErr bool
+		wantErr error
 	}{
-		{"valid ascii", "Slime", false},
-		{"valid japanese", "スライム", false},
-		{"valid max length 8", "12345678", false},
-		{"too long 9 chars", "123456789", true},
-		{"empty string", "", true},
-		{"whitespace only", "   ", true},
-		{"contains space", "S lime", true},
-		{"contains fullwidth space", "S　lime", true},
-		{"contains comma", "S,lime", true},
-		{"contains semicolon", "S;lime", true},
-		{"contains single quote", "S'lime", true},
-		{"contains double quote", "S\"lime", true},
-		{"contains ampersand", "S&lime", true},
-		{"contains brackets", "S<lime>", true},
-		{"contains at sign", "@スライム", true},
+		{"valid ascii", "Slime", nil},
+		{"valid japanese", "スライム", nil},
+		{"valid ascii with at mark", "@スライム", nil},
+		{"valid ascii at sign internal", "Slime@1", nil},
+		{"valid max length 8 ascii", "12345678", nil},
+		{"valid max length 8 japanese", "一二三四五六七八", nil},
+		{"too long 9 chars ascii", "123456789", monster.ErrNameTooLong},
+		{"too long 9 chars japanese", "一二三四五六七八九", monster.ErrNameTooLong},
+		{"empty string", "", monster.ErrInvalidName},
+		{"whitespace only", "   ", monster.ErrInvalidName},
+		{"leading space", " Slime", monster.ErrInvalidName},
+		{"trailing space", "Slime ", monster.ErrInvalidName},
+		{"leading and trailing spaces", " Slime ", monster.ErrInvalidName},
+		{"leading fullwidth space", "　スライム", monster.ErrInvalidName},
+		{"trailing fullwidth space", "スライム　", monster.ErrInvalidName},
+		{"contains space", "S lime", monster.ErrInvalidName},
+		{"contains tab", "S\tlime", monster.ErrInvalidName},
+		{"contains fullwidth space", "S　lime", monster.ErrInvalidName},
+		{"contains comma", "S,lime", monster.ErrInvalidName},
+		{"contains semicolon", "S;lime", monster.ErrInvalidName},
+		{"contains single quote", "S'lime", monster.ErrInvalidName},
+		{"contains double quote", "S\"lime", monster.ErrInvalidName},
+		{"contains ampersand", "S&lime", monster.ErrInvalidName},
+		{"contains brackets", "S<lime>", monster.ErrInvalidName},
+		{"contains fullwidth at sign", "＠スライム", monster.ErrInvalidName},
+		{"contains fullwidth at sign inside", "スラ＠りん", monster.ErrInvalidName},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := monster.ValidateMonsterName(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateMonsterName(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			if tt.wantErr == nil {
+				if err != nil {
+					t.Fatalf("ValidateMonsterName(%q) unexpected error = %v", tt.input, err)
+				}
+			} else {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("ValidateMonsterName(%q) error = %v, want %v", tt.input, err, tt.wantErr)
+				}
 			}
 		})
+	}
+}
+
+func TestMonsterService_Rename_Validation(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	monRepo := newMockMonsterRepo()
+	charRepo.characters["c1"] = corecharacter.Character{ID: "c1", Name: "Hero"}
+
+	svc := monster.NewService(charRepo, monRepo, monster.WithTransactionProvider(&mockTxProvider{}))
+
+	inst, err := svc.TameMonster(ctx, "c1", "slime", "スラりん")
+	if err != nil {
+		t.Fatalf("TameMonster failed: %v", err)
+	}
+
+	invalidCases := []struct {
+		name    string
+		newName string
+		wantErr error
+	}{
+		{"leading whitespace", " スラりん", monster.ErrInvalidName},
+		{"trailing whitespace", "スラりん ", monster.ErrInvalidName},
+		{"surrounding whitespace", "  スラりん  ", monster.ErrInvalidName},
+		{"fullwidth at symbol", "＠スラりん", monster.ErrInvalidName},
+		{"nine runes japanese", "一二三四五六七八九", monster.ErrNameTooLong},
+		{"forbidden comma", "スラ,りん", monster.ErrInvalidName},
+	}
+
+	for _, tc := range invalidCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := svc.Rename(ctx, "c1", inst.ID, tc.newName)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("Rename(%q) error = %v, want %v", tc.newName, err, tc.wantErr)
+			}
+
+			// Verify in storage that custom name was not modified
+			stored, err := monRepo.FindByID(ctx, inst.ID)
+			if err != nil {
+				t.Fatalf("FindByID failed: %v", err)
+			}
+			if stored.CustomName != "スラりん" {
+				t.Fatalf("CustomName modified after failed rename: got %q, want %q", stored.CustomName, "スラりん")
+			}
+		})
+	}
+
+	// Valid rename with ASCII @
+	updated, err := svc.Rename(ctx, "c1", inst.ID, "@スラりん")
+	if err != nil {
+		t.Fatalf("Rename with ASCII @ failed: %v", err)
+	}
+	if updated.CustomName != "@スラりん" {
+		t.Fatalf("updated CustomName = %q, want %q", updated.CustomName, "@スラりん")
+	}
+
+	stored, err := monRepo.FindByID(ctx, inst.ID)
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+	if stored.CustomName != "@スラりん" {
+		t.Fatalf("stored CustomName = %q, want %q", stored.CustomName, "@スラりん")
 	}
 }
 
