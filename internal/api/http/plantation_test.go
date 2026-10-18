@@ -269,3 +269,33 @@ func TestHTTP_PlantationErrors(t *testing.T) {
 		t.Errorf("expected 422 Unprocessable Entity, got %d", rec3.Code)
 	}
 }
+
+func TestHTTP_PlantationFertilize_RejectDefaultAliases(t *testing.T) {
+	for _, alias := range []string{"none", "なし"} {
+		t.Run("reject_"+alias, func(t *testing.T) {
+			stub := &stubPlantationService{
+				fertilizeFn: func(_ context.Context, _ string, fertID string) (plantation.FertilizeResult, error) {
+					if fertID == "none" || fertID == "なし" {
+						return plantation.FertilizeResult{}, plantation.ErrInvalidFertilizerID
+					}
+					return plantation.FertilizeResult{
+						Plot: plantation.Plot{FertilizerID: &fertID},
+					}, nil
+				},
+			}
+			h, charID := setupPlantationTestHandler(t, stub)
+			router := h.Router()
+
+			body, _ := json.Marshal(map[string]string{"fertilizer_id": alias})
+			req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/fertilize", bytes.NewReader(body))
+			req.Header.Set("Authorization", "Bearer valid-token")
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 Bad Request for %q, got %d: %s", alias, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}

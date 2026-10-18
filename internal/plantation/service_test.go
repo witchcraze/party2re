@@ -191,6 +191,13 @@ func TestCatalogs(t *testing.T) {
 	if defaultF.ID != "none" || defaultF.WitherRate != 10 {
 		t.Fatalf("default fertilizer mismatch: %+v", defaultF)
 	}
+
+	if _, ok := plantation.FindFertilizer("none"); ok {
+		t.Errorf("FindFertilizer(\"none\") should return false for internal default")
+	}
+	if _, ok := plantation.FindFertilizer("なし"); ok {
+		t.Errorf("FindFertilizer(\"なし\") should return false for internal default")
+	}
 }
 
 func TestCleanRoomFertilizerNames(t *testing.T) {
@@ -445,6 +452,60 @@ func TestFertilize(t *testing.T) {
 	d5, _ := depotRepo.FindByCharacterID(ctx, charID5)
 	if d5.Quantity("item-037") != 0 {
 		t.Errorf("expected 0 item-037 in depot, got %d", d5.Quantity("item-037"))
+	}
+}
+
+func TestFertilize_RejectInternalDefault(t *testing.T) {
+	for _, alias := range []string{"none", "なし"} {
+		t.Run("reject_"+alias, func(t *testing.T) {
+			svc, charRepo, invRepo, depotRepo, plotRepo := setupTestHarness(t)
+			ctx := context.Background()
+			charID := "c_default"
+			charRepo.chars[charID] = corecharacter.Character{ID: charID, Name: "Hero", Money: 1000}
+
+			now := time.Date(2026, 9, 12, 10, 0, 0, 0, time.UTC)
+			plotRepo.plots[charID] = plantation.Plot{
+				CharacterID: charID,
+				SeedID:      "red",
+				SownAt:      now,
+				MaturesAt:   timer.NextMidnightJST(now),
+			}
+
+			// Reject internal default fertilizer request
+			_, err := svc.Fertilize(ctx, charID, alias)
+			if !errors.Is(err, plantation.ErrInvalidFertilizerID) {
+				t.Fatalf("expected ErrInvalidFertilizerID for alias %q, got %v", alias, err)
+			}
+
+			// Plot must remain unfertilized
+			plot := plotRepo.plots[charID]
+			if plot.FertilizerID != nil {
+				t.Errorf("expected plot FertilizerID to remain nil, got %v", *plot.FertilizerID)
+			}
+
+			// Wallet, inventory, depot must remain unchanged
+			if charRepo.chars[charID].Money != 1000 {
+				t.Errorf("expected wallet to remain 1000, got %d", charRepo.chars[charID].Money)
+			}
+			if inv, _ := invRepo.FindByCharacterID(ctx, charID); len(inv.Items) != 0 {
+				t.Errorf("expected inventory to remain empty, got %d items", len(inv.Items))
+			}
+			if dep, _ := depotRepo.FindByCharacterID(ctx, charID); len(dep.Items) != 0 {
+				t.Errorf("expected depot to remain empty, got %d items", len(dep.Items))
+			}
+
+			// Applying a real fertilizer after rejection succeeds normally
+			res, err := svc.Fertilize(ctx, charID, "rice_bran")
+			if err != nil {
+				t.Fatalf("subsequent Fertilize with rice_bran failed: %v", err)
+			}
+			if *res.Plot.FertilizerID != "rice_bran" {
+				t.Errorf("expected fertilizer rice_bran, got %v", *res.Plot.FertilizerID)
+			}
+			if charRepo.chars[charID].Money != 850 {
+				t.Errorf("expected wallet 850 after rice_bran, got %d", charRepo.chars[charID].Money)
+			}
+		})
 	}
 }
 

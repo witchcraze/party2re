@@ -258,9 +258,14 @@ func FindSeed(idOrName string) (Seed, bool) {
 }
 
 // FindFertilizer finds a fertilizer by ID or Name.
+// Note: "none" is the internal unfertilized default and cannot be selected or applied.
+// Use GetDefaultFertilizer to retrieve default parameters.
 func FindFertilizer(idOrName string) (Fertilizer, bool) {
 	target := strings.TrimSpace(idOrName)
 	for _, f := range defaultFertilizers {
+		if f.ID == "none" {
+			continue
+		}
 		if f.ID == target || f.Name == target {
 			return f, true
 		}
