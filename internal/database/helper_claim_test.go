@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -61,18 +60,7 @@ type helperClaimFixture struct {
 
 func newHelperClaimFixture(t *testing.T, count int) helperClaimFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := helperIsolatedDB(t, "players", "characters", "character_depots", "depot_items", "helper_quests")
 	quests, err := database.NewHelperRepository(db)
 	if err != nil {
 		t.Fatal(err)

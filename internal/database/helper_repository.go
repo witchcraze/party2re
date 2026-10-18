@@ -81,13 +81,40 @@ func (r *HelperRepository) findByID(ctx context.Context, id string, forUpdate bo
 }
 
 func (r *HelperRepository) ListActive(ctx context.Context, now time.Time) ([]helperquest.Quest, error) {
+	return r.list(ctx, "expires_at > ?", now)
+}
+
+// ListExpired reads uncompleted requests past their deadline (same boundary as
+// helperquest.CompleteQuest). It takes no locks: a range FOR UPDATE would hold gap locks that
+// deadlock with concurrent replacement inserts, so callers lock each row by id instead.
+func (r *HelperRepository) ListExpired(ctx context.Context, now time.Time) ([]helperquest.Quest, error) {
+	return r.list(ctx, "expires_at < ?", now)
+}
+
+// Delete removes an uncompleted request so that it can be exchanged for a replacement.
+func (r *HelperRepository) Delete(ctx context.Context, id string) error {
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `DELETE FROM helper_quests WHERE id = ? AND completed_at IS NULL`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return helperquest.ErrQuestNotFound
+	}
+	return nil
+}
+
+// list reads uncompleted requests matching a fixed deadline predicate (never user input).
+func (r *HelperRepository) list(ctx context.Context, deadline string, now time.Time) ([]helperquest.Quest, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, title, kind, target_id, target_name, required_count,
 		       reward_item_id, is_rare, is_guild, expires_at, completed_at, completed_by, created_at
 		FROM helper_quests
-		WHERE completed_at IS NULL AND expires_at > ?
-		ORDER BY created_at ASC
-	`, now)
+		WHERE completed_at IS NULL AND `+deadline+`
+		ORDER BY created_at ASC, id ASC`, now)
 	if err != nil {
 		return nil, err
 	}

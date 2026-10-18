@@ -24,7 +24,7 @@ Quests are randomly generated across four categories:
 ### Lifecycle and Expiration
 - Quests remain active for **6 days** (`ExpiresAt = CreatedAt + 6 days`).
 - Upon completion, required items/equipment are deducted from the player's **Depot** (`check_depot`), or monsters are deducted from the **Monster Ranch** box (`check_farm`), quest rewards are delivered directly to the player's **Depot** (`send_item`), the character's `help_count` is incremented, and a fresh replacement quest is generated.
-- Legacy `party2/lib/helper.cgi:128–140` replaces an expired non-target request during `かいけつ`, one existing row for one new row. Go currently only hides expired requests in `ListActive`; restoring their replacement remains [#1217](https://github.com/witchcraze/party2re/issues/1217). This is distinct from creating requests in a store that has no rows.
+- Legacy `party2/lib/helper.cgi:92–145,128–132` (`kaiketsu`) exchanges every expired non-target request for one new request on each `かいけつ` call, even when that call completes nothing. Go matches this in `CompleteQuest` ([#1217](https://github.com/witchcraze/party2re/issues/1217)): before each completion attempt, and independently of its outcome (unknown id, insufficient materials, guild requirement), a separate transaction deletes every expired uncompleted request except the target and inserts one replacement per deletion. Rows are locked per id, so concurrent or retried calls exchange each row once; a save failure rolls back the deletions together with the replacements. Completed rows are retained; an expired target is still rejected with `ErrQuestExpired` (the legacy script would complete it) and is then exchanged too. Expiry is strict (`now > expires_at`, so exactly six days is still live). `ListQuests` / `GET /helpers/quests` never write, matching `miru`. Exchange is one-for-one and never creates requests in a store that has no rows.
 
 ### Initial Supply and Empty Stores
 
@@ -42,7 +42,7 @@ The Go migration `031_rescue_and_helper.sql` creates the table without inserting
 | Fresh, correctly migrated DB with no requests | Startup creates no requests; a successful list returns an empty board. Shop exclusion readers return no requested targets. No request generation, RNG consumption or save occurs. |
 | Existing requests and application restart | Preserve the stored requests; do not append, reset, or top up to an invented initial count. |
 | Several instances, repeated reads or restart retries | All instances create zero initial requests. No initialization marker, leader election or once-only seed lock is needed. |
-| No active requests, but expired/completed rows exist | Do not infer a fresh installation from active count zero. Existing expired-row replacement belongs to #1217; never use it to fill an arbitrary board size. |
+| No active requests, but expired/completed rows exist | Do not infer a fresh installation from active count zero. Expired uncompleted rows are exchanged one-for-one by `CompleteQuest` (#1217); never use that to fill an arbitrary board size. |
 | Missing table or failed storage read | Return the storage error through the existing error path; do not reinterpret failure as an empty board, create a schema, or seed requests. |
 | Retry after a failed read | Read the authoritative store again. If it is empty, it remains empty; no partial bootstrap or duplicate generation exists. |
 | Save failure | Bootstrap performs no save. Completion/replacement failures retain their transaction rollback behavior; their recovery is not an excuse to seed an empty store. |
@@ -51,9 +51,9 @@ The Go migration `031_rescue_and_helper.sql` creates the table without inserting
 | :--- | :--- | :--- |
 | Container startup creates the missing request file | Schema migration and `cmd/party2` service composition | No initial requests; retain existing data. |
 | `みる` → `miru` | `ListQuests` / `GET /helpers/quests` | Read existing requests; an empty result does not generate supply. |
-| `かいけつ` → `kaiketsu` | `CompleteQuest` / `POST /helpers/complete` | Complete an existing request and create its replacement; no bootstrap command. Expiration renewal remains the separate #1217 gap. |
+| `かいけつ` → `kaiketsu` | `CompleteQuest` / `POST /helpers/complete` | Complete an existing request and create its replacement; also exchanges expired non-target requests on every call (#1217). No bootstrap command. |
 
-A fresh installation therefore has no playable helper requests until initial request data is separately supplied. A nonzero automatic seed or provisioning tool would require an explicit new decision about its count, source and transaction/idempotency contract; none is authorized here. This decision does not certify the generator pools/reward weights ([#1216](https://github.com/witchcraze/party2re/issues/1216)), expiration replacement (#1217), or production guild wiring ([#1218](https://github.com/witchcraze/party2re/issues/1218)).
+A fresh installation therefore has no playable helper requests until initial request data is separately supplied. A nonzero automatic seed or provisioning tool would require an explicit new decision about its count, source and transaction/idempotency contract; none is authorized here. This decision does not certify the generator pools/reward weights ([#1216](https://github.com/witchcraze/party2re/issues/1216)) or production guild wiring ([#1218](https://github.com/witchcraze/party2re/issues/1218)).
 
 ---
 
