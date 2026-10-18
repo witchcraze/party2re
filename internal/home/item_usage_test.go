@@ -1151,8 +1151,8 @@ func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
 		},
 		{
 			instID:      "inst-hagure-w",
-			expectedMsg: "武器名：流銀の剣 / 強さ：150 / 重さ：75 / 価格：20000G",
-			disallowed:  "強さ：2001", // old price/10+1 = 2001
+			expectedMsg: "武器名：流銀の剣 / 強さ：150 / 重さ：75 / 価格：30000G",
+			disallowed:  "強さ：3001", // old price/10+1 = 3001
 		},
 	}
 

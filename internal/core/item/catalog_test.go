@@ -144,3 +144,20 @@ func TestDefinitionProviderInterface(t *testing.T) {
 		t.Errorf("expected itemDef ID 'herb', got %s", itemDef.ID)
 	}
 }
+
+func TestWeapon40BasePrice(t *testing.T) {
+	cat, err := InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog(): %v", err)
+	}
+	def, err := cat.FindByID("weapon-40")
+	if err != nil {
+		t.Fatalf("FindByID(weapon-40): %v", err)
+	}
+	if def.Price != 30000 {
+		t.Errorf("weapon-40 price = %d, want 30000", def.Price)
+	}
+	if def.Name != "流銀の剣" {
+		t.Errorf("weapon-40 name = %q, want 流銀の剣", def.Name)
+	}
+}
