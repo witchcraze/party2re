@@ -417,6 +417,10 @@ that same contract; gear terms must be saved rather than redrawn on reload.
 Their finite producer formulas do not admit outer custom/random/calling
 closures. The consumer must preflight all descendants and required reset/defeat, damage,
 requester and cursor context before costs or committed RNG.
+The finite damage-gem registry and its already-applied target MP facts follow
+[Battle's shared damage contract](battle.md#shared-modifiers-and-callback-outcomes);
+the consumer must keep slot CMP contributions separate from MP and persist
+absorption/damage results without replaying them on reload.
 
 Revival and sacrifice use [Battle's ordered revival contract](battle.md#resources-revival-and-roster-changes).
 Ordinary fallen-self discovery requires the66.6 entry and its living designated
