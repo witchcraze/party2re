@@ -497,6 +497,12 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handlePostParkMessage": "park.go",
 		"handleParkNPCTalk":     "park.go",
 		"handleParkNPCDivinate": "park.go",
+		// Monster
+		"handleBringMonsterToHome":  "monster.go",
+		"handleDepositMonsterToBox": "monster.go",
+		"handleRenameMonster":       "monster.go",
+		"handleSendMonster":         "monster.go",
+		"handleReleaseMonster":      "monster.go",
 	}
 
 	for handlerName, sourceFile := range requiredActionGuardHandlers {

@@ -26623,6 +26623,16 @@
             },
             "description": "Monster not found"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict - character is currently sleeping or awaiting wake-up"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -26722,6 +26732,16 @@
               }
             },
             "description": "Monster not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict - character is currently sleeping or awaiting wake-up"
           },
           "500": {
             "content": {
@@ -26824,6 +26844,16 @@
               }
             },
             "description": "Monster not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict - character is currently sleeping or awaiting wake-up"
           },
           "500": {
             "content": {
@@ -26942,6 +26972,16 @@
               }
             },
             "description": "Monster not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict - character is currently sleeping or awaiting wake-up"
           },
           "415": {
             "$ref": "#/components/responses/Error",
@@ -27072,6 +27112,16 @@
               }
             },
             "description": "Recipient or monster not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict - character is currently sleeping or awaiting wake-up"
           },
           "415": {
             "$ref": "#/components/responses/Error",

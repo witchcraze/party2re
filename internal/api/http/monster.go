@@ -114,7 +114,7 @@ func (h *Handler) handleBringMonsterToHome(w http.ResponseWriter, r *http.Reques
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		instanceID := r.PathValue("instance_id")
 		if instanceID == "" {
 			writeError(w, http.StatusBadRequest, errors.New("instance_id is required"))
@@ -149,7 +149,7 @@ func (h *Handler) handleDepositMonsterToBox(w http.ResponseWriter, r *http.Reque
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		instanceID := r.PathValue("instance_id")
 		if instanceID == "" {
 			writeError(w, http.StatusBadRequest, errors.New("instance_id is required"))
@@ -183,7 +183,7 @@ func (h *Handler) handleRenameMonster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		instanceID := r.PathValue("instance_id")
 		if instanceID == "" {
 			writeError(w, http.StatusBadRequest, errors.New("instance_id is required"))
@@ -224,7 +224,7 @@ func (h *Handler) handleSendMonster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		instanceID := r.PathValue("instance_id")
 		if instanceID == "" {
 			writeError(w, http.StatusBadRequest, errors.New("instance_id is required"))
@@ -267,7 +267,7 @@ func (h *Handler) handleReleaseMonster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		instanceID := r.PathValue("instance_id")
 		if instanceID == "" {
 			writeError(w, http.StatusBadRequest, errors.New("instance_id is required"))

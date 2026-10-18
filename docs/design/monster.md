@@ -54,6 +54,14 @@ The Monster system (`internal/monster`, legacy `farm.cgi` / `monster.cgi`) provi
 | **Send Monster** | `おくる` | `POST /characters/{id}/monsters/{instance_id}/send` | Gifts a monster to another player character's box. |
 | **Release** | `わかれる` | `POST /characters/{id}/monsters/{instance_id}/release` | Releases a monster back into the wild. |
 
+### 4.1 Sleep and CanWake Action Guards
+
+In alignment with legacy dispatch rules (`party.cgi:14-18`, `lib/sleep.cgi:42` where `$m{sleep} > 0` overrides command execution), all monster mutation endpoints (`bring-home`, `deposit`, `rename`, `send`, `release`) require an awake character (`withAuthenticatedActionCharacter`):
+- **Sleeping (`Sleeping = true`)**: Rejected with HTTP `409 Conflict`.
+- **CanWake (`CanWake = true`)**: Rejected with HTTP `409 Conflict` prompting the player to wake up.
+- **Sleep Status Error**: Returns HTTP `500 Internal Server Error` and prevents service execution.
+- **Read Endpoints (`GET /characters/{id}/monsters`, `GET /monster/dialogue`)**: Remain accessible while sleeping or awaiting wake-up.
+
 ---
 
 ## 5. Monster Naming Constraints
