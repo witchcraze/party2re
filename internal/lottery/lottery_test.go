@@ -265,47 +265,40 @@ func TestTakarakujiCandidatePools(t *testing.T) {
 	}
 }
 
-func TestRollNewRoundPrizes_Distribution(t *testing.T) {
-	trials := 5000
-	ittoHits := make(map[string]int)
-	nitoHits := make(map[string]int)
-	santoHits := make(map[string]int)
+// #1249 intentionally keeps direct selection across every candidate slot.
+func TestRollNewRoundPrizes_AllCandidateSlots(t *testing.T) {
+	originalReader := rand.Reader
+	t.Cleanup(func() { rand.Reader = originalReader })
 
-	for i := 0; i < trials; i++ {
-		p1, a1, p2, a2, p3, a3, err := lottery.RollNewRoundPrizes()
-		if err != nil {
-			t.Fatalf("RollNewRoundPrizes returned error: %v", err)
-		}
-		if a1 != 1 {
-			t.Errorf("amount1 = %d; want 1", a1)
-		}
-		if a2 < 1 || a2 > 2 {
-			t.Errorf("amount2 = %d; want 1 or 2", a2)
-		}
-		if a3 < 2 || a3 > 4 {
-			t.Errorf("amount3 = %d; want 2, 3, or 4", a3)
-		}
-		ittoHits[p1]++
-		nitoHits[p2]++
-		santoHits[p3]++
+	tests := []struct {
+		name         string
+		rollPosition int
+		prizes       []string
+	}{
+		{"first", 0, []string{"item-129", "item-266", "item-265", "item-265", "item-255"}},
+		{"second", 1, []string{"item-168", "item-264", "item-150", "item-173", "item-207", "item-264", "armor-40", "weapon-40", "item-265"}},
+		{"third", 3, []string{"item-126", "item-244", "item-243", "item-199", "item-253", "item-254", "item-263", "item-263", "item-264"}},
 	}
-
-	// In 1st prize, item-265 has 2/5 weight (40%). In 5000 trials, expect ~2000 hits (allow 33% - 47%).
-	itto265Ratio := float64(ittoHits["item-265"]) / float64(trials)
-	if itto265Ratio < 0.33 || itto265Ratio > 0.47 {
-		t.Errorf("item-265 ratio in Itto = %f; expected ~0.40", itto265Ratio)
-	}
-
-	// In 2nd prize, item-264 has 2/9 weight (22.2%). In 5000 trials, expect ~1111 hits (allow 17% - 27%).
-	nito264Ratio := float64(nitoHits["item-264"]) / float64(trials)
-	if nito264Ratio < 0.17 || nito264Ratio > 0.27 {
-		t.Errorf("item-264 ratio in Nito = %f; expected ~0.222", nito264Ratio)
-	}
-
-	// In 3rd prize, item-263 has 2/9 weight (22.2%). In 5000 trials, expect ~1111 hits (allow 17% - 27%).
-	santo263Ratio := float64(santoHits["item-263"]) / float64(trials)
-	if santo263Ratio < 0.17 || santo263Ratio > 0.27 {
-		t.Errorf("item-263 ratio in Santo = %f; expected ~0.222", santo263Ratio)
+	for rank, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for index, want := range tt.prizes {
+				for _, amounts := range [][2]byte{{0, 0}, {1, 1}, {1, 2}} {
+					rolls := []byte{0, 0, amounts[0], 0, amounts[1]}
+					rolls[tt.rollPosition] = byte(index)
+					rand.Reader = bytes.NewReader(rolls)
+					p1, a1, p2, a2, p3, a3, err := lottery.RollNewRoundPrizes()
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got := []string{p1, p2, p3}[rank]; got != want {
+						t.Errorf("slot %d: got %s, want %s", index, got, want)
+					}
+					if a1 != 1 || a2 != int(amounts[0])+1 || a3 != int(amounts[1])+2 {
+						t.Errorf("amounts = %d/%d/%d, rolls = %v", a1, a2, a3, amounts)
+					}
+				}
+			}
+		})
 	}
 }
 
