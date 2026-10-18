@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -255,6 +256,48 @@ func TestOracleShopEndpoints(t *testing.T) {
 
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("expected 400 Bad Request, got %d", resp.StatusCode)
+		}
+	})
+
+	// 6b. POST /characters/{id}/oracle/buy -> 500 Internal Server Error on helper read failure
+	t.Run("OracleBuyCostume_HelperError", func(t *testing.T) {
+		oracleSvc.buyCostumeItemFn = func(_ context.Context, _ string, _ int) (*store.CostumeBuyResult, error) {
+			return nil, errors.New("helper database failure")
+		}
+		defer func() { oracleSvc.buyCostumeItemFn = nil }()
+
+		body, _ := json.Marshal(map[string]interface{}{"item_no": 44})
+		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/buy", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer session-token")
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusInternalServerError {
+			t.Errorf("expected 500 Internal Server Error, got %d", resp.StatusCode)
+		}
+	})
+
+	// 6c. GET /characters/{id}/oracle -> 500 Internal Server Error on helper read failure
+	t.Run("GetOracleStatus_HelperError", func(t *testing.T) {
+		oracleSvc.getStatusFn = func(_ context.Context, _ string) (*store.OracleStatus, error) {
+			return nil, errors.New("helper database failure")
+		}
+		defer func() { oracleSvc.getStatusFn = nil }()
+
+		req, _ := http.NewRequest(http.MethodGet, server.URL+"/characters/c1/oracle", nil)
+		req.Header.Set("Authorization", "Bearer session-token")
+		resp, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusInternalServerError {
+			t.Errorf("expected 500 Internal Server Error, got %d", resp.StatusCode)
 		}
 	})
 

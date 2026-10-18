@@ -41,6 +41,7 @@ Items requested by active helper quest 3 (`get_helper_item(3)`) are excluded fro
 ```perl
 next if $h_no =~ /,$i,/; # 手助けクエストで依頼されているアイテムは除く
 ```
+If reading active helper quest items fails, catalog retrieval (`GetOracleStatus`) and purchase execution (`BuyCostumeItem`) reject the request with an error, preserving character gold, inventory, depot, and collection state without selling items under indeterminate exclusion.
 
 ### 2.2 Authentic Costume Catalog & Gender Parity
 
