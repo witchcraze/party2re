@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,196 +14,11 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
-func TestBanquetAttendeesForTier(t *testing.T) {
-	tests := []struct {
-		tier     int
-		expected int
-	}{
-		{tier: 0, expected: 10},
-		{tier: 1, expected: 10},
-		{tier: 2, expected: 20},
-		{tier: 3, expected: 30},
-		{tier: 5, expected: 30},
-		{tier: 10, expected: 30},
-	}
-
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("tier-%d", tt.tier), func(t *testing.T) {
-			got := BanquetAttendeesForTier(tt.tier)
-			if got != tt.expected {
-				t.Errorf("BanquetAttendeesForTier(%d) = %d, expected %d", tt.tier, got, tt.expected)
-			}
-		})
-	}
-}
-
-func TestValkeyPresenceTracker_RecordPresence(t *testing.T) {
-	var executedCmds [][]string
-	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		executedCmds = append(executedCmds, cmd.Commands())
-		return valkeytest.MakeOKResult()
-	}))
-
-	tracker := NewValkeyPresenceTracker(client)
-	now := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
-	err := tracker.RecordPresence(context.Background(), "char-123", now)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(executedCmds) != 2 {
-		t.Fatalf("expected 2 commands (ZADD, EXPIRE), got %d: %v", len(executedCmds), executedCmds)
-	}
-
-	// 1. ZADD
-	if executedCmds[0][0] != "ZADD" || executedCmds[0][1] != ValkeyPresenceKey {
-		t.Errorf("unexpected ZADD command: %v", executedCmds[0])
-	}
-	if executedCmds[0][2] != strconv.FormatInt(now.Unix(), 10) || executedCmds[0][3] != "char-123" {
-		t.Errorf("unexpected ZADD score/member: %v", executedCmds[0])
-	}
-
-	// 2. EXPIRE
-	if executedCmds[1][0] != "EXPIRE" || executedCmds[1][1] != ValkeyPresenceKey {
-		t.Errorf("unexpected EXPIRE command: %v", executedCmds[1])
-	}
-}
-
-func TestValkeyPresenceTracker_RecordBanquetPresence(t *testing.T) {
-	var executedCmds [][]string
-	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		executedCmds = append(executedCmds, cmd.Commands())
-		return valkeytest.MakeOKResult()
-	}))
-
-	tracker := NewValkeyPresenceTracker(client)
-	at := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
-	duration := time.Hour
-	expiry := at.Add(duration)
-
-	err := tracker.RecordBanquetPresenceAt(context.Background(), "banquet-king1", 10, at, duration)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(executedCmds) != 2 {
-		t.Fatalf("expected 2 commands (ZADD, EXPIRE), got %d: %v", len(executedCmds), executedCmds)
-	}
-
-	// 1. ZADD with 10 members
-	zaddCmd := executedCmds[0]
-	if zaddCmd[0] != "ZADD" || zaddCmd[1] != ValkeyPresenceKey {
-		t.Fatalf("unexpected ZADD command: %v", zaddCmd)
-	}
-	// args: ZADD key score member score member ...
-	// total args = 2 + 10 * 2 = 22
-	if len(zaddCmd) != 22 {
-		t.Fatalf("expected 22 args in ZADD for 10 members, got %d: %v", len(zaddCmd), zaddCmd)
-	}
-	expectedScoreStr := strconv.FormatInt(expiry.Unix(), 10)
-	for i := 0; i < 10; i++ {
-		scoreArg := zaddCmd[2+i*2]
-		memberArg := zaddCmd[3+i*2]
-		if scoreArg != expectedScoreStr {
-			t.Errorf("member %d: expected score %s, got %s", i, expectedScoreStr, scoreArg)
-		}
-		expectedMember := fmt.Sprintf("banquet:banquet-king1:npc:%d", i)
-		if memberArg != expectedMember {
-			t.Errorf("member %d: expected %s, got %s", i, expectedMember, memberArg)
-		}
-	}
-
-	// 2. EXPIRE
-	expireCmd := executedCmds[1]
-	if expireCmd[0] != "EXPIRE" || expireCmd[1] != ValkeyPresenceKey {
-		t.Errorf("unexpected EXPIRE command: %v", expireCmd)
-	}
-	expectedTTL := strconv.FormatInt(int64(duration.Seconds())+ValkeyPresenceTTL, 10)
-	if expireCmd[2] != expectedTTL {
-		t.Errorf("expected TTL %s, got %s", expectedTTL, expireCmd[2])
-	}
-}
-
-func TestValkeyPresenceTracker_CountActiveParticipants(t *testing.T) {
-	var executedCmds [][]string
-	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		executedCmds = append(executedCmds, cmd.Commands())
-		if cmd.Commands()[0] == "ZCARD" {
-			return valkeytest.MakeIntResult(25)
-		}
-		return valkeytest.MakeOKResult()
-	}))
-
-	tracker := NewValkeyPresenceTracker(client)
-	cutoff := time.Date(2026, 9, 14, 12, 55, 0, 0, time.UTC)
-	count, err := tracker.CountActiveParticipants(context.Background(), cutoff)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if count != 25 {
-		t.Errorf("expected count 25, got %d", count)
-	}
-
-	if len(executedCmds) != 2 {
-		t.Fatalf("expected 2 commands (ZREMRANGEBYSCORE, ZCARD), got %d: %v", len(executedCmds), executedCmds)
-	}
-
-	// 1. ZREMRANGEBYSCORE key -inf cutoff-1
-	remCmd := executedCmds[0]
-	if remCmd[0] != "ZREMRANGEBYSCORE" || remCmd[1] != ValkeyPresenceKey {
-		t.Errorf("unexpected ZREMRANGEBYSCORE: %v", remCmd)
-	}
-	expectedMax := strconv.FormatInt(cutoff.Unix()-1, 10)
-	if remCmd[2] != "-inf" || remCmd[3] != expectedMax {
-		t.Errorf("expected range -inf to %s, got %s to %s", expectedMax, remCmd[2], remCmd[3])
-	}
-
-	// 2. ZCARD key
-	cardCmd := executedCmds[1]
-	if cardCmd[0] != "ZCARD" || cardCmd[1] != ValkeyPresenceKey {
-		t.Errorf("unexpected ZCARD: %v", cardCmd)
-	}
-}
-
-func TestValkeyPresenceTracker_NilClient(t *testing.T) {
-	tracker := NewValkeyPresenceTracker(nil)
-	ctx := context.Background()
-
-	if err := tracker.RecordPresence(ctx, "char-1", time.Now()); err != nil {
-		t.Errorf("expected nil error on nil client, got %v", err)
-	}
-	if err := tracker.RecordBanquetPresence(ctx, "b-1", 10, time.Hour); err != nil {
-		t.Errorf("expected nil error on nil client, got %v", err)
-	}
-	count, err := tracker.CountActiveParticipants(ctx, time.Now())
-	if err != nil || count != 0 {
-		t.Errorf("expected (0, nil) on nil client, got (%d, %v)", count, err)
-	}
-}
-
-func TestValkeyPresenceTracker_ErrorHandling(t *testing.T) {
-	errZadd := errors.New("valkey zadd failure")
-	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		if cmd.Commands()[0] == "ZADD" {
-			return valkeytest.MakeErrorResult(errZadd)
-		}
-		return valkeytest.MakeOKResult()
-	}))
-
-	tracker := NewValkeyPresenceTracker(client)
-	ctx := context.Background()
-
-	if err := tracker.RecordPresence(ctx, "char-1", time.Now()); !errors.Is(err, errZadd) {
-		t.Errorf("expected errZadd on RecordPresence, got %v", err)
-	}
-	if err := tracker.RecordBanquetPresence(ctx, "b-1", 10, time.Hour); !errors.Is(err, errZadd) {
-		t.Errorf("expected errZadd on RecordBanquetPresence, got %v", err)
-	}
-}
-
 type mockSortedSetStore struct {
+	mu      sync.Mutex
 	members map[string]float64
+	fail    string
+	aborts  int
 }
 
 func newMockSortedSetStore() *mockSortedSetStore {
@@ -209,173 +26,242 @@ func newMockSortedSetStore() *mockSortedSetStore {
 }
 
 func (s *mockSortedSetStore) Client() valkey.Client {
-	return valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		args := cmd.Commands()
-		switch args[0] {
-		case "ZADD":
-			// ZADD key score member [score member ...]
-			for i := 2; i < len(args); i += 2 {
-				score, _ := strconv.ParseFloat(args[i], 64)
-				s.members[args[i+1]] = score
+		if s.fail == args[0] {
+			return valkeytest.MakeErrorResult(errors.New("store unavailable"))
+		}
+		if args[0] == "ZRANGE" {
+			keys := make([]string, 0, len(s.members))
+			for key := range s.members {
+				keys = append(keys, key)
 			}
-			return valkeytest.MakeIntResult(int64((len(args) - 2) / 2))
-		case "ZREMRANGEBYSCORE":
-			// ZREMRANGEBYSCORE key min max
-			maxScore, _ := strconv.ParseFloat(args[3], 64)
-			var removed int64
-			for m, sc := range s.members {
-				if sc <= maxScore {
-					delete(s.members, m)
-					removed++
+			slices.Sort(keys)
+			values := make([]string, 0, 2*len(keys))
+			for _, key := range keys {
+				values = append(values, key, strconv.FormatFloat(s.members[key], 'f', -1, 64))
+			}
+			return valkeytest.MakeStringSliceResult(values)
+		}
+		return valkeytest.MakeOKResult()
+	}))
+	client.DedicatedFn = func(fn func(valkey.DedicatedClient) error) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		dedicated := valkeytest.NewMockClient(valkeytest.WithDoHandler(client.DoFn), valkeytest.WithDoMultiHandler(client.DoMultiFn))
+		return dedicated.Dedicated(fn)
+	}
+	client.DoMultiFn = func(ctx context.Context, commands ...valkey.Completed) []valkey.ValkeyResult {
+		results := make([]valkey.ValkeyResult, len(commands))
+		for i := range results {
+			results[i] = valkeytest.MakeOKResult()
+		}
+		if s.aborts > 0 {
+			s.aborts--
+			results[len(results)-1] = valkeytest.MakeNilResult()
+			return results
+		}
+		for _, cmd := range commands {
+			args := cmd.Commands()
+			if s.fail == args[0] {
+				results[len(results)-1] = valkeytest.MakeErrorResult(errors.New("store unavailable"))
+				return results
+			}
+		}
+		for _, cmd := range commands {
+			args := cmd.Commands()
+			switch args[0] {
+			case "DEL":
+				clear(s.members)
+			case "ZADD":
+				for i := 2; i < len(args); i += 2 {
+					score, err := strconv.ParseFloat(args[i], 64)
+					if err != nil {
+						panic(err)
+					}
+					s.members[args[i+1]] = score
 				}
 			}
-			return valkeytest.MakeIntResult(removed)
-		case "ZCARD":
-			return valkeytest.MakeIntResult(int64(len(s.members)))
-		case "EXPIRE":
-			return valkeytest.MakeIntResult(1)
+		}
+		results[len(results)-1] = valkeytest.MakeIntSliceResult([]int64{1})
+		return results
+	}
+	return client
+}
+
+func newTrackedService(t *testing.T, store *mockSortedSetStore, clock *mockClock) *Service {
+	t.Helper()
+	svc, err := NewService(newMemoryRepo(), newMemoryCharacterRepo(), newMemoryInventoryRepo(),
+		WithClock(clock), WithPresenceTracker(NewValkeyPresenceTracker(store.Client())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc
+}
+
+func TestMerchantSnapshotBeforeCleanup(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+	for _, count := range []int{9, 10, 19, 20, 29, 30} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			store := newMockSortedSetStore()
+			tracker := NewValkeyPresenceTracker(store.Client())
+			for i := 0; i < count; i++ {
+				if err := tracker.RecordPresence(ctx, fmt.Sprint(i), now.Add(-PresenceWindow-time.Second)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			clock := &mockClock{now: now}
+			svc := newTrackedService(t, store, clock)
+			status, err := svc.GetPlazaStatus(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tier, _, _ := CalculateMerchantTier(count)
+			active := 0
+			if tier > 0 {
+				active = 1
+			}
+			if status.MerchantSelectionCount != count || status.MerchantTier != tier || status.ActiveParticipants != active {
+				t.Fatalf("first status = %+v, want count/tier/active %d/%d/%d", status, count, tier, active)
+			}
+			next, err := svc.GetPlazaStatus(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if next.MerchantTier != 0 || next.MerchantSelectionCount != active {
+				t.Fatalf("after cleanup = %+v", next)
+			}
+		})
+	}
+}
+
+func TestPresenceGraceDuplicatesAndStaggeredDeparture(t *testing.T) {
+	ctx := context.Background()
+	clock := &mockClock{now: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)}
+	start := clock.now
+	store := newMockSortedSetStore()
+	tracker := NewValkeyPresenceTracker(store.Client())
+	// The later duplicate must not extend the first retained guest's lifetime.
+	if err := tracker.AppendCrowd(ctx, []Presence{
+		{"Guest", start.Add(time.Hour)}, {"Guest", start.Add(7199 * time.Second)},
+		{"Decoration", start.Add(7199 * time.Second)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc := newTrackedService(t, store, clock)
+	for _, step := range []struct {
+		elapsed time.Duration
+		active  int
+	}{
+		{time.Hour + PresenceWindow, 2},
+		{time.Hour + PresenceWindow + time.Second, 1},
+		{7199*time.Second + PresenceWindow, 1},
+		{7200*time.Second + PresenceWindow, 0},
+	} {
+		clock.now = start.Add(step.elapsed)
+		status, err := svc.GetPlazaStatus(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.ActiveParticipants != step.active {
+			t.Fatalf("at %v: active=%d, want %d", step.elapsed, status.ActiveParticipants, step.active)
+		}
+	}
+	if len(store.members) != 0 {
+		t.Fatal("empty plaza key still contains records")
+	}
+}
+
+func TestMerchantRowContributesToNextSelection(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	store := newMockSortedSetStore()
+	tracker := NewValkeyPresenceTracker(store.Client())
+	// Ten stored rows collapse to nine guests plus the newly added merchant.
+	crowd := make([]Presence, 0, 10)
+	for i := 0; i < 9; i++ {
+		crowd = append(crowd, Presence{fmt.Sprint("guest", i), now.Add(time.Hour)})
+	}
+	crowd = append(crowd, crowd[0])
+	if err := tracker.AppendCrowd(ctx, crowd); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		snapshot, err := tracker.Observe(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snapshot != (PresenceSnapshot{Stored: 10, Active: 10}) {
+			t.Fatalf("observation %d: %+v", i, snapshot)
+		}
+	}
+}
+
+func TestValkeyPresenceTrackerErrorsAndRetries(t *testing.T) {
+	for _, command := range []string{"WATCH", "ZRANGE", "ZADD", "EXEC"} {
+		t.Run(command, func(t *testing.T) {
+			store := newMockSortedSetStore()
+			store.fail = command
+			tracker := NewValkeyPresenceTracker(store.Client())
+			if err := tracker.RecordPresence(context.Background(), "hero", time.Now()); err == nil {
+				t.Fatal("store error suppressed")
+			}
+		})
+	}
+	store := newMockSortedSetStore()
+	store.aborts = 2
+	tracker := NewValkeyPresenceTracker(store.Client())
+	if err := tracker.RecordPresence(context.Background(), "hero", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.members) != 1 {
+		t.Fatal("retry duplicated/lost presence")
+	}
+	store.aborts = 16
+	if _, err := tracker.Observe(context.Background(), time.Now()); err == nil {
+		t.Fatal("contention limit ignored")
+	}
+}
+
+func TestValkeyPresenceTrackerMigratesExistingMembers(t *testing.T) {
+	now := time.Now().UTC()
+	store := newMockSortedSetStore()
+	store.members["hero"] = float64(now.Unix())
+	store.members["banquet:old:npc:0"] = float64(now.Add(time.Hour).Unix())
+	tracker := NewValkeyPresenceTracker(store.Client())
+	if err := tracker.RecordPresence(context.Background(), "hero", now); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := tracker.Observe(context.Background(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot != (PresenceSnapshot{Stored: 2, Active: 2}) {
+		t.Fatalf("migration = %+v", snapshot)
+	}
+}
+
+func TestValkeyPresenceTrackerClosesSocketWhenUnwatchFails(t *testing.T) {
+	closed := false
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		switch cmd.Commands()[0] {
+		case "ZRANGE":
+			return valkeytest.MakeStringSliceResult(nil)
+		case "EXEC":
+			return valkeytest.MakeIntSliceResult([]int64{1})
+		case "UNWATCH":
+			return valkeytest.MakeErrorResult(context.Canceled)
 		default:
 			return valkeytest.MakeOKResult()
 		}
 	}))
-}
-
-func TestValkeyPresenceTracker_BanquetLifecycleAndNaturalPurge(t *testing.T) {
-	store := newMockSortedSetStore()
-	tracker := NewValkeyPresenceTracker(store.Client())
-	ctx := context.Background()
-
-	startTime := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
-	duration := 1 * time.Hour
-
-	// 1. Defeating King Boss Tier 2 injects 20 attendees
-	err := tracker.RecordBanquetPresenceAt(ctx, "banquet-king2", 20, startTime, duration)
-	if err != nil {
-		t.Fatalf("RecordBanquetPresenceAt failed: %v", err)
+	client.CloseFn = func() { closed = true }
+	tracker := NewValkeyPresenceTracker(client)
+	if err := tracker.RecordPresence(context.Background(), "Hero", time.Now()); err != nil {
+		t.Fatal(err)
 	}
-
-	// 2. Querying presence 30 minutes in (cutoff = 12:25:00)
-	countDuring, err := tracker.CountActiveParticipants(ctx, startTime.Add(25*time.Minute))
-	if err != nil {
-		t.Fatalf("CountActiveParticipants failed: %v", err)
-	}
-	if countDuring != 20 {
-		t.Errorf("expected 20 active participants during banquet, got %d", countDuring)
-	}
-
-	// 3. Querying presence after 1 hour (expiry = 13:00:00; cutoff at 13:00:01)
-	// The participants naturally expire and are purged by ZREMRANGEBYSCORE
-	countAfter, err := tracker.CountActiveParticipants(ctx, startTime.Add(1*time.Hour+1*time.Second))
-	if err != nil {
-		t.Fatalf("CountActiveParticipants failed: %v", err)
-	}
-	if countAfter != 0 {
-		t.Errorf("expected 0 active participants after banquet expired, got %d", countAfter)
-	}
-}
-
-func TestEventPlazaService_VictoryBanquet_UnlocksTravelingMerchant(t *testing.T) {
-	ctx := context.Background()
-	clock := &mockClock{now: time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)}
-	store := newMockSortedSetStore()
-	tracker := NewValkeyPresenceTracker(store.Client())
-	repo := newMemoryRepo()
-	charRepo := newMemoryCharacterRepo()
-	invRepo := newMemoryInventoryRepo()
-
-	svc, err := NewService(
-		repo,
-		charRepo,
-		invRepo,
-		WithPresenceTracker(tracker),
-		WithClock(clock),
-	)
-	if err != nil {
-		t.Fatalf("NewService failed: %v", err)
-	}
-
-	// Initial state: 0 participants, Traveling merchant on journey (tier 0)
-	status, err := svc.GetPlazaStatus(ctx)
-	if err != nil {
-		t.Fatalf("GetPlazaStatus failed: %v", err)
-	}
-	if status.ActiveParticipants != 0 || status.MerchantTier != 0 {
-		t.Fatalf("expected 0 participants and tier 0, got %d, %d", status.ActiveParticipants, status.MerchantTier)
-	}
-
-	// 1. King Boss Tier 1 victory: records 10 attendees -> unlocks Tier 1 (Bronze)
-	banquet1, err := svc.RecordVictoryBanquet(ctx, "king1", "King Slime", "char-hero", "Hero", 1)
-	if err != nil {
-		t.Fatalf("RecordVictoryBanquet tier 1 failed: %v", err)
-	}
-	if banquet1.Tier != 1 {
-		t.Errorf("expected banquet tier 1, got %d", banquet1.Tier)
-	}
-
-	status1, err := svc.GetPlazaStatus(ctx)
-	if err != nil {
-		t.Fatalf("GetPlazaStatus failed: %v", err)
-	}
-	if status1.ActiveParticipants != 10 {
-		t.Errorf("expected 10 active participants, got %d", status1.ActiveParticipants)
-	}
-	if status1.MerchantTier != 1 {
-		t.Errorf("expected MerchantTier 1 (Bronze), got %d (%s)", status1.MerchantTier, status1.MerchantTierName)
-	}
-
-	// 2. King Boss Tier 2 victory: records 20 attendees -> unlocks Tier 2 (Silver)
-	// Reset store to isolate tier 2 test
-	store.members = make(map[string]float64)
-	banquet2, err := svc.RecordVictoryBanquet(ctx, "king2", "King Goblin", "char-hero", "Hero", 2)
-	if err != nil {
-		t.Fatalf("RecordVictoryBanquet tier 2 failed: %v", err)
-	}
-	if banquet2.Tier != 2 {
-		t.Errorf("expected banquet tier 2, got %d", banquet2.Tier)
-	}
-
-	status2, err := svc.GetPlazaStatus(ctx)
-	if err != nil {
-		t.Fatalf("GetPlazaStatus failed: %v", err)
-	}
-	if status2.ActiveParticipants != 20 {
-		t.Errorf("expected 20 active participants, got %d", status2.ActiveParticipants)
-	}
-	if status2.MerchantTier != 2 {
-		t.Errorf("expected MerchantTier 2 (Silver), got %d (%s)", status2.MerchantTier, status2.MerchantTierName)
-	}
-
-	// 3. King Boss Tier 3 victory: records 30 attendees -> unlocks Tier 3 (Gold)
-	store.members = make(map[string]float64)
-	banquet3, err := svc.RecordVictoryBanquet(ctx, "king3", "King Dragon", "char-hero", "Hero", 3)
-	if err != nil {
-		t.Fatalf("RecordVictoryBanquet tier 3 failed: %v", err)
-	}
-	if banquet3.Tier != 3 {
-		t.Errorf("expected banquet tier 3, got %d", banquet3.Tier)
-	}
-
-	status3, err := svc.GetPlazaStatus(ctx)
-	if err != nil {
-		t.Fatalf("GetPlazaStatus failed: %v", err)
-	}
-	if status3.ActiveParticipants != 30 {
-		t.Errorf("expected 30 active participants, got %d", status3.ActiveParticipants)
-	}
-	if status3.MerchantTier != 3 {
-		t.Errorf("expected MerchantTier 3 (Gold), got %d (%s)", status3.MerchantTier, status3.MerchantTierName)
-	}
-
-	// 4. Advance clock by 1 hour + 6 minutes (beyond 1 hour duration + 5 min presence cutoff)
-	clock.now = clock.now.Add(1*time.Hour + 6*time.Minute)
-	statusExpired, err := svc.GetPlazaStatus(ctx)
-	if err != nil {
-		t.Fatalf("GetPlazaStatus failed: %v", err)
-	}
-	if statusExpired.ActiveParticipants != 0 {
-		t.Errorf("expected 0 active participants after expiry, got %d", statusExpired.ActiveParticipants)
-	}
-	if statusExpired.MerchantTier != 0 {
-		t.Errorf("expected MerchantTier 0 after expiry, got %d", statusExpired.MerchantTier)
+	if !closed {
+		t.Fatal("socket with uncleared WATCH was returned to the pool")
 	}
 }

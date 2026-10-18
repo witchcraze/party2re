@@ -8,9 +8,21 @@ import (
 	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/collection"
 	"github.com/witchcraze/party2re/internal/contest"
+	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
+
+type victoryPlaza interface {
+	RecordVictoryBanquet(context.Context, string, string, string, string, int) (eventplaza.CelebrationBanquet, error)
+}
+
+func buildVictoryBanquetHook(plaza victoryPlaza) boss.VictoryBanquetHook {
+	return func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error {
+		_, err := plaza.RecordVictoryBanquet(ctx, bossID, bossName, slayerID, slayerName, tier)
+		return err
+	}
+}
 
 type postAdventureTavern interface {
 	ResetFullness(ctx context.Context, characterID string) error

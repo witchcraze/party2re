@@ -101,10 +101,7 @@ func wireHooks(
 		return misc.medal.RecordProgress(ctx, characterID, medal.MetricAlchemyCrafts, 1)
 	})
 
-	cmbt.boss.SetVictoryBanquetHook(func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error {
-		_, err := misc.eventplaza.RecordVictoryBanquet(ctx, bossID, bossName, slayerID, slayerName, tier)
-		return err
-	})
+	cmbt.boss.SetVictoryBanquetHook(buildVictoryBanquetHook(misc.eventplaza))
 
 	misc.casino.SetGamePlayedHook(func(ctx context.Context, characterID string, gameName string) error {
 		return misc.medal.RecordProgress(ctx, characterID, medal.MetricCasinoGames, 1)

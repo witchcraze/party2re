@@ -1,7 +1,7 @@
 {
   "/eventplaza": {
     "get": {
-      "description": "Retrieves the event plaza status including active town population, traveling merchant tier, and ongoing boss victory celebration banquets.",
+      "description": "Retrieves displayed active population and a separate merchant_selection_count taken before expiry/duplicate cleanup. Selects the merchant from that snapshot, adds its presence, then cleans records for display. Observations can change the next request's tier; no real visitor heartbeat or reward is added. Includes ongoing boss victory celebration banquets pending their retirement.",
       "operationId": "getEventPlaza",
       "responses": {
         "200": {
@@ -201,7 +201,7 @@
   },
   "/eventplaza/merchant/items": {
     "get": {
-      "description": "Lists rare goods, materials, and equipment sold by the traveling merchant based on the currently unlocked town population tier.",
+      "description": "Lists traveling merchant goods using the stored row count before this request adds merchant presence and cleans expired/duplicate records. The resulting tier can differ on the next observation or purchase; active display population does not determine the catalog.",
       "operationId": "getEventPlazaMerchantItems",
       "responses": {
         "200": {
@@ -238,7 +238,7 @@
   },
   "/eventplaza/merchant/purchase": {
     "post": {
-      "description": "Purchases items from the traveling merchant for a specific character with concurrency-safe transaction locking and validation.",
+      "description": "Selects the merchant catalog from stored presence records before merchant insertion and display cleanup, then validates the purchase with concurrency-safe asset transaction locking. Re-evaluates the tier for this request rather than reusing a previous status or catalog response.",
       "operationId": "purchaseEventPlazaMerchantItem",
       "requestBody": {
         "content": {

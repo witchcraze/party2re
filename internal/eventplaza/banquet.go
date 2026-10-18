@@ -60,9 +60,8 @@ func (s *Service) RecordVictoryBanquet(
 		return CelebrationBanquet{}, fmt.Errorf("failed to save celebration banquet: %w", err)
 	}
 
-	attendees := BanquetAttendeesForTier(tier)
 	//lint:ignore error-swallow best-effort banquet presence recording
-	_ = s.RecordBanquetPresence(ctx, banquet.ID, attendees, time.Hour)
+	_ = s.recordVictoryCrowd(ctx, now)
 
 	return banquet, nil
 }
@@ -121,7 +120,7 @@ func (s *Service) ToastBanquet(ctx context.Context, banquetID string, characterI
 			return fmt.Errorf("failed to update character money on toast: %w", err)
 		}
 
-		_ = s.recordPresence(txCtx, characterID, now)
+		_ = s.recordPresence(txCtx, characterID, char.Name, now)
 
 		result = BanquetToastResult{
 			BanquetID:            banquetID,

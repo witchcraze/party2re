@@ -105,11 +105,12 @@ func TestHandleGetEventPlaza(t *testing.T) {
 	mockSvc := &mockEventPlazaService{
 		getPlazaStatusFn: func(ctx context.Context) (eventplaza.PlazaStatus, error) {
 			return eventplaza.PlazaStatus{
-				ActiveParticipants:  25,
-				MerchantTier:        2,
-				MerchantTierName:    "Silver Traveling Merchant (熟練の行商人バザー)",
-				NextTierThreshold:   30,
-				ActiveBanquetsCount: 1,
+				ActiveParticipants:     7,
+				MerchantSelectionCount: 25,
+				MerchantTier:           2,
+				MerchantTierName:       "Silver Traveling Merchant (熟練の行商人バザー)",
+				NextTierThreshold:      30,
+				ActiveBanquetsCount:    1,
 			}, nil
 		},
 	}
@@ -132,7 +133,7 @@ func TestHandleGetEventPlaza(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if res.ActiveParticipants != 25 || res.MerchantTier != 2 {
+	if res.ActiveParticipants != 7 || res.MerchantSelectionCount != 25 || res.MerchantTier != 2 {
 		t.Errorf("unexpected plaza status: %+v", res)
 	}
 }
