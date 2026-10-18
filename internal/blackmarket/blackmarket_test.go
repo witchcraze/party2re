@@ -185,6 +185,101 @@ func TestCatalogLoading(t *testing.T) {
 	if !ok || yURare268.URarePoints != 50 || yURare268.RarePoints != 0 {
 		t.Errorf("unexpected sacrifice yield for item-268: %+v", yURare268)
 	}
+
+	// Verify item-059 sacrifice yield
+	yItem059, ok := catalog.GetSacrificeYield("item-059")
+	if !ok || yItem059.RarePoints != 1 || yItem059.URarePoints != 0 {
+		t.Errorf("unexpected sacrifice yield for item-059: %+v (ok=%v)", yItem059, ok)
+	}
+
+	// Verify all 46 authentic legacy sacrifice items
+	expectedSacrifices := map[string]blackmarket.SacrificeYield{
+		// Weapons: 29, 30, 33..40 (10 items)
+		"weapon-29": {ItemDefinitionID: "weapon-29", RarePoints: 1, URarePoints: 0},
+		"weapon-30": {ItemDefinitionID: "weapon-30", RarePoints: 1, URarePoints: 0},
+		"weapon-33": {ItemDefinitionID: "weapon-33", RarePoints: 1, URarePoints: 0},
+		"weapon-34": {ItemDefinitionID: "weapon-34", RarePoints: 1, URarePoints: 0},
+		"weapon-35": {ItemDefinitionID: "weapon-35", RarePoints: 1, URarePoints: 0},
+		"weapon-36": {ItemDefinitionID: "weapon-36", RarePoints: 1, URarePoints: 0},
+		"weapon-37": {ItemDefinitionID: "weapon-37", RarePoints: 1, URarePoints: 0},
+		"weapon-38": {ItemDefinitionID: "weapon-38", RarePoints: 1, URarePoints: 0},
+		"weapon-39": {ItemDefinitionID: "weapon-39", RarePoints: 1, URarePoints: 0},
+		"weapon-40": {ItemDefinitionID: "weapon-40", RarePoints: 1, URarePoints: 0},
+		// Armors: 35..40 (6 items)
+		"armor-35": {ItemDefinitionID: "armor-35", RarePoints: 1, URarePoints: 0},
+		"armor-36": {ItemDefinitionID: "armor-36", RarePoints: 1, URarePoints: 0},
+		"armor-37": {ItemDefinitionID: "armor-37", RarePoints: 1, URarePoints: 0},
+		"armor-38": {ItemDefinitionID: "armor-38", RarePoints: 1, URarePoints: 0},
+		"armor-39": {ItemDefinitionID: "armor-39", RarePoints: 1, URarePoints: 0},
+		"armor-40": {ItemDefinitionID: "armor-40", RarePoints: 1, URarePoints: 0},
+		// Regular Items: 28, 29, 40, 57..71, 87, 104..107, 109 (24 items)
+		"item-028": {ItemDefinitionID: "item-028", RarePoints: 1, URarePoints: 0},
+		"item-029": {ItemDefinitionID: "item-029", RarePoints: 1, URarePoints: 0},
+		"item-040": {ItemDefinitionID: "item-040", RarePoints: 1, URarePoints: 0},
+		"item-057": {ItemDefinitionID: "item-057", RarePoints: 1, URarePoints: 0},
+		"item-058": {ItemDefinitionID: "item-058", RarePoints: 1, URarePoints: 0},
+		"item-059": {ItemDefinitionID: "item-059", RarePoints: 1, URarePoints: 0},
+		"item-060": {ItemDefinitionID: "item-060", RarePoints: 1, URarePoints: 0},
+		"item-061": {ItemDefinitionID: "item-061", RarePoints: 1, URarePoints: 0},
+		"item-062": {ItemDefinitionID: "item-062", RarePoints: 1, URarePoints: 0},
+		"item-063": {ItemDefinitionID: "item-063", RarePoints: 1, URarePoints: 0},
+		"item-064": {ItemDefinitionID: "item-064", RarePoints: 1, URarePoints: 0},
+		"item-065": {ItemDefinitionID: "item-065", RarePoints: 1, URarePoints: 0},
+		"item-066": {ItemDefinitionID: "item-066", RarePoints: 1, URarePoints: 0},
+		"item-067": {ItemDefinitionID: "item-067", RarePoints: 1, URarePoints: 0},
+		"item-068": {ItemDefinitionID: "item-068", RarePoints: 1, URarePoints: 0},
+		"item-069": {ItemDefinitionID: "item-069", RarePoints: 1, URarePoints: 0},
+		"item-070": {ItemDefinitionID: "item-070", RarePoints: 1, URarePoints: 0},
+		"item-071": {ItemDefinitionID: "item-071", RarePoints: 1, URarePoints: 0},
+		"item-087": {ItemDefinitionID: "item-087", RarePoints: 1, URarePoints: 0},
+		"item-104": {ItemDefinitionID: "item-104", RarePoints: 1, URarePoints: 0},
+		"item-105": {ItemDefinitionID: "item-105", RarePoints: 1, URarePoints: 0},
+		"item-106": {ItemDefinitionID: "item-106", RarePoints: 1, URarePoints: 0},
+		"item-107": {ItemDefinitionID: "item-107", RarePoints: 1, URarePoints: 0},
+		"item-109": {ItemDefinitionID: "item-109", RarePoints: 1, URarePoints: 0},
+		// Ultra-Rare Items: 263..268 (6 items)
+		"item-263": {ItemDefinitionID: "item-263", RarePoints: 0, URarePoints: 1},
+		"item-264": {ItemDefinitionID: "item-264", RarePoints: 0, URarePoints: 3},
+		"item-265": {ItemDefinitionID: "item-265", RarePoints: 0, URarePoints: 5},
+		"item-266": {ItemDefinitionID: "item-266", RarePoints: 0, URarePoints: 10},
+		"item-267": {ItemDefinitionID: "item-267", RarePoints: 0, URarePoints: 20},
+		"item-268": {ItemDefinitionID: "item-268", RarePoints: 0, URarePoints: 50},
+	}
+
+	if len(expectedSacrifices) != 46 {
+		t.Fatalf("expected 46 items in test verification set, got %d", len(expectedSacrifices))
+	}
+
+	sacrifices := catalog.Sacrifices()
+	if len(sacrifices) != 46 {
+		t.Errorf("expected 46 sacrifices in catalog, got %d", len(sacrifices))
+	}
+
+	for _, s := range sacrifices {
+		if _, ok := expectedSacrifices[s.ItemDefinitionID]; !ok {
+			t.Errorf("unexpected sacrifice item in catalog: %+v", s)
+		}
+	}
+
+	for id, expected := range expectedSacrifices {
+		actual, ok := catalog.GetSacrificeYield(id)
+		if !ok {
+			t.Errorf("missing expected sacrifice item: %s", id)
+			continue
+		}
+		if actual.RarePoints != expected.RarePoints || actual.URarePoints != expected.URarePoints {
+			t.Errorf("item %s yield mismatch: got (Rare=%d, URare=%d), expected (Rare=%d, URare=%d)",
+				id, actual.RarePoints, actual.URarePoints, expected.RarePoints, expected.URarePoints)
+		}
+	}
+
+	// Verify non-rare / non-eligible items return false
+	ineligibleSample := []string{"weapon-01", "armor-01", "item-001", "item-056", "item-072", "item-086", "item-088", "item-262", "item-269"}
+	for _, id := range ineligibleSample {
+		if y, ok := catalog.GetSacrificeYield(id); ok {
+			t.Errorf("item %s should not be sacrifice eligible, but got %+v", id, y)
+		}
+	}
 }
 
 func TestCheckEligibility(t *testing.T) {
@@ -285,6 +380,7 @@ func TestSacrificeItem_Inventory(t *testing.T) {
 	itemDefs := newMockItemDefProvider()
 	itemDefs.defs["weapon-29"] = coreitem.Definition{ID: "weapon-29", Name: "はやぶさの剣"}
 	itemDefs.defs["item-263"] = coreitem.Definition{ID: "item-263", Name: "オリハルコン"}
+	itemDefs.defs["item-059"] = coreitem.Definition{ID: "item-059", Name: "天馬のたづな"}
 	itemDefs.defs["item-001"] = coreitem.Definition{ID: "item-001", Name: "薬草"}
 
 	svc, _ := blackmarket.NewService(
@@ -338,6 +434,32 @@ func TestSacrificeItem_Inventory(t *testing.T) {
 		t.Errorf("unexpected dialogue: %s", resURare.Message)
 	}
 
+	// Sacrifice restored item-059 (天馬のたづな)
+	inst059, _ := coreitem.NewInstance("item-059", 1)
+	_ = inv.Add(inst059)
+	_ = invRepo.Save(ctx, inv)
+
+	res059, err := svc.SacrificeItem(ctx, "char-hero", inst059.ID)
+	if err != nil {
+		t.Fatalf("unexpected error sacrificing item-059: %v", err)
+	}
+	if res059.RarePointsGained != 1 || res059.URarePointsGained != 0 {
+		t.Errorf("expected 1 rare point and 0 u-rare points for item-059, got rare=%d u-rare=%d",
+			res059.RarePointsGained, res059.URarePointsGained)
+	}
+	if res059.TotalRarePoints != 2 || res059.TotalURarePoints != 1 {
+		t.Errorf("expected total rare=2 u-rare=1, got rare=%d u-rare=%d", res059.TotalRarePoints, res059.TotalURarePoints)
+	}
+	if res059.Message != "…天馬のたづな…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…" {
+		t.Errorf("unexpected dialogue for item-059: %s", res059.Message)
+	}
+
+	// Verify item-059 was consumed from inventory
+	inv, _ = invRepo.FindByCharacterID(ctx, "char-hero")
+	if _, found := inv.Find(inst059.ID); found {
+		t.Errorf("expected item-059 to be consumed from inventory")
+	}
+
 	// Sacrifice non-rare item -> ErrNotSacrificeEligible
 	instCommon, _ := coreitem.NewInstance("item-001", 1)
 	_ = inv.Add(instCommon)
@@ -358,6 +480,7 @@ func TestSacrificeItem_Depot(t *testing.T) {
 	catalog, _ := blackmarket.LoadDefaultCatalog()
 	itemDefs := newMockItemDefProvider()
 	itemDefs.defs["armor-35"] = coreitem.Definition{ID: "armor-35", Name: "神秘の鎧"}
+	itemDefs.defs["item-059"] = coreitem.Definition{ID: "item-059", Name: "天馬のたづな"}
 
 	svc, _ := blackmarket.NewService(
 		charRepo,
@@ -389,6 +512,103 @@ func TestSacrificeItem_Depot(t *testing.T) {
 	dep, _ = depotRepo.FindByCharacterID(ctx, "char-depot")
 	if len(dep.Items) != 0 {
 		t.Errorf("expected depot to be empty after sacrifice, got %d items", len(dep.Items))
+	}
+
+	// Sacrifice restored item-059 from depot
+	inst059, _ := coreitem.NewInstance("item-059", 1)
+	_ = dep.AddItem(inst059)
+	_ = depotRepo.Save(ctx, dep)
+
+	res059, err := svc.SacrificeItem(ctx, "char-depot", inst059.ID)
+	if err != nil {
+		t.Fatalf("unexpected sacrifice item-059 from depot error: %v", err)
+	}
+	if res059.RarePointsGained != 1 || res059.TotalRarePoints != 2 || res059.URarePointsGained != 0 {
+		t.Errorf("expected gained=1 total=2 rare points for item-059 from depot, got gained=%d total=%d",
+			res059.RarePointsGained, res059.TotalRarePoints)
+	}
+	dep, _ = depotRepo.FindByCharacterID(ctx, "char-depot")
+	if len(dep.Items) != 0 {
+		t.Errorf("expected depot to be empty after item-059 sacrifice, got %d items", len(dep.Items))
+	}
+}
+
+func TestSacrificeItem_PreservationOnFailure(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	depotRepo := newMockDepotRepo()
+	bmRepo := newMockBlackMarketRepo()
+	catalog, _ := blackmarket.LoadDefaultCatalog()
+	itemDefs := newMockItemDefProvider()
+	itemDefs.defs["item-001"] = coreitem.Definition{ID: "item-001", Name: "薬草"}
+	itemDefs.defs["item-059"] = coreitem.Definition{ID: "item-059", Name: "天馬のたづな"}
+
+	// Set initial points
+	bmRepo.points["char-fail"] = blackmarket.CharacterPoints{
+		CharacterID: "char-fail",
+		RarePoints:  10,
+		URarePoints: 5,
+	}
+
+	char := corecharacter.Character{ID: "char-fail", Name: "FailTestChar"}
+	_ = charRepo.Update(ctx, char)
+
+	inv, _ := invRepo.FindByCharacterID(ctx, "char-fail")
+	instCommon, _ := coreitem.NewInstance("item-001", 2)
+	_ = inv.Add(instCommon)
+	_ = invRepo.Save(ctx, inv)
+
+	dep, _ := depotRepo.FindByCharacterID(ctx, "char-fail")
+	instDepot059, _ := coreitem.NewInstance("item-059", 1)
+	_ = dep.AddItem(instDepot059)
+	_ = depotRepo.Save(ctx, dep)
+
+	svc, _ := blackmarket.NewService(
+		charRepo,
+		invRepo,
+		bmRepo,
+		catalog,
+		blackmarket.WithDepotRepository(depotRepo),
+		blackmarket.WithItemDefinitionProvider(itemDefs),
+		blackmarket.WithTransactionProvider(&mockTxProvider{}),
+	)
+
+	// 1. Failure: Ineligible item rejected
+	_, err := svc.SacrificeItem(ctx, "char-fail", instCommon.ID)
+	if !errors.Is(err, blackmarket.ErrNotSacrificeEligible) {
+		t.Fatalf("expected ErrNotSacrificeEligible, got %v", err)
+	}
+
+	// Verify inventory unchanged
+	inv, _ = invRepo.FindByCharacterID(ctx, "char-fail")
+	foundInst, found := inv.Find(instCommon.ID)
+	if !found || foundInst.Quantity != 2 {
+		t.Errorf("expected inventory item to be preserved with quantity 2, got found=%v quantity=%d", found, foundInst.Quantity)
+	}
+
+	// Verify depot unchanged
+	dep, _ = depotRepo.FindByCharacterID(ctx, "char-fail")
+	if len(dep.Items) != 1 || dep.Items[0].DefinitionID != "item-059" {
+		t.Errorf("expected depot item-059 preserved, got %+v", dep.Items)
+	}
+
+	// Verify points unchanged
+	pts := bmRepo.points["char-fail"]
+	if pts.RarePoints != 10 || pts.URarePoints != 5 {
+		t.Errorf("expected points preserved at (10, 5), got (%d, %d)", pts.RarePoints, pts.URarePoints)
+	}
+
+	// 2. Failure: Non-existent item ID rejected
+	_, err = svc.SacrificeItem(ctx, "char-fail", "non-existent-instance-id")
+	if !errors.Is(err, blackmarket.ErrUnownedItem) {
+		t.Fatalf("expected ErrUnownedItem, got %v", err)
+	}
+
+	// Verify points still unchanged
+	pts = bmRepo.points["char-fail"]
+	if pts.RarePoints != 10 || pts.URarePoints != 5 {
+		t.Errorf("expected points preserved at (10, 5), got (%d, %d)", pts.RarePoints, pts.URarePoints)
 	}
 }
 
