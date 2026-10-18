@@ -26,16 +26,44 @@
           "description": "Black market status and trade prize catalogs"
         },
         "401": {
-          "$ref": "#/components/responses/Unauthorized"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Authentication required"
         },
         "403": {
-          "$ref": "#/components/responses/Forbidden"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Access denied"
         },
         "404": {
-          "$ref": "#/components/responses/NotFound"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character or prize not found"
         },
         "500": {
-          "$ref": "#/components/responses/InternalServerError"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unexpected storage or service failure"
         }
       },
       "security": [
@@ -76,16 +104,44 @@
           "description": "Merchant inspection dialogue"
         },
         "401": {
-          "$ref": "#/components/responses/Unauthorized"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Authentication required"
         },
         "403": {
-          "$ref": "#/components/responses/Forbidden"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Access denied"
         },
         "404": {
-          "$ref": "#/components/responses/NotFound"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character or prize not found"
         },
         "500": {
-          "$ref": "#/components/responses/InternalServerError"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unexpected storage or service failure"
         }
       },
       "security": [
@@ -119,23 +175,51 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BlackMarketPointsStatus"
+                "$ref": "#/components/schemas/BlackMarketStatus"
               }
             }
           },
           "description": "Black Market points and prize catalogs status"
         },
         "401": {
-          "$ref": "#/components/responses/Unauthorized"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Authentication required"
         },
         "403": {
-          "$ref": "#/components/responses/Forbidden"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Access denied"
         },
         "404": {
-          "$ref": "#/components/responses/NotFound"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character or prize not found"
         },
         "500": {
-          "$ref": "#/components/responses/InternalServerError"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unexpected storage or service failure"
         }
       },
       "security": [
@@ -186,19 +270,54 @@
           "description": "Item sacrifice successful"
         },
         "400": {
-          "$ref": "#/components/responses/BadRequest"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Invalid request or rejected trade"
         },
         "401": {
-          "$ref": "#/components/responses/Unauthorized"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Authentication required"
         },
         "403": {
-          "$ref": "#/components/responses/Forbidden"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Access denied"
         },
         "404": {
-          "$ref": "#/components/responses/NotFound"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character or prize not found"
         },
         "500": {
-          "$ref": "#/components/responses/InternalServerError"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unexpected storage or service failure"
         }
       },
       "security": [
@@ -239,16 +358,44 @@
           "description": "Merchant dialogue"
         },
         "401": {
-          "$ref": "#/components/responses/Unauthorized"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Authentication required"
         },
         "403": {
-          "$ref": "#/components/responses/Forbidden"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Access denied"
         },
         "404": {
-          "$ref": "#/components/responses/NotFound"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character or prize not found"
         },
         "500": {
-          "$ref": "#/components/responses/InternalServerError"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unexpected storage or service failure"
         }
       },
       "security": [
@@ -299,19 +446,54 @@
           "description": "Prize trade exchange successful"
         },
         "400": {
-          "$ref": "#/components/responses/BadRequest"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Invalid request or rejected trade"
         },
         "401": {
-          "$ref": "#/components/responses/Unauthorized"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Authentication required"
         },
         "403": {
-          "$ref": "#/components/responses/Forbidden"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Access denied"
         },
         "404": {
-          "$ref": "#/components/responses/NotFound"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character or prize not found"
         },
         "500": {
-          "$ref": "#/components/responses/InternalServerError"
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unexpected storage or service failure"
         }
       },
       "security": [

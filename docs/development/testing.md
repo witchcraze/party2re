@@ -31,33 +31,11 @@ For DB/Valkey changes, run affected-package tests with live services and connect
 
 ## 3. Canonical Commands
 
-All canonical commands run through the repository `Makefile`:
-
-```bash
-# Start local DB and Cache for fast Inner Loop and MCP access
-make up
-
-# Auto-format Go code and synchronize OpenAPI 3.1 specifications
-make fmt
-
-# All-package host tests (integration coverage depends on connection settings)
-make test
-
-# Host-based integration tests (requires make up)
-make test-integration
-
-# Run all local checks (formatting, vet, openapi-check, db-migrate, full host tests, smoke build)
-make check
-
-# Clean verification with full DB reset
-make check-clean
-
-# Apply pending database migrations / reset from scratch
-make db-migrate
-make db-reset
-```
-
----
+The [Makefile](../../Makefile) owns command definitions. Use `make up` for local
+services, `make test-integration` for host tests with DB/Valkey, `make test-docker`
+for the container runner, and `make check` for full verification. `make test`
+does not supply connection settings. Environment reset/disposal is described in
+[development-environment.md](development-environment.md#database-initialization-and-migration).
 
 ## 4. Container Roles
 
@@ -90,25 +68,68 @@ Cleanup such as `DELETE ... WHERE character_id = ?` is appropriate when the char
 
 The existing repository reset assertion in [`ranking_extra_repository_test.go`](../../internal/database/ranking_extra_repository_test.go) keeps its mutation and reads in one transaction and rolls back before checking the fixture again outside it. This does not verify committed cross-connection behavior. If rollback cannot contain every write, or locking interferes with other tests, use a dedicated DB. Connection-local temporary tables in [`job_points_migration_test.go`](../../internal/database/job_points_migration_test.go) and [`replay_migration_test.go`](../../internal/database/replay_migration_test.go) isolate migration fixtures without clearing persistent tables; their connection boundary must be preserved.
 
-Environment-wide initialization/disposal is separate from per-test setup/cleanup. A fresh CI job may initialize and discard its whole environment; a developer may explicitly reset a local environment between uses. These permissions do not authorize an individual shared-DB test to clear unrelated rows. See [local reset procedures](development-environment.md#database-initialization-and-migration) and [CI environment lifetime](ci-cd.md#test-environment-lifetime).
+Environment-wide initialization/disposal is separate from per-test setup/cleanup. A fresh CI job may initialize and discard its whole environment; a developer may explicitly reset a local environment between uses. These permissions do not authorize an individual shared-DB test to clear unrelated rows. See [local reset procedures](development-environment.md#database-initialization-and-migration) and [CI environment lifetime](#8-continuous-integration-and-delivery).
 
 Future development with multiple concurrent sessions should isolate each environment's DB, cache and runtime resources. This policy does not add session provisioning or change the current Compose configuration.
 
-### 5.2 Existing Dedicated Database Setup
+### 5.2 Dedicated Database Setup
 
-[`weeklyRotationDB`](../../internal/ranking/weekly_rotation_integration_test.go), [`contestIntegrationDB`](../../internal/contest/integration_test.go), [`homeIsolatedDB`](../../internal/home/integration_test.go) (copies all table definitions for the capacity-sensitive house build test), [`depotIsolatedDB`](../../internal/database/depot_concurrency_test.go) (keeps item tables sparse for locking-plan regression coverage), [`replayArchiveDB`](../../internal/api/http/replay_authorization_integration_test.go), [`takarakujiIsolatedDB`](../../internal/lottery/integration_test.go) and [`lotteryIsolatedDB`](../../internal/database/lottery_repository_test.go) create unique databases, copy only required table definitions (including foreign keys) from `PARTY2_DB_DSN`, and drop only their own databases during cleanup. Weekly rotation workers retain separate connections and transactions; shared ranking rows are never cleared or restored by these fixtures.
+Dedicated fixtures create uniquely named databases, copy the required schema
+including foreign keys, and drop only their own databases. Preserve real
+worker/commit boundaries when those are the subject of the test.
+`PARTY2_TEST_DB_ADMIN_DSN` must permit database creation/deletion; Compose,
+`make test-integration` and `make check` provide it. For direct host tests use
+`root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails
+DB-enabled dedicated tests rather than falling back to the shared database.
 
-`PARTY2_TEST_DB_ADMIN_DSN` must allow creating/dropping these databases. It is supplied by `make test-integration`, `make check`, and the development Compose test runner. For direct host runs with the local Compose services, set it to `root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails these DB-enabled tests rather than falling back to the shared database. This administrator connection is for tests only; ordinary shared-DB tests do not require database-creation privileges.
 
-### 5.3 Known Implementation Gaps
+## 6. Mechanical AST Static Analysis Linters
 
-Currently, all test fixtures comply with the database ownership and isolation policy. Former gaps, including the [Lottery tests clearing shared ticket/round tables (#1396)](https://github.com/witchcraze/party2re/issues/1396), have been resolved into dedicated databases.
+In-tree Go tests under [internal/architecture](../../internal/architecture/),
+[internal/database](../../internal/database/), Core and HTTP enforce architectural
+boundaries, transaction/lock usage, authentication wrappers, mutation encapsulation,
+error propagation and unused-definition checks. `make arch-lint`, `make lock-lint`
+and `make check` run the relevant suites. Their source owns the exact scope and
+exceptions; passing AST checks do not certify runtime locks or legacy parity.
 
----
+Legitimate best-effort/compensatory persistence calls use
+`//lint:ignore error-swallow <reason>` immediately before or on the statement.
+New checks use standard Go AST packages, synthetic positive/negative cases, and
+actionable file/line diagnostics. Avoid duplicating the checks' implementation in prose.
 
-## 6. Related Documents
+## 7. Continuous Performance Verification & Benchmarking
+
+Functional test timeout constraints are owned by the [workflow rule](../../.agents/rules/01-development-workflow.md#unit--integration-test-time-budget-policy-vs-benchmarking).
+Measure performance separately with `testing.B`: `make bench` runs
+[scripts/benchmark.sh](../../scripts/benchmark.sh), writes `.benchmarks/current.txt`
+and compares an existing baseline. `./scripts/benchmark.sh --record` records
+`.benchmarks/baseline.txt`; these local results are ignored by Git.
+`go run ./scripts/benchcompare .benchmarks/baseline.txt .benchmarks/current.txt`
+compares latency/allocations; the default +30% regression threshold exits with code 2.
+
+## 8. Continuous Integration and Delivery
+
+The [CI workflow](../../.github/workflows/ci.yml) runs formatting, OpenAPI sync
+validation, vet and tests with atomic coverage in the Compose development
+container, then builds the production image. It does not currently run the race
+detector or exercise the built production image. MariaDB initializes from migrations
+on first volume creation; the GitHub-hosted runner is disposable per job. Tests
+inside a job still follow the database ownership/isolation rules above.
+
+CI runs on pushes to main and PR opening/synchronization/reopening against main.
+After retargeting a PR, use a supported trigger and confirm a passing run for the
+final head; an absent check is not a passing check. Before merge, verify native
+closing-Issue linkage (`gh pr view <number> --json closingIssuesReferences`);
+`Closes #...` links natively when the base is the default branch. Merge completion
+and related-ticket synchronization follow the [workflow rule](../../.agents/rules/01-development-workflow.md#2-issue-and-pr-workflow).
+
+Investigate a CI failure against the pre-change baseline in isolated checkouts
+under matching conditions. Record revisions, commands and reproducible seed/input;
+preserve behavioral assertions when fixing an unstable fixture. Container startup
+and headless gameplay coverage remain distinct from a successful image build.
+
+## 9. Related Documents
 
 - [`../../AGENTS.md`](../../AGENTS.md) & [`.agents/rules/01-development-workflow.md`](../../.agents/rules/01-development-workflow.md) — mandatory TDD and DoD rules.
-- [`ast-linters.md`](ast-linters.md) — mechanical AST static analysis suite.
-- [`benchmarking.md`](benchmarking.md) — performance benchmarking and regression tracking.
-- [`issue-workflow.md`](issue-workflow.md) — acceptance criteria and PR review lifecycle.
+- [`development-environment.md`](development-environment.md) — local services and reset procedures.
+- [`openapi.md`](openapi.md) — transport specification maintenance.

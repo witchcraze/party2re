@@ -14,7 +14,7 @@ Docker Compose provides:
 - `app` — Go 1.26.7 development container;
 - `mariadb` — MariaDB using the `latest` image;
 - `valkey` — Valkey (Redis-compatible) used for the ScheduledAction queue
-  (added in Issue #106). Configured with both AOF and RDB persistence so
+  Configured with both AOF and RDB persistence so
   pending scheduled actions survive container restarts. The `app` service
   connects via `PARTY2_VALKEY_ADDR: valkey:6379`.
 
@@ -87,4 +87,3 @@ The named MariaDB volume remains after this command.
 
 - [`testing.md`](testing.md) — canonical formatting, test, and analysis commands.
 - [`dependency-policy.md`](dependency-policy.md) — dependency and license rules.
-- [`ci-cd.md`](ci-cd.md) — continuous verification principles.

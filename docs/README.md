@@ -20,6 +20,12 @@ During Version 1.0 reconstruction, the original Party2 project defines game beha
 
 `api/openapi.json` and `internal/api/http/openapi.json` are generated bundles. Keep both because one is distributed as documentation and the other is embedded in the server; edit their modular sources.
 
+Authentication and logging contracts live in [architecture/interfaces.md](architecture/interfaces.md),
+scheduling lifecycles in [architecture/valkey-keyspace.md](architecture/valkey-keyspace.md#scheduled-work-lifecycle),
+and maintenance controls in [design/admin.md](design/admin.md#system-maintenance-mode).
+[development/testing.md](development/testing.md) owns local/CI verification and benchmarking;
+[assets/required-images.md](assets/required-images.md) owns asset-type guidance and placeholder provenance.
+
 Use the [documentation maintenance rule](../.agents/rules/02-documentation-sync.md) for updates, additions and scoped consolidation. Permanent documents explain contracts and decisions; Issues/PRs and Git preserve detailed work history. Keep meaningful evidence and unresolved gaps with their owning explanation or linked Issue. A frozen inventory is not current coverage certification.
 
 When auditing documents, inventory files and references first, then compare statements with the appropriate authority above. Preserve correct legacy rules when Go differs and record the implementation gap with its source evidence. Label proposed contracts as planned, and obsolete designs as historical. Consolidate duplicate API tables and implementation inventories into their existing source of truth rather than maintaining multiple independent copies.

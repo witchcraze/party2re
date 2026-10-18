@@ -320,16 +320,13 @@ In `ExchangePrize`, the configured character repository locks the character (Ran
 
 ### Showdown Settlement Atomicity & Error Boundary
 
-During multiplayer game actions and showdown resolution (`highlow`, `doppel`, `indian_poker`), financial updates (coin deductions, payouts, casino wins) in MariaDB and transient room/member updates in Valkey operate under a strict settlement failure boundary:
-
-- **Pre-Payload Failures (Authoritative Write Failure)**:
-  If balance checks (`s.repo.GetAccount`), coin deductions/payouts, or the Valkey room/member payload `SET` fails, the error is propagated immediately and the entire MariaDB transaction rolls back cleanly. Unsettled coins remain in players' balances, and room state is not advanced.
-- **Post-Payload Secondary Index Failures (`SecondarySyncError`)**:
-  Once the Valkey room payload `SET` succeeds (e.g. pot is committed as settled and room status transitions to waiting/round 0), any failure in secondary indices (active room index `ZADD`/`ZREM` or member mapping `SET`/`DEL`) is wrapped as `ErrSecondarySync`. Because the game state has already transitioned authoritatively in Valkey, rolling back SQL would destroy the pot and leave balances short. The service therefore allows the durable SQL transaction to commit (awarding coins and casino wins to the rightful winner), while returning `ErrSecondarySync` to the caller.
-- **Coin Conservation & Replay Rejection**:
-  Total coins across all participants are strictly conserved in both healthy settlements and secondary synchronization failure scenarios. Replaying the action after a secondary sync failure is rejected with `ErrGameNotInRound` or `ErrAlreadyActed`, preventing duplicate payouts or lost wagers.
-
----
+The authoritative [Casino persistence and secondary-sync contract](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging)
+distinguishes payload failures from `SecondarySyncError` / `ErrSecondarySync`.
+Before authoritative payload persistence, financial failures abort SQL settlement.
+After payload success, a secondary-index failure preserves committed coin/win
+settlement while returning the error. Clients must observe state rather than
+blindly replay commands. Healthy and degraded settlements conserve coins;
+replay is rejected with `ErrGameNotInRound` or `ErrAlreadyActed`.
 
 ## 9. Casino Wins (`cas_c`) & Job Advancement
 

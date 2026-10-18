@@ -12,19 +12,29 @@
 > After Version 1, this workflow may be replaced by a permanent asset
 > management process.
 
-## Status
+## Asset type guidelines
 
-- `Required`: identified but not yet produced
-- `In Progress`: currently being produced
-- `Placeholder available`: a temporary file exists; final artwork and client integration are still pending
-- `Completed`: final artwork produced, licensed, and integrated
-- `Rejected`: no longer required
+Observed legacy dimensions are starting points, not reproduction limits. Aspect
+ratios are flexible; document a concrete display/size override when needed.
+All final artwork must have known provenance and license; legacy artwork is not reused.
 
-## Required Images
+| Type / use | Typical / observed upper size (px) | Transparency | Reserved placeholder names |
+| --- | --- | --- | --- |
+| Character / small player icons | 20×20 / 40×40 | Supported | `character-default`, `character-silhouette`, `character-unknown` |
+| Monster / enemy | 40×40 / 140×140 | Supported | `monster-default`, `monster-silhouette`, `monster-unknown` |
+| Effect / spells, impacts | 30×30 / 50×50 | Supported | `effect-default`, `effect-unknown` |
+| Mark / status indicators | 13×13 / 15×14 | Supported | `mark-default`, `mark-unknown` |
+| Background / map tiles | 40×40 / 180×180 | Per asset | `background-default`, `background-empty`, `background-unknown` |
+| UI / buttons, banners, logos | 50×16 / 468×60 | Per asset | `ui-default`, `ui-unknown` |
+
+The first/default name is the category fallback suggestion. Reserved names do
+not assert that files exist; the entries below identify actual files and size
+overrides. Missing art uses an available placeholder rather than a broken URL.
+
+## Placeholder inventory
 
 ### IMG-001: Player Character — Idle
 
-- Status: Placeholder available
 - Type: Character
 - File: `assets/images/placeholders/character/character-default.svg`
 - Placeholder: `character-default`
@@ -35,8 +45,6 @@
   - Transparent background.
   - The character should remain recognizable at the typical display size.
 - Size: 128 × 128 px
-- Format: SVG
-- Transparency: None
 - Notes:
   - No image from the original implementation was reused.
   - Use `character-default` until the final image is available.
@@ -46,15 +54,12 @@
 
 ### IMG-002: Battle — Generic Encounter
 
-- Status: Placeholder available
 - Type: Battle
 - File: `assets/images/placeholders/battle/battle-default.svg`
 - Placeholder: `battle-default`
 - Used by: Battle and Adventure presentation
 - Purpose: Temporary illustration for a battle encounter.
 - Size: 256 × 128 px
-- Format: SVG
-- Transparency: None
 - Visual brief: Two neutral geometric combatants facing one another.
 - Provenance: Created in this repository for development use; no third-party
   source or legacy asset was used.
@@ -62,15 +67,12 @@
 
 ### IMG-003: Adventure — Generic Route
 
-- Status: Placeholder available
 - Type: Adventure
 - File: `assets/images/placeholders/adventure/adventure-default.svg`
 - Placeholder: `adventure-default`
 - Used by: Adventure presentation
 - Purpose: Temporary illustration for an adventure route (adventures resolve immediately).
 - Size: 256 × 128 px
-- Format: SVG
-- Transparency: None
 - Visual brief: Neutral mountain route beneath a moon.
 - Provenance: Created in this repository for development use; no third-party
   source or legacy asset was used.
@@ -78,15 +80,12 @@
 
 ### IMG-004: Job — Generic Emblem
 
-- Status: Placeholder available
 - Type: Job
 - File: `assets/images/placeholders/job/job-default.svg`
 - Placeholder: `job-default`
 - Used by: Job presentation
 - Purpose: Temporary icon shared by jobs until individual artwork exists.
 - Size: 96 × 96 px
-- Format: SVG
-- Transparency: None
 - Visual brief: Neutral star emblem with no character or franchise reference.
 - Provenance: Created in this repository for development use; no third-party
   source or legacy asset was used.
@@ -122,7 +121,7 @@ assets. A public client and production manifest/resolver are pending #140,
 #654, and #729. The character transparency brief describes the final target;
 its present placeholder has an opaque background.
 
-## First asset batch
+## Final artwork
 
 IMG-001 through IMG-004 form the first implementation batch. Final artwork for
 individual jobs, characters, monsters, stages, maps, effects, and UI elements

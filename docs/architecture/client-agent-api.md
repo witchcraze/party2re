@@ -21,7 +21,7 @@ Instead of scattering game logic across hundreds of disconnected REST URLs, the 
                +--------------------+----------------------+
                                     |
           Query (Observe)           |         Command (Execute)
-          GET /characters/{id}/context        POST /characters/{id}/actions
+          GET /api/v1/characters/{id}/context  POST /api/v1/characters/{id}/actions
                                     |
                +--------------------v----------------------+
                |          Client / Agent Gateway           |
@@ -637,106 +637,27 @@ reading profile enrichment.
 
 ### Bank command contract
 
-`bank_deposit` and `bank_withdraw` accept only `{ "amount": 5000 }`, with a
-required non-null signed 64-bit integer. The owned path supplies the actor; each
-command calls the corresponding Bank service once with the request context.
-Exact positive-amount, funds, balance and limit validation remains service-owned.
-Both results preserve the REST fields `character_id`, `money`, `deposit`,
-`amount` and `message`; withdrawal also preserves `actual_withdrawn` and
-`refunded`, including excess returned to savings when the wallet reaches its cap.
-
-| Service rejection | HTTP | Stable code |
-|---|---|---|
-| Invalid actor ID | 400 | `BANK_INVALID_CHARACTER_ID` |
-| Nonpositive amount | 400 | `BANK_INVALID_AMOUNT` |
-| Insufficient wallet funds | 400 | `BANK_INSUFFICIENT_FUNDS` |
-| Insufficient savings balance | 400 | `BANK_INSUFFICIENT_BALANCE` |
-| Savings limit exceeded | 400 | `BANK_DEPOSIT_LIMIT_EXCEEDED` |
-| Character no longer exists | 404 | `CHARACTER_NOT_FOUND` |
-
-Entry exclusions and sleep/pending wake guards prevent service execution under
-the shared boundary. Known results/rejections use the refresh contract below;
-unknown service/store failures remain `500 EXECUTION_FAILED`. The old
-`POST /characters/{id}/bank/deposit` and `/bank/withdraw` routes are retired;
-clients use `POST /api/v1/characters/{id}/actions` with the explicit ActionID and
-amount. `bank_deposit`/`bank_withdraw` resolver links use that same Gateway URL.
-Only Bank talk/inspect REST operations remain pending their own reconciliation.
+Bank amounts, wallet limits and validation belong to [Bank design](../design/bank.md).
+`bank_deposit` / `bank_withdraw` use signed-int64 amounts from their OpenAPI
+conditions; adapters preserve service result types and explicit known rejection
+mappings. See [Bank adapter](../../internal/api/http/action_bank.go).
 
 ### SecretShop purchase command contract
 
-`secretshop_purchase` accepts only explicit parameters such as
-`{ "item_id": "secret_item_herbal_root", "quantity": 1 }`. Both fields are
-required and non-null: a catalog ID string and a signed 64-bit integer. The
-existing service validates current item availability, job qualification, exact
-funds, quantities 1..99, price overflow and delivery capacity. The Gateway does
-not apply the retained REST route's omitted/nonpositive quantity default.
-
-The owned path supplies the actor. The adapter reads the presentation name before
-calling `PurchaseItem` once with the request context, then shares the REST
-purchase formatter. `result` retains `character_id`, `item`, `quantity`,
-`total_price`, `remaining_gold`, `inventory_instance_id`, `transferred_to_depot`
-and `npc_message`; inventory and depot acknowledgements retain their respective
-wording. It neither duplicates the service transaction nor reads presentation
-inputs after a successful mutation.
-
-| Service rejection | HTTP | Stable code |
-|---|---|---|
-| Job qualification denied | 403 | `SECRETSHOP_ACCESS_DENIED` |
-| Character no longer exists | 404 | `SECRETSHOP_CHARACTER_NOT_FOUND` |
-| Item absent from catalog | 404 | `SECRETSHOP_ITEM_NOT_FOUND` |
-| Active HelperQuest target | 409 | `SECRETSHOP_ITEM_UNAVAILABLE` |
-| Quantity outside 1..99 | 400 | `SECRETSHOP_INVALID_QUANTITY` |
-| Insufficient wallet funds | 400 | `SECRETSHOP_INSUFFICIENT_FUNDS` |
-| Total price overflow | 400 | `SECRETSHOP_PRICE_OVERFLOW` |
-| Depot full | 400 | `SECRETSHOP_DEPOT_FULL` |
-
-Required HelperQuest/store failures and an unconfigured depot are unexpected
-execution failures, not known rejections. Shared entry/Sleep/CanWake/work guards
-and the outcome/refresh contract apply unchanged. A failed name read stops before
-purchase; a failed post-command query/profile read preserves the known result or
-rejection with GET-only recovery. Nil SecretShop service remains 501.
-
-The ActionID-specific schema and resolver URL point to the Gateway independently
-of REST operations. `GET /characters/{id}/secretshop` and
-`POST /characters/{id}/secretshop/purchase` are retired and return 404. Enter
-SecretShop with `scene_enter` (`destination:secretshop`), then GET character
-context for the catalog/product observations described above. The context's
-character slot identifies the actor; scene `info.title` supplies the former
-`location_name`, and `info.npc_name`/`info.is_eligible` supply the facility facts.
-Products provide explicit purchase templates. Execute `secretshop_purchase`
-with both `item_id` and `quantity`; clients migrating the retired REST default
-must send `quantity:1` explicitly. Missing quantity is invalid, and nonpositive
-quantity is rejected rather than defaulted. Talk, inspect and puff-puff REST
-operations remain registered pending their own replacements; see
-[SecretShop design](../design/shops.md#74-purchase-transport-and-remaining-migration)
-for legacy differences and action reconciliation.
+Purchase eligibility, quantities, prices and route-retirement reconciliation
+belong to [SecretShop design](../design/shops.md#74-purchase-transport-and-remaining-migration).
+The command requires explicit `item_id` and `quantity`; it does not inherit the
+retired REST default of one. Presentation remains HTTP-owned. The [SecretShop adapter](../../internal/api/http/action_secretshop.go) owns
+stable known-rejection mapping; unexpected persistence/hook failures remain 500.
 
 ### Stage adventure command contract
 
-`adventure_start` accepts only `{ "stage_id": "stage-00" }`. A supplied non-null
-string is required; an empty string retains `StartStage`'s existing starter-stage
-default. The adapter calls the existing Adventure service once with the owned
-actor and request context. `result` reuses the `POST /adventures` fields: `id`,
-`character_id`, `stage_id`, `started_at`, `floors_cleared`, `is_cleared`,
-`party_size`, `resolved`, and `experience_reward`. The crawl resolves immediately;
-this connection adds no scheduled expedition or new game rule.
-
-| Service rejection | HTTP | Stable code |
-|---|---|---|
-| Stage not found | 422 | `ADVENTURE_STAGE_NOT_FOUND` |
-| Level requirement | 403 | `ADVENTURE_LEVEL_REQUIRED` |
-| Job level requirement | 403 | `ADVENTURE_JOB_LEVEL_REQUIRED` |
-| Unconscious character | 422 | `ADVENTURE_UNCONSCIOUS` |
-| Exhausted character | 422 | `ADVENTURE_EXHAUSTED` |
-| Once-daily entry already used | 422 | `ADVENTURE_DAILY_LIMIT` |
-| Character no longer exists | 404 | `CHARACTER_NOT_FOUND` |
-
-Catalog exclusions (including HP=0, fatigue, sleep, pending wake recovery and
-unfinished Pending/Processing work) return `409 ACTION_UNAVAILABLE` before
-service execution. A ready deadline does not clear unfinished work. Service
-validation remains authoritative for exact stage requirements and state changes
-after preflight; unexpected service/store errors use `500 EXECUTION_FAILED`.
-Both known outcomes use the refresh/recovery contract below.
+`adventure_start` requires a non-null `stage_id` string; an empty string retains
+the existing starter-stage default. Its current adapter reuses `StartStage` and
+the immediate-crawl result. [Adventure design](../design/adventure.md) owns entry
+rules and the unresolved explicit-action gap; connection to the Gateway does
+not certify parity or add a delayed expedition. Service-specific known rejections
+remain distinct from the shared `409 ACTION_UNAVAILABLE` preflight boundary.
 
 ### Planned normal-adventure commands and recovery
 
@@ -780,67 +701,21 @@ optional Replay/cleanup failures do not change a committed settlement result.
 
 ### Emergency rescue command contract
 
-`rescue_request` accepts only `{ "reason": "stuck activity" }`, with a required
-non-null string. Actor identity comes from the owned path. Empty or whitespace-only
-reasons reach existing service validation and return `422 RESCUE_INVALID_REASON`;
-invalid actor IDs map to `400 RESCUE_INVALID_CHARACTER_ID`, and a missing service
-character maps to `404 CHARACTER_NOT_FOUND`. Unexpected service/store errors
-remain `500 EXECUTION_FAILED` with unknown outcome and no context.
-
-The adapter calls `EmergencyRescue` once with the request context and current UTC
-time. Rescue remains an explicit entry/sleep recovery exception during sleep,
-cooldown and unfinished work. Its structured `RescueRecord` result includes
-`id`, `character_id`, `reason`, `penalty_seconds` and `created_at`, including the
-service's idle/no-op result. Cleanup and penalties remain service-owned; rescue
-does not guarantee removal of sleep. Known success/rejection survives refresh
-failure under the shared contract. Existing REST rescue routes remain available.
+`rescue_request` requires a non-null `reason` string and bypasses ordinary
+action-entry and Sleep/CanWake gates. Empty/whitespace reasons reach service
+validation (`422 RESCUE_INVALID_REASON`). It calls the owned actor's Rescue
+service once; it does not guarantee removal of sleep.
+Penalty, cancellation and partial failures belong to [Rescue design](../design/rescue-and-helper.md).
+Known service rejections and unexpected errors keep the common outcome boundary.
 
 ### Home sleep and wake command contract
 
-`home_sleep` accepts `{ "target_home_id": "other-char" }` with an optional string;
-omitting or passing an empty string targets the actor's own home. Home sleep is free
-and accepts dead or fatigued actors. Duration scales with online player count.
-`result` reuses the REST fields: `sleeping`, `duration_seconds`, `remaining_seconds`,
-`home_character_id` and `message`. Sleep shares the `timer.CategoryWaking` exclusion boundary
-with Wake, rejects requests while Wake is in progress (`409 HOME_WAKE_IN_PROGRESS`) or while
-an active sleep timer or pending wake recovery remains (`409 HOME_ALREADY_SLEEPING`), persists
-`pending_wake = 1` in MariaDB `characters` (Issue #1118), sets `timer.CategorySleep` and
-`timer.CategoryAsleep` in Valkey, and then reverts any temporary Job Memory. On timer or job-memory
-failure, Sleep rolls back established locks and `pending_wake = 0` using a detached timeout context
-and joins any rollback error onto the returned failure.
-
-`home_wake` accepts no parameters (`{}` or omitted). It is an explicit exception
-to the ordinary sleep action guard:
-- While sleep duration has not elapsed (`timer.CategorySleep` active), the request
-  returns `409 HOME_STILL_SLEEPING` without altering vitality or state.
-- Concurrent Wake and Sleep executions for the same character are serialized via Valkey `timer.CategoryWaking`
-  using token-scoped exclusive ownership (`TryLockWithToken` with a 30s safety lease, actively renewed via background keepalive). Concurrent attempts while Wake is running, or executions that lose claim ownership during slow recovery hooks, return `409 HOME_WAKE_IN_PROGRESS` immediately without modifying successor locks, quotas, or durable recovery state.
-- When sleep duration has elapsed and pending recovery is active (`characters.pending_wake = 1` in SQL or
-  `timer.CategoryAsleep` in Valkey), Wake restores full HP, MP and resets fatigue to 0, then executes configured
-  mandatory recovery hooks (tavern fullness reset, chapel blessing clear, alchemy synthesis completion, costume reset)
-  and timer cleanup (`timer.CategoryDungeonOnce` lock and `dungeon_once` daily quota).
-  Before resetting `dungeon_once` and inside the final SQL transaction that sets `characters.pending_wake = 0`
-  before releasing `timer.CategoryAsleep`, Wake re-verifies that no active `timer.CategorySleep` lock exists,
-  ensuring an older Wake can never clear a newly accepted sleep cycle.
-- **Hook failure and partial outcome**: If any mandatory recovery hook or timer cleanup
-  fails, Wake aborts and returns `500 EXECUTION_FAILED`. `characters.pending_wake` remains 1 and `timer.CategoryAsleep`
-  remains locked (pending recovery is not finalized, keeping ordinary actions blocked). Any effects
-  applied before the failure (such as restored vitality or earlier hook actions) persist
-  without cross-store rollback. Clients observe this honestly via `GET /context` and must
-  not automatically replay the action. A subsequent explicit Wake can complete remaining
-  hooks and finalize recovery once transient errors resolve.
-- If Wake is called when the character is already awake (`characters.pending_wake = 0` and `timer.CategoryAsleep` not active),
-  it returns `200` with an "already awake" message and the current character state.
-
-| Service rejection | HTTP | Stable code |
-|---|---|---|
-| Still sleeping (duration not elapsed) | 409 | `HOME_STILL_SLEEPING` |
-| Wake already in progress | 409 | `HOME_WAKE_IN_PROGRESS` |
-| Already sleeping | 409 | `HOME_ALREADY_SLEEPING` |
-| Not sleeping | 409 | `HOME_NOT_SLEEPING` |
-| Character not found | 404 | `CHARACTER_NOT_FOUND` |
-| Target house not found | 404 | `HOME_HOUSE_NOT_FOUND` |
-| Target house expired | 404 | `HOME_HOUSE_EXPIRED` |
+`home_sleep` permits optional `target_home_id`; `home_wake` accepts omitted params
+or `{}`. [Home recovery](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)
+owns duration, explicit waking, claim exclusion, hooks and partial outcomes.
+An early Wake reaches service validation and returns its known rejection; an
+awake character has no eligible Wake. Sleep-state read failures stop before
+execution. The [Home adapter](../../internal/api/http/action_home.go) owns its stable service-rejection codes.
 
 ### Outcome responses
 

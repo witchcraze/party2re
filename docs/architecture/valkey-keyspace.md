@@ -216,3 +216,27 @@ selected required documentation terms, banned commands, and Lua embedding.
 It does not validate TTL values, exhaustively discover dynamic keys, verify
 cluster colocation, prove crash recovery, or benchmark runtime complexity.
 Run the architectural tests and `make check` after keyspace changes.
+
+## Scheduled work lifecycle
+
+Pending/Processing work remains unfinished after its execution deadline. The
+actor query reads its Set index and bulk payloads, returning only that actor's
+Pending/Processing records, omitting terminal/missing payloads and propagating
+invalid-record/storage errors. This read changes no records/timers and acquires
+no exclusive actor lock; feature services own eligibility and settlement.
+
+Registration writes payload, then actor membership (if present), then pending
+queue membership. A failed index/enqueue halts later steps, attempts compensation
+of partial entries and returns the underlying error. Retries use idempotent
+SET/SADD/ZADD, not repeated feature execution.
+
+`FetchDue` preserves queued work on transient payload-read errors/cancellation;
+it removes genuinely missing entries and propagates cleanup errors. Malformed or
+invalid payloads are removed from execution candidates. Processing/terminal
+handling and bounded traversal follow [terminal recovery](#scheduled-terminal-persistence-and-recovery).
+
+Actor cancellation removes queue membership, payload and lock per action before
+deleting the actor index. A failure halts later destructive cleanup, preserves
+the actor index for discovery/retry and returns the error plus successful count.
+An empty/missing index succeeds with zero actions. `ClearActiveActions` reports
+`cleared=false` on failure so Rescue cannot charge a penalty on a false clean slate.

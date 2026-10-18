@@ -91,38 +91,7 @@ Faithfully reproduces legacy Party2 (`lib/_add_monster_book.cgi`, `lib/collectio
   - **Mandatory Induction vs. Informational Broadcast**: Hall of Fame induction (`RecordLegend`) is a mandatory persistent milestone. It must succeed before marking the completion milestone in `character_collection_completions`. If `RecordLegend` fails, completion is not marked and the error is returned to the caller, preventing legend failures from being masked as success.
   - **Best-Effort News**: Server news broadcasting (`PublishNews`) is informational best-effort; failures do not abort completion and news is only broadcast upon initial completion.
   - **Reprocessing Recovery**: If a transient persistence failure interrupts legend induction, `character_collection_completions` remains unrecorded. Subsequent defeats or discoveries re-evaluate the threshold, retry legend induction, and successfully finalize completion once without duplicates.
-  - **Existing Data Recovery Procedure**: For characters that were completed prior to this consistency fix and lost Hall of Fame induction, `collection.Service.RecoverMissingLegends(ctx, characterID)` inspects all completed milestones and idempotently writes missing `legend_records`. For database-wide batch administrative repair:
-    ```sql
-    INSERT IGNORE INTO legend_records (category, character_id, character_name, guild_name, color, icon, message, inducted_at)
-    SELECT 
-        CASE ccc.kind
-            WHEN 'monster_book' THEN 'comp_mon'
-            WHEN 'weapon' THEN 'comp_wea'
-            WHEN 'armor' THEN 'comp_arm'
-            WHEN 'item' THEN 'comp_ite'
-        END AS category,
-        c.id AS character_id,
-        c.name AS character_name,
-        COALESCE(g.name, '') AS guild_name,
-        COALESCE(c.color, '#ffffff') AS color,
-        COALESCE(cp.avatar_url, '') AS icon,
-        COALESCE(cp.comment, '') AS message,
-        ccc.completed_at AS inducted_at
-    FROM character_collection_completions ccc
-    JOIN characters c ON ccc.character_id = c.id
-    LEFT JOIN character_profiles cp ON c.id = cp.character_id
-    LEFT JOIN guild_members gm ON c.id = gm.character_id AND gm.is_pending = FALSE
-    LEFT JOIN guilds g ON gm.guild_id = g.id
-    LEFT JOIN legend_records lr ON lr.character_id = ccc.character_id AND lr.category = (
-        CASE ccc.kind
-            WHEN 'monster_book' THEN 'comp_mon'
-            WHEN 'weapon' THEN 'comp_wea'
-            WHEN 'armor' THEN 'comp_arm'
-            WHEN 'item' THEN 'comp_ite'
-        END
-    )
-    WHERE lr.id IS NULL;
-    ```
+  - **Existing Data Recovery Procedure**: For characters that were completed prior to this consistency fix and lost Hall of Fame induction, `collection.Service.RecoverMissingLegends(ctx, characterID)` inspects all completed milestones and idempotently writes missing `legend_records`. Use this service contract for repair; do not maintain a separate ad-hoc SQL reconstruction.
   - Milestone recordings are persisted idempotently in `character_collection_completions` (`PRIMARY KEY (character_id, kind)`) so subsequent defeats or discoveries never trigger duplicate news notifications or duplicate legend inductions.
 
 ---
@@ -142,27 +111,16 @@ Faithfully reproduces legacy Party2 (`lib/_add_monster_book.cgi`, `lib/collectio
 
 Item discovery (`RecordItemDiscovered`) and monster discovery (`RecordMonsterDefeated`) can trigger mandatory Hall of Fame induction milestones (`RecordLegend`). Because Hall of Fame inductions are permanent career achievements, failures must never be ignored or swallowed by discovery callers.
 
-### Direct Transactional Discovery Callers
+### Transactional discovery boundary
 
-All transactional callers execute within database transactions and MUST propagate discovery errors out of the transaction callback to trigger an atomic rollback:
-
-| Domain Module | Function / Path | Discovery Trigger | Transaction Boundary | Rollback Invariant |
-|---|---|---|---|---|
-| **福引 (Lottery)** | `internal/lottery/lottery.go:PlayRaffle` | Item prize won | `s.txRunner.RunInTx` | Tickets, inventory/depot items, collection records, and milestone inductions roll back atomically. |
-| **宝くじ (Takarakuji)** | `internal/lottery/takarakuji_draw.go:deliverPrizeToDepot` | Round prize delivered | `s.txRunner.RunInTx` (`SettleTakarakujiRound`) | Round settlement, winning ticket statuses, depot items, collection entries, and milestone inductions roll back atomically. |
-| **秘密の店 (Secret Shop)** | `internal/secretshop/purchase.go:Purchase` | Item purchased | `s.txRunner.RunInTx` | Currency, inventory items, collection records, and milestone inductions roll back atomically. |
-| **通常店 (Shop)** | `internal/shop/purchase.go:Purchase` | Item purchased | `s.txRunner.RunInTx` | Currency, inventory items, collection records, and milestone inductions roll back atomically. |
-| **預かり所 (Depot)** | `internal/depot/service.go:WithdrawItem` | Item withdrawn to inventory | `s.txRunner.RunInTx` | Depot contents, inventory items, collection records, and milestone inductions roll back atomically. |
-| **神殿 (Altar)** | `internal/altar/service.go:Wish` | Item granted by wish | `s.txRunner.RunInTx` | Offering costs, inventory items, collection records, and milestone inductions roll back atomically. |
-| **オラクル (Oracle)** | `internal/store/oracle.go:BuyCostume` | Costume item purchased | `s.txRunner.RunInTx` | Currency, inventory items, collection records, and milestone inductions roll back atomically. |
-| **よろず屋 (Store)** | `internal/store/sales.go:BuyItem`, `TradeItem` | Item bought or traded | `s.txRunner.RunInTx` | Currency, inventory items, collection records, and milestone inductions roll back atomically. |
-| **イベント広場 (Event Plaza)** | `internal/eventplaza/purchase.go:PurchaseBazaarItem` | Bazaar item bought (inventory/depot) | `s.txRunner.RunInTx` | Currency, bazaar listing stock, inventory/depot items, collection records, and milestone inductions roll back atomically. |
-| **フリーマーケット (Flea Market)** | `internal/fleamarket/fleamarket.go:CreateListing` | Listing created with unrecorded item | `s.txRunner.RunInTx` | Inventory items, listing creation, collection records, and milestone inductions roll back atomically. |
+Item acquisition/transfer and battle settlement propagate required discovery and
+Hall of Fame failures out of their transaction callback. Currency, prizes,
+inventory/depot mutations, discovery records and milestones roll back together
+within that SQL boundary. Search `RecordItemDiscovered` / `RecordMonsterDefeated`
+callers for the live inventory; adding a caller must preserve this contract.
 
 ### Intentional Boundary Exceptions
 
 - **Server News Broadcast (`PublishNews`)**: Informational and strictly best-effort. Failure to publish news (e.g. redis/queue outage) does NOT abort or roll back the transaction.
 - **Boss Sealing Battle Atomicity**: Tracked independently in #1200; boss battle completion atomicity follows boss raid lifecycle rules.
 - **Battle Post-Commit Recording**: Adventure and PvE combat settlement incorporates monster discovery within the post-battle settlement transaction boundary (`ApplyPostBattleResult`).
-
-

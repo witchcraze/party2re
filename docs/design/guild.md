@@ -235,21 +235,4 @@ $gpoint = int( $gpoint * 0.8 );
 - Points increments are performed via atomic SQL arithmetic (`points = points + ?`) to avoid lock contention during concurrent gameplay achievements.
 - Point decay executes via atomic SQL batch update (`UPDATE guilds SET points = FLOOR(points * ?), updated_at = ? WHERE points > 0`) wrapped in a Unit of Work transaction.
 
-## HTTP REST API Endpoints
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/guilds` | List guilds (paginated) | Public |
-| `POST` | `/guilds` | Create new guild | Bearer Token |
-| `GET` | `/guilds/{id}` | Get guild detail with roster | Public |
-| `DELETE` | `/guilds/{id}` | Disband guild (leader only) | Bearer Token |
-| `GET` | `/characters/{id}/guild` | Get character's current guild & membership | Public |
-| `POST` | `/guilds/{id}/apply` | Apply to join guild | Bearer Token |
-| `POST` | `/guilds/{id}/applications/{applicant_id}/approve` | Approve applicant & assign title (leader only) | Bearer Token |
-| `POST` | `/guilds/{id}/applications/{applicant_id}/reject` | Reject applicant (leader only) | Bearer Token |
-| `POST` | `/guilds/{id}/callout` | Broadcast callout message to members (+1 GP) | Bearer Token |
-| `PUT` | `/guilds/{id}/members/{char_id}/title` | Assign custom role title to member (leader only) | Bearer Token |
-| `PUT` | `/guilds/{id}/customization` | Update color, mark, wallpaper, or notice (leader only) | Bearer Token |
-| `POST` | `/guilds/{id}/leave` | Leave guild (triggers succession if leader, or dissolution if last member) | Bearer Token |
-| `DELETE` | `/guilds/{id}/members/{char_id}` | Kick member from guild (leader only) | Bearer Token |
-| `POST` | `/admin/guilds/decay-points` | Batch decay guild points by 20% (Admin) | Admin Key |
+Transport operations and schemas: [OpenAPI](../api/openapi.json).

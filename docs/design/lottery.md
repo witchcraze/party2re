@@ -176,12 +176,4 @@ When a drawing occurs (via background scheduler `takarakuji_draw` or scheduled h
 
 ---
 
-## HTTP REST Endpoints
-
-| Method | Endpoint | Description | Auth |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/lottery/takarakuji` | Get current Takarakuji status, prize lineup, remaining tickets, and talk phrases | Public |
-| `POST` | `/characters/{id}/lottery/takarakuji/buy` | Purchase Takarakuji ticket (30,000G, 1 per character per round, 20 max) | Character Auth |
-| `GET` | `/characters/{id}/lottery/takarakuji/ticket` | Get character's current round ticket and past participation history | Character Auth |
-| `GET` | `/characters/{id}/lottery/tickets` | Get character tavern raffle ticket count | Character Auth |
-| `POST` | `/characters/{id}/lottery/raffle` | Play raffle drawing mini-game (automatic mode: Special if >= 300 tickets [300 consumed], Standard if < 300 [3 consumed]) | Character Auth |
+Transport operations and schemas: [OpenAPI](../api/openapi.json).

@@ -102,7 +102,7 @@ These criteria MUST NOT be interpreted as requiring an exhaustive combination ma
 
 ### Unit & Integration Test Time Budget Policy vs. Benchmarking
 - **No Sub-Second Assertions in Unit/Integration Tests:** Functional tests (`go test`) MUST NOT enforce sub-second wall-clock thresholds (fragile in CI/virtualized environments). Use liberal dead-man bounds (2.0s–5.0s) strictly to catch deadlocks/hanging goroutines. Emit informational timing via `t.Logf`.
-- **Dedicated Benchmarks for Performance:** Verify throughput and latency regressions via Go benchmarks (`testing.B`) using `scripts/benchmark.sh` / `make bench`. SSOT: [`docs/development/benchmarking.md`](../../docs/development/benchmarking.md).
+- **Dedicated Benchmarks for Performance:** Verify throughput and latency regressions via Go benchmarks (`testing.B`) using `scripts/benchmark.sh` / `make bench`. SSOT: [`docs/development/testing.md#7-continuous-performance-verification--benchmarking`](../../docs/development/testing.md#7-continuous-performance-verification--benchmarking).
 
 ## 4. Definition of Done
 A ticket is complete only when applicable:
@@ -113,7 +113,7 @@ A ticket is complete only when applicable:
 - Unified local checks (`make check`) pass completely.
 - Architecture remains valid and no unrelated changes were introduced.
 - Dead Code and Orphaned Definitions Elimination: When replacing, refactoring, or superseding domain methods, repository interfaces, constants, or DTOs, all unused precursors MUST be eliminated. Leaving obsolete or zero-caller methods, unused top-level constants, or dead DTO fields behind is prohibited. Mechanically enforced by Go AST linters (`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`). Intentional schema/OpenAPI compatibility fields and enum sets must be annotated with `//lint:ignore <reason>`.
-- Silent Error Suppression Prohibition: Database repository, persistent store, container mutation, and currency mutation calls must never discard errors via blank identifiers (`_ =`, `_, _ =`, `val, _ :=`) or unassigned expression statements. All errors must be propagated to the caller or handled within transactional rollback boundaries. If a call is strictly best-effort or compensatory (e.g., defer rollback, post-commit cache eviction), it must be annotated with `//lint:ignore error-swallow <reason>`. Mechanically enforced by Go AST linter (`internal/architecture/error_swallow_lint_test.go`; see [`docs/development/ast-linters.md`](../../docs/development/ast-linters.md)).
+- Silent Error Suppression Prohibition: Database repository, persistent store, container mutation, and currency mutation calls must never discard errors via blank identifiers (`_ =`, `_, _ =`, `val, _ :=`) or unassigned expression statements. All errors must be propagated to the caller or handled within transactional rollback boundaries. If a call is strictly best-effort or compensatory (e.g., defer rollback, post-commit cache eviction), it must be annotated with `//lint:ignore error-swallow <reason>`. Mechanically enforced by Go AST linter (`internal/architecture/error_swallow_lint_test.go`; see [`docs/development/testing.md#6-mechanical-ast-static-analysis-linters`](../../docs/development/testing.md#6-mechanical-ast-static-analysis-linters)).
 - Owning documentation is current and affected explanations are consolidated under [`02-documentation-sync.md`](02-documentation-sync.md).
 - PR template requirements are satisfied.
 

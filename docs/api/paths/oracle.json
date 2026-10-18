@@ -146,7 +146,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Get Oracle Shop status, costume catalog, wallpapers, and active rental",
@@ -226,7 +226,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Check Black Market discovery from Oracle Shop",
@@ -338,7 +338,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Buy a costume consumable item",
@@ -419,7 +419,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Inspect Oracle NPC @ラクル",
@@ -497,7 +497,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Talk to Oracle NPC @ラクル",
@@ -604,7 +604,7 @@
       },
       "security": [
         {
-          "bearerAuth": []
+          "BearerAuth": []
         }
       ],
       "summary": "Purchase home wallpaper",
