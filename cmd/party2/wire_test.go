@@ -166,31 +166,43 @@ func TestWirePostAdventureHook_ResetsFullnessAndClaimsDelivery(t *testing.T) {
 	}
 }
 
-type mockPlazaService struct {
-	recordedTier int
-	recordedArgs []string
-	err          error
+type victoryCrowdTracker struct {
+	eventplaza.PresenceTracker
+	recordedContext context.Context
+	calls           int
+	crowd           []eventplaza.Presence
+	err             error
 }
 
-func (m *mockPlazaService) RecordVictoryBanquet(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) (eventplaza.CelebrationBanquet, error) {
-	m.recordedTier = tier
-	m.recordedArgs = []string{bossID, bossName, slayerID, slayerName}
-	return eventplaza.CelebrationBanquet{}, m.err
+func (m *victoryCrowdTracker) AppendCrowd(ctx context.Context, crowd []eventplaza.Presence) error {
+	m.recordedContext = ctx
+	m.calls++
+	m.crowd = crowd
+	return m.err
 }
 
 func TestWireBossVictoryBanquetHook(t *testing.T) {
-	plaza := &mockPlazaService{}
+	tracker := &victoryCrowdTracker{}
+	// Embedded nil interfaces fail on any SQL, character or inventory access.
+	plaza, err := eventplaza.NewService(
+		&struct{ eventplaza.Repository }{}, &struct{ eventplaza.CharacterRepository }{},
+		&struct{ eventplaza.InventoryRepository }{}, eventplaza.WithPresenceTracker(tracker))
+	if err != nil {
+		t.Fatal(err)
+	}
 	hook := buildVictoryBanquetHook(plaza)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	for _, tier := range []int{1, 2, 3} {
-		if err := hook(context.Background(), "king", "King", "hero", "Hero", tier); err != nil {
+		if err := hook(ctx, "king", "King", "hero", "Hero", tier); err != nil {
 			t.Fatal(err)
 		}
-		if plaza.recordedTier != tier || strings.Join(plaza.recordedArgs, ",") != "king,King,hero,Hero" {
-			t.Fatalf("hook lost victory parameters: %+v", plaza)
+		if tracker.calls != tier || tracker.recordedContext != ctx || len(tracker.crowd) < 3 || len(tracker.crowd) > 7 {
+			t.Fatalf("hook lost crowd call or context: %+v", tracker)
 		}
 	}
-	plaza.err = errors.New("plaza unavailable")
-	if err := hook(context.Background(), "king", "King", "hero", "Hero", 1); !errors.Is(err, plaza.err) {
+	tracker.err = errors.New("plaza unavailable")
+	if err := hook(context.Background(), "king", "King", "hero", "Hero", 1); !errors.Is(err, tracker.err) {
 		t.Fatalf("hook suppressed error: %v", err)
 	}
 }

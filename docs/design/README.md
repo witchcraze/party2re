@@ -88,7 +88,7 @@ graph TD
 - [`adventure.md`](adventure.md) — Sequential 10-floor dungeon crawl, Floor 11 treasure room, adventure chronicle history, and milestone unlocks.
 - [`dungeon.md`](dungeon.md) — 2D grid tile matrix exploration, hazard traps, `@ちず` scouting jobs, and escape portals.
 - [`challenge.md`](challenge.md) — Continuous wave survival trial, enemy stat scaling, no inter-round healing, and Hall of Fame.
-- [`boss.md`](boss.md) — 6-player king1–10 / 4-player king99 sealing battles, eligibility, Dejon banishment, and victory banquets.
+- [`boss.md`](boss.md) — 6-player king1–10 / 4-player king99 sealing battles, eligibility, Dejon banishment, and victory celebration crowds.
 - [`party-system.md`](party-system.md) — 1–4 player co-op adventure lobbies, speed configuration, `need_join` condition gates, and synergy bonuses.
 - [`pvp.md`](pvp.md) — Colosseum real-time 2..8 player Bet & Split arena, 9 team colors, and multi-round combat resolution.
 - [`gvg.md`](gvg.md) — Guild vs Guild 2..8 player live matches, GP prize pools, target wins, and 7-tier championship medals.
@@ -120,7 +120,7 @@ graph TD
 
 ### 6. Social, Community & Gambling
 - [`guild.md`](guild.md) — Guild founding, dynamic GP, custom roles, hex colors, broadcast callouts, and 20-day inactivity auto-disbandment.
-- [`eventplaza.md`](eventplaza.md) — Real-time 5-minute concurrency presence tracking, 3x markup traveling merchant bazaar, and victory banquets.
+- [`eventplaza.md`](eventplaza.md) — Real-time 5-minute concurrency presence tracking, 3x markup traveling merchant bazaar, and victory celebration crowds.
 - [`casino.md`](casino.md) — Multi-player room lobby (2..8 players), Indian Poker, High & Low, Doppelganger, solo 3-reel slot machine, and 18 authentic prizes routed to depot.
 - [`lottery.md`](lottery.md) — Server-wide 20-ticket Takarakuji lottery with rollover jackpot, and Tavern Fukubiki raffle.
 - [`photo-contest.md`](photo-contest.md) — 10-day seasonal cycles, screenshot submissions, community voting, prize delivery, and Hall of Fame.

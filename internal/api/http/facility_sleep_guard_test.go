@@ -152,7 +152,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		// Event Plaza
 		{"eventplaza_presence", http.MethodPost, "/eventplaza/presence", `{"character_id":"char-1"}`},
 		{"eventplaza_merchant_purchase", http.MethodPost, "/eventplaza/merchant/purchase", `{"character_id":"char-1","item_id":"item-1","quantity":1}`},
-		{"eventplaza_toast", http.MethodPost, "/eventplaza/banquets/banquet-1/toast", `{"character_id":"char-1"}`},
 		// Tavern
 		{"tavern_order", http.MethodPost, "/characters/char-1/tavern/order", `{"item_id":"ale"}`},
 		{"tavern_reserve_delivery", http.MethodPost, "/characters/char-1/tavern/delivery", `{"item_id":"ale"}`},

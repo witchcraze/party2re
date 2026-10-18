@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -21,8 +20,6 @@ type mockEventPlazaService struct {
 	getPlazaStatusFn           func(ctx context.Context) (eventplaza.PlazaStatus, error)
 	listAvailableBazaarItemsFn func(ctx context.Context) ([]eventplaza.BazaarItem, int, error)
 	purchaseBazaarItemFn       func(ctx context.Context, characterID string, itemID string, quantity int) (eventplaza.BazaarPurchaseResult, error)
-	listActiveBanquetsFn       func(ctx context.Context) ([]eventplaza.CelebrationBanquet, error)
-	toastBanquetFn             func(ctx context.Context, banquetID string, characterID string) (eventplaza.BanquetToastResult, error)
 }
 
 func (m *mockEventPlazaService) RecordPresence(ctx context.Context, characterID string) error {
@@ -51,20 +48,6 @@ func (m *mockEventPlazaService) PurchaseBazaarItem(ctx context.Context, characte
 		return m.purchaseBazaarItemFn(ctx, characterID, itemID, quantity)
 	}
 	return eventplaza.BazaarPurchaseResult{}, nil
-}
-
-func (m *mockEventPlazaService) ListActiveBanquets(ctx context.Context) ([]eventplaza.CelebrationBanquet, error) {
-	if m.listActiveBanquetsFn != nil {
-		return m.listActiveBanquetsFn(ctx)
-	}
-	return []eventplaza.CelebrationBanquet{}, nil
-}
-
-func (m *mockEventPlazaService) ToastBanquet(ctx context.Context, banquetID string, characterID string) (eventplaza.BanquetToastResult, error) {
-	if m.toastBanquetFn != nil {
-		return m.toastBanquetFn(ctx, banquetID, characterID)
-	}
-	return eventplaza.BanquetToastResult{}, nil
 }
 
 func createTestHandler(opts ...apihttp.Option) (*apihttp.Handler, error) {
@@ -110,7 +93,6 @@ func TestHandleGetEventPlaza(t *testing.T) {
 				MerchantTier:           2,
 				MerchantTierName:       "Silver Traveling Merchant (熟練の行商人バザー)",
 				NextTierThreshold:      30,
-				ActiveBanquetsCount:    1,
 			}, nil
 		},
 	}
@@ -129,12 +111,21 @@ func TestHandleGetEventPlaza(t *testing.T) {
 	}
 
 	var res eventplaza.PlazaStatus
-	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
 	if res.ActiveParticipants != 7 || res.MerchantSelectionCount != 25 || res.MerchantTier != 2 {
 		t.Errorf("unexpected plaza status: %+v", res)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &fields); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"active_banquets", "active_banquets_count"} {
+		if _, exists := fields[name]; exists {
+			t.Errorf("retired field %q remains in plaza status", name)
+		}
 	}
 }
 
@@ -336,158 +327,6 @@ func TestEventPlaza_MerchantPurchase_ForbiddenCharacter_Returns403(t *testing.T)
 		"quantity":     1,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer valid-session")
-	rec := httptest.NewRecorder()
-	handler.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status 403 Forbidden, got %d", rec.Code)
-	}
-}
-
-func TestHandleGetEventPlazaBanquets(t *testing.T) {
-	now := time.Now().UTC()
-	mockSvc := &mockEventPlazaService{
-		listActiveBanquetsFn: func(ctx context.Context) ([]eventplaza.CelebrationBanquet, error) {
-			return []eventplaza.CelebrationBanquet{
-				{
-					ID:                  "banquet-1",
-					BossName:            "Flame Sovereign",
-					SlayerCharacterName: "Hero",
-					Tier:                1,
-					ToastCount:          5,
-					CelebratedAt:        now,
-					ExpiresAt:           now.Add(24 * time.Hour),
-				},
-			}, nil
-		},
-	}
-
-	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
-	if err != nil {
-		t.Fatalf("failed to create handler: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/eventplaza/banquets", nil)
-	rec := httptest.NewRecorder()
-	handler.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-
-	var res struct {
-		Banquets []eventplaza.CelebrationBanquet `json:"banquets"`
-		Total    int                             `json:"total"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if res.Total != 1 || res.Banquets[0].BossName != "Flame Sovereign" {
-		t.Errorf("unexpected banquets response: %+v", res)
-	}
-}
-
-func TestHandlePostEventPlazaBanquetToast(t *testing.T) {
-	mockSvc := &mockEventPlazaService{
-		toastBanquetFn: func(ctx context.Context, banquetID string, characterID string) (eventplaza.BanquetToastResult, error) {
-			if banquetID == "already_toasted" {
-				return eventplaza.BanquetToastResult{}, eventplaza.ErrAlreadyToasted
-			}
-			if banquetID == "expired" {
-				return eventplaza.BanquetToastResult{}, eventplaza.ErrBanquetExpired
-			}
-			if banquetID == "not_found" {
-				return eventplaza.BanquetToastResult{}, eventplaza.ErrBanquetNotFound
-			}
-			return eventplaza.BanquetToastResult{
-				BanquetID:            banquetID,
-				CharacterID:          characterID,
-				GoldAwarded:          300,
-				CurrentCharacterGold: 1300,
-				ToastCount:           6,
-				Message:              "乾杯しました！",
-			}, nil
-		},
-	}
-
-	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
-	if err != nil {
-		t.Fatalf("failed to create handler: %v", err)
-	}
-
-	// 1. Success with valid auth
-	body, _ := json.Marshal(map[string]any{"character_id": "char-1"})
-	req := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/banquet-1/toast", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer valid-session")
-	rec := httptest.NewRecorder()
-	handler.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	// 2. Already toasted -> 409 Conflict
-	reqConflict := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/already_toasted/toast", bytes.NewReader(body))
-	reqConflict.Header.Set("Content-Type", "application/json")
-	reqConflict.Header.Set("Authorization", "Bearer valid-session")
-	recConflict := httptest.NewRecorder()
-	handler.Router().ServeHTTP(recConflict, reqConflict)
-	if recConflict.Code != http.StatusConflict {
-		t.Errorf("expected status 409, got %d", recConflict.Code)
-	}
-
-	// 3. Expired -> 410 Gone
-	reqExpired := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/expired/toast", bytes.NewReader(body))
-	reqExpired.Header.Set("Content-Type", "application/json")
-	reqExpired.Header.Set("Authorization", "Bearer valid-session")
-	recExpired := httptest.NewRecorder()
-	handler.Router().ServeHTTP(recExpired, reqExpired)
-	if recExpired.Code != http.StatusGone {
-		t.Errorf("expected status 410, got %d", recExpired.Code)
-	}
-
-	// 4. Not Found -> 404
-	reqNotFound := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/not_found/toast", bytes.NewReader(body))
-	reqNotFound.Header.Set("Content-Type", "application/json")
-	reqNotFound.Header.Set("Authorization", "Bearer valid-session")
-	recNotFound := httptest.NewRecorder()
-	handler.Router().ServeHTTP(recNotFound, reqNotFound)
-	if recNotFound.Code != http.StatusNotFound {
-		t.Errorf("expected status 404, got %d", recNotFound.Code)
-	}
-}
-
-func TestEventPlaza_BanquetToast_Unauthenticated_Returns401(t *testing.T) {
-	mockSvc := &mockEventPlazaService{}
-	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
-	if err != nil {
-		t.Fatalf("failed to create handler: %v", err)
-	}
-
-	body, _ := json.Marshal(map[string]any{"character_id": "char-1"})
-	req := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/banquet-1/toast", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	handler.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status 401 Unauthorized, got %d", rec.Code)
-	}
-}
-
-func TestEventPlaza_BanquetToast_ForbiddenCharacter_Returns403(t *testing.T) {
-	mockSvc := &mockEventPlazaService{}
-	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
-	if err != nil {
-		t.Fatalf("failed to create handler: %v", err)
-	}
-
-	body, _ := json.Marshal(map[string]any{"character_id": "char-2"}) // belongs to other-player
-	req := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/banquet-1/toast", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer valid-session")
 	rec := httptest.NewRecorder()

@@ -379,8 +379,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /eventplaza/presence", h.handlePostEventPlazaPresence)
 	mux.HandleFunc("GET /eventplaza/merchant/items", h.handleGetEventPlazaMerchantItems)
 	mux.HandleFunc("POST /eventplaza/merchant/purchase", h.handlePostEventPlazaMerchantPurchase)
-	mux.HandleFunc("GET /eventplaza/banquets", h.handleGetEventPlazaBanquets)
-	mux.HandleFunc("POST /eventplaza/banquets/{id}/toast", h.handlePostEventPlazaBanquetToast)
 
 	mux.HandleFunc("GET /medals/rewards", h.handleGetMedalRewards)
 	mux.HandleFunc("POST /medals/claim", h.handleClaimMedalReward)
