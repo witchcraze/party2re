@@ -724,6 +724,35 @@ again and must still reject unsupported tails before any draws or writes. All cu
 random and delegated closures still require whole-entry admission through
 `skill.BattleDefinitions`; helper availability never enables a slot by itself.
 
+`DamageGemEntries` retains existing native IDs, generic callback names, source
+positions, target/category roles and CMP contributions for these21 bodies.
+`BattleDefinitions.RegisterDamageGems` binds them to the existing invocation
+catalog; `DamageGemAction` and execution share `ValidateDamageGem` before costs
+or committed draws. CMP metadata is not an MP debit. Single-target bodies consume
+their target argument;6–9 randomize each hit without consuming it, and area bodies
+ignore it. Custom missing targets default to actor before confusion/fallback,
+while naked callbacks retain their supplied argument context.
+
+Each body applies target-helper MP conversion/absorption immediately, including
+drain26's initial symbolic target check, its subsequent damage check and healing
+target hooks. Returned MP facts are already applied and must not be replayed.
+Zero/blocked HP damage may still leave these MP changes. Drain admission includes
+targets made reachable by a successful magic-seal cure followed by item195
+confusion, before selecting or mutating anything. Its requested base is computed
+from the first resolved target's current HP, capped300; only a nonempty returned
+damage target enables healing. Reflection, nullification and one-hit defense retain
+their own returned-target semantics. Sacrifice72 invokes the same shared defeat
+closure after damage even when damage has no effect; automatic revival may prevent
+death, with no added MP0/1 write.
+
+Repeated producer calls retain operation counters and use current battle facts;
+reload restores those facts and frozen input rather than replaying damage or
+absorption. Arbitrary prior callback transitions still require the enclosing
+#1436 custom-composition projection and remain gated by `AfterEffects`; registration
+does not certify a complete mixed-slot action, random pool or production consumer.
+SQL/service/Gateway continuation remains #1328/#1329/#1330. Named cosmic/antlion,
+missing reset/defeat and malformed101/102 gates remain unchanged.
+
 Concrete native bodies in `ApplyRecoveryStatGem` are source19–23 (single,
 self-untyped and party healing),28–33 (self-physical or targeted-magic AT/DF/AG
 doubling), and93–96 (party enemy AT/DF/AG/hit reduction), evidenced at

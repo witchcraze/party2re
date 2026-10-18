@@ -68,11 +68,14 @@ func (s *LifetimeState) ValidateDamageGem(sourceID int, c *DamageContext, target
 	if sourceID < 1 || (sourceID > 18 && sourceID != 26 && sourceID != 72 && sourceID != 73) {
 		return ErrUnsupportedEffect
 	}
-	if c == nil {
+	if s == nil || c == nil {
 		return ErrInvalidRequest
 	}
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
+	}
+	if c.Custom && s.actor(targetID) == nil {
+		targetID = c.ActorID
 	}
 	if sourceID == 72 && c.Defeat == nil {
 		return ErrUnsupportedEffect
@@ -90,7 +93,7 @@ func (s *LifetimeState) ValidateDamageGem(sourceID int, c *DamageContext, target
 		if projected.actor(c.ActorID).categorySealed(converted.Category) {
 			projected.actor(c.ActorID).Status = ""
 		}
-		for _, candidate := range s.damageCandidates(c, converted) {
+		for _, candidate := range projected.damageCandidates(c, converted) {
 			e.TargetID = candidate.TargetID
 			e.Payload.Number = float64(min(300, int(float64(s.actor(candidate.TargetID).HP)*.2)))
 			if err := projected.ValidateDamage(c, e, rng); err != nil {
@@ -122,6 +125,22 @@ func (s *LifetimeState) ApplyDamageGem(sourceID int, c *DamageContext, targetID 
 	if err := s.ValidateDamageGem(sourceID, c, targetID, rng); err != nil {
 		return nil, err
 	}
+	if c.Custom && s.actor(targetID) == nil {
+		targetID = c.ActorID
+	}
+	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
+	resources := func(r TargetResolution) {
+		if r.MPDebit != 0 {
+			a := s.actor(c.ActorID)
+			a.MP = max(0, a.MP-r.MPDebit)
+		}
+		if r.MPRecoveryTarget != "" {
+			t := s.actor(r.MPRecoveryTarget)
+			t.MP = min(t.MaxMP, t.MP+r.MPRecovery)
+		}
+	}
+	c.targetResources, c.EffectContext.targetResources = resources, resources
+	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
 	a := s.actor(c.ActorID)
 	e, area := damageGemBase(a, sourceID)
 	e.TargetID = targetID
@@ -151,6 +170,9 @@ func (s *LifetimeState) ApplyDamageGem(sourceID int, c *DamageContext, targetID 
 		return results, nil
 	case 26:
 		target, err := s.ResolveEnemyTarget(c.TargetContext, TargetEffect{TargetID: targetID, Category: CategoryMagic, Payload: CallbackPayload{Symbol: "drain"}}, rng)
+		if err == nil {
+			resources(target)
+		}
 		prefix = append(prefix, EffectApplication{TargetResolution: target})
 		if err != nil || !target.Resolved {
 			return prefix, err
