@@ -152,6 +152,10 @@
           },
           "description": "Character not found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
         "500": {
           "$ref": "#/components/responses/Error",
           "description": "Internal Server Error"
@@ -275,6 +279,10 @@
             }
           },
           "description": "Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
         },
         "415": {
           "$ref": "#/components/responses/Error",
@@ -569,6 +577,10 @@
             }
           },
           "description": "Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
         },
         "415": {
           "$ref": "#/components/responses/Error",

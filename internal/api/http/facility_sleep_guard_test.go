@@ -16,6 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
+	"github.com/witchcraze/party2re/internal/store"
 )
 
 func setupFacilitySleepGuardTest(t *testing.T, sleepStatus home.SleepStatus) http.Handler {
@@ -86,6 +87,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithStore(&stubStoreService{}),
 		apihttp.WithPark(&mockParkService{}),
 		apihttp.WithMonster(&stubMonsterService{}),
+		apihttp.WithOracleShop(&stubOracleShopService{}),
 	)
 	if err != nil {
 		t.Fatalf("failed to create handler: %v", err)
@@ -229,6 +231,10 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"monster_rename", http.MethodPost, "/characters/char-1/monsters/m-1/rename", `{"custom_name":"newname"}`},
 		{"monster_send", http.MethodPost, "/characters/char-1/monsters/m-1/send", `{"recipient_character_id":"char-2"}`},
 		{"monster_release", http.MethodPost, "/characters/char-1/monsters/m-1/release", ``},
+		// Oracle
+		{"oracle_buy_costume", http.MethodPost, "/characters/char-1/oracle/buy", `{"item_no":44}`},
+		{"oracle_buy_wallpaper", http.MethodPost, "/characters/char-1/oracle/wallpaper", `{"wallpaper":"goods"}`},
+		{"oracle_blackmarket", http.MethodPost, "/characters/char-1/oracle/blackmarket", ``},
 	}
 
 	t.Run("sleeping character is rejected with 409 Conflict across all facility endpoints", func(t *testing.T) {
@@ -565,6 +571,126 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 
 			if rec.Code == http.StatusConflict {
 				t.Errorf("expected GET %s not to be blocked by sleep guard, got %d: %s", path, rec.Code, rec.Body.String())
+			}
+		}
+	})
+
+	t.Run("oracle mutations never invoke service when sleeping, can_wake, or sleep lookup fails", func(t *testing.T) {
+		conditions := []struct {
+			name         string
+			sleepStatus  home.SleepStatus
+			sleepErr     error
+			expectedCode int
+		}{
+			{"sleeping", home.SleepStatus{Sleeping: true, RemainingSeconds: 300, Message: "お休み中「Zzz...」"}, nil, http.StatusConflict},
+			{"can_wake", home.SleepStatus{CanWake: true, Message: "お休み中「Zzz...」 目を覚ましてください"}, nil, http.StatusConflict},
+			{"lookup_error", home.SleepStatus{}, errors.New("sleep lookup failed"), http.StatusInternalServerError},
+		}
+
+		oracleRoutes := []struct {
+			name   string
+			method string
+			path   string
+			body   string
+		}{
+			{"buy_costume", http.MethodPost, "/characters/char-1/oracle/buy", `{"item_no":44}`},
+			{"buy_wallpaper", http.MethodPost, "/characters/char-1/oracle/wallpaper", `{"wallpaper":"goods"}`},
+			{"blackmarket", http.MethodPost, "/characters/char-1/oracle/blackmarket", ""},
+		}
+
+		for _, cond := range conditions {
+			t.Run(cond.name, func(t *testing.T) {
+				called := false
+				oracleStub := &stubOracleShopService{
+					buyCostumeItemFn: func(_ context.Context, _ string, _ int) (*store.CostumeBuyResult, error) {
+						called = true
+						return &store.CostumeBuyResult{}, nil
+					},
+					buyHomeWallpaperFn: func(_ context.Context, _ string, _ string) (*store.HomeWallpaperResult, error) {
+						called = true
+						return &store.HomeWallpaperResult{}, nil
+					},
+					discoverBlackMarketFn: func(_ int) error {
+						called = true
+						return nil
+					},
+				}
+
+				player := coreplayer.Player{ID: "player-1", Username: "hero"}
+				char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero", JobLevel: 20}
+				players := &stubPlayerService{
+					authenticateFn: func(_ context.Context, _ string) (coreplayer.Player, error) { return player, nil },
+				}
+				chars := &stubCharacterService{
+					getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+				}
+				mockHome := &mockHomeService{
+					getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
+						return cond.sleepStatus, cond.sleepErr
+					},
+				}
+
+				h, err := apihttp.NewHandler(
+					players,
+					chars,
+					&stubAdventureService{},
+					&stubShopService{},
+					apihttp.WithHome(mockHome),
+					apihttp.WithOracleShop(oracleStub),
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+				router := h.Router()
+
+				for _, route := range oracleRoutes {
+					called = false
+					var req *http.Request
+					if route.body != "" {
+						req = httptest.NewRequest(route.method, route.path, bytes.NewReader([]byte(route.body)))
+						req.Header.Set("Content-Type", "application/json")
+					} else {
+						req = httptest.NewRequest(route.method, route.path, nil)
+					}
+					req.Header.Set("Authorization", "Bearer valid-session")
+					rec := httptest.NewRecorder()
+					router.ServeHTTP(rec, req)
+
+					if rec.Code != cond.expectedCode {
+						t.Errorf("[%s - %s] expected status %d, got %d: %s", cond.name, route.name, cond.expectedCode, rec.Code, rec.Body.String())
+					}
+					if called {
+						t.Errorf("[%s - %s] expected service method not to be called, but was called", cond.name, route.name)
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("oracle read endpoints are exempt from sleep guard", func(t *testing.T) {
+		router := setupFacilitySleepGuardTest(t, home.SleepStatus{
+			Sleeping:         true,
+			RemainingSeconds: 300,
+			Message:          "お休み中「Zzz...」",
+		})
+
+		readRoutes := []struct {
+			method string
+			path   string
+		}{
+			{http.MethodGet, "/characters/char-1/oracle"},
+			{http.MethodPost, "/characters/char-1/oracle/talk"},
+			{http.MethodPost, "/characters/char-1/oracle/inspect"},
+		}
+
+		for _, route := range readRoutes {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			req.Header.Set("Authorization", "Bearer valid-session")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusConflict {
+				t.Errorf("expected %s %s not to be blocked by sleep guard, got %d: %s", route.method, route.path, rec.Code, rec.Body.String())
 			}
 		}
 	})

@@ -82,6 +82,7 @@ func (s *stubOracleShopService) DiscoverBlackMarket(jobLevel int) error {
 func TestOracleShopEndpoints(t *testing.T) {
 	player := coreplayer.Player{ID: "p1", Username: "hero"}
 	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Level: 20, JobLevel: 16, Money: 50000}
+	otherChar := corecharacter.Character{ID: "c2", PlayerID: "p2", Name: "Other", Level: 20, JobLevel: 16, Money: 50000}
 
 	pService := &stubPlayerService{
 		authenticateFn: alwaysAuthPlayer(player),
@@ -90,6 +91,9 @@ func TestOracleShopEndpoints(t *testing.T) {
 		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
 			if id == char.ID {
 				return char, nil
+			}
+			if id == otherChar.ID {
+				return otherChar, nil
 			}
 			return corecharacter.Character{}, corecharacter.ErrNotFound
 		},
@@ -317,6 +321,41 @@ func TestOracleShopEndpoints(t *testing.T) {
 
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("expected 403 Forbidden, got %d", resp.StatusCode)
+		}
+	})
+
+	// 10. Non-owner returns 403 Forbidden across all mutating endpoints
+	t.Run("OracleMutations_ForbiddenForNonOwner", func(t *testing.T) {
+		routes := []struct {
+			name string
+			path string
+			body string
+		}{
+			{"buy_costume", "/characters/c2/oracle/buy", `{"item_no":44}`},
+			{"buy_wallpaper", "/characters/c2/oracle/wallpaper", `{"wallpaper":"goods"}`},
+			{"blackmarket", "/characters/c2/oracle/blackmarket", ""},
+		}
+
+		for _, tc := range routes {
+			t.Run(tc.name, func(t *testing.T) {
+				var req *http.Request
+				if tc.body != "" {
+					req, _ = http.NewRequest(http.MethodPost, server.URL+tc.path, bytes.NewReader([]byte(tc.body)))
+					req.Header.Set("Content-Type", "application/json")
+				} else {
+					req, _ = http.NewRequest(http.MethodPost, server.URL+tc.path, nil)
+				}
+				req.Header.Set("Authorization", "Bearer session-token")
+				resp, err := server.Client().Do(req)
+				if err != nil {
+					t.Fatalf("request failed: %v", err)
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusForbidden {
+					t.Errorf("expected 403 Forbidden for %s, got %d", tc.name, resp.StatusCode)
+				}
+			})
 		}
 	})
 }

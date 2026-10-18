@@ -131,7 +131,7 @@ func (h *Handler) handleOracleBuyCostume(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *oracleBuyCostumeRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *oracleBuyCostumeRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req oracleBuyCostumeRequest) {
 		if req.ItemNo <= 0 {
@@ -175,7 +175,7 @@ func (h *Handler) handleOracleBuyWallpaper(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *oracleBuyWallpaperRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *oracleBuyWallpaperRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req oracleBuyWallpaperRequest) {
 		if req.Wallpaper == "" {
@@ -210,7 +210,7 @@ func (h *Handler) handleOracleBlackMarket(w http.ResponseWriter, r *http.Request
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		if err := h.oracle.DiscoverBlackMarket(char.JobLevel); err != nil {
 			if errors.Is(err, store.ErrBlackMarketNotDiscovered) {
 				writeError(w, http.StatusForbidden, err)
