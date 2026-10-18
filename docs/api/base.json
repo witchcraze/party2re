@@ -9189,21 +9189,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "AlchemyLearnRequest": {
-        "properties": {
-          "pool": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
       "AlchemySynthesisResult": {
         "properties": {
           "matures_at": {

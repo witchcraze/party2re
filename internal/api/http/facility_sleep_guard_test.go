@@ -185,7 +185,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		// Alchemy
 		{"alchemy_synthesize", http.MethodPost, "/characters/char-1/alchemy/synthesize", `{"recipe_id":"rec-1"}`},
 		{"alchemy_claim", http.MethodPost, "/characters/char-1/alchemy/claim", `{}`},
-		{"alchemy_learn", http.MethodPost, "/characters/char-1/alchemy/learn", `{}`},
 		// Black Market
 		{"blackmarket_sacrifice", http.MethodPost, "/characters/char-1/blackmarket/sacrifice", `{"item_instance_id":"item-1"}`},
 		{"blackmarket_trade", http.MethodPost, "/characters/char-1/blackmarket/trade", `{"prize_id":"prize-1"}`},

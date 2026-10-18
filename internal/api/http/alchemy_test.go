@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,7 +23,6 @@ type stubAlchemyService struct {
 	getCompendiumFn func(ctx context.Context, characterID string) (alchemy.Compendium, error)
 	synthesizeFn    func(ctx context.Context, characterID string, recipeID string) (alchemy.SynthesisResult, error)
 	claimFn         func(ctx context.Context, characterID string) (alchemy.ClaimResult, error)
-	learnRecipeFn   func(ctx context.Context, characterID string, pool []string) (alchemy.Recipe, error)
 }
 
 func (s *stubAlchemyService) GetStatus(ctx context.Context, characterID string) (alchemy.Synthesis, error) {
@@ -76,13 +76,6 @@ func (s *stubAlchemyService) Claim(ctx context.Context, characterID string) (alc
 		CompAlcAwarded: false,
 		Message:        "完成したぞい！",
 	}, nil
-}
-
-func (s *stubAlchemyService) LearnRecipe(ctx context.Context, characterID string, pool []string) (alchemy.Recipe, error) {
-	if s.learnRecipeFn != nil {
-		return s.learnRecipeFn(ctx, characterID, pool)
-	}
-	return alchemy.NewRecipe("rec-learned", "Learned Recipe", "item-002", 1, []alchemy.Ingredient{{DefinitionID: "item-001", Quantity: 2}})
 }
 
 func setupAlchemyTestHandler(t *testing.T, alchemySvc *stubAlchemyService) (*apihttp.Handler, string) {
@@ -224,26 +217,17 @@ func TestHTTP_AlchemyClaimDepotFullConflict(t *testing.T) {
 	}
 }
 
-func TestHTTP_AlchemyLearn(t *testing.T) {
+func TestHTTP_AlchemyLearn_EndpointNotRegistered(t *testing.T) {
 	h, charID := setupAlchemyTestHandler(t, &stubAlchemyService{})
 	router := h.Router()
 
-	payload, _ := json.Marshal(map[string]any{"pool": []string{"item-001"}})
-	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/alchemy/learn", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/alchemy/learn", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer valid-token")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var r alchemy.Recipe
-	if err := json.NewDecoder(rec.Body).Decode(&r); err != nil {
-		t.Fatalf("decode failed: %v", err)
-	}
-	if r.ID != "rec-learned" {
-		t.Errorf("expected rec-learned, got %s", r.ID)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for removed learn endpoint, got %d", rec.Code)
 	}
 }

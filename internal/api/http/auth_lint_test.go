@@ -458,7 +458,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Alchemy
 		"handleAlchemySynthesize": "alchemy.go",
 		"handleAlchemyClaim":      "alchemy.go",
-		"handleAlchemyLearn":      "alchemy.go",
 		// Black Market
 		"handleBlackMarketSacrifice": "blackmarket.go",
 		"handleBlackMarketTrade":     "blackmarket.go",
