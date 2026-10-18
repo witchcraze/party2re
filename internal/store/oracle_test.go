@@ -68,9 +68,13 @@ func (m *mockCollectionRecorder) RecordItemDiscovered(_ context.Context, charID,
 
 type mockHelperProvider struct {
 	activeItemIDs []string
+	err           error
 }
 
 func (m *mockHelperProvider) GetActiveHelperItemIDs(_ context.Context, _ time.Time) ([]string, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
 	return m.activeItemIDs, nil
 }
 
@@ -339,6 +343,75 @@ func TestOracleService_GetOracleStatus(t *testing.T) {
 	}
 }
 
+func TestOracleService_GetOracleStatus_HelperScenarios(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	char := corecharacter.Character{
+		ID:       "char-1",
+		Name:     "勇者",
+		JobLevel: 16,
+		Money:    5000,
+	}
+	_ = charRepo.Save(ctx, char)
+
+	helper := &mockHelperProvider{}
+	svc := store.NewService(
+		newMockStoreRepo(),
+		charRepo,
+		&mockDepotRepo{depots: make(map[string]depot.Depot)},
+		&mockCatalog{items: make(map[string]coreitem.Definition)},
+		&mockTxProvider{},
+		store.WithHelperProvider(helper),
+	)
+
+	// 1. Helper read error fails catalog retrieval
+	helperErr := errors.New("helper storage read failed")
+	helper.err = helperErr
+	status, err := svc.GetOracleStatus(ctx, "char-1")
+	if !errors.Is(err, helperErr) {
+		t.Fatalf("expected helper error %v, got: %v", helperErr, err)
+	}
+	if status != nil {
+		t.Errorf("expected nil status on helper error, got %+v", status)
+	}
+
+	// 2. Empty helper requests returns full catalog
+	helper.err = nil
+	helper.activeItemIDs = []string{}
+	status, err = svc.GetOracleStatus(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("unexpected error with empty helper requests: %v", err)
+	}
+	if len(status.AvailableCostumes) != 17 {
+		t.Errorf("expected 17 costumes for empty helper requests, got %d", len(status.AvailableCostumes))
+	}
+
+	// 3. Target active helper item is excluded
+	helper.activeItemIDs = []string{"item-045"}
+	status, err = svc.GetOracleStatus(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("unexpected error with target helper item: %v", err)
+	}
+	if len(status.AvailableCostumes) != 16 {
+		t.Errorf("expected 16 costumes when item-045 is active, got %d", len(status.AvailableCostumes))
+	}
+	for _, c := range status.AvailableCostumes {
+		if c.ItemNo == 45 {
+			t.Errorf("expected item 45 to be excluded from available costumes")
+		}
+	}
+
+	// 4. Unrelated active helper item does not exclude oracle costumes
+	helper.activeItemIDs = []string{"item-999"}
+	status, err = svc.GetOracleStatus(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("unexpected error with unrelated helper item: %v", err)
+	}
+	if len(status.AvailableCostumes) != 17 {
+		t.Errorf("expected 17 costumes for unrelated helper requests, got %d", len(status.AvailableCostumes))
+	}
+}
+
 func TestOracleService_BuyCostumeItem(t *testing.T) {
 	ctx := context.Background()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
@@ -367,8 +440,31 @@ func TestOracleService_BuyCostumeItem(t *testing.T) {
 		store.WithHelperProvider(helper),
 	)
 
+	// 0. Helper read error fails purchase and preserves wallet/inventory/depot/collection state
+	helperErr := errors.New("helper quest storage read failure")
+	helper.err = helperErr
+	_, err := svc.BuyCostumeItem(ctx, "char-1", 44)
+	if !errors.Is(err, helperErr) {
+		t.Fatalf("expected helper error %v, got: %v", helperErr, err)
+	}
+	cAfterErr, _ := charRepo.FindByID(ctx, "char-1")
+	if cAfterErr.Money != 1000 {
+		t.Errorf("expected money to remain 1000, got %d", cAfterErr.Money)
+	}
+	invAfterErr, _ := invRepo.FindByCharacterIDForUpdate(ctx, "char-1")
+	if len(invAfterErr.Items) != 0 {
+		t.Errorf("expected inventory to remain empty, got %d items", len(invAfterErr.Items))
+	}
+	if len(depotRepo.depots) != 0 {
+		t.Errorf("expected depot to remain empty, got %d depots", len(depotRepo.depots))
+	}
+	if len(collector.records) != 0 {
+		t.Errorf("expected collection to remain empty, got %d records", len(collector.records))
+	}
+	helper.err = nil
+
 	// 1. Gating error: Item 56 requires jobLevel > 10
-	_, err := svc.BuyCostumeItem(ctx, "char-1", 56)
+	_, err = svc.BuyCostumeItem(ctx, "char-1", 56)
 	if !errors.Is(err, store.ErrCostumeNotAvailable) {
 		t.Fatalf("expected ErrCostumeNotAvailable, got: %v", err)
 	}
@@ -431,6 +527,30 @@ func TestOracleService_BuyCostumeItem(t *testing.T) {
 		t.Fatalf("expected collection error %v, got %v", colErr, err)
 	}
 	collector.err = nil
+
+	// Replenish money for subsequent helper scenarios
+	char.Money = 1000
+	_ = charRepo.Save(ctx, char)
+
+	// 7. Unrelated active helper item allows purchase of item 45
+	helper.activeItemIDs = []string{"item-999"}
+	resUnrelated, err := svc.BuyCostumeItem(ctx, "char-1", 45)
+	if err != nil {
+		t.Fatalf("unexpected error when buying with unrelated helper item: %v", err)
+	}
+	if resUnrelated.ItemNo != 45 {
+		t.Errorf("expected bought item 45, got %d", resUnrelated.ItemNo)
+	}
+
+	// 8. Empty helper items allows purchase
+	helper.activeItemIDs = []string{}
+	resEmpty, err := svc.BuyCostumeItem(ctx, "char-1", 45)
+	if err != nil {
+		t.Fatalf("unexpected error when buying with empty helper items: %v", err)
+	}
+	if resEmpty.ItemNo != 45 {
+		t.Errorf("expected bought item 45, got %d", resEmpty.ItemNo)
+	}
 }
 
 func TestOracleService_BuyHomeWallpaper(t *testing.T) {

@@ -215,7 +215,10 @@ func (s *Service) GetOracleStatus(ctx context.Context, characterID string) (*Ora
 	costumes := AvailableCostumes(char.JobLevel)
 	if s.helper != nil {
 		activeHelperIDs, err := s.helper.GetActiveHelperItemIDs(ctx, s.nowFunc().UTC())
-		if err == nil && len(activeHelperIDs) > 0 {
+		if err != nil {
+			return nil, err
+		}
+		if len(activeHelperIDs) > 0 {
 			excluded := make(map[string]bool, len(activeHelperIDs))
 			for _, id := range activeHelperIDs {
 				excluded[id] = true
@@ -291,12 +294,13 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 
 		if s.helper != nil {
 			activeHelperIDs, err := s.helper.GetActiveHelperItemIDs(txCtx, now)
-			if err == nil {
-				defID := fmt.Sprintf("item-%03d", itemNo)
-				for _, id := range activeHelperIDs {
-					if id == defID || id == strconv.Itoa(itemNo) {
-						return ErrItemUnavailableInHelperQuest
-					}
+			if err != nil {
+				return err
+			}
+			defID := fmt.Sprintf("item-%03d", itemNo)
+			for _, id := range activeHelperIDs {
+				if id == defID || id == strconv.Itoa(itemNo) {
+					return ErrItemUnavailableInHelperQuest
 				}
 			}
 		}
