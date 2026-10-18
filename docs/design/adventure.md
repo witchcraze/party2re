@@ -418,6 +418,12 @@ Their finite producer formulas do not admit outer custom/random/calling
 closures. The consumer must preflight all descendants and required reset/defeat, damage,
 requester and cursor context before costs or committed RNG.
 
+Revival and sacrifice use [Battle's ordered revival contract](battle.md#resources-revival-and-roster-changes).
+Ordinary fallen-self discovery requires the66.6 entry and its living designated
+helper; direct callback admission is not ordinary role/learning admission.
+Persist resulting revival, consumed-accessory and ban facts without replaying
+the callback on reload. Mixed slot transition projection remains #1436's owner.
+
 Summoned identity, command-actor restoration and save-boundary
 roster rules are owned by [Battle's roster contract](battle.md#summoned-roster-and-helper-commands).
 `Stage.SummonPool` requires complete certified payloads in the current seasonal

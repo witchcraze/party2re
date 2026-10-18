@@ -14,6 +14,7 @@ type BattleDefinitions struct {
 	ArithmeticSkills map[string]bool
 	RosterSkills     map[string]bool
 	RecoveryStatGems map[string]bool
+	RevivalSkills    map[string]bool
 	Invocations      corebattle.CallbackCatalog
 }
 
