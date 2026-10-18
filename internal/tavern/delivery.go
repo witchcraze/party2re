@@ -34,16 +34,11 @@ func (s *Service) ReserveDelivery(ctx context.Context, characterID string, itemI
 		return DeliveryReservation{}, ErrMenuItemNotFound
 	}
 
-	char, err := s.charRepo.FindByID(ctx, charID)
-	if err != nil {
+	if _, err := s.charRepo.FindByID(ctx, charID); err != nil {
 		if errors.Is(err, corecharacter.ErrNotFound) {
 			return DeliveryReservation{}, ErrCharacterNotFound
 		}
 		return DeliveryReservation{}, err
-	}
-
-	if char.Money < item.Price {
-		return DeliveryReservation{}, ErrInsufficientFunds
 	}
 
 	delivery := DeliveryReservation{

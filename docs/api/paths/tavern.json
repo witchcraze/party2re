@@ -239,7 +239,7 @@
         },
         "400": {
           "$ref": "#/components/responses/Error",
-          "description": "Insufficient gold or invalid request"
+          "description": "Invalid request"
         },
         "401": {
           "$ref": "#/components/responses/Error",

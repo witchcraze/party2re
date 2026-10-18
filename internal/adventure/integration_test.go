@@ -360,6 +360,195 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 	}
 }
 
+func TestAdventurePostAdventureHook_TavernDelivery_ZeroFundsLifecycle(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	tavernRepo, err := database.NewTavernRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tavernCatalog, err := tavern.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tavernService, err := tavern.NewService(
+		tavernCatalog,
+		tavernRepo,
+		charRepo,
+		txProvider,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Create test character with 0G
+	char, err := database.CreateTestCharacterWithFunds(ctx, db, "TavernAdvZeroHero", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Reduce character HP and MP to verify healing conditions
+	char.Stats.HP = 20
+	char.Stats.MaxHP = 100
+	char.Stats.MP = 5
+	char.Stats.MaxMP = 50
+	if err := charRepo.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Reserve delivery for full course (Price: 3000) with 0G -> succeeds!
+	delivFull, err := tavernService.ReserveDelivery(ctx, char.ID, "tavern_full_course")
+	if err != nil {
+		t.Fatalf("ReserveDelivery for full course with 0G failed: %v", err)
+	}
+	if delivFull.ItemID != "tavern_full_course" {
+		t.Fatalf("expected tavern_full_course, got %s", delivFull.ItemID)
+	}
+
+	// 3. Overwrite / replace delivery with omelet rice (Price: 750) with 0G -> succeeds!
+	deliv, err := tavernService.ReserveDelivery(ctx, char.ID, "tavern_omelet_rice")
+	if err != nil {
+		t.Fatalf("ReserveDelivery for omelet rice with 0G failed: %v", err)
+	}
+	if deliv.ItemID != "tavern_omelet_rice" {
+		t.Fatalf("expected tavern_omelet_rice, got %s", deliv.ItemID)
+	}
+
+	// Ensure gold remains 0G after reservations
+	charCheck, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if charCheck.Money != 0 {
+		t.Fatalf("expected 0G intact after reservations, got %d", charCheck.Money)
+	}
+
+	// 4. Setup Adventure Service with PostAdventureHook wired to tavern ClaimDelivery
+	clock := &fixedClock{now: time.Date(2026, 9, 12, 10, 0, 0, 0, time.UTC)}
+	adventures, err := database.NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	advService, err := adventure.NewServiceWithCatalogs(
+		adventures,
+		charRepo,
+		invRepo,
+		stages,
+		monsters,
+		corebattle.Engine{},
+		nil,
+		nil,
+		clock,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	advService.SetPostAdventureHook(func(hookCtx context.Context, characterID string) error {
+		_ = tavernService.ResetFullness(hookCtx, characterID)
+		_, err := tavernService.ClaimDelivery(hookCtx, characterID)
+		if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
+			return nil
+		}
+		return err
+	})
+
+	// 5. Start adventure: character finishes with small reward (< 750G)
+	claimedAdv, err := advService.StartStage(ctx, char.ID, adventure.StarterAdventure)
+	if err != nil {
+		t.Fatalf("StartStage failed: %v", err)
+	}
+	if !claimedAdv.Resolved {
+		t.Fatal("expected adventure to be resolved")
+	}
+
+	// Verify post-adventure state: delivery was skipped due to insufficient funds, but reservation remains
+	charAfterFirstAdv, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Money reflects only battle reward (not deducted for delivery)
+	if charAfterFirstAdv.Money != claimedAdv.BattleResult.Reward.Currency {
+		t.Errorf("expected Money %d, got %d", claimedAdv.BattleResult.Reward.Currency, charAfterFirstAdv.Money)
+	}
+	// Delivery reservation remains active in DB
+	delivStillActive, err := tavernService.GetDelivery(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("expected delivery reservation to remain active after insufficient funds skip, got %v", err)
+	}
+	if delivStillActive.ItemID != "tavern_omelet_rice" {
+		t.Errorf("expected delivery item tavern_omelet_rice, got %s", delivStillActive.ItemID)
+	}
+
+	// 6. Character earns sufficient funds (e.g. granted 2000G)
+	charAfterFirstAdv.Money += 2000
+	if err := charRepo.Update(ctx, charAfterFirstAdv); err != nil {
+		t.Fatal(err)
+	}
+
+	// 7. Start second adventure: character now has sufficient funds for delivery
+	claimedAdv2, err := advService.StartStage(ctx, char.ID, adventure.StarterAdventure)
+	if err != nil {
+		t.Fatalf("second StartStage failed: %v", err)
+	}
+	if !claimedAdv2.Resolved {
+		t.Fatal("expected second adventure to be resolved")
+	}
+
+	// Verify delivery was successfully claimed and deducted
+	charFinal, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedFinalGold := charAfterFirstAdv.Money + claimedAdv2.BattleResult.Reward.Currency - 750
+	if charFinal.Money != expectedFinalGold {
+		t.Errorf("expected Final Gold %d, got %d", expectedFinalGold, charFinal.Money)
+	}
+	if charFinal.Stats.HP != 100 {
+		t.Errorf("expected HP 100 healed by delivery, got %d", charFinal.Stats.HP)
+	}
+	if charFinal.Stats.MP != 50 {
+		t.Errorf("expected MP 50 healed by delivery, got %d", charFinal.Stats.MP)
+	}
+
+	// Delivery reservation remains active for future adventures (standing order)
+	delivFinal, err := tavernService.GetDelivery(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("expected delivery reservation to remain active after successful claim, got %v", err)
+	}
+	if delivFinal.ItemID != "tavern_omelet_rice" {
+		t.Errorf("expected delivery item tavern_omelet_rice, got %s", delivFinal.ItemID)
+	}
+}
+
 func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")

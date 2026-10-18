@@ -42,6 +42,7 @@ type mockTavernRepo struct {
 	deliveries        map[string]tavern.DeliveryReservation
 	getStatusErr      error
 	resetFullnessErr  error
+	saveDeliveryErr   error
 	upsertStatusCalls int
 	resetStatusCalls  int
 }
@@ -107,6 +108,9 @@ func (m *mockTavernRepo) GetDelivery(ctx context.Context, characterID string) (t
 }
 
 func (m *mockTavernRepo) SaveDelivery(ctx context.Context, delivery tavern.DeliveryReservation) error {
+	if m.saveDeliveryErr != nil {
+		return m.saveDeliveryErr
+	}
 	m.deliveries[delivery.CharacterID] = delivery
 	return nil
 }
@@ -296,10 +300,16 @@ func TestTavern_DeliveryFlow(t *testing.T) {
 		Stats: corecharacter.Stats{HP: 20, MaxHP: 100, MP: 5, MaxMP: 50},
 	}
 
-	// 1. Reserve delivery for full course (Price: 3000 -> insufficient)
-	_, err := svc.ReserveDelivery(ctx, charID, "tavern_full_course")
-	if !errors.Is(err, tavern.ErrInsufficientFunds) {
-		t.Errorf("expected ErrInsufficientFunds, got %v", err)
+	// 1. Reserve delivery for full course (Price: 3000 -> succeeds without deducting funds)
+	delivCourse, err := svc.ReserveDelivery(ctx, charID, "tavern_full_course")
+	if err != nil {
+		t.Fatalf("ReserveDelivery for full course failed: %v", err)
+	}
+	if delivCourse.ItemID != "tavern_full_course" || delivCourse.Price != 3000 {
+		t.Errorf("unexpected delivery: %+v", delivCourse)
+	}
+	if charRepo.chars[charID].Money != 2000 {
+		t.Errorf("expected Money intact (2000), got %d", charRepo.chars[charID].Money)
 	}
 
 	// 2. Reserve delivery for omelet rice (Price: 750, HPHeal: 500, MPHeal: 100, Tickets: 7)
@@ -742,5 +752,146 @@ func TestTavern_ClaimDelivery_StorageError(t *testing.T) {
 	}
 	if st.TotalMealsEaten != 4 || st.TotalGoldSpent != 1550 {
 		t.Errorf("unexpected updated status: %+v", st)
+	}
+}
+
+func TestTavern_Delivery_ZeroFundsLifecycle(t *testing.T) {
+	svc, charRepo, _, _ := setupTestService(t)
+	ctx := context.Background()
+
+	charID := "zero-hero"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:    charID,
+		Name:  "ZeroHero",
+		Money: 0,
+		Stats: corecharacter.Stats{HP: 20, MaxHP: 100, MP: 5, MaxMP: 50},
+	}
+
+	// 1. 0G character reserves expensive meal (3000G)
+	deliv, err := svc.ReserveDelivery(ctx, charID, "tavern_full_course")
+	if err != nil {
+		t.Fatalf("expected 0G reservation to succeed, got %v", err)
+	}
+	if deliv.ItemID != "tavern_full_course" || deliv.Price != 3000 {
+		t.Errorf("unexpected delivery: %+v", deliv)
+	}
+	if charRepo.chars[charID].Money != 0 {
+		t.Errorf("expected 0G intact, got %d", charRepo.chars[charID].Money)
+	}
+
+	// 2. Overwrite / replace reservation with omelet rice (750G) while still having 0G
+	delivOmelet, err := svc.ReserveDelivery(ctx, charID, "tavern_omelet_rice")
+	if err != nil {
+		t.Fatalf("expected overwrite reservation to succeed with 0G, got %v", err)
+	}
+	if delivOmelet.ItemID != "tavern_omelet_rice" || delivOmelet.Price != 750 {
+		t.Errorf("unexpected delivery: %+v", delivOmelet)
+	}
+	if charRepo.chars[charID].Money != 0 {
+		t.Errorf("expected 0G intact after overwrite, got %d", charRepo.chars[charID].Money)
+	}
+
+	fetched, err := svc.GetDelivery(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetDelivery failed: %v", err)
+	}
+	if fetched.ItemID != "tavern_omelet_rice" {
+		t.Errorf("expected replaced item tavern_omelet_rice, got %s", fetched.ItemID)
+	}
+
+	// 3. Claim before acquiring funds -> fails with ErrInsufficientFunds
+	_, err = svc.ClaimDelivery(ctx, charID)
+	if !errors.Is(err, tavern.ErrInsufficientFunds) {
+		t.Fatalf("expected ErrInsufficientFunds on claim with 0G, got %v", err)
+	}
+
+	// Reservation retained
+	fetchedAfterFailedClaim, err := svc.GetDelivery(ctx, charID)
+	if err != nil {
+		t.Fatalf("expected reservation retained after failed claim: %v", err)
+	}
+	if fetchedAfterFailedClaim.ItemID != "tavern_omelet_rice" {
+		t.Errorf("expected reservation retained as tavern_omelet_rice, got %s", fetchedAfterFailedClaim.ItemID)
+	}
+
+	// Character money and stats intact
+	c := charRepo.chars[charID]
+	if c.Money != 0 || c.Stats.HP != 20 || c.Stats.MP != 5 {
+		t.Errorf("expected state untouched after failed claim: money=%d hp=%d mp=%d", c.Money, c.Stats.HP, c.Stats.MP)
+	}
+
+	// 4. Character earns funds (e.g. 1000G from adventure)
+	c.Money = 1000
+	charRepo.chars[charID] = c
+
+	// 5. Claim delivery now succeeds
+	claimRes, err := svc.ClaimDelivery(ctx, charID)
+	if err != nil {
+		t.Fatalf("ClaimDelivery failed after earning funds: %v", err)
+	}
+	if claimRes.RemainingGold != 250 { // 1000 - 750 = 250
+		t.Errorf("expected RemainingGold 250, got %d", claimRes.RemainingGold)
+	}
+	if claimRes.HPHealed != 80 || claimRes.CurrentHP != 100 {
+		t.Errorf("expected HP 100 healed 80, got HP %d healed %d", claimRes.CurrentHP, claimRes.HPHealed)
+	}
+	if claimRes.MPHealed != 45 || claimRes.CurrentMP != 50 {
+		t.Errorf("expected MP 50 healed 45, got MP %d healed %d", claimRes.CurrentMP, claimRes.MPHealed)
+	}
+
+	// Reservation still retained (standing order)
+	fetchedAfterSuccess, err := svc.GetDelivery(ctx, charID)
+	if err != nil {
+		t.Fatalf("expected standing order retained after success: %v", err)
+	}
+	if fetchedAfterSuccess.ItemID != "tavern_omelet_rice" {
+		t.Errorf("expected standing order tavern_omelet_rice, got %s", fetchedAfterSuccess.ItemID)
+	}
+
+	// 6. Cancel delivery succeeds without funds requirement
+	if err := svc.CancelDelivery(ctx, charID); err != nil {
+		t.Fatalf("CancelDelivery failed: %v", err)
+	}
+	_, err = svc.GetDelivery(ctx, charID)
+	if !errors.Is(err, tavern.ErrNoActiveDelivery) {
+		t.Errorf("expected ErrNoActiveDelivery after cancel, got %v", err)
+	}
+}
+
+func TestTavern_ReserveDelivery_ValidationAndErrors(t *testing.T) {
+	svc, charRepo, tavernRepo, _ := setupTestService(t)
+	ctx := context.Background()
+
+	charID := "valid-char"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:    charID,
+		Name:  "Hero",
+		Money: 0,
+	}
+
+	// Blank character ID
+	_, err := svc.ReserveDelivery(ctx, "", "tavern_water")
+	if !errors.Is(err, tavern.ErrInvalidCharacterID) {
+		t.Errorf("expected ErrInvalidCharacterID for empty id, got %v", err)
+	}
+
+	// Non-existent character
+	_, err = svc.ReserveDelivery(ctx, "nonexistent", "tavern_water")
+	if !errors.Is(err, tavern.ErrCharacterNotFound) {
+		t.Errorf("expected ErrCharacterNotFound for missing char, got %v", err)
+	}
+
+	// Non-existent menu item
+	_, err = svc.ReserveDelivery(ctx, charID, "unknown_dish")
+	if !errors.Is(err, tavern.ErrMenuItemNotFound) {
+		t.Errorf("expected ErrMenuItemNotFound for unknown dish, got %v", err)
+	}
+
+	// Storage error on SaveDelivery
+	storageErr := errors.New("storage failure")
+	tavernRepo.saveDeliveryErr = storageErr
+	_, err = svc.ReserveDelivery(ctx, charID, "tavern_water")
+	if !errors.Is(err, storageErr) {
+		t.Errorf("expected storageErr, got %v", err)
 	}
 }
