@@ -12,6 +12,9 @@ func (s *LifetimeState) ValidateRoster(c *RosterContext, id, targetID string, rn
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
 	}
+	if id == "job-66-revive" {
+		return s.ValidateRevival(&RevivalContext{TargetContext: c.TargetContext}, id, targetID, rng)
+	}
 	if id == "tool-78" || id == "gem-82" || npcRosterCommand(id) == "summon" {
 		return s.validateEnemySummon(c, id)
 	}
@@ -125,8 +128,8 @@ func (s *LifetimeState) ValidateRoster(c *RosterContext, id, targetID string, rn
 		return s.validateDoubleTail(c, rng)
 	case "venom":
 		return s.validateVenom(c, helperID, rng)
-	case "revive", "grave", "drain-barrage":
-		// #1365 status/defeat, #1338 revival, #1366 fields, #1337 MP drain.
+	case "grave", "drain-barrage":
+		// #1365 status/defeat, #1366 fields, #1337 MP drain.
 		return ErrUnsupportedEffect
 	default:
 		return ErrUnsupportedEffect
@@ -175,6 +178,10 @@ func (s *LifetimeState) ApplyRoster(c *RosterContext, id, targetID string, rng r
 	r := RosterResult{}
 	if err := s.ValidateRoster(c, id, targetID, rng); err != nil {
 		return r, err
+	}
+	if id == "job-66-revive" {
+		v, err := s.ApplyRevival(&RevivalContext{TargetContext: c.TargetContext}, id, targetID, rng)
+		return RosterResult{Applied: v.Applied, HelperID: s.FindCallingHelper(c.TargetContext, 66), TargetConsumed: v.TargetConsumed, Effects: v.Applications}, err
 	}
 	if id == "tool-78" || id == "gem-82" || npcRosterCommand(id) == "summon" {
 		return s.summonEnemy(c, id, rng)

@@ -185,7 +185,7 @@ func TestToolIdentitiesJobPayloadAndNoEffectPrerequisites(t *testing.T) {
 }
 
 func TestRosterAdmissionKeepsStateCountersAndRNGUnchanged(t *testing.T) {
-	for _, id := range []string{"job-61-special", "job-62-special", "job-63-special", "job-64-special", "job-66-special", "job-67-special", "job-71-special", "job-80-special", "job-87-special", "job-87-venom", "job-64-grave", "job-66-revive", "tool-110"} {
+	for _, id := range []string{"job-61-special", "job-62-special", "job-63-special", "job-64-special", "job-66-special", "job-67-special", "job-71-special", "job-80-special", "job-87-special", "job-87-venom", "job-64-grave", "tool-110"} {
 		s, c := rosterFixture()
 		if job, _, ok := rosterCommand(id); ok {
 			addRosterHelper(t, &s, &c, job)

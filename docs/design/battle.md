@@ -102,12 +102,11 @@ selection, agility round order or automatic termination as the interaction rule.
        - `poison` (毒): deals 10% MaxHP damage (capped at 950–1049 if >999) to the actor at the end of their own turn (`_battle.cgi:840`). If alive, rolls 20% natural cure chance (`rand(5) < 1`); clears status on success.
    - **Defeat & Revival Check (`defeat.go`)**:
      - When any participant's HP drops to $\le 0$:
-     - Check `RevivalTriggers`:
-       - `pharaoh`: Revives at 100% MaxHP (consumed on use).
-       - `undying`: Revives at 50% MaxHP (consumed on use).
-       - `touki_shield`: Revives at 30% MaxHP (consumed on use).
-       - `dokuro_amulet`: Revives at 25% MaxHP with `dofuu` (動封) applied (consumed on use).
-       - `cursed_revive`: Item 260 revives at 30% MaxHP, adds 300 Attack (capped at 999), and applies cursed state; see the detailed rule below and legacy `_battle.cgi:75–85`.
+     - The batch resolver uses `CheckRevival`'s historical ability-based approximation.
+       Its fixed undying recovery, quarter-HP item193 and trigger consumption are
+       known differences from normal-adventure rules. The explicit engine uses
+       [the ordered revival contract below](#resources-revival-and-roster-changes);
+       changing other combat modes is outside that reconstruction boundary.
      - If revived: HP set to revival amount, log revival message, participant remains active.
      - If not revived: Mark `Defeated = true`, HP clamped to 0.
 
@@ -945,6 +944,70 @@ and a three-operation ban (`_skill.cgi:4910–4930`). Death-triggered revival an
 reset/reward ordering remain part of `_battle.cgi:defeat:28–142`, not a blanket
 post-battle “keep 1 HP” correction.
 
+`RevivalEntries` identifies19 concrete job producers and the tool/book/gem/extension
+subset. `ValidateRevival`/`ApplyRevival` implement their bodies;
+`ValidateRevivalAction`/`RevivalAction` add ordinary bans and admit a fallen actor
+only for66.6 with a living designated helper. Discovery still owns current/previous-job,
+extended-SP, equipment and cost admission. Indirect callbacks retain the source's
+absence of these ordinary action guards. `RegisterRevivals` binds the same bodies to `BattleDefinitions` and the
+existing indirect invocation gate, without advertising an incomplete job table.
+`ApplyRoster` delegates66.6 to this owner; calling-table assembly remains #1480/#1481.
+Direct revival preserves recipient status, temporary effects and tension except
+for the callback's explicit writes. It has no healing modifiers, counters or
+universal minimum1HP/MaxHP clamp.
+
+| Concrete job positions | Enduring callback rule | Evidence in `party2/lib/_skill.cgi` |
+| --- | --- | --- |
+| 3.6,14.4,17.4,76.3 | FullHP for every other ally, including living allies; invoke actor defeat, then MP1. No caster seal or living check in the body | 1169–1181,1734–1747,1897–1909,5842–5855 |
+| 7.8 | Untyped area instant-death60, then actor defeat and MP1, even if the area call already defeated actor | 1348–1353 |
+| 5.7,39.5 | Magic revival target helper; fallen recipient has independent1/2 chance at floor50%MaxHP | 1245–1253,3081–3089 |
+| 16.6;17.6,18.6,33.6,43.6 | Magic revival target helper; fallen recipient gets floor25%MaxHP, or fullHP respectively | 1848–1853,1914–1919,1956–1961,2805–2810,3209–3214 |
+| 18.4,70.3;51.5 | Iterate fallen allies directly; independent1/2 halfHP, or1/5 fullHP respectively. No caster seal check | 1941–1951,5306–5316,3657–3667 |
+| 32.4 | One magic seal/cure check, then floor15%MaxHP for every fallen ally | 2757–2765 |
+| 50.6 | Magic target helper uses a nonrevival symbol, so ordinary fallen fallback applies; a resolved nonself recipient receives fullHP/fullMP before actor defeat/MP1 | 3598–3610 |
+| 75.5 | Magic revival target helper; fallen target requires MP≥1, receives its pre-debit MP as HP without MaxHP clamp, then MP halves/floors | 5791–5797 |
+| 66.6 | Named helper presence takes precedence over appearance fallback, including a dead named helper. A living helper is required for either branch; successful revival immobilizes recipient, halves helper HP (possibly to0 without defeat), and sets the shared three-operation ban | 4911–4931 |
+
+Position identities follow #1409's source ledger. Non-job evidence is
+`_data.cgi:628–639,2151–2154` and `_skill.cgi:461–475,522–535,687–698`.
+Book196 seals its caster only after successful full revival outside `library`.
+Party loops and sacrifices retain their absence of caster seal/living checks;
+single magic callbacks use the existing symbolic revival target helper, including
+confusion, reflection and cover. Custom missing targets default to the actor in
+their enclosing callback context.
+
+`ValidateAutomaticRevival`/`ApplyAutomaticRevival` own the **prefix** of shared
+defeat (`_battle.cgi:28–87`), before final-defeat/reward handling:
+
+1. Temporary revival clears that temporary, restores floor(MaxHP×(0.1+rand0.1)),
+   resets and returns, even when the rounded HP is0.
+2. Pharaoh requires MP strictly greater than25%MaxMP; restore fullHP, debit
+   floor50%currentMP, reset and return. The ability remains available.
+3. Every other member with weapon37+armor38 receives floor50%fallen currentAT,
+   capped999, with no living/team filter. This precedes later item revivals.
+4. Item161 at tension≥8, or item193, restores floor50%MaxHP and resets. Item193
+   is checked/removed **after** reset, recorded in `ConsumedItems`, and immobilizes
+   its holder. Item161 remains equipped; reset can lower its tension eligibility.
+5. Noncursed item260 restores floor30%MaxHP, resets, then adds300 AT/DF/AG
+   without a999 cap and adds curse. Already cursed holders skip this branch.
+
+`Prevented` means the enclosing defeat returns before rewards, independently of
+positive HP. Otherwise it continues its existing final reset, final strike,
+inheritance and reward logic. Sacrifices call this same defeat closure with the
+actor's current HP intact and overwrite MP0/1 **after** it returns. The area-death
+sacrifice still invokes that closure again if the area operation already defeated
+the actor. No revival primitive awards rewards or repeats settlement.
+
+Reset hooks must already certify equipment in the separate requester/actor/target
+contexts, including possible HP0 resets; missing hooks, item110's broken fallen
+reset, unknown context and missing instant-death owners retain whole-entry gates.
+#1365 owns those nonrevival descendants and composes this prefix without a reverse
+dependency. Arbitrary preceding callback transitions remain rejected until the
+enclosing owner can project them; #1436 owns mixed gem-slot composition. Saved
+facts include consumed equipment, curse, resources, helper HP and bans; reload
+rebuilds only closures and never replays a revival roll. SQL continuation remains
+#1328/#1329. The batch `CheckRevival` contract is unchanged.
+
 ##### Summoned roster and helper commands
 
 `LifetimeState.Actors` preserves member order. Summoned incarnations receive a
@@ -1226,9 +1289,9 @@ Deterministic 1v1 duel resolution utilizing the canonical damage formula:
 - A cursed revival from `item-260` revives the participant at 30% MaxHP and
   grants +300 Attack, +300 Defense, and +300 Agility, then adds curse
   (`party2/lib/_battle.cgi:75–87`). These are all three stats, not Attack alone.
-- When an ally is defeated without revival, each living ally equipped with
-  `item-037` and `item-038` gains half of the fallen ally's Attack. The
-  resulting Attack is capped at 999.
+- Weapon37+armor38 death transfer follows the ordered
+  [normal-adventure revival contract](#resources-revival-and-roster-changes),
+  including fallen holders and transfers before item-triggered revival.
 
 ## Battle Adapter & State Application (`internal/battle`)
 
