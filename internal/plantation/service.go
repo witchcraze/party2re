@@ -256,7 +256,7 @@ func (s *Service) Fertilize(ctx context.Context, characterID string, fertilizerI
 	}
 
 	fert, ok := FindFertilizer(fertilizerID)
-	if !ok {
+	if !ok || fert.ID == "none" {
 		return FertilizeResult{}, ErrInvalidFertilizerID
 	}
 
@@ -290,8 +290,11 @@ func (s *Service) Fertilize(ctx context.Context, characterID string, fertilizerI
 		}
 
 		if plot.FertilizerID != nil {
-			applied, _ := FindFertilizer(*plot.FertilizerID)
-			return fmt.Errorf("%w: もう%sをまいてあるよ", ErrFertilizerAlreadyApplied, applied.Name)
+			appliedName := *plot.FertilizerID
+			if applied, ok := FindFertilizer(*plot.FertilizerID); ok {
+				appliedName = applied.Name
+			}
+			return fmt.Errorf("%w: もう%sをまいてあるよ", ErrFertilizerAlreadyApplied, appliedName)
 		}
 
 		if !fert.IsItem {

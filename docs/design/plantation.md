@@ -64,6 +64,7 @@ Unlike modern farming mini-games with tile-grids or watering schedules, authenti
 2. **Preconditions**:
    - Character must have an active plot.
    - Plot must not already have a fertilizer applied (`plot.FertilizerID == nil`).
+   - Requested fertilizer must be one of the 14 selectable fertilizers. The internal default `none` (`なし`) provides unfertilized harvest parameters only and is rejected with `ErrInvalidFertilizerID` (HTTP 400).
    - If gold fertilizer: character has sufficient funds.
    - If item fertilizer: character has the item in Depot or active Inventory.
 3. **Execution**:
