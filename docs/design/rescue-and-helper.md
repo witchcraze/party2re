@@ -35,7 +35,9 @@ The evidence has two different limits:
 - The recovered original repository's `docker-entrypoint.sh:7–10` creates a missing `helper_quest.cgi` as an empty file and preserves an existing file. This also holds at the audit revision `ff97fc549932a146cc945d7edf71b44c868a840e`; it is evidence for the recovered container's fresh-start behavior, not proof of historical live-server provisioning.
 - Game code `party2/lib/helper.cgi:60–86,92–148` registers `みる` / `かいけつ`, reads existing rows, and only generates replacements while processing an existing completed or expired request. An empty file stays empty. The original live server's initial request count/data remains **unknown**; no positive count may be presented as an established legacy rule.
 
-The Go migration `031_rescue_and_helper.sql` creates the table without inserting requests. `cmd/party2` constructs the service without a supply step, and `ListQuests` / `GetActiveHelperItemIDs` read `ListActive` without generating requests. These match the adopted zero-bootstrap rule.
+The Go migration `031_rescue_and_helper.sql` creates the table without inserting requests. `cmd/party2` constructs the service without a supply step. `ListQuests` reads all uncompleted requests, including expired ones (`ListUncompleted`), matching legacy `miru` (`party2/lib/helper.cgi:68–87`); `GetActiveHelperItemIDs` still reads only active requests (`ListActive`) for shop exclusions. Neither read generates requests. These match the adopted zero-bootstrap rule.
+
+When every request has expired, clients can still obtain their IDs from `GET /helpers/quests` and submit one to the authenticated `POST /helpers/complete`. The expired target returns HTTP 422 (`ErrQuestExpired`) without consuming materials or granting rewards, while the expired rows are exchanged one-for-one. Clients must fetch the board again after that response to obtain the new requests. GET remains read-only; no scheduler or additional supply mechanism is involved.
 
 | Situation | Expected behavior |
 | :--- | :--- |
@@ -50,7 +52,7 @@ The Go migration `031_rescue_and_helper.sql` creates the table without inserting
 | Original action / path | Go service / current transport | Supply effect |
 | :--- | :--- | :--- |
 | Container startup creates the missing request file | Schema migration and `cmd/party2` service composition | No initial requests; retain existing data. |
-| `みる` → `miru` | `ListQuests` / `GET /helpers/quests` | Read existing requests; an empty result does not generate supply. |
+| `みる` → `miru` | `ListQuests` / `GET /helpers/quests` | Read uncompleted requests including expired ones; an empty result does not generate supply. |
 | `かいけつ` → `kaiketsu` | `CompleteQuest` / `POST /helpers/complete` | Complete an existing request and create its replacement; also exchanges expired non-target requests on every call (#1217). No bootstrap command. |
 
 A fresh installation therefore has no playable helper requests until initial request data is separately supplied. A nonzero automatic seed or provisioning tool would require an explicit new decision about its count, source and transaction/idempotency contract; none is authorized here. Production guild wiring is connected via public port adapter in `cmd/party2` ([#1218](https://github.com/witchcraze/party2re/issues/1218)); this decision does not certify the generator pools/reward weights ([#1216](https://github.com/witchcraze/party2re/issues/1216)).

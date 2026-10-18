@@ -15,6 +15,7 @@ type QuestRepository interface {
 	Save(ctx context.Context, q Quest) error
 	FindByIDForUpdate(ctx context.Context, id string) (Quest, error)
 	ListActive(ctx context.Context, now time.Time) ([]Quest, error)
+	ListUncompleted(ctx context.Context) ([]Quest, error)
 	// ListExpired reads uncompleted requests whose deadline is before now, without locking.
 	ListExpired(ctx context.Context, now time.Time) ([]Quest, error)
 	// Delete removes an uncompleted request that is being exchanged for a replacement.
@@ -108,8 +109,9 @@ func (s *Service) SetRandomSource(r RandomSource) {
 	s.randomSource = r
 }
 
-func (s *Service) ListQuests(ctx context.Context, now time.Time) ([]Quest, error) {
-	return s.quests.ListActive(ctx, now)
+// ListQuests reads the board, including expired requests that callers can submit for exchange.
+func (s *Service) ListQuests(ctx context.Context, _ time.Time) ([]Quest, error) {
+	return s.quests.ListUncompleted(ctx)
 }
 
 func (s *Service) GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]string, error) {
