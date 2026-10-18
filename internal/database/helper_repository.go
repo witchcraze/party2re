@@ -35,17 +35,31 @@ func (r *HelperRepository) Save(ctx context.Context, q helperquest.Quest) error 
 }
 
 func (r *HelperRepository) FindByID(ctx context.Context, id string) (helperquest.Quest, error) {
+	return r.findByID(ctx, id, false)
+}
+
+// FindByIDForUpdate locks the shared quest before character assets are acquired.
+// The caller must hold the ambient transaction until completion or rollback.
+func (r *HelperRepository) FindByIDForUpdate(ctx context.Context, id string) (helperquest.Quest, error) {
+	return r.findByID(ctx, id, true)
+}
+
+func (r *HelperRepository) findByID(ctx context.Context, id string, forUpdate bool) (helperquest.Quest, error) {
 	var q helperquest.Quest
 	var kindInt int
 	var completedBy sql.NullString
 	var completedAt sql.NullTime
 
-	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+	query := `
 		SELECT id, title, kind, target_id, target_name, required_count,
 		       reward_item_id, is_rare, is_guild, expires_at, completed_at, completed_by, created_at
 		FROM helper_quests
 		WHERE id = ?
-	`, id).Scan(
+	`
+	if forUpdate {
+		query += " FOR UPDATE"
+	}
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, id).Scan(
 		&q.ID, &q.Title, &kindInt, &q.TargetID, &q.TargetName, &q.RequiredCount,
 		&q.RewardItemID, &q.IsRare, &q.IsGuild, &q.ExpiresAt, &completedAt, &completedBy, &q.CreatedAt,
 	)

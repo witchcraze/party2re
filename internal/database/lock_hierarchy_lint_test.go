@@ -101,7 +101,8 @@ func classifyLockCall(recvName, methodName, relPath string) (LockRank, string, b
 		strings.Contains(m, "sale") || strings.Contains(m, "room") {
 		return RankSharedPeerEntity, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
-	if strings.Contains(r, "party") || strings.Contains(r, "contest") || strings.Contains(r, "casinoroom") || strings.Contains(r, "room") {
+	if strings.Contains(r, "party") || strings.Contains(r, "contest") || strings.Contains(r, "casinoroom") || strings.Contains(r, "room") ||
+		(normPath == "internal/helperquest/service.go" && r == "quests") {
 		return RankSharedPeerEntity, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
 
@@ -368,6 +369,32 @@ func (s *Service) Transfer(ctx context.Context) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = analyzeASTFileLocks(fset, fileNode, "test.go")
+	}
+}
+
+func TestLockHierarchyHelperQuestClaim(t *testing.T) {
+	for _, inverted := range []bool{false, true} {
+		t.Run(fmt.Sprintf("inverted=%t", inverted), func(t *testing.T) {
+			questLock := `q, _ := s.quests.FindByIDForUpdate(ctx, "q"); _ = q;`
+			charLock := `c, _ := s.characters.FindByIDForUpdate(ctx, "c"); _ = c;`
+			locks := questLock + charLock
+			if inverted {
+				locks = charLock + questLock
+			}
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, "service.go", "package helperquest; func claim() {"+locks+"}", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			violations := analyzeASTFileLocks(fset, file, "internal/helperquest/service.go")
+			want := 0
+			if inverted {
+				want = 1
+			}
+			if len(violations) != want {
+				t.Fatalf("lock violations = %v, want %d", violations, want)
+			}
+		})
 	}
 }
 

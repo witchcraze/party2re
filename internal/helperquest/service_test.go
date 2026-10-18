@@ -31,7 +31,7 @@ func (r *mockQuestRepo) Save(_ context.Context, q helperquest.Quest) error {
 	return nil
 }
 
-func (r *mockQuestRepo) FindByID(_ context.Context, id string) (helperquest.Quest, error) {
+func (r *mockQuestRepo) FindByIDForUpdate(_ context.Context, id string) (helperquest.Quest, error) {
 	q, ok := r.quests[id]
 	if !ok {
 		return helperquest.Quest{}, helperquest.ErrQuestNotFound
