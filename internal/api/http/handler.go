@@ -492,7 +492,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/alchemy", h.handleGetCharacterAlchemy)
 	mux.HandleFunc("POST /characters/{id}/alchemy/synthesize", h.handleAlchemySynthesize)
 	mux.HandleFunc("POST /characters/{id}/alchemy/claim", h.handleAlchemyClaim)
-	mux.HandleFunc("POST /characters/{id}/alchemy/learn", h.handleAlchemyLearn)
 
 	// Plantation
 	mux.HandleFunc("GET /characters/{id}/plantation", h.handleGetCharacterPlantation)

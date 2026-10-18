@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/witchcraze/party2re/internal/alchemy"
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/contest"
@@ -254,59 +253,6 @@ func TestOptionalJSONEndpoints_RejectsInvalidJSON_ZeroDomainMutations(t *testing
 			wantStatus:  http.StatusBadRequest,
 		},
 	}
-
-	t.Run("POST /characters/{id}/alchemy/learn", func(t *testing.T) {
-		for _, tc := range invalidCases {
-			t.Run(tc.name, func(t *testing.T) {
-				var calls int32
-				alchSvc := &stubAlchemyService{
-					learnRecipeFn: func(_ context.Context, _ string, _ []string) (alchemy.Recipe, error) {
-						atomic.AddInt32(&calls, 1)
-						return alchemy.Recipe{ID: "r1"}, nil
-					},
-				}
-				router := setupAuthenticatedHandler(t, apihttp.WithAlchemy(alchSvc))
-
-				req := httptest.NewRequest(http.MethodPost, "/characters/c1/alchemy/learn", strings.NewReader(tc.body))
-				req.Header.Set("Authorization", "Bearer valid-session")
-				req.Header.Set("Content-Type", tc.contentType)
-
-				rec := httptest.NewRecorder()
-				router.ServeHTTP(rec, req)
-
-				if rec.Code != tc.wantStatus {
-					t.Errorf("status = %d, want %d", rec.Code, tc.wantStatus)
-				}
-				if got := atomic.LoadInt32(&calls); got != 0 {
-					t.Errorf("expected 0 domain calls on rejected input, got %d", got)
-				}
-			})
-		}
-
-		t.Run("absent body succeeds and invokes domain", func(t *testing.T) {
-			var calls int32
-			alchSvc := &stubAlchemyService{
-				learnRecipeFn: func(_ context.Context, _ string, _ []string) (alchemy.Recipe, error) {
-					atomic.AddInt32(&calls, 1)
-					return alchemy.Recipe{ID: "r1"}, nil
-				},
-			}
-			router := setupAuthenticatedHandler(t, apihttp.WithAlchemy(alchSvc))
-
-			req := httptest.NewRequest(http.MethodPost, "/characters/c1/alchemy/learn", nil)
-			req.Header.Set("Authorization", "Bearer valid-session")
-
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusOK {
-				t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-			}
-			if got := atomic.LoadInt32(&calls); got != 1 {
-				t.Errorf("expected 1 domain call on absent body, got %d", got)
-			}
-		})
-	})
 
 	t.Run("POST /characters/{id}/pvp/rooms/{room_id}/join", func(t *testing.T) {
 		for _, tc := range invalidCases {

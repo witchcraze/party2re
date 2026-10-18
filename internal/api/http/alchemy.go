@@ -17,7 +17,6 @@ type AlchemyService interface {
 	GetCompendium(ctx context.Context, characterID string) (alchemy.Compendium, error)
 	Synthesize(ctx context.Context, characterID string, recipeID string) (alchemy.SynthesisResult, error)
 	Claim(ctx context.Context, characterID string) (alchemy.ClaimResult, error)
-	LearnRecipe(ctx context.Context, characterID string, pool []string) (alchemy.Recipe, error)
 }
 
 // WithAlchemy configures the AlchemyService for the HTTP handler.
@@ -29,10 +28,6 @@ func WithAlchemy(service AlchemyService) Option {
 
 type alchemySynthesizeRequest struct {
 	RecipeID string `json:"recipe_id"`
-}
-
-type alchemyLearnRequest struct {
-	Pool []string `json:"pool,omitempty"`
 }
 
 type characterAlchemyResponse struct {
@@ -104,28 +99,6 @@ func (h *Handler) handleAlchemyClaim(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) handleAlchemyLearn(w http.ResponseWriter, r *http.Request) {
-	if h.alchemy == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("alchemy service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req alchemyLearnRequest
-		if !decodeOptionalJSON(w, r, &req) {
-			return
-		}
-
-		res, err := h.alchemy.LearnRecipe(r.Context(), char.ID, req.Pool)
-		if err != nil {
-			h.writeAlchemyError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, res)
-	})
-}
-
 func (h *Handler) writeAlchemyError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, alchemy.ErrInvalidCharacterID), errors.Is(err, alchemy.ErrInvalidRecipeID):
@@ -136,8 +109,7 @@ func (h *Handler) writeAlchemyError(w http.ResponseWriter, err error) {
 		errors.Is(err, alchemy.ErrRecipeNotLearned),
 		errors.Is(err, alchemy.ErrSynthesisInProgress),
 		errors.Is(err, alchemy.ErrNoActiveSynthesis),
-		errors.Is(err, alchemy.ErrSynthesisNotReady),
-		errors.Is(err, alchemy.ErrNoRecipesToLearn):
+		errors.Is(err, alchemy.ErrSynthesisNotReady):
 		writeError(w, http.StatusUnprocessableEntity, err)
 	case errors.Is(err, depot.ErrDepotFull):
 		writeError(w, http.StatusConflict, err)

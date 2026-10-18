@@ -91,6 +91,7 @@ A recipe consists of:
   - `神の錬金レシピ` (Item 129, 7000G): Teaches 1 unlearned recipe from all recipes (empty pool filter).
   - Pool exhaustion: 1 scroll item is still consumed and `"この錬金レシピからこれ以上習得できる錬金方法はないようだ…"` is returned.
   - Integrated into `internal/home` via consumer-side `RecipeLearner` interface.
+- **No Direct HTTP Discovery**: Recipe discovery is exclusively driven by recipe scroll item consumption via Home item usage; no direct HTTP endpoint exists for recipe learning.
 
 ---
 
