@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,25 @@ func (r *mockQuestRepo) ListActive(_ context.Context, now time.Time) ([]helperqu
 		}
 	}
 	return list, nil
+}
+
+func (r *mockQuestRepo) ListExpired(_ context.Context, now time.Time) ([]helperquest.Quest, error) {
+	var list []helperquest.Quest
+	for _, q := range r.quests {
+		if q.CompletedAt == nil && q.ExpiresAt.Before(now) {
+			list = append(list, q)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
+	return list, nil
+}
+
+func (r *mockQuestRepo) Delete(_ context.Context, id string) error {
+	if _, ok := r.quests[id]; !ok {
+		return helperquest.ErrQuestNotFound
+	}
+	delete(r.quests, id)
+	return nil
 }
 
 type mockCharRepo struct {

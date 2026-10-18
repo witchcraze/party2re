@@ -15,6 +15,10 @@ type QuestRepository interface {
 	Save(ctx context.Context, q Quest) error
 	FindByIDForUpdate(ctx context.Context, id string) (Quest, error)
 	ListActive(ctx context.Context, now time.Time) ([]Quest, error)
+	// ListExpired reads uncompleted requests whose deadline is before now, without locking.
+	ListExpired(ctx context.Context, now time.Time) ([]Quest, error)
+	// Delete removes an uncompleted request that is being exchanged for a replacement.
+	Delete(ctx context.Context, id string) error
 }
 
 type CharacterRepository interface {
@@ -121,14 +125,69 @@ func (s *Service) GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]
 }
 
 // CompleteQuest atomically completes a shared request and creates its replacement.
-// Transaction: RunInTx
+// Like legacy `kaiketsu` (lib/helper.cgi:92-145), every call also exchanges each expired
+// uncompleted request other than the target one-for-one, even when this completion fails.
+// An expired target is rejected with ErrQuestExpired and is then exchanged as well.
+// Transaction: RunInTx (renewal), then RunInTx (completion)
 // Lock Order: helper_quests(0) -> characters(2) -> depot(5) -> guilds(7, guild quests)
 func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (CompletionResult, error) {
-	var res CompletionResult
-
 	if s.txProvider == nil {
-		return res, errors.New("transaction provider is missing")
+		return CompletionResult{}, errors.New("transaction provider is missing")
 	}
+	if err := s.renewExpired(ctx, now, questID); err != nil {
+		return CompletionResult{}, err
+	}
+	res, err := s.completeQuest(ctx, characterID, questID, now)
+	if errors.Is(err, ErrQuestExpired) {
+		if renewErr := s.renewExpired(ctx, now, ""); renewErr != nil {
+			return CompletionResult{}, errors.Join(err, renewErr)
+		}
+	}
+	return res, err
+}
+
+// renewExpired replaces each expired uncompleted request except keepID with one new request.
+// Each candidate is re-read FOR UPDATE by id and re-checked, so concurrent callers exchange each
+// row once, and any failure rolls back the deletions together with the replacements.
+// Transaction: RunInTx
+// Lock Order: helper_quests(0)
+func (s *Service) renewExpired(ctx context.Context, now time.Time, keepID string) error {
+	return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+		candidates, err := s.quests.ListExpired(txCtx, now)
+		if err != nil {
+			return err
+		}
+		for _, candidate := range candidates {
+			if candidate.ID == keepID {
+				continue
+			}
+			old, err := s.quests.FindByIDForUpdate(txCtx, candidate.ID)
+			if errors.Is(err, ErrQuestNotFound) {
+				continue // exchanged concurrently
+			}
+			if err != nil {
+				return err
+			}
+			if old.CompletedAt != nil || !now.After(old.ExpiresAt) {
+				continue
+			}
+			replacement, err := GenerateQuest(s.randomSource, now)
+			if err != nil {
+				return err
+			}
+			if err := s.quests.Delete(txCtx, old.ID); err != nil {
+				return err
+			}
+			if err := s.quests.Save(txCtx, replacement); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (s *Service) completeQuest(ctx context.Context, characterID, questID string, now time.Time) (CompletionResult, error) {
+	var res CompletionResult
 
 	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
 		q, err := s.quests.FindByIDForUpdate(txCtx, questID)
