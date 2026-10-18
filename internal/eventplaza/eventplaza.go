@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
@@ -57,12 +58,13 @@ type BazaarItem struct {
 
 // PlazaStatus represents the public state and unlocked features of the Event Plaza.
 type PlazaStatus struct {
-	ActiveParticipants  int                  `json:"active_participants"`
-	MerchantTier        int                  `json:"merchant_tier"`
-	MerchantTierName    string               `json:"merchant_tier_name"`
-	NextTierThreshold   int                  `json:"next_tier_threshold"`
-	ActiveBanquetsCount int                  `json:"active_banquets_count"`
-	ActiveBanquets      []CelebrationBanquet `json:"active_banquets,omitempty"`
+	ActiveParticipants     int                  `json:"active_participants"`
+	MerchantSelectionCount int                  `json:"merchant_selection_count"`
+	MerchantTier           int                  `json:"merchant_tier"`
+	MerchantTierName       string               `json:"merchant_tier_name"`
+	NextTierThreshold      int                  `json:"next_tier_threshold"`
+	ActiveBanquetsCount    int                  `json:"active_banquets_count"`
+	ActiveBanquets         []CelebrationBanquet `json:"active_banquets,omitempty"`
 }
 
 type Repository interface {
@@ -76,9 +78,9 @@ type Repository interface {
 }
 
 type PresenceTracker interface {
-	RecordPresence(ctx context.Context, characterID string, at time.Time) error
-	RecordBanquetPresence(ctx context.Context, banquetID string, count int, duration time.Duration) error
-	CountActiveParticipants(ctx context.Context, cutoff time.Time) (int, error)
+	RecordPresence(ctx context.Context, displayName string, at time.Time) error
+	AppendCrowd(ctx context.Context, crowd []Presence) error
+	Observe(ctx context.Context, now time.Time) (PresenceSnapshot, error)
 }
 
 type CharacterRepository interface {
@@ -138,9 +140,14 @@ type Service struct {
 	clock           Clock
 	bazaarCatalog   []BazaarItem
 	economy         *economy.Service
+	rng             interface{ Intn(int) int }
 }
 
 type Option func(*Service)
+
+func WithRNG(rng interface{ Intn(int) int }) Option {
+	return func(s *Service) { s.rng = rng }
+}
 
 func WithTransactionProvider(txProvider TransactionProvider) Option {
 	return func(s *Service) {
@@ -219,6 +226,7 @@ func NewService(
 		inventoryRepo: inventoryRepo,
 		clock:         realClock{},
 		bazaarCatalog: catalog,
+		rng:           random.Default(),
 	}
 
 	for _, opt := range opts {
@@ -238,21 +246,22 @@ func NewService(
 	return svc, nil
 }
 
-func (s *Service) countParticipants(ctx context.Context, cutoff time.Time) (int, error) {
+func (s *Service) observeParticipants(ctx context.Context) (PresenceSnapshot, error) {
 	if s.presenceTracker != nil {
-		return s.presenceTracker.CountActiveParticipants(ctx, cutoff)
+		return s.presenceTracker.Observe(ctx, s.clock.Now())
 	}
-	return s.repo.CountActiveParticipants(ctx, cutoff)
+	count, err := s.repo.CountActiveParticipants(ctx, s.clock.Now().Add(-PresenceWindow))
+	return PresenceSnapshot{Stored: count, Active: count}, err
 }
 
-func (s *Service) recordPresence(ctx context.Context, characterID string, at time.Time) error {
+func (s *Service) recordPresence(ctx context.Context, characterID, displayName string, at time.Time) error {
 	if s.presenceTracker != nil {
-		return s.presenceTracker.RecordPresence(ctx, characterID, at)
+		return s.presenceTracker.RecordPresence(ctx, displayName, at)
 	}
 	return s.repo.RecordPresence(ctx, characterID, at)
 }
 
-// CalculateMerchantTier calculates the active traveling merchant tier based on real-time plaza concurrency.
+// CalculateMerchantTier selects the catalog using the stored count before display cleanup.
 func CalculateMerchantTier(participants int) (tier int, tierName string, nextThreshold int) {
 	if participants >= Tier3Threshold {
 		return 3, "Gold Traveling Merchant (至高の行商人バザー)", 0
@@ -266,49 +275,29 @@ func CalculateMerchantTier(participants int) (tier int, tierName string, nextThr
 	return 0, "Traveling Merchant On Journey (行商人巡回中)", Tier1Threshold
 }
 
-// BanquetAttendeesForTier returns the number of virtual celebration attendees (10–30) for a boss tier.
-// Defeating a King Boss tier yields:
-// - Tier 1: 10 attendees -> unlocks Tier 1 Traveling Merchant (Bronze)
-// - Tier 2: 20 attendees -> unlocks Tier 2 Traveling Merchant (Silver)
-// - Tier 3+: 30 attendees -> unlocks Tier 3 Traveling Merchant (Gold)
-func BanquetAttendeesForTier(tier int) int {
-	if tier <= 1 {
-		return Tier1Threshold
-	}
-	if tier == 2 {
-		return Tier2Threshold
-	}
-	return Tier3Threshold
-}
-
 func (s *Service) RecordPresence(ctx context.Context, characterID string) error {
-	if strings.TrimSpace(characterID) == "" {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
 		return ErrCharacterNotFound
 	}
-	return s.recordPresence(ctx, strings.TrimSpace(characterID), s.clock.Now())
-}
-
-// RecordBanquetPresence records virtual celebration banquet attendees into the presence tracker.
-func (s *Service) RecordBanquetPresence(ctx context.Context, banquetID string, count int, duration time.Duration) error {
+	displayName := ""
 	if s.presenceTracker != nil {
-		if trackerWithClock, ok := s.presenceTracker.(interface {
-			RecordBanquetPresenceAt(ctx context.Context, banquetID string, count int, at time.Time, duration time.Duration) error
-		}); ok {
-			return trackerWithClock.RecordBanquetPresenceAt(ctx, banquetID, count, s.clock.Now(), duration)
+		char, err := s.characterRepo.FindByID(ctx, characterID)
+		if err != nil {
+			return err
 		}
-		return s.presenceTracker.RecordBanquetPresence(ctx, banquetID, count, duration)
+		displayName = char.Name
 	}
-	return nil
+	return s.recordPresence(ctx, characterID, displayName, s.clock.Now())
 }
 
 func (s *Service) GetPlazaStatus(ctx context.Context) (PlazaStatus, error) {
-	cutoff := s.clock.Now().Add(-PresenceWindow)
-	participants, err := s.countParticipants(ctx, cutoff)
+	participants, err := s.observeParticipants(ctx)
 	if err != nil {
 		return PlazaStatus{}, fmt.Errorf("failed to count active participants: %w", err)
 	}
 
-	tier, tierName, nextThreshold := CalculateMerchantTier(participants)
+	tier, tierName, nextThreshold := CalculateMerchantTier(participants.Stored)
 
 	now := s.clock.Now()
 	banquets, err := s.repo.ListActiveBanquets(ctx, now)
@@ -317,23 +306,23 @@ func (s *Service) GetPlazaStatus(ctx context.Context) (PlazaStatus, error) {
 	}
 
 	return PlazaStatus{
-		ActiveParticipants:  participants,
-		MerchantTier:        tier,
-		MerchantTierName:    tierName,
-		NextTierThreshold:   nextThreshold,
-		ActiveBanquetsCount: len(banquets),
-		ActiveBanquets:      banquets,
+		ActiveParticipants:     participants.Active,
+		MerchantSelectionCount: participants.Stored,
+		MerchantTier:           tier,
+		MerchantTierName:       tierName,
+		NextTierThreshold:      nextThreshold,
+		ActiveBanquetsCount:    len(banquets),
+		ActiveBanquets:         banquets,
 	}, nil
 }
 
 func (s *Service) ListAvailableBazaarItems(ctx context.Context) ([]BazaarItem, int, error) {
-	cutoff := s.clock.Now().Add(-PresenceWindow)
-	participants, err := s.countParticipants(ctx, cutoff)
+	participants, err := s.observeParticipants(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count active participants: %w", err)
 	}
 
-	tier, _, _ := CalculateMerchantTier(participants)
+	tier, _, _ := CalculateMerchantTier(participants.Stored)
 	if tier <= 0 {
 		return []BazaarItem{}, 0, nil
 	}

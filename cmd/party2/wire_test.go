@@ -167,58 +167,31 @@ func TestWirePostAdventureHook_ResetsFullnessAndClaimsDelivery(t *testing.T) {
 }
 
 type mockPlazaService struct {
-	banquetRecorded   bool
-	presenceRecorded  bool
-	recordedAttendees int
-	recordedDuration  time.Duration
+	recordedTier int
+	recordedArgs []string
+	err          error
 }
 
 func (m *mockPlazaService) RecordVictoryBanquet(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) (eventplaza.CelebrationBanquet, error) {
-	m.banquetRecorded = true
-	attendees := eventplaza.BanquetAttendeesForTier(tier)
-	_ = m.RecordBanquetPresence(ctx, "banquet-1", attendees, time.Hour)
-	return eventplaza.CelebrationBanquet{
-		ID:   "banquet-1",
-		Tier: tier,
-	}, nil
+	m.recordedTier = tier
+	m.recordedArgs = []string{bossID, bossName, slayerID, slayerName}
+	return eventplaza.CelebrationBanquet{}, m.err
 }
 
-func (m *mockPlazaService) RecordBanquetPresence(ctx context.Context, banquetID string, count int, duration time.Duration) error {
-	m.presenceRecorded = true
-	m.recordedAttendees = count
-	m.recordedDuration = duration
-	return nil
-}
-
-func TestWireBossVictoryBanquetHook_RecordsPresence(t *testing.T) {
-	plazaMock := &mockPlazaService{}
-	hook := func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error {
-		_, err := plazaMock.RecordVictoryBanquet(ctx, bossID, bossName, slayerID, slayerName, tier)
-		return err
-	}
-
+func TestWireBossVictoryBanquetHook(t *testing.T) {
+	plaza := &mockPlazaService{}
+	hook := buildVictoryBanquetHook(plaza)
 	for _, tier := range []int{1, 2, 3} {
-		plazaMock.banquetRecorded = false
-		plazaMock.presenceRecorded = false
-		plazaMock.recordedAttendees = 0
-
-		err := hook(context.Background(), "boss-1", "King", "slayer-1", "Hero", tier)
-		if err != nil {
-			t.Fatalf("tier %d: expected nil error, got %v", tier, err)
+		if err := hook(context.Background(), "king", "King", "hero", "Hero", tier); err != nil {
+			t.Fatal(err)
 		}
-		if !plazaMock.banquetRecorded {
-			t.Errorf("tier %d: expected banquet to be recorded", tier)
+		if plaza.recordedTier != tier || strings.Join(plaza.recordedArgs, ",") != "king,King,hero,Hero" {
+			t.Fatalf("hook lost victory parameters: %+v", plaza)
 		}
-		if !plazaMock.presenceRecorded {
-			t.Errorf("tier %d: expected presence to be recorded", tier)
-		}
-		expectedAttendees := eventplaza.BanquetAttendeesForTier(tier)
-		if plazaMock.recordedAttendees != expectedAttendees {
-			t.Errorf("tier %d: expected %d attendees, got %d", tier, expectedAttendees, plazaMock.recordedAttendees)
-		}
-		if plazaMock.recordedDuration != time.Hour {
-			t.Errorf("tier %d: expected duration 1h, got %v", tier, plazaMock.recordedDuration)
-		}
+	}
+	plaza.err = errors.New("plaza unavailable")
+	if err := hook(context.Background(), "king", "King", "hero", "Hero", 1); !errors.Is(err, plaza.err) {
+		t.Fatalf("hook suppressed error: %v", err)
 	}
 }
 

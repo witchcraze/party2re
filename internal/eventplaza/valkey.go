@@ -2,97 +2,134 @@ package eventplaza
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strconv"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-const (
-	ValkeyPresenceKey = "party2:eventplaza:presence"
-	ValkeyPresenceTTL = 3600 // 1 hour sliding TTL
-)
+const ValkeyPresenceKey = "party2:eventplaza:presence"
 
-// ValkeyPresenceTracker tracks character presence in Event Plaza using a Valkey Sorted Set.
+// ValkeyPresenceTracker owns ordered presence records scored by their time markers.
+// WATCH protects snapshot selection and cleanup against concurrent crowd/heartbeat writes.
 type ValkeyPresenceTracker struct {
 	client valkey.Client
+	key    string
 }
 
-// NewValkeyPresenceTracker creates a new ValkeyPresenceTracker.
 func NewValkeyPresenceTracker(client valkey.Client) *ValkeyPresenceTracker {
-	return &ValkeyPresenceTracker{
-		client: client,
-	}
+	return &ValkeyPresenceTracker{client: client, key: ValkeyPresenceKey}
 }
 
-// RecordPresence records a character's presence at the specified time.
-func (t *ValkeyPresenceTracker) RecordPresence(ctx context.Context, characterID string, at time.Time) error {
+func (t *ValkeyPresenceTracker) RecordPresence(ctx context.Context, displayName string, at time.Time) error {
+	_, err := t.update(ctx, func(rows []Presence) ([]Presence, PresenceSnapshot) {
+		for i := range rows {
+			if rows[i].Name == displayName {
+				rows[i].Marker = at
+				return rows, PresenceSnapshot{}
+			}
+		}
+		return append(rows, Presence{Name: displayName, Marker: at}), PresenceSnapshot{}
+	})
+	return err
+}
+
+func (t *ValkeyPresenceTracker) AppendCrowd(ctx context.Context, crowd []Presence) error {
+	_, err := t.update(ctx, func(rows []Presence) ([]Presence, PresenceSnapshot) {
+		return append(rows, crowd...), PresenceSnapshot{}
+	})
+	return err
+}
+
+func (t *ValkeyPresenceTracker) Observe(ctx context.Context, now time.Time) (PresenceSnapshot, error) {
+	return t.update(ctx, func(rows []Presence) ([]Presence, PresenceSnapshot) {
+		return observeCrowd(rows, now)
+	})
+}
+
+func (t *ValkeyPresenceTracker) update(ctx context.Context, change func([]Presence) ([]Presence, PresenceSnapshot)) (PresenceSnapshot, error) {
 	if t.client == nil {
-		return nil
+		return PresenceSnapshot{}, nil
 	}
-
-	score := float64(at.Unix())
-	cmd := t.client.B().Zadd().Key(ValkeyPresenceKey).ScoreMember().ScoreMember(score, characterID).Build()
-	if err := t.client.Do(ctx, cmd).Error(); err != nil {
-		return err
-	}
-
-	expireCmd := t.client.B().Expire().Key(ValkeyPresenceKey).Seconds(ValkeyPresenceTTL).Build()
-	_ = t.client.Do(ctx, expireCmd)
-	return nil
-}
-
-// RecordBanquetPresence records virtual celebration banquet attendees in the plaza with score set to expiry timestamp.
-func (t *ValkeyPresenceTracker) RecordBanquetPresence(ctx context.Context, banquetID string, count int, duration time.Duration) error {
-	return t.RecordBanquetPresenceAt(ctx, banquetID, count, time.Now().UTC(), duration)
-}
-
-// RecordBanquetPresenceAt records virtual celebration banquet attendees with an explicit reference time.
-func (t *ValkeyPresenceTracker) RecordBanquetPresenceAt(ctx context.Context, banquetID string, count int, at time.Time, duration time.Duration) error {
-	if t.client == nil || count <= 0 {
-		return nil
-	}
-	if duration <= 0 {
-		duration = time.Hour
-	}
-	expiry := at.Add(duration)
-	score := float64(expiry.Unix())
-
-	zadd := t.client.B().Zadd().Key(ValkeyPresenceKey).ScoreMember()
-	for i := 0; i < count; i++ {
-		member := fmt.Sprintf("banquet:%s:npc:%d", banquetID, i)
-		zadd = zadd.ScoreMember(score, member)
-	}
-	if err := t.client.Do(ctx, zadd.Build()).Error(); err != nil {
-		return err
-	}
-
-	ttlSeconds := int64(duration.Seconds()) + ValkeyPresenceTTL
-	expireCmd := t.client.B().Expire().Key(ValkeyPresenceKey).Seconds(ttlSeconds).Build()
-	_ = t.client.Do(ctx, expireCmd)
-	return nil
-}
-
-// CountActiveParticipants returns the number of active participants seen at or after cutoff.
-func (t *ValkeyPresenceTracker) CountActiveParticipants(ctx context.Context, cutoff time.Time) (int, error) {
-	if t.client == nil {
-		return 0, nil
-	}
-
-	// Purge stale members older than cutoff
-	purgeCmd := t.client.B().Zremrangebyscore().Key(ValkeyPresenceKey).Min("-inf").Max(strconv.FormatInt(cutoff.Unix()-1, 10)).Build()
-	_ = t.client.Do(ctx, purgeCmd)
-
-	cardCmd := t.client.B().Zcard().Key(ValkeyPresenceKey).Build()
-	resp := t.client.Do(ctx, cardCmd)
-	if err := resp.Error(); err != nil {
-		return 0, err
-	}
-
-	count, err := resp.AsInt64()
+	var snapshot PresenceSnapshot
+	err := t.client.Dedicated(func(client valkey.DedicatedClient) error {
+		defer func() {
+			// A cancelled request must not return a still-watched socket to the pool.
+			if err := client.Do(ctx, client.B().Unwatch().Build()).Error(); err != nil {
+				client.Close()
+			}
+		}()
+		for attempt := 0; attempt < 16; attempt++ {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := client.Do(ctx, client.B().Watch().Key(t.key).Build()).Error(); err != nil {
+				return err
+			}
+			values, err := client.Do(ctx, client.B().Zrange().Key(t.key).Min("0").Max("-1").Withscores().Build()).AsZScores()
+			if err != nil {
+				return err
+			}
+			// Member prefixes preserve insertion order independently of the marker scores.
+			slices.SortStableFunc(values, func(a, b valkey.ZScore) int { return strings.Compare(a.Member, b.Member) })
+			rows := make([]Presence, 0, len(values))
+			for _, value := range values {
+				name := value.Member
+				if strings.HasPrefix(name, "v1:") {
+					parts := strings.SplitN(name, ":", 3)
+					if len(parts) != 3 {
+						return fmt.Errorf("invalid plaza presence member %q", name)
+					}
+					name = parts[2]
+				}
+				rows = append(rows, Presence{Name: name, Marker: time.Unix(int64(value.Score), 0).UTC()})
+			}
+			rows, snapshot = change(rows)
+			commands := []valkey.Completed{client.B().Multi().Build(), client.B().Del().Key(t.key).Build()}
+			if len(rows) > 0 {
+				add := client.B().Zadd().Key(t.key).ScoreMember()
+				for i, row := range rows {
+					member := fmt.Sprintf("v1:%020d:%s", i, row.Name)
+					add = add.ScoreMember(float64(row.Marker.Unix()), member)
+				}
+				commands = append(commands, add.Build())
+			}
+			commands = append(commands, client.B().Exec().Build())
+			results := client.DoMulti(ctx, commands...)
+			for _, result := range results[:len(results)-1] {
+				if err := result.Error(); err != nil {
+					return err
+				}
+			}
+			committed, err := results[len(results)-1].ToArray()
+			if valkey.IsValkeyNil(err) {
+				// Back off contending writers instead of exhausting retries in a tight loop.
+				delay := time.Duration(1+random.Intn(1<<min(attempt, 8))) * time.Millisecond
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(delay):
+				}
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			for _, result := range committed {
+				if err := result.Error(); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		return errors.New("plaza presence changed concurrently; retry request")
+	})
 	if err != nil {
-		return 0, err
+		return PresenceSnapshot{}, err
 	}
-	return int(count), nil
+	return snapshot, nil
 }

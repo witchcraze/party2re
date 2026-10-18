@@ -35,13 +35,12 @@ func (s *Service) PurchaseBazaarItem(
 		return BazaarPurchaseResult{}, ErrInvalidQuantity
 	}
 
-	cutoff := s.clock.Now().Add(-PresenceWindow)
-	participants, err := s.countParticipants(ctx, cutoff)
+	participants, err := s.observeParticipants(ctx)
 	if err != nil {
 		return BazaarPurchaseResult{}, fmt.Errorf("failed to count active participants: %w", err)
 	}
 
-	currentTier, _, _ := CalculateMerchantTier(participants)
+	currentTier, _, _ := CalculateMerchantTier(participants.Stored)
 	if currentTier <= 0 {
 		return BazaarPurchaseResult{}, ErrMerchantNotPresent
 	}
@@ -134,7 +133,7 @@ func (s *Service) PurchaseBazaarItem(
 				}
 			}
 
-			_ = s.recordPresence(txCtx, characterID, s.clock.Now())
+			_ = s.recordPresence(txCtx, characterID, char.Name, s.clock.Now())
 
 			result = BazaarPurchaseResult{
 				CharacterID:         characterID,
@@ -200,7 +199,7 @@ func (s *Service) PurchaseBazaarItem(
 			}
 		}
 
-		_ = s.recordPresence(txCtx, characterID, s.clock.Now())
+		_ = s.recordPresence(txCtx, characterID, char.Name, s.clock.Now())
 
 		result = BazaarPurchaseResult{
 			CharacterID:         characterID,

@@ -1900,6 +1900,11 @@
             "type": "integer"
           },
           "active_participants": {
+            "description": "Displayed count after expiry and same-name cleanup, including the merchant when retained. It does not determine merchant_tier.",
+            "type": "integer"
+          },
+          "merchant_selection_count": {
+            "description": "Stored row count before this observation adds the merchant and cleans expired/duplicate records. Determines merchant_tier independently of active_participants.",
             "type": "integer"
           },
           "merchant_tier": {
@@ -1914,6 +1919,7 @@
         },
         "required": [
           "active_participants",
+          "merchant_selection_count",
           "merchant_tier",
           "merchant_tier_name",
           "next_tier_threshold",
