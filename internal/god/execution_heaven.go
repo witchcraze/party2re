@@ -28,9 +28,7 @@ func (s *Service) executeHeavenWish(
 		wishName = "強くなりたい"
 		desc = "全ステータス 40 アップ"
 		char.Stats.MaxHP += 40
-		char.Stats.HP += 40
 		char.Stats.MaxMP += 40
-		char.Stats.MP += 40
 		char.Stats.Attack += 40
 		char.Stats.Defense += 40
 		char.Stats.Agility += 40

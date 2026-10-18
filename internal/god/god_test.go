@@ -257,8 +257,14 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GrantWish stats failed: %v", err)
 	}
-	if resStats.Character.Stats.MaxHP != 140 || resStats.Character.Stats.Attack != 70 {
-		t.Errorf("expected MaxHP 140, Attack 70, got %+v", resStats.Character.Stats)
+	if resStats.Character.Stats.MaxHP != 140 || resStats.Character.Stats.HP != 80 {
+		t.Errorf("expected HP 80/140, got %d/%d", resStats.Character.Stats.HP, resStats.Character.Stats.MaxHP)
+	}
+	if resStats.Character.Stats.MaxMP != 90 || resStats.Character.Stats.MP != 40 {
+		t.Errorf("expected MP 40/90, got %d/%d", resStats.Character.Stats.MP, resStats.Character.Stats.MaxMP)
+	}
+	if resStats.Character.Stats.Attack != 70 || resStats.Character.Stats.Defense != 60 || resStats.Character.Stats.Agility != 55 {
+		t.Errorf("unexpected stats: %+v", resStats.Character.Stats)
 	}
 
 	// 2. Money wish

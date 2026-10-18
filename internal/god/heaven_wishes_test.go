@@ -156,8 +156,11 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if res.Character.Stats.MaxHP != 140 || res.Character.Stats.HP != 90 {
-			t.Errorf("expected HP 90/140, got %d/%d", res.Character.Stats.HP, res.Character.Stats.MaxHP)
+		if res.Character.Stats.MaxHP != 140 || res.Character.Stats.HP != 50 {
+			t.Errorf("expected HP 50/140, got %d/%d", res.Character.Stats.HP, res.Character.Stats.MaxHP)
+		}
+		if res.Character.Stats.MaxMP != 90 || res.Character.Stats.MP != 20 {
+			t.Errorf("expected MP 20/90, got %d/%d", res.Character.Stats.MP, res.Character.Stats.MaxMP)
 		}
 		if res.Character.Stats.Attack != 70 || res.Character.Stats.Defense != 65 || res.Character.Stats.Agility != 60 {
 			t.Errorf("unexpected stats: %+v", res.Character.Stats)

@@ -32,7 +32,7 @@ The Heaven catalog comprises 18 standard wishes plus 1 conditional level-cap wis
 
 | Wish ID | Name (和名) | Description (説明) | Condition (出現/実行条件) | Effect (効果) |
 | :--- | :--- | :--- | :--- | :--- |
-| `wish_stats` | 強くなりたい | 全ステータス 40 アップ | `!OverLevel` | $\text{MaxHP} + 40, \text{HP} + 40, \text{MaxMP} + 40, \text{MP} + 40, \text{Attack} + 40, \text{Defense} + 40, \text{Agility} + 40$ |
+| `wish_stats` | 強くなりたい | 全ステータス 40 アップ | `!OverLevel` | $\text{MaxHP} + 40, \text{MaxMP} + 40, \text{Attack} + 40, \text{Defense} + 40, \text{Agility} + 40$ (現在HP・MPは加算せず維持) |
 | `wish_sp` | スキルを覚えたい | Sp 50 アップ | None | $\text{SP} + 50$ (via `char.AddSP(50)`) |
 | `wish_money` | お金がほしい | 10 万G | None | $\text{Money} + 100,000\text{ G}$ (via `char.AddMoney(100000)`) |
 | `wish_casino_coins` | カジノコインがほしい | 5 万枚 | None | Casino Coins $+ 50,000$ (via `casino.AdjustCoins`) |
