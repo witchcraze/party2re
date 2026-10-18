@@ -24,7 +24,7 @@ func (r *stubQuestRepo) Save(_ context.Context, q Quest) error {
 	return nil
 }
 
-func (r *stubQuestRepo) FindByID(_ context.Context, id string) (Quest, error) {
+func (r *stubQuestRepo) FindByIDForUpdate(_ context.Context, id string) (Quest, error) {
 	q, ok := r.quests[id]
 	if !ok {
 		return Quest{}, ErrQuestNotFound

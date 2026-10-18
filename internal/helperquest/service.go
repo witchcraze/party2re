@@ -13,7 +13,7 @@ import (
 
 type QuestRepository interface {
 	Save(ctx context.Context, q Quest) error
-	FindByID(ctx context.Context, id string) (Quest, error)
+	FindByIDForUpdate(ctx context.Context, id string) (Quest, error)
 	ListActive(ctx context.Context, now time.Time) ([]Quest, error)
 }
 
@@ -120,6 +120,9 @@ func (s *Service) GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]
 	return ids, nil
 }
 
+// CompleteQuest atomically completes a shared request and creates its replacement.
+// Transaction: RunInTx
+// Lock Order: helper_quests(0) -> characters(2) -> depot(5) -> guilds(7, guild quests)
 func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (CompletionResult, error) {
 	var res CompletionResult
 
@@ -128,7 +131,7 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 	}
 
 	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
-		q, err := s.quests.FindByID(txCtx, questID)
+		q, err := s.quests.FindByIDForUpdate(txCtx, questID)
 		if err != nil {
 			return err
 		}

@@ -40,7 +40,7 @@ helper. A callback error prevents successful transaction completion.
 | One character, wallet/medals/inventory | `TransactionRunner`; character Rank 2, inventory Rank 3 when needed |
 | Depot, gem box, or other aggregates | Injected `TransactionProvider`; feature coordinates all required ranks |
 | P2P transfer | One transaction; character IDs sorted ascending before inventory/depot |
-| Shared sale/listing purchase | Lock Rank 0 sale/listing first, then ascending characters and dependent assets |
+| Shared sale/listing purchase or helper quest completion | Lock Rank 0 shared row first, then ascending characters and dependent assets |
 
 ### 4.3 Lock acquisition and ambient transactions
 
