@@ -48,12 +48,12 @@ When ordering food or drinks directly inside the tavern:
 
 To allow characters heading out to adventure to secure an automatic meal upon return:
 - **Standing Order Reservation (`POST /characters/{id}/tavern/delivery`)**:
-  - Validates menu item selection and initial funds.
-  - Saves recurring standing order into `tavern_deliveries`.
-  - Can be inspected with `GET` or cancelled with `DELETE` (`party2/lib/bar.cgi:149`).
+  - Validates menu item selection and character existence without requiring current meal funds (`party2/lib/bar.cgi:134-158`).
+  - Saves recurring standing order into `tavern_deliveries` (0G reservation and overwrite supported without funds deduction).
+  - Can be inspected with `GET` or cancelled with `DELETE` (`party2/lib/bar.cgi:149-152`).
 - **Claim & Consume (`POST /characters/{id}/tavern/delivery/claim`)**:
-  - Re-validates gold funds at claim time inside a pessimistic transaction.
-  - Deducts gold and restores HP/MP.
+  - Validates gold funds at claim time inside a pessimistic transaction.
+  - Deducts gold and restores HP/MP when funds are sufficient.
   - Does NOT set `is_full = true` and does NOT award raffle tickets (`party2/lib/_battle.cgi:1348-1376`).
   - Does NOT delete the reservation; the standing order remains active for future adventures.
 - **Automated Post-Adventure Arrival & Fullness Reset (Solo & Party)**:
