@@ -567,15 +567,94 @@ Wake/Rescue exceptions. During an active sleep duration, an explicit Wake reques
 reaches the service and returns its recognized early-wake rejection without
 restoring vitality. GET still offers Wake only when recovery is ready; an awake
 character's Wake request remains entry-ineligible. Duration expiry alone leaves
-Domain services validate exact amounts, currencies, items, and state. Service adapters call underlying domain services directly and compose standardized results; they do not invoke REST handlers via internal HTTP requests or duplicate game rules.
+ordinary commands blocked until explicit Wake clears pending recovery (enforced
+durably by `characters.pending_wake = 1` in SQL and `timer:asleep` in Valkey).
+Sleep and Wake cycle transitions are mutually excluded per character via
+`party2:timer:waking:<character_id>` claim leases with token ownership; if a lease
+expires or token ownership is lost, execution safely aborts without committing
+recovery state. If any mandatory recovery hook or timer cleanup fails during Wake,
+execution halts (`500 EXECUTION_FAILED`), leaving `pending_wake = 1` and `timer:asleep`
+locked without cross-store rollback. Clients must retry an explicit Wake once transient
+errors resolve. See [Home design](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)
+and [Valkey keyspace](valkey-keyspace.md#transient-state-inventory) for full lifecycle
+invariants.
 
-Detailed action parameter schemas, operation-specific rejection codes, and legacy evidence are codified in modular OpenAPI specifications (`docs/api/paths/`) and owning design documents (`docs/design/`):
+Domain services validate exact amounts, currencies, items, and state. Service adapters
+call underlying domain services directly and compose standardized results; they do not
+invoke REST handlers via internal HTTP requests or duplicate game rules. Command-specific
+parameter schemas are codified under `CharacterActionRequest.allOf` in
+[`docs/api/base.json`](../api/base.json) and [`docs/api/openapi.json`](../api/openapi.json).
+
+Detailed action specifications and legacy evidence belong to their owning design documents:
 - **Depot commands** (`depot_expand`, `depot_sell`, `depot_sell_batch`, `depot_sort`): [`docs/design/depot.md`](../design/depot.md)
 - **Bank commands** (`bank_deposit`, `bank_withdraw`): [`docs/design/bank.md`](../design/bank.md)
 - **Shop & Secret Shop commands** (`secretshop_purchase`): [`docs/design/shops.md`](../design/shops.md)
 - **Adventure commands** (`adventure_start`): [`docs/design/adventure.md`](../design/adventure.md)
 - **Emergency Rescue** (`rescue_request`): [`docs/design/rescue-and-helper.md`](../design/rescue-and-helper.md)
 - **Home Sleep & Wake** (`home_sleep`, `home_wake`): [`docs/design/home.md`](../design/home.md)
+- **Navigation commands** (`scene_enter`, `scene_select`, `scene_page`, `scene_back`): [`docs/architecture/client-agent-api.md#2-observation-pillar-get-apiv1charactersidcontext`](#2-observation-pillar-get-apiv1charactersidcontext)
+
+### Gateway action rejection codes
+
+When a connected command fails validation or domain rules, the Gateway responds with
+`actionRejectionResponse` (mapped HTTP 4xx, `success: false`, `error: { code, message }`,
+and refreshed `context` alongside `context_error` if refresh failed). Unmapped unexpected
+failures return `actionFailureResponse` (`500 EXECUTION_FAILED`) without context.
+
+| HTTP Status | Error Code | Action / Domain | Trigger Condition | Refreshed Context |
+|---|---|---|---|---|
+| **400 Bad Request** | `INVALID_ACTION_PARAMS` | Universal | Malformed JSON envelope, missing required fields, or unknown extra params | No |
+| | `INVALID_SELECTION` | `scene_enter`, `scene_select`, `scene_page` | Target destination, scene kind, page offset/cursor or limit is invalid | Yes |
+| | `BANK_INVALID_CHARACTER_ID` | `bank_deposit`, `bank_withdraw` | Provided actor ID is malformed or invalid | Yes |
+| | `BANK_INVALID_AMOUNT` | `bank_deposit`, `bank_withdraw` | Amount is zero, negative, or exceeds signed int64 bounds | Yes |
+| | `BANK_INSUFFICIENT_FUNDS` | `bank_deposit` | Deposit amount exceeds character wallet cash | Yes |
+| | `BANK_INSUFFICIENT_BALANCE` | `bank_withdraw` | Withdrawal amount exceeds savings account balance | Yes |
+| | `BANK_DEPOSIT_LIMIT_EXCEEDED` | `bank_deposit` | Resulting savings balance would exceed maximum bank deposit cap | Yes |
+| | `RESCUE_INVALID_CHARACTER_ID` | `rescue_request` | Provided actor ID is malformed or invalid | Yes |
+| | `SECRETSHOP_INVALID_QUANTITY` | `secretshop_purchase` | Purchase quantity is outside supported range (1..99) | Yes |
+| | `SECRETSHOP_INSUFFICIENT_FUNDS`| `secretshop_purchase` | Character wallet cash is less than required purchase price | Yes |
+| | `SECRETSHOP_PRICE_OVERFLOW` | `secretshop_purchase` | Total purchase price calculation exceeds integer bounds | Yes |
+| | `SECRETSHOP_DEPOT_FULL` | `secretshop_purchase` | Depot storage has reached maximum capacity; cannot deliver item | Yes |
+| | `DEPOT_INVALID_CHARACTER_ID` | `depot_*` | Provided actor ID is malformed or invalid | Yes |
+| | `DEPOT_INSUFFICIENT_FUNDS` | `depot_expand` | Character wallet cash is insufficient for the quoted tier cost | Yes |
+| | `DEPOT_MAX_EXPANDED` | `depot_expand` | Depot storage has already reached the maximum tier cap (500 slots) | Yes |
+| | `DEPOT_EMPTY_ITEM_LIST` | `depot_sell_batch` | Batch sale requested with an empty item instance IDs list | Yes |
+| | `DEPOT_INVALID_AMOUNT` | `depot_sell`, `depot_sell_batch` | Calculated sale price or gold amount is invalid | Yes |
+| | `DEPOT_INVALID_QUANTITY` | `depot_sell`, `depot_sell_batch` | Sale item quantity is zero or invalid | Yes |
+| | `DEPOT_INVALID_ITEM_INSTANCE_ID`| `depot_sell`, `depot_sell_batch` | Item instance ID string is empty or invalid | Yes |
+| **401 Unauthorized** | (Standard HTTP Error) | Universal | Missing, expired, or invalid session token | No |
+| **403 Forbidden** | `ADVENTURE_LEVEL_REQUIRED` | `adventure_start` | Character level requirement for the stage is not met | Yes |
+| | `ADVENTURE_JOB_LEVEL_REQUIRED` | `adventure_start` | Job level requirement for the stage is not met | Yes |
+| | `SCENE_ACCESS_DENIED` | `scene_enter`, `scene_select` | Character does not qualify for target scene (e.g., job/level gate) | Yes |
+| | `NAVIGATION_FORBIDDEN` | Navigation | Character is not owned by the authenticated player session | No |
+| | `SECRETSHOP_ACCESS_DENIED` | `secretshop_purchase` | Character does not meet Secret Shop requirement (Job Level < 7) | Yes |
+| **404 Not Found** | `ACTION_NOT_FOUND` | Universal | ActionID is not registered in the Gateway catalog | No |
+| | `CHARACTER_NOT_FOUND` | Universal | Character ID does not exist in persistence | No / Yes |
+| | `HOME_HOUSE_NOT_FOUND` | `home_sleep` | Destination visited house does not exist | Yes |
+| | `HOME_HOUSE_EXPIRED` | `home_sleep` | Destination visited house lease has expired | Yes |
+| | `SELECTION_NOT_FOUND` | `scene_select` | Target entity or item selection not found in current scene | Yes |
+| | `SECRETSHOP_CHARACTER_NOT_FOUND`| `secretshop_purchase`| Character record does not exist | Yes |
+| | `SECRETSHOP_ITEM_NOT_FOUND` | `secretshop_purchase` | Requested item is not offered in current secret shop catalog | Yes |
+| | `DEPOT_ITEM_NOT_FOUND` | `depot_sell`, `depot_sell_batch` | Target item instance is not present in actor's depot | Yes |
+| | `DEPOT_NOT_FOUND` | `depot_*` | Central depot storage record does not exist for actor | Yes |
+| **409 Conflict** | `ACTION_UNAVAILABLE` | Universal / Navigation | Action is currently ineligible due to active sleep, recovery, or busy activity | Yes |
+| | `HOME_ALREADY_SLEEPING` | `home_sleep` | Sleep command submitted while character is already asleep | Yes |
+| | `HOME_STILL_SLEEPING` | `home_wake` | Wake submitted before required sleep duration elapsed (vitality not restored) | Yes |
+| | `HOME_NOT_SLEEPING` | `home_wake` | Wake submitted when character is not in sleeping state | Yes |
+| | `HOME_WAKE_IN_PROGRESS` | `home_wake` | Concurrent Wake execution is already in progress | Yes |
+| | `SECRETSHOP_ITEM_UNAVAILABLE` | `secretshop_purchase` | Item purchase restricted during active Helper Quest | Yes |
+| **415 Unsupported Media** | (Standard HTTP Error) | Universal | Request Content-Type is not `application/json` | No |
+| **422 Unprocessable Entity** | `ADVENTURE_STAGE_NOT_FOUND` | `adventure_start` | Specified stage ID does not exist in adventure stage catalog | Yes |
+| | `ADVENTURE_UNCONSCIOUS` | `adventure_start` | Character HP is 0; must be revived or rest before adventuring | Yes |
+| | `ADVENTURE_EXHAUSTED` | `adventure_start` | Character tiredness is at cap; must rest at home before adventuring | Yes |
+| | `ADVENTURE_DAILY_LIMIT` | `adventure_start` | Daily once-dungeon or adventure quota already consumed for today | Yes |
+| | `RESCUE_INVALID_REASON` | `rescue_request` | Emergency rescue reason string is empty or blank | Yes |
+| **500 Internal Server Error**| `ACTION_PREFLIGHT_FAILED` | Universal | State read or sleep timer verification failed before dispatch | No |
+| | `EXECUTION_FAILED` | Universal | Unhandled service error during execution; mutation outcome unconfirmed | No |
+| **501 Not Implemented** | `ACTION_NOT_IMPLEMENTED` | Universal | ActionID is recognized in catalog but domain adapter is unconnected | No |
+
+*Note on Unconnected / Planned Commands:* Actions for Casino (`casino_bet`, `casino_join`), PvP/GvG match commands, and ordinary NPC shops (`weaponshop_buy`, `armorshop_buy`, `itemshop_buy`) remain catalog-registered but currently unconnected to the Gateway, returning `501 ACTION_NOT_IMPLEMENTED`.
+
 
 ### Command outcome and context refresh
 

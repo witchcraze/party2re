@@ -247,7 +247,7 @@ func TestErrorSwallowLint(t *testing.T) {
 		for _, v := range allViolations {
 			buf.WriteString(fmt.Sprintf("%s:%d: %s\n", v.file, v.line, v.message))
 		}
-		buf.WriteString("\nAccording to .agents/rules/01-development-workflow.md and docs/development/ast-linters.md:\n" +
+		buf.WriteString("\nAccording to .agents/rules/01-development-workflow.md and docs/development/testing.md:\n" +
 			"- Database repository and persistent store calls must never discard errors via blank identifiers ('_ =', '_, _ =', 'val, _ :=') or unassigned expression statements.\n" +
 			"- All errors must be propagated to caller or handled within transactional rollback boundaries.\n" +
 			"- If a call is strictly best-effort or compensatory (e.g. defer rollback), annotate with '//lint:ignore error-swallow <reason>'.\n")
