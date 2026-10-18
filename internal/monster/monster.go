@@ -119,19 +119,18 @@ func BoxCapacityForCharacter(char corecharacter.Character) int {
 	return base + (tier * OverBoxCapacityPerTier)
 }
 
-// ValidateMonsterName ensures the custom pet name conforms to legacy restrictions.
+// ValidateMonsterName ensures the custom pet name conforms to legacy restrictions (farm.cgi:273-286).
 func ValidateMonsterName(name string) error {
-	name = strings.TrimSpace(name)
 	if name == "" {
 		return ErrInvalidName
 	}
-	if utf8.RuneCountInString(name) > MaxMonsterNameLength {
-		return ErrNameTooLong
-	}
 	for _, r := range name {
-		if unicode.IsSpace(r) || r == '\u3000' || strings.ContainsRune(",;\"'&<>@", r) {
+		if unicode.IsSpace(r) || r == '\u3000' || strings.ContainsRune(",;\"'&<>＠", r) {
 			return ErrInvalidName
 		}
+	}
+	if utf8.RuneCountInString(name) > MaxMonsterNameLength {
+		return ErrNameTooLong
 	}
 	return nil
 }
