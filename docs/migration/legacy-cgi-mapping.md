@@ -25,14 +25,14 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 
 ### CL-01: Meta & Player Identity (基盤・アカウント・ナビゲーション)
 - **Cluster Summary**: プレイヤーアカウント、キャラクター生成・管理、認証トークン、緊急脱出、管理者機能、ナビゲーション
-- **Shared Dependencies**: `party2/lib/system.cgi` (ユーザーファイルI/O, セッション, アクセス制御)
+- **Shared Dependencies**: `party2/lib/system.cgi` (ユーザーファイルI/O, セッション, アクセス制御 / #1106にて更新連打ペナルティ廃止・レートリミット置換を承認)
 - **Primary Domain Packages**: `internal/player/`, `internal/character/`, `internal/rescue/`, `internal/maintenance/`, `internal/id/`
 - **Key Testing / Linter Focus**: AST Auth Wrappers (`internal/api/http/auth_lint_test.go`), IP抽出, 不正トークン破棄
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | `index.cgi`, `_side_menu.cgi` | メインポータル・ナビゲーション | Client Presentation | N/A | Planned | サーバー側ではなくフロントエンドUIで提供 |
-| `login.cgi` | 認証・セッション発行・日次処理 | `internal/player/` | [design/player-and-character.md](../design/player-and-character.md)<br/>[PAT contract](../architecture/interfaces.md#personal-access-tokens-and-dual-authentication)<br/>[api/paths/auth.json](../api/paths/auth.json) | Review against source (#775) | 仕様・残差は所有 Design Doc と原典を照合する。 |
+| `login.cgi` | 認証・セッション発行・日次処理 | `internal/player/` | [design/player-and-character.md](../design/player-and-character.md)<br/>[PAT contract](../architecture/interfaces.md#personal-access-tokens-and-dual-authentication)<br/>[api/paths/auth.json](../api/paths/auth.json) | Approved reload-sleep departure (#1106); review against source (#775) | 原典の短時間手動アクセス連打記録（`lib/system.cgi:148–156`）およびログイン時更新連打ペナルティ（`login.cgi:37–103` による 1h〜7d のキャラクター睡眠加算）は、共有CGIサーバー過負荷防止の歴史的産物として廃止。現代的な HTTP 429 Too Many Requests（`internal/ratelimit`）およびアカウントBAN（`Player.banned_at`）へ完全置換し、ゲームドメインの睡眠タイマー（`timer.CategorySleep`）を通信頻度で汚染しない（#1106承認）。詳細は [design/player-and-character.md](../design/player-and-character.md#27-request-throttling-and-reload-sleep-penalty-reconciliation-approved-departure) 参照。 |
 | `new_entry.cgi` | キャラクター新規作成 | `internal/player/`<br/>`internal/character/` | [design/player-and-character.md](../design/player-and-character.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source (#771) | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `player.cgi`, `player_old.cgi` | プレイヤーの軌跡 (Memory log & 4大コンプリート率) | *(Unimplemented)* | [design/player-and-character.md](../design/player-and-character.md) | Reconciling (#773) | 原典の軌跡ログ(`memory.cgi`, `write_memory`)および4大コンプリート率(武器・防具・道具141・錬金)の取得APIが未実装 |
 | `my.cgi`, `my2.cgi` | 外部ブログパーツ１・２ | Client / Widget API | [design/player-and-character.md](../design/player-and-character.md) | Reconciling | 内部ダッシュボードではなく外部サイト貼り付け用JS(`document.write`)。ステータスミニカード・同居人台詞表示 |
