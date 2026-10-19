@@ -432,27 +432,27 @@ func TestStoreCustomization(t *testing.T) {
 
 	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "元店名")
 
-	// ChangeStoreName
+	// ChangeStoreName (requires 5,000 G balance, 0 G deducted)
 	err := svc.ChangeStoreName(ctx, "c1", "新店名")
 	if err != nil {
 		t.Fatalf("ChangeStoreName failed: %v", err)
 	}
 	c1, _ := charRepo.FindByID(ctx, "c1")
-	if c1.Money != 45000 { // 50,000 - 5,000
-		t.Errorf("expected 45000 gold, got %d", c1.Money)
+	if c1.Money != 50000 { // 50,000 - 0 (legacy parity: zero cost)
+		t.Errorf("expected 50000 gold, got %d", c1.Money)
 	}
 
-	// ChangeWallpaper
+	// ChangeWallpaper (authentically deducts 2,500 G for casino style)
 	err = svc.ChangeWallpaper(ctx, "c1", "casino")
 	if err != nil {
 		t.Fatalf("ChangeWallpaper failed: %v", err)
 	}
 	c1, _ = charRepo.FindByID(ctx, "c1")
-	if c1.Money != 42500 { // 45,000 - 2,500
-		t.Errorf("expected 42500 gold, got %d", c1.Money)
+	if c1.Money != 47500 { // 50,000 - 2,500
+		t.Errorf("expected 47500 gold, got %d", c1.Money)
 	}
 
-	// AddInterior
+	// AddInterior (requires 1,000 G balance, 0 G deducted)
 	interior, err := svc.AddInterior(ctx, "c1", "001")
 	if err != nil {
 		t.Fatalf("AddInterior failed: %v", err)
@@ -461,8 +461,8 @@ func TestStoreCustomization(t *testing.T) {
 		t.Errorf("unexpected furniture ID: %s", interior.FurnitureID)
 	}
 	c1, _ = charRepo.FindByID(ctx, "c1")
-	if c1.Money != 41500 { // 42,500 - 1,000
-		t.Errorf("expected 41500 gold, got %d", c1.Money)
+	if c1.Money != 47500 { // 47,500 - 0 (legacy parity: zero cost)
+		t.Errorf("expected 47500 gold, got %d", c1.Money)
 	}
 
 	// RenameInterior
@@ -475,6 +475,96 @@ func TestStoreCustomization(t *testing.T) {
 	err = svc.CleanInteriors(ctx, "c1")
 	if err != nil {
 		t.Fatalf("CleanInteriors failed: %v", err)
+	}
+}
+
+func TestStoreCustomization_ZeroCostAndBoundary(t *testing.T) {
+	svc, _, charRepo, _, _ := setupTestService(t)
+	ctx := context.Background()
+
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+
+	// 1. Signboard renaming boundary tests
+	// Insufficient funds: 4,999 G (< 5,000 G)
+	c1, _ := charRepo.FindByID(ctx, "c1")
+	_ = c1.DeductMoney(c1.Money)
+	_ = c1.AddMoney(4999)
+	_ = charRepo.Save(ctx, c1)
+
+	err := svc.ChangeStoreName(ctx, "c1", "看板テスト")
+	if err != store.ErrInsufficientFunds {
+		t.Fatalf("expected ErrInsufficientFunds when Money=4999, got %v", err)
+	}
+	c1, _ = charRepo.FindByID(ctx, "c1")
+	if c1.Money != 4999 {
+		t.Errorf("expected wallet preserved at 4999 G on failure, got %d", c1.Money)
+	}
+
+	// Exact threshold: 5,000 G
+	_ = c1.AddMoney(1) // 4999 + 1 = 5000
+	_ = charRepo.Save(ctx, c1)
+
+	err = svc.ChangeStoreName(ctx, "c1", "看板成功")
+	if err != nil {
+		t.Fatalf("ChangeStoreName failed when Money=5000: %v", err)
+	}
+	c1, _ = charRepo.FindByID(ctx, "c1")
+	if c1.Money != 5000 {
+		t.Errorf("expected wallet preserved at 5000 G on success (0 G deducted), got %d", c1.Money)
+	}
+
+	// Validation error: invalid character "@"
+	err = svc.ChangeStoreName(ctx, "c1", "不正名＠")
+	if err == nil {
+		t.Fatal("expected validation error for invalid characters, got nil")
+	}
+	c1, _ = charRepo.FindByID(ctx, "c1")
+	if c1.Money != 5000 {
+		t.Errorf("expected wallet preserved on validation failure, got %d", c1.Money)
+	}
+
+	// 2. Interior placement boundary tests
+	// Insufficient funds: 999 G (< 1,000 G)
+	_ = c1.DeductMoney(c1.Money)
+	_ = c1.AddMoney(999)
+	_ = charRepo.Save(ctx, c1)
+
+	_, err = svc.AddInterior(ctx, "c1", "001")
+	if err != store.ErrInsufficientFunds {
+		t.Fatalf("expected ErrInsufficientFunds when Money=999, got %v", err)
+	}
+	c1, _ = charRepo.FindByID(ctx, "c1")
+	if c1.Money != 999 {
+		t.Errorf("expected wallet preserved at 999 G on failure, got %d", c1.Money)
+	}
+
+	// Exact threshold & Sequential placement with exactly 1,000 G
+	_ = c1.AddMoney(1) // 999 + 1 = 1000
+	_ = charRepo.Save(ctx, c1)
+
+	furnitures := []string{"001", "002", "003", "010", "011"}
+	for i, f := range furnitures {
+		interior, err := svc.AddInterior(ctx, "c1", f)
+		if err != nil {
+			t.Fatalf("AddInterior [%d: %s] failed with 1000 G balance: %v", i+1, f, err)
+		}
+		if interior.FurnitureID != f {
+			t.Errorf("expected furnitureID %s, got %s", f, interior.FurnitureID)
+		}
+		c1, _ = charRepo.FindByID(ctx, "c1")
+		if c1.Money != 1000 {
+			t.Fatalf("placement [%d] modified wallet: expected 1000 G, got %d", i+1, c1.Money)
+		}
+	}
+
+	// 6th placement exceeds MaxInteriorCount (5)
+	_, err = svc.AddInterior(ctx, "c1", "014")
+	if err != store.ErrMaxInteriorsReached {
+		t.Fatalf("expected ErrMaxInteriorsReached on 6th item, got %v", err)
+	}
+	c1, _ = charRepo.FindByID(ctx, "c1")
+	if c1.Money != 1000 {
+		t.Errorf("expected wallet preserved at 1000 G when cap exceeded, got %d", c1.Money)
 	}
 }
 

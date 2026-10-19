@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// ChangeStoreName updates the store's signboard name for 5,000 G.
+// ChangeStoreName updates the store's signboard name (requires 5,000 G balance, 0 G deducted).
 func (s *Service) ChangeStoreName(ctx context.Context, characterID, newName string) error {
 	cleanName := strings.TrimSpace(newName)
 	if err := ValidateStoreName(cleanName); err != nil {
@@ -36,13 +36,6 @@ func (s *Service) ChangeStoreName(ctx context.Context, characterID, newName stri
 		namedStore, err := s.repo.GetStoreByName(txCtx, cleanName)
 		if err == nil && namedStore.CharacterID != characterID && namedStore.IsActive(now) {
 			return ErrStoreNameTaken
-		}
-
-		if err := char.DeductMoney(NameChangePrice); err != nil {
-			return ErrInsufficientFunds
-		}
-		if err := s.charRepo.Save(txCtx, char); err != nil {
-			return err
 		}
 
 		st.StoreName = cleanName
@@ -96,7 +89,7 @@ func (s *Service) ChangeWallpaper(ctx context.Context, characterID, wallpaper st
 	})
 }
 
-// AddInterior adds a piece of furniture to the store for 1,000 G (up to 5 items).
+// AddInterior adds a piece of furniture to the store (requires 1,000 G balance, 0 G deducted, up to 5 items).
 func (s *Service) AddInterior(ctx context.Context, characterID, furnitureID string) (*Interior, error) {
 	cleanFurniture := strings.TrimSpace(furnitureID)
 	cleanFurniture = strings.TrimSuffix(cleanFurniture, ".gif")
@@ -132,13 +125,6 @@ func (s *Service) AddInterior(ctx context.Context, characterID, furnitureID stri
 		}
 		if len(interiors) >= MaxInteriorCount {
 			return ErrMaxInteriorsReached
-		}
-
-		if err := char.DeductMoney(InteriorPrice); err != nil {
-			return ErrInsufficientFunds
-		}
-		if err := s.charRepo.Save(txCtx, char); err != nil {
-			return err
 		}
 
 		interiorObj := Interior{
