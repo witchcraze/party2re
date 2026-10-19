@@ -15,6 +15,7 @@ import (
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/helperquest"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/rescue"
 )
 
@@ -192,6 +193,72 @@ func TestHelperAndRescueEndpoints(t *testing.T) {
 		}
 		if result.Character.Money != 100 {
 			t.Errorf("expected 100 gold, got %d", result.Character.Money)
+		}
+	})
+
+	t.Run("POST /helpers/complete - sleeping character returns 409", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping: true,
+					Message:  "お休み中「Zzz...」",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(
+			players,
+			chars,
+			adv,
+			shopSvc,
+			apihttp.WithHelper(helperSvc),
+			apihttp.WithRescue(rescueSvc),
+			apihttp.WithHome(mockHome),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := []byte(`{"character_id":"char-1","quest_id":"quest-1"}`)
+		req := httptest.NewRequest(http.MethodPost, "/helpers/complete", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		h.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409, got %d (body: %s)", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /helpers/complete - can_wake character returns 409", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					CanWake: true,
+					Message: "お休み中「Zzz...」 目を覚ましてください",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(
+			players,
+			chars,
+			adv,
+			shopSvc,
+			apihttp.WithHelper(helperSvc),
+			apihttp.WithRescue(rescueSvc),
+			apihttp.WithHome(mockHome),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := []byte(`{"character_id":"char-1","quest_id":"quest-1"}`)
+		req := httptest.NewRequest(http.MethodPost, "/helpers/complete", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		h.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409, got %d (body: %s)", rec.Code, rec.Body.String())
 		}
 	})
 
