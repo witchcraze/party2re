@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -88,6 +90,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithPark(&mockParkService{}),
 		apihttp.WithMonster(&stubMonsterService{}),
 		apihttp.WithOracleShop(&stubOracleShopService{}),
+		apihttp.WithHelper(&mockHelperService{}),
 	)
 	if err != nil {
 		t.Fatalf("failed to create handler: %v", err)
@@ -234,6 +237,9 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"oracle_buy_costume", http.MethodPost, "/characters/char-1/oracle/buy", `{"item_no":44}`},
 		{"oracle_buy_wallpaper", http.MethodPost, "/characters/char-1/oracle/wallpaper", `{"wallpaper":"goods"}`},
 		{"oracle_blackmarket", http.MethodPost, "/characters/char-1/oracle/blackmarket", ``},
+		// Helper
+		{"helper_complete", http.MethodPost, "/helpers/complete", `{"character_id":"char-1","quest_id":"quest-1"}`},
+		{"helper_complete_renew_only", http.MethodPost, "/helpers/complete", `{"character_id":"char-1"}`},
 	}
 
 	t.Run("sleeping character is rejected with 409 Conflict across all facility endpoints", func(t *testing.T) {
@@ -691,6 +697,98 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			if rec.Code == http.StatusConflict {
 				t.Errorf("expected %s %s not to be blocked by sleep guard, got %d: %s", route.method, route.path, rec.Code, rec.Body.String())
 			}
+		}
+	})
+
+	t.Run("helper mutations never invoke service when sleeping, can_wake, or sleep lookup fails", func(t *testing.T) {
+		conditions := []struct {
+			name         string
+			sleepStatus  home.SleepStatus
+			sleepErr     error
+			expectedCode int
+		}{
+			{"sleeping", home.SleepStatus{Sleeping: true, RemainingSeconds: 300, Message: "お休み中「Zzz...」"}, nil, http.StatusConflict},
+			{"can_wake", home.SleepStatus{CanWake: true, Message: "お休み中「Zzz...」 目を覚ましてください"}, nil, http.StatusConflict},
+			{"lookup_error", home.SleepStatus{}, errors.New("sleep lookup failed"), http.StatusInternalServerError},
+		}
+
+		helperRoutes := []struct {
+			name string
+			body string
+		}{
+			{"complete", `{"character_id":"char-1","quest_id":"quest-1"}`},
+			{"renew_only", `{"character_id":"char-1"}`},
+		}
+
+		for _, cond := range conditions {
+			t.Run(cond.name, func(t *testing.T) {
+				called := false
+				helperStub := &mockHelperService{
+					completeQuestFn: func(_ context.Context, _, _ string, _ time.Time) (helperquest.CompletionResult, error) {
+						called = true
+						return helperquest.CompletionResult{}, nil
+					},
+				}
+
+				player := coreplayer.Player{ID: "player-1", Username: "hero"}
+				char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
+				players := &stubPlayerService{
+					authenticateFn: func(_ context.Context, _ string) (coreplayer.Player, error) { return player, nil },
+				}
+				chars := &stubCharacterService{
+					getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+				}
+				mockHome := &mockHomeService{
+					getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
+						return cond.sleepStatus, cond.sleepErr
+					},
+				}
+
+				h, err := apihttp.NewHandler(
+					players,
+					chars,
+					&stubAdventureService{},
+					&stubShopService{},
+					apihttp.WithHome(mockHome),
+					apihttp.WithHelper(helperStub),
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+				router := h.Router()
+
+				for _, route := range helperRoutes {
+					called = false
+					req := httptest.NewRequest(http.MethodPost, "/helpers/complete", bytes.NewReader([]byte(route.body)))
+					req.Header.Set("Content-Type", "application/json")
+					req.Header.Set("Authorization", "Bearer valid-session")
+					rec := httptest.NewRecorder()
+					router.ServeHTTP(rec, req)
+
+					if rec.Code != cond.expectedCode {
+						t.Errorf("[%s - %s] expected status %d, got %d: %s", cond.name, route.name, cond.expectedCode, rec.Code, rec.Body.String())
+					}
+					if called {
+						t.Errorf("[%s - %s] expected service method not to be called, but was called", cond.name, route.name)
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("helper read endpoints are exempt from sleep guard", func(t *testing.T) {
+		router := setupFacilitySleepGuardTest(t, home.SleepStatus{
+			Sleeping:         true,
+			RemainingSeconds: 300,
+			Message:          "お休み中「Zzz...」",
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/helpers/quests", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusConflict {
+			t.Errorf("expected GET /helpers/quests not to be blocked by sleep guard, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 }

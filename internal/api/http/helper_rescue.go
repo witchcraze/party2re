@@ -39,7 +39,7 @@ func (h *Handler) handleCompleteHelperQuest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *completeHelperQuestRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *completeHelperQuestRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req completeHelperQuestRequest) {
 		res, err := h.helpers.CompleteQuest(r.Context(), char.ID, req.QuestID, time.Now().UTC())
