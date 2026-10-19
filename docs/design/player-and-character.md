@@ -75,7 +75,7 @@ Legacy reload sleep penalties are **formally deprecated and superseded** by mode
 #### 2.7.3 Non-Interference and Testing Requirements
 - **SPA & Parallel Request Non-Interference**: Modern browser and mobile clients dispatch multiple parallel asynchronous requests on page loads (e.g. character details, notifications, party status, chat). Sub-second inter-request spacing must not accumulate penalty strikes or restrict valid traffic within configured HTTP quotas (Public 10 req/min, Authenticated 60 req/min).
 - **Automated Agents & PAT Non-Interference**: Programmatic clients (AI agents, automated scripts) operating via Personal Access Tokens must receive standard HTTP 429 backoff responses when exceeding quotas, without triggering character sleep locks.
-- **Fail-Open Resilience**: Infrastructure limiter failures (e.g. Valkey unavailability) must fail open gracefully (`internal/api/http/ratelimit_test.go`), avoiding spurious rejections or penalty side-effects during backend incidents.
+- **Resilience and Separation during Infrastructure Failure**: When Valkey is unavailable, `ValkeyLimiter` falls back to an in-memory `MemoryLimiter`, actively enforcing rate limits in process memory. If an unrecoverable limiter error occurs, HTTP middleware fails open gracefully (`internal/api/http/ratelimit_test.go`) to prevent service disruption. Under no circumstances do rate-limiter infrastructure incidents or rate-limit rejections mutate domain character timers (`timer.CategorySleep`) or impose gameplay sleep penalties.
 
 ---
 
