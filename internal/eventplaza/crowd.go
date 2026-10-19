@@ -18,6 +18,31 @@ type PresenceSnapshot struct {
 	Active int
 }
 
+func crowdGuestIdentity(slot int) int {
+	if slot == 64 {
+		return 60
+	}
+	return slot
+}
+
+func crowdGuestName(slot int) string {
+	return fmt.Sprintf("Celebration guest %02d", 1+crowdGuestIdentity(slot))
+}
+
+func crowdPropIdentity(slot int) int {
+	if slot == 24 {
+		return 20
+	}
+	if slot > 24 {
+		return slot - 1
+	}
+	return slot
+}
+
+func crowdPropName(slot int) string {
+	return fmt.Sprintf("Celebration decoration %02d", 1+crowdPropIdentity(slot))
+}
+
 // RecordVictoryCrowd appends the temporary guests and props after a successful sealing.
 func (s *Service) RecordVictoryCrowd(ctx context.Context) error {
 	if s.presenceTracker == nil {
@@ -26,17 +51,19 @@ func (s *Service) RecordVictoryCrowd(ctx context.Context) error {
 	now := s.clock.Now()
 	guests, props := 2+s.rng.Intn(4), 1+s.rng.Intn(2)
 	crowd := make([]Presence, 0, guests+props)
-	// Generic identities replace legacy names/assets; repeated draws remain duplicates.
+	// Generic identities replace legacy names/assets; 65/32 candidate slots map to
+	// 64/31 identities with duplicate slots (60/64 and 20/24) preserving legacy weights.
 	for _, group := range []struct {
-		name        string
-		count, pool int
+		nameGen func(int) string
+		count   int
+		slots   int
 	}{
-		{"Celebration guest", guests, 64}, {"Celebration decoration", props, 32},
+		{crowdGuestName, guests, 65},
+		{crowdPropName, props, 32},
 	} {
 		for i := 0; i < group.count; i++ {
 			marker := now.Add(time.Duration(3600+s.rng.Intn(3600)) * time.Second)
-			name := fmt.Sprintf("%s %02d", group.name, 1+s.rng.Intn(group.pool))
-			crowd = append(crowd, Presence{Name: name, Marker: marker})
+			crowd = append(crowd, Presence{Name: group.nameGen(s.rng.Intn(group.slots)), Marker: marker})
 		}
 	}
 	return s.presenceTracker.AppendCrowd(ctx, crowd)
