@@ -46,9 +46,9 @@ func (m *mockHelperService) CompleteQuest(ctx context.Context, characterID, ques
 		return m.completeQuestFn(ctx, characterID, questID, now)
 	}
 	return helperquest.CompletionResult{
-		Character: corecharacter.Character{ID: characterID, Money: 100},
-		Depot:     depot.Depot{CharacterID: characterID},
-		CompletedQuest: helperquest.Quest{
+		Character: &corecharacter.Character{ID: characterID, Money: 100},
+		Depot:     &depot.Depot{CharacterID: characterID},
+		CompletedQuest: &helperquest.Quest{
 			ID:           questID,
 			Title:        "Completed Quest",
 			Kind:         helperquest.KindItem,

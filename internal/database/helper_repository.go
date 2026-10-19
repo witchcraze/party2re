@@ -88,8 +88,8 @@ func (r *HelperRepository) ListUncompleted(ctx context.Context) ([]helperquest.Q
 	return r.list(ctx, "TRUE")
 }
 
-// ListExpired reads uncompleted requests past their deadline (same boundary as
-// helperquest.CompleteQuest). It takes no locks: a range FOR UPDATE would hold gap locks that
+// ListExpired reads uncompleted requests past their deadline for non-target renewal.
+// It takes no locks: a range FOR UPDATE would hold gap locks that
 // deadlock with concurrent replacement inserts, so callers lock each row by id instead.
 func (r *HelperRepository) ListExpired(ctx context.Context, now time.Time) ([]helperquest.Quest, error) {
 	return r.list(ctx, "expires_at < ?", now)

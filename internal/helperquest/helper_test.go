@@ -283,7 +283,7 @@ func TestCompleteGuildQuestAwardsPoints(t *testing.T) {
 	}
 }
 
-func TestCompleteQuestRejectsExpired(t *testing.T) {
+func TestCompleteQuestExpiredTargetStillRequiresMaterials(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 
@@ -310,8 +310,8 @@ func TestCompleteQuestRejectsExpired(t *testing.T) {
 	_ = questRepo.Save(ctx, quest)
 
 	_, err := svc.CompleteQuest(ctx, "char-1", "quest-exp", now)
-	if !errors.Is(err, ErrQuestExpired) {
-		t.Errorf("expected ErrQuestExpired, got %v", err)
+	if !errors.Is(err, ErrInsufficientItems) {
+		t.Errorf("expected ErrInsufficientItems, got %v", err)
 	}
 }
 

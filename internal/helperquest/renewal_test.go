@@ -87,7 +87,7 @@ func TestCompleteQuest_ExchangesExpiredNonTargetRequestsOneForOne(t *testing.T) 
 	}
 }
 
-func TestCompleteQuest_ExchangesExpiredRequestsWhenCompletionFails(t *testing.T) {
+func TestCompleteQuest_RenewalOnlyExchangesExpiredRequests(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	repo := newMockQuestRepo()
@@ -97,8 +97,12 @@ func TestCompleteQuest_ExchangesExpiredRequestsWhenCompletionFails(t *testing.T)
 	)
 	svc := renewalService(t, repo, &mockTxProvider{})
 
-	if _, err := svc.CompleteQuest(ctx, "char-1", "unknown", now); !errors.Is(err, helperquest.ErrQuestNotFound) {
-		t.Fatalf("error = %v, want ErrQuestNotFound", err)
+	res, err := svc.CompleteQuest(ctx, "char-1", "", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.RenewedCount != 2 || res.CompletedQuest != nil || res.Character != nil || res.Depot != nil || res.NewQuest != nil {
+		t.Fatalf("renewal-only result = %+v", res)
 	}
 
 	if len(repo.quests) != 2 {
@@ -110,30 +114,30 @@ func TestCompleteQuest_ExchangesExpiredRequestsWhenCompletionFails(t *testing.T)
 	}
 
 	// A retry exchanges nothing more.
-	if _, err := svc.CompleteQuest(ctx, "char-1", "unknown", now); !errors.Is(err, helperquest.ErrQuestNotFound) {
-		t.Fatalf("retry error = %v, want ErrQuestNotFound", err)
+	if res, err := svc.CompleteQuest(ctx, "char-1", "", now); err != nil || res.RenewedCount != 0 {
+		t.Fatalf("retry = %+v, %v", res, err)
 	}
 	if len(repo.quests) != 2 {
 		t.Fatalf("stored requests after retry = %d, want 2", len(repo.quests))
 	}
 }
 
-func TestCompleteQuest_ExpiredTargetIsRejectedAndExchanged(t *testing.T) {
+func TestCompleteQuest_ExpiredTargetCompletes(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	repo := newMockQuestRepo()
 	seed(t, repo, renewalQuest("target", now.Add(-8*24*time.Hour), now.Add(-time.Hour)))
 	svc := renewalService(t, repo, &mockTxProvider{})
 
-	if _, err := svc.CompleteQuest(ctx, "char-1", "target", now); !errors.Is(err, helperquest.ErrQuestExpired) {
-		t.Fatalf("error = %v, want ErrQuestExpired", err)
+	res, err := svc.CompleteQuest(ctx, "char-1", "target", now)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	if _, ok := repo.quests["target"]; ok {
-		t.Error("expired target was not exchanged")
+	if res.CompletedQuest.ID != "target" || res.Character.HelpCount != 1 || res.RenewedCount != 0 {
+		t.Fatalf("expired target completion = %+v", res)
 	}
-	if len(repo.quests) != 1 {
-		t.Fatalf("stored requests = %d, want 1 replacement", len(repo.quests))
+	if len(repo.quests) != 2 || repo.quests["target"].CompletedAt == nil {
+		t.Fatalf("stored requests = %+v, want completed target and replacement", repo.quests)
 	}
 }
 
@@ -170,7 +174,7 @@ func TestCompleteQuest_ExpiryBoundaryIsSixDaysExclusive(t *testing.T) {
 			r := newMockQuestRepo()
 			seed(t, r, replacement)
 			s := renewalService(t, r, &mockTxProvider{})
-			if _, err := s.CompleteQuest(ctx, "char-1", "unknown", tc.now); !errors.Is(err, helperquest.ErrQuestNotFound) {
+			if _, err := s.CompleteQuest(ctx, "char-1", "", tc.now); err != nil {
 				t.Fatal(err)
 			}
 			_, kept := r.quests[replacement.ID]
@@ -184,7 +188,7 @@ func TestCompleteQuest_ExpiryBoundaryIsSixDaysExclusive(t *testing.T) {
 func TestCompleteQuest_EmptyStoreStaysEmpty(t *testing.T) {
 	repo := newMockQuestRepo()
 	svc := renewalService(t, repo, &mockTxProvider{})
-	if _, err := svc.CompleteQuest(context.Background(), "char-1", "unknown", time.Now().UTC()); !errors.Is(err, helperquest.ErrQuestNotFound) {
+	if _, err := svc.CompleteQuest(context.Background(), "char-1", "", time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	if len(repo.quests) != 0 {
@@ -192,7 +196,21 @@ func TestCompleteQuest_EmptyStoreStaysEmpty(t *testing.T) {
 	}
 }
 
-func TestCompleteQuest_RenewalFailureStopsCompletion(t *testing.T) {
+func TestCompleteQuest_UnknownTargetDoesNotRenewBoard(t *testing.T) {
+	repo := newMockQuestRepo()
+	now := time.Now().UTC()
+	q := renewalQuest("expired", now.Add(-7*24*time.Hour), now.Add(-time.Second))
+	seed(t, repo, q)
+	svc := renewalService(t, repo, &mockTxProvider{})
+	if _, err := svc.CompleteQuest(context.Background(), "char-1", "unknown", now); !errors.Is(err, helperquest.ErrQuestNotFound) {
+		t.Fatalf("error = %v, want ErrQuestNotFound", err)
+	}
+	if len(repo.quests) != 1 || repo.quests[q.ID] != q {
+		t.Fatalf("unknown target changed board: %+v", repo.quests)
+	}
+}
+
+func TestCompleteQuest_RenewalFailurePropagates(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	repo := newMockQuestRepo()
@@ -204,7 +222,7 @@ func TestCompleteQuest_RenewalFailureStopsCompletion(t *testing.T) {
 	tx := &mockTxProvider{}
 	svc := renewalService(t, repo, tx)
 
-	if _, err := svc.CompleteQuest(ctx, "char-1", "target", now); err == nil {
+	if _, err := svc.CompleteQuest(ctx, "char-1", "", now); err == nil {
 		t.Fatal("expected replacement save failure")
 	}
 	if !tx.rollbackCalled {

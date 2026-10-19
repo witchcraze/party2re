@@ -412,7 +412,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		Label:          "何でも屋クエスト報告",
 		Category:       "social",
 		OperationID:    "completeHelperQuest",
-		RequiredParams: []string{"quest_id"},
+		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{

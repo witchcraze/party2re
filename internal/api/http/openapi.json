@@ -8656,12 +8656,15 @@
                 "type": "null"
               }
             ]
+          },
+          "renewed_count": {
+            "description": "Expired non-target requests exchanged; excludes the completed target replacement. Renewal-only results omit character, depot, completed_quest and new_quest.",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
-          "character",
-          "depot",
-          "completed_quest"
+          "renewed_count"
         ],
         "type": "object"
       },
@@ -34099,7 +34102,7 @@
     },
     "/helpers/complete": {
       "post": {
-        "description": "Attempts completion and exchanges expired uncompleted requests one-for-one. Submitting an expired quest_id obtained from GET /helpers/quests returns 422 without turn-in or reward, but exchanges that expired request and the other expired requests. Fetch the board again after this response. An empty store is never seeded.",
+        "description": "Completes the selected request even after its deadline, and exchanges expired non-target requests atomically. Omit quest_id or send an empty string for renewal only, without consuming materials or granting rewards. Renewal uses now \u003e expires_at and never seeds an empty store. Successful calls return renewed_count (excluding the completion replacement); completion fields are present only for a completed target. Fetch GET /helpers/quests after success. A rejected completion leaves the board and assets unchanged.",
         "operationId": "completeHelperQuest",
         "requestBody": {
           "content": {
@@ -34110,12 +34113,12 @@
                     "type": "string"
                   },
                   "quest_id": {
+                    "description": "Target request ID. Omitted or empty means renewal only.",
                     "type": "string"
                   }
                 },
                 "required": [
-                  "character_id",
-                  "quest_id"
+                  "character_id"
                 ],
                 "type": "object"
               }
@@ -34132,7 +34135,7 @@
                 }
               }
             },
-            "description": "Quest completion result"
+            "description": "Completion or renewal-only result; renewed_count counts expired non-target exchanges"
           },
           "400": {
             "content": {
@@ -34174,7 +34177,7 @@
           },
           "422": {
             "$ref": "#/components/responses/Error",
-            "description": "Completion rejected (including an expired target); expired requests may already have been exchanged. Fetch GET /helpers/quests again."
+            "description": "Completion rejected (for example insufficient materials, guild membership required, unknown or completed target); board and assets unchanged."
           },
           "500": {
             "content": {
@@ -34204,7 +34207,7 @@
     },
     "/helpers/quests": {
       "get": {
-        "description": "Read-only board of all uncompleted requests, including expired requests; completed requests are excluded. Submit an expired quest_id to POST /helpers/complete to trigger exchange, then fetch this board again even when completion returns 422. An empty board returns [] and is never seeded.",
+        "description": "Read-only board of all uncompleted requests, including expired requests; completed requests are excluded. Expired targets can still be completed. For renewal without turn-in, POST /helpers/complete with character_id and omit quest_id or send an empty string, then fetch this board again after success. An empty board returns [] and is never seeded.",
         "operationId": "listHelperQuests",
         "responses": {
           "200": {

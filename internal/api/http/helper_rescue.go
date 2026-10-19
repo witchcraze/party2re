@@ -13,7 +13,7 @@ import (
 
 type completeHelperQuestRequest struct {
 	CharacterID string `json:"character_id"`
-	QuestID     string `json:"quest_id"`
+	QuestID     string `json:"quest_id"` // Omitted or empty selects renewal without a turn-in.
 }
 
 func (h *Handler) handleListHelperQuests(w http.ResponseWriter, r *http.Request) {

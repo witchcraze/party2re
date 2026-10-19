@@ -95,7 +95,7 @@ func newRenewalFixture(t *testing.T) renewalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Exchange touches only helper_quests; character and depot ports are unused on unknown targets.
+	// Renewal-only operations touch helper_quests; character and depot ports are unused.
 	svc := helperquest.NewService(repo, nil, nil, database.NewTransactionProvider(db))
 	return renewalFixture{db: db, repo: repo, service: svc, now: time.Now().UTC().Truncate(time.Second)}
 }
@@ -132,8 +132,8 @@ func TestHelperQuestExchangeReplacesExpiredRowsOnce(t *testing.T) {
 	f.seed(t, "expired-done", f.now.Add(-time.Hour), "someone")
 	f.seed(t, "live", f.now.Add(time.Hour), "")
 
-	if _, err := f.service.CompleteQuest(ctx, "nobody", "unknown", f.now); !errors.Is(err, helperquest.ErrQuestNotFound) {
-		t.Fatalf("error = %v, want ErrQuestNotFound", err)
+	if _, err := f.service.CompleteQuest(ctx, "nobody", "", f.now); err != nil {
+		t.Fatal(err)
 	}
 
 	for _, id := range []string{"expired-1", "expired-2"} {
@@ -169,10 +169,7 @@ func TestHelperQuestExchangeConcurrentCallsReplaceEachRowOnce(t *testing.T) {
 	operations := make([]func() error, 6)
 	for i := range operations {
 		operations[i] = func() error {
-			_, err := f.service.CompleteQuest(ctx, "nobody", "unknown", f.now)
-			if errors.Is(err, helperquest.ErrQuestNotFound) {
-				return nil
-			}
+			_, err := f.service.CompleteQuest(ctx, "nobody", "", f.now)
 			return err
 		}
 	}
@@ -210,7 +207,7 @@ func TestHelperQuestExchangeRollsBackDeletionOnReplacementFailure(t *testing.T) 
 	ctx := context.Background()
 	f.seed(t, "expired", f.now.Add(-time.Hour), "")
 
-	if _, err := svc.CompleteQuest(ctx, "nobody", "unknown", f.now); !errors.Is(err, failure) {
+	if _, err := svc.CompleteQuest(ctx, "nobody", "", f.now); !errors.Is(err, failure) {
 		t.Fatalf("error = %v, want %v", err, failure)
 	}
 	if _, err := repo.FindByID(ctx, "expired"); err != nil {
@@ -223,8 +220,8 @@ func TestHelperQuestExchangeRollsBackDeletionOnReplacementFailure(t *testing.T) 
 
 func TestHelperQuestExchangeLeavesEmptyStoreEmpty(t *testing.T) {
 	f := newRenewalFixture(t)
-	if _, err := f.service.CompleteQuest(context.Background(), "nobody", "unknown", f.now); !errors.Is(err, helperquest.ErrQuestNotFound) {
-		t.Fatalf("error = %v, want ErrQuestNotFound", err)
+	if _, err := f.service.CompleteQuest(context.Background(), "nobody", "", f.now); err != nil {
+		t.Fatal(err)
 	}
 	if f.count(t) != 0 {
 		t.Fatalf("empty store gained rows: %d", f.count(t))
