@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -245,5 +246,158 @@ func TestRateLimitMiddleware_TrustedProxyForwardingHonorsClientIP(t *testing.T) 
 	router.ServeHTTP(rec3, req3)
 	if rec3.Code != http.StatusCreated {
 		t.Fatalf("req3: expected 201 Created for different client B, got %d", rec3.Code)
+	}
+}
+
+func TestRateLimitMiddleware_RotatingInvalidBearerTokensThrottledByIP(t *testing.T) {
+	memLimiter := ratelimit.NewMemoryLimiter()
+	cfg := apihttp.RateLimitConfig{
+		PublicLimit:   10,
+		PublicWindow:  time.Minute,
+		GeneralLimit:  3,
+		GeneralWindow: time.Minute,
+	}
+
+	playerSvc := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			return coreplayer.Player{}, coreplayer.ErrInvalidSession
+		},
+	}
+
+	handler := newTestHandler(t, playerSvc, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithRateLimiter(memLimiter, cfg),
+	)
+	router := handler.Router()
+
+	// 1. Send 3 requests with rotating dummy Bearer tokens from the same IP (192.168.1.50)
+	for i := 1; i <= 3; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+		req.Header.Set("Authorization", "Bearer dummy-token-"+strconv.Itoa(i))
+		req.RemoteAddr = "192.168.1.50:12345"
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("request %d: unexpectedly throttled with 429", i)
+		}
+	}
+
+	// 2. 4th request from same IP with a new dummy Bearer token must be throttled with 429
+	req4 := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req4.Header.Set("Authorization", "Bearer dummy-token-4")
+	req4.RemoteAddr = "192.168.1.50:12345"
+	rec4 := httptest.NewRecorder()
+	router.ServeHTTP(rec4, req4)
+
+	if rec4.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 4th request from same IP to be throttled with 429, got %d (body: %s)", rec4.Code, rec4.Body.String())
+	}
+	if rec4.Header().Get("Retry-After") == "" {
+		t.Errorf("expected Retry-After header on 429 response")
+	}
+
+	// 3. Request from different IP (192.168.1.51) with another dummy token should NOT be throttled
+	req5 := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req5.Header.Set("Authorization", "Bearer dummy-token-5")
+	req5.RemoteAddr = "192.168.1.51:12345"
+	rec5 := httptest.NewRecorder()
+	router.ServeHTTP(rec5, req5)
+
+	if rec5.Code == http.StatusTooManyRequests {
+		t.Fatalf("request from different IP should not be throttled with 429, got %d", rec5.Code)
+	}
+}
+
+func TestRateLimitMiddleware_SingleBearerTokenThrottledAcrossIPs(t *testing.T) {
+	memLimiter := ratelimit.NewMemoryLimiter()
+	cfg := apihttp.RateLimitConfig{
+		PublicLimit:   10,
+		PublicWindow:  time.Minute,
+		GeneralLimit:  2,
+		GeneralWindow: time.Minute,
+	}
+
+	playerSvc := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			return coreplayer.Player{ID: "p1"}, nil
+		},
+	}
+
+	handler := newTestHandler(t, playerSvc, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithRateLimiter(memLimiter, cfg),
+	)
+	router := handler.Router()
+
+	token := "shared-valid-token"
+
+	// Req 1 from IP 1
+	req1 := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req1.Header.Set("Authorization", "Bearer "+token)
+	req1.RemoteAddr = "192.168.1.1:12345"
+	rec1 := httptest.NewRecorder()
+	router.ServeHTTP(rec1, req1)
+	if rec1.Code == http.StatusTooManyRequests {
+		t.Fatalf("req1 unexpectedly throttled")
+	}
+
+	// Req 2 from IP 2
+	req2 := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req2.Header.Set("Authorization", "Bearer "+token)
+	req2.RemoteAddr = "192.168.1.2:12345"
+	rec2 := httptest.NewRecorder()
+	router.ServeHTTP(rec2, req2)
+	if rec2.Code == http.StatusTooManyRequests {
+		t.Fatalf("req2 unexpectedly throttled")
+	}
+
+	// Req 3 from IP 3 with same token -> throttled by token limit!
+	req3 := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req3.Header.Set("Authorization", "Bearer "+token)
+	req3.RemoteAddr = "192.168.1.3:12345"
+	rec3 := httptest.NewRecorder()
+	router.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected req3 to be throttled with 429, got %d", rec3.Code)
+	}
+}
+
+func TestRateLimitMiddleware_RemainingHeaderReflectsTighterBound(t *testing.T) {
+	memLimiter := ratelimit.NewMemoryLimiter()
+	cfg := apihttp.RateLimitConfig{
+		PublicLimit:   10,
+		PublicWindow:  time.Minute,
+		GeneralLimit:  5,
+		GeneralWindow: time.Minute,
+	}
+
+	playerSvc := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			return coreplayer.Player{ID: "p1"}, nil
+		},
+	}
+
+	handler := newTestHandler(t, playerSvc, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithRateLimiter(memLimiter, cfg),
+	)
+	router := handler.Router()
+
+	// 1. IP makes an unauthenticated request -> IP count = 1, remaining = 4
+	req1 := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req1.RemoteAddr = "192.168.1.99:12345"
+	rec1 := httptest.NewRecorder()
+	router.ServeHTTP(rec1, req1)
+	if rec1.Header().Get("X-RateLimit-Remaining") != "4" {
+		t.Fatalf("expected remaining 4, got %s", rec1.Header().Get("X-RateLimit-Remaining"))
+	}
+
+	// 2. Same IP makes request with a fresh token -> IP count = 2 (remaining 3), Token count = 1 (remaining 4)
+	// Header must show 3 (tighter bound)!
+	req2 := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req2.Header.Set("Authorization", "Bearer fresh-token")
+	req2.RemoteAddr = "192.168.1.99:12345"
+	rec2 := httptest.NewRecorder()
+	router.ServeHTTP(rec2, req2)
+	if rec2.Header().Get("X-RateLimit-Remaining") != "3" {
+		t.Fatalf("expected tighter bound remaining 3, got %s", rec2.Header().Get("X-RateLimit-Remaining"))
 	}
 }

@@ -5,11 +5,27 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/witchcraze/party2re/internal/ratelimit"
 )
 
 func (h *Handler) extractClientIP(r *http.Request) string {
 	return ExtractClientIP(r, h.trustedProxies...)
+}
+
+func (h *Handler) setRateLimitHeaders(w http.ResponseWriter, res ratelimit.Result) {
+	w.Header().Set("X-RateLimit-Limit", strconv.FormatInt(res.Limit, 10))
+	w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(res.Remaining, 10))
+	w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(int64(res.ResetAfter.Seconds()), 10))
+}
+
+func (h *Handler) writeRateLimitExceeded(w http.ResponseWriter, res ratelimit.Result) {
+	retrySec := int64(res.ResetAfter.Seconds())
+	if retrySec < 1 {
+		retrySec = 1
+	}
+	w.Header().Set("Retry-After", strconv.FormatInt(retrySec, 10))
+	writeError(w, http.StatusTooManyRequests, errors.New("rate limit exceeded"))
 }
 
 // rateLimitMiddleware applies distributed / in-memory rate limiting to incoming HTTP requests.
@@ -21,50 +37,80 @@ func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
 		}
 
 		ip := h.extractClientIP(r)
-		var key string
-		var limit int64
-		var window time.Duration
 
-		// Public registration/login endpoints
+		// Public registration/login endpoints: strictly keyed by client IP
 		if r.Method == http.MethodPost && (r.URL.Path == "/players" || r.URL.Path == "/sessions") {
-			key = "http:public:" + ip + ":" + r.URL.Path
-			limit = h.rateLimitCfg.PublicLimit
-			window = h.rateLimitCfg.PublicWindow
-		} else {
-			if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-				sessionID := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
-				key = "http:auth:" + sessionID
-			} else {
-				key = "http:general:" + ip
+			limit := h.rateLimitCfg.PublicLimit
+			window := h.rateLimitCfg.PublicWindow
+			if limit <= 0 || window <= 0 {
+				next.ServeHTTP(w, r)
+				return
 			}
-			limit = h.rateLimitCfg.GeneralLimit
-			window = h.rateLimitCfg.GeneralWindow
+
+			key := "http:public:" + ip + ":" + r.URL.Path
+			res, err := h.limiter.Allow(r.Context(), key, limit, window)
+			if err != nil {
+				// Fail-open gracefully on limiter error
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			h.setRateLimitHeaders(w, res)
+			if !res.Allowed {
+				h.writeRateLimitExceeded(w, res)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+			return
 		}
 
+		// General endpoints: enforce dual-layer rate limiting (IP-level protection first, then token-level if present)
+		limit := h.rateLimitCfg.GeneralLimit
+		window := h.rateLimitCfg.GeneralWindow
 		if limit <= 0 || window <= 0 {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		res, err := h.limiter.Allow(r.Context(), key, limit, window)
-		if err != nil {
-			// Fail-open gracefully on limiter error
-			next.ServeHTTP(w, r)
+		// 1. Client IP rate limit check (protects against rotating unauthenticated token flooding)
+		ipRes, ipErr := h.limiter.Allow(r.Context(), "http:general:"+ip, limit, window)
+		if ipErr == nil && !ipRes.Allowed {
+			h.setRateLimitHeaders(w, ipRes)
+			h.writeRateLimitExceeded(w, ipRes)
 			return
 		}
 
-		w.Header().Set("X-RateLimit-Limit", strconv.FormatInt(res.Limit, 10))
-		w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(res.Remaining, 10))
-		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(int64(res.ResetAfter.Seconds()), 10))
-
-		if !res.Allowed {
-			retrySec := int64(res.ResetAfter.Seconds())
-			if retrySec < 1 {
-				retrySec = 1
+		// 2. Token-based rate limit check if Authorization: Bearer is present
+		var tokenRes ratelimit.Result
+		var hasTokenCheck bool
+		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+			token := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+			if token != "" {
+				var tokenErr error
+				tokenRes, tokenErr = h.limiter.Allow(r.Context(), "http:auth:"+token, limit, window)
+				if tokenErr == nil {
+					hasTokenCheck = true
+					if !tokenRes.Allowed {
+						h.setRateLimitHeaders(w, tokenRes)
+						h.writeRateLimitExceeded(w, tokenRes)
+						return
+					}
+				}
 			}
-			w.Header().Set("Retry-After", strconv.FormatInt(retrySec, 10))
-			writeError(w, http.StatusTooManyRequests, errors.New("rate limit exceeded"))
-			return
+		}
+
+		// Set rate limit headers reflecting the tighter bound
+		if hasTokenCheck && ipErr == nil {
+			if tokenRes.Remaining < ipRes.Remaining {
+				h.setRateLimitHeaders(w, tokenRes)
+			} else {
+				h.setRateLimitHeaders(w, ipRes)
+			}
+		} else if hasTokenCheck {
+			h.setRateLimitHeaders(w, tokenRes)
+		} else if ipErr == nil {
+			h.setRateLimitHeaders(w, ipRes)
 		}
 
 		next.ServeHTTP(w, r)
