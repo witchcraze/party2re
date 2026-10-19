@@ -2,6 +2,7 @@ package gemstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -47,7 +48,11 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 
 		var dep depot.Depot
 		if s.depots != nil {
-			if d, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID); err == nil {
+			d, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
+			if err != nil && !errors.Is(err, depot.ErrNotFound) {
+				return err
+			}
+			if err == nil {
 				dep = d
 			}
 		}
@@ -159,7 +164,11 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 
 		var dep depot.Depot
 		if s.depots != nil {
-			if d, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID); err == nil {
+			d, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
+			if err != nil && !errors.Is(err, depot.ErrNotFound) {
+				return err
+			}
+			if err == nil {
 				dep = d
 			}
 		}

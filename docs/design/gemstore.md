@@ -16,8 +16,8 @@
 | `かう` | `&kau` | `GemStoreService.BuyGem` | `POST /characters/{id}/gemstore/buy` | レベル要件検証 $\rightarrow$ 価格計算（定価 $\times$ 5） $\rightarrow$ 所持金減算 $\rightarrow$ 宝珠箱 (`GemBox`) 追加（満杯時拒否） |
 | `うる` | `&uru` | `GemStoreService.SellGem` | `POST /characters/{id}/gemstore/sell` | 宝珠箱所有確認 $\rightarrow$ 売却額計算（50%価格、最低1G） $\rightarrow$ 宝珠箱から消費 $\rightarrow$ 所持金加算 |
 | `おくる` | `&okuru` | `GemStoreService.SendGem` | `POST /characters/{id}/gemstore/send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与（満杯時拒否） |
-| `かこう` | `&kako` | `GemStoreService.SynthesizeGem` | `POST /characters/{id}/gemstore/synthesize` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否） |
-| `かんてい` | `&kantei` | `GemStoreService.AppraiseItem` | `POST /characters/{id}/gemstore/appraise` | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否） |
+| `かこう` | `&kako` | `GemStoreService.SynthesizeGem` | `POST /characters/{id}/gemstore/synthesize` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
+| `かんてい` | `&kantei` | `GemStoreService.AppraiseItem` | `POST /characters/{id}/gemstore/appraise` | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
 | `みる` / `はなす` | `words` / メニュー | `GemStoreService.GetCatalog`<br>`GemStoreService.GetRecipes`<br>`GemStoreService.GetDialogue` | `GET /gemstore/catalog`<br>`GET /gemstore/recipes`<br>`GET /gemstore/dialogue` | 転職・レベル別購入可能宝石、全合成レシピ、店主 `@ジェマ` 会話メッセージの取得 |
 
 ---
@@ -82,6 +82,13 @@
 ```
 
 すべての状態更新は `txProvider.RunInTx(ctx, ...)` によるアンビエントトランザクション伝播下でアトミックに実行される。
+
+### 4.1 倉庫 (Depot) 読取エラーハンドリング規約
+
+合成 (`SynthesizeGem`) および鑑定 (`AppraiseItem`) において、構成済み `DepotRepository` に対する排他読取 (`FindByCharacterIDForUpdate`) は以下の規約に従う。
+
+- **未作成倉庫 (`depot.ErrNotFound`)**: 正常系として許容し、倉庫アイテム 0 件の空倉庫として処理を継続する。インベントリまたは宝珠箱のみで消費・鑑定が完結した場合であっても、未作成の倉庫レコードは新規作成・保存されない。
+- **一時障害・SQL エラー・コンテキストキャンセル**: 倉庫データが正しく読取不能な障害とみなし、直ちにエラーを伝播してトランザクションを中断・ロールバックする。インベントリ素材や所持品のみで要件を満たす場合であっても、倉庫読取障害を握りつぶして部分観測で状態更新を実行してはならない。これにより、素材欠落とみなす誤判定や障害発生時の部分更新を防止する。
 
 ---
 
