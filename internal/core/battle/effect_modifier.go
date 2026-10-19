@@ -26,10 +26,12 @@ type EffectContext struct {
 type ModifierKind string
 
 const (
-	ModifierHPHealing ModifierKind = "hp_healing"
-	ModifierMPHealing ModifierKind = "mp_healing"
-	ModifierStatUp    ModifierKind = "stat_up"
-	ModifierStatDown  ModifierKind = "stat_down"
+	ModifierHPHealing    ModifierKind = "hp_healing"
+	ModifierMPHealing    ModifierKind = "mp_healing"
+	ModifierStatUp       ModifierKind = "stat_up"
+	ModifierStatDown     ModifierKind = "stat_down"
+	ModifierStatus       ModifierKind = "status"
+	ModifierInstantDeath ModifierKind = "instant_death"
 )
 
 // EffectApplication distinguishes helper rejection, a returned no-effect tuple,
@@ -67,7 +69,7 @@ func (s *LifetimeState) ModifyEffect(c *EffectContext, e TargetEffect, kind Modi
 		return 0, nil, ErrInvalidParticipant
 	}
 	switch kind {
-	case ModifierHPHealing, ModifierMPHealing, ModifierStatUp, ModifierStatDown:
+	case ModifierHPHealing, ModifierMPHealing, ModifierStatUp, ModifierStatDown, ModifierStatus, ModifierInstantDeath:
 	default:
 		return 0, nil, ErrUnsupportedEffect
 	}
@@ -103,7 +105,7 @@ func (s *LifetimeState) ModifyEffect(c *EffectContext, e TargetEffect, kind Modi
 func (s *LifetimeState) initialEffectPower(c *EffectContext, e TargetEffect, kind ModifierKind) float64 {
 	a := s.actor(c.ActorID)
 	v := e.Payload.Number
-	if s.Fields.Current() == "sanctuary" && e.Category == CategoryMagic && kind != ModifierStatDown {
+	if s.Fields.Current() == "sanctuary" && e.Category == CategoryMagic && (kind == ModifierHPHealing || kind == ModifierMPHealing || kind == ModifierStatUp) {
 		v *= 1.2
 	}
 	if s.Fields.Current() == "darkness" && kind == ModifierStatUp {

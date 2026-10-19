@@ -26,6 +26,9 @@ func (a *LifetimeActor) CheckIncapacitation(c IncapacitationContext, rng random.
 	if rng == nil {
 		return StatusDecision{}, ErrInvalidRequest
 	}
+	if err := a.ApplyAbilityCure(rng); err != nil {
+		return StatusDecision{}, err
+	}
 	// The curse branch draws before checking item204, unlike the other branches.
 	if a.Status == StatusKinju && rng.Float64() < 0.25 && !c.Bypass {
 		a.HP = max(0, a.HP-a.poisonDamage(rng))

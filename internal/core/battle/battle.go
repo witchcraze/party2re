@@ -53,6 +53,9 @@ type BattleBaseStats struct {
 type BattleGearStats struct {
 	ArmorDefense, WeaponWeight, ArmorWeight int
 	WeaponID, ArmorID, AccessoryID          string
+	// WeaponAttack is the evaluated table value before any reset/revision.
+	// nil with an equipped weapon is an unrepresented load context.
+	WeaponAttack *int
 }
 
 type Request struct {

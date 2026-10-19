@@ -421,6 +421,14 @@ The finite damage-gem registry and its already-applied target MP facts follow
 [Battle's shared damage contract](battle.md#shared-modifiers-and-callback-outcomes);
 the consumer must keep slot CMP contributions separate from MP and persist
 absorption/damage results without replaying them on reload.
+The [shared status/reset contract](battle.md#shared-modifiers-and-callback-outcomes)
+also supplies the seventeen status/cure/death gem bodies and job35.1's ordered
+dispel. Preflight the complete reset/defeat closure, including later members and
+post-revival continuations, before any costs or draws. Retain raw equipment and
+request table-load seal facts; supply requester level, current actor and reset
+target independently. Reward and fortress callbacks remain their owners' work;
+helper registration alone does not connect an Adventure command or admit mixed
+custom slots. Item110 and unrepresented recursive descendants remain rejected.
 
 Revival and sacrifice use [Battle's ordered revival contract](battle.md#resources-revival-and-roster-changes).
 Ordinary fallen-self discovery requires the66.6 entry and its living designated

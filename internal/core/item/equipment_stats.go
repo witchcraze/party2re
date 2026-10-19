@@ -41,10 +41,26 @@ func NominalArmorStats(defID string) (int, int) {
 
 // CalculateWeaponStats returns (attackBonus, weight) according to @weas in _data.cgi:394-500 and _weapon_revision in _battle.cgi:1726-1745.
 func CalculateWeaponStats(defID string, char corecharacter.Character, rng corecharacter.RandomSource, hasExAmuletOrAwakening bool) (int, int) {
+	return calculateWeaponStats(defID, char, rng, hasExAmuletOrAwakening, nil)
+}
+
+// CalculateWeaponStatsAndTable also retains the table-load attack before the
+// weapon revision. Explicit resets reuse this roll rather than rerolling gear.
+func CalculateWeaponStatsAndTable(defID string, char corecharacter.Character, rng corecharacter.RandomSource, awakened bool) (attack, weight, tableAttack int) {
+	attack, weight = calculateWeaponStats(defID, char, rng, awakened, &tableAttack)
+	return
+}
+
+func calculateWeaponStats(defID string, char corecharacter.Character, rng corecharacter.RandomSource, hasExAmuletOrAwakening bool, table *int) (attack, weight int) {
 	no := parseItemIndex(defID, "weapon-")
 	if no <= 0 {
 		no = parseItemIndex(defID, "item-")
 	}
+	defer func() {
+		if table != nil && no != 69 && no != 70 && no != 71 {
+			*table = attack
+		}
+	}()
 	r := func(n int) int { return randInt(rng, n) }
 
 	switch no {
@@ -186,10 +202,18 @@ func CalculateWeaponStats(defID string, char corecharacter.Character, rng corech
 		return 180, r(int(float64(char.Stats.HP) * 0.2))
 	case 69:
 		origLv := min(char.Level, 99)
-		return r(int(float64(char.Stats.Attack)*1.2)) + int(float64(origLv)*1.5), 40
+		v := r(int(float64(char.Stats.Attack) * 1.2))
+		if table != nil {
+			*table = v
+		}
+		return v + int(float64(origLv)*1.5), 40
 	case 70:
 		origLv := min(char.Level, 99)
-		return r(int(float64(char.Stats.Attack)*1.6)) + int(float64(origLv)*2.0), 50
+		v := r(int(float64(char.Stats.Attack) * 1.6))
+		if table != nil {
+			*table = v
+		}
+		return v + int(float64(origLv)*2.0), 50
 	case 71:
 		randFrac := 0.25
 		if rng != nil {
@@ -198,6 +222,9 @@ func CalculateWeaponStats(defID string, char corecharacter.Character, rng corech
 			}
 		}
 		mult := 0.75 + randFrac
+		if table != nil {
+			*table = int(float64(char.Stats.Attack) * mult)
+		}
 		if hasExAmuletOrAwakening {
 			mult = 1.5 + randFrac
 		}
