@@ -472,6 +472,9 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handlePurchaseFleaMarketListing": "fleamarket.go",
 		"handleCancelFleaMarketListing":   "fleamarket.go",
 		// Home
+		"handleBuildHouse":            "home_estate.go",
+		"handleSetCharacterColor":     "home_estate.go",
+		"handleUseHomeItem":           "home_estate.go",
 		"handleUpdateHomeSettings":    "home.go",
 		"handleSendLetter":            "home.go",
 		"handleReadLetter":            "home.go",

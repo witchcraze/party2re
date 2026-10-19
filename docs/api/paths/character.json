@@ -1034,6 +1034,10 @@
           "$ref": "#/components/responses/Error",
           "description": "Not Found"
         },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
+        },
         "415": {
           "$ref": "#/components/responses/Error",
           "description": "Unsupported Media Type"
@@ -2018,6 +2022,10 @@
         "404": {
           "$ref": "#/components/responses/Error",
           "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Conflict"
         },
         "415": {
           "$ref": "#/components/responses/Error",

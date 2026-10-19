@@ -204,6 +204,9 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"fleamarket_purchase", http.MethodPost, "/characters/char-1/fleamarket/listings/list-1/purchase", `{}`},
 		{"fleamarket_cancel", http.MethodDelete, "/characters/char-1/fleamarket/listings/list-1", ``},
 		// Home
+		{"home_build_house", http.MethodPost, "/towns/town1/houses", `{"character_id":"char-1","house_style":"001"}`},
+		{"home_set_character_color", http.MethodPost, "/characters/char-1/color", `{"color":"#ffffff"}`},
+		{"home_use_item", http.MethodPost, "/characters/char-1/home/items/use", `{"instance_id":"item-1","source":"inventory"}`},
 		{"home_settings", http.MethodPost, "/homes/char-1/settings", `{"companion_name":"ペット"}`},
 		{"home_send_letter", http.MethodPost, "/letters", `{"sender_character_id":"char-1","recipient_character_id":"char-2","content":"hello"}`},
 		{"home_read_letter", http.MethodPost, "/letters/letter-1/read", `{"character_id":"char-1"}`},
@@ -789,6 +792,123 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 
 		if rec.Code == http.StatusConflict {
 			t.Errorf("expected GET /helpers/quests not to be blocked by sleep guard, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("home estate mutations never invoke service when sleeping, can_wake, or sleep lookup fails", func(t *testing.T) {
+		conditions := []struct {
+			name         string
+			sleepStatus  home.SleepStatus
+			sleepErr     error
+			expectedCode int
+		}{
+			{"sleeping", home.SleepStatus{Sleeping: true, RemainingSeconds: 300, Message: "お休み中「Zzz...」"}, nil, http.StatusConflict},
+			{"can_wake", home.SleepStatus{CanWake: true, Message: "お休み中「Zzz...」 目を覚ましてください"}, nil, http.StatusConflict},
+			{"lookup_error", home.SleepStatus{}, errors.New("sleep lookup failed"), http.StatusInternalServerError},
+		}
+
+		homeRoutes := []struct {
+			name   string
+			method string
+			path   string
+			body   string
+		}{
+			{"build_house", http.MethodPost, "/towns/town1/houses", `{"character_id":"char-1","house_style":"001"}`},
+			{"set_character_color", http.MethodPost, "/characters/char-1/color", `{"color":"#ffffff"}`},
+			{"use_home_item", http.MethodPost, "/characters/char-1/home/items/use", `{"instance_id":"item-1","source":"inventory"}`},
+		}
+
+		for _, cond := range conditions {
+			t.Run(cond.name, func(t *testing.T) {
+				called := false
+				mockHome := &mockHomeService{
+					getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
+						return cond.sleepStatus, cond.sleepErr
+					},
+					buildHouseFn: func(_ context.Context, _, _, _ string) (*home.HomeCheckResult, error) {
+						called = true
+						return &home.HomeCheckResult{}, nil
+					},
+					setCharacterColorFn: func(_ context.Context, _, _ string) error {
+						called = true
+						return nil
+					},
+					useHomeItemFn: func(_ context.Context, _, _, _ string) (*home.UseHomeItemResult, error) {
+						called = true
+						return &home.UseHomeItemResult{}, nil
+					},
+				}
+
+				player := coreplayer.Player{ID: "player-1", Username: "hero"}
+				char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
+				players := &stubPlayerService{
+					authenticateFn: func(_ context.Context, _ string) (coreplayer.Player, error) { return player, nil },
+				}
+				chars := &stubCharacterService{
+					getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+				}
+
+				h, err := apihttp.NewHandler(
+					players,
+					chars,
+					&stubAdventureService{},
+					&stubShopService{},
+					apihttp.WithHome(mockHome),
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+				router := h.Router()
+
+				for _, route := range homeRoutes {
+					called = false
+					var req *http.Request
+					if route.body != "" {
+						req = httptest.NewRequest(route.method, route.path, bytes.NewReader([]byte(route.body)))
+						req.Header.Set("Content-Type", "application/json")
+					} else {
+						req = httptest.NewRequest(route.method, route.path, nil)
+					}
+					req.Header.Set("Authorization", "Bearer valid-session")
+					rec := httptest.NewRecorder()
+					router.ServeHTTP(rec, req)
+
+					if rec.Code != cond.expectedCode {
+						t.Errorf("[%s - %s] expected status %d, got %d: %s", cond.name, route.name, cond.expectedCode, rec.Code, rec.Body.String())
+					}
+					if called {
+						t.Errorf("[%s - %s] expected service method not to be called, but was called", cond.name, route.name)
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("home estate read endpoints are exempt from sleep guard", func(t *testing.T) {
+		router := setupFacilitySleepGuardTest(t, home.SleepStatus{
+			Sleeping:         true,
+			RemainingSeconds: 300,
+			Message:          "お休み中「Zzz...」",
+		})
+
+		readRoutes := []struct {
+			method string
+			path   string
+		}{
+			{http.MethodGet, "/towns/town1/houses"},
+			{http.MethodGet, "/houses/check?target=Hero"},
+			{http.MethodGet, "/characters/char-1/home/items"},
+		}
+
+		for _, route := range readRoutes {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			req.Header.Set("Authorization", "Bearer valid-session")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusConflict {
+				t.Errorf("expected %s %s not to be blocked by sleep guard, got %d: %s", route.method, route.path, rec.Code, rec.Body.String())
+			}
 		}
 	})
 }

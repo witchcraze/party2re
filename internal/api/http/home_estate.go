@@ -22,7 +22,7 @@ func (h *Handler) handleBuildHouse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	townID := r.PathValue("town_id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *buildHouseRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *buildHouseRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req buildHouseRequest) {
 		result, err := h.homes.BuildHouse(r.Context(), char.ID, townID, req.HouseStyle)
@@ -103,7 +103,7 @@ func (h *Handler) handleSetCharacterColor(w http.ResponseWriter, r *http.Request
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req setCharacterColorRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -152,7 +152,7 @@ func (h *Handler) handleUseHomeItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req useHomeItemRequest
 		if !decodeJSON(w, r, &req) {
 			return
