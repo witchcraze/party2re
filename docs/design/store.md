@@ -19,9 +19,9 @@ Player Stores represent permanent commercial real-estate built within the 4 town
 | `とりけし` | `&torikesi` | `StoreService.WithdrawListing` | `DELETE /characters/{id}/store/listings/{sale_id}` | **Reconciled (1:1)**: Cancels store listing and returns the item safely to owner's depot. |
 | `かう` (ゴールド) | `&kau_gold` | `StoreService.BuyItem` | `POST /characters/{id}/store/sales/{sale_id}/buy` | **Reconciled (1:1)**: Buyer pays listed gold. Gold deposited into seller wallet, item moved into buyer depot. Collection discovery (`RecordItemDiscovered`) triggered for buyer (`party2/lib/store.cgi:175-176`). |
 | `かう` (物々交換) | `&kau_barter` | `StoreService.TradeItem` | `POST /characters/{id}/store/sales/{sale_id}/trade` | **Reconciled (1:1)**: Buyer exchanges matching depot item for listed item. Both items transferred atomically. Collection discovery (`RecordItemDiscovered`) triggered for buyer (`party2/lib/store.cgi:276-277`). |
-| `かんばん` | `&kanban` | `StoreService.ChangeStoreName` | `POST /characters/{id}/store/name` | **Reconciled (1:1)**: Modifies store signboard name. Max 8 characters, validated and sanitized. Requires 5,000 G wallet balance; under observable legacy parity, no gold is deducted upon success (#1146 decision). Current Go implementation deducts 5,000 G until implementation follow-up. |
+| `かんばん` | `&kanban` | `StoreService.ChangeStoreName` | `POST /characters/{id}/store/name` | **Reconciled (1:1)**: Modifies store signboard name. Max 8 characters, validated and sanitized. Requires 5,000 G wallet balance; under observable legacy parity, no gold is deducted upon success (#1146 decision, verified in #1545). |
 | `かべがみ` | `&kabegami` | `StoreService.ChangeWallpaper` | `POST /characters/{id}/store/wallpaper` | **Reconciled (1:1)**: Updates boutique wallpaper from 50 historical styles (`%kabes`) with tier pricing (0–50,000 G), deducted atomically from owner wallet (`lib/store.cgi:593-620`). |
-| `おく` (インテリア) | `&oku` | `StoreService.AddInterior` | `POST /characters/{id}/store/interiors` | **Reconciled (1:1)**: Places furniture from 15 available styles (`001`–`023`), max 5 interiors. Requires 1,000 G wallet balance; under observable legacy parity, no gold is deducted upon success (#1146 decision). Current Go implementation deducts 1,000 G until implementation follow-up. |
+| `おく` (インテリア) | `&oku` | `StoreService.AddInterior` | `POST /characters/{id}/store/interiors` | **Reconciled (1:1)**: Places furniture from 15 available styles (`001`–`023`), max 5 interiors. Requires 1,000 G wallet balance; under observable legacy parity, no gold is deducted upon success (#1146 decision, verified in #1545). |
 | `なづける` | `&nazukeru` | `StoreService.RenameInterior` | `PUT /characters/{id}/store/interiors/{interior_id}/name` | **Reconciled (1:1)**: Renames placed furniture piece (max 8 characters). |
 | `そうじ` | `&souji` | `StoreService.CleanInteriors` | `DELETE /characters/{id}/store/interiors` | **Reconciled (1:1)**: Clears all placed furniture from the store. |
 
@@ -103,14 +103,14 @@ erDiagram
 In the original Party2 implementation (`/home/witchcraze/dev/party2/party2/`):
 
 1. **Signboard Renaming (`party2/lib/store.cgi:289-313`, `sub kanban`)**:
-   - UI display: prompts that renaming requires `$NAME_CHANGE_MONEY` G (`店名の変更には $NAME_CHANGE_MONEY G必要です`, where `$NAME_CHANGE_MONEY = 5000` in `_data.cgi:14`).
+   - UI display: prompts that renaming requires `$NAME_CHANGE_MONEY` G (`店名の変更には $NAME_CHANGE_MONEY G必要です`, where `$NAME_CHANGE_MONEY = 5000` in `party2/lib/store.cgi:30`).
    - Balance guard: `if $NAME_CHANGE_MONEY > $m{money};` halts execution with message `店名変更代の $NAME_CHANGE_MONEY Gが足りません`.
    - Execution & State mutation: invokes `write_stores_name($target)` and `write_town_member(...)`.
    - **Observable legacy behavior**: neither `kanban` nor the common action dispatcher `party2/lib/system.cgi:639-655` (`sub action`) executes `$m{money} -= $NAME_CHANGE_MONEY`. No gold is deducted; the check functions solely as a balance threshold qualification.
 2. **Furniture Interior Placement (`party2/lib/store.cgi:626-661`, `sub interior`)**:
    - UI display: prompts `インテリアの値段 $interior_price G / どのインテリアを置きますか？` (where `$interior_price = 1000`).
    - Balance guard: `if ( $m{money} < $interior_price )` halts execution with message `ゴールドが足りません`.
-   - Capacity guard: `elsif (&is_max_interiors)` halts execution if store already holds 5 interiors (`$MAX_INTERIOR = 5` in `_data.cgi:15`).
+   - Capacity guard: `elsif (&is_max_interiors)` halts execution if store already holds 5 interiors (`$MAX_INTERIOR = 5` in `party2/lib/store.cgi:29`).
    - Execution & State mutation: appends `0<>1<>$no<>0<>item/$interior<>$npc_color<>\n` to `$userdir/$yid/store_member.cgi`.
    - **Observable legacy behavior**: neither `interior` nor `sub action` executes `$m{money} -= $interior_price`. No gold is deducted; placement requires 1,000 G in hand but costs 0 G.
 3. **Wallpaper Replacement (`party2/lib/store.cgi:593-620`, `sub kabegami`)**:
@@ -135,22 +135,18 @@ The approved reconstruction specification is:
 | **看板 (ChangeStoreName)** | `4,999 G` | `< 5,000 G` (insufficient) | Rejected | `4,999 G` (unchanged) | N/A | `ErrInsufficientFunds` (HTTP 400) |
 | **看板 (ChangeStoreName)** | `5,000 G` | `== 5,000 G` (exact threshold) | Accepted | `5,000 G` (0 G deducted) | N/A | None (HTTP 200) |
 | **看板 (ChangeStoreName)** | `50,000 G` | `> 5,000 G` (surplus) | Accepted | `50,000 G` (0 G deducted) | N/A | None (HTTP 200) |
-| **看板 (ChangeStoreName)** | Any | Validation failure (collision, >8 chars, invalid chars) | Rejected | Unchanged | N/A | Validation error (HTTP 400) |
+| **看板 (ChangeStoreName)** | Any | Name validation failure (>8 chars, invalid chars/whitespace) | Rejected | Unchanged | N/A | `ErrInvalidStoreName` (HTTP 400) |
+| **看板 (ChangeStoreName)** | Any | Store name taken / collision with active store | Rejected | Unchanged | N/A | `ErrStoreNameTaken` (HTTP 409) |
 | **家具 (AddInterior)** | `999 G` | `< 1,000 G` (insufficient), slots < 5 | Rejected | `999 G` (unchanged) | Unchanged | `ErrInsufficientFunds` (HTTP 400) |
 | **家具 (AddInterior)** | `1,000 G` | `== 1,000 G` (exact threshold), slots < 5 | Accepted | `1,000 G` (0 G deducted) | `+1` | None (HTTP 201) |
 | **家具 (AddInterior)** | `10,000 G` | `> 1,000 G` (surplus), slots < 5 | Accepted | `10,000 G` (0 G deducted) | `+1` | None (HTTP 201) |
 | **家具 (AddInterior)** | `1,000 G` | Sequential placement from `0` to `5` items | All 5 Accepted | `1,000 G` (0 G deducted throughout) | `5` | None (HTTP 201 x 5) |
-| **家具 (AddInterior)** | `>= 1,000 G` | Store already at cap (`5` items placed) | Rejected | Unchanged | `5` (unchanged) | `ErrMaxInteriorsReached` (HTTP 400) |
+| **家具 (AddInterior)** | `>= 1,000 G` | Store already at cap (`5` items placed) | Rejected | Unchanged | `5` (unchanged) | `ErrMaxInteriorsReached` (HTTP 409) |
 
-### Current Go Implementation Gap and Follow-up Scope
+### Implementation and Verification (Issue #1545)
 
-Until resolved by the implementation follow-up issue:
-1. `internal/store/customization.go:41` executes `char.DeductMoney(NameChangePrice)` in `ChangeStoreName`.
-2. `internal/store/customization.go:137` executes `char.DeductMoney(InteriorPrice)` in `AddInterior`.
-3. `internal/store/store_test.go:441, 464` asserts post-action wallet balances assuming gold deductions (5,000 G and 1,000 G).
-
-The implementation follow-up will:
-- Update `ChangeStoreName` to verify `char.Money >= NameChangePrice` without calling `DeductMoney`.
-- Update `AddInterior` to verify `char.Money >= InteriorPrice` without calling `DeductMoney`.
-- Update `TestStoreCustomization` and add unit/integration boundary tests verifying that wallet balances remain unmodified across successful operations, and that sequential furniture placements with exactly 1,000 G complete all 5 slots without deduction.
+Resolved and verified in Issue #1545:
+1. `ChangeStoreName` verifies `char.Money >= NameChangePrice` (5,000 G) admission qualification without deducting money from character wallet.
+2. `AddInterior` verifies `char.Money >= InteriorPrice` (1,000 G) admission qualification without deducting money from character wallet.
+3. `store_test.go` (`TestStoreCustomization`, `TestStoreCustomization_ZeroCostAndBoundary`) verifies wallet preservation on success, boundary rejection on insufficient balance (<5,000 G, <1,000 G), exact threshold balance (=5,000 G, =1,000 G), and sequential placement of 5 pieces with exactly 1,000 G balance without deduction.
 
