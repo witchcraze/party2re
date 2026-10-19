@@ -11050,9 +11050,14 @@
         "additionalProperties": false,
         "properties": {
           "fertilizer_id": {
+            "minLength": 1,
+            "pattern": "[^\t-\r    - \u2028\u2029  　]",
             "type": "string"
           }
         },
+        "required": [
+          "fertilizer_id"
+        ],
         "type": "object"
       },
       "PlantationFertilizeResponse": {
@@ -11241,9 +11246,14 @@
         "additionalProperties": false,
         "properties": {
           "seed_id": {
+            "minLength": 1,
+            "pattern": "[^\t-\r    - \u2028\u2029  　]",
             "type": "string"
           }
         },
+        "required": [
+          "seed_id"
+        ],
         "type": "object"
       },
       "PlantationSowResponse": {
