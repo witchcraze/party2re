@@ -103,14 +103,14 @@ erDiagram
 In the original Party2 implementation (`/home/witchcraze/dev/party2/party2/`):
 
 1. **Signboard Renaming (`party2/lib/store.cgi:289-313`, `sub kanban`)**:
-   - UI display: prompts that renaming requires `$NAME_CHANGE_MONEY` G (`店名の変更には $NAME_CHANGE_MONEY G必要です`, where `$NAME_CHANGE_MONEY = 5000` in `_data.cgi:14`).
+   - UI display: prompts that renaming requires `$NAME_CHANGE_MONEY` G (`店名の変更には $NAME_CHANGE_MONEY G必要です`, where `$NAME_CHANGE_MONEY = 5000` in `party2/lib/store.cgi:30`).
    - Balance guard: `if $NAME_CHANGE_MONEY > $m{money};` halts execution with message `店名変更代の $NAME_CHANGE_MONEY Gが足りません`.
    - Execution & State mutation: invokes `write_stores_name($target)` and `write_town_member(...)`.
    - **Observable legacy behavior**: neither `kanban` nor the common action dispatcher `party2/lib/system.cgi:639-655` (`sub action`) executes `$m{money} -= $NAME_CHANGE_MONEY`. No gold is deducted; the check functions solely as a balance threshold qualification.
 2. **Furniture Interior Placement (`party2/lib/store.cgi:626-661`, `sub interior`)**:
    - UI display: prompts `インテリアの値段 $interior_price G / どのインテリアを置きますか？` (where `$interior_price = 1000`).
    - Balance guard: `if ( $m{money} < $interior_price )` halts execution with message `ゴールドが足りません`.
-   - Capacity guard: `elsif (&is_max_interiors)` halts execution if store already holds 5 interiors (`$MAX_INTERIOR = 5` in `_data.cgi:15`).
+   - Capacity guard: `elsif (&is_max_interiors)` halts execution if store already holds 5 interiors (`$MAX_INTERIOR = 5` in `party2/lib/store.cgi:29`).
    - Execution & State mutation: appends `0<>1<>$no<>0<>item/$interior<>$npc_color<>\n` to `$userdir/$yid/store_member.cgi`.
    - **Observable legacy behavior**: neither `interior` nor `sub action` executes `$m{money} -= $interior_price`. No gold is deducted; placement requires 1,000 G in hand but costs 0 G.
 3. **Wallpaper Replacement (`party2/lib/store.cgi:593-620`, `sub kabegami`)**:
@@ -135,12 +135,13 @@ The approved reconstruction specification is:
 | **看板 (ChangeStoreName)** | `4,999 G` | `< 5,000 G` (insufficient) | Rejected | `4,999 G` (unchanged) | N/A | `ErrInsufficientFunds` (HTTP 400) |
 | **看板 (ChangeStoreName)** | `5,000 G` | `== 5,000 G` (exact threshold) | Accepted | `5,000 G` (0 G deducted) | N/A | None (HTTP 200) |
 | **看板 (ChangeStoreName)** | `50,000 G` | `> 5,000 G` (surplus) | Accepted | `50,000 G` (0 G deducted) | N/A | None (HTTP 200) |
-| **看板 (ChangeStoreName)** | Any | Validation failure (collision, >8 chars, invalid chars) | Rejected | Unchanged | N/A | Validation error (HTTP 400) |
+| **看板 (ChangeStoreName)** | Any | Name validation failure (>8 chars, invalid chars/whitespace) | Rejected | Unchanged | N/A | `ErrInvalidStoreName` (HTTP 400) |
+| **看板 (ChangeStoreName)** | Any | Store name taken / collision with active store | Rejected | Unchanged | N/A | `ErrStoreNameTaken` (HTTP 409) |
 | **家具 (AddInterior)** | `999 G` | `< 1,000 G` (insufficient), slots < 5 | Rejected | `999 G` (unchanged) | Unchanged | `ErrInsufficientFunds` (HTTP 400) |
 | **家具 (AddInterior)** | `1,000 G` | `== 1,000 G` (exact threshold), slots < 5 | Accepted | `1,000 G` (0 G deducted) | `+1` | None (HTTP 201) |
 | **家具 (AddInterior)** | `10,000 G` | `> 1,000 G` (surplus), slots < 5 | Accepted | `10,000 G` (0 G deducted) | `+1` | None (HTTP 201) |
 | **家具 (AddInterior)** | `1,000 G` | Sequential placement from `0` to `5` items | All 5 Accepted | `1,000 G` (0 G deducted throughout) | `5` | None (HTTP 201 x 5) |
-| **家具 (AddInterior)** | `>= 1,000 G` | Store already at cap (`5` items placed) | Rejected | Unchanged | `5` (unchanged) | `ErrMaxInteriorsReached` (HTTP 400) |
+| **家具 (AddInterior)** | `>= 1,000 G` | Store already at cap (`5` items placed) | Rejected | Unchanged | `5` (unchanged) | `ErrMaxInteriorsReached` (HTTP 409) |
 
 ### Implementation and Verification (Issue #1545)
 
