@@ -11,6 +11,10 @@ import (
 type DefeatRewards struct {
 	Validate func(*LifetimeState, TargetContext, string) error
 	Apply    func(*LifetimeState, TargetContext, string) error
+	// Project describes combat scalar changes on a validation copy, without
+	// external effects/RNG. Nil means combat-neutral rewards; ordered fortress
+	// continuations require an explicit projection from their field owner.
+	Project func(*LifetimeState, TargetContext, string) error
 }
 
 type DefeatContext struct {
@@ -35,103 +39,8 @@ func (s *LifetimeState) ValidateDefeat(c *DefeatContext, targetID string, rng ra
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
 	}
-	return s.validateDefeat(c, targetID, rng, map[string]bool{})
-}
-
-func (s *LifetimeState) validateResetHP(c *EquipmentResetContext, id string, hp int, rng random.Generator) error {
-	projected := *s
-	projected.Actors = slices.Clone(s.Actors)
-	if projected.actor(id) == nil {
-		return ErrInvalidParticipant
-	}
-	projected.actor(id).HP = hp
-	return projected.ValidateEquipmentReset(c, id, rng)
-}
-
-func (s *LifetimeState) validateDefeat(c *DefeatContext, id string, rng random.Generator, visiting map[string]bool) error {
-	a := s.actor(id)
-	if a == nil {
-		return ErrInvalidParticipant
-	}
-	if visiting[id] {
-		return ErrUnsupportedEffect
-	} // A reachable recursive final strike has no finite closure.
-	visiting[id] = true
-	defer delete(visiting, id)
-	auto := AutomaticRevivalContext{TargetContext: c.TargetContext, Reset: func(string) error { return nil }}
-	if err := s.ValidateAutomaticRevival(&auto, id, rng); err != nil {
-		return err
-	}
-	hp := 0
-	branch := automaticRevivalBranch(a)
-	switch branch {
-	case "temporary":
-		hp = int(float64(a.MaxHP) * .1)
-	case "pharaoh":
-		hp = a.MaxHP
-	case "half":
-		hp = a.MaxHP / 2
-	case "curse":
-		hp = int(float64(a.MaxHP) * .3)
-	}
-	if err := s.validateResetHP(&c.EquipmentResetContext, id, hp, rng); err != nil {
-		return err
-	}
-	if branch != "" {
-		return nil
-	}
-	if hasItem(a.ItemDefinitionIDs, "item-212") {
-		// Target selection uses the acting participant, not the fallen holder.
-		// Reset can clear that actor's effects; admit both continuations.
-		projected := *s
-		projected.Actors = slices.Clone(s.Actors)
-		fallen := projected.actor(id)
-		fallen.HP = 0
-		fallen.Status = ""
-		fallen.Temporary = ""
-		fallen.Extended = ""
-		if fallen.Gear.AccessoryID == "item-143" {
-			fallen.Status = StatusPhysicalSeal
-		}
-		if fallen.Gear.AccessoryID == "item-116" {
-			fallen.Status = StatusDofuu
-		}
-		candidates, err := projected.defeatStrikeCandidates(c, id, rng)
-		if err != nil {
-			return err
-		}
-		for _, candidate := range candidates {
-			t := projected.actor(candidate.TargetID)
-			if t.Temporary == TemporaryOneHitDefense {
-				continue
-			}
-			if err := c.ToolCategory.validate(); err != nil {
-				return err
-			}
-			if t.Gear == nil {
-				return ErrUnsupportedEffect
-			}
-			if err := projected.validateDefeat(c, t.ID, rng, visiting); err != nil {
-				return err
-			}
-		}
-	}
-	if s.actor(c.ActorID).NPC || id == c.ActorID {
-		return nil
-	}
-	if c.Rewards == nil || c.Rewards.Validate == nil || c.Rewards.Apply == nil {
-		return ErrUnsupportedEffect
-	}
-	if err := c.Rewards.Validate(s, c.TargetContext, id); err != nil {
-		return err
-	}
-	if c.FieldAtLoad == "fortress" && s.Fields.AntiTurns == 0 {
-		if c.Fortress == nil || c.Fortress.Validate == nil || c.Fortress.Apply == nil {
-			return ErrUnsupportedEffect
-		}
-		return c.Fortress.Validate(s, c.TargetContext, id)
-	}
-	return nil
+	_, err := s.projectDefeatContinuation(c, targetID, rng, map[string]bool{}, false)
+	return err
 }
 
 func (s *LifetimeState) defeatStrikeCandidates(c *DefeatContext, id string, rng random.Generator) ([]TargetEffect, error) {
@@ -214,6 +123,23 @@ func (s *LifetimeState) applyDefeat(c *DefeatContext, id string, rng random.Gene
 			r.FinalStrike = &strike
 		}
 	}
+	s.applyDefeatInheritance(c, id)
+	if s.actor(c.ActorID).NPC || id == c.ActorID {
+		return r, nil
+	}
+	if err := c.Rewards.Apply(s, c.TargetContext, id); err != nil {
+		return r, err
+	}
+	r.RewardsReached = true
+	if c.FieldAtLoad == "fortress" && s.Fields.AntiTurns == 0 {
+		if err := c.Fortress.Apply(s, c.TargetContext, id); err != nil {
+			return r, err
+		}
+	}
+	return r, nil
+}
+
+func (s *LifetimeState) applyDefeatInheritance(c *DefeatContext, id string) {
 	for side, ids := range [][]string{c.PartyIDs, c.EnemyIDs} {
 		if len(ids) == 0 || s.actor(id).TeamID != s.actor(ids[0]).TeamID {
 			continue
@@ -233,17 +159,4 @@ func (s *LifetimeState) applyDefeat(c *DefeatContext, id string, rng random.Gene
 			}
 		}
 	}
-	if s.actor(c.ActorID).NPC || id == c.ActorID {
-		return r, nil
-	}
-	if err := c.Rewards.Apply(s, c.TargetContext, id); err != nil {
-		return r, err
-	}
-	r.RewardsReached = true
-	if c.FieldAtLoad == "fortress" && s.Fields.AntiTurns == 0 {
-		if err := c.Fortress.Apply(s, c.TargetContext, id); err != nil {
-			return r, err
-		}
-	}
-	return r, nil
 }

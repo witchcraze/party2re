@@ -166,6 +166,9 @@ func (s *LifetimeState) ValidateAreaStatus(c *StatusContext, e TargetEffect, cha
 	if err := s.ValidateStatus(c, e, chance, bypass, death, rng); err != nil {
 		return err
 	}
+	if death {
+		return s.validateAreaDeath(c, e, chance, bypass, rng)
+	}
 	projected := *s
 	projected.Actors = slices.Clone(s.Actors)
 	child := *c
@@ -190,105 +193,9 @@ func (s *LifetimeState) ValidateAreaStatus(c *StatusContext, e TargetEffect, cha
 			if err := projected.ValidateStatus(&child, e, chance, bypass, death, rng); err != nil {
 				return err
 			}
-			if death {
-				converted, _, err := projected.actor(c.ActorID).ConvertEnemyCategory(c.TargetContext, e)
-				if err != nil {
-					return err
-				}
-				seen := map[string]bool{}
-				for _, candidate := range projected.damageCandidates(&DamageContext{EffectContext: child.EffectContext}, converted) {
-					t := projected.actor(candidate.TargetID)
-					if seen[t.ID] || t.HP <= 0 || candidate.Payload.Symbol == "" || statusImmune(t, bypass, true, projected.Fields.Current()) {
-						continue
-					}
-					seen[t.ID] = true
-					defeat := *c.Defeat
-					defeat.TargetContext = c.TargetContext
-					if err := projected.projectDefeatContinuation(&defeat, t.ID, rng, map[string]bool{}); err != nil {
-						return err
-					}
-				}
-			}
 		}
 	}
 	return nil
-}
-
-func (s *LifetimeState) projectDefeatContinuation(c *DefeatContext, id string, rng random.Generator, visiting map[string]bool) error {
-	if visiting[id] {
-		return ErrUnsupportedEffect
-	}
-	visiting[id] = true
-	defer delete(visiting, id)
-	a := s.actor(id)
-	strike := automaticRevivalBranch(a) == "" && hasItem(a.ItemDefinitionIDs, "item-212")
-	projectStatusDefeat(a)
-	if !strike {
-		return nil
-	}
-	candidates, err := s.defeatStrikeCandidates(c, id, rng)
-	if err != nil {
-		return err
-	}
-	seen := map[string]bool{}
-	for _, candidate := range candidates {
-		t := s.actor(candidate.TargetID)
-		if seen[t.ID] {
-			continue
-		}
-		seen[t.ID] = true
-		if t.Temporary == TemporaryOneHitDefense {
-			t.Temporary = ""
-			continue
-		}
-		if err := s.projectDefeatContinuation(c, t.ID, rng, visiting); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Admission retains both the original state and the continuation after earlier
-// reachable resets/one-use revivals. It consumes no equipment/probability draws.
-func projectStatusDefeat(a *LifetimeActor) {
-	branch := automaticRevivalBranch(a)
-	switch branch {
-	case "temporary":
-		a.HP = int(float64(a.MaxHP) * .2)
-	case "pharaoh":
-		a.HP = a.MaxHP
-		a.MP -= a.MP / 2
-	case "half":
-		a.HP = a.MaxHP / 2
-		if hasItem(a.ItemDefinitionIDs, "item-193") {
-			a.ItemDefinitionIDs = slices.DeleteFunc(slices.Clone(a.ItemDefinitionIDs), func(id string) bool { return id == "item-193" })
-			if a.Gear != nil {
-				gear := *a.Gear
-				gear.AccessoryID = ""
-				a.Gear = &gear
-			}
-		}
-	case "curse":
-		a.HP = int(float64(a.MaxHP) * .3)
-		a.Abilities = append(slices.Clone(a.Abilities), "cursed")
-	default:
-		a.HP = 0
-	}
-	a.Status = ""
-	a.Temporary = ""
-	a.Extended = ""
-	a.Tension = 1
-	if a.Gear != nil {
-		if a.Gear.AccessoryID == "item-116" {
-			a.Status = StatusDofuu
-		}
-		if a.Gear.AccessoryID == "item-143" {
-			a.Status = StatusPhysicalSeal
-		}
-		if a.Gear.AccessoryID == "item-163" && a.HP > 0 {
-			a.Temporary = TemporaryReflectMagic
-		}
-	}
 }
 
 // ApplyAreaStatus does not stop on actor death; the original plural status and

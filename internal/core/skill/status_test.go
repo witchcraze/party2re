@@ -3,11 +3,61 @@ package skill
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
 )
+
+func TestNonlethalFinalStrikeThroughRegisteredAndDelegatedInvocation(t *testing.T) {
+	for _, id := range []string{"gem_instant_death_1", "delegated"} {
+		t.Run(id, func(t *testing.T) {
+			s, rc, d := rosterRegistryFixture()
+			for i := range s.Actors {
+				s.Actors[i].HP = 100
+				s.Actors[i].Gear.AccessoryID = "item-212"
+				s.Actors[i].ItemDefinitionIDs = []string{"item-212"}
+			}
+			s.Actors[1].BaseStats.Attack = 100
+			c := corebattle.StatusContext{EffectContext: corebattle.EffectContext{TargetContext: rc.TargetContext}}
+			c.Defeat = &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: c.TargetContext}, Rewards: &corebattle.DefeatRewards{
+				Validate: func(*corebattle.LifetimeState, corebattle.TargetContext, string) error { return nil },
+				Apply:    func(*corebattle.LifetimeState, corebattle.TargetContext, string) error { return nil },
+			}}
+			d.RegisterStatuses(&c, nil)
+			d.Invocations.Entries["delegated"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "tool-84"}}
+			d.Invocations.JobTables[60] = corebattle.CallbackTable{Variants: [][]corebattle.CallbackEntry{{{ID: "gem_instant_death_1", Name: "death"}}}}
+			frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
+			before, err := json.Marshal(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ops, err := d.InvocationAction(&s, &frame, []string{id}, noArithmeticDraws{t})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, ids := range [][]string{{"random"}, {"gem_cure_poison", id}} {
+				d.Invocations.Entries["random"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "random"}}
+				if _, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+					t.Fatal(ids, err)
+				}
+			}
+			after, err := json.Marshal(s)
+			if err != nil || !reflect.DeepEqual(before, after) || c.DeathCalls != 0 {
+				t.Fatal(s, err)
+			}
+			draws := []float64{0, 0, 0}
+			if id == "delegated" {
+				draws = append(draws, 0)
+			}
+			rng := &damageGemDraws{t: t, draws: draws}
+			if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || s.Actors[0].HP != 33 || s.Actors[1].HP != 0 || rng.used != len(draws) {
+				t.Fatal(s, err, rng.used)
+			}
+		})
+	}
+}
 
 func TestStatusRegistryConcreteBindingsAndWholeInvocationAdmission(t *testing.T) {
 	s, rc, d := rosterRegistryFixture()

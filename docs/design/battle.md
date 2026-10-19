@@ -905,9 +905,20 @@ guard. Inheritance includes fallen holders: party stats cap999, enemy stats do
 not. The source death-mark temporary survives final defeat. Reward callbacks
 remain owned outside core and run only after those hooks; fortress is delegated
 to the field owner only after rewards, using the battle-load field snapshot and
-current anti-field. Callback failure stops later hooks. Admission covers repeated
-revival/consumption across area invocations and rejects a reachable recursive212
-closure without a finite supported continuation. A212 helper path that returns
+current anti-field. Callback failure stops later hooks. Admission uses post-reset
+attack bounds and the tool's defense, armor,162 and damage variation to require
+target defeat only when a212 strike can be lethal. Guaranteed nonlethal hits
+retain their HP loss for subsequent area invocations; one-hit defense is consumed
+once. Alternative recipients and surviving/defeated outcomes keep separate
+continuations, including equipment reset, revival/consumption and inheritance.
+Validation uses private state and finite reset boundaries without consuming the
+caller's RNG or changing its operation context. Owners whose reward/field hooks
+change combat scalars supply a pure continuation projection; ordinary rewards
+are combat-neutral when no projection is supplied. A reached fortress hook must
+supply this projection before a later area invocation, otherwise the entire
+entry is rejected. Validation never executes external settlement callbacks.
+A reachable recursive212 closure
+without a finite supported continuation remains rejected. A212 helper path that returns
 no target also remains gated: its source tool continuation addresses an
 unrepresented empty record, rather than a supported no-effect outcome.
 Item193 consumption and260's
