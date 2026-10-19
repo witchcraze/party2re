@@ -96,6 +96,7 @@ Characters can construct and maintain private town houses across the 4 towns (`t
   - Town capacity limit of 10 houses (`ErrTownMaxHousesReached`).
   - Style must match town allowed range (`ErrInvalidHouseStyle`).
   - Home lease duration is tracked via `expires_at` in MariaDB and dual-leased in Valkey (`party2:timer:house:<character_id>`).
+  - Protected action admission: House construction (`POST /towns/{town_id}/houses`) and character color customization (`POST /characters/{id}/color`) enforce the sleep action guard, rejecting active sleep or pending wake recovery with HTTP `409 Conflict`.
 - **House Check (`家チェック`)**:
   - Players can inspect any character's house status by name to view location, style, and remaining lease duration formatted in JST (`Y年M月D日 H時M分`).
 - **Guild Points Bonus**:
@@ -158,6 +159,7 @@ Adventurers can inspect equipment and consume location-2 items directly from the
     - `幸せの種`: Sets experience to `Level * Level * 10` (triggers level up on next adventure: `"次のクエスト時にレベルアップ！"`).
   - Combat recovery items and combat-only items (`UsageCategory == 1`, e.g. `薬草`, `上薬草`, `特薬草`, `霊樹のしずく`, `魔法の聖水`) cannot be consumed at Home and return `ErrCannotUseHere` with authentic message `"%sは戦闘中でしか使えません"` (HTTP `400 Bad Request`). Non-usable/passive items (`UsageCategory == 0` or `3`) return `ErrCannotUseHere` with `"%sはここでは使えません"`. Recovery at home is performed exclusively via Resting & Sleeping (`＠やすむ`).
   - Deducts 1 item instance from inventory or remote depot storage upon successful usage.
+  - Protected action admission: Consuming items at Home (`POST /characters/{id}/home/items/use`) enforces the sleep action guard, rejecting active sleep or pending wake recovery with HTTP `409 Conflict`.
 
 ### 5. Delivery Notices (`character_delivery_notices`)
 
