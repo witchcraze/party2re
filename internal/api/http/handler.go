@@ -37,6 +37,8 @@ type RateLimitConfig struct {
 	PublicWindow  time.Duration
 	GeneralLimit  int64
 	GeneralWindow time.Duration
+	IPLimit       int64
+	IPWindow      time.Duration
 }
 
 // DefaultRateLimitConfig returns standard default rate limits.
@@ -46,6 +48,8 @@ func DefaultRateLimitConfig() RateLimitConfig {
 		PublicWindow:  time.Minute,
 		GeneralLimit:  60,
 		GeneralWindow: time.Minute,
+		IPLimit:       300,
+		IPWindow:      time.Minute,
 	}
 }
 
