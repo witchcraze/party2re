@@ -46,8 +46,9 @@ func CalculateEquipmentStats(
 	if instID, ok := equip.Equipped(coreitem.SlotMainHand); ok {
 		if inst, found := inv.Find(instID); found {
 			hasWeapon = true
-			atk, wt := calculateWeaponStats(inst.DefinitionID, char, rng, hasExAmuletOrAwakening)
+			atk, wt, tableAttack := coreitem.CalculateWeaponStatsAndTable(inst.DefinitionID, char, rng, hasExAmuletOrAwakening)
 			weaponAtk = atk
+			stats.Gear.WeaponAttack = &tableAttack
 			stats.Gear.WeaponWeight = wt
 			stats.Gear.WeaponID = inst.DefinitionID
 			stats.AttackBonus += atk
@@ -122,11 +123,6 @@ func parseItemIndex(defID, prefix string) int {
 		return 0
 	}
 	return no
-}
-
-// calculateWeaponStats delegates to coreitem.CalculateWeaponStats.
-func calculateWeaponStats(defID string, char corecharacter.Character, rng corecharacter.RandomSource, hasExAmuletOrAwakening bool) (int, int) {
-	return coreitem.CalculateWeaponStats(defID, char, rng, hasExAmuletOrAwakening)
 }
 
 // calculateArmorStats delegates to coreitem.CalculateArmorStats.

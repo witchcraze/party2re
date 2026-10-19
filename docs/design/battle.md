@@ -181,10 +181,12 @@ Normal-action temporary expiry preserves the player mirror-sharing/item163
 exceptions and consumes the original random draw even for empty temporary
 state. Reflection/cover redirects persist; only one-hit defense is consumed at
 its damage-helper point. Reset restores tension1/hit95 and cleared status/effects,
-then accepts freshly evaluated equipment facts through `LifetimeReset`; a cached
-encounter-start profile cannot substitute for requester/actor/target-dependent
-equipment evaluation. HP/MP/CMP, consumed items, bans and history survive this
-reset. Explicit advance performs the first living item188 holder's ally revival
+then uses `ApplyEquipmentReset` to evaluate current equipment for the separate
+requester, actor and target. `LifetimeReset` remains its baseline/fact operation;
+a cached final encounter-start profile cannot replace equipment callbacks.
+HP/MP/CMP, consumed items, bans and history survive the baseline reset; explicit
+accessory HP/MP callbacks retain their own guards. Explicit advance performs the
+first living item188 holder's ally revival
 pass, resets members with current equipment, reapplies living holders' revival
 temporary effect, and clears temporary/anti fields while retaining the default.
 Equipment formulas and automatic revival stay with their separate native owners.
@@ -859,12 +861,70 @@ ordinary/virulent poison. Ability cure runs before incapacitation: matching
 specific ability 1/2, then general ability 1/5 only if status remains. A hook's
 existence alone does not import its map17-only producers into ordinary stages.
 
+`ApplyStatus`/`ApplyAreaStatus` modify probability through the shared nondamage
+segment, while retaining the symbolic effect through target redirection. A zero
+modified death probability still succeeds at draw0. Status checks the equipment
+pair before the tension shield; death checks the shield before drawing. The
+plural loops visit every ordered enemy without area damage's actor-death break.
+`ApplyCure`/`ApplyPartyCure` retain matching-state and living-target predicates;
+gem62 resolves once to read current status and again inside the cure helper.
+`CheckIncapacitation` runs ability cure before its status-specific checks.
+
+`StatusEntries` and `BattleDefinitions.RegisterStatuses` bind gems55–62,70–71,
+75–81 and job35.1 (`_data.cgi:2143–2150,2158–2159,2163–2169`;
+`_skill.cgi:2879–2886`). These are concrete intrinsic bodies with independent
+category, target and CMP metadata. They do not assemble job35's table or admit
+mixed custom transitions; unprojected `AfterEffects`, incomplete random tables
+and unavailable descendants remain whole-entry gates. Ordinary learning,
+MP/CMP charges and the production consumer retain their existing owners.
+
 Reset clears transient state, rebuilds equipped stats, **reapplies type3 accessory,
 weapon revision and seal effects**, then floors agility. It does not generically
 restore HP/MP, but an accessory can explicitly do so. Revival precedence, item
 consumption and post-reset death attacks must use the same defeat/reset path.
 Dispel therefore need not leave empty state or unequipped stats. #1332 owns
 reset/lifetime state, #1338 revival, #1337 MP and #1339 roster operations.
+
+`ApplyEquipmentReset` recognizes the source's117 category3 identities explicitly,
+including empty callbacks; item110 remains rejected in living and fallen
+contexts. Appraisal callbacks251–255 still consume their discarded-result draw.
+Raw table weapon attack and weights survive in `BattleGearStats`; seal3's
+requester weapon coefficient and seal6's one table-load random weight are shared
+`WeaponSealTable` facts, captured by the adapter and retained for the request's
+continuation. Missing raw weapon or seal facts reject before reset. Weapon69/70
+use requester level capped99, while71 uses raw50/75 thresholds and the reset
+target's actual158/240–242 accessory or the **current actor's** awakening. A
+target's awakening has already been cleared by its own reset. Accessory159 also
+updates the operation cursor. Job35.1 resets every ordered member, including
+fallen members and both sides, restoring each member's saved tension afterward.
+Its preflight checks later members before any earlier reset or draw.
+
+`ApplyDefeat` composes `ApplyAutomaticRevival`, this same equipment reset, the
+post-reset212 tool strike and same-side212 inheritance, then the NPC/self reward
+guard. Inheritance includes fallen holders: party stats cap999, enemy stats do
+not. The source death-mark temporary survives final defeat. Reward callbacks
+remain owned outside core and run only after those hooks; fortress is delegated
+to the field owner only after rewards, using the battle-load field snapshot and
+current anti-field. Callback failure stops later hooks. Admission uses post-reset
+attack bounds and the tool's defense, armor,162 and damage variation to require
+target defeat only when a212 strike can be lethal. Guaranteed nonlethal hits
+retain their HP loss for subsequent area invocations; one-hit defense is consumed
+once. Alternative recipients and surviving/defeated outcomes keep separate
+continuations, including equipment reset, revival/consumption and inheritance.
+Validation uses private state and finite reset boundaries without consuming the
+caller's RNG or changing its operation context. Owners whose reward/field hooks
+change combat scalars supply a pure continuation projection; ordinary rewards
+are combat-neutral when no projection is supplied. A reached fortress hook must
+supply this projection before a later area invocation, otherwise the entire
+entry is rejected. Validation never executes external settlement callbacks.
+A reachable recursive212 closure
+without a finite supported continuation remains rejected. A212 helper path that returns
+no target also remains gated: its source tool continuation addresses an
+unrepresented empty record, rather than a supported no-effect outcome.
+Item193 consumption and260's
+second cursed defeat reuse automatic revival; no separate asset settlement is
+introduced. Evidence: `_battle.cgi:28–142,282–303,1390–1428,1726–1759` and
+`_data.cgi` category3 callbacks, reconciled in #1343/#1367.
 
 Named-field reads and eligible field tails have different predicates. The latter
 check before **or** after field name, response eligibility, no anti-field and no

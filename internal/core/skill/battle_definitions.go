@@ -16,6 +16,7 @@ type BattleDefinitions struct {
 	RecoveryStatGems map[string]bool
 	DamageGems       map[string]bool
 	RevivalSkills    map[string]bool
+	StatusSkills     map[string]bool
 	Invocations      corebattle.CallbackCatalog
 }
 

@@ -29,12 +29,8 @@ func (s *LifetimeState) ApplyToolDamage(c *DamageContext, targetID string, power
 	if t.Gear == nil || (!nonlethal && c.Defeat == nil) {
 		return r, ErrUnsupportedEffect
 	}
-	minus := float64(t.Defense+t.Gear.ArmorDefense) * .3
-	if hasItem(t.ItemDefinitionIDs, "item-162") {
-		minus = (float64(t.Defense)*1.5 + float64(t.Gear.ArmorDefense)) * .3
-	}
 	// Neither absent nor job77's numeric package category equals physical.
-	r.Amount = rollDamage(power, minus, direct, t.BaseStats.Defense, rng)
+	r.Amount = rollDamage(power, toolDefense(t), direct, t.BaseStats.Defense, rng)
 	before := t.HP
 	t.HP -= r.Amount
 	if t.HP <= 0 {
@@ -51,4 +47,11 @@ func (s *LifetimeState) ApplyToolDamage(c *DamageContext, targetID string, power
 	r.TargetResolution = TargetResolution{TargetEffect: TargetEffect{TargetID: targetID}, Resolved: true}
 	r.Returned, r.Applied, r.Delta = true, true, t.HP-before
 	return r, nil
+}
+
+func toolDefense(t *LifetimeActor) float64 {
+	if hasItem(t.ItemDefinitionIDs, "item-162") {
+		return (float64(t.Defense)*1.5 + float64(t.Gear.ArmorDefense)) * .3
+	}
+	return float64(t.Defense+t.Gear.ArmorDefense) * .3
 }
