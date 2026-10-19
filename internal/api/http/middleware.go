@@ -65,52 +65,56 @@ func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// General endpoints: enforce dual-layer rate limiting (IP-level protection first, then token-level if present)
-		limit := h.rateLimitCfg.GeneralLimit
-		window := h.rateLimitCfg.GeneralWindow
-		if limit <= 0 || window <= 0 {
+		// General endpoints:
+		// 1. Check aggregate client IP rate limit (flood-protection against unauthenticated or rotating token flooding).
+		ipLimit := h.rateLimitCfg.IPLimit
+		ipWindow := h.rateLimitCfg.IPWindow
+		if ipLimit <= 0 && h.rateLimitCfg.GeneralLimit > 0 {
+			ipLimit = h.rateLimitCfg.GeneralLimit * 5
+		}
+		if ipWindow <= 0 {
+			ipWindow = h.rateLimitCfg.GeneralWindow
+		}
+
+		if ipLimit > 0 && ipWindow > 0 {
+			ipRes, ipErr := h.limiter.Allow(r.Context(), "http:ip:"+ip, ipLimit, ipWindow)
+			if ipErr == nil && !ipRes.Allowed {
+				h.setRateLimitHeaders(w, ipRes)
+				h.writeRateLimitExceeded(w, ipRes)
+				return
+			}
+		}
+
+		// 2. Check token-based limit if Bearer token present, or general IP limit if unauthenticated
+		tokenLimit := h.rateLimitCfg.GeneralLimit
+		tokenWindow := h.rateLimitCfg.GeneralWindow
+		if tokenLimit <= 0 || tokenWindow <= 0 {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// 1. Client IP rate limit check (protects against rotating unauthenticated token flooding)
-		ipRes, ipErr := h.limiter.Allow(r.Context(), "http:general:"+ip, limit, window)
-		if ipErr == nil && !ipRes.Allowed {
-			h.setRateLimitHeaders(w, ipRes)
-			h.writeRateLimitExceeded(w, ipRes)
-			return
-		}
-
-		// 2. Token-based rate limit check if Authorization: Bearer is present
-		var tokenRes ratelimit.Result
-		var hasTokenCheck bool
+		var targetKey string
 		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 			token := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
 			if token != "" {
-				var tokenErr error
-				tokenRes, tokenErr = h.limiter.Allow(r.Context(), "http:auth:"+token, limit, window)
-				if tokenErr == nil {
-					hasTokenCheck = true
-					if !tokenRes.Allowed {
-						h.setRateLimitHeaders(w, tokenRes)
-						h.writeRateLimitExceeded(w, tokenRes)
-						return
-					}
-				}
+				targetKey = "http:auth:" + token
 			}
 		}
+		if targetKey == "" {
+			targetKey = "http:general:" + ip
+		}
 
-		// Set rate limit headers reflecting the tighter bound
-		if hasTokenCheck && ipErr == nil {
-			if tokenRes.Remaining < ipRes.Remaining {
-				h.setRateLimitHeaders(w, tokenRes)
-			} else {
-				h.setRateLimitHeaders(w, ipRes)
-			}
-		} else if hasTokenCheck {
-			h.setRateLimitHeaders(w, tokenRes)
-		} else if ipErr == nil {
-			h.setRateLimitHeaders(w, ipRes)
+		targetRes, targetErr := h.limiter.Allow(r.Context(), targetKey, tokenLimit, tokenWindow)
+		if targetErr != nil {
+			// Fail-open gracefully on limiter error
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		h.setRateLimitHeaders(w, targetRes)
+		if !targetRes.Allowed {
+			h.writeRateLimitExceeded(w, targetRes)
+			return
 		}
 
 		next.ServeHTTP(w, r)
