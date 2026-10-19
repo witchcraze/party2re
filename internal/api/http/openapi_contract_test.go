@@ -3,6 +3,7 @@ package http_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/plantation"
 )
 
 type openAPICasinoService struct{ stubCasinoService }
@@ -177,6 +179,12 @@ func TestOpenAPIConstraintBoundaries(t *testing.T) {
 		{"BuildStoreRequest", "", `{"character_id":"c1","house_style":"001"}`, true},
 		{"UseHomeItemRequest", "", `{"instance_id":"item-1"}`, true},
 		{"CasinoRoomActionRequest", "", `{"mark":"0"}`, true},
+		{"PlantationSowRequest", "", `{"seed_id":"red"}`, true},
+		{"PlantationSowRequest", "", `{"seed_id":""}`, false},
+		{"PlantationSowRequest", "", `{}`, false},
+		{"PlantationFertilizeRequest", "", `{"fertilizer_id":"speed"}`, true},
+		{"PlantationFertilizeRequest", "", `{"fertilizer_id":""}`, false},
+		{"PlantationFertilizeRequest", "", `{}`, false},
 	} {
 		t.Run(tc.schema+"/"+tc.field+"/"+tc.payload, func(t *testing.T) {
 			schema := schemas[tc.schema].(map[string]any)
@@ -257,5 +265,112 @@ func TestOpenAPILetterAndCasinoRequestContracts(t *testing.T) {
 		if err := checkOpenAPIPayload(nil, schema, tc.value); (err == nil) != tc.valid {
 			t.Errorf("minLength for %q: valid=%t: %v", tc.value, tc.valid, err)
 		}
+	}
+}
+
+func TestPostReviewPlantationRequestSchema(t *testing.T) {
+	var root map[string]any
+	decoder := json.NewDecoder(strings.NewReader(string(gamehttp.OpenAPISpec())))
+	decoder.UseNumber()
+	if err := decoder.Decode(&root); err != nil {
+		t.Fatal(err)
+	}
+	schemas := root["components"].(map[string]any)["schemas"].(map[string]any)
+	paths := root["paths"].(map[string]any)
+
+	sowSchema := schemas["PlantationSowRequest"].(map[string]any)
+	fertSchema := schemas["PlantationFertilizeRequest"].(map[string]any)
+
+	// Schema-level validation: missing, empty, whitespace, and valid values
+	schemaTests := []struct {
+		name   string
+		schema map[string]any
+		body   string
+		valid  bool
+	}{
+		{"sow missing seed_id", sowSchema, `{}`, false},
+		{"sow empty seed_id", sowSchema, `{"seed_id":""}`, false},
+		{"sow spaces seed_id", sowSchema, `{"seed_id":"   "}`, false},
+		{"sow whitespace seed_id", sowSchema, `{"seed_id":" \t\r\n\u3000"}`, false},
+		{"sow non-ascii whitespace seed_id", sowSchema, "{\"seed_id\":\"\u0085\u00a0\"}", false},
+		{"sow valid canonical id", sowSchema, `{"seed_id":"red"}`, true},
+		{"sow valid alias", sowSchema, `{"seed_id":"トマトの種"}`, true},
+		{"sow valid gold", sowSchema, `{"seed_id":"gold"}`, true},
+
+		{"fertilize missing fertilizer_id", fertSchema, `{}`, false},
+		{"fertilize empty fertilizer_id", fertSchema, `{"fertilizer_id":""}`, false},
+		{"fertilize spaces fertilizer_id", fertSchema, `{"fertilizer_id":"   "}`, false},
+		{"fertilize whitespace fertilizer_id", fertSchema, `{"fertilizer_id":" \t\r\n\u3000"}`, false},
+		{"fertilize non-ascii whitespace fertilizer_id", fertSchema, "{\"fertilizer_id\":\"\u0085\u00a0\"}", false},
+		{"fertilize valid canonical id", fertSchema, `{"fertilizer_id":"speed"}`, true},
+		{"fertilize valid alias", fertSchema, `{"fertilizer_id":"速効肥料"}`, true},
+		{"fertilize none id schema valid", fertSchema, `{"fertilizer_id":"none"}`, true},
+	}
+	for _, tc := range schemaTests {
+		t.Run("schema/"+tc.name, func(t *testing.T) {
+			var value any
+			dec := json.NewDecoder(strings.NewReader(tc.body))
+			dec.UseNumber()
+			if err := dec.Decode(&value); err != nil {
+				t.Fatal(err)
+			}
+			err := checkOpenAPIPayload(schemas, tc.schema, value)
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%t: %v", tc.valid, err)
+			}
+		})
+	}
+
+	// Verify paths in OpenAPI point to these schemas
+	sowPathSchema := paths["/characters/{id}/plantation/sow"].(map[string]any)["post"].(map[string]any)["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+	fertPathSchema := paths["/characters/{id}/plantation/fertilize"].(map[string]any)["post"].(map[string]any)["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+	if sowPathSchema["$ref"] != "#/components/schemas/PlantationSowRequest" {
+		t.Fatalf("unexpected sow path schema ref: %v", sowPathSchema["$ref"])
+	}
+	if fertPathSchema["$ref"] != "#/components/schemas/PlantationFertilizeRequest" {
+		t.Fatalf("unexpected fertilize path schema ref: %v", fertPathSchema["$ref"])
+	}
+
+	// HTTP Handler validation with zero-value real plantation service
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Level: 10}
+	h, err := gamehttp.NewHandler(
+		&stubPlayerService{authenticateFn: alwaysAuthPlayer(coreplayer.Player{ID: "p1"})},
+		&stubCharacterService{getFn: func(context.Context, string) (corecharacter.Character, error) { return char, nil }},
+		&stubAdventureService{}, &stubShopService{},
+		gamehttp.WithPlantation(&plantation.Service{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := h.Router()
+
+	httpTests := []struct {
+		name       string
+		path       string
+		body       string
+		wantStatus int
+	}{
+		{"sow empty object", "/characters/c1/plantation/sow", `{}`, http.StatusBadRequest},
+		{"sow empty string", "/characters/c1/plantation/sow", `{"seed_id":""}`, http.StatusBadRequest},
+		{"sow whitespace", "/characters/c1/plantation/sow", `{"seed_id":"   "}`, http.StatusBadRequest},
+		{"sow unicode whitespace", "/characters/c1/plantation/sow", "{\"seed_id\":\" \t\r\n\u3000\"}", http.StatusBadRequest},
+
+		{"fertilize empty object", "/characters/c1/plantation/fertilize", `{}`, http.StatusBadRequest},
+		{"fertilize empty string", "/characters/c1/plantation/fertilize", `{"fertilizer_id":""}`, http.StatusBadRequest},
+		{"fertilize whitespace", "/characters/c1/plantation/fertilize", `{"fertilizer_id":"   "}`, http.StatusBadRequest},
+		{"fertilize unicode whitespace", "/characters/c1/plantation/fertilize", "{\"fertilizer_id\":\" \t\r\n\u3000\"}", http.StatusBadRequest},
+		{"fertilize none rejection", "/characters/c1/plantation/fertilize", `{"fertilizer_id":"none"}`, http.StatusBadRequest},
+	}
+	for _, tc := range httpTests {
+		t.Run("http/"+tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer session")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+		})
 	}
 }

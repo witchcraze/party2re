@@ -10018,9 +10018,14 @@
       "PlantationFertilizeRequest": {
         "properties": {
           "fertilizer_id": {
+            "minLength": 1,
+            "pattern": "[^\t-\r    -     　]",
             "type": "string"
           }
         },
+        "required": [
+          "fertilizer_id"
+        ],
         "type": "object",
         "additionalProperties": false
       },
@@ -10088,9 +10093,14 @@
       "PlantationSowRequest": {
         "properties": {
           "seed_id": {
+            "minLength": 1,
+            "pattern": "[^\t-\r    -     　]",
             "type": "string"
           }
         },
+        "required": [
+          "seed_id"
+        ],
         "type": "object",
         "additionalProperties": false
       },

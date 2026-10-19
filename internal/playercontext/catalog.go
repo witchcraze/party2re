@@ -304,7 +304,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		Label:          "種菜園に種まき",
 		Category:       "crafting",
 		OperationID:    "postCharactersIdPlantationSow",
-		RequiredParams: []string{},
+		RequiredParams: []string{"seed_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
