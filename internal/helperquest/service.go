@@ -4,6 +4,7 @@ package helperquest
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -69,10 +70,11 @@ func WithFarmRepository(repo FarmRepository) Option {
 }
 
 type CompletionResult struct {
-	Character      corecharacter.Character `json:"character"`
-	Depot          depot.Depot             `json:"depot"`
-	CompletedQuest Quest                   `json:"completed_quest"`
-	NewQuest       *Quest                  `json:"new_quest,omitempty"`
+	Character      *corecharacter.Character `json:"character,omitempty"`
+	Depot          *depot.Depot             `json:"depot,omitempty"`
+	CompletedQuest *Quest                   `json:"completed_quest,omitempty"`
+	NewQuest       *Quest                   `json:"new_quest,omitempty"`
+	RenewedCount   int                      `json:"renewed_count"`
 }
 
 type Service struct {
@@ -109,7 +111,7 @@ func (s *Service) SetRandomSource(r RandomSource) {
 	s.randomSource = r
 }
 
-// ListQuests reads the board, including expired requests that callers can submit for exchange.
+// ListQuests reads the board, including expired requests that callers can still complete.
 func (s *Service) ListQuests(ctx context.Context, _ time.Time) ([]Quest, error) {
 	return s.quests.ListUncompleted(ctx)
 }
@@ -126,53 +128,58 @@ func (s *Service) GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]
 	return ids, nil
 }
 
-// CompleteQuest atomically completes a shared request and creates its replacement.
-// Like legacy `kaiketsu` (lib/helper.cgi:92-145), every call also exchanges each expired
-// uncompleted request other than the target one-for-one, even when this completion fails.
-// An expired target is rejected with ErrQuestExpired and is then exchanged as well.
-// Transaction: RunInTx (renewal), then RunInTx (completion)
-// Lock Order: helper_quests(0) -> characters(2) -> depot(5) -> guilds(7, guild quests)
+// CompleteQuest completes the target regardless of its deadline and exchanges expired
+// non-target requests atomically. An empty questID only exchanges expired requests.
+// Failed turn-ins leave both the board and character assets unchanged.
+// Transaction: RunInTx
+// Lock Order: helper_quests(0, ascending IDs) -> characters(2) -> depot(5) -> guilds(7, guild quests)
 func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (CompletionResult, error) {
 	if s.txProvider == nil {
 		return CompletionResult{}, errors.New("transaction provider is missing")
 	}
-	if err := s.renewExpired(ctx, now, questID); err != nil {
-		return CompletionResult{}, err
-	}
-	res, err := s.completeQuest(ctx, characterID, questID, now)
-	if errors.Is(err, ErrQuestExpired) {
-		if renewErr := s.renewExpired(ctx, now, ""); renewErr != nil {
-			return CompletionResult{}, errors.Join(err, renewErr)
-		}
-	}
-	return res, err
-}
-
-// renewExpired replaces each expired uncompleted request except keepID with one new request.
-// Each candidate is re-read FOR UPDATE by id and re-checked, so concurrent callers exchange each
-// row once, and any failure rolls back the deletions together with the replacements.
-// Transaction: RunInTx
-// Lock Order: helper_quests(0)
-func (s *Service) renewExpired(ctx context.Context, now time.Time, keepID string) error {
-	return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+	var res CompletionResult
+	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
 		candidates, err := s.quests.ListExpired(txCtx, now)
 		if err != nil {
 			return err
 		}
+		var ids []string
 		for _, candidate := range candidates {
-			if candidate.ID == keepID {
+			ids = append(ids, candidate.ID)
+		}
+		if questID != "" {
+			ids = append(ids, questID)
+		}
+		slices.Sort(ids)
+		var target Quest
+		var expired []Quest
+		// Acquire every shared row before character assets; recheck stale candidates under lock.
+		for _, id := range slices.Compact(ids) {
+			q, err := s.quests.FindByIDForUpdate(txCtx, id)
+			if id == questID {
+				if err != nil {
+					return err
+				}
+				target = q
 				continue
 			}
-			old, err := s.quests.FindByIDForUpdate(txCtx, candidate.ID)
 			if errors.Is(err, ErrQuestNotFound) {
 				continue // exchanged concurrently
 			}
 			if err != nil {
 				return err
 			}
-			if old.CompletedAt != nil || !now.After(old.ExpiresAt) {
-				continue
+			if q.CompletedAt == nil && now.After(q.ExpiresAt) {
+				expired = append(expired, q)
 			}
+		}
+		if questID != "" {
+			res, err = s.completeQuest(txCtx, characterID, target, now)
+			if err != nil {
+				return err
+			}
+		}
+		for _, old := range expired {
 			replacement, err := GenerateQuest(s.randomSource, now)
 			if err != nil {
 				return err
@@ -183,167 +190,152 @@ func (s *Service) renewExpired(ctx context.Context, now time.Time, keepID string
 			if err := s.quests.Save(txCtx, replacement); err != nil {
 				return err
 			}
+			res.RenewedCount++
 		}
 		return nil
 	})
-}
-
-func (s *Service) completeQuest(ctx context.Context, characterID, questID string, now time.Time) (CompletionResult, error) {
-	var res CompletionResult
-
-	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
-		q, err := s.quests.FindByIDForUpdate(txCtx, questID)
-		if err != nil {
-			return err
-		}
-
-		if q.CompletedAt != nil {
-			return ErrQuestAlreadyDone
-		}
-
-		if now.After(q.ExpiresAt) {
-			return ErrQuestExpired
-		}
-
-		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		var guildID string
-		if q.IsGuild {
-			if s.guilds == nil {
-				return ErrGuildRequired
-			}
-			gID, err := s.guilds.FindGuildIDByCharacterID(txCtx, characterID)
-			if err != nil {
-				return err
-			}
-			if gID == "" {
-				return ErrGuildRequired
-			}
-			guildID = gID
-		}
-
-		if s.depotRepo == nil {
-			return errors.New("depot repository is required")
-		}
-		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
-		if err != nil {
-			return err
-		}
-
-		if q.Kind == KindMonster {
-			if s.farmRepo == nil {
-				return errors.New("farm repository is required for monster quest")
-			}
-			monsters, err := s.farmRepo.ListRanchMonsters(txCtx, characterID)
-			if err != nil {
-				return err
-			}
-
-			var matching []FarmMonster
-			for _, m := range monsters {
-				if m.MonsterID == q.TargetID {
-					matching = append(matching, m)
-				}
-			}
-
-			if len(matching) < q.RequiredCount {
-				return ErrInsufficientItems
-			}
-
-			for i := 0; i < q.RequiredCount; i++ {
-				if err := s.farmRepo.Delete(txCtx, matching[i].ID); err != nil {
-					return err
-				}
-			}
-		} else {
-			if dep.Quantity(q.TargetID) < q.RequiredCount {
-				return ErrInsufficientItems
-			}
-
-			type consumeTarget struct {
-				id  string
-				qty int
-			}
-			needed := q.RequiredCount
-			var targets []consumeTarget
-			for _, it := range dep.Items {
-				if it.DefinitionID == q.TargetID && needed > 0 {
-					qty := it.Quantity
-					if qty > needed {
-						qty = needed
-					}
-					targets = append(targets, consumeTarget{id: it.ID, qty: qty})
-					needed -= qty
-				}
-			}
-
-			for _, t := range targets {
-				if _, err := dep.Consume(t.id, t.qty); err != nil {
-					return err
-				}
-			}
-		}
-
-		// Deliver reward directly to Depot
-		if q.RewardItemID != "" {
-			rewardInst, err := item.NewInstance(q.RewardItemID, 1)
-			if err != nil {
-				return err
-			}
-			if err := dep.AddItem(rewardInst); err != nil {
-				return err
-			}
-		}
-
-		if err := s.depotRepo.Save(txCtx, dep); err != nil {
-			return err
-		}
-
-		// Update character
-		char.HelpCount++
-
-		// Award Guild Points if Guild Quest
-		if q.IsGuild && guildID != "" && s.guilds != nil {
-			if err := s.guilds.AddGuildPoints(txCtx, guildID, 100); err != nil {
-				return err
-			}
-		}
-
-		// Update completed quest
-		q.CompletedAt = &now
-		q.CompletedBy = characterID
-
-		if err := s.characters.Update(txCtx, char); err != nil {
-			return err
-		}
-		if err := s.quests.Save(txCtx, q); err != nil {
-			return err
-		}
-
-		// Generate replacement quest
-		newQ, err := GenerateQuest(s.randomSource, now)
-		if err != nil {
-			return err
-		}
-		if err := s.quests.Save(txCtx, newQ); err != nil {
-			return err
-		}
-		newQPtr := &newQ
-
-		res = CompletionResult{
-			Character:      char,
-			Depot:          dep,
-			CompletedQuest: q,
-			NewQuest:       newQPtr,
-		}
-		return nil
-	})
-
 	if err != nil {
 		return CompletionResult{}, err
 	}
 	return res, nil
+}
+
+// completeQuest uses the target row and transaction already locked by CompleteQuest.
+func (s *Service) completeQuest(ctx context.Context, characterID string, q Quest, now time.Time) (CompletionResult, error) {
+	if q.CompletedAt != nil {
+		return CompletionResult{}, ErrQuestAlreadyDone
+	}
+
+	char, err := s.characters.FindByIDForUpdate(ctx, characterID)
+	if err != nil {
+		return CompletionResult{}, err
+	}
+
+	var guildID string
+	if q.IsGuild {
+		if s.guilds == nil {
+			return CompletionResult{}, ErrGuildRequired
+		}
+		gID, err := s.guilds.FindGuildIDByCharacterID(ctx, characterID)
+		if err != nil {
+			return CompletionResult{}, err
+		}
+		if gID == "" {
+			return CompletionResult{}, ErrGuildRequired
+		}
+		guildID = gID
+	}
+
+	if s.depotRepo == nil {
+		return CompletionResult{}, errors.New("depot repository is required")
+	}
+	dep, err := depot.FindOrCreate(ctx, s.depotRepo, char)
+	if err != nil {
+		return CompletionResult{}, err
+	}
+
+	if q.Kind == KindMonster {
+		if s.farmRepo == nil {
+			return CompletionResult{}, errors.New("farm repository is required for monster quest")
+		}
+		monsters, err := s.farmRepo.ListRanchMonsters(ctx, characterID)
+		if err != nil {
+			return CompletionResult{}, err
+		}
+
+		var matching []FarmMonster
+		for _, m := range monsters {
+			if m.MonsterID == q.TargetID {
+				matching = append(matching, m)
+			}
+		}
+
+		if len(matching) < q.RequiredCount {
+			return CompletionResult{}, ErrInsufficientItems
+		}
+
+		for i := 0; i < q.RequiredCount; i++ {
+			if err := s.farmRepo.Delete(ctx, matching[i].ID); err != nil {
+				return CompletionResult{}, err
+			}
+		}
+	} else {
+		if dep.Quantity(q.TargetID) < q.RequiredCount {
+			return CompletionResult{}, ErrInsufficientItems
+		}
+
+		type consumeTarget struct {
+			id  string
+			qty int
+		}
+		needed := q.RequiredCount
+		var targets []consumeTarget
+		for _, it := range dep.Items {
+			if it.DefinitionID == q.TargetID && needed > 0 {
+				qty := it.Quantity
+				if qty > needed {
+					qty = needed
+				}
+				targets = append(targets, consumeTarget{id: it.ID, qty: qty})
+				needed -= qty
+			}
+		}
+
+		for _, t := range targets {
+			if _, err := dep.Consume(t.id, t.qty); err != nil {
+				return CompletionResult{}, err
+			}
+		}
+	}
+
+	// Deliver reward directly to Depot
+	if q.RewardItemID != "" {
+		rewardInst, err := item.NewInstance(q.RewardItemID, 1)
+		if err != nil {
+			return CompletionResult{}, err
+		}
+		if err := dep.AddItem(rewardInst); err != nil {
+			return CompletionResult{}, err
+		}
+	}
+
+	if err := s.depotRepo.Save(ctx, dep); err != nil {
+		return CompletionResult{}, err
+	}
+
+	// Update character
+	char.HelpCount++
+
+	// Award Guild Points if Guild Quest
+	if q.IsGuild && guildID != "" && s.guilds != nil {
+		if err := s.guilds.AddGuildPoints(ctx, guildID, 100); err != nil {
+			return CompletionResult{}, err
+		}
+	}
+
+	// Update completed quest
+	q.CompletedAt = &now
+	q.CompletedBy = characterID
+
+	if err := s.characters.Update(ctx, char); err != nil {
+		return CompletionResult{}, err
+	}
+	if err := s.quests.Save(ctx, q); err != nil {
+		return CompletionResult{}, err
+	}
+
+	// Generate replacement quest
+	newQ, err := GenerateQuest(s.randomSource, now)
+	if err != nil {
+		return CompletionResult{}, err
+	}
+	if err := s.quests.Save(ctx, newQ); err != nil {
+		return CompletionResult{}, err
+	}
+	return CompletionResult{
+		Character:      &char,
+		Depot:          &dep,
+		CompletedQuest: &q,
+		NewQuest:       &newQ,
+	}, nil
 }

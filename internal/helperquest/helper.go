@@ -25,7 +25,6 @@ const (
 
 var (
 	ErrQuestNotFound     = errors.New("helper quest not found")
-	ErrQuestExpired      = errors.New("helper quest has expired")
 	ErrQuestAlreadyDone  = errors.New("helper quest has already been completed")
 	ErrGuildRequired     = errors.New("guild membership required for guild quest")
 	ErrInsufficientItems = errors.New("insufficient items to complete helper quest")

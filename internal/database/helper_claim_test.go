@@ -18,11 +18,12 @@ import (
 
 type claimQuestRepository struct {
 	*database.HelperRepository
-	readBarrier     sync.WaitGroup
-	syncReads       bool
-	mu              sync.Mutex
-	replacements    []string
-	failReplacement error
+	readBarrier       sync.WaitGroup
+	syncReads         bool
+	mu                sync.Mutex
+	replacements      []string
+	failReplacement   error
+	failReplacementAt int
 }
 
 // Synchronize the old unlocked read path to reproduce two stale snapshots.
@@ -42,8 +43,11 @@ func (r *claimQuestRepository) Save(ctx context.Context, q helperquest.Quest) er
 	if q.CompletedAt == nil {
 		r.mu.Lock()
 		r.replacements = append(r.replacements, q.ID)
+		fail := r.failReplacementAt == 0 || len(r.replacements) == r.failReplacementAt
 		r.mu.Unlock()
-		return r.failReplacement
+		if fail {
+			return r.failReplacement
+		}
 	}
 	return nil
 }
@@ -218,7 +222,7 @@ func TestHelperQuestClaimRollback(t *testing.T) {
 	if !errors.Is(err, failure) {
 		t.Fatalf("error = %v, want %v", err, failure)
 	}
-	if result.CompletedQuest.ID != "" || result.NewQuest != nil {
+	if result.CompletedQuest != nil || result.NewQuest != nil || result.RenewedCount != 0 {
 		t.Fatalf("failed claim returned success result: %+v", result)
 	}
 	f.assertState(t, "")

@@ -29,6 +29,9 @@ func (helperHTTPPlayer) Authenticate(_ context.Context, sessionID string) (corep
 type helperHTTPCharacter struct{ apihttp.CharacterService }
 
 func (helperHTTPCharacter) Get(_ context.Context, characterID string) (corecharacter.Character, error) {
+	if characterID == "other-character" {
+		return corecharacter.Character{ID: characterID, PlayerID: "other-player"}, nil
+	}
 	return corecharacter.Character{ID: characterID, PlayerID: "helper-player"}, nil
 }
 
@@ -64,29 +67,46 @@ func TestHelperHTTPBoardRenewal(t *testing.T) {
 			if len(before) != count || f.count(t) != count {
 				t.Fatalf("GET must expose all expired requests without writes: listed=%d stored=%d want=%d", len(before), f.count(t), count)
 			}
-			questID := "unknown"
-			if count > 0 {
-				questID = before[0].ID
-				for _, q := range before {
-					if !q.ExpiresAt.Before(f.now) {
-						t.Fatalf("GET renewed expired request: %+v", q)
+			for _, denied := range []struct {
+				character, token string
+				status           int
+			}{
+				{"helper-character", "invalid-session", http.StatusUnauthorized},
+				{"other-character", "helper-session", http.StatusForbidden},
+			} {
+				rec := httptest.NewRecorder()
+				req := httptest.NewRequest(http.MethodPost, "/helpers/complete", strings.NewReader(fmt.Sprintf(`{"character_id":%q}`, denied.character)))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Authorization", "Bearer "+denied.token)
+				router.ServeHTTP(rec, req)
+				if rec.Code != denied.status {
+					t.Fatalf("denied renewal: %d %s", rec.Code, rec.Body.String())
+				}
+				got := list()
+				for i := range before {
+					if got[i].ID != before[i].ID {
+						t.Fatal("rejected renewal changed board")
 					}
 				}
 			}
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/helpers/complete", strings.NewReader(fmt.Sprintf(`{"character_id":"helper-character","quest_id":%q}`, questID)))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer helper-session")
-			router.ServeHTTP(rec, req)
-			if rec.Code != http.StatusUnprocessableEntity {
-				t.Fatalf("completion: %d %s", rec.Code, rec.Body.String())
+			for _, q := range before {
+				if !q.ExpiresAt.Before(f.now) {
+					t.Fatalf("GET renewed expired request: %+v", q)
+				}
 			}
-			wantErr := helperquest.ErrQuestNotFound
-			if count > 0 {
-				wantErr = helperquest.ErrQuestExpired
-			}
-			if !strings.Contains(rec.Body.String(), wantErr.Error()) {
-				t.Fatalf("completion error: %s, want %v", rec.Body.String(), wantErr)
+			for i, body := range []string{`{"character_id":"helper-character"}`, `{"character_id":"helper-character","quest_id":""}`} {
+				rec := httptest.NewRecorder()
+				req := httptest.NewRequest(http.MethodPost, "/helpers/complete", strings.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Authorization", "Bearer helper-session")
+				router.ServeHTTP(rec, req)
+				wantCount := count
+				if i > 0 {
+					wantCount = 0 // retry must not exchange fresh replacements
+				}
+				if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != fmt.Sprintf(`{"renewed_count":%d}`, wantCount) {
+					t.Fatalf("renewal-only: %d %s", rec.Code, rec.Body.String())
+				}
 			}
 			after := list()
 			if len(after) != count || f.count(t) != count {

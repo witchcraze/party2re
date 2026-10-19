@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ var helperWiringRequiredTables = []string{
 }
 
 // helperWiringIsolatedDB creates a unique dedicated database holding only copied table
-// definitions (no data). CompleteQuest calls renewExpired which scans and exchanges expired
+// definitions (no data). CompleteQuest scans and exchanges expired
 // requests in helper_quests, so tests must not run against the shared test DB.
 // Missing admin configuration fails the test rather than falling back to the shared DB.
 func helperWiringIsolatedDB(t *testing.T) *sql.DB {
@@ -194,16 +195,29 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 		IsRare:        false,
 		IsGuild:       true,
 		CreatedAt:     now,
-		ExpiresAt:     now.Add(24 * time.Hour),
+		ExpiresAt:     now.Add(-time.Hour),
 	}
 	if err := questRepo.Save(ctx, guildQuest); err != nil {
 		t.Fatalf("failed to save guildQuest: %v", err)
+	}
+	expired := guildQuest
+	expired.ID = "expired-other"
+	if err := questRepo.Save(ctx, expired); err != nil {
+		t.Fatal(err)
+	}
+	boardBefore, err := questRepo.ListUncompleted(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// 1. Unaffiliated character attempts to complete guild-only quest -> rejected with ErrGuildRequired
 	_, err = misc.helper.CompleteQuest(ctx, soloChar.ID, guildQuest.ID, now)
 	if !errors.Is(err, helperquest.ErrGuildRequired) {
 		t.Fatalf("expected ErrGuildRequired for unaffiliated character, got %v", err)
+	}
+	boardAfter, err := questRepo.ListUncompleted(ctx)
+	if err != nil || !reflect.DeepEqual(boardBefore, boardAfter) {
+		t.Fatalf("guild rejection changed board: %+v, %v", boardAfter, err)
 	}
 
 	// Verify solo character state unchanged in dedicated DB
@@ -213,6 +227,9 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	}
 	if qty := soloDepot.Quantity("item-001"); qty != 4 {
 		t.Errorf("expected soloChar materials intact (4), got %d", qty)
+	}
+	if soloDepot.Quantity("item-126") != 0 {
+		t.Fatal("guild rejection granted a reward")
 	}
 	soloInDB, err := core.charRepo.FindByID(ctx, soloChar.ID)
 	if err != nil {
@@ -249,6 +266,9 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	}
 	if res.NewQuest == nil {
 		t.Fatal("expected replacement quest in result, got nil")
+	}
+	if res.RenewedCount != 1 {
+		t.Fatalf("renewed_count = %d, want 1", res.RenewedCount)
 	}
 
 	// Verify database persistence in dedicated DB:
@@ -292,6 +312,9 @@ func (f *faultyGuildPointAdapter) FindGuildIDByCharacterID(ctx context.Context, 
 }
 
 func (f *faultyGuildPointAdapter) AddGuildPoints(ctx context.Context, guildID string, points int) error {
+	if err := f.inner.AddGuildPoints(ctx, guildID, points); err != nil {
+		return err
+	}
 	return errors.New("simulated guild point database failure")
 }
 
