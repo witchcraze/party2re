@@ -76,12 +76,18 @@ func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
 			ipWindow = h.rateLimitCfg.GeneralWindow
 		}
 
+		var ipRes ratelimit.Result
+		var hasIPRes bool
 		if ipLimit > 0 && ipWindow > 0 {
-			ipRes, ipErr := h.limiter.Allow(r.Context(), "http:ip:"+ip, ipLimit, ipWindow)
-			if ipErr == nil && !ipRes.Allowed {
-				h.setRateLimitHeaders(w, ipRes)
-				h.writeRateLimitExceeded(w, ipRes)
-				return
+			res, ipErr := h.limiter.Allow(r.Context(), "http:ip:"+ip, ipLimit, ipWindow)
+			if ipErr == nil {
+				if !res.Allowed {
+					h.setRateLimitHeaders(w, res)
+					h.writeRateLimitExceeded(w, res)
+					return
+				}
+				ipRes = res
+				hasIPRes = true
 			}
 		}
 
@@ -89,6 +95,9 @@ func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
 		tokenLimit := h.rateLimitCfg.GeneralLimit
 		tokenWindow := h.rateLimitCfg.GeneralWindow
 		if tokenLimit <= 0 || tokenWindow <= 0 {
+			if hasIPRes {
+				h.setRateLimitHeaders(w, ipRes)
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -111,12 +120,22 @@ func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		h.setRateLimitHeaders(w, targetRes)
 		if !targetRes.Allowed {
+			h.setRateLimitHeaders(w, targetRes)
 			h.writeRateLimitExceeded(w, targetRes)
 			return
 		}
 
+		effectiveRes := targetRes
+		if hasIPRes {
+			if ipRes.Remaining < targetRes.Remaining {
+				effectiveRes = ipRes
+			} else if ipRes.Remaining == targetRes.Remaining && ipRes.ResetAfter > targetRes.ResetAfter {
+				effectiveRes = ipRes
+			}
+		}
+
+		h.setRateLimitHeaders(w, effectiveRes)
 		next.ServeHTTP(w, r)
 	})
 }
