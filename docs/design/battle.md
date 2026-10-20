@@ -275,52 +275,47 @@ and counter decrement separately. Generic arbitrary extra turns are unsupported.
 An action is available only when its **whole reachable effect** has an evidenced
 native implementation. Admission covers callback-specific targets, resource
 changes, resets, death/revival, roster mutations and durable side effects, not
-just its first damage/heal instruction. A gem's shop/synthesis availability is
-not certification of its battle effect. Unknown effect kinds must not become
+just its first damage/heal instruction. A gem's shop/synthesis availability or
+learning definition is not certification of its battle effect, and shared helper
+presence does not certify concrete entries. Unknown effect kinds must not become
 ordinary attacks, and an empty effect list must not spend CMP as a successful
 custom skill. This gate applies equally to player, helper and ordinary enemy
 actions, including random or delegated invocation. It does not authorize
 permanent omission of original choices: the missing behavior remains a cutover
-prerequisite. Preserve original order, repeated draws and accepted no-effect
-outcomes once the entry is supported.
+prerequisite. Preserve original order, repeated draws, duplicate slots and
+accepted no-effect outcomes once the entry is supported.
 
-Native admission has two boundaries. `skill.BattleDefinitions` explicitly maps
-individual job/gem IDs to complete native payloads; learning or commerce
-definitions cannot create these entries by matching an effect-kind string.
-The participant adapter omits a job entry without a validated native definition,
-and hydrates occupied custom slots in their original order (including duplicates)
-only when every slot passes. Missing definitions or an empty custom action omit
-the whole custom choice. The zero-value registry admits no catalog entries;
-no production legacy job/gem entry is certified by this admission work alone.
-Each future entry needs legacy evidence and whole-effect tests, including all
-descendants, before registration. Existing direct batch payloads remain the
-responsibility of their producers; primitive validation does not certify their
-legacy parity.
+Native admission is enforced across these boundaries:
+- **Definitions and Hydration**: `skill.BattleDefinitions` (`internal/core/skill/battle_definitions.go`)
+  explicitly maps catalog IDs to validated native action payloads; learning or commerce
+  definitions cannot create combat entries by matching kind strings. Participant adaptation
+  (`internal/battle`, `internal/core/battle`) omits job entries lacking validated native
+  definitions, and hydrates occupied custom slots in original order (including duplicates)
+  only when every slot passes. An empty custom action or any missing/unsupported slot omits
+  the whole custom choice without partial execution.
+- **Atomic Preflight Validation**: `battle.ValidateSkillAction` and `battle.ValidateCustomSkillAction`
+  (`internal/core/battle/admission.go`) return `ErrUnsupportedEffect` for unsupported effect kinds
+  or incomplete payloads. The battle engine validates the complete action before executing
+  any effect and before mutating HP, MP, CMP, items, RNG state, or combat context. Consumers
+  must derive discovery and submission from the same server-owned definitions and propagate rejection;
+  client-submitted payloads are never trusted. A supported operation with no eligible target
+  remains an accepted no-effect action and is charged according to its existing resource contract.
+- **Random and Delegated Invocations**: Indirect callbacks use the separate invocation boundary
+  described [below](#random-and-delegated-job-closure) rather than batch scalar payloads.
+  Their entire reachable closure must be certified; substituting a supported-only draw pool
+  is prohibited.
 
-The core returns `ErrUnsupportedEffect` for unsupported kinds or incomplete
-payloads. It preflights every participant's job/custom/item actions before batch
-execution and validates the selected complete action again before MP/CMP/item
-mutation. A later unsupported slot therefore cannot leave partial effects.
-Consumers must derive discovery and submission from the same server-owned
-definitions and propagate rejection, rather than trusting submitted payloads.
-The explicit Adventure/HTTP consumers remain #1329/#1330. Random/delegated
-callbacks use the separate explicit invocation boundary described
-[below](#random-and-delegated-job-closure), rather than batch scalar payloads.
-Their entire original closure must be certified; no supported-only draw pool
-is substituted. A supported operation with no eligible effect target is still
-accepted and charged according to its existing resource contract.
-
-Evidence below uses `party2/lib/` at revision
-`ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item/gem/job references are
+Specification evidence and per-entry provenance use `party2/lib/` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item, gem, and job references are
 provenance identifiers, not authorization to reuse distinctive display names.
-The finite source-entry ledger and helper evidence are recorded in
-[#1333](https://github.com/witchcraze/party2re/issues/1333). Source-to-native
-body, descendant, registration, discovery, wiring and test evidence are separate
-obligations: [#1410](https://github.com/witchcraze/party2re/issues/1410) maps
-non-job and ordinary NPC entries to their implementation owners, while
-[#1409](https://github.com/witchcraze/party2re/issues/1409) owns shared player-job
-identities. Completing those ownership audits does not certify production
-support; successful original branches retain their concrete implementation gates.
+Finite source ledgers and specification evidence are recorded in
+[#1333](https://github.com/witchcraze/party2re/issues/1333), with non-job and ordinary
+NPC entry mapping in [#1410](https://github.com/witchcraze/party2re/issues/1410) and
+shared player-job identities in [#1409](https://github.com/witchcraze/party2re/issues/1409).
+Unimplemented original branches retain their concrete implementation gates; completed
+catalog audits do not certify production support. Production consumers remain
+[#1329](https://github.com/witchcraze/party2re/issues/1329) and
+[#1330](https://github.com/witchcraze/party2re/issues/1330).
 
 | Dispatch | Enduring behavior / effect boundary | Evidence |
 | --- | --- | --- |
@@ -343,21 +338,25 @@ accepted no-effect outcomes and caster death, using the same adjusted cost as
 discovery (`_battle.cgi:761–778`). NPC selection appends job callbacks, without
 the player seal additions (`_npc_action.cgi:156–218`).
 
-`BattleDefinitions.RegisterWeaponSeals` binds `seal-7-breath`, `seal-8-magic`
-and `seal-9-magic` to the shared ordered area-damage pipeline.
-`WeaponSealAction` and invocation execution share whole-effect admission;
-the returned MP cost belongs to the consumer's post-effect debit. Seal identity
-is retained in the serialized lifetime actor alongside its equipped weapon and
-previous-job SP. These native callbacks apply magic-absorption MP recovery at
-target resolution, before HP damage/defeat; returned recovery facts are already
-applied and must not be charged again. Operation-local damage/reset/defeat context and callback
-closures must be rebuilt after reload. Missing reachable descendants reject
-before state, counters, RNG or costs; accepted one-hit defense/immune outcomes
-do not require unreachable tail context. An unprojected preceding callback
-remains unsupported. The batch participant builder supplies no active seal
-scalar attacks. Production supply, SQL receipts/retry charging and published
-choices retain their integration gates in [#1329](https://github.com/witchcraze/party2re/issues/1329)
-and [#1330](https://github.com/witchcraze/party2re/issues/1330).
+Active weapon seals bind `seal-7-breath`, `seal-8-magic`, and `seal-9-magic` to the
+shared ordered area-damage pipeline (`internal/core/skill/weapon_seal.go`,
+`internal/core/battle/weapon_seal.go`):
+- **Admission and Cost Debit**: `WeaponSealAction` and invocation execution share
+  whole-effect admission against enemy targets, weapon requirement, and previous-job SP.
+  The returned adjusted MP cost is debited by the calling consumer after the effect.
+- **Lifetime Actor Context**: Seal identity, equipped weapon, and previous-job SP are
+  preserved on `LifetimeActor` (`internal/battle/lifetime_builder.go`). Operation-local
+  damage/reset/defeat context and callback closures must be rebuilt after encounter reload.
+- **Magic Absorption**: Native seal callbacks apply magic-absorption MP recovery at
+  target resolution before HP damage or defeat; applied recovery facts must not be
+  charged or re-applied.
+- **Rejection Integrity**: Missing reachable descendants reject before any mutation
+  to state, counters, RNG, or costs. Accepted one-hit defense or immune outcomes are
+  valid resolutions and do not require unreachable tail context.
+- **Consumer Gates**: Production supply, SQL receipts, retry charging, and published
+  choices retain their unresolved integration gates in
+  [#1329](https://github.com/witchcraze/party2re/issues/1329) and
+  [#1330](https://github.com/witchcraze/party2re/issues/1330).
 
 #### Combat books, stored tools and purchases
 
