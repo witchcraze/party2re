@@ -71,7 +71,7 @@ func isStateMutationMethod(method string) bool {
 		"AddSmallMedals", "DeductSmallMedals",
 		"AddCrystal", "DeductCrystal",
 		"AddItem", "RemoveItem", "ConsumeItem",
-		"RecordMatchSettlement":
+		"CommitRoundTransition":
 		return true
 	}
 	return false

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/witchcraze/party2re/internal/gvg"
 )
@@ -107,7 +108,7 @@ func (r *GvGRepository) GetLeaderboard(ctx context.Context, limit int) ([]gvg.Gv
 	return list, nil
 }
 
-func (r *GvGRepository) AddRoundWinGP(ctx context.Context, guildID string, gp int) error {
+func (r *GvGRepository) addRoundWinGP(ctx context.Context, guildID string, gp int) error {
 	if guildID == "" || gp <= 0 {
 		return nil
 	}
@@ -125,7 +126,9 @@ func (r *GvGRepository) AddRoundWinGP(ctx context.Context, guildID string, gp in
 	})
 }
 
-func (r *GvGRepository) RecordMatchSettlement(ctx context.Context, settlement gvg.MatchSettlement) error {
+func (r *GvGRepository) recordMatchSettlement(ctx context.Context, settlement gvg.MatchSettlement) error {
+	settlement.GuildIDs = append([]string(nil), settlement.GuildIDs...)
+	sort.Strings(settlement.GuildIDs)
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 
@@ -154,16 +157,13 @@ func (r *GvGRepository) RecordMatchSettlement(ctx context.Context, settlement gv
 			extraGP := settlement.ParticipantGP[gID]
 			if gID == settlement.WinnerGuildID {
 				var st gvg.GvGStanding
-				var gName sql.NullString
 				err := executor.QueryRowContext(txCtx, `
-					SELECT s.guild_id, g.name, s.wins, s.losses, s.draws, s.victory_points,
-					       s.bronze_medals, s.silver_medals, s.gold_medals, s.orders, s.trophies,
-					       s.championship_cups, s.champion_cups, s.updated_at
-					FROM gvg_standings s
-					JOIN guilds g ON s.guild_id = g.id
-					WHERE s.guild_id = ? FOR UPDATE
+					SELECT guild_id, wins, losses, draws, victory_points,
+					       bronze_medals, silver_medals, gold_medals, orders, trophies,
+					       championship_cups, champion_cups, updated_at
+					FROM gvg_standings WHERE guild_id = ? FOR UPDATE
 				`, gID).Scan(
-					&st.GuildID, &gName, &st.Wins, &st.Losses, &st.Draws, &st.VictoryPoints,
+					&st.GuildID, &st.Wins, &st.Losses, &st.Draws, &st.VictoryPoints,
 					&st.BronzeMedals, &st.SilverMedals, &st.GoldMedals, &st.Orders, &st.Trophies,
 					&st.ChampionshipCups, &st.ChampionCups, &st.UpdatedAt,
 				)

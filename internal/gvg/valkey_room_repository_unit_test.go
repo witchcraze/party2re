@@ -86,12 +86,12 @@ func TestValkeyRoomRepository_SaveRoom(t *testing.T) {
 		t.Fatalf("expected 2 commands, got %d: %v", len(cmds), cmds)
 	}
 
-	// First command: SET room key with TTL
-	if cmds[0][0] != "SET" || cmds[0][1] != gvg.DefaultRoomKeyPrefix+room.ID {
-		t.Errorf("unexpected SET command: %v", cmds[0])
+	// SET room state only after the index update succeeds.
+	if cmds[1][0] != "SET" || cmds[1][1] != gvg.DefaultRoomKeyPrefix+room.ID {
+		t.Errorf("unexpected SET command: %v", cmds[1])
 	}
 	var savedDetail gvg.RoomDetail
-	if err := json.Unmarshal([]byte(cmds[0][2]), &savedDetail); err != nil {
+	if err := json.Unmarshal([]byte(cmds[1][2]), &savedDetail); err != nil {
 		t.Fatalf("saved room payload is invalid JSON: %v", err)
 	}
 	if savedDetail.Room.ID != room.ID || len(savedDetail.Members) != 2 {
@@ -101,13 +101,13 @@ func TestValkeyRoomRepository_SaveRoom(t *testing.T) {
 		t.Errorf("saved room payload content mismatch: %+v", savedDetail)
 	}
 
-	// Second command: ZADD to rooms index with UpdatedAt score
-	if cmds[1][0] != "ZADD" || cmds[1][1] != gvg.DefaultRoomsActiveIndexKey || cmds[1][3] != room.ID {
-		t.Errorf("unexpected ZADD command: %v", cmds[1])
+	// First update the rooms index with the UpdatedAt score.
+	if cmds[0][0] != "ZADD" || cmds[0][1] != gvg.DefaultRoomsActiveIndexKey || cmds[0][3] != room.ID {
+		t.Errorf("unexpected ZADD command: %v", cmds[0])
 	}
 	expectedScore := strconv.FormatInt(room.UpdatedAt.Unix(), 10)
-	if cmds[1][2] != expectedScore {
-		t.Errorf("expected score %s, got %s", expectedScore, cmds[1][2])
+	if cmds[0][2] != expectedScore {
+		t.Errorf("expected score %s, got %s", expectedScore, cmds[0][2])
 	}
 
 	// 2. SET error
@@ -275,7 +275,7 @@ func TestValkeyRoomRepository_ListRooms(t *testing.T) {
 	r2JSON, _ := json.Marshal(r2InProgress)
 	r3JSON, _ := json.Marshal(r3)
 
-	// 1. Success with filtering and eviction of expired rooms
+	// 1. Success with filtering and age-based eviction of expired rooms
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		cmdParts := cmd.Commands()
 		switch cmdParts[0] {
@@ -292,8 +292,6 @@ func TestValkeyRoomRepository_ListRooms(t *testing.T) {
 			default:
 				return valkeytest.MakeNilResult() // expired / missing
 			}
-		case "ZREM":
-			return valkeytest.MakeOKResult()
 		default:
 			return valkeytest.MakeOKResult()
 		}
@@ -323,16 +321,11 @@ func TestValkeyRoomRepository_ListRooms(t *testing.T) {
 		t.Error("expected lazy pruning via ZREMRANGEBYSCORE on DefaultRoomsActiveIndexKey")
 	}
 
-	// Verify that gvg-expired was purged via ZREM
-	purged := false
+	// Missing bodies may still be publishing; a reader must not erase their index.
 	for _, recorded := range client.RecordedCommandStrings() {
-		if recorded[0] == "ZREM" && recorded[1] == gvg.DefaultRoomsActiveIndexKey && recorded[2] == "gvg-expired" {
-			purged = true
-			break
+		if recorded[0] == "ZREM" {
+			t.Error("listing removed a potentially publishing room from the index")
 		}
-	}
-	if !purged {
-		t.Error("expected expired GvG room to be removed from index via ZREM")
 	}
 
 	// 2. Error on ZREVRANGE

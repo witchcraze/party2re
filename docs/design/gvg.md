@@ -14,6 +14,7 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
 - **Dual-Tier Storage Model**:
   - **Ephemeral Room State (Valkey Master)**: Rooms, active rosters, and character-to-room mappings are stored in Valkey (`party2:gvg:room:<id>`, `party2:gvg:character:<id>`, `party2:gvg:rooms:active`) with a 30-minute inactivity TTL. Disbanding or match completion immediately cleans up active mappings.
   - **Canonical Persistence (MariaDB Master)**: Guild standings, accumulated Victory Points (GP), wins, losses, draws, and permanent 7-tier trophy decorations are durably recorded in `gvg_standings` using row-level pessimistic locking (`FOR UPDATE`). Guilds store their official team color in `guilds.color`.
+  - **Reward Retry Boundary**: The SQL repository commits rewards and the latest room transition together, then publishes the room to Valkey. The [GvG reward publication contract](../architecture/transient-run-state.md#gvg-reward-publication) owns claim identity, retry and retention guarantees. Reward amount/recipient parity gaps remain tracked in [#1213](https://github.com/witchcraze/party2re/issues/1213); retry safety does not certify those rules.
 - **Authorization & Ownership**: All room creation, joining, starting, and advancing operations enforce strict character ownership through standard authentication middleware (`withAuthenticatedCharacter`).
 
 ---

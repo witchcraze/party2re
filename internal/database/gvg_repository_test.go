@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestGvGRepository(t *testing.T) {
@@ -96,9 +97,13 @@ func TestGvGRepository(t *testing.T) {
 		t.Errorf("unexpected initial standing A: %#v", stA)
 	}
 
-	// 4. Test AddRoundWinGP
-	if err := gvgRepo.AddRoundWinGP(ctx, guildA_ID, 3); err != nil {
-		t.Fatalf("AddRoundWinGP: %v", err)
+	// 4. Commit an intermediate round win.
+	roundRoomID := id.New()
+	if _, err := gvgRepo.CommitRoundTransition(ctx, roundRoomID, 1, gvg.RoundTransition{
+		Detail: gvg.RoomDetail{Room: gvg.GvGRoom{ID: roundRoomID, Round: 2, Status: gvg.StatusInProgress}},
+		Result: gvg.RoundResolution{Round: 2, WinnerGuildID: guildA_ID},
+	}); err != nil {
+		t.Fatalf("commit round win: %v", err)
 	}
 	stA_afterRound, err := gvgRepo.GetOrCreateStanding(ctx, guildA_ID)
 	if err != nil {
@@ -108,7 +113,7 @@ func TestGvGRepository(t *testing.T) {
 		t.Errorf("expected 3 GP after round win, got %d", stA_afterRound.VictoryPoints)
 	}
 
-	// 5. Test RecordMatchSettlement (Win / Loss)
+	// 5. Commit the final round and match settlement together.
 	settlement := gvg.MatchSettlement{
 		WinnerGuildID: guildA_ID,
 		WinnerPrizeGP: 3, // 3 GP room prize pool
@@ -119,16 +124,20 @@ func TestGvGRepository(t *testing.T) {
 			guildB_ID: 4, // 1 participant * 4 GP
 		},
 	}
-	if err := gvgRepo.RecordMatchSettlement(ctx, settlement); err != nil {
-		t.Fatalf("RecordMatchSettlement: %v", err)
+	if _, err := gvgRepo.CommitRoundTransition(ctx, roundRoomID, 2, gvg.RoundTransition{
+		Detail:     gvg.RoomDetail{Room: gvg.GvGRoom{ID: roundRoomID, Round: 2, Status: gvg.StatusCompleted}},
+		Result:     gvg.RoundResolution{Round: 2, WinnerGuildID: guildA_ID, MatchCompleted: true},
+		Settlement: &settlement,
+	}); err != nil {
+		t.Fatalf("commit final round: %v", err)
 	}
 
 	updatedA, err := gvgRepo.GetOrCreateStanding(ctx, guildA_ID)
 	if err != nil {
 		t.Fatalf("GetOrCreateStanding A after settlement: %v", err)
 	}
-	// 3 GP (from round) + 3 GP (prize pool) + 4 GP (participant) = 10 GP
-	if updatedA.Wins != 1 || updatedA.BronzeMedals != 1 || updatedA.VictoryPoints != 10 {
+	// Current accounting: 6 GP (two rounds) + 3 GP (prize) + 4 GP (participant).
+	if updatedA.Wins != 1 || updatedA.BronzeMedals != 1 || updatedA.VictoryPoints != 13 {
 		t.Errorf("unexpected updated standing A: %#v", updatedA)
 	}
 
@@ -152,12 +161,17 @@ func TestGvGRepository(t *testing.T) {
 			guildB_ID: 4,
 		},
 	}
-	if err := gvgRepo.RecordMatchSettlement(ctx, drawSettlement); err != nil {
-		t.Fatalf("RecordMatchSettlement (draw): %v", err)
+	drawRoomID := id.New()
+	if _, err := gvgRepo.CommitRoundTransition(ctx, drawRoomID, gvg.MaxRounds, gvg.RoundTransition{
+		Detail:     gvg.RoomDetail{Room: gvg.GvGRoom{ID: drawRoomID, Round: gvg.MaxRounds, Status: gvg.StatusCompleted}},
+		Result:     gvg.RoundResolution{Round: gvg.MaxRounds, MatchCompleted: true},
+		Settlement: &drawSettlement,
+	}); err != nil {
+		t.Fatalf("commit draw: %v", err)
 	}
 
 	afterDrawA, err := gvgRepo.GetOrCreateStanding(ctx, guildA_ID)
-	if err != nil || afterDrawA.Draws != 1 || afterDrawA.VictoryPoints != 14 {
+	if err != nil || afterDrawA.Draws != 1 || afterDrawA.VictoryPoints != 17 {
 		t.Errorf("unexpected standing A after draw: %#v, err=%v", afterDrawA, err)
 	}
 

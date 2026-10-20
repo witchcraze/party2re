@@ -1,0 +1,41 @@
+{
+  "module": "gvg",
+  "tier": 2,
+  "description": "Live guild battle rooms; service delegates durable round rewards and final settlement to the SQL repository before publishing room state to Valkey.",
+  "package": "internal/gvg",
+  "dependencies": [
+    {
+      "name": "standings",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/gvg/repository.go#StandingRepository"
+    },
+    {
+      "name": "rooms",
+      "target_module": "gvg",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/gvg/repository.go#RoomRepository"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "CommitRoundTransition",
+      "source_ref": "internal/database/gvg_transition_repository.go#GvGRepository.CommitRoundTransition",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "gvg_match_transitions",
+          "tier": 0,
+          "mode": "INSERT / SELECT ... FOR UPDATE",
+          "note": "Serialize room round identities and terminal settlement before reward writes."
+        },
+        {
+          "table": "gvg_standings",
+          "tier": 8,
+          "mode": "SELECT ... FOR UPDATE (ascending guild ID)",
+          "note": "Lock all affected standings before round GP, win/loss/draw and medal mutations."
+        }
+      ]
+    }
+  ]
+}
