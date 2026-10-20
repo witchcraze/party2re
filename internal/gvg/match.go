@@ -67,6 +67,18 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		if detail.Room.Status != StatusInProgress {
 			return ErrMatchNotInProgress
 		}
+		committed, found, err := s.standings.FindRoundTransition(lockedCtx, roomID, detail.Room.Round)
+		if err != nil {
+			return err
+		}
+		if found {
+			if err := s.repo.SaveRoom(lockedCtx, committed.Detail.Room, committed.Detail.Members); err != nil {
+				return err
+			}
+			result = committed.Result
+			return nil
+		}
+		round := detail.Room.Round
 
 		leaderGuildColor := ""
 		leaderGuildID := ""
@@ -193,9 +205,6 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 
 		// Handle round win: +3 GP to the round winning guild (vs_guild.cgi:121)
 		if roundWinnerGuildID != "" {
-			if err := s.standings.AddRoundWinGP(lockedCtx, roundWinnerGuildID, RoundWinGP); err != nil {
-				return err
-			}
 			detail.Room.GuildScores[roundWinnerGuildID]++
 
 			if detail.Room.GuildScores[roundWinnerGuildID] >= detail.Room.TargetWins {
@@ -212,6 +221,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			roundOutcome = "match_draw"
 		}
 
+		var settlement *MatchSettlement
 		if matchCompleted {
 			// Settle match standings
 			participantGP := make(map[string]int)
@@ -225,15 +235,12 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 				guildIDs = append(guildIDs, gid)
 			}
 
-			settlement := MatchSettlement{
+			settlement = &MatchSettlement{
 				WinnerGuildID: overallWinnerGuildID,
 				WinnerPrizeGP: detail.Room.PrizePool,
 				GuildIDs:      guildIDs,
 				IsDraw:        overallWinnerGuildID == "",
 				ParticipantGP: participantGP,
-			}
-			if err := s.standings.RecordMatchSettlement(lockedCtx, settlement); err != nil {
-				return err
 			}
 
 			detail.Room.Status = StatusCompleted
@@ -247,10 +254,6 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		}
 
 		detail.Room.UpdatedAt = time.Now().UTC()
-		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
-			return err
-		}
-
 		result = RoundResolution{
 			Round:                  detail.Room.Round,
 			Outcome:                roundOutcome,
@@ -265,6 +268,16 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			Turns:                  res.Turns,
 			BattleLog:              res.Logs,
 		}
+		committed, err = s.standings.CommitRoundTransition(lockedCtx, roomID, round, RoundTransition{
+			Detail: detail, Result: result, Settlement: settlement,
+		})
+		if err != nil {
+			return err
+		}
+		if err := s.repo.SaveRoom(lockedCtx, committed.Detail.Room, committed.Detail.Members); err != nil {
+			return err
+		}
+		result = committed.Result
 		return nil
 	})
 	return result, err

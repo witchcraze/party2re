@@ -2,6 +2,7 @@ package gvg_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -18,12 +19,16 @@ type mockStandingRepo struct {
 	standings   map[string]gvg.GvGStanding
 	settlements []gvg.MatchSettlement
 	roundWins   map[string]int
+	transitions map[string][]byte
+	rounds      map[string]int
 }
 
 func newMockStandingRepo() *mockStandingRepo {
 	return &mockStandingRepo{
-		standings: make(map[string]gvg.GvGStanding),
-		roundWins: make(map[string]int),
+		standings:   make(map[string]gvg.GvGStanding),
+		roundWins:   make(map[string]int),
+		transitions: make(map[string][]byte),
+		rounds:      make(map[string]int),
 	}
 }
 
@@ -50,7 +55,39 @@ func (m *mockStandingRepo) GetLeaderboard(_ context.Context, limit int) ([]gvg.G
 	return list, nil
 }
 
-func (m *mockStandingRepo) AddRoundWinGP(_ context.Context, guildID string, gp int) error {
+func (m *mockStandingRepo) FindRoundTransition(_ context.Context, roomID string, round int) (gvg.RoundTransition, bool, error) {
+	var transition gvg.RoundTransition
+	if m.rounds[roomID] < round {
+		return transition, false, nil
+	}
+	err := json.Unmarshal(m.transitions[roomID], &transition)
+	return transition, true, err
+}
+
+func (m *mockStandingRepo) CommitRoundTransition(ctx context.Context, roomID string, round int, transition gvg.RoundTransition) (gvg.RoundTransition, error) {
+	if saved, found, err := m.FindRoundTransition(ctx, roomID, round); err != nil || found {
+		return saved, err
+	}
+	if transition.Result.WinnerGuildID != "" {
+		if err := m.addRoundWinGP(ctx, transition.Result.WinnerGuildID, gvg.RoundWinGP); err != nil {
+			return gvg.RoundTransition{}, err
+		}
+	}
+	if transition.Settlement != nil {
+		if err := m.recordMatchSettlement(ctx, *transition.Settlement); err != nil {
+			return gvg.RoundTransition{}, err
+		}
+	}
+	data, err := json.Marshal(transition)
+	if err != nil {
+		return gvg.RoundTransition{}, err
+	}
+	m.transitions[roomID] = data
+	m.rounds[roomID] = round
+	return transition, nil
+}
+
+func (m *mockStandingRepo) addRoundWinGP(_ context.Context, guildID string, gp int) error {
 	st, _ := m.GetOrCreateStanding(context.Background(), guildID)
 	st.VictoryPoints += int64(gp)
 	m.standings[guildID] = st
@@ -58,7 +95,7 @@ func (m *mockStandingRepo) AddRoundWinGP(_ context.Context, guildID string, gp i
 	return nil
 }
 
-func (m *mockStandingRepo) RecordMatchSettlement(_ context.Context, settlement gvg.MatchSettlement) error {
+func (m *mockStandingRepo) recordMatchSettlement(_ context.Context, settlement gvg.MatchSettlement) error {
 	m.settlements = append(m.settlements, settlement)
 	for _, gID := range settlement.GuildIDs {
 		st, _ := m.GetOrCreateStanding(context.Background(), gID)

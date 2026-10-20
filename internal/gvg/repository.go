@@ -27,12 +27,19 @@ type MatchSettlement struct {
 	ParticipantGP map[string]int // Additional GP awarded per guild (4 GP per participant)
 }
 
+// RoundTransition retains the committed outcome and room state for publication retries.
+type RoundTransition struct {
+	Detail     RoomDetail
+	Result     RoundResolution
+	Settlement *MatchSettlement
+}
+
 // StandingRepository defines durable persistence for guild battle standings and trophy progression.
 type StandingRepository interface {
 	GetOrCreateStanding(ctx context.Context, guildID string) (GvGStanding, error)
 	GetLeaderboard(ctx context.Context, limit int) ([]GvGStanding, error)
-	AddRoundWinGP(ctx context.Context, guildID string, gp int) error
-	RecordMatchSettlement(ctx context.Context, settlement MatchSettlement) error
+	FindRoundTransition(ctx context.Context, roomID string, round int) (RoundTransition, bool, error)
+	CommitRoundTransition(ctx context.Context, roomID string, round int, transition RoundTransition) (RoundTransition, error)
 }
 
 // RoomRepository manages ephemeral guild battle room state.

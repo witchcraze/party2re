@@ -1,0 +1,75 @@
+package gvg_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/gvg"
+)
+
+var errRoomPublication = errors.New("room publication failed")
+
+type failingPublicationRepo struct {
+	gvg.RoomRepository
+	fail       bool
+	failDelete bool
+}
+
+func (r *failingPublicationRepo) DeleteRoom(ctx context.Context, roomID string) error {
+	if r.failDelete {
+		return errRoomPublication
+	}
+	return r.RoomRepository.DeleteRoom(ctx, roomID)
+}
+
+func (r *failingPublicationRepo) SaveRoom(ctx context.Context, room gvg.GvGRoom, members []gvg.GvGMember) error {
+	if r.fail {
+		return errRoomPublication
+	}
+	return r.RoomRepository.SaveRoom(ctx, room, members)
+}
+
+func TestAdvanceRound_RetryRoomPublication(t *testing.T) {
+	for _, target := range []int{1, 2} {
+		t.Run(map[int]string{1: "final", 2: "intermediate"}[target], func(t *testing.T) {
+			ctx := context.Background()
+			standings := newMockStandingRepo()
+			_, rooms, leader, roomID := setupSettlementTest(t, standings)
+			detail, err := rooms.GetRoom(ctx, roomID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			detail.Room.TargetWins = target
+			if err := rooms.SaveRoom(ctx, detail.Room, detail.Members); err != nil {
+				t.Fatal(err)
+			}
+			chars := newMockCharRepo()
+			chars.characters["c1"] = createTestCharacter("c1", "Leader", 100, 0)
+			chars.characters["c2"] = createTestCharacter("c2", "Opponent", 100, 0)
+			publication := &failingPublicationRepo{RoomRepository: rooms, fail: true}
+			battle := &mockBattleEngine{outcome: corebattle.OutcomeWin}
+			svc, err := gvg.NewService(publication, standings, newMockGuildRepo(), chars, battle)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.AdvanceRound(ctx, leader, roomID); !errors.Is(err, errRoomPublication) {
+				t.Fatalf("publication error: %v", err)
+			}
+			// Recovery must reuse the committed winner even if another battle would differ.
+			battle.outcome = corebattle.OutcomeDefeat
+			publication.fail = false
+			result, err := svc.AdvanceRound(ctx, leader, roomID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.WinnerGuildID != "g1" || result.GuildScores["g1"] != 1 || standings.roundWins["g1"] != gvg.RoundWinGP || standings.roundWins["g2"] != 0 {
+				t.Fatalf("round was rerun: result=%+v rewards=%v", result, standings.roundWins)
+			}
+			if target == 1 && len(standings.settlements) != 1 {
+				t.Fatalf("settlements=%d", len(standings.settlements))
+			}
+		})
+	}
+}

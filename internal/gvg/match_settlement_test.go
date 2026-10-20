@@ -16,18 +16,14 @@ type mockFailingStandingRepo struct {
 	addErr    error
 }
 
-func (m *mockFailingStandingRepo) RecordMatchSettlement(ctx context.Context, settlement gvg.MatchSettlement) error {
-	if m.recordErr != nil {
-		return m.recordErr
+func (m *mockFailingStandingRepo) CommitRoundTransition(ctx context.Context, roomID string, round int, transition gvg.RoundTransition) (gvg.RoundTransition, error) {
+	if transition.Result.WinnerGuildID != "" && m.addErr != nil {
+		return gvg.RoundTransition{}, m.addErr
 	}
-	return m.mockStandingRepo.RecordMatchSettlement(ctx, settlement)
-}
-
-func (m *mockFailingStandingRepo) AddRoundWinGP(ctx context.Context, guildID string, gp int) error {
-	if m.addErr != nil {
-		return m.addErr
+	if transition.Settlement != nil && m.recordErr != nil {
+		return gvg.RoundTransition{}, m.recordErr
 	}
-	return m.mockStandingRepo.AddRoundWinGP(ctx, guildID, gp)
+	return m.mockStandingRepo.CommitRoundTransition(ctx, roomID, round, transition)
 }
 
 func setupSettlementTest(t *testing.T, standingRepo gvg.StandingRepository) (*gvg.Service, gvg.RoomRepository, string, string) {

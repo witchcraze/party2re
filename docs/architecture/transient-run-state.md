@@ -36,6 +36,26 @@ Do not invent generic auto-fold, forfeiture/refund, turn-history keys, or a
 60-second post-game retention policy. Each owning game must define and verify
 its actual transitions against the original CGI.
 
+### GvG reward publication
+
+`StandingRepository.CommitRoundTransition` delegates to the GvG SQL repository.
+One transaction locks the room's `gvg_match_transitions` record, then standing
+rows in ascending guild ID order, and commits round GP, any final settlement,
+and the resulting room/outcome together. The room ID and resolved round identify
+the claim; a completed match rejects further reward claims at any round.
+The record retains only the latest committed transition for each room.
+
+`AdvanceRound` checks this record before combat. When a cached room is behind,
+it republishes the committed room and returns the saved outcome without rerunning
+combat or awarding rewards again. Valkey publication is outside the SQL transaction;
+publication failures remain errors and can be retried. Lobby deletion or expiration
+does not delete the durable guard. These records have no automatic expiry, and a
+missing Valkey room is not reconstructed by this operation.
+
+This guarantee applies to transitions committed through the guard. It cannot
+retroactively identify rewards committed by an older deployment. Reward amounts
+and recipients remain a separate [GvG domain contract](../design/gvg.md).
+
 ## Candidate D: In-Progress Run Buffers
 
 Dungeon and Challenge are wired to Valkey working stores (#404/#405). Their
