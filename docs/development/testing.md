@@ -27,6 +27,12 @@ For DB/Valkey changes, run affected-package tests with live services and connect
 
 `make check` runs formatting, static analysis, OpenAPI/architecture checks, migrations, the full test suite and a smoke image build. It and the pre-push hook call the same `scripts/verify.sh`, which reuses a successful result for an unchanged working tree. Do not start duplicate checks concurrently or repeat a successful check solely for push or session end. If the verification environment changes, use `FORCE_VERIFY=1 make check`.
 
+For documentation-only changes, inspect the changed requirements, local links/anchors
+and examples against their sources. Services and the full runtime suite are not
+required solely for prose; a bounded existing test or fault-injection experiment
+can substantiate a testing-policy claim. Existing push hooks and CI still run
+their configured checks.
+
 ---
 
 ## 3. Canonical Commands
@@ -81,6 +87,192 @@ worker/commit boundaries when those are the subject of the test.
 `make test-integration` and `make check` provide it. For direct host tests use
 `root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails
 DB-enabled dedicated tests rather than falling back to the shared database.
+
+### 5.3 Battle Test Selection
+
+The [workflow rules](../../.agents/rules/01-development-workflow.md#whole-action-admission-regression-coverage)
+own admission requirements; [Battle Test Selection](../../.agents/rules/01-development-workflow.md#battle-test-selection)
+owns mandatory selection criteria. This section explains how to apply them. It
+does not change game rules, supported entries or the boundary between execution,
+admission and state projection. [Battle design](../design/battle.md) owns gameplay
+contracts; verify expected behavior against the original/approved specification
+under the [migration rules](../../.agents/rules/00-migration-constraints.md).
+
+#### Select by changed behavior
+
+Start from the changed entry and its callers. In the PR, identify the relevant
+classes and interactions, the layer checking each, and important exclusions with
+their reason. Use the following axes as prompts, not a product to enumerate:
+
+| Axes | Split when behavior differs |
+| --- | --- |
+| Effect and entry | Damage vs HP/MP recovery/drain, stats, status, revival; concrete job/skill/tool/gem identity, binding and direct/custom/random/delegated invocation |
+| State and equipment | Normal, temporary and extended states; raw gear/base/current stats, reapplication, one-use defenses and consumed item instances |
+| Roles and targets | Actor/requester/target identity; player/NPC, self/ally/enemy; single/area, roster size/order, living/fallen, fallback and mutually exclusive candidates |
+| Environment and resources | Field at load vs current field, suppression and external hooks; HP/MP/cost/cap/rounding/probability boundaries, internal resource writes vs enclosing charge and role-specific clamps |
+| Time and ownership | Earlier effects and counters, reset/revival/consumption order, external state transitions, frozen command input and save/reload continuation |
+
+Two inputs are equivalent only if they take the same relevant guards, formula,
+target resolution and tails with the same context needs. Pick a representative
+inside each class and the values immediately below/at/above its boundaries.
+Separate zero power, no-effect at a cap, nonlethal and potentially lethal cases:
+equal final HP can hide different counters, target tuples or consumed defenses.
+Do not assume healing is always monotonic or that HP above MaxHP is malformed;
+the owning contract decides which reachable states belong in a fixture.
+
+#### Responsibilities and connections
+
+| Layer | Evidence it provides | Evidence it cannot replace |
+| --- | --- | --- |
+| Formula/boundary | Hand-derived specification vectors for truncation, caps, thresholds and RNG endpoints | Target resolution, ordered side effects or correct registration |
+| Effect helper | Resolved target/returned facts, counters, skipped tails, local state and RNG contract | Complete producer behavior and later operations |
+| Enclosing operation | Admission plus execution of ordered single/area/repeated/custom effects; alternative branches and continuation | Concrete entry discovery/binding and caller hydration |
+| Concrete entry/registry | Correct identity, arguments, SP/MP/CMP metadata, discovery and execution through affected direct/custom/random/delegated routes | Completeness of other entries sharing the helper |
+| Adapter/consumer | Raw gear, job/history/requester facts and owner hooks survive hydration/save/reload; external error/rollback behavior | HTTP command availability, authorization and durable end-to-end lifecycle |
+
+Prove arithmetic once at its owner, then assert caller-specific wiring and
+observable results at connections. Repeating every formula vector through every
+adapter adds cost without checking a new contract. Conversely, a helper test and
+a separately passing registry enumeration do not prove that the registered entry
+invokes it correctly. Synthetic catalogs certify only their exercised subset.
+The HTTP/context journey and reusable E2E harness are owned by
+[#650](https://github.com/witchcraze/party2re/issues/650); battle boundary diagnosis
+does not wait for that harness or use it as the numerical oracle.
+
+#### Choose a method
+
+| Change / question | Smallest useful method and required connection |
+| --- | --- |
+| Formula, cap, probability or resource guard | Deterministic table of class representatives and adjacent boundary values; run through the changed producer for its parameters/tails |
+| Many axes with no known shared-state dependency | A small explicit pairwise table, or t-wise table for an identified interaction of t axes; document axes, valid constraints and tuples covered |
+| An earlier effect changes later eligibility or target | Deterministic multi-step scenario at the enclosing boundary, with a nearby accepted/no-effect and rejected case where applicable |
+| Action and tail have different eligibility predicates | Table the enclosing player/NPC guards separately; exercise skipped action with eligible tail, and excluded tail, through the actual operation |
+| Finite projection or large valid numeric range | Bounded property/state-transition test comparing admitted executions with projection plus independent specification vectors |
+| Input encoding or a reproducible generated sequence exposes gaps | Go standard fuzz with valid seed corpus, bounded decoding/sequence length and a specific invariant; keep intentional invalid-context cases separate |
+| Two executions have a specification-backed relationship | Metamorphic test, e.g. uninterrupted vs save/reload continuation with rebuilt context and the same remaining draw tape |
+
+Pairwise/t-wise tables are a sampling aid, not an independence proof. Gear,
+field and category can be sampled this way only after identifying interacting
+guards; cover the known threshold combinations explicitly. Ordered death/revival,
+reflection/cover, one-hit defense consumption, reset/reapplication and external
+HP changes need their actual multi-step sequence, including three or more effects
+when an intermediate transition enables the last one. Small finite domains can
+be enumerated; no requirement follows to enumerate the full combat catalog.
+
+For property tests, use assertions such as: admitted executions never encounter
+`ErrUnsupportedEffect` after a prefix; actual supported outcomes lie within the
+projected bounds; validation repeated twice leaves all caller inputs untouched.
+These check relationships, not independent correctness of a damage formula.
+Keep hand-derived source vectors alongside them. Do not recompute the production
+predictor as the expected answer. An admitted external transaction may still fail
+under its documented error contract; test that error and rollback at the owner,
+separately from admission missing an unsupported descendant.
+
+For metamorphic tests, verify the relationship's preconditions. Roster permutation
+is not generally invariant when turn order, fallback or area iteration matters;
+adding a target can change selection probabilities. Save/reload equivalence needs
+the same command facts and remaining randomness, not a newly seeded replacement
+stream or serialized function pointers.
+
+#### Apply the table across domains
+
+These examples illustrate test selection, not additional gameplay specifications:
+
+| Domain / change | Selected checks and existing pattern |
+| --- | --- |
+| Damage or HP/MP recovery boundary | Independent numeric vectors, full/zero/cap and living/fallen classes; ordered area healing where the first recipient consumes actor tension. See [recovery tests](../../internal/core/battle/recovery_test.go) and [damage composition](../../internal/core/battle/damage_composition_test.go). A recovery helper does not certify MP producers. |
+| Status, defeat and revival | Nonlethal acceptance beside lethal rejection; two individually survivable hits that become lethal together; one-use defense then a second hit; revival reset before later target/defense resolution. See [ordered defeat tests](../../internal/core/battle/defeat_ordered_test.go). |
+| Job/skill invocation | Each changed concrete binding/cost and its discovery/execution path, unsupported reachable child before any cost/draw, then a prior effect changing the job/table used by the next slot. See [generated invocation tests](../../internal/core/battle/invocation_generated_test.go), [status registry tests](../../internal/core/skill/status_test.go) and [adapter invocation](../../internal/battle/invocation_test.go). Synthetic job tables are not full catalog certification. |
+| New resource/custom producers | Derive cases from their owning specifications: internal MP/CMP writes before enclosing charge, signed costs and role-specific clamps where specified; distinguish requested/returned amount from actual delta and assert unaffected HP. Follow earlier slots that change state, roster or caster survival into later slot admission. |
+| Equipment tails and persisted consumer | Test the actual player/NPC eligibility boundary and snapshots taken before the action, not only the tail helper. Then verify real-store failure/retry/receipt and reload at the consumer; a Core JSON round trip cannot establish committed retry behavior. |
+
+Apply the same table to planned entries before their bodies exist: derive cases
+from the owning specification, label the missing connection, and retain its
+adoption gate until real bindings and consumer tests exist. Future work is not
+certified by an existing analogous helper or this selection policy.
+
+The healing-order example is grounded in reference revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`, `_skill.cgi:9056–9064,9067–9078,9103–9108`:
+party iteration calls the helper, whose successful healing consumes actor tension.
+Defeat examples use that revision's `_battle.cgi:28–142,1390–1428,1726–1759`
+and `_skill.cgi:10588–10626`: reset precedes the final attack and only lethal
+damage calls defeat. For a job change before current-job delegation, see
+`_skill.cgi:6593–6610` and `_data.cgi:1260–1264` at the same revision.
+Entry-specific behavior remains owned by
+[Battle's invocation contract](../design/battle.md#random-and-delegated-job-closure), not inferred from synthetic
+fixtures. Detailed audits and experiment logs belong in Issues/PRs, not a growing
+inventory of test names here.
+
+#### Fixtures, oracles and diagnosis
+
+Build positive fixtures from explicit valid facts: unique IDs and consistent
+roster/team membership, raw equipment and definitions, base/current resources,
+requester facts and the real owner context required by reachable paths. Include
+supported missing-context/no-effect classes deliberately. Label a negative case
+with the precise missing fact or unsupported branch; otherwise an earlier fixture
+error can make a purported admission regression pass for the wrong reason.
+Keep legitimate production candidate/RNG pools intact, including unsupported
+descendants that should cause rejection. Limit a generated test's inputs, not
+the production resolver. Constrain only what the contract actually excludes.
+
+Use independent snapshots of the mutable graph, not `before := context` when its
+pointers/slices/maps alias live data. Observe affected shared referents as well as
+the root, counters, arguments and external hook call counts. A failing-on-draw RNG
+is useful for admission; an explicit draw tape with exhaustion checks protects
+contractual draw order/count during execution. JSON snapshots omit runtime hooks
+and unexported facts, so supplement them with explicit assertions. Owner projection
+runs on isolated validation state; an external `Apply` spy should remain unused.
+
+Keep exact draw order assertions at source-defined RNG/command boundaries.
+Broader properties can use deterministic seeds or tapes without freezing every
+incidental draw; report seed, entry/route, initial state/context facts, operation
+sequence and observed error/state. Minimize a failure by deleting operations,
+actors and gear and shrinking numbers while preserving validity and the failure.
+For a fuzz failure, retain the minimized `testdata/fuzz/<FuzzName>/...` input and
+its replay command; promote a readable regression when useful. A seed alone is
+insufficient if catalog order or generator logic changes.
+
+#### Execution and cost
+
+Run the smallest named regression during iteration, then affected packages. The
+normal behavior-change gate remains one completed `make check` on final artifacts
+(section 2); avoid parallel or repeated full checks. Wider seed/sequence sweeps
+are opt-in investigation when a specific invariant or risk warrants them, with a
+recorded seed set, maximum generated actors/operations and run budget. Deterministic
+cases and fuzz seed corpora execute under ordinary `go test`/CI; active fuzzing is
+a separate bounded run, not implied by `make check`.
+
+```sh
+go test -count=1 ./internal/core/battle -run '^TestAreaDeathFinalStrikeAccumulatesDamage$'
+go test -count=1 ./internal/core/battle ./internal/core/skill
+```
+
+When a fuzz target exists, use these templates for a bounded run and a stored
+failure replay. For seeded table/property cases use the failing subtest and its
+recorded input.
+
+```sh
+go test ./<package> -run '^$' -fuzz '^<FuzzName>$' -fuzztime=30s
+go test ./<package> -run '^<FuzzName>/<corpus-hash>$'
+```
+
+Assess both generated test count and admission's explored states/allocations:
+one generated case can branch over many target/reset/catalog continuations.
+Measure small, typical and largest supported rosters/catalogs with realistic
+branching and depth, including admitted and rejected paths. Record those sizes
+and branch counts where observable; a tiny synthetic catalog gives no evidence
+about production scale. Use `testing.B` and the existing [benchmark procedure](#7-continuous-performance-verification--benchmarking)
+for latency/allocations, never sub-second functional assertions. The existing
+engine simulation benchmarks do not measure every admission path.
+
+Explicit tables, controlled RNG, bounded loops and JSON continuation tests already
+provide the necessary seams. No universal fixture DSL, second battle engine, new
+dependency, wholesale test migration or CI tier is needed to apply this policy.
+Add a local property/fuzz/benchmark only when its changed behavior demonstrates a
+gap; separate shared infrastructure work into a bounded Issue with the measured
+cost/duplication, missing property, target boundary and verification criterion.
+Sampling leaves untested combinations: report protected contracts and residual
+gaps, not test counts/coverage percentages as proof of complete battle support.
 
 
 ## 6. Mechanical AST Static Analysis Linters

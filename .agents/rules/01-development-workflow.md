@@ -94,11 +94,21 @@ For non-trivial behavior:
 
 Changes to whole-action admission MUST cover representative cases relevant to the affected behavior:
 
-- **Rejection:** Reachable unsupported paths MUST reject before execution, with state, counters and RNG consumption unchanged.
-- **Accepted No-Effect:** When the contract permits a no-effect outcome (e.g., caps or zero power), admission MUST NOT require context used only by skipped or unreachable side effects.
-- **Ordered Composition:** When earlier side effects can change later target resolution or eligibility, tests MUST include such a sequence at the enclosing operation boundary.
+- **Rejection and Permission:** Reachable unsupported paths MUST reject before execution. Tests MUST also protect supported nonlethal and permitted no-effect paths from rejection for context used only by unreachable side effects. Rejected, accepted-no-effect and applied outcomes MUST be distinguished.
+- **Pure Validation:** Admission MUST leave caller state, context, counters, RNG and nested shared references unchanged, on acceptance and rejection. Tests MUST observe affected referents independently of shallow snapshots. Validation MUST NOT invoke external `Apply` hooks or persistence; required external transitions MUST use the owner's validation/projection contract on isolated state.
+- **Ordered Composition:** When earlier effects change later resources, stats, consumption, living/dead state, target resolution or eligibility, tests MUST include the sequence at the enclosing operation boundary, carrying those changes into later steps. Mutually exclusive target/RNG alternatives MUST NOT be accumulated as simultaneous effects. Accepted operations MUST NOT reach an unsupported effect after partial execution; tests MUST distinguish such admission defects from contract-permitted external failures and their rollback behavior.
 
 These criteria MUST NOT be interpreted as requiring an exhaustive combination matrix or tests for unrelated behavior.
+
+### Battle Test Selection
+
+For battle behavior changes, MUST apply the [selection procedure and decision table](../../docs/development/testing.md#53-battle-test-selection) to the affected behavior:
+
+- MUST identify relevant equivalence classes, boundaries and shared-state interactions, and select checks at the responsible layers. Pairwise/t-wise sampling MUST NOT replace ordered cases for reachable death/revival, reflection/cover, one-use defenses, equipment reset or external state changes that affect continuation. MUST NOT require the full job × skill × status product by default.
+- Shared helpers or synthetic representative catalogs MUST NOT certify untested concrete entries. Changed entries MUST have their binding, parameters/cost metadata, discovery and execution checked through affected invocation paths; unsupported descendants MUST remain whole-action gates.
+- Positive fixtures/generated cases MUST satisfy the relevant state and context contracts. Intentionally missing/unsupported facts MUST be explicit negative cases. MUST NOT narrow production target candidates or random pools to make tests pass.
+- Expected behavior MUST use independently verified specification vectors/invariants. Comparing projection with execution MAY supplement them, but MUST NOT be the sole oracle. Changed persistence/continuation facts MUST be checked across save/reload with required runtime context rebuilt.
+- Generated failures MUST retain replayable seed/input facts and a minimized input/operation sequence. Test/benchmark selection MUST account for generated-case count and admission exploration cost at supported roster/catalog sizes; MUST NOT cap production behavior to fit a test budget. MUST NOT add a generic runner, dependency or CI tier without a demonstrated gap that existing tools cannot cover.
 
 ### Unit & Integration Test Time Budget Policy vs. Benchmarking
 - **No Sub-Second Assertions in Unit/Integration Tests:** Functional tests (`go test`) MUST NOT enforce sub-second wall-clock thresholds (fragile in CI/virtualized environments). Use liberal dead-man bounds (2.0s–5.0s) strictly to catch deadlocks/hanging goroutines. Emit informational timing via `t.Logf`.
