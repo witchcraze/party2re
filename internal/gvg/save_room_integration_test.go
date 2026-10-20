@@ -147,7 +147,7 @@ func TestGvGSaveRoomCommandFailureIntegration(t *testing.T) {
 				}
 				gp, opponentGP, wins := int64(3), int64(0), 0
 				if target == 1 {
-					gp, opponentGP, wins = 10, 4, 1
+					gp, opponentGP, wins = 7, 4, 1
 				}
 				f.assertRewards(t, gp, opponentGP, wins, 0)
 				saved, found, err := f.standings.FindRoundTransition(ctx, before.Room.ID, 1)
@@ -184,7 +184,7 @@ func TestGvGSaveRoomCommandFailureIntegration(t *testing.T) {
 					if battle.calls != 2 || !result.MatchCompleted {
 						t.Fatalf("next round did not complete: calls=%d result=%+v", battle.calls, result)
 					}
-					f.assertRewards(t, 13, 4, 1, 0)
+					f.assertRewards(t, 10, 4, 1, 0)
 				}
 			})
 		}

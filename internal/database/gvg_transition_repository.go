@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/witchcraze/party2re/internal/gvg"
 )
@@ -33,7 +33,7 @@ func (r *GvGRepository) FindRoundTransition(ctx context.Context, roomID string, 
 // CommitRoundTransition atomically claims a round, its rewards and final settlement.
 // A completed match cannot be claimed again, even with a different round number.
 // Transaction: RunInTx
-// Lock Order: gvg_match_transitions(0) -> gvg_standings(8, ascending guild ID)
+// Lock Order: gvg_match_transitions(0) -> guilds(7, ascending ID) -> gvg_standings(8, ascending guild ID)
 func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string, round int, transition gvg.RoundTransition) (gvg.RoundTransition, error) {
 	if roomID == "" || round < 1 || round > gvg.MaxRounds || transition.Detail.Room.ID != roomID {
 		return gvg.RoundTransition{}, fmt.Errorf("invalid gvg round transition")
@@ -63,7 +63,7 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 			}
 		}
 
-		// Acquire all standing rows before awarding any reward, in one stable order.
+		// Update all guild balances before acquiring any standing locks.
 		guildIDs := []string{}
 		if transition.Result.WinnerGuildID != "" {
 			guildIDs = append(guildIDs, transition.Result.WinnerGuildID)
@@ -71,11 +71,17 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 		if transition.Settlement != nil {
 			guildIDs = append(guildIDs, transition.Settlement.GuildIDs...)
 		}
-		sort.Strings(guildIDs)
-		for i, guildID := range guildIDs {
-			if i > 0 && guildID == guildIDs[i-1] {
-				continue
+		slices.Sort(guildIDs)
+		guildIDs = slices.Compact(guildIDs)
+		guilds := GuildRepository{db: r.db}
+		for _, guildID := range guildIDs {
+			if gp := transition.GuildRewardGP(guildID); gp > 0 {
+				if err := guilds.AddPoints(txCtx, guildID, gp); err != nil {
+					return err
+				}
 			}
+		}
+		for _, guildID := range guildIDs {
 			if _, err := r.GetOrCreateStanding(txCtx, guildID); err != nil {
 				return err
 			}
@@ -83,9 +89,13 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 			if err := executor.QueryRowContext(txCtx, "SELECT guild_id FROM gvg_standings WHERE guild_id = ? FOR UPDATE", guildID).Scan(&lockedID); err != nil {
 				return err
 			}
-		}
-		if err := r.addRoundWinGP(txCtx, transition.Result.WinnerGuildID, gvg.RoundWinGP); err != nil {
-			return err
+			if gp := transition.GuildRewardGP(guildID); gp > 0 {
+				if _, err := executor.ExecContext(txCtx, `
+					UPDATE gvg_standings SET victory_points = victory_points + ?, updated_at = NOW() WHERE guild_id = ?
+				`, gp, guildID); err != nil {
+					return err
+				}
+			}
 		}
 		if transition.Settlement != nil {
 			if err := r.recordMatchSettlement(txCtx, *transition.Settlement); err != nil {

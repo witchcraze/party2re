@@ -13,8 +13,8 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
 - **Live Team Battle Resolution**: Combats are resolved dynamically through `internal/core/battle.Engine` via `ResolvePartyBattle`. All participants sharing the room leader's guild color form the Ally party, while opposing guild participants form the Enemy party.
 - **Dual-Tier Storage Model**:
   - **Ephemeral Room State (Valkey Master)**: Rooms, active rosters, and character-to-room mappings are stored in Valkey (`party2:gvg:room:<id>`, `party2:gvg:character:<id>`, `party2:gvg:rooms:active`) with a 30-minute inactivity TTL. Disbanding or match completion immediately cleans up active mappings.
-  - **Canonical Persistence (MariaDB Master)**: Guild standings, accumulated Victory Points (GP), wins, losses, draws, and permanent 7-tier trophy decorations are durably recorded in `gvg_standings` using row-level pessimistic locking (`FOR UPDATE`). Guilds store their official team color in `guilds.color`.
-  - **Reward Retry Boundary**: The SQL repository commits rewards and the latest room transition together, then publishes the room to Valkey. The [GvG reward publication contract](../architecture/transient-run-state.md#gvg-reward-publication) owns claim identity, retry and retention guarantees. Reward amount/recipient parity gaps remain tracked in [#1213](https://github.com/witchcraze/party2re/issues/1213); retry safety does not certify those rules.
+  - **Canonical Persistence (MariaDB Master)**: Spendable GP is stored in `guilds.points` and awarded through the existing guild points writer. `gvg_standings` records cumulative GvG reward GP (`victory_points`), wins, losses, draws, and permanent 7-tier trophy decorations. The ranking counter is not the guild balance: other guild activities and point decay do not change it. Guilds store their official team color in `guilds.color`.
+  - **Reward Retry Boundary**: The SQL repository commits rewards and the latest room transition together, then publishes the room to Valkey. The [GvG reward publication contract](../architecture/transient-run-state.md#gvg-reward-publication) owns claim identity, retry and retention guarantees.
 - **Authorization & Ownership**: All room creation, joining, starting, and advancing operations enforce strict character ownership through standard authentication middleware (`withAuthenticatedCharacter`).
 
 ---
@@ -52,19 +52,19 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
   - **Round Winner**: Determined from the unique surviving guild among participants (`res.RemainingHP`, `vs_guild.cgi:106-122`):
     - If exactly 1 guild has surviving members (`alive_team_c == 1`), that guild wins the round (`round_win`).
     - If 0 guilds survive (mutual wipeout) or multiple guilds remain, the round results in a draw (`draw`) with no score or round GP awarded.
-  - **Round Victory Reward**: The winning guild immediately receives **+3 GP** (`victory_points += 3`, `vs_guild.cgi:121`).
+  - **Intermediate Victory Reward**: A round winner that has not reached `TargetWins` receives **+3 GP** (`vs_guild.cgi:126–128`). This also applies to a round win below the target at the round limit. A match-deciding win receives only the final settlement below, without an additional +3 GP (`vs_guild.cgi:112–128`).
   - Round scores are tracked per guild (`guild_scores[guild_id]++`).
 - **Match Decider & Target Wins**:
   - When a guild achieves the specified `TargetWins` (1..3):
     - The match completes (`status = completed`, `outcome = match_won`).
-    - The overall winning guild receives the **entire accumulated prize pool GP** (`victory_points += prize_pool`, `vs_guild.cgi:183`).
+    - The overall winning guild receives the **entire accumulated prize pool GP** (`vs_guild.cgi:183`).
     - The overall winning guild is awarded **1 Bronze Medal**, triggering recursive cascading promotion (`vs_guild.cgi:193`).
     - Participating loser guilds receive $+1$ match loss.
     - **All participants across all guilds** in the room earn **+4 GP** for their respective guilds (`vs_guild.cgi:187`).
 - **10-Round Draw Limit (`vs_guild.cgi:67, 114`)**:
   - If 10 rounds conclude without any guild reaching the target wins, the match forcibly terminates as a draw (`match_draw`).
   - All participating guilds receive $+1$ match draw.
-  - All participants across all guilds still earn **+4 GP** for their guilds.
+  - No prize, participant GP or medal is awarded: the legacy cutoff and no-survivor branches do not call `give_bet` (`vs_guild.cgi:67–85, 170–195`). Any intermediate win GP already earned is retained.
 - **Round Advancement**:
   - If the match is not complete, round number increments (`Round++`), and HP of all participants is fully restored to MaxHP for the next round (`vs_guild.cgi:142`).
 

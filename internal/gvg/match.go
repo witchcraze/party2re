@@ -203,7 +203,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		var overallWinnerGuildID string
 		var overallWinnerGuildName string
 
-		// Handle round win: +3 GP to the round winning guild (vs_guild.cgi:121)
+		// A deciding win receives the final settlement instead of intermediate GP.
 		if roundWinnerGuildID != "" {
 			detail.Room.GuildScores[roundWinnerGuildID]++
 
@@ -228,7 +228,9 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			guildIDsMap := make(map[string]bool)
 			for _, m := range detail.Members {
 				guildIDsMap[m.GuildID] = true
-				participantGP[m.GuildID] += MatchParticipantGP // 4 GP per participant (vs_guild.cgi:187)
+				if overallWinnerGuildID != "" {
+					participantGP[m.GuildID] += MatchParticipantGP // 4 GP per participant (vs_guild.cgi:187)
+				}
 			}
 			var guildIDs []string
 			for gid := range guildIDsMap {

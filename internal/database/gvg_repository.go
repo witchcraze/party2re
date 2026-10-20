@@ -108,24 +108,6 @@ func (r *GvGRepository) GetLeaderboard(ctx context.Context, limit int) ([]gvg.Gv
 	return list, nil
 }
 
-func (r *GvGRepository) addRoundWinGP(ctx context.Context, guildID string, gp int) error {
-	if guildID == "" || gp <= 0 {
-		return nil
-	}
-	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		executor := ExecutorFromContext(txCtx, r.db)
-		if _, err := r.GetOrCreateStanding(txCtx, guildID); err != nil {
-			return err
-		}
-		_, err := executor.ExecContext(txCtx, `
-			UPDATE gvg_standings
-			SET victory_points = victory_points + ?, updated_at = NOW()
-			WHERE guild_id = ?
-		`, gp, guildID)
-		return err
-	})
-}
-
 func (r *GvGRepository) recordMatchSettlement(ctx context.Context, settlement gvg.MatchSettlement) error {
 	settlement.GuildIDs = append([]string(nil), settlement.GuildIDs...)
 	sort.Strings(settlement.GuildIDs)
@@ -140,12 +122,11 @@ func (r *GvGRepository) recordMatchSettlement(ctx context.Context, settlement gv
 
 		if settlement.IsDraw {
 			for _, gID := range settlement.GuildIDs {
-				extraGP := settlement.ParticipantGP[gID]
 				_, err := executor.ExecContext(txCtx, `
 					UPDATE gvg_standings
-					SET draws = draws + 1, victory_points = victory_points + ?, updated_at = NOW()
+					SET draws = draws + 1, updated_at = NOW()
 					WHERE guild_id = ?
-				`, extraGP, gID)
+				`, gID)
 				if err != nil {
 					return err
 				}
@@ -154,7 +135,6 @@ func (r *GvGRepository) recordMatchSettlement(ctx context.Context, settlement gv
 		}
 
 		for _, gID := range settlement.GuildIDs {
-			extraGP := settlement.ParticipantGP[gID]
 			if gID == settlement.WinnerGuildID {
 				var st gvg.GvGStanding
 				err := executor.QueryRowContext(txCtx, `
@@ -172,17 +152,16 @@ func (r *GvGRepository) recordMatchSettlement(ctx context.Context, settlement gv
 				}
 
 				st.Wins++
-				st.VictoryPoints += int64(settlement.WinnerPrizeGP + extraGP)
 				st.BronzeMedals++
 				st.PromoteMedals()
 
 				_, err = executor.ExecContext(txCtx, `
 					UPDATE gvg_standings
-					SET wins = ?, victory_points = ?,
+					SET wins = ?,
 					    bronze_medals = ?, silver_medals = ?, gold_medals = ?, orders = ?, trophies = ?,
 					    championship_cups = ?, champion_cups = ?, updated_at = NOW()
 					WHERE guild_id = ?
-				`, st.Wins, st.VictoryPoints,
+				`, st.Wins,
 					st.BronzeMedals, st.SilverMedals, st.GoldMedals, st.Orders, st.Trophies,
 					st.ChampionshipCups, st.ChampionCups, gID)
 				if err != nil {
@@ -191,9 +170,9 @@ func (r *GvGRepository) recordMatchSettlement(ctx context.Context, settlement gv
 			} else {
 				_, err := executor.ExecContext(txCtx, `
 					UPDATE gvg_standings
-					SET losses = losses + 1, victory_points = victory_points + ?, updated_at = NOW()
+					SET losses = losses + 1, updated_at = NOW()
 					WHERE guild_id = ?
-				`, extraGP, gID)
+				`, gID)
 				if err != nil {
 					return err
 				}

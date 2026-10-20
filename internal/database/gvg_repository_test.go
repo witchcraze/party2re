@@ -136,8 +136,8 @@ func TestGvGRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreateStanding A after settlement: %v", err)
 	}
-	// Current accounting: 6 GP (two rounds) + 3 GP (prize) + 4 GP (participant).
-	if updatedA.Wins != 1 || updatedA.BronzeMedals != 1 || updatedA.VictoryPoints != 13 {
+	// 3 GP (intermediate round) + 3 GP (prize) + 4 GP (participant).
+	if updatedA.Wins != 1 || updatedA.BronzeMedals != 1 || updatedA.VictoryPoints != 10 {
 		t.Errorf("unexpected updated standing A: %#v", updatedA)
 	}
 
@@ -156,10 +156,6 @@ func TestGvGRepository(t *testing.T) {
 		WinnerPrizeGP: 0,
 		GuildIDs:      []string{guildA_ID, guildB_ID},
 		IsDraw:        true,
-		ParticipantGP: map[string]int{
-			guildA_ID: 4,
-			guildB_ID: 4,
-		},
 	}
 	drawRoomID := id.New()
 	if _, err := gvgRepo.CommitRoundTransition(ctx, drawRoomID, gvg.MaxRounds, gvg.RoundTransition{
@@ -171,7 +167,7 @@ func TestGvGRepository(t *testing.T) {
 	}
 
 	afterDrawA, err := gvgRepo.GetOrCreateStanding(ctx, guildA_ID)
-	if err != nil || afterDrawA.Draws != 1 || afterDrawA.VictoryPoints != 17 {
+	if err != nil || afterDrawA.Draws != 1 || afterDrawA.VictoryPoints != 10 {
 		t.Errorf("unexpected standing A after draw: %#v, err=%v", afterDrawA, err)
 	}
 

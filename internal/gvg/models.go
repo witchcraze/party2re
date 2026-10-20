@@ -63,7 +63,7 @@ type GvGStanding struct {
 	Wins             int       `json:"wins"`
 	Losses           int       `json:"losses"`
 	Draws            int       `json:"draws"`
-	VictoryPoints    int64     `json:"victory_points"` // GP
+	VictoryPoints    int64     `json:"victory_points"` // Cumulative GvG rewards, separate from the guild balance
 	BronzeMedals     int       `json:"bronze_medals"`
 	SilverMedals     int       `json:"silver_medals"`
 	GoldMedals       int       `json:"gold_medals"`

@@ -39,9 +39,11 @@ its actual transitions against the original CGI.
 ### GvG reward publication
 
 `StandingRepository.CommitRoundTransition` delegates to the GvG SQL repository.
-One transaction locks the room's `gvg_match_transitions` record, then standing
-rows in ascending guild ID order, and commits round GP, any final settlement,
-and the resulting room/outcome together. The room ID and resolved round identify
+One transaction locks the room's `gvg_match_transitions` record, updates rewarded
+`guilds` rows through `GuildRepository.AddPoints` in ascending ID order (Rank 7),
+then locks `gvg_standings` rows in ascending guild ID order (Rank 8). It commits
+spendable GP, cumulative GvG reward counters, any final settlement and the resulting
+room/outcome together. The room ID and resolved round identify
 the claim; a completed match rejects further reward claims at any round.
 The record retains only the latest committed transition for each room.
 

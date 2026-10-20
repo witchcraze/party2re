@@ -12406,7 +12406,8 @@
             "type": "string"
           },
           "victory_points": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Cumulative GP earned from GvG rewards for ranking; spendable guild GP is stored separately in the guild points balance."
           },
           "wins": {
             "type": "integer"

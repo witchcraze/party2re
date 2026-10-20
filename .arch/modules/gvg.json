@@ -1,7 +1,7 @@
 {
   "module": "gvg",
   "tier": 2,
-  "description": "Live guild battle rooms; service delegates durable round rewards and final settlement to the SQL repository before publishing room state to Valkey.",
+  "description": "Live guild battle rooms; service delegates spendable guild GP, ranking counters and final settlement to the SQL repository before publishing room state to Valkey.",
   "package": "internal/gvg",
   "dependencies": [
     {
@@ -30,10 +30,16 @@
           "note": "Serialize room round identities and terminal settlement before reward writes."
         },
         {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "UPDATE (ascending guild ID)",
+          "note": "Award spendable GP through GuildRepository.AddPoints using the ambient claim transaction."
+        },
+        {
           "table": "gvg_standings",
           "tier": 8,
           "mode": "SELECT ... FOR UPDATE (ascending guild ID)",
-          "note": "Lock all affected standings before round GP, win/loss/draw and medal mutations."
+          "note": "Lock affected standings before cumulative reward GP, win/loss/draw and medal mutations."
         }
       ]
     }

@@ -68,7 +68,7 @@ func (m *mockStandingRepo) CommitRoundTransition(ctx context.Context, roomID str
 	if saved, found, err := m.FindRoundTransition(ctx, roomID, round); err != nil || found {
 		return saved, err
 	}
-	if transition.Result.WinnerGuildID != "" {
+	if transition.Result.WinnerGuildID != "" && (transition.Settlement == nil || transition.Settlement.IsDraw) {
 		if err := m.addRoundWinGP(ctx, transition.Result.WinnerGuildID, gvg.RoundWinGP); err != nil {
 			return gvg.RoundTransition{}, err
 		}
@@ -102,7 +102,6 @@ func (m *mockStandingRepo) recordMatchSettlement(_ context.Context, settlement g
 		extraGP := settlement.ParticipantGP[gID]
 		if settlement.IsDraw {
 			st.Draws++
-			st.VictoryPoints += int64(extraGP)
 		} else if gID == settlement.WinnerGuildID {
 			st.Wins++
 			st.VictoryPoints += int64(settlement.WinnerPrizeGP + extraGP)
@@ -504,10 +503,8 @@ func TestGvGMatchFlow(t *testing.T) {
 		}
 
 		// Verify Standings:
-		// 1. Round win: g_crimson got +3 GP
-		// 2. Match settlement:
+		// The deciding round receives only match settlement:
 		//    - g_crimson (winner): +4 GP prize pool + (4 * 2 participants) = 12 GP, +1 Win, +1 Bronze Medal
-		//    - Total GP for g_crimson: 3 (round) + 12 (match) = 15 GP
 		//    - g_azure (loser): +1 Loss, + (4 * 1 participant) = 4 GP
 		stCrimson, err := standingRepo.GetOrCreateStanding(ctx, "g_crimson")
 		if err != nil {
@@ -519,8 +516,8 @@ func TestGvGMatchFlow(t *testing.T) {
 		if stCrimson.BronzeMedals != 1 {
 			t.Errorf("expected 1 bronze medal for Crimson, got %d", stCrimson.BronzeMedals)
 		}
-		if stCrimson.VictoryPoints != 15 {
-			t.Errorf("expected 15 GP for Crimson, got %d", stCrimson.VictoryPoints)
+		if stCrimson.VictoryPoints != 12 {
+			t.Errorf("expected 12 GP for Crimson, got %d", stCrimson.VictoryPoints)
 		}
 
 		stAzure, err := standingRepo.GetOrCreateStanding(ctx, "g_azure")

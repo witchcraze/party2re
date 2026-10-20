@@ -18,13 +18,13 @@ const (
 	DefaultRoomsIndexKey       = DefaultRoomsActiveIndexKey // Deprecated: alias for backward compatibility
 )
 
-// MatchSettlement encapsulates updates to durable guild standings upon match completion.
+// MatchSettlement describes final guild rewards, standings and medals.
 type MatchSettlement struct {
 	WinnerGuildID string         // Empty if match ended in a draw
 	WinnerPrizeGP int            // Prize pool GP to award to winning guild
 	GuildIDs      []string       // All participating guilds in the match
 	IsDraw        bool           // True if match ended in a draw
-	ParticipantGP map[string]int // Additional GP awarded per guild (4 GP per participant)
+	ParticipantGP map[string]int // 4 GP per participant, only when the match has a winner
 }
 
 // RoundTransition retains the committed outcome and room state for publication retries.
@@ -34,7 +34,25 @@ type RoundTransition struct {
 	Settlement *MatchSettlement
 }
 
-// StandingRepository defines durable persistence for guild battle standings and trophy progression.
+// GuildRewardGP returns earned GP; a deciding round replaces the intermediate win reward.
+func (t RoundTransition) GuildRewardGP(guildID string) int64 {
+	if t.Settlement != nil && !t.Settlement.IsDraw {
+		if t.Settlement.WinnerGuildID == "" {
+			return 0
+		}
+		gp := int64(t.Settlement.ParticipantGP[guildID])
+		if guildID == t.Settlement.WinnerGuildID {
+			gp += int64(t.Settlement.WinnerPrizeGP)
+		}
+		return gp
+	}
+	if guildID != "" && guildID == t.Result.WinnerGuildID {
+		return RoundWinGP
+	}
+	return 0
+}
+
+// StandingRepository persists guild battle rewards, standings and trophy progression.
 type StandingRepository interface {
 	GetOrCreateStanding(ctx context.Context, guildID string) (GvGStanding, error)
 	GetLeaderboard(ctx context.Context, limit int) ([]GvGStanding, error)

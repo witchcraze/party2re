@@ -17,7 +17,7 @@ type mockFailingStandingRepo struct {
 }
 
 func (m *mockFailingStandingRepo) CommitRoundTransition(ctx context.Context, roomID string, round int, transition gvg.RoundTransition) (gvg.RoundTransition, error) {
-	if transition.Result.WinnerGuildID != "" && m.addErr != nil {
+	if transition.Result.WinnerGuildID != "" && (transition.Settlement == nil || transition.Settlement.IsDraw) && m.addErr != nil {
 		return gvg.RoundTransition{}, m.addErr
 	}
 	if transition.Settlement != nil && m.recordErr != nil {
@@ -132,6 +132,15 @@ func TestAdvanceRound_AddRoundWinGP_ErrorPropagation(t *testing.T) {
 
 	svc, roomRepo, leaderID, roomID := setupSettlementTest(t, failingStandings)
 
+	detail, err := roomRepo.GetRoom(ctx, roomID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail.Room.TargetWins = 2
+	if err := roomRepo.SaveRoom(ctx, detail.Room, detail.Members); err != nil {
+		t.Fatal(err)
+	}
+
 	res, err := svc.AdvanceRound(ctx, leaderID, roomID)
 	if err == nil {
 		t.Fatalf("expected error from AdvanceRound when AddRoundWinGP fails, got nil (res=%+v)", res)
@@ -142,7 +151,7 @@ func TestAdvanceRound_AddRoundWinGP_ErrorPropagation(t *testing.T) {
 	}
 
 	// Verify room in repo was not saved with completed status or modified round
-	detail, err := roomRepo.GetRoom(ctx, roomID)
+	detail, err = roomRepo.GetRoom(ctx, roomID)
 	if err != nil {
 		t.Fatalf("GetRoom failed: %v", err)
 	}

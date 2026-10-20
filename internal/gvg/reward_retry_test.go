@@ -64,7 +64,11 @@ func TestAdvanceRound_RetryRoomPublication(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if result.WinnerGuildID != "g1" || result.GuildScores["g1"] != 1 || standings.roundWins["g1"] != gvg.RoundWinGP || standings.roundWins["g2"] != 0 {
+			expectedRoundGP := 0
+			if target > 1 {
+				expectedRoundGP = gvg.RoundWinGP
+			}
+			if result.WinnerGuildID != "g1" || result.GuildScores["g1"] != 1 || standings.roundWins["g1"] != expectedRoundGP || standings.roundWins["g2"] != 0 {
 				t.Fatalf("round was rerun: result=%+v rewards=%v", result, standings.roundWins)
 			}
 			if target == 1 && len(standings.settlements) != 1 {
