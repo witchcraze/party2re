@@ -213,6 +213,46 @@ func TestGvGRewardConcurrentRetryIntegration(t *testing.T) {
 	f.assertRewards(t, 21, 12, 3, 0)
 }
 
+func TestGvGRewardConcurrentWinDrawIntegration(t *testing.T) {
+	f := newRewardFixture(t, 1, 1, corebattle.OutcomeWin)
+	ctx := context.Background()
+	roomIDs := []string{id.New(), id.New()}
+	winner, loser := f.detail.Members[0].GuildID, f.detail.Members[1].GuildID
+	// Both claims start without standings and contend on the same guilds.
+	stress := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, _ int) error {
+		detail := f.detail
+		detail.Room.ID = roomIDs[worker%2]
+		detail.Room.Status = gvg.StatusCompleted
+		detail.Room.WinnerGuildID = winner
+		detail.Room.GuildScores = map[string]int{winner: 1}
+		settlement := gvg.MatchSettlement{
+			WinnerGuildID: winner, WinnerPrizeGP: 3,
+			GuildIDs: []string{winner, loser}, ParticipantGP: map[string]int{winner: 4, loser: 4},
+		}
+		result := gvg.RoundResolution{Round: 1, Outcome: "match_won", WinnerGuildID: winner, OverallWinnerGuildID: winner, MatchCompleted: true}
+		if worker%2 == 1 {
+			settlement.GuildIDs[0], settlement.GuildIDs[1] = settlement.GuildIDs[1], settlement.GuildIDs[0]
+			settlement.IsDraw = true
+			settlement.WinnerGuildID = ""
+			settlement.ParticipantGP = nil
+			result.WinnerGuildID = ""
+			result.OverallWinnerGuildID = ""
+			result.Outcome = "match_draw"
+			result.Round = gvg.MaxRounds
+			detail.Room.Round = gvg.MaxRounds
+			detail.Room.WinnerGuildID = ""
+			detail.Room.GuildScores = map[string]int{}
+		}
+		result.GuildScores = detail.Room.GuildScores
+		_, err := f.standings.CommitRoundTransition(ctx, detail.Room.ID, detail.Room.Round, gvg.RoundTransition{Detail: detail, Result: result, Settlement: &settlement})
+		return err
+	})
+	if stress.Successes != stress.TotalOps {
+		t.Fatalf("win/draw claims: %+v", stress)
+	}
+	f.assertRewards(t, 7, 4, 1, 1)
+}
+
 func TestGvGRewardSuccessiveRoundsIntegration(t *testing.T) {
 	f := newRewardFixture(t, 2, 1, corebattle.OutcomeWin)
 	ctx := context.Background()

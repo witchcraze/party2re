@@ -38,9 +38,9 @@
     {
       "module": "gvg",
       "caller_method": "internal/database/gvg_transition_repository.go#GvGRepository.CommitRoundTransition",
-      "lock_mode": "UPDATE",
+      "lock_mode": "SELECT FOR UPDATE",
       "lock_order": 7,
-      "purpose": "Award spendable GvG rewards through GuildRepository.AddPoints after the room claim and before standing locks, in ascending guild ID order"
+      "purpose": "Lock affected guilds in ascending ID order after the room claim and before standing creation; award spendable GP through GuildRepository.AddPoints"
     }
   ]
 }

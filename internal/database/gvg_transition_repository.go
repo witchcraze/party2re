@@ -63,7 +63,7 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 			}
 		}
 
-		// Update all guild balances before acquiring any standing locks.
+		// Lock guilds even without rewards: inserting a standing also locks its guild FK.
 		guildIDs := []string{}
 		if transition.Result.WinnerGuildID != "" {
 			guildIDs = append(guildIDs, transition.Result.WinnerGuildID)
@@ -75,6 +75,13 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 		guildIDs = slices.Compact(guildIDs)
 		guilds := GuildRepository{db: r.db}
 		for _, guildID := range guildIDs {
+			var lockedID string
+			if err := executor.QueryRowContext(txCtx, "SELECT id FROM guilds WHERE id = ? FOR UPDATE", guildID).Scan(&lockedID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return gvg.ErrGuildNotFound
+				}
+				return err
+			}
 			if gp := transition.GuildRewardGP(guildID); gp > 0 {
 				if err := guilds.AddPoints(txCtx, guildID, gp); err != nil {
 					return err

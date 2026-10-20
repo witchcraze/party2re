@@ -32,8 +32,8 @@
         {
           "table": "guilds",
           "tier": 7,
-          "mode": "UPDATE (ascending guild ID)",
-          "note": "Award spendable GP through GuildRepository.AddPoints using the ambient claim transaction."
+          "mode": "SELECT ... FOR UPDATE (ascending guild ID)",
+          "note": "Lock all affected guilds, including draws, before standing creation can acquire a guild foreign-key lock; award GP through GuildRepository.AddPoints using the ambient claim transaction."
         },
         {
           "table": "gvg_standings",
