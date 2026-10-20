@@ -244,15 +244,16 @@ func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room GvGRoom, membe
 		return err
 	}
 
-	key := DefaultRoomKeyPrefix + room.ID
-	cmd := v.client.B().Set().Key(key).Value(string(data)).Ex(DefaultLobbyTTL).Build()
-	if err := v.client.Do(ctx, cmd).Error(); err != nil {
+	// Publish the index first so its failure cannot advance the authoritative room.
+	indexCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
+		ScoreMember(float64(room.UpdatedAt.Unix()), room.ID).Build()
+	if err := v.client.Do(ctx, indexCmd).Error(); err != nil {
 		return err
 	}
 
-	indexCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
-		ScoreMember(float64(room.UpdatedAt.Unix()), room.ID).Build()
-	return v.client.Do(ctx, indexCmd).Error()
+	key := DefaultRoomKeyPrefix + room.ID
+	cmd := v.client.B().Set().Key(key).Value(string(data)).Ex(DefaultLobbyTTL).Build()
+	return v.client.Do(ctx, cmd).Error()
 }
 
 func (v *ValkeyRoomRepository) GetRoom(ctx context.Context, id string) (RoomDetail, error) {
@@ -308,7 +309,7 @@ func (v *ValkeyRoomRepository) ListRooms(ctx context.Context) ([]RoomSummary, er
 	for _, id := range roomIDs {
 		detail, err := v.GetRoom(ctx, id)
 		if err != nil {
-			_ = v.client.Do(ctx, v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(id).Build())
+			// The index may precede a room being published; prune by age above.
 			continue
 		}
 		if detail.Room.Status != StatusRecruiting {

@@ -24,6 +24,7 @@ type rewardFixture struct {
 	detail    gvg.RoomDetail
 	service   *gvg.Service
 	battle    *mockBattleEngine
+	client    valkey.Client
 }
 
 func newRewardFixture(t *testing.T, target, round int, outcome corebattle.Outcome) rewardFixture {
@@ -81,7 +82,7 @@ func newRewardFixture(t *testing.T, target, round int, outcome corebattle.Outcom
 	if err != nil {
 		t.Fatal(err)
 	}
-	return rewardFixture{db: db, standings: standings, rooms: rooms, detail: detail, service: service, battle: battle}
+	return rewardFixture{db: db, standings: standings, rooms: rooms, detail: detail, service: service, battle: battle, client: client}
 }
 
 func (f rewardFixture) assertRewards(t *testing.T, winnerGP, loserGP int64, wins, draws int) {
