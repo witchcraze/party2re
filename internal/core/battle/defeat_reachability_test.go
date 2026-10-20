@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"testing"
 )
@@ -14,7 +15,11 @@ func finalStrikeFixture() (LifetimeState, *DefeatContext) {
 	c.PartyIDs, c.EnemyIDs = []string{"self"}, []string{"enemy"}
 	s.actor("enemy").Gear.AccessoryID = "item-212"
 	s.actor("enemy").ItemDefinitionIDs = []string{"item-212"}
-	return s, nativeDefeatContext(c.TargetContext)
+	dc := nativeDefeatContext(c.TargetContext)
+	level := 50
+	dc.RequesterLevel = &level
+	dc.Seals = &WeaponSealTable{DragonAttack: 50, PhoenixWeight: -20}
+	return s, dc
 }
 
 func TestFinalStrikeNonlethalDoesNotRequireDefeat(t *testing.T) {
@@ -24,11 +29,17 @@ func TestFinalStrikeNonlethalDoesNotRequireDefeat(t *testing.T) {
 			s.actor("enemy").Attack = 900
 			s.actor("self").Gear.AccessoryID = accessory
 			s.actor("self").ItemDefinitionIDs = []string{accessory}
+			levelBefore, sealsBefore := *c.RequesterLevel, *c.Seals
+			partyBefore, enemyBefore := slices.Clone(c.PartyIDs), slices.Clone(c.EnemyIDs)
+			applies := 0
+			c.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { applies++; return nil }
 			before, context := reloadLifetime(t, s), *c
 			if err := s.ValidateDefeat(c, "enemy", &targetRNG{t: t}); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(before, s) || !reflect.DeepEqual(context, *c) {
+			if !reflect.DeepEqual(before, s) || !reflect.DeepEqual(context, *c) ||
+				*c.RequesterLevel != levelBefore || *c.Seals != sealsBefore ||
+				!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) || applies != 0 {
 				t.Fatal("validation changed state or context")
 			}
 			for _, reload := range []bool{false, true} {
@@ -99,9 +110,18 @@ func TestFinalStrikeDamageBoundsAndResetContexts(t *testing.T) {
 			if tc.shield {
 				target.ItemDefinitionIDs = append(target.ItemDefinitionIDs, "item-162")
 			}
+			levelBefore, sealsBefore := *c.RequesterLevel, *c.Seals
+			partyBefore, enemyBefore := slices.Clone(c.PartyIDs), slices.Clone(c.EnemyIDs)
+			applies := 0
+			c.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { applies++; return nil }
 			before := reloadLifetime(t, s)
 			err := s.ValidateDefeat(c, "enemy", &targetRNG{t: t})
-			if (err == nil) != tc.accept || (!tc.accept && !errors.Is(err, ErrUnsupportedEffect)) || !reflect.DeepEqual(before, s) {
+			if *c.Seals != sealsBefore {
+				t.Fatal("validation changed shared seal facts")
+			}
+			if (err == nil) != tc.accept || (!tc.accept && !errors.Is(err, ErrUnsupportedEffect)) ||
+				!reflect.DeepEqual(before, s) || *c.RequesterLevel != levelBefore ||
+				!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) || applies != 0 {
 				t.Fatal(tc.accept, err, s)
 			}
 			if tc.accept && tc.attack != 0 {
@@ -133,10 +153,17 @@ func TestAreaDeathFinalStrikeAccumulatesDamage(t *testing.T) {
 			s.actor("self").HP = hp
 			s.actor("self").Gear.AccessoryID = "item-110"
 			s.actor("self").ItemDefinitionIDs = []string{"item-110"}
+			levelBefore, sealsBefore := *c.RequesterLevel, *c.Seals
+			partyBefore, enemyBefore := slices.Clone(c.PartyIDs), slices.Clone(c.EnemyIDs)
+			applies := 0
+			c.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { applies++; return nil }
 			sc := StatusContext{EffectContext: EffectContext{TargetContext: c.TargetContext}, Defeat: c}
 			before := reloadLifetime(t, s)
 			err := s.ValidateAreaStatus(&sc, TargetEffect{Payload: CallbackPayload{Symbol: "death"}}, 100, true, true, &targetRNG{t: t})
-			if !reflect.DeepEqual(before, s) || sc.DeathCalls != 0 || sc.AreaDeathCalls != 0 {
+			if !reflect.DeepEqual(before, s) || sc.DeathCalls != 0 || sc.AreaDeathCalls != 0 ||
+				*c.RequesterLevel != levelBefore || *c.Seals != sealsBefore ||
+				!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) ||
+				sc.Defeat != c || applies != 0 {
 				t.Fatal("impure area validation")
 			}
 			if hp == 120 {
