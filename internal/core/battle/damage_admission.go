@@ -121,7 +121,7 @@ func (s *LifetimeState) damageCandidates(c *DamageContext, e TargetEffect) []Tar
 	return s.damageCandidatesAfter(c, e, nil)
 }
 
-func (s *LifetimeState) damageCandidatesAfter(c *DamageContext, e TargetEffect, mayReplace map[string]float64) []TargetEffect {
+func (s *LifetimeState) damageInitialTargetIDs(c *DamageContext, e TargetEffect) []string {
 	a := s.actor(c.ActorID)
 	var ids []string
 	if a.Status != StatusConfusion {
@@ -146,7 +146,13 @@ func (s *LifetimeState) damageCandidatesAfter(c *DamageContext, e TargetEffect, 
 			}
 		}
 	}
+	return ids
+}
+
+func (s *LifetimeState) damageCandidatesAfter(c *DamageContext, e TargetEffect, mayReplace map[string]float64) []TargetEffect {
+	ids := s.damageInitialTargetIDs(c, e)
 	var candidates []TargetEffect
+	a := s.actor(c.ActorID)
 	if a.Temporary == TemporaryPhantom {
 		for _, id := range ids {
 			candidate := e
@@ -156,6 +162,10 @@ func (s *LifetimeState) damageCandidatesAfter(c *DamageContext, e TargetEffect, 
 	} else {
 		candidates = s.temporaryTargetCandidates(c.TargetContext, e, ids, mayReplace)
 	}
+	return s.phantomTargetCandidates(c.TargetContext, candidates)
+}
+
+func (s *LifetimeState) phantomTargetCandidates(c TargetContext, candidates []TargetEffect) []TargetEffect {
 	if s.Fields.Current() == "phantom" && c.PhantomTargetID != "" && len(c.PhantomEnemyIDs) > 0 {
 		var redirected []TargetEffect
 		for _, candidate := range candidates {

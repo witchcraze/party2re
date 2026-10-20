@@ -639,8 +639,11 @@ absent pair after an unknown temporary; disabling the hook skips it altogether
 (`10559–10584`). Tools do not acquire spell category checks or fallback rules.
 MP debit and absorption requests are returned explicitly for the resource owner
 to apply in source order: seal12 subtracts3 with a zero floor before subsequent
-helper gates, absorption adds to the resolved target with a MaxMP clamp before
-the incoming effect continues. These shared operations do not themselves write
+helper gates, absorption adds to the temporary's owner with a MaxMP clamp before
+the incoming effect continues, even if a later phantom-field redirect changes
+the final target. Symbolic magic restores30..49 MP; den reduces this to
+`floor(recovery * 0.025) + 1`, and an actor's Phantom skips the target temporary
+(`_skill.cgi:9542–9555,9695–9715`). These shared operations do not themselves write
 MP or certify a resource callback. Phantom-field identities must be supplied by
 the certified roster owner, including its matching-copy existence predicate and
 ordered candidate list; display names never substitute for encounter identities.
@@ -866,6 +869,11 @@ segment, while retaining the symbolic effect through target redirection. A zero
 modified death probability still succeeds at draw0. Status checks the equipment
 pair before the tension shield; death checks the shield before drawing. The
 plural loops visit every ordered enemy without area damage's actor-death break.
+Death admission projects each possible helper recovery before the existing
+revival/defeat closure. Ordered area continuations retain that recovery even
+when the death roll fails; later targets are checked after earlier resource and
+revival changes. Unreachable final strikes and reward hooks cannot reject a
+guaranteed revival, while any reachable final defeat retains their validation.
 `ApplyCure`/`ApplyPartyCure` retain matching-state and living-target predicates;
 gem62 resolves once to read current status and again inside the cure helper.
 `CheckIncapacitation` runs ability cure before its status-specific checks.
