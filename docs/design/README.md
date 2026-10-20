@@ -67,7 +67,7 @@ graph TD
 - [`admin.md`](admin.md) — Administrative character inspection and controls.
 
 ### 1. Account, Identity & Character Foundation
-- [`player-and-character.md`](player-and-character.md) — Account authentication, character identity, wallet (999,999G), vitality, crystal currency, and fatigue caps.
+- [`player-and-character.md`](player-and-character.md) — Account authentication, character identity, registration population limits (999 accounts), wallet (999,999G), vitality, crystal currency, and fatigue caps.
 - [`character-customization.md`](character-customization.md) — Naming hall, gender changes, title display, and custom font colors (`#RRGGBB`).
 - [PAT authentication](../architecture/interfaces.md#personal-access-tokens-and-dual-authentication) — token lifecycle and dual authentication.
 - [`player-deletion.md`](player-deletion.md) — Account deletion, asset cleanup, and maintenance lifecycle.

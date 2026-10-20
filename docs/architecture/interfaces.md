@@ -204,6 +204,9 @@ obsolete blanket exception list.
   - **Transport Response**: Throttled requests immediately return `429 Too Many Requests` with `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and `Retry-After: <seconds>` headers.
   - **Resilience and Fail-Open Boundary**: When the distributed Valkey backend is unavailable, `ValkeyLimiter` automatically falls back to an in-process `MemoryLimiter`, actively enforcing rate limits in memory. If the limiter itself returns an unhandled error, HTTP middleware fails open gracefully (`next.ServeHTTP`) to prevent dropping legitimate traffic.
   - **Game State Separation Invariant**: HTTP rate limiting operates strictly at the transport boundary. It never mutates domain character timers (`timer.CategorySleep`), records reload strikes, or applies in-game sleep penalties. Legacy reload strike and character sleep penalties (`party2/lib/system.cgi`, `party2/login.cgi`) are superseded by this HTTP-level throttling and administrative ban protection (#1106).
+- Player registration population limit (`POST /players` / `PARTY2_MAX_PLAYERS`):
+  - Server capacity is bounded by active accounts (`SELECT COUNT(*) FROM players WHERE banned_at IS NULL`), defaulting to 999 (`PARTY2_MAX_PLAYERS=0` for unlimited).
+  - When capacity is reached (`active_count >= max_players`), `POST /players` rejects registration with `409 Conflict` (domain error `ErrRegistrationLimitReached`) and message `"現在定員のため、新規登録は受け付けておりません"`. Soft-banned accounts (`banned_at IS NOT NULL`) and deleted accounts do not occupy slots (#1105).
 - `Content-Type: application/json` is required on all endpoints that consume a
   request body. Requests with a missing or incorrect content type receive
   `415 Unsupported Media Type`.
