@@ -103,7 +103,7 @@ In Party2re's relational domain model, identity and game progression are separat
 1. **Unit of Population Limit (Account-Level Enforcement)**:
    - The registration capacity ceiling applies strictly to **Player Accounts** (`players` table).
    - The registration gateway `POST /players` (`player.Service.Register`) is the sole enforcement boundary for server population limits.
-   - Character creation (`POST /characters`) operates independently of this server-wide limit, governed instead by per-account character quotas.
+   - Character creation (`POST /characters`) operates independently of this server-wide limit and neither consumes nor evaluates registration population capacity.
 
 2. **Configuration Source & Unlimited Option**:
    - The limit is governed by the environment variable `PARTY2_MAX_PLAYERS` (configurable via `compose.yaml` / Docker Compose / process environment).
@@ -126,7 +126,7 @@ In Party2re's relational domain model, identity and game progression are separat
    - **Required Stress Verification**: Implementation must include a paired concurrency stress test (`testutil.RunConcurrentStressTest` / `testutil.RunRace`) verifying that when capacity has room for $M$ registrants, exactly $M$ concurrent registrations succeed and all remaining concurrent attempts fail with `409 Conflict`, with final `COUNT(*) <= max_players`.
 
 #### 2.8.3 Bounded Implementation Handover
-Runtime enforcement of this specification is handed over to a dedicated follow-up implementation issue (covering `cmd/party2/config.go`, `internal/player`, `internal/api/http`, OpenAPI path update, and concurrent stress tests).
+Runtime enforcement of this specification is handed over to dedicated follow-up implementation issue [#1562](https://github.com/witchcraze/party2re/issues/1562) (covering `cmd/party2/config.go`, `internal/player`, `internal/api/http`, OpenAPI path update, and concurrent stress tests).
 
 ---
 
