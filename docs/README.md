@@ -10,7 +10,7 @@ During Version 1.0 reconstruction, the original Party2 project defines game beha
 | [`architecture/`](architecture/) | Component boundaries and persistence contracts | Composition roots, public interfaces, migrations |
 | [`design/README.md`](design/README.md) | Game rules, formulas, and state transitions | Original CGI behavior and explicitly approved changes |
 | [`development/`](development/) | Repository workflows and validation | Makefile, scripts, hooks, CI |
-| [`migration/legacy-cgi-mapping.md`](migration/legacy-cgi-mapping.md) | Navigation from legacy behavior to reconstruction targets | Legacy script, current source, and ticket evidence |
+| [`migration/legacy-cgi-mapping.md`](migration/legacy-cgi-mapping.md) | Navigation from legacy behavior to reconstruction targets | Legacy script, current source, and owning design documents |
 | [`migration/feature-inventory.md`](migration/feature-inventory.md) | Frozen reconstruction snapshot at its stated date/revision | Historical evidence; consult STATUS and open Issues for current gaps |
 | GitHub Issues / PRs and Git history | Task progress and detailed change history | Current ticket state, merged PRs and commits |
 | [`migration/documentation-audit.md`](migration/documentation-audit.md) | Known differences and unresolved reconstruction findings | Linked specifications, legacy evidence and current source |
