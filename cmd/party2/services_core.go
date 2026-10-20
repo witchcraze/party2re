@@ -100,6 +100,7 @@ func (c *coreServices) initPlayerAndChar(
 	guildService *guild.Service,
 	fleamarketRepo *database.FleaMarketRepository,
 	notificationService *notification.Service,
+	maxPlayers int,
 	logger logging.Logger,
 ) error {
 	var charOpts []character.Option
@@ -144,6 +145,7 @@ func (c *coreServices) initPlayerAndChar(
 		player.WithAPITokenRepository(c.playerAPITokenRepo),
 		player.WithTransactionProvider(c.txProvider),
 		player.WithLogger(logger),
+		player.WithMaxPlayers(maxPlayers),
 	)
 
 	if guildService != nil {

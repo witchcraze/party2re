@@ -77,6 +77,20 @@ func (m *memoryPlayerRepo) UpdateLastLogin(_ context.Context, id string, ip stri
 	return nil
 }
 
+func (m *memoryPlayerRepo) CountActive(_ context.Context) (int, error) {
+	count := 0
+	for _, p := range m.players {
+		if p.BannedAt == nil {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (m *memoryPlayerRepo) LockRegistrationForUpdate(_ context.Context) error {
+	return nil
+}
+
 func TestValkeySessionAuth_EndToEndFlow(t *testing.T) {
 	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("PARTY2_VALKEY_ADDR is not set, skipping real Valkey test")

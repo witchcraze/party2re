@@ -5,12 +5,15 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/logging"
 )
+
+var ErrRegistrationLimitReached = coreplayer.ErrRegistrationLimitReached
 
 const SessionDuration = 7 * 24 * time.Hour
 
@@ -22,6 +25,8 @@ type PlayerRepository interface {
 	List(ctx context.Context, sort string) ([]coreplayer.Player, error)
 	UpdateBannedAt(ctx context.Context, id string, bannedAt *time.Time) error
 	UpdateLastLogin(ctx context.Context, id string, ip string, at time.Time) error
+	CountActive(ctx context.Context) (int, error)
+	LockRegistrationForUpdate(ctx context.Context) error
 }
 
 type SessionRepository interface {
@@ -92,6 +97,14 @@ func WithAPITokenRepository(tokenRepo APITokenRepository) Option {
 	}
 }
 
+// WithMaxPlayers sets the registration population limit.
+// 0 or negative values mean unlimited registration.
+func WithMaxPlayers(limit int) Option {
+	return func(s *Service) {
+		s.maxPlayers = limit
+	}
+}
+
 // WithNow sets the time provider function for deterministic testing.
 func WithNow(now func() time.Time) Option {
 	return func(s *Service) {
@@ -110,6 +123,8 @@ type Service struct {
 	guildCleaner GuildMembershipCleaner
 	logger       logging.Logger
 	now          func() time.Time
+	maxPlayers   int
+	regMu        sync.Mutex
 }
 
 func NewService(players PlayerRepository, sessions SessionRepository, opts ...Option) (*Service, error) {
@@ -143,7 +158,32 @@ func (s *Service) Register(ctx context.Context, username, password string) (core
 		s.logger.Warn(ctx, "player.register", slog.String("username", username), slog.String("reason", "invalid_request"))
 		return coreplayer.Player{}, err
 	}
-	if err := s.players.Save(ctx, value); err != nil {
+
+	if s.maxPlayers > 0 {
+		s.regMu.Lock()
+		defer s.regMu.Unlock()
+	}
+
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		if s.maxPlayers > 0 {
+			if err := s.players.LockRegistrationForUpdate(txCtx); err != nil {
+				return err
+			}
+			count, err := s.players.CountActive(txCtx)
+			if err != nil {
+				return err
+			}
+			if count >= s.maxPlayers {
+				return coreplayer.ErrRegistrationLimitReached
+			}
+		}
+		return s.players.Save(txCtx, value)
+	})
+	if err != nil {
+		if errors.Is(err, coreplayer.ErrRegistrationLimitReached) {
+			s.logger.Warn(ctx, "player.register", slog.String("username", username), slog.String("reason", "registration_limit_reached"))
+			return coreplayer.Player{}, err
+		}
 		s.logger.Error(ctx, "player.register", err, slog.String("username", username))
 		return coreplayer.Player{}, err
 	}

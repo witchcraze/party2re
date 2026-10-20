@@ -14,12 +14,13 @@ import (
 const bcryptCost = 12
 
 var (
-	ErrInvalidPlayer   = errors.New("player is invalid")
-	ErrInvalidPassword = errors.New("password is invalid")
-	ErrInvalidSession  = errors.New("session is invalid")
-	ErrAuthentication  = errors.New("authentication failed")
-	ErrPlayerBanned    = errors.New("player account is banned")
-	ErrPlayerNotFound  = errors.New("player not found")
+	ErrInvalidPlayer            = errors.New("player is invalid")
+	ErrInvalidPassword          = errors.New("password is invalid")
+	ErrInvalidSession           = errors.New("session is invalid")
+	ErrAuthentication           = errors.New("authentication failed")
+	ErrPlayerBanned             = errors.New("player account is banned")
+	ErrPlayerNotFound           = errors.New("player not found")
+	ErrRegistrationLimitReached = errors.New("registration limit reached")
 )
 
 type Player struct {

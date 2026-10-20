@@ -5,29 +5,67 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type playerRepositoryStub struct {
-	value       coreplayer.Player
-	players     []coreplayer.Player
-	saveErr     error
-	findByIDErr error
-	deleteErr   error
-	listErr     error
-	banErr      error
-	loginIP     string
-	loginAt     time.Time
+	mu             sync.Mutex
+	value          coreplayer.Player
+	players        []coreplayer.Player
+	saveErr        error
+	findByIDErr    error
+	deleteErr      error
+	listErr        error
+	banErr         error
+	countActiveErr error
+	activeCount    *int
+	lockErr        error
+	loginIP        string
+	loginAt        time.Time
 }
 
-func (r *playerRepositoryStub) Save(context.Context, coreplayer.Player) error {
-	return r.saveErr
+func (r *playerRepositoryStub) Save(_ context.Context, p coreplayer.Player) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.saveErr != nil {
+		return r.saveErr
+	}
+	r.players = append(r.players, p)
+	return nil
+}
+
+func (r *playerRepositoryStub) CountActive(context.Context) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.countActiveErr != nil {
+		return 0, r.countActiveErr
+	}
+	if r.activeCount != nil {
+		return *r.activeCount, nil
+	}
+	count := 0
+	for _, p := range r.players {
+		if p.BannedAt == nil {
+			count++
+		}
+	}
+	if r.value.ID != "" && r.value.BannedAt == nil {
+		count++
+	}
+	return count, nil
+}
+
+func (r *playerRepositoryStub) LockRegistrationForUpdate(context.Context) error {
+	return r.lockErr
 }
 
 func (r *playerRepositoryStub) FindByUsername(context.Context, string) (coreplayer.Player, error) {
@@ -572,6 +610,126 @@ func TestRegisterErrorBranches(t *testing.T) {
 			t.Fatalf("expected error %v, got %v", expectedErr, err)
 		}
 	})
+
+	t.Run("population limit threshold reached returns ErrRegistrationLimitReached", func(t *testing.T) {
+		players := &playerRepositoryStub{}
+		svc, _ := NewService(players, &sessionRepositoryStub{}, WithMaxPlayers(2))
+
+		// 1st registration succeeds (0 -> 1)
+		p1, err := svc.Register(ctx, "player1", "password123")
+		if err != nil {
+			t.Fatalf("expected player1 to register successfully, got %v", err)
+		}
+		if p1.Username != "player1" {
+			t.Errorf("expected username player1, got %s", p1.Username)
+		}
+
+		// 2nd registration succeeds (1 -> 2)
+		p2, err := svc.Register(ctx, "player2", "password123")
+		if err != nil {
+			t.Fatalf("expected player2 to register successfully, got %v", err)
+		}
+		if p2.Username != "player2" {
+			t.Errorf("expected username player2, got %s", p2.Username)
+		}
+
+		// 3rd registration fails (2 -> reaches limit 2)
+		_, err = svc.Register(ctx, "player3", "password123")
+		if !errors.Is(err, ErrRegistrationLimitReached) {
+			t.Fatalf("expected ErrRegistrationLimitReached, got %v", err)
+		}
+
+		// Soft-ban player1 frees slot (2 active -> 1 active)
+		banTime := time.Now()
+		players.players[0].Ban(banTime)
+
+		// Now registration of player3 succeeds (1 -> 2)
+		p3, err := svc.Register(ctx, "player3", "password123")
+		if err != nil {
+			t.Fatalf("expected player3 to register after soft-ban freed slot, got %v", err)
+		}
+		if p3.Username != "player3" {
+			t.Errorf("expected username player3, got %s", p3.Username)
+		}
+	})
+
+	t.Run("population limit 0 or negative is unlimited", func(t *testing.T) {
+		activeCount := 1000
+		players := &playerRepositoryStub{activeCount: &activeCount}
+
+		// limit 0
+		svc0, _ := NewService(players, &sessionRepositoryStub{}, WithMaxPlayers(0))
+		if _, err := svc0.Register(ctx, "unlimited1", "password123"); err != nil {
+			t.Fatalf("expected limit 0 to be unlimited, got %v", err)
+		}
+
+		// limit -1
+		svcNeg, _ := NewService(players, &sessionRepositoryStub{}, WithMaxPlayers(-1))
+		if _, err := svcNeg.Register(ctx, "unlimited2", "password123"); err != nil {
+			t.Fatalf("expected negative limit to be unlimited, got %v", err)
+		}
+	})
+
+	t.Run("lock or count error is propagated", func(t *testing.T) {
+		lockErr := errors.New("lock timeout")
+		svcLock, _ := NewService(&playerRepositoryStub{lockErr: lockErr}, &sessionRepositoryStub{}, WithMaxPlayers(10))
+		if _, err := svcLock.Register(ctx, "user1", "password123"); !errors.Is(err, lockErr) {
+			t.Fatalf("expected lockErr, got %v", err)
+		}
+
+		countErr := errors.New("count failed")
+		svcCount, _ := NewService(&playerRepositoryStub{countActiveErr: countErr}, &sessionRepositoryStub{}, WithMaxPlayers(10))
+		if _, err := svcCount.Register(ctx, "user2", "password123"); !errors.Is(err, countErr) {
+			t.Fatalf("expected countErr, got %v", err)
+		}
+	})
+}
+
+func TestRegisterPopulationLimit_ConcurrentStress(t *testing.T) {
+	ctx := context.Background()
+	initialPlayers := []coreplayer.Player{
+		{ID: "p1", Username: "existing1"},
+		{ID: "p2", Username: "existing2"},
+		{ID: "p3", Username: "existing3"},
+	}
+	players := &playerRepositoryStub{players: initialPlayers}
+	// Limit is 5, currently 3 active players, room for exactly M = 2 more!
+	svc, err := NewService(players, &sessionRepositoryStub{}, WithMaxPlayers(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := testutil.ConcurrencyStressConfig{
+		Workers:      10,
+		OpsPerWorker: 2,
+	}
+
+	res := testutil.RunConcurrentStressTest(t, cfg, func(workerID, op int) error {
+		username := fmt.Sprintf("worker_%d_op_%d", workerID, op)
+		_, err := svc.Register(ctx, username, "password123")
+		return err
+	})
+
+	if res.Deadlocks != 0 {
+		t.Fatalf("expected 0 deadlocks, got %d", res.Deadlocks)
+	}
+	// Exactly M = 2 registrations must succeed
+	if res.Successes != 2 {
+		t.Fatalf("expected exactly 2 successful registrations, got %d (failures: %d)", res.Successes, res.Failures)
+	}
+	// All remaining 18 must fail
+	if res.Failures != 18 {
+		t.Fatalf("expected 18 failures, got %d", res.Failures)
+	}
+
+	// Final active count must be conserved at exactly 5
+	activeCount, err := players.CountActive(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activeCount != 5 {
+		t.Fatalf("expected final active count 5, got %d", activeCount)
+	}
 }
 
 func TestLoginErrorBranches(t *testing.T) {

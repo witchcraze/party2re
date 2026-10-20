@@ -38412,6 +38412,10 @@
             },
             "description": "Bad request - invalid input or JSON syntax"
           },
+          "409": {
+            "$ref": "#/components/responses/Error",
+            "description": "Conflict - registration population limit reached"
+          },
           "415": {
             "$ref": "#/components/responses/Error",
             "description": "Unsupported Media Type"
