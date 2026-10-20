@@ -414,6 +414,33 @@ func TestHandleRegisterPlayer_ServiceError(t *testing.T) {
 	}
 }
 
+func TestHandleRegisterPlayer_RegistrationLimitReached(t *testing.T) {
+	ps := &stubPlayerService{
+		registerFn: func(_ context.Context, username, password string) (coreplayer.Player, error) {
+			return coreplayer.Player{}, coreplayer.ErrRegistrationLimitReached
+		},
+	}
+	h := newTestHandler(t, ps, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{})
+
+	rec := httptest.NewRecorder()
+	req := jsonRequest(t, http.MethodPost, "/players", `{"username":"alice","password":"secret"}`)
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+
+	var resp apihttp.StructuredErrorResponse
+	decodeResponseBody(t, rec.Body.Bytes(), &resp)
+	if resp.Error.Code != "registration_limit_reached" {
+		t.Errorf("error code = %q, want registration_limit_reached", resp.Error.Code)
+	}
+	wantMsg := "現在定員のため、新規登録は受け付けておりません"
+	if resp.Error.Message != wantMsg {
+		t.Errorf("error message = %q, want %q", resp.Error.Message, wantMsg)
+	}
+}
+
 func TestHandleRegisterPlayer_BadJSON(t *testing.T) {
 	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{})
 	rec := httptest.NewRecorder()

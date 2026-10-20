@@ -39,6 +39,15 @@ Start the application, including dependency startup checks, with:
 docker compose run --rm app go run ./cmd/party2
 ```
 
+## Application configuration
+
+The application daemon supports the following core environment variables:
+- `PARTY2_DB_DSN`: MariaDB connection DSN (required).
+- `PARTY2_VALKEY_ADDR`: Valkey endpoint address (required, e.g. `valkey:6379` or `127.0.0.1:6379`).
+- `PARTY2_MAX_PLAYERS`: Server-wide player account population limit (default `999`; `0` or negative for unlimited). Active player accounts (`WHERE banned_at IS NULL`) are evaluated at registration time; when capacity is reached, `POST /players` rejects with `409 Conflict`.
+- `PARTY2_ADMIN_API_KEY`: API key for administrative endpoints.
+- `PARTY2_TRUSTED_PROXIES`: Comma-separated CIDR blocks for reverse proxy client IP resolution.
+
 ## Database configuration
 
 The development connection string is supplied to the application through

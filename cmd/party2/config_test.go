@@ -16,6 +16,7 @@ func TestConfigFromEnv(t *testing.T) {
 	origAddr := os.Getenv("PARTY2_ADDR")
 	origPort := os.Getenv("PORT")
 	origTrusted := os.Getenv("PARTY2_TRUSTED_PROXIES")
+	origMaxPlayers := os.Getenv("PARTY2_MAX_PLAYERS")
 	defer func() {
 		restoreEnv("PARTY2_DB_DSN", origDB)
 		restoreEnv("PARTY2_ADMIN_API_KEY", origAdmin)
@@ -23,6 +24,7 @@ func TestConfigFromEnv(t *testing.T) {
 		restoreEnv("PARTY2_ADDR", origAddr)
 		restoreEnv("PORT", origPort)
 		restoreEnv("PARTY2_TRUSTED_PROXIES", origTrusted)
+		restoreEnv("PARTY2_MAX_PLAYERS", origMaxPlayers)
 	}()
 
 	t.Run("missing DB DSN returns error", func(t *testing.T) {
@@ -60,6 +62,86 @@ func TestConfigFromEnv(t *testing.T) {
 		if cfg.Server.TrustedProxies != "127.0.0.1/32,10.0.0.0/8" {
 			t.Errorf("expected trusted proxies 127.0.0.1/32,10.0.0.0/8, got %s", cfg.Server.TrustedProxies)
 		}
+		if cfg.Player.MaxPlayers != 999 {
+			t.Errorf("expected default max players 999, got %d", cfg.Player.MaxPlayers)
+		}
+	})
+
+	t.Run("PARTY2_MAX_PLAYERS parsing", func(t *testing.T) {
+		_ = os.Setenv("PARTY2_DB_DSN", "test:test@tcp(127.0.0.1:3306)/test_db")
+
+		testCases := []struct {
+			name        string
+			envVal      string
+			setEnv      bool
+			expected    int
+			expectError bool
+		}{
+			{
+				name:        "unset defaults to 999",
+				setEnv:      false,
+				expected:    999,
+				expectError: false,
+			},
+			{
+				name:        "empty defaults to 999",
+				envVal:      "   ",
+				setEnv:      true,
+				expected:    999,
+				expectError: false,
+			},
+			{
+				name:        "custom positive value 500",
+				envVal:      "500",
+				setEnv:      true,
+				expected:    500,
+				expectError: false,
+			},
+			{
+				name:        "zero interpreted as unlimited",
+				envVal:      "0",
+				setEnv:      true,
+				expected:    0,
+				expectError: false,
+			},
+			{
+				name:        "negative interpreted as unlimited",
+				envVal:      "-1",
+				setEnv:      true,
+				expected:    -1,
+				expectError: false,
+			},
+			{
+				name:        "invalid non-integer returns error",
+				envVal:      "abc",
+				setEnv:      true,
+				expectError: true,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				if tc.setEnv {
+					_ = os.Setenv("PARTY2_MAX_PLAYERS", tc.envVal)
+				} else {
+					_ = os.Unsetenv("PARTY2_MAX_PLAYERS")
+				}
+
+				cfg, err := ConfigFromEnv()
+				if tc.expectError {
+					if err == nil {
+						t.Fatal("expected error, got nil")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if cfg.Player.MaxPlayers != tc.expected {
+					t.Errorf("expected max players %d, got %d", tc.expected, cfg.Player.MaxPlayers)
+				}
+			})
+		}
 	})
 
 	t.Run("invalid trusted proxies returns error", func(t *testing.T) {
@@ -84,8 +166,9 @@ func TestConfigStructParallelCreation(t *testing.T) {
 			Addr           string
 			TrustedProxies string
 		}{Addr: ":8080", TrustedProxies: "127.0.0.1/32"},
-		Admin: struct{ APIKey string }{APIKey: "test-admin-key"},
-		CORS:  struct{ AllowedOrigins string }{AllowedOrigins: "http://example.com"},
+		Admin:  struct{ APIKey string }{APIKey: "test-admin-key"},
+		CORS:   struct{ AllowedOrigins string }{AllowedOrigins: "http://example.com"},
+		Player: struct{ MaxPlayers int }{MaxPlayers: 999},
 	}
 
 	if cfg.DB.DSN != "user:pass@tcp(127.0.0.1:3306)/party2" {
@@ -105,5 +188,8 @@ func TestConfigStructParallelCreation(t *testing.T) {
 	}
 	if cfg.CORS.AllowedOrigins != "http://example.com" {
 		t.Errorf("unexpected cors allowed origins: %s", cfg.CORS.AllowedOrigins)
+	}
+	if cfg.Player.MaxPlayers != 999 {
+		t.Errorf("unexpected player max players: %d", cfg.Player.MaxPlayers)
 	}
 }

@@ -166,3 +166,27 @@ func (r *PlayerRepository) Delete(ctx context.Context, id string) error {
 
 	return nil
 }
+
+// CountActive returns the number of active, non-banned player accounts.
+func (r *PlayerRepository) CountActive(ctx context.Context) (int, error) {
+	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM players WHERE banned_at IS NULL`)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// LockRegistrationForUpdate serializes concurrent player registrations to atomically enforce the population limit.
+func (r *PlayerRepository) LockRegistrationForUpdate(ctx context.Context) error {
+	exec := ExecutorFromContext(ctx, r.db)
+	if _, err := exec.ExecContext(ctx,
+		`INSERT IGNORE INTO system_maintenance (id, is_enabled, message, estimated_end_time, updated_at)
+		VALUES ('global', FALSE, 'System is operating normally.', NULL, UTC_TIMESTAMP())`); err != nil {
+		return err
+	}
+	var id string
+	return exec.QueryRowContext(ctx,
+		`SELECT id FROM system_maintenance WHERE id = 'global' FOR UPDATE`).Scan(&id)
+}

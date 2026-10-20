@@ -2,12 +2,15 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestNewPlayerRepositoryNilDB(t *testing.T) {
@@ -164,5 +167,161 @@ func TestPlayerRepositoryListAndBan(t *testing.T) {
 		if len(list) < 2 {
 			t.Fatalf("expected at least 2 players in list, got %d", len(list))
 		}
+	}
+}
+
+func playerIsolatedDB(t *testing.T) (*sql.DB, *PlayerRepository) {
+	t.Helper()
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Skip("PARTY2_TEST_DB_ADMIN_DSN is required for isolated player repository tests")
+	}
+	source, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	ctx := context.Background()
+	name := "party2_player_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg.DBName = name
+	db, err := Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, table := range []string{"players", "system_maintenance", "player_notifications", "player_api_tokens"} {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo, err := NewPlayerRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db, repo
+}
+
+func TestPlayerRepositoryCountActiveAndLock(t *testing.T) {
+	db, repository := playerIsolatedDB(t)
+
+	ctx := context.Background()
+	initialCount, err := repository.CountActive(ctx)
+	if err != nil {
+		t.Fatalf("CountActive() initial failed: %v", err)
+	}
+
+	prefix := "counttest_" + time.Now().Format("150405_")
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	p, err := coreplayer.New(prefix+"user", "password123", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Save new player -> count increments
+	if err := repository.Save(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	defer repository.Delete(ctx, p.ID)
+
+	afterSaveCount, err := repository.CountActive(ctx)
+	if err != nil {
+		t.Fatalf("CountActive() after save failed: %v", err)
+	}
+	if afterSaveCount != initialCount+1 {
+		t.Fatalf("expected active count %d, got %d", initialCount+1, afterSaveCount)
+	}
+
+	// 2. Soft-ban player -> count decrements (slot naturally recovered)
+	banTime := now.Add(time.Second)
+	if err := repository.UpdateBannedAt(ctx, p.ID, &banTime); err != nil {
+		t.Fatalf("UpdateBannedAt() failed: %v", err)
+	}
+
+	afterBanCount, err := repository.CountActive(ctx)
+	if err != nil {
+		t.Fatalf("CountActive() after ban failed: %v", err)
+	}
+	if afterBanCount != initialCount {
+		t.Fatalf("expected active count after soft-ban to revert to %d, got %d", initialCount, afterBanCount)
+	}
+
+	// 3. Unban player -> count increments back
+	if err := repository.UpdateBannedAt(ctx, p.ID, nil); err != nil {
+		t.Fatalf("UpdateBannedAt(nil) failed: %v", err)
+	}
+
+	afterUnbanCount, err := repository.CountActive(ctx)
+	if err != nil {
+		t.Fatalf("CountActive() after unban failed: %v", err)
+	}
+	if afterUnbanCount != initialCount+1 {
+		t.Fatalf("expected active count after unban to be %d, got %d", initialCount+1, afterUnbanCount)
+	}
+
+	// 4. Delete player -> count decrements back to initial
+	if err := repository.Delete(ctx, p.ID); err != nil {
+		t.Fatalf("Delete() failed: %v", err)
+	}
+
+	afterDeleteCount, err := repository.CountActive(ctx)
+	if err != nil {
+		t.Fatalf("CountActive() after delete failed: %v", err)
+	}
+	if afterDeleteCount != initialCount {
+		t.Fatalf("expected active count after delete to revert to %d, got %d", initialCount, afterDeleteCount)
+	}
+
+	// 5. Verify LockRegistrationForUpdate under ambient transaction
+	err = RunInTx(ctx, db, func(txCtx context.Context) error {
+		if err := repository.LockRegistrationForUpdate(txCtx); err != nil {
+			return err
+		}
+		c, err := repository.CountActive(txCtx)
+		if err != nil {
+			return err
+		}
+		if c != initialCount {
+			t.Errorf("expected count inside tx %d, got %d", initialCount, c)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("RunInTx with LockRegistrationForUpdate failed: %v", err)
 	}
 }

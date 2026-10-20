@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/witchcraze/party2re/internal/api/http"
@@ -23,6 +24,9 @@ type Config struct {
 	}
 	CORS struct {
 		AllowedOrigins string
+	}
+	Player struct {
+		MaxPlayers int
 	}
 }
 
@@ -45,6 +49,16 @@ func ConfigFromEnv() (Config, error) {
 		}
 	}
 
+	const defaultMaxPlayers = 999
+	maxPlayers := defaultMaxPlayers
+	if val := strings.TrimSpace(os.Getenv("PARTY2_MAX_PLAYERS")); val != "" {
+		parsed, err := strconv.Atoi(val)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid PARTY2_MAX_PLAYERS: %w", err)
+		}
+		maxPlayers = parsed
+	}
+
 	return Config{
 		DB:     dbCfg,
 		Valkey: valkey.ConfigFromEnvironment(),
@@ -60,6 +74,9 @@ func ConfigFromEnv() (Config, error) {
 		},
 		CORS: struct{ AllowedOrigins string }{
 			AllowedOrigins: os.Getenv("PARTY2_CORS_ORIGINS"),
+		},
+		Player: struct{ MaxPlayers int }{
+			MaxPlayers: maxPlayers,
 		},
 	}, nil
 }

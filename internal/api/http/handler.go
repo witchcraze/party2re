@@ -724,6 +724,10 @@ func (h *Handler) handleRegisterPlayer(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.players.Register(r.Context(), req.Username, req.Password)
 	if err != nil {
+		if errors.Is(err, coreplayer.ErrRegistrationLimitReached) {
+			writeAppError(w, http.StatusConflict, "registration_limit_reached", "現在定員のため、新規登録は受け付けておりません")
+			return
+		}
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return
 	}

@@ -125,8 +125,8 @@ In Party2re's relational domain model, identity and game progression are separat
    - Enforcement must execute within a database transaction boundary (e.g. pessimistic locking on a counter row, advisory lock, or serialized lock check).
    - **Required Stress Verification**: Implementation must include a paired concurrency stress test (`testutil.RunConcurrentStressTest` / `testutil.RunRace`) verifying that when capacity has room for $M$ registrants, exactly $M$ concurrent registrations succeed and all remaining concurrent attempts fail with `409 Conflict`, with final `COUNT(*) <= max_players`.
 
-#### 2.8.3 Bounded Implementation Handover
-Runtime enforcement of this specification is handed over to dedicated follow-up implementation issue [#1562](https://github.com/witchcraze/party2re/issues/1562) (covering `cmd/party2/config.go`, `internal/player`, `internal/api/http`, OpenAPI path update, and concurrent stress tests).
+#### 2.8.3 Implementation & Verification
+Runtime enforcement of this specification is implemented across `cmd/party2/config.go`, `internal/player`, and `internal/api/http`, with verified transaction locking and paired concurrency stress tests (`internal/player/registration_concurrency_integration_test.go`, `internal/player/application_test.go`). When active account capacity (`WHERE banned_at IS NULL`) reaches `PARTY2_MAX_PLAYERS`, `POST /players` atomically rejects with `409 Conflict` (`registration_limit_reached`).
 
 ---
 
