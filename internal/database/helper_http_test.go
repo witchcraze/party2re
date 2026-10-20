@@ -138,8 +138,8 @@ func TestHelperBoardListsUncompletedRegardlessOfDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(active) != 1 {
-		t.Fatalf("shop exclusion must still use active requests only: %v", active)
+	if len(active) != 3 {
+		t.Fatalf("shop exclusion must include every uncompleted request: %v", active)
 	}
 	if f.count(t) != 4 {
 		t.Fatalf("reads changed stored rows: %d", f.count(t))

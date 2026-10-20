@@ -81,7 +81,7 @@ func TestCompleteQuest_ExchangesExpiredNonTargetRequestsOneForOne(t *testing.T) 
 		t.Error("unexpired request must be retained")
 	}
 	// live-other + 2 exchanged + 1 completion replacement; the target is completed.
-	active, _ := repo.ListActive(ctx, now)
+	active, _ := repo.ListUncompleted(ctx)
 	if len(active) != 4 {
 		t.Fatalf("active requests = %d, want 4", len(active))
 	}
@@ -108,7 +108,7 @@ func TestCompleteQuest_RenewalOnlyExchangesExpiredRequests(t *testing.T) {
 	if len(repo.quests) != 2 {
 		t.Fatalf("stored requests = %d, want 2 exchanged one-for-one", len(repo.quests))
 	}
-	active, _ := repo.ListActive(ctx, now)
+	active, _ := repo.ListUncompleted(ctx)
 	if len(active) != 2 {
 		t.Fatalf("active requests = %d, want 2 after all-expired exchange", len(active))
 	}
@@ -151,7 +151,7 @@ func TestCompleteQuest_ExpiryBoundaryIsSixDaysExclusive(t *testing.T) {
 		t.Fatal(err)
 	}
 	var replacement helperquest.Quest
-	active, _ := repo.ListActive(ctx, start)
+	active, _ := repo.ListUncompleted(ctx)
 	if len(active) != 1 {
 		t.Fatalf("active = %d, want 1 completion replacement", len(active))
 	}
