@@ -59,7 +59,11 @@ func (s *LifetimeState) ValidateStatus(c *StatusContext, e TargetEffect, chance 
 		projected.actor(c.ActorID).Status = ""
 	}
 	dc.TargetContext = c.TargetContext
-	for _, candidate := range projected.damageCandidates(&dc, converted) {
+	candidates, err := projected.statusTargetCandidates(&dc, converted)
+	if err != nil {
+		return err
+	}
+	for _, candidate := range candidates {
 		t := projected.actor(candidate.TargetID)
 		if t.HP <= 0 || candidate.Payload.Symbol == "" || statusImmune(t, bypass, death, projected.Fields.Current()) {
 			continue
@@ -79,7 +83,9 @@ func (s *LifetimeState) ValidateStatus(c *StatusContext, e TargetEffect, chance 
 		}
 		child := *c.Defeat
 		child.TargetContext = c.TargetContext
-		if err := projected.ValidateDefeat(&child, t.ID, rng); err != nil {
+		p := projected.defeatCopy()
+		applyStatusResources(&p, candidate)
+		if err := p.ValidateDefeat(&child, t.ID, rng); err != nil {
 			return err
 		}
 	}
@@ -162,6 +168,10 @@ func (s *LifetimeState) ValidateAreaStatus(c *StatusContext, e TargetEffect, cha
 	}
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
+	}
+	// Later death targets must be admitted after earlier helper/revival facts.
+	if death && len(c.EnemyIDs) > 0 {
+		e.TargetID = c.EnemyIDs[0]
 	}
 	if err := s.ValidateStatus(c, e, chance, bypass, death, rng); err != nil {
 		return err

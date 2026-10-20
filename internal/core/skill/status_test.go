@@ -150,3 +150,69 @@ func TestStatusRegistryReloadPreservesTargetArgumentConsumption(t *testing.T) {
 		t.Fatal(frame, err)
 	}
 }
+
+func TestStatusRegistryAbsorbedDeathDirectAndDelegatedAfterReload(t *testing.T) {
+	for _, entry := range []string{"gem_instant_death_1", "gem_instant_death_sky"} {
+		for _, delegated := range []bool{false, true} {
+			var reference corebattle.LifetimeState
+			for _, reload := range []bool{false, true} {
+				s, rc, d := rosterRegistryFixture()
+				self, enemy := &s.Actors[0], &s.Actors[1]
+				self.HP, self.Gear.AccessoryID, self.ItemDefinitionIDs = 1, "item-110", []string{"item-110"}
+				enemy.HP, enemy.MaxHP, enemy.MaxMP = 100, 101, 100
+				enemy.Abilities, enemy.Temporary = []string{"pharaoh"}, corebattle.TemporaryAbsorbMagic
+				enemy.BaseStats = corebattle.BattleBaseStats{Attack: 100, Defense: 100, Agility: 100}
+				enemy.Gear.AccessoryID, enemy.ItemDefinitionIDs = "item-212", []string{"item-212"}
+				if reload {
+					data, err := json.Marshal(s)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := json.Unmarshal(data, &s); err != nil {
+						t.Fatal(err)
+					}
+				}
+				c := corebattle.StatusContext{EffectContext: corebattle.EffectContext{TargetContext: rc.TargetContext}}
+				c.Defeat = &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: c.TargetContext}, Rewards: &corebattle.DefeatRewards{
+					Validate: func(*corebattle.LifetimeState, corebattle.TargetContext, string) error {
+						return corebattle.ErrUnsupportedEffect
+					},
+					Apply: func(*corebattle.LifetimeState, corebattle.TargetContext, string) error {
+						t.Fatal("unreachable rewards executed")
+						return nil
+					},
+				}}
+				d.RegisterStatuses(&c, nil)
+				id := entry
+				draws := []float64{.5, 0}
+				if delegated {
+					id = "delegated"
+					d.Invocations.Entries[id] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "tool-84"}}
+					d.Invocations.JobTables[60] = corebattle.CallbackTable{Variants: [][]corebattle.CallbackEntry{{{ID: entry, Name: "death"}}}}
+					draws = append([]float64{0}, draws...)
+				}
+				frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
+				before, err := json.Marshal(s)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ops, err := d.InvocationAction(&s, &frame, []string{id}, noArithmeticDraws{t})
+				if err != nil {
+					t.Fatal(entry, delegated, reload, err)
+				}
+				after, err := json.Marshal(s)
+				if err != nil || string(before) != string(after) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 || len(frame.Arguments) != 1 || frame.Arguments[0] != "enemy" {
+					t.Fatal("registry admission changed caller facts", err)
+				}
+				rng := &damageGemDraws{t: t, draws: draws}
+				if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || s.Actors[0].HP != 1 || s.Actors[1].HP != 101 || s.Actors[1].MP != 20 || c.DeathCalls != 1 || rng.used != len(draws) {
+					t.Fatal(entry, delegated, reload, s, c, err, rng.used)
+				}
+				if reload && !reflect.DeepEqual(reference, s) {
+					t.Fatal("registry rebuild changed absorption/revival")
+				}
+				reference = s
+			}
+		}
+	}
+}
