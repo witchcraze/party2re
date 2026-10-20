@@ -77,6 +77,57 @@ Legacy reload sleep penalties are **formally deprecated and superseded** by mode
 - **Automated Agents & PAT Non-Interference**: Programmatic clients (AI agents, automated scripts) operating via Personal Access Tokens must receive standard HTTP 429 backoff responses when exceeding quotas, without triggering character sleep locks.
 - **Resilience and Separation during Infrastructure Failure**: When Valkey is unavailable, `ValkeyLimiter` falls back to an in-memory `MemoryLimiter`, actively enforcing rate limits in process memory. If an unrecoverable limiter error occurs, HTTP middleware fails open gracefully (`internal/api/http/ratelimit_test.go`) to prevent service disruption. Under no circumstances do rate-limiter infrastructure incidents or rate-limit rejections mutate domain character timers (`timer.CategorySleep`) or impose gameplay sleep penalties.
 
+### 2.8 Registration Population Limit & Capacity Reconciliation (#1105)
+
+#### 2.8.1 Legacy Population Limit Specification
+In original Party2, world registration capacity was constrained by a hardcoded configuration ceiling:
+- **Configuration Default (`party2/config.cgi_origin:46`)**:
+  - `$max_entry = 999;` defined the maximum allowable player population on the server.
+- **Capacity Counter Storage & Admission Check (`party2/new_entry.cgi:133–138`)**:
+  - Maintained an aggregate flat-file counter in `$logdir/entry.cgi` formatted as `"$entry_count<>$last_addr<>"`.
+  - During registration (`new_entry.cgi`), if `$entry_count >= $max_entry`, registration was immediately blocked with the authentic message:
+    `"現在定員のため、新規登録は受け付けておりません"`.
+- **Atomic Counter Increment (`party2/new_entry.cgi:224–234`)**:
+  - On successful registration, `sub plus_entry_count` opened `$logdir/entry.cgi` with exclusive advisory locking (`flock $fh, 2`), read `$entry_count`, incremented it (`++$entry_count`), and rewrote the file.
+- **Counter Decrement on Deletion (`party2/delete.cgi:56`, `party2/admin.cgi:115`)**:
+  - Self-deletion called `&minus_entry_count(1)` (`delete.cgi:56`).
+  - Administrative user deletion called `&minus_entry_count($count)` (`admin.cgi:115`).
+- **Exile / Ban Treatment (`party2/lib/exile.cgi:177`)**:
+  - In original Party2, `&minus_entry_count` was explicitly commented out in `lib/exile.cgi` (`## &minus_entry_count;`). Consequently, banned/exiled players continued to occupy a registration slot in `$entry_count` until directory cleanup.
+- **Recalibration & Inactivity Purge (`party2/login.cgi:190–250`)**:
+  - When rebuilding the player ranking and list (`login.cgi`), the system scanned all user directories (`$userdir`), purged inactive accounts exceeding `$auto_delete_day` (or level <= 2 inactive for 7 days), tallied surviving active user directories (`$count`), and rewrote `$logdir/entry.cgi` as `"$count<><>"`, recalibrating any drift.
+
+#### 2.8.2 Reconciled Architecture & Adoption Policy (#1105)
+In Party2re's relational domain model, identity and game progression are separated into distinct `Player` (account) and `Character` (in-game persona) entities. The registration population limit is reconciled with this architecture as follows:
+
+1. **Unit of Population Limit (Account-Level Enforcement)**:
+   - The registration capacity ceiling applies strictly to **Player Accounts** (`players` table).
+   - The registration gateway `POST /players` (`player.Service.Register`) is the sole enforcement boundary for server population limits.
+   - Character creation (`POST /characters`) operates independently of this server-wide limit and neither consumes nor evaluates registration population capacity.
+
+2. **Configuration Source & Unlimited Option**:
+   - The limit is governed by the environment variable `PARTY2_MAX_PLAYERS` (configurable via `compose.yaml` / Docker Compose / process environment).
+   - **Authentic Legacy Default**: Defaults to `999` to faithfully preserve the original game's reference capacity (`$max_entry = 999`).
+   - **Unlimited Capacity Flag**: Setting `PARTY2_MAX_PLAYERS=0` (or negative) disables the population limit entirely, allowing unlimited account registration for modern high-capacity or cloud-native deployments.
+
+3. **Active Population & Soft-Ban Reconciliation**:
+   - The population count evaluates **active accounts only**: `SELECT COUNT(*) FROM players WHERE banned_at IS NULL`.
+   - **Soft-Ban Slot Recovery**: In contrast to the original CGI's commented-out decrement, soft-banned accounts (`banned_at IS NOT NULL`) do not consume population quota, ensuring that malicious or banned accounts cannot permanently starve legitimate players of registration slots.
+   - **Account Deletion Slot Recovery**: Hard deletion of a player account (`DELETE /players/me` or admin `DELETE /players/{id}`) removes the row from `players`, automatically decrementing the active count.
+
+4. **Admission Boundary & Rejection Contract**:
+   - **Threshold Condition**: When `PARTY2_MAX_PLAYERS > 0` and the current active account count satisfies `active_count >= max_players`, registration requests are rejected.
+   - **HTTP Transport Response**: `POST /players` returns `HTTP 409 Conflict` (domain error `ErrRegistrationLimitReached`, JSON error code `"registration_limit_reached"`) with the authentic legacy message:
+     `"現在定員のため、新規登録は受け付けておりません"`.
+
+5. **Concurrency Invariant & Verification Requirements**:
+   - **Atomic Admission Under Race Conditions**: Registration transactions must prevent race conditions where concurrent requests observe `active_count == max_players - 1` and simultaneously insert multiple records, exceeding `max_players`.
+   - Enforcement must execute within a database transaction boundary (e.g. pessimistic locking on a counter row, advisory lock, or serialized lock check).
+   - **Required Stress Verification**: Implementation must include a paired concurrency stress test (`testutil.RunConcurrentStressTest` / `testutil.RunRace`) verifying that when capacity has room for $M$ registrants, exactly $M$ concurrent registrations succeed and all remaining concurrent attempts fail with `409 Conflict`, with final `COUNT(*) <= max_players`.
+
+#### 2.8.3 Bounded Implementation Handover
+Runtime enforcement of this specification is handed over to dedicated follow-up implementation issue [#1562](https://github.com/witchcraze/party2re/issues/1562) (covering `cmd/party2/config.go`, `internal/player`, `internal/api/http`, OpenAPI path update, and concurrent stress tests).
+
 ---
 
 ## 3. Data Schema & Persistence
