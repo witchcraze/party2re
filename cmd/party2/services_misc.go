@@ -8,6 +8,7 @@ import (
 
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/activity"
+	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/altar"
 	"github.com/witchcraze/party2re/internal/blackmarket"
 	"github.com/witchcraze/party2re/internal/casino"
@@ -127,6 +128,10 @@ func newMiscServices(
 	if soc != nil && soc.guild != nil {
 		helperGuild = &helperGuildAdapter{guild: soc.guild}
 	}
+	helperMonsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		return nil, err
+	}
 	helperService := helperquest.NewService(
 		helperRepo,
 		core.charRepo,
@@ -134,6 +139,10 @@ func newMiscServices(
 		core.txProvider,
 		helperquest.WithDepotRepository(econ.depotRepo),
 		helperquest.WithFarmRepository(&helperFarmAdapter{repo: monsterRepo}),
+		helperquest.WithMonsterLookup(func(id string) (string, bool) {
+			m, err := helperMonsters.FindByID(id)
+			return m.Name, err == nil
+		}),
 	)
 
 	secretshopCatalog, err := secretshop.LoadDefaultCatalog()

@@ -146,6 +146,8 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Both completion replacement and expired-row exchange must use production catalog wiring.
+	misc.helper.SetRandomSource(helperRareMonsterRandom{})
 
 	runID := fmt.Sprintf("%06x", time.Now().UnixNano()%0x1000000)
 
@@ -267,6 +269,9 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	if res.NewQuest == nil {
 		t.Fatal("expected replacement quest in result, got nil")
 	}
+	if res.NewQuest.TargetID != "monster-165" || res.NewQuest.TargetName == "" || !res.NewQuest.IsRare {
+		t.Fatalf("replacement did not use native rare-monster fallback: %+v", res.NewQuest)
+	}
 	if res.RenewedCount != 1 {
 		t.Fatalf("renewed_count = %d, want 1", res.RenewedCount)
 	}
@@ -300,6 +305,25 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	}
 	if qty := leaderDepot.Quantity("item-126"); qty != 1 {
 		t.Errorf("expected reward item-126 quantity 1, got %d", qty)
+	}
+}
+
+type helperRareMonsterRandom struct{}
+
+func (helperRareMonsterRandom) Intn(max int) (int, error) {
+	switch max {
+	case 4:
+		return 3, nil // Monster quest.
+	case 14:
+		return 0, nil // Rare.
+	case 15:
+		return 1, nil // Nonguild.
+	case 80:
+		return 79, nil // Missing monster-579.
+	case 6:
+		return 5, nil // Fallback monster-165 and last rare reward slot.
+	default:
+		return 0, nil
 	}
 }
 
@@ -383,7 +407,7 @@ func TestHelperProductionGuildWiring_GPUpdateErrorRollsBack(t *testing.T) {
 		core.charRepo,
 		faultyAdapter,
 		core.txProvider,
-		helperquest.WithDepotRepository(econ.depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(econ.depotRepo),
 		helperquest.WithFarmRepository(&helperFarmAdapter{repo: monsterRepo}),
 	)
 

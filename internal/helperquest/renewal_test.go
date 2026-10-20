@@ -3,6 +3,7 @@ package helperquest_test
 import (
 	"context"
 	"errors"
+	"github.com/witchcraze/party2re/internal/testutil"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func renewalService(t *testing.T, questRepo *mockQuestRepo, tx helperquest.Trans
 		t.Fatal(err)
 	}
 	charRepo := &mockCharRepo{characters: map[string]corecharacter.Character{"char-1": {ID: "char-1", Name: "Hero"}}}
-	return helperquest.NewService(questRepo, charRepo, nil, tx, helperquest.WithDepotRepository(depotRepo))
+	return helperquest.NewService(questRepo, charRepo, nil, tx, helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo))
 }
 
 func renewalQuest(id string, createdAt, expiresAt time.Time) helperquest.Quest {

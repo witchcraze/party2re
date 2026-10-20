@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/witchcraze/party2re/internal/testutil"
 	"sort"
 	"strings"
 	"testing"
@@ -185,7 +186,7 @@ func TestCompleteQuest_WeaponTurnInAndRewardFromDepot(t *testing.T) {
 		charRepo,
 		nil,
 		&mockTxProvider{},
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -248,7 +249,7 @@ func TestCompleteQuest_ItemTurnInAndRewardFromDepot(t *testing.T) {
 		charRepo,
 		nil,
 		&mockTxProvider{},
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -316,7 +317,7 @@ func TestCompleteQuest_MonsterTurnInFromRanch(t *testing.T) {
 		charRepo,
 		nil,
 		&mockTxProvider{},
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 		helperquest.WithFarmRepository(farmRepo),
 	)
 
@@ -388,7 +389,7 @@ func TestCompleteQuest_MonsterTurnIn_IgnoresHomePets(t *testing.T) {
 		charRepo,
 		nil,
 		&mockTxProvider{},
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 		helperquest.WithFarmRepository(farmRepo),
 	)
 
@@ -445,7 +446,7 @@ func TestCompleteQuest_DepotFullRollback(t *testing.T) {
 		charRepo,
 		nil,
 		txProvider,
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 		helperquest.WithFarmRepository(farmRepo),
 	)
 
@@ -497,7 +498,7 @@ func TestCompleteQuest_InsufficientDepotItems(t *testing.T) {
 		charRepo,
 		nil,
 		&mockTxProvider{},
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -544,7 +545,7 @@ func TestCompleteQuest_InsufficientFarmMonsters(t *testing.T) {
 		charRepo,
 		nil,
 		&mockTxProvider{},
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 		helperquest.WithFarmRepository(farmRepo),
 	)
 
@@ -623,7 +624,7 @@ func TestCompleteQuest_MonsterQuest_NilFarmRepo_ReturnsError(t *testing.T) {
 		charRepo,
 		nil,
 		&mockTxProvider{},
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -666,7 +667,7 @@ func TestCompleteQuest_ReplacementQuestSaveErrorPropagates(t *testing.T) {
 		charRepo,
 		nil,
 		txProvider,
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -747,7 +748,7 @@ func TestCompleteQuest_GuildQuestUnaffiliatedRejected(t *testing.T) {
 		charRepo,
 		guildRepo,
 		txProvider,
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -804,7 +805,7 @@ func TestCompleteQuest_GuildQuestFindGuildErrorPropagates(t *testing.T) {
 		charRepo,
 		guildRepo,
 		txProvider,
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -856,7 +857,7 @@ func TestCompleteQuest_GuildQuestAddPointsErrorRollsBack(t *testing.T) {
 		charRepo,
 		guildRepo,
 		txProvider,
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -907,7 +908,7 @@ func TestCompleteQuest_GuildQuestSuccessAwardsPoints(t *testing.T) {
 		charRepo,
 		guildRepo,
 		txProvider,
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{

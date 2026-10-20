@@ -54,6 +54,11 @@ type TransactionProvider interface {
 
 type Option func(*Service)
 
+// WithMonsterLookup supplies native monster definitions for target validation and fallback.
+func WithMonsterLookup(lookup func(string) (string, bool)) Option {
+	return func(s *Service) { s.lookupMonster = lookup }
+}
+
 // WithDepotRepository sets the DepotRepository for storage sourcing and reward delivery.
 func WithDepotRepository(repo DepotRepository) Option {
 	return func(s *Service) {
@@ -77,13 +82,14 @@ type CompletionResult struct {
 }
 
 type Service struct {
-	quests       QuestRepository
-	characters   CharacterRepository
-	depotRepo    DepotRepository
-	farmRepo     FarmRepository
-	guilds       GuildRepository
-	txProvider   TransactionProvider
-	randomSource RandomSource
+	quests        QuestRepository
+	characters    CharacterRepository
+	depotRepo     DepotRepository
+	farmRepo      FarmRepository
+	guilds        GuildRepository
+	txProvider    TransactionProvider
+	randomSource  RandomSource
+	lookupMonster func(string) (string, bool)
 }
 
 func NewService(
@@ -180,7 +186,7 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 			}
 		}
 		for _, old := range expired {
-			replacement, err := GenerateQuest(s.randomSource, now)
+			replacement, err := GenerateQuest(s.randomSource, now, s.lookupMonster)
 			if err != nil {
 				return err
 			}
@@ -325,7 +331,7 @@ func (s *Service) completeQuest(ctx context.Context, characterID string, q Quest
 	}
 
 	// Generate replacement quest
-	newQ, err := GenerateQuest(s.randomSource, now)
+	newQ, err := GenerateQuest(s.randomSource, now, s.lookupMonster)
 	if err != nil {
 		return CompletionResult{}, err
 	}
