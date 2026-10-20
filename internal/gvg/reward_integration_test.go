@@ -8,10 +8,12 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/valkey-io/valkey-go"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -87,6 +89,10 @@ func newRewardFixture(t *testing.T, target, round int, outcome corebattle.Outcom
 
 func (f rewardFixture) assertRewards(t *testing.T, winnerGP, loserGP int64, wins, draws int) {
 	t.Helper()
+	guilds, err := database.NewGuildRepository(f.db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for i, member := range f.detail.Members {
 		st, err := f.standings.GetOrCreateStanding(context.Background(), member.GuildID)
 		if err != nil {
@@ -98,6 +104,10 @@ func (f rewardFixture) assertRewards(t *testing.T, winnerGP, loserGP int64, wins
 		}
 		if st.VictoryPoints != gp || st.Wins != expectedWins || st.Losses != losses || st.Draws != draws || st.BronzeMedals != medals {
 			t.Fatalf("guild %d: unexpected durable rewards: %+v", i, st)
+		}
+		g, _, err := guilds.GetGuildByCharacter(context.Background(), member.CharacterID)
+		if err != nil || g.Points != gp {
+			t.Fatalf("guild %d: spendable GP=%d want=%d err=%v", i, g.Points, gp, err)
 		}
 	}
 }
@@ -111,8 +121,11 @@ func TestGvGRewardPublicationIntegration(t *testing.T) {
 		wins, draws    int
 	}{
 		{"intermediate", 2, 1, corebattle.OutcomeWin, 3, 0, 0, 0},
-		{"final", 1, 1, corebattle.OutcomeWin, 10, 4, 1, 0},
-		{"final_draw", 3, gvg.MaxRounds, corebattle.OutcomeDraw, 4, 4, 0, 1},
+		{"intermediate_draw", 2, 1, corebattle.OutcomeDraw, 0, 0, 0, 0},
+		{"final", 1, 1, corebattle.OutcomeWin, 7, 4, 1, 0},
+		{"final_at_limit", 1, gvg.MaxRounds, corebattle.OutcomeWin, 7, 4, 1, 0},
+		{"final_draw", 3, gvg.MaxRounds, corebattle.OutcomeDraw, 0, 0, 0, 1},
+		{"win_below_target_at_limit", 3, gvg.MaxRounds, corebattle.OutcomeWin, 3, 0, 0, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newRewardFixture(t, tc.target, tc.round, tc.outcome)
@@ -175,7 +188,7 @@ func TestGvGRewardConcurrentRetryIntegration(t *testing.T) {
 	if stress.Successes != stress.TotalOps {
 		t.Fatalf("retry stress: %+v", stress)
 	}
-	f.assertRewards(t, 10, 4, 1, 0)
+	f.assertRewards(t, 7, 4, 1, 0)
 	saved, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID, 1)
 	if err != nil || !found {
 		t.Fatalf("transition: %v %v", found, err)
@@ -197,7 +210,47 @@ func TestGvGRewardConcurrentRetryIntegration(t *testing.T) {
 	if stress.Successes != stress.TotalOps {
 		t.Fatalf("SQL retry stress: %+v", stress)
 	}
-	f.assertRewards(t, 30, 12, 3, 0)
+	f.assertRewards(t, 21, 12, 3, 0)
+}
+
+func TestGvGRewardConcurrentWinDrawIntegration(t *testing.T) {
+	f := newRewardFixture(t, 1, 1, corebattle.OutcomeWin)
+	ctx := context.Background()
+	roomIDs := []string{id.New(), id.New()}
+	winner, loser := f.detail.Members[0].GuildID, f.detail.Members[1].GuildID
+	// Both claims start without standings and contend on the same guilds.
+	stress := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, _ int) error {
+		detail := f.detail
+		detail.Room.ID = roomIDs[worker%2]
+		detail.Room.Status = gvg.StatusCompleted
+		detail.Room.WinnerGuildID = winner
+		detail.Room.GuildScores = map[string]int{winner: 1}
+		settlement := gvg.MatchSettlement{
+			WinnerGuildID: winner, WinnerPrizeGP: 3,
+			GuildIDs: []string{winner, loser}, ParticipantGP: map[string]int{winner: 4, loser: 4},
+		}
+		result := gvg.RoundResolution{Round: 1, Outcome: "match_won", WinnerGuildID: winner, OverallWinnerGuildID: winner, MatchCompleted: true}
+		if worker%2 == 1 {
+			settlement.GuildIDs[0], settlement.GuildIDs[1] = settlement.GuildIDs[1], settlement.GuildIDs[0]
+			settlement.IsDraw = true
+			settlement.WinnerGuildID = ""
+			settlement.ParticipantGP = nil
+			result.WinnerGuildID = ""
+			result.OverallWinnerGuildID = ""
+			result.Outcome = "match_draw"
+			result.Round = gvg.MaxRounds
+			detail.Room.Round = gvg.MaxRounds
+			detail.Room.WinnerGuildID = ""
+			detail.Room.GuildScores = map[string]int{}
+		}
+		result.GuildScores = detail.Room.GuildScores
+		_, err := f.standings.CommitRoundTransition(ctx, detail.Room.ID, detail.Room.Round, gvg.RoundTransition{Detail: detail, Result: result, Settlement: &settlement})
+		return err
+	})
+	if stress.Successes != stress.TotalOps {
+		t.Fatalf("win/draw claims: %+v", stress)
+	}
+	f.assertRewards(t, 7, 4, 1, 1)
 }
 
 func TestGvGRewardSuccessiveRoundsIntegration(t *testing.T) {
@@ -207,8 +260,11 @@ func TestGvGRewardSuccessiveRoundsIntegration(t *testing.T) {
 		if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
 			t.Fatal(err)
 		}
+		if i == 0 {
+			f.assertRewards(t, 3, 0, 0, 0)
+		}
 	}
-	f.assertRewards(t, 13, 4, 1, 0)
+	f.assertRewards(t, 10, 4, 1, 0)
 	// A snapshot older than the latest durable round recovers the terminal state.
 	if err := f.rooms.SaveRoom(ctx, f.detail.Room, f.detail.Members); err != nil {
 		t.Fatal(err)
@@ -220,7 +276,7 @@ func TestGvGRewardSuccessiveRoundsIntegration(t *testing.T) {
 	if !result.MatchCompleted || result.GuildScores[f.detail.Members[0].GuildID] != 2 {
 		t.Fatalf("stale recovery: %+v", result)
 	}
-	f.assertRewards(t, 13, 4, 1, 0)
+	f.assertRewards(t, 10, 4, 1, 0)
 }
 
 func TestGvGRewardCleanupFailureIntegration(t *testing.T) {
@@ -248,7 +304,7 @@ func TestGvGRewardCleanupFailureIntegration(t *testing.T) {
 	if _, err := f.standings.CommitRoundTransition(ctx, f.detail.Room.ID, 2, committed); err != nil {
 		t.Fatal(err)
 	}
-	f.assertRewards(t, 10, 4, 1, 0)
+	f.assertRewards(t, 7, 4, 1, 0)
 }
 
 func TestGvGRewardSettlementFailureIntegration(t *testing.T) {
@@ -258,7 +314,7 @@ func TestGvGRewardSettlementFailureIntegration(t *testing.T) {
 	if _, err := f.standings.GetOrCreateStanding(ctx, winner); err != nil {
 		t.Fatal(err)
 	}
-	// Overflow the SQL INT win counter after the round GP update, during settlement.
+	// Overflow the SQL INT win counter after the guild GP update, during settlement.
 	if _, err := f.db.ExecContext(ctx, "UPDATE gvg_standings SET wins = 2147483647 WHERE guild_id = ?", winner); err != nil {
 		t.Fatal(err)
 	}
@@ -275,13 +331,19 @@ func TestGvGRewardSettlementFailureIntegration(t *testing.T) {
 	if _, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID, 1); err != nil || found {
 		t.Fatalf("failed settlement claimed the round: %v %v", found, err)
 	}
+	var points int64
+	for _, member := range f.detail.Members {
+		if err := f.db.QueryRowContext(ctx, "SELECT points FROM guilds WHERE id = ?", member.GuildID).Scan(&points); err != nil || points != 0 {
+			t.Fatalf("GP survived failed settlement: points=%d err=%v", points, err)
+		}
+	}
 	if _, err := f.db.ExecContext(ctx, "UPDATE gvg_standings SET wins = 0 WHERE guild_id = ?", winner); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
 		t.Fatal(err)
 	}
-	f.assertRewards(t, 10, 4, 1, 0)
+	f.assertRewards(t, 7, 4, 1, 0)
 }
 
 func TestGvGRewardRollbackIntegration(t *testing.T) {
@@ -314,5 +376,56 @@ func TestGvGRewardRollbackIntegration(t *testing.T) {
 	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
 		t.Fatal(err)
 	}
-	f.assertRewards(t, 10, 4, 1, 0)
+	f.assertRewards(t, 7, 4, 1, 0)
+}
+
+func TestGvGRewardParticipantGPIntegration(t *testing.T) {
+	f := newRewardFixture(t, 1, 1, corebattle.OutcomeWin)
+	ctx := context.Background()
+	guilds, err := database.NewGuildRepository(f.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := append([]gvg.GvGMember(nil), f.detail.Members...)
+	for _, member := range f.detail.Members {
+		// Other guild activities contribute to the balance, not GvG ranking totals.
+		if err := guilds.AddPoints(ctx, member.GuildID, 100); err != nil {
+			t.Fatal(err)
+		}
+		char, err := database.CreateTestCharacter(ctx, f.db, "GvG participant")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := guilds.AddMember(ctx, guild.Member{GuildID: member.GuildID, CharacterID: char.ID, Role: guild.RoleMember, JoinedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+		member.CharacterID, member.CharacterName = char.ID, char.Name
+		members = append(members, member)
+	}
+	room := f.detail.Room
+	room.PrizePool = 5 // Two extra joiners: prize 3 + 2.
+	if err := f.rooms.SaveRoom(ctx, room, members); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.AdvanceRound(ctx, room.LeaderCharacterID, room.ID); err != nil {
+		t.Fatal(err)
+	}
+	committed, found, err := f.standings.FindRoundTransition(ctx, room.ID, 1)
+	if err != nil || !found {
+		t.Fatalf("transition: found=%v err=%v", found, err)
+	}
+	if _, err := f.standings.CommitRoundTransition(ctx, room.ID, 1, committed); err != nil {
+		t.Fatal(err)
+	}
+	for i, member := range f.detail.Members {
+		st, err := f.standings.GetOrCreateStanding(ctx, member.GuildID)
+		want := int64(13) // Prize 5 + 4 per winner; 4 per loser.
+		if i == 1 {
+			want = 8
+		}
+		g, _, guildErr := guilds.GetGuildByCharacter(ctx, member.CharacterID)
+		if err != nil || guildErr != nil || st.VictoryPoints != want || g.Points != want+100 {
+			t.Fatalf("retry changed independent balances: standing=%+v GP=%d err=%v/%v", st, g.Points, err, guildErr)
+		}
+	}
 }
