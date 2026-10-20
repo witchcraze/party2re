@@ -3,6 +3,7 @@ package battle
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -41,8 +42,12 @@ func TestAreaFinalStrikeProjectsExternalFortressBeforeLaterDamage(t *testing.T) 
 				return nil
 			}
 		}
+		levelBefore, sealsBefore := *c.Defeat.RequesterLevel, *c.Defeat.Seals
+		partyBefore, enemyBefore := slices.Clone(c.PartyIDs), slices.Clone(c.EnemyIDs)
 		before := reloadLifetime(t, s)
-		if _, err := s.ApplyStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 || calls != 0 {
+		if _, err := s.ApplyStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 || calls != 0 ||
+			*c.Defeat.RequesterLevel != levelBefore || *c.Defeat.Seals != sealsBefore ||
+			!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) {
 			t.Fatal("fortress changed later damage after partial execution", projection, s, c, calls, err)
 		}
 	}
@@ -68,8 +73,13 @@ func TestOrderedDefeatUsesPureOwnerProjectionWithoutExecutingIt(t *testing.T) {
 		p.actor("self").HP = 1000
 		return nil
 	}
+	levelBefore, sealsBefore := *c.Defeat.RequesterLevel, *c.Defeat.Seals
+	partyBefore, enemyBefore := slices.Clone(c.PartyIDs), slices.Clone(c.EnemyIDs)
 	before := reloadLifetime(t, s)
-	if err := s.ValidateStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) || applyCalls != 0 || projectCalls == 0 {
+	if err := s.ValidateStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) || applyCalls != 0 || projectCalls == 0 ||
+		*c.Defeat.RequesterLevel != levelBefore || *c.Defeat.Seals != sealsBefore ||
+		!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) ||
+		c.DeathCalls != 0 || c.AreaDeathCalls != 0 {
 		t.Fatal(s, applyCalls, projectCalls, err)
 	}
 	rng := &targetRNG{t: t, draws: []float64{0, 0, 0, 0, 0, 0}}
@@ -82,7 +92,13 @@ func TestOrderedDefeatUsesPureOwnerProjectionWithoutExecutingIt(t *testing.T) {
 	s, sc := twoStrikeFixture()
 	s.actor("self").NPC = true
 	sc.Defeat.FieldAtLoad = "fortress"
-	if err := s.ValidateStatusEntry(&sc, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); err != nil {
+	levelBefore, sealsBefore = *sc.Defeat.RequesterLevel, *sc.Defeat.Seals
+	partyBefore, enemyBefore = slices.Clone(sc.PartyIDs), slices.Clone(sc.EnemyIDs)
+	before = reloadLifetime(t, s)
+	if err := s.ValidateStatusEntry(&sc, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) ||
+		*sc.Defeat.RequesterLevel != levelBefore || *sc.Defeat.Seals != sealsBefore ||
+		!slices.Equal(sc.PartyIDs, partyBefore) || !slices.Equal(sc.EnemyIDs, enemyBefore) ||
+		sc.DeathCalls != 0 || sc.AreaDeathCalls != 0 {
 		t.Fatal(err)
 	}
 }

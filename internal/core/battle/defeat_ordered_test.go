@@ -3,6 +3,7 @@ package battle
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -20,9 +21,16 @@ func TestFinalStrikeRegisteredSingleAndAreaAdmission(t *testing.T) {
 		s, dc := finalStrikeFixture()
 		s.actor("self").Gear.AccessoryID = "item-212"
 		s.actor("self").ItemDefinitionIDs = []string{"item-212"}
+		levelBefore, sealsBefore := *dc.RequesterLevel, *dc.Seals
+		partyBefore, enemyBefore := slices.Clone(dc.PartyIDs), slices.Clone(dc.EnemyIDs)
+		applies := 0
+		dc.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { applies++; return nil }
 		c := StatusContext{EffectContext: EffectContext{TargetContext: dc.TargetContext}, Defeat: dc}
 		before := reloadLifetime(t, s)
-		if err := s.ValidateStatusEntry(&c, nil, entry, "enemy", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) {
+		if err := s.ValidateStatusEntry(&c, nil, entry, "enemy", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) ||
+			*dc.RequesterLevel != levelBefore || *dc.Seals != sealsBefore ||
+			!slices.Equal(dc.PartyIDs, partyBefore) || !slices.Equal(dc.EnemyIDs, enemyBefore) ||
+			c.DeathCalls != 0 || c.AreaDeathCalls != 0 || c.Defeat != dc || applies != 0 {
 			t.Fatal(entry, s, err)
 		}
 		rng := &targetRNG{t: t, draws: []float64{0, 0, 0}}
@@ -40,8 +48,14 @@ func TestFinalStrikeOneHitDefenseIsConsumedInContinuation(t *testing.T) {
 	s.actor("self").Temporary = TemporaryOneHitDefense
 	s.actor("self").Gear.AccessoryID = "item-110"
 	s.actor("self").ItemDefinitionIDs = []string{"item-110"}
+	levelBefore, sealsBefore := *c.Defeat.RequesterLevel, *c.Defeat.Seals
+	partyBefore, enemyBefore := slices.Clone(c.PartyIDs), slices.Clone(c.EnemyIDs)
+	applies := 0
+	c.Defeat.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { applies++; return nil }
 	before := reloadLifetime(t, s)
-	if _, err := s.ApplyStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 {
+	if _, err := s.ApplyStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 ||
+		*c.Defeat.RequesterLevel != levelBefore || *c.Defeat.Seals != sealsBefore ||
+		!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) || applies != 0 {
 		t.Fatal(s, c, err)
 	}
 	// A single final strike reaches neither damage nor target defeat validation.
@@ -92,9 +106,16 @@ func TestAreaFinalStrikeUsesDefenseAfterRevival(t *testing.T) {
 			}
 			return nil
 		}
+		levelBefore, sealsBefore := *c.Defeat.RequesterLevel, *c.Defeat.Seals
+		partyBefore, enemyBefore := slices.Clone(c.PartyIDs), slices.Clone(c.EnemyIDs)
+		applies := 0
+		c.Defeat.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { applies++; return nil }
 		before := reloadLifetime(t, s)
 		err := s.ValidateStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t})
-		if !reflect.DeepEqual(before, s) {
+		if !reflect.DeepEqual(before, s) ||
+			*c.Defeat.RequesterLevel != levelBefore || *c.Defeat.Seals != sealsBefore ||
+			!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) ||
+			c.DeathCalls != 0 || c.AreaDeathCalls != 0 || applies != 0 {
 			t.Fatal("impure revival admission")
 		}
 		if defense == 100 {
@@ -132,9 +153,16 @@ func TestAreaDeathAdmissionRetainsTargetHelperManaBeforeRevival(t *testing.T) {
 	a := s.actor("enemy")
 	a.Abilities, a.MP, a.Temporary = []string{"pharaoh"}, 0, TemporaryAbsorbMagic
 	s.actor("self").Gear.AccessoryID = "item-110"
+	levelBefore, sealsBefore := *dc.RequesterLevel, *dc.Seals
+	partyBefore, enemyBefore := slices.Clone(dc.PartyIDs), slices.Clone(dc.EnemyIDs)
+	applies := 0
+	dc.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { applies++; return nil }
 	c := StatusContext{EffectContext: EffectContext{TargetContext: dc.TargetContext}, Defeat: dc}
 	before := reloadLifetime(t, s)
-	if err := s.ValidateStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) {
+	if err := s.ValidateStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) ||
+		*dc.RequesterLevel != levelBefore || *dc.Seals != sealsBefore ||
+		!slices.Equal(dc.PartyIDs, partyBefore) || !slices.Equal(dc.EnemyIDs, enemyBefore) ||
+		c.DeathCalls != 0 || c.AreaDeathCalls != 0 || c.Defeat != dc || applies != 0 {
 		t.Fatal(s, err)
 	}
 	rng := &targetRNG{t: t, draws: []float64{.5, 0}}
