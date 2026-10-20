@@ -21,6 +21,18 @@ Quests are randomly generated across four categories:
 - **Rare Quest (1/14 probability)**: Demands rare high-tier items or rare monsters; rewards valuable rare items (`item-129`, `item-135`〜`item-137`).
 - **Guild Quest (1/15 probability)**: Requires guild membership; requirement count is doubled (`x2`); rewards a Fortune Bag (`item-126`), awards **+100 Guild Points (GP)** to the player's guild, and increments the player's `help_count`.
 
+Candidate ranges and reward weights follow `party2/lib/helper.cgi:22–44,154–211` (reference revision `ff97fc549932a146cc945d7edf71b44c868a840e`). Each slot is equally likely; repeated reward slots retain their weight.
+
+| Target kind | Normal candidate numbers | Rare candidate numbers |
+| :--- | :--- | :--- |
+| Weapon / Armor | 1–27 | 28–40 |
+| Item | 1–27, 30–43, 60–65, 72–103, 108 | 28–29, 40, 58–59, 66–71, 104–107, 109 |
+| Monster | 4–120, 198–260 | 500–579 |
+
+Equipment and item slots use the complete native item catalog, including shields and accessories stored under `item-NNN`; names come from that catalog. A missing item definition fails generation rather than silently narrowing its pool. For monsters, draw the primary slot first and validate its native definition. A missing normal monster triggers a separate uniform draw from 1–3; a missing rare monster draws from 160–165. Do not filter primary monster slots or replace them with a different high-level pool. A missing fallback definition fails generation. This replaces the original icon-file existence check with native catalog validation without reusing legacy assets. Currently the native monster catalog contains no 500–579 definitions, so rare monster requests use the specified fallback; this does not claim those primary definitions have been reconstructed. The composition root supplies monster lookup to both completion replacement and expired-request exchange.
+
+Normal rewards have **10 slots**: `item-128` ×3, `item-130`–`item-133` ×1 each, `item-134` ×2 and `item-184` ×1. Rare rewards have **6 slots**: `item-129` ×3 and `item-135`–`item-137` ×1 each. Guild requests override either reward pool with `item-126`.
+
 ### Lifecycle and Expiration
 - Quests remain active for **6 days** (`ExpiresAt = CreatedAt + 6 days`).
 - Upon completion, required items/equipment are deducted from the player's **Depot** (`check_depot`), or monsters are deducted from the **Monster Ranch** box (`check_farm`), quest rewards are delivered directly to the player's **Depot** (`send_item`), the character's `help_count` is incremented, and a fresh replacement quest is generated.
@@ -58,7 +70,7 @@ When every request has expired, clients can complete a request if they meet its 
 | `みる` → `miru` | `ListQuests` / `GET /helpers/quests` | Read uncompleted requests including expired ones; an empty result does not generate supply. |
 | `かいけつ` → `kaiketsu` | `CompleteQuest` / `POST /helpers/complete` | Complete an existing request and create its replacement; exchanges expired non-target requests on success, or all expired requests with an empty target. No bootstrap command. |
 
-A fresh installation therefore has no playable helper requests until initial request data is separately supplied. A nonzero automatic seed or provisioning tool would require an explicit new decision about its count, source and transaction/idempotency contract; none is authorized here. Production guild wiring is connected via public port adapter in `cmd/party2` ([#1218](https://github.com/witchcraze/party2re/issues/1218)); this decision does not certify the generator pools/reward weights ([#1216](https://github.com/witchcraze/party2re/issues/1216)).
+A fresh installation therefore has no playable helper requests until initial request data is separately supplied. A nonzero automatic seed or provisioning tool would require an explicit new decision about its count, source and transaction/idempotency contract; none is authorized here. Production guild wiring is connected via public port adapter in `cmd/party2` ([#1218](https://github.com/witchcraze/party2re/issues/1218)).
 
 ---
 

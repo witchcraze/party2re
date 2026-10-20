@@ -96,7 +96,7 @@ func newRenewalFixture(t *testing.T) renewalFixture {
 		t.Fatal(err)
 	}
 	// Renewal-only operations touch helper_quests; character and depot ports are unused.
-	svc := helperquest.NewService(repo, nil, nil, database.NewTransactionProvider(db))
+	svc := helperquest.NewService(repo, nil, nil, database.NewTransactionProvider(db), helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)))
 	return renewalFixture{db: db, repo: repo, service: svc, now: time.Now().UTC().Truncate(time.Second)}
 }
 
@@ -202,7 +202,7 @@ func (r failingReplacementRepository) Save(ctx context.Context, q helperquest.Qu
 func TestHelperQuestExchangeRollsBackDeletionOnReplacementFailure(t *testing.T) {
 	f := newRenewalFixture(t)
 	failure := errors.New("replacement save failed")
-	svc := helperquest.NewService(failingReplacementRepository{HelperRepository: f.repo, err: failure}, nil, nil, database.NewTransactionProvider(f.db))
+	svc := helperquest.NewService(failingReplacementRepository{HelperRepository: f.repo, err: failure}, nil, nil, database.NewTransactionProvider(f.db), helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)))
 	repo := f.repo
 	ctx := context.Background()
 	f.seed(t, "expired", f.now.Add(-time.Hour), "")

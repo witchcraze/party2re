@@ -78,7 +78,7 @@ func newHelperClaimFixture(t *testing.T, count int) helperClaimFixture {
 		t.Fatal(err)
 	}
 	f := helperClaimFixture{quests: &claimQuestRepository{HelperRepository: quests}, chars: chars, depots: depots, now: time.Now().UTC().Truncate(time.Second)}
-	f.service = helperquest.NewService(f.quests, chars, nil, database.NewTransactionProvider(db), helperquest.WithDepotRepository(depots))
+	f.service = helperquest.NewService(f.quests, chars, nil, database.NewTransactionProvider(db), helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depots))
 	f.quest = helperquest.Quest{ID: id.New(), Title: "Concurrent claim", Kind: helperquest.KindItem, TargetID: "item-001", RequiredCount: 2, RewardItemID: "item-128", CreatedAt: f.now, ExpiresAt: f.now.Add(time.Hour)}
 	ctx := context.Background()
 	if err := quests.Save(ctx, f.quest); err != nil {

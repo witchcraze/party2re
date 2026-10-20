@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
 )
@@ -75,73 +76,70 @@ type TargetSpec struct {
 }
 
 var (
-	normalWeapons = []TargetSpec{
-		{"weapon-01", "ヒノキの棒"}, {"weapon-02", "竹の槍"}, {"weapon-03", "こんぼう"},
-		{"weapon-04", "かしの杖"}, {"weapon-05", "いばらのむち"}, {"weapon-06", "ブロンズナイフ"},
-		{"weapon-07", "おおきづち"}, {"weapon-08", "どうのつるぎ"}, {"weapon-09", "石のオノ"},
-		{"weapon-10", "くさりがま"}, {"weapon-11", "ブーメラン"}, {"weapon-12", "モーニングスター"},
-		{"weapon-13", "まどうしの杖"}, {"weapon-14", "どくばり"}, {"weapon-15", "鉄の槍"},
-		{"weapon-16", "鉄のつるぎ"}, {"weapon-17", "バトルアックス"}, {"weapon-18", "はがねのつるぎ"},
-		{"weapon-19", "はがねのオノ"}, {"weapon-20", "ホーリーランス"}, {"weapon-21", "さばきの杖"},
-		{"weapon-22", "ウォーハンマー"}, {"weapon-23", "まどろみの剣"}, {"weapon-24", "プラチナソード"},
-		{"weapon-25", "炎のつるぎ"}, {"weapon-26", "ゾンビキラー"}, {"weapon-27", "ドラゴンキラー"},
-	}
-	rareWeapons = []TargetSpec{
-		{"weapon-28", "はやぶさの剣"}, {"weapon-29", "きせきのつるぎ"}, {"weapon-30", "光の杖"},
-		{"weapon-31", "グレートアックス"}, {"weapon-32", "ふぶきのつるぎ"}, {"weapon-33", "らいめいの剣"},
-		{"weapon-34", "オーガシールド"}, {"weapon-35", "バスタードソード"}, {"weapon-36", "風神の盾"},
-		{"weapon-37", "皆殺しの剣"}, {"weapon-38", "覇王のオノ"}, {"weapon-39", "メタルキングの剣"},
-		{"weapon-40", "ロトのつるぎ"},
-	}
-
-	normalArmors = []TargetSpec{
-		{"armor-01", "布の服"}, {"armor-02", "旅人の服"}, {"armor-03", "皮の鎧"},
-		{"armor-04", "皮のドレス"}, {"armor-05", "くさりかたびら"}, {"armor-06", "青銅の鎧"},
-		{"armor-07", "鉄の鎧"}, {"armor-08", "鉄の胸当て"}, {"armor-09", "みかわしの服"},
-		{"armor-10", "はがねの鎧"}, {"armor-11", "まほうの法衣"}, {"armor-12", "まほうの鎧"},
-		{"armor-13", "シルバーメイル"}, {"armor-14", "ダンシングメイル"}, {"armor-15", "ドラゴンメイル"},
-		{"armor-16", "プラチナメイル"}, {"armor-17", "みずのはごろも"}, {"armor-18", "風のローブ"},
-		{"armor-19", "スパイクアーマー"}, {"armor-20", "やいばのよろい"}, {"armor-21", "神秘のビキニ"},
-		{"armor-22", "聖なる鎧"}, {"armor-23", "ふしぎなボレロ"}, {"armor-24", "炎の鎧"},
-		{"armor-25", "ミラーアーマー"}, {"armor-26", "ギガントアーマー"}, {"armor-27", "ドラゴンローブ"},
-	}
-	rareArmors = []TargetSpec{
-		{"armor-28", "天使のローブ"}, {"armor-29", "メタルキング鎧"}, {"armor-30", "光のドレス"},
-		{"armor-31", "王者のローブ"}, {"armor-32", "セラフィムローブ"}, {"armor-33", "覇者の鎧"},
-		{"armor-34", "神託のローブ"}, {"armor-35", "創世の鎧"},
-	}
-
-	normalItems = []TargetSpec{
-		{"item-001", "薬草"}, {"item-002", "上薬草"}, {"item-003", "特薬草"},
-		{"item-007", "毒消し草"}, {"item-008", "満月草"}, {"item-009", "目覚まし草"},
-		{"item-010", "天使のすず"}, {"item-011", "聖水"}, {"item-012", "キメラの翼"},
-	}
-	rareItems = []TargetSpec{
-		{"item-004", "賢者の石"}, {"item-005", "霊樹のしずく"}, {"item-006", "霊樹の葉"},
-		{"item-028", "エルフの飲み薬"}, {"item-029", "世界樹の雫"},
-	}
-
-	normalMonsters = []TargetSpec{
-		{"monster-001", "ドットスライム"}, {"monster-002", "スライム"}, {"monster-003", "レッドスライム"},
-		{"monster-004", "おおがらす"}, {"monster-005", "いっかくうさぎ"}, {"monster-006", "おおみみず"},
-		{"monster-007", "ゴースト"}, {"monster-008", "ドラキー"}, {"monster-009", "まほうつかい"},
-	}
-	rareMonsters = []TargetSpec{
-		{"monster-280", "エルダーグリフォン"}, {"monster-281", "ブラッドロード"}, {"monster-282", "アビスドラゴン"},
-		{"monster-283", "ヘルバトラー"}, {"monster-284", "デスジャガー"}, {"monster-285", "アークデーモン"},
-	}
-
-	normalRewards = []string{"item-128", "item-130", "item-131", "item-132", "item-133", "item-134", "item-184"}
-	rareRewards   = []string{"item-129", "item-135", "item-136", "item-137"}
-	guildReward   = "item-126" // 幸福袋
+	normalRewards = []string{"item-128", "item-128", "item-128", "item-130", "item-131", "item-132", "item-133", "item-134", "item-134", "item-184"}
+	rareRewards   = []string{"item-129", "item-129", "item-129", "item-135", "item-136", "item-137"}
+	guildReward   = "item-126"
 )
+
+// questTargets validates item slots against the native catalog and uses its names.
+// Monster slots remain intact so a missing definition triggers a separate fallback draw.
+func questTargets(kind QuestKind, rare bool) ([]TargetSpec, error) {
+	prefix, width := "item", 3
+	var ranges [][2]int
+	switch kind {
+	case KindWeapon, KindArmor:
+		if kind == KindWeapon {
+			prefix = "weapon"
+		} else {
+			prefix = "armor"
+		}
+		width = 2
+		ranges = [][2]int{{1, 27}}
+		if rare {
+			ranges = [][2]int{{28, 40}}
+		}
+	case KindItem:
+		ranges = [][2]int{{1, 27}, {30, 43}, {60, 65}, {72, 103}, {108, 108}}
+		if rare {
+			ranges = [][2]int{{28, 29}, {40, 40}, {58, 59}, {66, 71}, {104, 107}, {109, 109}}
+		}
+	case KindMonster:
+		prefix = "monster"
+		ranges = [][2]int{{4, 120}, {198, 260}}
+		if rare {
+			ranges = [][2]int{{500, 579}}
+		}
+	}
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		return nil, err
+	}
+	var targets []TargetSpec
+	for _, bounds := range ranges {
+		for n := bounds[0]; n <= bounds[1]; n++ {
+			target := TargetSpec{ID: fmt.Sprintf("%s-%0*d", prefix, width, n)}
+			if kind != KindMonster {
+				def, err := catalog.FindByID(target.ID)
+				if err != nil {
+					return nil, fmt.Errorf("helper target %s: %w", target.ID, err)
+				}
+				target.Name = def.Name
+			}
+			targets = append(targets, target)
+		}
+	}
+	if len(targets) == 0 {
+		return nil, ErrInvalidParameters
+	}
+	return targets, nil
+}
 
 var weaponTitles = []string{"店を始めたいので", "強くなりたくて", "戦い用に", "ライバルに勝ちたくて", "見てみたい", "趣味で", "家宝にしたい", "探しています"}
 var armorTitles = []string{"コンプリートのために", "カッコ良くなりたい", "オシャレになりたくて", "あこがれの服", "プレゼント用に", "着てみたい", "集めたい", "流行なので"}
 var itemTitles = []string{"コレクション用", "病気を治すために", "非常用に", "必要なんです", "大好物なので", "気になるので", "自分用に欲しい", "用途は秘密です"}
 var monsterTitles = []string{"かわいいので", "ペットほしい", "仲良くなりたい", "プニプニしたい", "いやされたい", "触ってみたい", "背中に乗ってみたい", "幸せになるために"}
 
-func GenerateQuest(random RandomSource, now time.Time) (Quest, error) {
+func GenerateQuest(random RandomSource, now time.Time, lookupMonster func(string) (string, bool)) (Quest, error) {
 	if random == nil {
 		random = DefaultRandomSource()
 	}
@@ -167,47 +165,27 @@ func GenerateQuest(random RandomSource, now time.Time) (Quest, error) {
 	}
 	isGuild := (gVal == 0)
 
-	var targetList []TargetSpec
 	var titles []string
-	var needCount int
-
+	countSlots, countBase := 3, 2
 	switch kind {
 	case KindWeapon:
 		titles = weaponTitles
-		if isRare {
-			targetList = rareWeapons
-		} else {
-			targetList = normalWeapons
-		}
-		c, _ := random.Intn(3)
-		needCount = c + 2
 	case KindArmor:
 		titles = armorTitles
-		if isRare {
-			targetList = rareArmors
-		} else {
-			targetList = normalArmors
-		}
-		c, _ := random.Intn(3)
-		needCount = c + 2
 	case KindItem:
 		titles = itemTitles
-		if isRare {
-			targetList = rareItems
-		} else {
-			targetList = normalItems
-		}
-		c, _ := random.Intn(3)
-		needCount = c + 2
 	case KindMonster:
 		titles = monsterTitles
-		if isRare {
-			targetList = rareMonsters
-		} else {
-			targetList = normalMonsters
-		}
-		c, _ := random.Intn(2)
-		needCount = c + 1
+		countSlots, countBase = 2, 1
+	}
+	c, err := random.Intn(countSlots)
+	if err != nil {
+		return Quest{}, err
+	}
+	needCount := c + countBase
+	targetList, err := questTargets(kind, isRare)
+	if err != nil {
+		return Quest{}, err
 	}
 
 	if isGuild {
@@ -219,19 +197,53 @@ func GenerateQuest(random RandomSource, now time.Time) (Quest, error) {
 		return Quest{}, err
 	}
 	target := targetList[tIdx]
+	if kind == KindMonster {
+		if lookupMonster == nil {
+			return Quest{}, fmt.Errorf("monster catalog lookup is required: %w", ErrInvalidParameters)
+		}
+		var ok bool
+		target.Name, ok = lookupMonster(target.ID)
+		if !ok {
+			first, slots := 1, 3
+			if isRare {
+				first, slots = 160, 6
+			}
+			fallback, err := random.Intn(slots)
+			if err != nil {
+				return Quest{}, err
+			}
+			target.ID = fmt.Sprintf("monster-%03d", first+fallback)
+			target.Name, ok = lookupMonster(target.ID)
+			if !ok {
+				return Quest{}, fmt.Errorf("monster fallback is unavailable: %w", ErrInvalidParameters)
+			}
+		}
+	}
 
-	titleIdx, _ := random.Intn(len(titles))
-	suffixNum, _ := random.Intn(999)
+	titleIdx, err := random.Intn(len(titles))
+	if err != nil {
+		return Quest{}, err
+	}
+	suffixNum, err := random.Intn(999)
+	if err != nil {
+		return Quest{}, err
+	}
 	title := fmt.Sprintf("%sその%d", titles[titleIdx], suffixNum+1)
 
 	var rewardID string
 	if isGuild {
 		rewardID = guildReward
 	} else if isRare {
-		rwIdx, _ := random.Intn(len(rareRewards))
+		rwIdx, err := random.Intn(len(rareRewards))
+		if err != nil {
+			return Quest{}, err
+		}
 		rewardID = rareRewards[rwIdx]
 	} else {
-		rwIdx, _ := random.Intn(len(normalRewards))
+		rwIdx, err := random.Intn(len(normalRewards))
+		if err != nil {
+			return Quest{}, err
+		}
 		rewardID = normalRewards[rwIdx]
 	}
 

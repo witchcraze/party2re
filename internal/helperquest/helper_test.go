@@ -3,6 +3,7 @@ package helperquest
 import (
 	"context"
 	"errors"
+	"github.com/witchcraze/party2re/internal/testutil"
 	"slices"
 	"testing"
 	"time"
@@ -141,7 +142,7 @@ func TestGenerateQuest(t *testing.T) {
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	rand := &mockRandomSource{values: []int{0, 1, 0, 0}} // weapon, normal, count, etc.
 
-	q, err := GenerateQuest(rand, now)
+	q, err := GenerateQuest(rand, now, testutil.MonsterNameLookup(t))
 	if err != nil {
 		t.Fatalf("GenerateQuest failed: %v", err)
 	}
@@ -186,7 +187,7 @@ func TestCompleteQuestSuccess(t *testing.T) {
 		charGuild:   map[string]string{"char-1": "guild-1"},
 	}
 
-	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithDepotRepository(depotRepo))
+	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithMonsterLookup(testutil.MonsterNameLookup(t)), WithDepotRepository(depotRepo))
 
 	quest := Quest{
 		ID:            "quest-1",
@@ -244,7 +245,7 @@ func TestCompleteGuildQuestAwardsPoints(t *testing.T) {
 		charGuild:   map[string]string{"char-1": "guild-1"},
 	}
 
-	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithDepotRepository(depotRepo))
+	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithMonsterLookup(testutil.MonsterNameLookup(t)), WithDepotRepository(depotRepo))
 
 	quest := Quest{
 		ID:            "quest-g1",
@@ -286,7 +287,7 @@ func TestCompleteQuestExpiredTargetStillRequiresMaterials(t *testing.T) {
 	}
 	guildRepo := &stubGuildRepo{charGuild: make(map[string]string)}
 
-	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithDepotRepository(newStubDepotRepo()))
+	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithMonsterLookup(testutil.MonsterNameLookup(t)), WithDepotRepository(newStubDepotRepo()))
 
 	quest := Quest{
 		ID:            "quest-exp",
@@ -372,7 +373,7 @@ func TestCompleteQuestTransactionFailure(t *testing.T) {
 	}
 	_ = questRepo.Save(ctx, quest)
 
-	svc := NewService(questRepo, charRepo, guildRepo, &failingTxProvider{}, WithDepotRepository(depotRepo))
+	svc := NewService(questRepo, charRepo, guildRepo, &failingTxProvider{}, WithMonsterLookup(testutil.MonsterNameLookup(t)), WithDepotRepository(depotRepo))
 
 	_, err := svc.CompleteQuest(ctx, "char-1", "quest-fail-tx", now)
 	if err == nil {

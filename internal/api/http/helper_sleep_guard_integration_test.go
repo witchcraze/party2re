@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/witchcraze/party2re/internal/testutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -112,7 +113,7 @@ func setupHelperSleepIntegrationEnv(t *testing.T) *helperSleepIntegrationEnv {
 		charRepo,
 		nil,
 		txProvider,
-		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithMonsterLookup(testutil.MonsterNameLookup(t)), helperquest.WithDepotRepository(depotRepo),
 	)
 
 	// Create primary player and character
