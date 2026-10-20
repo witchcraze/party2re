@@ -57,10 +57,10 @@ func TestHelperRepository_Integration(t *testing.T) {
 		t.Errorf("unexpected found quest: %+v", found)
 	}
 
-	// 3. ListActive
-	active, err := repo.ListActive(ctx, now)
+	// 3. ListUncompleted
+	active, err := repo.ListUncompleted(ctx)
 	if err != nil {
-		t.Fatalf("ListActive failed: %v", err)
+		t.Fatalf("ListUncompleted failed: %v", err)
 	}
 	hasQuest := false
 	for _, a := range active {

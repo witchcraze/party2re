@@ -146,7 +146,7 @@ func TestHelperQuestExchangeReplacesExpiredRowsOnce(t *testing.T) {
 			t.Errorf("%s must be retained: %v", id, err)
 		}
 	}
-	active, err := f.repo.ListActive(ctx, f.now)
+	active, err := f.repo.ListUncompleted(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestHelperQuestExchangeConcurrentCallsReplaceEachRowOnce(t *testing.T) {
 			t.Fatalf("concurrent exchange: %v", err)
 		}
 	}
-	active, err := f.repo.ListActive(ctx, f.now)
+	active, err := f.repo.ListUncompleted(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,6 +220,10 @@ func TestHelperQuestExchangeRollsBackDeletionOnReplacementFailure(t *testing.T) 
 
 func TestHelperQuestExchangeLeavesEmptyStoreEmpty(t *testing.T) {
 	f := newRenewalFixture(t)
+	ids, err := f.service.GetActiveHelperItemIDs(context.Background(), f.now)
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("empty board exclusions = %v, %v", ids, err)
+	}
 	if _, err := f.service.CompleteQuest(context.Background(), "nobody", "", f.now); err != nil {
 		t.Fatal(err)
 	}

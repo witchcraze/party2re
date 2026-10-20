@@ -76,7 +76,7 @@ func TestSecretShopProductionHelperWiring(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	assertAssets := func(wantGold, wantCount int) {
+	assertAssets := func(wantGold, wantInventory, wantDepot int) {
 		t.Helper()
 		got, err := core.charRepo.FindByID(ctx, char.ID)
 		if err != nil {
@@ -90,14 +90,14 @@ func TestSecretShopProductionHelperWiring(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		count := dep.Quantity("item-010")
+		inventoryCount := 0
 		for _, it := range inv.Items {
 			if it.DefinitionID == "item-010" {
-				count += it.Quantity
+				inventoryCount += it.Quantity
 			}
 		}
-		if got.Money != wantGold || count != wantCount {
-			t.Fatalf("assets: gold=%d items=%d; want %d/%d", got.Money, count, wantGold, wantCount)
+		if got.Money != wantGold || inventoryCount != wantInventory || dep.Quantity("item-010") != wantDepot {
+			t.Fatalf("assets: gold=%d inventory=%d depot=%d; want %d/%d/%d", got.Money, inventoryCount, dep.Quantity("item-010"), wantGold, wantInventory, wantDepot)
 		}
 	}
 	status, err := misc.secretshop.GetShopStatus(ctx, char.ID)
@@ -119,7 +119,7 @@ func TestSecretShopProductionHelperWiring(t *testing.T) {
 	if res.Failures != 0 {
 		t.Fatalf("concurrent exclusions: %+v", res)
 	}
-	assertAssets(char.Money, 0)
+	assertAssets(char.Money, 0, 0)
 	q.CompletedAt, q.CompletedBy = &now, char.ID
 	if err := questRepo.Save(ctx, q); err != nil {
 		t.Fatal(err)
@@ -149,7 +149,7 @@ func TestSecretShopProductionHelperWiring(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	assertAssets(char.Money-2*750, 2)
+	assertAssets(char.Money-2*750, 1, 1)
 	q.ID, q.CompletedAt, q.CompletedBy, q.ExpiresAt = id.New(), nil, "", now.Add(-time.Hour)
 	if err := questRepo.Save(ctx, q); err != nil {
 		t.Fatal(err)
@@ -168,24 +168,23 @@ func TestSecretShopProductionHelperWiring(t *testing.T) {
 	for _, it := range status.Items {
 		found = found || it.ItemDefinitionID == q.TargetID
 	}
-	if !found {
-		t.Fatal("expired target remains excluded")
+	if found {
+		t.Fatal("production catalog exposes expired uncompleted helper target")
 	}
-	if _, err := misc.secretshop.PurchaseItem(ctx, char.ID, "secret_item_herbal_root", 1); err != nil {
-		t.Fatal(err)
+	if _, err := misc.secretshop.PurchaseItem(ctx, char.ID, "secret_item_herbal_root", 1); !errors.Is(err, secretshop.ErrItemUnavailableInHelperQuest) {
+		t.Fatalf("expired target purchase: %v", err)
 	}
-	assertAssets(char.Money-3*750, 3)
+	assertAssets(char.Money-2*750, 1, 1)
 }
 
 type secretShopFailingQuests struct {
 	helperquest.QuestRepository
 	err error
 	ctx context.Context
-	now time.Time
 }
 
-func (r *secretShopFailingQuests) ListActive(ctx context.Context, now time.Time) ([]helperquest.Quest, error) {
-	r.ctx, r.now = ctx, now
+func (r *secretShopFailingQuests) ListUncompleted(ctx context.Context) ([]helperquest.Quest, error) {
+	r.ctx = ctx
 	return nil, r.err
 }
 
@@ -216,7 +215,6 @@ func TestSecretShopHelperReadFailure(t *testing.T) {
 	}
 	type requestKey struct{}
 	ctx := context.WithValue(context.Background(), requestKey{}, "request")
-	before := time.Now().UTC()
 	status, err := service.GetShopStatus(ctx, "hero")
 	if status != nil || !errors.Is(err, failure) || quests.ctx != ctx {
 		t.Fatalf("status=%+v err=%v ctx=%v", status, err, quests.ctx)
@@ -227,9 +225,6 @@ func TestSecretShopHelperReadFailure(t *testing.T) {
 	}
 	if quests.ctx.Value(requestKey{}) != "request" || quests.ctx.Value(secretShopTransactionKey{}) != true {
 		t.Fatal("helper read lost request/transaction context")
-	}
-	if quests.now.Before(before) || quests.now.After(time.Now().UTC()) {
-		t.Fatalf("helper reader time=%v", quests.now)
 	}
 	if chars.char.Money != 50000 {
 		t.Fatalf("wallet changed on helper failure: %+v", chars.char)

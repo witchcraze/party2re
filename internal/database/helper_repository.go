@@ -80,10 +80,6 @@ func (r *HelperRepository) findByID(ctx context.Context, id string, forUpdate bo
 	return q, nil
 }
 
-func (r *HelperRepository) ListActive(ctx context.Context, now time.Time) ([]helperquest.Quest, error) {
-	return r.list(ctx, "expires_at > ?", now)
-}
-
 func (r *HelperRepository) ListUncompleted(ctx context.Context) ([]helperquest.Quest, error) {
 	return r.list(ctx, "TRUE")
 }

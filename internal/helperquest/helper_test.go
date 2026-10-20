@@ -3,6 +3,7 @@ package helperquest
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -30,16 +31,6 @@ func (r *stubQuestRepo) FindByIDForUpdate(_ context.Context, id string) (Quest, 
 		return Quest{}, ErrQuestNotFound
 	}
 	return q, nil
-}
-
-func (r *stubQuestRepo) ListActive(_ context.Context, now time.Time) ([]Quest, error) {
-	var list []Quest
-	for _, q := range r.quests {
-		if q.CompletedAt == nil && q.ExpiresAt.After(now) {
-			list = append(list, q)
-		}
-	}
-	return list, nil
 }
 
 func (r *stubQuestRepo) ListUncompleted(_ context.Context) ([]Quest, error) {
@@ -320,18 +311,17 @@ func TestGetActiveHelperItemIDs(t *testing.T) {
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 
 	questRepo := newStubQuestRepo()
-	_ = questRepo.Save(ctx, Quest{
-		ID:        "q1",
-		Kind:      KindWeapon,
-		TargetID:  "weapon-05",
-		ExpiresAt: now.Add(10 * time.Hour),
-	})
-	_ = questRepo.Save(ctx, Quest{
-		ID:        "q2",
-		Kind:      KindItem,
-		TargetID:  "item-007",
-		ExpiresAt: now.Add(10 * time.Hour),
-	})
+	for _, q := range []Quest{
+		{ID: "live", Kind: KindWeapon, TargetID: "weapon-05", ExpiresAt: now.Add(time.Hour)},
+		{ID: "boundary", Kind: KindArmor, TargetID: "armor-01", ExpiresAt: now},
+		{ID: "expired", Kind: KindItem, TargetID: "item-007", ExpiresAt: now.Add(-time.Hour)},
+		{ID: "monster", Kind: KindMonster, TargetID: "monster-001", ExpiresAt: now.Add(-time.Hour)},
+		{ID: "done", Kind: KindItem, TargetID: "item-008", ExpiresAt: now.Add(time.Hour), CompletedAt: &now},
+	} {
+		if err := questRepo.Save(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	svc := NewService(questRepo, &stubCharRepo{}, &stubGuildRepo{}, &stubTransactionProvider{})
 	itemIDs, err := svc.GetActiveHelperItemIDs(ctx, now)
@@ -339,8 +329,9 @@ func TestGetActiveHelperItemIDs(t *testing.T) {
 		t.Fatalf("GetActiveHelperItemIDs failed: %v", err)
 	}
 
-	if len(itemIDs) != 2 {
-		t.Fatalf("expected 2 active item IDs, got %d", len(itemIDs))
+	slices.Sort(itemIDs)
+	if !slices.Equal(itemIDs, []string{"armor-01", "item-007", "monster-001", "weapon-05"}) {
+		t.Fatalf("uncompleted target IDs = %v", itemIDs)
 	}
 }
 

@@ -40,16 +40,6 @@ func (r *mockQuestRepo) FindByIDForUpdate(_ context.Context, id string) (helperq
 	return q, nil
 }
 
-func (r *mockQuestRepo) ListActive(_ context.Context, now time.Time) ([]helperquest.Quest, error) {
-	var list []helperquest.Quest
-	for _, q := range r.quests {
-		if q.CompletedAt == nil && q.ExpiresAt.After(now) {
-			list = append(list, q)
-		}
-	}
-	return list, nil
-}
-
 func (r *mockQuestRepo) ListUncompleted(_ context.Context) ([]helperquest.Quest, error) {
 	var list []helperquest.Quest
 	for _, q := range r.quests {

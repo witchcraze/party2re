@@ -15,7 +15,6 @@ import (
 type QuestRepository interface {
 	Save(ctx context.Context, q Quest) error
 	FindByIDForUpdate(ctx context.Context, id string) (Quest, error)
-	ListActive(ctx context.Context, now time.Time) ([]Quest, error)
 	ListUncompleted(ctx context.Context) ([]Quest, error)
 	// ListExpired reads uncompleted requests whose deadline is before now, without locking.
 	ListExpired(ctx context.Context, now time.Time) ([]Quest, error)
@@ -116,13 +115,14 @@ func (s *Service) ListQuests(ctx context.Context, _ time.Time) ([]Quest, error) 
 	return s.quests.ListUncompleted(ctx)
 }
 
-func (s *Service) GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]string, error) {
-	active, err := s.quests.ListActive(ctx, now)
+// GetActiveHelperItemIDs returns targets until their requests are completed or exchanged.
+func (s *Service) GetActiveHelperItemIDs(ctx context.Context, _ time.Time) ([]string, error) {
+	quests, err := s.quests.ListUncompleted(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var ids []string
-	for _, q := range active {
+	for _, q := range quests {
 		ids = append(ids, q.TargetID)
 	}
 	return ids, nil
