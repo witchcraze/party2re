@@ -60,6 +60,17 @@ func (s *Service) StartMatch(ctx context.Context, leaderID string, roomID string
 func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID string) (RoundResolution, error) {
 	var result RoundResolution
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		last, err := s.transitions.FindTransition(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
+		if last.Result != nil && last.Result.MatchCompleted {
+			if last.Detail.Room.LeaderCharacterID != leaderID {
+				return ErrNotRoomLeader
+			}
+			result = *last.Result
+			return nil
+		}
 		detail, err := s.repo.GetRoom(lockedCtx, roomID)
 		if err != nil {
 			return err
@@ -177,6 +188,8 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		var overallWinner string
 		var prizePerMember int
 		var awardedIDs []string
+		var refundIDs []string
+		var refundAmount int
 
 		if roundWinnerTeam != "" {
 			detail.Room.TeamScores[roundWinnerTeam]++
@@ -196,16 +209,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 
 				if len(winIDs) > 0 {
 					prizePerMember = detail.Room.PrizePool / len(winIDs)
-					var err error
-					awardedIDs, err = s.awardPrizes(lockedCtx, winIDs, prizePerMember)
-					if err != nil {
-						return err
-					}
-					if s.victoryHook != nil {
-						for _, aID := range awardedIDs {
-							_ = s.victoryHook(lockedCtx, aID, "")
-						}
-					}
+					awardedIDs = sortCharacterIDs(winIDs)
 				}
 				detail.Room.PrizePerMember = prizePerMember
 				detail.Room.PrizePool = 0
@@ -219,13 +223,9 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			detail.Room.Status = StatusCompleted
 			// Refund remaining prize pool equally among all members
 			if len(detail.Members) > 0 {
-				refund := detail.Room.PrizePool / len(detail.Members)
-				var memberIDs []string
+				refundAmount = detail.Room.PrizePool / len(detail.Members)
 				for _, m := range detail.Members {
-					memberIDs = append(memberIDs, m.CharacterID)
-				}
-				if err := s.refundMembers(lockedCtx, memberIDs, refund); err != nil {
-					return err
+					refundIDs = append(refundIDs, m.CharacterID)
 				}
 				detail.Room.PrizePool = 0
 			}
@@ -240,10 +240,6 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		}
 
 		detail.Room.UpdatedAt = time.Now().UTC()
-		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
-			return err
-		}
-
 		result = RoundResolution{
 			Round:               detail.Room.Round,
 			Outcome:             roundOutcome,
@@ -256,6 +252,28 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			AwardedCharacterIDs: awardedIDs,
 			Turns:               res.Turns,
 			BattleLog:           res.Logs,
+		}
+		if matchCompleted {
+			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &result}, func(txCtx context.Context) error {
+				if err := s.awardPrizes(txCtx, awardedIDs, prizePerMember); err != nil {
+					return err
+				}
+				if err := s.refundMembers(txCtx, refundIDs, refundAmount); err != nil {
+					return err
+				}
+				if s.victoryHook != nil {
+					for _, aID := range awardedIDs {
+						if err := s.victoryHook(txCtx, aID, ""); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+		} else if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+			return err
 		}
 		return nil
 	})

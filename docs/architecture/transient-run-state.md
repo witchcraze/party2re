@@ -36,6 +36,36 @@ Do not invent generic auto-fold, forfeiture/refund, turn-history keys, or a
 60-second post-game retention policy. Each owning game must define and verify
 its actual transitions against the original CGI.
 
+### PvP financial publication
+
+PvP keeps live teams and rounds in Valkey. The SQL `pvp_room_transitions` record
+retains each room's latest financial version, resulting room and final outcome;
+`pvp_character_claims` reserves each character's participation. The PvP transition
+port commits bets, refunds or prizes and victory counters with this recovery state
+in one SQL transaction. It locks the room claim (Rank 0), affected characters in
+ascending ID order (Rank 2), then participation claims (Rank 8). A unique character
+claim rolls back a competing admission, including its debit. Terminal claims reject
+further financial transitions. Financial versions also reject stale cached rosters.
+
+Valkey publication happens after commit. Before subsequent room mutations, pending
+publication is retried under the room lock without repeating financial effects or
+combat. Creation can discover unpublished rooms through the character's SQL claim.
+Removed claims remain reserved until room and reverse-mapping writes all succeed;
+mapping deletion compares the room ID so it cannot erase newer membership. Final
+round retries return the stored result. Password hashes and financial versions use
+private persistence fields and remain absent from public room responses.
+
+These records have no automatic expiry. Recovery covers committed financial
+transitions awaiting publication; it does not reconstruct later team/round changes
+after an already published lobby expires or is evicted, or identify losses from
+older deployments. Active claims survive that loss, preventing another debit but
+requiring explicit recovery rather than silently abandoning the escrow. This adds
+no timeout refund rule. Retry after a new join/leave cycle is a new operation; the
+API has no client request identity to distinguish a delayed request across cycles.
+SQL versions protect the financial claim; live combat and publication still use
+the existing room lease, whose wider multi-instance guarantees are unresolved in
+[#1574](https://github.com/witchcraze/party2re/issues/1574).
+
 ### GvG reward publication
 
 `StandingRepository.CommitRoundTransition` delegates to the GvG SQL repository.

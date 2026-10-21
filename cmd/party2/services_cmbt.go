@@ -84,12 +84,17 @@ func newCmbtServices(
 	} else {
 		pvpRoomRepo = pvp.NewMemoryRoomRepository()
 	}
+	pvpTransitions, err := database.NewPvPTransitionRepository(db)
+	if err != nil {
+		return nil, err
+	}
 	pvpService, err := pvp.NewService(
 		pvpRoomRepo,
 		core.charRepo,
 		battleEngine,
 		pvp.WithParticipantBuilder(battleAdapter),
 		pvp.WithTransactionProvider(core.txProvider),
+		pvp.WithTransitionRepository(pvpTransitions),
 	)
 	if err != nil {
 		return nil, err

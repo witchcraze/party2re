@@ -1,0 +1,32 @@
+{
+  "module": "pvp",
+  "tier": 2,
+  "description": "Ephemeral colosseum rooms with durable SQL financial versions, participation claims and publication recovery (C1, C2, C3).",
+  "package": "internal/pvp",
+  "dependencies": [
+    {"name": "transitions", "target_module": "database", "relation_type": "contract_interface", "source_ref": "internal/pvp/transition.go#TransitionRepository"},
+    {"name": "characters", "target_module": "character", "relation_type": "contract_interface", "source_ref": "internal/pvp/service.go#CharacterRepository"},
+    {"name": "rooms", "target_module": "pvp", "relation_type": "contract_interface", "source_ref": "internal/pvp/repository.go#RoomRepository"}
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "CommitTransition",
+      "source_ref": "internal/database/pvp_transition_repository.go#PvPTransitionRepository.CommitTransition",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {"table": "pvp_room_transitions", "tier": 0, "mode": "INSERT / SELECT ... FOR UPDATE", "note": "Unique financial version; reject pending or terminal transitions."},
+        {"table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE (ascending ID)", "note": "Callback updates wallets and PvP wins through CharacterRepository; shares the ambient SQL transaction."},
+        {"table": "pvp_character_claims", "tier": 8, "mode": "INSERT unique character ID", "note": "Admission conflict rolls back the debit and room claim."}
+      ]
+    },
+    {
+      "method": "AcknowledgeTransition",
+      "source_ref": "internal/database/pvp_transition_repository.go#PvPTransitionRepository.AcknowledgeTransition",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {"table": "pvp_room_transitions", "tier": 0, "mode": "SELECT ... FOR UPDATE", "note": "Acknowledge only the published version."},
+        {"table": "pvp_character_claims", "tier": 8, "mode": "DELETE scoped to character and room", "note": "Release departed claims only after cache publication; terminal settlement releases all participants."}
+      ]
+    }
+  ]
+}

@@ -78,7 +78,7 @@ func setupService(battleOutcome corebattle.Outcome) (*pvp.Service, *mockCharRepo
 			Logs:    []corebattle.TurnLog{{Turn: 1, Message: "Round combat concluded."}},
 		},
 	}
-	svc, _ := pvp.NewService(roomRepo, charRepo, battleEngine)
+	svc, _ := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))
 	return svc, charRepo, roomRepo
 }
 

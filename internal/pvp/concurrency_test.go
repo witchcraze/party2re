@@ -212,7 +212,7 @@ func testConcurrentJoinRoomStress(t *testing.T, roomRepo pvp.RoomRepository) {
 			Outcome: corebattle.OutcomeWin,
 		},
 	}
-	svc, err := pvp.NewService(roomRepo, charRepo, battleEngine)
+	svc, err := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))
 	if err != nil {
 		t.Fatalf("failed to create pvp service: %v", err)
 	}

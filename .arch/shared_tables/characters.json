@@ -12,7 +12,8 @@
     "internal/fleamarket/fleamarket.go#CharacterRepository",
     "internal/gemstore/types.go#CharacterRepository",
     "internal/bank/bank.go#Repository",
-    "internal/auction/types.go#CharacterRepository"
+    "internal/auction/types.go#CharacterRepository",
+    "internal/pvp/service.go#CharacterRepository"
   ],
   "callers": [
     {
@@ -168,6 +169,27 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Serialize Dungeon/Challenge solo and Party starts with character IDs sorted; checks activity before publishing the admitted run"
+    },
+    {
+      "module": "pvp",
+      "caller_method": "internal/pvp/settlement.go#Service.deductBet",
+      "lock_mode": "SELECT ... FOR UPDATE (ascending ID for multiple characters)",
+      "lock_order": 2,
+      "purpose": "Financial mutation inside the durable room transition transaction; room claim precedes characters and participation claims follow them"
+    },
+    {
+      "module": "pvp",
+      "caller_method": "internal/pvp/settlement.go#Service.refundMembers",
+      "lock_mode": "SELECT ... FOR UPDATE (ascending ID for multiple characters)",
+      "lock_order": 2,
+      "purpose": "Financial mutation inside the durable room transition transaction; room claim precedes characters and participation claims follow them"
+    },
+    {
+      "module": "pvp",
+      "caller_method": "internal/pvp/settlement.go#Service.awardPrizes",
+      "lock_mode": "SELECT ... FOR UPDATE (ascending ID for multiple characters)",
+      "lock_order": 2,
+      "purpose": "Financial mutation inside the durable room transition transaction; room claim precedes characters and participation claims follow them"
     }
   ]
 }

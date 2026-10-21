@@ -14,6 +14,7 @@ Unlike modern asynchronous snapshot Elo ladders, authentic Party2 PvP features r
 - **Relational vs Ephemeral Authority**:
   - Room state, participant roster, team assignments, and round scores are stored ephemerally in Valkey Master (`party2:pvp:room:<id>`, `party2:pvp:character:<id>`, `party2:pvp:rooms:active`) with a 30-minute inactivity TTL.
   - Canonical player wealth (`characters.money`) and PvP victories (`characters.pvp_wins`, legacy `$m{kill_p}`) are durably persisted in MariaDB Master.
+  - Financial transitions also retain a durable SQL claim and publication result. Failed room/membership writes are retried without charging or paying twice; SQL participation claims prevent concurrent admission to different rooms. See [financial publication and its recovery limits](../architecture/transient-run-state.md#pvp-financial-publication).
 - **Core Battle Engine Integration**: Round combat utilizes `corebattle.Engine.ResolvePartyBattle`, treating teammates as allies and opposing color participants as enemies.
 
 ---
