@@ -141,7 +141,8 @@ HTTP maps an unknown outcome to `500` with only the sentinel message. Clients ob
 owned readers and never replay the POST. Limitation: an absent row is treated as an
 abort, so a commit still in flight server-side when it is read is not excluded;
 excluding it needs durable start receipts like the Adventure contract below.
-Terminal payout/history idempotency remains separate (#1205, #1211).
+Terminal payout/history idempotency is separate from start reconciliation; see
+the Challenge guarantee below and the remaining Dungeon work in #1205.
 
 ## Two-Phase Settlement
 
@@ -157,6 +158,25 @@ Inspect the owning finalizer, durable idempotency guard, and failure tests when
 changing this boundary. Durable records include `character_dungeon_records`,
 `dungeon_expedition_history`, and `character_challenge_records`; legacy SQL
 active-state migrations are historical work, not a remaining rollout plan.
+
+### Challenge finalization
+
+`ChallengeRepository.FinalizeSession` requires the SQL row created at start and
+a `defeated` or `claimed` terminal snapshot. In one transaction it locks the
+Character, conditionally updates the owned session from `active`, checks
+`RowsAffected`, and applies rewards and the challenge record. It reuses an
+ambient transaction. An error rolls back the claim with its coupled effects.
+Missing sessions return `ErrSessionNotFound`; ownership mismatches return
+`ErrForbidden`; completed sessions return `ErrSessionNotActive` without changing
+their snapshot or granting rewards again. Finalization never recreates a row.
+
+The retained SQL row protects sequential and concurrent retries independently
+of Valkey deletion. Post-commit cleanup failure leaves the buffer observable;
+another defeat settlement returns `ErrSessionNotActive` and grants nothing.
+This guard does not repair that buffer, serialize live rounds, or extend the
+current leader-only reward settlement to all participants. Those behavior gaps
+remain tracked in #1210 and #1209. No new HTTP operation or automatic retry is
+introduced.
 
 ## Crash Recovery
 

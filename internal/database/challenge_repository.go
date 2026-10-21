@@ -312,11 +312,24 @@ func (r *ChallengeRepository) GetLeaderboard(ctx context.Context, tierID string,
 	return list, rows.Err()
 }
 
+// FinalizeSession claims an active SQL session once, committing its terminal
+// snapshot, rewards and record together. Duplicate claims return ErrSessionNotActive.
+// Transaction: RunInTx (reuses an ambient transaction)
+// Lock Order: characters(2) -> inventory_items(3) -> character_depots(5)
 func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.ChallengeSession, expReward int, goldReward int, items []string, newStreak int) error {
+	if s.Status != challenge.StatusDefeated && s.Status != challenge.StatusClaimed {
+		return challenge.ErrSessionNotActive
+	}
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 
-		// 1. Update session status
+		charRepo := &CharacterRepository{db: r.db}
+		char, err := charRepo.FindByIDForUpdate(txCtx, s.CharacterID)
+		if err != nil {
+			return err
+		}
+
+		// The start row is durable before Valkey publication; never recreate it here.
 		itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
 		var partyID sql.NullString
 		if s.PartyID != "" {
@@ -326,50 +339,47 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 		if len(s.Members) > 0 {
 			membersJSON = sql.NullString{String: challenge.EncodeJSON(s.Members), Valid: true}
 		}
-		upsertSessionQuery := `
-			INSERT INTO challenge_sessions (
-				id, character_id, party_id, members_json, tier_id, current_round, character_current_hp,
-				accumulated_exp, accumulated_gold, accumulated_items_json, status,
-				created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON DUPLICATE KEY UPDATE
-				party_id = VALUES(party_id),
-				members_json = VALUES(members_json),
-				current_round = VALUES(current_round),
-				character_current_hp = VALUES(character_current_hp),
-				accumulated_exp = VALUES(accumulated_exp),
-				accumulated_gold = VALUES(accumulated_gold),
-				accumulated_items_json = VALUES(accumulated_items_json),
-				status = VALUES(status),
-				updated_at = VALUES(updated_at)
+		claimSessionQuery := `
+			UPDATE challenge_sessions
+			SET party_id = ?, members_json = ?, current_round = ?, character_current_hp = ?,
+			    accumulated_exp = ?, accumulated_gold = ?, accumulated_items_json = ?,
+			    status = ?, updated_at = ?
+			WHERE id = ? AND character_id = ? AND status = 'active'
 		`
-		if _, err := executor.ExecContext(
+		result, err := executor.ExecContext(
 			txCtx,
-			upsertSessionQuery,
-			s.ID,
-			s.CharacterID,
+			claimSessionQuery,
 			partyID,
 			membersJSON,
-			s.TierID,
 			s.CurrentRound,
 			s.CharacterCurrentHP,
 			s.AccumulatedExp,
 			s.AccumulatedGold,
 			itemsJSON,
 			string(s.Status),
-			s.CreatedAt,
 			s.UpdatedAt,
-		); err != nil {
-			return err
-		}
-
-		// 2. Lock Character (Rank 2) & Award EXP and Gold
-		charRepo := &CharacterRepository{db: r.db}
-		char, err := charRepo.FindByIDForUpdate(txCtx, s.CharacterID)
+			s.ID,
+			s.CharacterID,
+		)
 		if err != nil {
 			return err
 		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			stored, err := r.FindSessionByID(txCtx, s.ID)
+			if err != nil {
+				return err
+			}
+			if stored.CharacterID != s.CharacterID {
+				return challenge.ErrForbidden
+			}
+			return challenge.ErrSessionNotActive
+		}
 
+		// Award EXP and Gold only after this transaction claimed the session.
 		if goldReward > 0 {
 			if err := char.AddMoney(goldReward); err != nil {
 				return err
