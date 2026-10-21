@@ -294,6 +294,8 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		// Atomically advance round and buffer rewards in Valkey Master
 		outcome, err := s.activeStore.AdvanceRound(ctx, characterID, AdvanceRoundParams{
 			ExpectedSessionID: sessionID,
+			ExpectedRound:     round,
+			Members:           session.Members,
 			SurvivingHP:       leaderSurvivingHP,
 			ExpDelta:          mExp,
 			GoldDelta:         mGold,
@@ -302,14 +304,6 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		})
 		if err != nil {
 			return nil, nil, err
-		}
-
-		outcome.Session.PartyID = session.PartyID
-		outcome.Session.Members = session.Members
-		outcome.Session.PartyName = session.PartyName
-		outcome.Session.PartyColor = session.PartyColor
-		if err := s.activeStore.SaveActiveSession(ctx, outcome.Session); err != nil {
-			return nil, nil, fmt.Errorf("saving active session: %w", err)
 		}
 
 		return &RoundResult{

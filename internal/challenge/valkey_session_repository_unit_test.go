@@ -67,6 +67,8 @@ func TestValkeySessionRepository_NewAndFallback(t *testing.T) {
 	// 3. AdvanceRound fallback
 	advanceOutcome, err := repo.AdvanceRound(ctx, "char-fallback-1", challenge.AdvanceRoundParams{
 		ExpectedSessionID: "chal-fallback-1",
+		ExpectedRound:     retrieved.CurrentRound,
+		Members:           retrieved.Members,
 		SurvivingHP:       140,
 		ExpDelta:          25,
 		GoldDelta:         50,
@@ -403,6 +405,7 @@ func TestValkeySessionRepository_AdvanceRound(t *testing.T) {
 
 	params := challenge.AdvanceRoundParams{
 		ExpectedSessionID: "chal-advance-1",
+		ExpectedRound:     1,
 		SurvivingHP:       175,
 		ExpDelta:          50,
 		GoldDelta:         100,
@@ -462,6 +465,14 @@ func TestValkeySessionRepository_AdvanceRound(t *testing.T) {
 	repoMismatch, _ := challenge.NewValkeySessionRepository(clientMismatch)
 	if _, err := repoMismatch.AdvanceRound(ctx, "char-advance-1", params); !errors.Is(err, challenge.ErrSessionIDMismatch) {
 		t.Fatalf("expected ErrSessionIDMismatch, got %v", err)
+	}
+
+	clientRoundMismatch := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
+		return valkeytest.MakeErrorResult(errors.New("ERR_SESSION_ROUND_MISMATCH"))
+	}))
+	repoRoundMismatch, _ := challenge.NewValkeySessionRepository(clientRoundMismatch)
+	if _, err := repoRoundMismatch.AdvanceRound(ctx, "char-advance-1", params); !errors.Is(err, challenge.ErrSessionRoundMismatch) {
+		t.Fatalf("expected ErrSessionRoundMismatch, got %v", err)
 	}
 
 	// 5. Generic error

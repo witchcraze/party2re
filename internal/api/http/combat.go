@@ -192,6 +192,10 @@ func (h *Handler) handleAdvanceChallenge(w http.ResponseWriter, r *http.Request)
 
 		roundRes, session, err := h.challenges.AdvanceRound(r.Context(), char.ID, req.SessionID)
 		if err != nil {
+			if errors.Is(err, challenge.ErrSessionRoundMismatch) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
 			if errors.Is(err, challenge.ErrSessionNotFound) {
 				writeError(w, http.StatusNotFound, err)
 				return

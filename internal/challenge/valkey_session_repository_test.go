@@ -90,6 +90,7 @@ func TestMemorySessionRepository_LifecycleAndErrors(t *testing.T) {
 	// 4. AdvanceRound
 	advanceParams := challenge.AdvanceRoundParams{
 		ExpectedSessionID: sessID,
+		ExpectedRound:     1,
 		SurvivingHP:       180,
 		ExpDelta:          50,
 		GoldDelta:         100,
@@ -234,6 +235,7 @@ func TestValkeySessionRepository_LifecycleAndErrors(t *testing.T) {
 	// 5. Atomic AdvanceRound with Lua Script
 	advanceParams := challenge.AdvanceRoundParams{
 		ExpectedSessionID: sessID,
+		ExpectedRound:     1,
 		SurvivingHP:       175,
 		ExpDelta:          75,
 		GoldDelta:         150,
@@ -263,6 +265,7 @@ func TestValkeySessionRepository_LifecycleAndErrors(t *testing.T) {
 	// 6. Advance another round accumulating another item
 	advanceParams2 := challenge.AdvanceRoundParams{
 		ExpectedSessionID: sessID,
+		ExpectedRound:     2,
 		SurvivingHP:       190,
 		ExpDelta:          80,
 		GoldDelta:         160,
@@ -349,6 +352,7 @@ func TestValkeySessionRepository_ConcurrentRounds(t *testing.T) {
 			for r := 1; r <= roundsPerChar; r++ {
 				_, stepErr := repo.AdvanceRound(ctx, cid, challenge.AdvanceRoundParams{
 					ExpectedSessionID: fmt.Sprintf("conc-sess-%s", cid[len(cid)-2:]),
+					ExpectedRound:     r,
 					SurvivingHP:       150,
 					ExpDelta:          20,
 					GoldDelta:         40,

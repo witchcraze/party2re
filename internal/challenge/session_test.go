@@ -134,7 +134,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("activeStore SaveActiveSession error propagates with context", func(t *testing.T) {
+	t.Run("successful round does not require a second SaveActiveSession", func(t *testing.T) {
 		svc, _, _, activeStore := setupSessionTestService(t)
 		sess, err := svc.StartSession(ctx, "hero", "0")
 		if err != nil {
@@ -143,9 +143,9 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 		activeStore.saveActiveSessionErr = errors.New("valkey oom")
 
-		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID)
-		if err == nil || !strings.Contains(err.Error(), "saving active session: valkey oom") {
-			t.Errorf("expected wrapped save active session error, got %v", err)
+		_, updated, err := svc.AdvanceRound(ctx, "hero", sess.ID)
+		if err != nil || updated == nil || updated.CurrentRound != 2 {
+			t.Errorf("expected an atomic successful round, got %+v, err=%v", updated, err)
 		}
 	})
 

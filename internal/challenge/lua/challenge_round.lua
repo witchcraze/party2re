@@ -8,6 +8,8 @@ local gold_delta = tonumber(ARGV[4]) or 0
 local reward_item = ARGV[5]
 local now_timestamp = ARGV[6]
 local ttl_seconds = tonumber(ARGV[7]) or 7200
+local expected_round = tonumber(ARGV[8])
+local members_json = ARGV[9]
 
 -- 1. Check existence of active challenge session key
 if redis.call('EXISTS', session_key) == 0 then
@@ -26,10 +28,17 @@ if status ~= 'active' then
     return redis.error_reply("ERR_SESSION_NOT_ACTIVE: challenge session is not active")
 end
 
--- 4. Advance round counter and update surviving HP
+-- 4. Reject stale combat results before changing state or rewards.
+local stored_round = tonumber(redis.call('HGET', session_key, 'current_round'))
+if stored_round ~= expected_round then
+    return redis.error_reply("ERR_SESSION_ROUND_MISMATCH: challenge round already changed")
+end
+
+-- Advance round counter and persist the complete post-combat HP snapshot.
 local new_round = redis.call('HINCRBY', session_key, 'current_round', 1)
 redis.call('HMSET', session_key,
     'character_current_hp', surviving_hp,
+    'members', members_json,
     'updated_at', now_timestamp
 )
 

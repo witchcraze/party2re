@@ -90,6 +90,9 @@ func mapLuaError(err error) error {
 	if strings.Contains(errStr, "ERR_SESSION_ID_MISMATCH") {
 		return ErrSessionIDMismatch
 	}
+	if strings.Contains(errStr, "ERR_SESSION_ROUND_MISMATCH") {
+		return ErrSessionRoundMismatch
+	}
 	return err
 }
 
@@ -286,6 +289,8 @@ func (r *ValkeySessionRepository) AdvanceRound(ctx context.Context, characterID 
 		params.RewardItemID,
 		params.Now.Format(time.RFC3339Nano),
 		strconv.FormatInt(int64(r.ttl.Seconds()), 10),
+		strconv.Itoa(params.ExpectedRound),
+		EncodeJSON(params.Members),
 	})
 
 	if err := res.Error(); err != nil {
