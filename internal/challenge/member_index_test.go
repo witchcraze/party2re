@@ -54,7 +54,7 @@ func TestMemberIndex(t *testing.T) {
 			if got, err := store.GetActiveSession(ctx, id.New()); err != nil || got != nil {
 				t.Fatalf("unrelated actor: %+v %v", got, err)
 			}
-			outcome, err := store.AdvanceRound(ctx, leader, challenge.AdvanceRoundParams{ExpectedSessionID: run.ID, SurvivingHP: 200, Now: time.Now()})
+			outcome, err := store.AdvanceRound(ctx, leader, challenge.AdvanceRoundParams{ExpectedSessionID: run.ID, ExpectedRound: run.CurrentRound, Members: run.Members, SurvivingHP: 200, Now: time.Now()})
 			updated := outcome.Session
 			if err != nil || updated.PartyID != run.PartyID || len(updated.Members) != 2 {
 				t.Fatalf("transition lost roster: %+v %v", updated, err)

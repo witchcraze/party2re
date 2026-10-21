@@ -17,14 +17,15 @@ import (
 var challengeTiersData []byte
 
 var (
-	ErrSessionNotFound     = errors.New("ERR_SESSION_NOT_FOUND: challenge session not found")
-	ErrSessionNotActive    = errors.New("ERR_SESSION_NOT_ACTIVE: challenge session is not active")
-	ErrSessionIDMismatch   = errors.New("ERR_SESSION_ID_MISMATCH: challenge session id mismatch")
-	ErrActiveSessionExists = errors.New("active challenge session already exists")
-	ErrTierNotFound        = errors.New("challenge tier not found")
-	ErrLevelTooLow         = errors.New("character level is too low for this tier")
-	ErrCharacterNotFound   = errors.New("character not found")
-	ErrForbidden           = errors.New("forbidden: character does not own this challenge session")
+	ErrSessionNotFound      = errors.New("ERR_SESSION_NOT_FOUND: challenge session not found")
+	ErrSessionNotActive     = errors.New("ERR_SESSION_NOT_ACTIVE: challenge session is not active")
+	ErrSessionIDMismatch    = errors.New("ERR_SESSION_ID_MISMATCH: challenge session id mismatch")
+	ErrSessionRoundMismatch = errors.New("ERR_SESSION_ROUND_MISMATCH: challenge round already changed")
+	ErrActiveSessionExists  = errors.New("active challenge session already exists")
+	ErrTierNotFound         = errors.New("challenge tier not found")
+	ErrLevelTooLow          = errors.New("character level is too low for this tier")
+	ErrCharacterNotFound    = errors.New("character not found")
+	ErrForbidden            = errors.New("forbidden: character does not own this challenge session")
 )
 
 type SessionStatus string
@@ -147,9 +148,12 @@ type RoundResult struct {
 	SessionStatus      SessionStatus     `json:"session_status"`
 }
 
-// AdvanceRoundParams encapsulates the parameters for advancing an active challenge session round atomically.
+// AdvanceRoundParams applies one computed victory only to its expected session/round.
+// Members is the complete post-combat roster snapshot; party identity remains unchanged.
 type AdvanceRoundParams struct {
 	ExpectedSessionID string
+	ExpectedRound     int
+	Members           []ChallengeMember
 	SurvivingHP       int
 	ExpDelta          int
 	GoldDelta         int

@@ -85,8 +85,13 @@ current key patterns use a Cluster Hash Tag `{char:<character_id>}`:
 `dungeon_step` (`internal/dungeon/lua/dungeon_step.lua`) verifies expedition ID
 and active state, updates coordinates/HP/turns, accumulates provisional loot,
 and refreshes state/reward TTLs. `challenge_advance_round`
-(`internal/challenge/lua/challenge_round.lua`) verifies session ID and active
-state, advances the round, updates HP/rewards, and refreshes TTLs. Exact fields,
+(`internal/challenge/lua/challenge_round.lua`) verifies session ID, active
+state and the round used to calculate combat. It advances the round and saves
+leader HP, the complete member snapshot and provisional rewards in one atomic
+step, preserving party identity and refreshing TTLs. A stale round returns
+`ErrSessionRoundMismatch` (HTTP 409) without changing the buffer; callers must
+read the current run before computing another round. There is no later full
+session save that could overwrite a newer step. Exact fields,
 argument order, errors, and return tuples are defined in the embedded sources.
 These scripts protect their own transitions; application reads, combat
 resolution, and SQL settlement are separate operations.

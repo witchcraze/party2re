@@ -238,28 +238,37 @@ func TestCombatEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/challenges/advance - forbidden for non-owned session", func(t *testing.T) {
-		hForbidden := newTestHandler(
-			t,
-			pService,
-			cService,
-			&stubAdventureService{},
-			&stubShopService{},
-			apihttp.WithChallenge(&stubChallengeService{
-				advanceRoundFn: func(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
-					return nil, nil, challenge.ErrForbidden
-				},
-			}),
-		)
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/advance", `{"session_id":"other-sess"}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		hForbidden.Router().ServeHTTP(rec, req)
+	for _, tc := range []struct {
+		name string
+		err  error
+		code int
+	}{
+		{"forbidden for non-owned session", challenge.ErrForbidden, http.StatusForbidden},
+		{"conflict for stale round", challenge.ErrSessionRoundMismatch, http.StatusConflict},
+	} {
+		t.Run("POST /characters/{id}/challenges/advance - "+tc.name, func(t *testing.T) {
+			hError := newTestHandler(
+				t,
+				pService,
+				cService,
+				&stubAdventureService{},
+				&stubShopService{},
+				apihttp.WithChallenge(&stubChallengeService{
+					advanceRoundFn: func(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
+						return nil, nil, tc.err
+					},
+				}),
+			)
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/advance", `{"session_id":"other-sess"}`)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			hError.Router().ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
-		}
-	})
+			if rec.Code != tc.code {
+				t.Fatalf("expected %d, got %d: %s", tc.code, rec.Code, rec.Body.String())
+			}
+		})
+	}
 
 	// Bosses
 	t.Run("GET /characters/{id}/bosses", func(t *testing.T) {

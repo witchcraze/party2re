@@ -155,9 +155,13 @@ func (m *MemorySessionRepository) AdvanceRound(ctx context.Context, characterID 
 	if s.Status != StatusActive {
 		return AdvanceRoundOutcome{}, ErrSessionNotActive
 	}
+	if s.CurrentRound != params.ExpectedRound {
+		return AdvanceRoundOutcome{}, ErrSessionRoundMismatch
+	}
 
 	s.CurrentRound++
 	s.CharacterCurrentHP = params.SurvivingHP
+	s.Members = append([]ChallengeMember(nil), params.Members...)
 	s.AccumulatedExp += params.ExpDelta
 	s.AccumulatedGold += params.GoldDelta
 	if params.RewardItemID != "" {
