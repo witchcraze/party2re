@@ -14,6 +14,19 @@
   ],
   "transaction_boundaries": [
     {
+      "method": "DecayGuildPoints",
+      "source_ref": "internal/database/guild_points_repository.go#GuildRepository.DecayGuildPoints",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "UPDATE",
+          "note": "Read positive-balance guild IDs without locks, then update each current balance in ascending ID order, compatible with GvG settlement."
+        }
+      ]
+    },
+    {
       "method": "CreateGuild",
       "source_ref": "internal/database/guild_repository.go#GuildRepository.CreateGuild",
       "transaction_type": "RunInTx",

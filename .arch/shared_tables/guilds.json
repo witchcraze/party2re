@@ -9,6 +9,13 @@
   "callers": [
     {
       "module": "guild",
+      "caller_method": "internal/database/guild_points_repository.go#GuildRepository.DecayGuildPoints",
+      "lock_mode": "UPDATE",
+      "lock_order": 7,
+      "purpose": "Decay current positive balances through individual updates in ascending guild ID order within one ambient transaction"
+    },
+    {
+      "module": "guild",
       "caller_method": "internal/database/guild_repository.go#GuildRepository.CreateGuild",
       "lock_mode": "INSERT",
       "lock_order": 7,

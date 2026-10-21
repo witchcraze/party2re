@@ -15,10 +15,8 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// helperIsolatedDB creates a unique database holding only the given table definitions.
-// Helper request exchange deletes and replaces every expired request in helper_quests, so
-// real-commit tests must not run against the shared table.
-func helperIsolatedDB(t *testing.T, tables ...string) *sql.DB {
+// isolatedRepositoryDB copies table definitions into a dedicated, disposable database.
+func isolatedRepositoryDB(t *testing.T, tables ...string) *sql.DB {
 	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -35,7 +33,7 @@ func helperIsolatedDB(t *testing.T, tables ...string) *sql.DB {
 	})
 	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
 	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated helper quest tests")
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated repository tests")
 	}
 	cfg, err := mysql.ParseDSN(adminDSN)
 	if err != nil {
@@ -50,7 +48,7 @@ func helperIsolatedDB(t *testing.T, tables ...string) *sql.DB {
 			t.Error(err)
 		}
 	})
-	name := "party2_helper_quest_test_" + id.New()
+	name := "party2_repository_test_" + id.New()
 	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +88,7 @@ type renewalFixture struct {
 
 func newRenewalFixture(t *testing.T) renewalFixture {
 	t.Helper()
-	db := helperIsolatedDB(t, "helper_quests")
+	db := isolatedRepositoryDB(t, "helper_quests")
 	repo, err := database.NewHelperRepository(db)
 	if err != nil {
 		t.Fatal(err)

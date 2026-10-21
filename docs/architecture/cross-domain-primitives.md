@@ -52,6 +52,10 @@ Rank order applies to acquiring new locks, not merely the textual order of
 updates to rows already locked. The complete hierarchy is owned by
 [the database rules](../../.agents/rules/05-database-and-caching.md).
 
+Daily guild GP decay and GvG settlement acquire guild row locks in ascending ID
+order. Decay applies its formula to each current locked balance; a bulk update
+through the points index can acquire locks in a conflicting order.
+
 Depot serializes changes through the `character_depots` parent row and reads
 items with `FOR UPDATE` to retain the latest committed state. Both locking item
 reads and item deletions explicitly use `idx_depot_items_character`: sparse
