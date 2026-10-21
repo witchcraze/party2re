@@ -107,7 +107,7 @@ func (f *activeAffiliationFixture) getCharacterMoney(t *testing.T, charID string
 
 func TestGuildActiveAffiliation_ConcurrentCreate(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	initialMoney := 20000
@@ -162,7 +162,7 @@ func TestGuildActiveAffiliation_ConcurrentCreate(t *testing.T) {
 
 func TestGuildActiveAffiliation_ConcurrentApproval(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader1 := f.createCharacter(t, "AppLead1", 20000)
@@ -219,7 +219,7 @@ func TestGuildActiveAffiliation_ConcurrentApproval(t *testing.T) {
 
 func TestGuildActiveAffiliation_CreateVsApproval(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader1 := f.createCharacter(t, "CvALead", 20000)
@@ -291,7 +291,7 @@ func TestGuildActiveAffiliation_CreateVsApproval(t *testing.T) {
 
 func TestGuildActiveAffiliation_JoinVsCreate(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader := f.createCharacter(t, "JvCLead", 20000)
@@ -455,7 +455,7 @@ func TestGuildActiveAffiliation_PendingSuccessionFallback(t *testing.T) {
 
 func TestGuildActiveAffiliation_AssignCustomRoleConcurrency(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader1 := f.createCharacter(t, "ARLead1", 20000)
@@ -512,7 +512,7 @@ func TestGuildActiveAffiliation_AssignCustomRoleConcurrency(t *testing.T) {
 
 func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader1 := f.createCharacter(t, "LSLead1", 20000)
@@ -590,7 +590,7 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.
 
 func TestGuildActiveAffiliation_LeaveSuccessionVsCreateConcurrency(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader1 := f.createCharacter(t, "LCLead1", 20000)
@@ -639,7 +639,7 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsCreateConcurrency(t *testing.T)
 
 func TestGuildActiveAffiliation_SoleLeaderLeaveVsJoinConcurrency(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader := f.createCharacter(t, "LJLead", 20000)
@@ -700,7 +700,7 @@ func TestGuildActiveAffiliation_SoleLeaderLeaveVsJoinConcurrency(t *testing.T) {
 
 func TestGuildActiveAffiliation_LeaderLeaveVsCandidateDepartureConcurrency(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader := f.createCharacter(t, "LLCLead", 20000)
@@ -749,7 +749,7 @@ func TestGuildActiveAffiliation_LeaderLeaveVsCandidateDepartureConcurrency(t *te
 
 func TestGuildActiveAffiliation_LeaderLeaveVsCandidateRosterChangesConcurrency(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	leader := f.createCharacter(t, "LRCLead", 20000)

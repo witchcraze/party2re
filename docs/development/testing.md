@@ -275,6 +275,21 @@ Sampling leaves untested combinations: report protected contracts and residual
 gaps, not test counts/coverage percentages as proof of complete battle support.
 
 
+### 5.4 Execution Budgets and Stop Detection
+
+A DB integration test's context covers fixture preparation and business operations;
+normally allow 60 seconds so package concurrency and `-race` have headroom.
+Character/guild creation consumes that budget even when a fixture helper uses its
+own context. This budget is a cancellation safety net, not a latency assertion.
+
+Keep separate bounds for intentional lock waits and isolated stuck-worker checks;
+the workflow rule's 2–5 second dead-man guidance applies to those checks, not the
+whole DB scenario. Do not relax SQL lock-wait settings or suppress deadline,
+deadlock or cancellation errors. Wait for barriers/state observations rather than
+fixed sleeps, make channel waits cancellation-aware, and join all workers before
+assertions and fixture cleanup. Existing concurrency helpers join workers; their
+callbacks must honor cancellation themselves.
+
 ## 6. Mechanical AST Static Analysis Linters
 
 In-tree Go tests under [internal/architecture](../../internal/architecture/),
