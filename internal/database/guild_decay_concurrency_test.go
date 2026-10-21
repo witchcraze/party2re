@@ -139,11 +139,14 @@ func TestGuildRepository_DecayGuildPoints(t *testing.T) {
 	if err := f.db.QueryRow("SELECT updated_at FROM guilds WHERE id = ?", f.guildIDs[3]).Scan(&updated); err != nil || updated.Year() != 2000 {
 		t.Fatalf("zero GP guild changed: updated=%v err=%v", updated, err)
 	}
+	if err := f.db.QueryRow("SELECT updated_at FROM guilds WHERE id = ?", f.guildIDs[2]).Scan(&updated); err != nil || updated.Year() == 2000 {
+		t.Fatalf("positive GP decayed to zero without timestamp update: updated=%v err=%v", updated, err)
+	}
 }
 
 // Observe a real InnoDB wait instead of guessing when the contender reached its lock.
 func waitForGuildDecayLock(ctx context.Context, db *sql.DB, waiting, blocking int64) error {
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		var count int
@@ -163,90 +166,115 @@ func waitForGuildDecayLock(ctx context.Context, db *sql.DB, waiting, blocking in
 }
 
 func TestGuildDecayGvGControlledInterleaving(t *testing.T) {
-	f := newGuildDecayFixture(t, 100, 200) // Points index visits B before A.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	transition := f.transition(false)
-	started := make(chan int64, 1)
-	done := make(chan error, 1)
-	decayStarted := false
-	err := database.RunInTx(ctx, f.db, func(txCtx context.Context) error {
-		tx := database.TxFromContext(txCtx)
-		// Reproduce the existing GvG prefix: room claim, then the first guild.
-		if _, err := tx.ExecContext(txCtx, "INSERT INTO gvg_match_transitions (room_id) VALUES (?)", transition.Detail.Room.ID); err != nil {
-			return err
-		}
-		var locked string
-		if err := tx.QueryRowContext(txCtx, "SELECT id FROM guilds WHERE id = ? FOR UPDATE", f.guildIDs[0]).Scan(&locked); err != nil {
-			return err
-		}
-		var blocking int64
-		if err := tx.QueryRowContext(txCtx, "SELECT CONNECTION_ID()").Scan(&blocking); err != nil {
-			return err
-		}
-		decayStarted = true
-		go func() {
-			done <- database.RunInTx(ctx, f.db, func(decayCtx context.Context) error {
-				var waiting int64
-				err := database.TxFromContext(decayCtx).QueryRowContext(decayCtx, "SELECT CONNECTION_ID()").Scan(&waiting)
-				started <- waiting
-				if err != nil {
+	for _, tc := range []struct {
+		name          string
+		initial, want []int64
+	}{
+		{"positive", []int64{100, 200}, []int64{85, 163}},
+		{"zero_second", []int64{100, 0}, []int64{85, 3}},
+		{"zero_first", []int64{0, 100}, []int64{5, 83}},
+		{"both_zero", []int64{0, 0}, []int64{5, 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newGuildDecayFixture(t, tc.initial...)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			transition := f.transition(false)
+			started := make(chan int64, 1)
+			done := make(chan error, 1)
+			decayStarted := false
+			err := database.RunInTx(ctx, f.db, func(txCtx context.Context) error {
+				tx := database.TxFromContext(txCtx)
+				// Reproduce the existing GvG prefix: room claim, then the first guild.
+				if _, err := tx.ExecContext(txCtx, "INSERT INTO gvg_match_transitions (room_id) VALUES (?)", transition.Detail.Room.ID); err != nil {
 					return err
 				}
-				return f.guilds.DecayGuildPoints(decayCtx, .8)
-			})
-		}()
-		select {
-		case waiting := <-started:
-			if err := waitForGuildDecayLock(txCtx, f.db, waiting, blocking); err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		_, err := f.gvg.CommitRoundTransition(txCtx, transition.Detail.Room.ID, 1, transition)
-		return err
-	})
-	if decayStarted {
-		if decayErr := <-done; decayErr != nil {
-			t.Errorf("decay failed: %v", decayErr)
-		}
-	}
-	if err != nil {
-		t.Fatalf("settlement failed: %v", err)
-	}
-	if got := f.points(t); !slices.Equal(got, []int64{85, 163}) {
-		t.Fatalf("settlement then decay GP=%v want=[85 163]", got)
-	}
-	f.assertSettlement(t, transition)
-}
-
-func TestGuildDecayGvGSerialControls(t *testing.T) {
-	for _, decayFirst := range []bool{false, true} {
-		t.Run(fmt.Sprintf("decay_first=%v", decayFirst), func(t *testing.T) {
-			f := newGuildDecayFixture(t, 100, 200)
-			ctx := context.Background()
-			transition := f.transition(false)
-			if decayFirst {
-				if err := f.guilds.DecayGuildPoints(ctx, .8); err != nil {
-					t.Fatal(err)
+				var locked string
+				if err := tx.QueryRowContext(txCtx, "SELECT id FROM guilds WHERE id = ? FOR UPDATE", f.guildIDs[0]).Scan(&locked); err != nil {
+					return err
 				}
+				var blocking int64
+				if err := tx.QueryRowContext(txCtx, "SELECT CONNECTION_ID()").Scan(&blocking); err != nil {
+					return err
+				}
+				decayStarted = true
+				go func() {
+					done <- database.RunInTx(ctx, f.db, func(decayCtx context.Context) error {
+						var waiting int64
+						err := database.TxFromContext(decayCtx).QueryRowContext(decayCtx, "SELECT CONNECTION_ID()").Scan(&waiting)
+						started <- waiting
+						if err != nil {
+							return err
+						}
+						return f.guilds.DecayGuildPoints(decayCtx, .8)
+					})
+				}()
+				select {
+				case waiting := <-started:
+					if err := waitForGuildDecayLock(txCtx, f.db, waiting, blocking); err != nil {
+						return err
+					}
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				_, err := f.gvg.CommitRoundTransition(txCtx, transition.Detail.Room.ID, 1, transition)
+				return err
+			})
+			if decayStarted {
+				if decayErr := <-done; decayErr != nil {
+					t.Errorf("decay failed: %v", decayErr)
+				}
+			}
+			if err != nil {
+				t.Fatalf("settlement failed: %v", err)
 			}
 			if _, err := f.gvg.CommitRoundTransition(ctx, transition.Detail.Room.ID, 1, transition); err != nil {
-				t.Fatal(err)
+				t.Fatalf("replay committed settlement: %v", err)
 			}
-			want := []int64{87, 164}
-			if !decayFirst {
-				if err := f.guilds.DecayGuildPoints(ctx, .8); err != nil {
-					t.Fatal(err)
-				}
-				want = []int64{85, 163}
-			}
-			if got := f.points(t); !slices.Equal(got, want) {
-				t.Fatalf("serial GP=%v want=%v", got, want)
+			if got := f.points(t); !slices.Equal(got, tc.want) {
+				t.Fatalf("settlement then decay GP=%v want=%v", got, tc.want)
 			}
 			f.assertSettlement(t, transition)
 		})
+	}
+}
+
+func TestGuildDecayGvGSerialControls(t *testing.T) {
+	for _, tc := range []struct {
+		name                                 string
+		initial, decayFirst, settlementFirst []int64
+	}{
+		{"positive", []int64{100, 200}, []int64{87, 164}, []int64{85, 163}},
+		{"zero_second", []int64{100, 0}, []int64{87, 4}, []int64{85, 3}},
+		{"zero_first", []int64{0, 100}, []int64{7, 84}, []int64{5, 83}},
+		{"both_zero", []int64{0, 0}, []int64{7, 4}, []int64{5, 3}},
+	} {
+		for _, decayFirst := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/decay_first=%v", tc.name, decayFirst), func(t *testing.T) {
+				f := newGuildDecayFixture(t, tc.initial...)
+				ctx := context.Background()
+				transition := f.transition(false)
+				if decayFirst {
+					if err := f.guilds.DecayGuildPoints(ctx, .8); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := f.gvg.CommitRoundTransition(ctx, transition.Detail.Room.ID, 1, transition); err != nil {
+					t.Fatal(err)
+				}
+				want := tc.decayFirst
+				if !decayFirst {
+					if err := f.guilds.DecayGuildPoints(ctx, .8); err != nil {
+						t.Fatal(err)
+					}
+					want = tc.settlementFirst
+				}
+				if got := f.points(t); !slices.Equal(got, want) {
+					t.Fatalf("serial GP=%v want=%v", got, want)
+				}
+				f.assertSettlement(t, transition)
+			})
+		}
 	}
 }
 

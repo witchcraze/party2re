@@ -16,7 +16,7 @@ func (r *GuildRepository) DecayGuildPoints(ctx context.Context, factor float64) 
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 		// Read IDs without locking: a bulk update can lock through the points index.
-		rows, err := executor.QueryContext(txCtx, "SELECT id FROM guilds WHERE points > 0 ORDER BY id")
+		rows, err := executor.QueryContext(txCtx, "SELECT id FROM guilds ORDER BY id")
 		if err != nil {
 			return err
 		}
@@ -34,11 +34,13 @@ func (r *GuildRepository) DecayGuildPoints(ctx context.Context, factor float64) 
 		}
 		now := time.Now().UTC()
 		for _, guildID := range guildIDs {
+			// Keep zero balances locked; evaluate the timestamp before changing points.
 			if _, err := executor.ExecContext(txCtx, `
 				UPDATE guilds
-				SET points = FLOOR(points * ?), updated_at = ?
-				WHERE id = ? AND points > 0
-			`, factor, now, guildID); err != nil {
+				SET updated_at = IF(points > 0, ?, updated_at),
+				    points = IF(points > 0, FLOOR(points * ?), points)
+				WHERE id = ?
+			`, now, factor, guildID); err != nil {
 				return err
 			}
 		}

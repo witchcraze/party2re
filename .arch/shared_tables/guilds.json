@@ -12,7 +12,7 @@
       "caller_method": "internal/database/guild_points_repository.go#GuildRepository.DecayGuildPoints",
       "lock_mode": "UPDATE",
       "lock_order": 7,
-      "purpose": "Decay current positive balances through individual updates in ascending guild ID order within one ambient transaction"
+      "purpose": "Lock all existing guilds, including zero balances, through individual updates in ascending ID order within one ambient transaction; decay only current positive balances"
     },
     {
       "module": "guild",

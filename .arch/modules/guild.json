@@ -22,7 +22,7 @@
           "table": "guilds",
           "tier": 7,
           "mode": "UPDATE",
-          "note": "Read positive-balance guild IDs without locks, then update each current balance in ascending ID order, compatible with GvG settlement."
+          "note": "Read all guild IDs without locks, then lock each row by ID in ascending order, including zero balances; decay only current positive balances, compatible with GvG settlement."
         }
       ]
     },
