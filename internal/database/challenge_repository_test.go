@@ -209,6 +209,11 @@ func TestChallengeRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 	}
 
 	// 1. Finalize with first item -> goes to empty inventory
+	sess1.Status = challenge.StatusActive
+	if err := repo.SaveSession(ctx, sess1); err != nil {
+		t.Fatal(err)
+	}
+	sess1.Status = challenge.StatusDefeated
 	if err := repo.FinalizeSession(ctx, sess1, 50, 20, []string{"item-001"}, 1); err != nil {
 		t.Fatalf("FinalizeSession 1 failed: %v", err)
 	}
@@ -232,6 +237,11 @@ func TestChallengeRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
+	sess2.Status = challenge.StatusActive
+	if err := repo.SaveSession(ctx, sess2); err != nil {
+		t.Fatal(err)
+	}
+	sess2.Status = challenge.StatusDefeated
 	if err := repo.FinalizeSession(ctx, sess2, 50, 20, []string{"item-002"}, 2); err != nil {
 		t.Fatalf("FinalizeSession 2 overflow failed: %v", err)
 	}
@@ -272,6 +282,11 @@ func TestChallengeRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
+	sess3.Status = challenge.StatusActive
+	if err := repo.SaveSession(ctx, sess3); err != nil {
+		t.Fatal(err)
+	}
+	sess3.Status = challenge.StatusDefeated
 	if err := repo.FinalizeSession(ctx, sess3, 50, 20, []string{"item-003"}, 3); err != nil {
 		t.Fatalf("FinalizeSession with full depot should succeed as lost drop: %v", err)
 	}

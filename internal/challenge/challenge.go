@@ -181,6 +181,9 @@ type SessionRepository interface {
 	FindSessionByID(ctx context.Context, id string) (*ChallengeSession, error)
 	FindActiveSessionByCharacter(ctx context.Context, characterID string) (*ChallengeSession, error)
 	UpdateSession(ctx context.Context, session ChallengeSession) error
+	// FinalizeSession atomically claims the existing active SQL row and applies
+	// rewards/records. Only claimed or defeated snapshots are accepted; retries
+	// return ErrSessionNotActive without applying effects again.
 	FinalizeSession(ctx context.Context, session ChallengeSession, expReward int, goldReward int, items []string, newStreak int) error
 }
 
