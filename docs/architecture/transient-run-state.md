@@ -1,8 +1,9 @@
 # Transient Run and Session State (Candidates C and D)
 
-This document distinguishes implemented storage boundaries from the planned
-normal-adventure boundary below. The legacy CGI owns turn, timeout, reward, and penalty
-rules. The storage policy is in [the database rules](../../.agents/rules/05-database-and-caching.md).
+This document distinguishes implemented storage boundaries from the approved
+Challenge exit and normal-adventure targets below. The legacy CGI owns turn,
+timeout, reward, and penalty rules. The storage policy is in
+[the database rules](../../.agents/rules/05-database-and-caching.md).
 
 ## Candidate C: Ephemeral Turn & Session Lobby
 
@@ -220,7 +221,137 @@ adapter with consumed items removed before equipment and abilities are evaluated
 Pre-upgrade snapshots without MP initialize it from durable state once and retain
 their shared reward balance; already-lost MP/consumption history cannot be recovered.
 No new HTTP exit operation or automatic retry is introduced; voluntary exit is
-tracked separately in #1208.
+tracked separately in #1208 and requires the target below.
+
+### Challenge participant exit target
+
+**Decision: option A in [#1584](https://github.com/witchcraze/party2re/issues/1584),
+user-approved 2026-10-22.** Retain Valkey live-round authority, make run identity
+independent of leadership, and add SQL participant settlement receipts and
+recoverable publication. This is an implementation target, not a claim that the
+current service supports individual exit. It does not change Dungeon or introduce
+a generic cancellation framework. Gameplay evidence and exit effects belong to
+[Challenge](../design/challenge.md#individual-exit).
+
+#### Identity and admission
+
+One immutable session ID identifies the canonical buffer. Current leader, ordered
+active roster and designated treasure recipients are separate facts. Every actor,
+including the leader, discovers the run through a run-qualified reference; no
+leader handoff moves canonical keys. The [keyspace target](valkey-keyspace.md#challenge-run-identity-target)
+owns names and lifetime. Public feature readers verify actor enrollment, not just
+possession of a reference. Historical session ownership never authorizes an exited
+leader to control the remaining party.
+
+SQL retains immutable admission evidence, active participant claims and each
+participant's settlement outcome. A unique unfinished claim per character blocks
+competing enrollment, including an exit awaiting required publication. Admission
+and other activity gates use the owner's public reader to recognize these claims
+when Valkey discovery is absent. Creating the SQL admission/publication intent
+precedes publishing live state. Lobby readiness still comes from Party's public
+handoff; a run never infers consent from a stale lobby or changes another actor's
+lobby membership as a side effect of exit.
+
+#### Mutation ordering and settlement
+
+All Challenge writers adopt one owner-specific transition boundary, including
+start, round advancement, individual exit and defeat. The durable run coordination
+record is locked first (Rank 0), then affected Characters in ascending ID order
+(Rank 2), inventory/equipment (Rank 3), conditional overflow depot (Rank 5) and
+secondary participant/record/fullness state (Rank 8). Use the injected Unit of Work;
+feature code does not access SQL directly. No expiring Valkey lease is the sole
+guard against a second writer or payout.
+
+Under this boundary a writer first resolves any committed publication awaiting
+completion. Only then may it read and calculate from the current live revision.
+It validates role, phase, immutable run ID and expected revision and commits the
+exact accepted result, next revision and pending publication intent in SQL before
+changing Valkey. Every accepted mutation advances the revision, including an exit
+that leaves the round unchanged. Admission claims and financial effects commit
+with this intent; failure rolls them all back. No new operation can overtake an
+unacknowledged transition. The buffered combat state and provisional rewards
+remain live Valkey state; SQL transition evidence is a recovery boundary, not a
+blanket migration of live authority or a promise to reconstruct expired runs.
+
+Participant exit claims are unique by run and admitted character. The common
+settlement owner uses the shared battle adapter to save only the departing
+participant's HP/MP, cumulative consumptions, earned rewards, record and required
+exit effects. It retains the other participants' exact buffered state. Terminal
+`FinalizeSession` reuses that same implementation and pays only unsettled
+participants; it neither requires a reduced roster to impersonate the original
+admission nor rewards a departed member again. Stored admission and exit receipts
+remain authorization evidence. Final departure marks the run claimed; defeat
+marks it defeated. Record round counts follow the gameplay owner, not a revision
+counter. Treasure delivery retains its recorded recipient and durable delivered
+state; it is never cloned or reassigned by handoff.
+
+#### Publication, replay and observation
+
+After SQL commit, publication conditionally installs the recorded revision in the
+run's canonical Valkey hash slot. Repeating the same publication succeeds without
+advancing again; an older publication cannot overwrite a newer revision. Update
+remaining actor references and conditionally remove departed references by run
+ID. Only after all required writes succeed may SQL acknowledge publication and
+release departed claims. Cleanup cannot delete a replacement run or enrollment.
+The last exit deletes only that run's buffer. No cross-slot or SQL/Valkey atomicity
+is implied.
+
+Retain actor-scoped command results independently of current enrollment. Mutation
+identity includes run, executing actor and expected revision, with canonical
+action/inputs checked against the receipt. An identical retry returns the stored
+result; reuse with different inputs conflicts. Expose only the authenticated
+actor's receipt. Receipt lookup precedes current-membership/phase rejection so a
+successful exit remains observable after departure. Mutation adapters must carry
+the expected revision; an ID-only advance must not silently execute the next
+round after a lost response. Existing REST callers require a verified contract
+update at cutover; there is no silent compatibility replay with a guessed revision.
+
+| Failure boundary | Required behavior |
+|---|---|
+| Validation, computation or SQL failure before commit | No payout, receipt or live publication; the original roster and buffer remain |
+| SQL commit acknowledgement lost | Resolve the owned receipt outside the failed transaction with a bounded context; preserve state and report unknown outcome if evidence is unreadable |
+| Committed payout, Valkey body/reference/cleanup write fails | Retain the exact pending publication and participant claims; another explicit command can finish publication without rerunning combat, bonuses or payout |
+| Publication succeeded, acknowledgement failed | Repeating publication is revision-idempotent; acknowledge the same durable transition before accepting new work |
+| HTTP response lost | Owned receipt returns the original outcome; clients recover by GET and never automatically replay POST |
+| Missing live buffer with no pending publication | Report unresolved owned activity; do not invent zero rewards, refunds, a new run or complete crash recovery |
+
+GET is strictly read-only: it does not settle, publish, remove references or renew
+TTL. Pending publication is observable through the public activity reader even
+without a usable buffer; no ordinary-entry controls are offered for unresolved
+claims. A successful financial receipt and pending publication are distinct
+facts. The Gateway's known-result/context-refresh-failure contract still applies.
+Retain required REST detail reads until actual replacement coverage exists.
+
+#### Upgrade and verification
+
+Quiesce old Challenge writers before activating the new transition boundary;
+mixed old/new writers cannot honor the new revision/receipt guard. Until an
+explicit migration command runs, new readers can observe old character-keyed
+buffers and original member references without renewing or rewriting them. The
+migration validates the SQL admission and complete old snapshot, records a pending
+transition under the same immutable run ID, publishes run-keyed state and all
+actor references, then conditionally removes only the matching old keys. It
+preserves roster order, resources, consumptions, individual earnings, treasure
+and the remaining deadline; migration is not activity and does not reset TTL.
+Failure is recoverable through the same publication intent. Missing or unreadable
+old state blocks that run for explicit recovery; never silently discard it or
+guess already-lost resources. Restore/rollback must not re-enable old writers
+against already-migrated runs.
+
+The runtime prerequisite couples run-keyed buffers, conditional publication,
+migration compatibility, participant claims/shared settlement and adoption by
+every existing Challenge writer. Keep that correctness boundary together; the
+Gateway exit adapter is a separate dependent unit. Each runtime PR owns its
+public-port, OpenAPI and Guidance changes; this decision adds no executable
+schema or port.
+
+Use real SQL/Valkey tests for solo/party, zero/one/multiple wins, follower/leader/
+last exit, ordered handoff and former-leader re-entry. Check untouched survivors
+independently of the departing actor. Exercise duplicate and different-member
+exits, exit versus advance/defeat, pending publication, lost acknowledgements,
+old-buffer migration and read-only GET. Standard concurrency stress tests must
+prove one payout per participant and no asset duplication, loss, deadlocks or
+resurrection of departed combatants. Mocks alone do not certify this protocol.
 
 ## Crash Recovery
 

@@ -185,6 +185,22 @@ reference. Natural run expiry or a failed start may leave at most one inert
 reference per character; it carries no rewards and never establishes activity
 without a matching live run. There is no cross-slot atomicity claim.
 
+### Challenge run identity target
+
+The approved [participant-exit target](transient-run-state.md#challenge-participant-exit-target)
+keeps Challenge live state in Valkey, under
+`party2:challenge:{run:<session_id>}:session` and
+`party2:challenge:{run:<session_id>}:rewards` (Hashes). Both share one hash slot
+and the existing 7200s sliding activity lifetime. Each enrolled character,
+including the leader, uses `party2:challenge:{char:<character_id>}:member`
+(String containing the immutable session ID, no TTL). SQL claims and the public
+owner reader preserve unresolved activity when a reference or live body is
+missing; GET never repairs either. Revision-qualified canonical publication and
+run-qualified reference deletion protect replacement enrollment. Leadership is
+buffer data, not a key address. Old character-keyed buffers/references remain
+readable until the explicit migration described in the storage owner; the target
+does not describe deployed keys or registered Lua scripts yet.
+
 ## Lua Script Registry
 
 The following registry describes current scripts. Exact arguments and error

@@ -275,6 +275,17 @@ Dungeon/Challenge discovery uses the consented
 An enrolled follower observes `role:member` with no leader continuation controls;
 membership never authorizes executing the controlling actor's commands.
 
+The approved [Challenge individual-exit target](transient-run-state.md#challenge-participant-exit-target)
+will replace its original-leader-only discovery with current roster/leadership
+and durable pending-publication facts. `challenge_retire` is the selected future
+ActionID, scoped to the authenticated actor with explicit `session_id` and
+`expected_revision`; it is a continuation/recovery operation rather than town
+entry. Every remaining participant may leave; only the last departure ends the
+run. Mutation receipts remain actor-owned after departure. GET observes pending
+recovery and stored outcomes without publishing, settling or renewing lifetime.
+This target registers no command or schema; current OpenAPI remains the source
+for executable adapters, and operational REST reads remain until replaced.
+
 Continuation eligibility comes from actual membership, role and phase, instead
 of entry's town/cooldown/HP/fatigue/currency gates. Exact readiness, team setup,
 prices and parameters remain service checks. Casino participants that have
