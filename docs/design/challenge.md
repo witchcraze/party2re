@@ -8,16 +8,63 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 
 ## Architectural Policy & Boundaries
 
-- **Session-Based Consecutive Combat**: Characters enter a challenge stage (`0`〜`8`) and battle consecutively from Round 1 onwards until party defeat. Each participant carries HP, MP and consumed-item state directly across rounds without inter-round recovery (legacy parity with `vs_challenge.cgi` and `_battle.cgi`).
+- **Session-Based Consecutive Combat**: Characters enter a challenge stage (`0`〜`8`) and battle consecutive rounds until defeat or individual departure. Each participant carries HP, MP and consumed-item state directly across rounds without inter-round recovery (legacy parity with `vs_challenge.cgi` and `_battle.cgi`).
 - **Authentic Stat Scaling Formula**: Enemy combat stats scale dynamically based on the current round number according to the authentic fixed legacy formula (`vs_challenge.cgi:68`):
   $$\text{Scale} = 1.0 + 0.10 \times \text{Round}$$
 - **100% Defeat Reward Retention**:
   - Each living participant earns the round's EXP and Gold; a fallen member retains prior earnings but earns no new rewards until revived (`_battle.cgi:208–214`). Leader death does not stop surviving allies.
-  - On party wipe/defeat, all participants retain **100% of their earned EXP and Gold**. The current shared treasure ledger pays its designated leader recipient once; per-player treasure interactions remain part of [#1207](https://github.com/witchcraze/party2re/issues/1207).
-  - Voluntary exit (`_battle.cgi:nigeru`, HP/MP/item settlement at lines 1208–1222) remains tracked in [#1208](https://github.com/witchcraze/party2re/issues/1208); its eventual command must use the same terminal settlement contract. There is no 50% defeat penalty.
+  - On party wipe/defeat, all participants retain **100% of their earned EXP and Gold**. The current shared treasure ledger pays its designated leader recipient once; the [individual-exit rules](#individual-exit) distinguish that ledger from unreconciled per-player treasure interactions.
+  - There is no 50% defeat penalty. Voluntary departure follows the [individual-exit rules](#individual-exit); the current service has no exit command.
 - **Authentic Treasure Room Trigger**:
   - For rounds $\ge \text{TreasureRound}$ (10, 20, or 30 depending on the stage), there is a 10% chance per floor (`rand < 0.10`) to encounter a treasure room / receive treasure from the stage's item pool if no treasure has been awarded yet in that run (`vs_challenge.cgi:64`).
 - **Leaderboards & Hall of Fame**: Tracks all-time highest round reached per stage with tie-breaking by earliest completion timestamp.
+
+---
+
+## Individual Exit
+
+The original `lib/_skill.cgi:set_action` exposes `にげる`, dispatched to
+`lib/_battle.cgi:nigeru:1184–1222,1330–1346` (reference revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`). These are reconstruction requirements;
+the current all-participant finalizer does not implement individual exit.
+
+- A participant leaves and receives only their own earned EXP/Gold, remaining
+  HP/MP and consumed-item settlement. Other participants keep their resources,
+  earnings and current encounter/round. Departed characters never fight or earn
+  another round's rewards in that run. Spectator departure grants no rewards.
+- If the leader leaves, the first remaining participant in roster order becomes
+  leader. Only the last participant's departure ends the run. The former leader
+  can enter another run without changing the continuing run's identity.
+- The initial `すすむ` is leader-only; after that the original checks only that
+  enemies are gone (`lib/vs_challenge.cgi:20–53`). Leader handoff must preserve
+  progression rather than trapping the party behind the original leader's ID.
+- Exit fatigue is `3 * legacy round + 1`; calm mode halves that amount with
+  truncation. The original clears meal fullness and persists combat resources.
+  Equipped item 105 adds `20 * legacy round` EXP; item 106 adds
+  `floor(legacy round * U)`, with `U` uniform in `[0,77)`.
+  Multiplying the round by an integer draw in `[0,77)` is not equivalent.
+  The legacy initial round is zero; after victories Go's `CurrentRound` names
+  the next round, so an exit
+  after victories uses `CurrentRound - 1`. Defeat must account for the attempted
+  round separately. Current Challenge has no calm-mode selection; that absence
+  does not authorize pretending an unrecorded mode was selected.
+- Use existing shared combat persistence and Tavern fullness ownership for these
+  effects. Equipment eligibility must account for cumulative combat consumption;
+  an exit receipt fixes any random bonus once. Fullness and all required durable
+  effects belong to the same settlement transaction, without resetting meal
+  history. Any post-commit meal delivery uses the existing
+  [Tavern arrival contract](tavern.md#3-delivery-reservation-system-reservedelivery--claimdelivery)
+  and cannot replay successful exit effects.
+- The existing shared treasure ledger is not a per-player entitlement model.
+  Each recorded award keeps one designated recipient and is delivered once;
+  leadership changes do not retarget already-earned treasure. An award after
+  handoff names its recipient when earned. Full individual treasure inspection
+  remains unreconciled; [#1207](https://github.com/witchcraze/party2re/issues/1207)
+  owns the encounter/treasure-branch correction, not that entire lifecycle.
+
+The approved [participant-exit storage contract](../architecture/transient-run-state.md#challenge-participant-exit-target)
+defines identity, receipts and recovery. Its implementation prerequisites and
+Gateway adoption remain tracked by [#1208](https://github.com/witchcraze/party2re/issues/1208).
 
 ---
 
