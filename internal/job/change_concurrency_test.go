@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/job"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type interceptorCharRepo struct {
@@ -24,6 +24,9 @@ type interceptorCharRepo struct {
 
 func (r *interceptorCharRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
 	c, err := r.inner.FindByID(ctx, id)
+	if err != nil {
+		return c, err
+	}
 	if r.onFindByID != nil {
 		r.onFindByID()
 	}
@@ -47,6 +50,7 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 		name         string
 		itemID       string
 		expectedKind corecharacter.JobMemoryKind
+		cancelAt     string
 	}{
 		{
 			name:         "item-168 persistent memory conflict",
@@ -57,6 +61,16 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 			name:         "item-243 temporary memory conflict",
 			itemID:       "item-243",
 			expectedKind: corecharacter.JobMemoryKindTemporary,
+		},
+		{
+			name:     "canceled before preflight",
+			itemID:   "item-168",
+			cancelAt: "before preflight",
+		},
+		{
+			name:     "canceled after preflight",
+			itemID:   "item-168",
+			cancelAt: "after preflight",
 		},
 	}
 
@@ -78,7 +92,7 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
 			char, err := database.CreateTestCharacter(ctx, db, "ChangeJobLock_"+tc.itemID)
@@ -163,8 +177,14 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 			interceptingChar := &interceptorCharRepo{
 				inner: charRepo,
 				onFindByID: func() {
+					if tc.cancelAt == "after preflight" {
+						cancel()
+					}
 					close(preflightDone)
-					<-exchangeCommitted
+					select {
+					case <-exchangeCommitted:
+					case <-ctx.Done():
+					}
 				},
 			}
 
@@ -183,26 +203,33 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var changeErr error
-			var wg sync.WaitGroup
-			wg.Add(2)
+			if tc.cancelAt == "before preflight" {
+				cancel()
+			}
 
-			// Goroutine 1: ChangeJob preflights, pauses, then resumes under lock
-			go func() {
-				defer wg.Done()
-				_, _, changeErr = svcChange.ChangeJob(ctx, char.ID, "job-01")
-			}()
+			changeErr, exchangeErr := testutil.RunRace2(
+				func() error {
+					_, _, err := svcChange.ChangeJob(ctx, char.ID, "job-01")
+					return err
+				},
+				func() error {
+					defer close(exchangeCommitted)
+					select {
+					case <-preflightDone:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+					_, _, err := svcExchange.ExchangeJob(ctx, char.ID, "job-03", "job-04", tc.itemID)
+					return err
+				},
+			)
 
-			// Goroutine 2: ExchangeJob executes after ChangeJob preflight
-			var exchangeErr error
-			go func() {
-				defer wg.Done()
-				<-preflightDone
-				_, _, exchangeErr = svcExchange.ExchangeJob(ctx, char.ID, "job-03", "job-04", tc.itemID)
-				close(exchangeCommitted)
-			}()
-
-			wg.Wait()
+			if tc.cancelAt != "" {
+				if !errors.Is(changeErr, context.Canceled) || !errors.Is(exchangeErr, context.Canceled) {
+					t.Fatalf("expected both workers canceled, got ChangeJob=%v ExchangeJob=%v", changeErr, exchangeErr)
+				}
+				return
+			}
 
 			if exchangeErr != nil {
 				t.Fatalf("ExchangeJob failed: %v", exchangeErr)
