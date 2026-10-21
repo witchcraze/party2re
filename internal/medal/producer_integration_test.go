@@ -539,6 +539,7 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 		pvpRepo,
 		charRepo,
 		integrationBattleEngine{result: corebattle.Result{Outcome: corebattle.OutcomeWin, WinnerID: hero.ID, LoserID: opponent.ID}},
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create pvp service: %v", err)

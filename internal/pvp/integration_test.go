@@ -50,6 +50,7 @@ func TestPvPIntegration_DisbandRefundTransactional(t *testing.T) {
 		charRepo,
 		battleEngine,
 		pvp.WithTransactionProvider(txProvider),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -139,6 +140,7 @@ func TestPvPIntegration_MatchPrizeDistributionTransactional(t *testing.T) {
 		charRepo,
 		battleEngine,
 		pvp.WithTransactionProvider(txProvider),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatal(err)

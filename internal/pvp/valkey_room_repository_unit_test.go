@@ -417,11 +417,11 @@ func TestValkeyRoomRepository_CharacterRoom(t *testing.T) {
 	}))
 	repoDel, _ := pvp.NewValkeyRoomRepository(clientDel)
 
-	if err := repoDel.DeleteCharacterRoom(ctx, "char-1"); err != nil {
+	if err := repoDel.DeleteCharacterRoom(ctx, "char-1", "room-1"); err != nil {
 		t.Fatalf("unexpected DeleteCharacterRoom error: %v", err)
 	}
 	delCmds := clientDel.RecordedCommandStrings()
-	if len(delCmds) != 1 || delCmds[0][0] != "DEL" || !strings.Contains(delCmds[0][1], "char-1") {
+	if len(delCmds) != 1 || delCmds[0][0] != "EVALSHA" || !strings.Contains(delCmds[0][3], "char-1") || delCmds[0][4] != "room-1" {
 		t.Errorf("unexpected DeleteCharacterRoom command: %v", delCmds)
 	}
 
@@ -430,7 +430,7 @@ func TestValkeyRoomRepository_CharacterRoom(t *testing.T) {
 		return valkeytest.MakeErrorResult(errDel)
 	}))
 	repoDelErr, _ := pvp.NewValkeyRoomRepository(clientDelErr)
-	if err := repoDelErr.DeleteCharacterRoom(ctx, "char-1"); !errors.Is(err, errDel) {
+	if err := repoDelErr.DeleteCharacterRoom(ctx, "char-1", "room-1"); !errors.Is(err, errDel) {
 		t.Fatalf("expected errDel, got %v", err)
 	}
 }

@@ -2,6 +2,7 @@ package pvp
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"sort"
 	"strconv"
@@ -26,7 +27,7 @@ type RoomRepository interface {
 	ListRooms(ctx context.Context) ([]RoomSummary, error)
 	GetCharacterRoom(ctx context.Context, characterID string) (string, error)
 	SetCharacterRoom(ctx context.Context, characterID string, roomID string) error
-	DeleteCharacterRoom(ctx context.Context, characterID string) error
+	DeleteCharacterRoom(ctx context.Context, characterID string, roomID string) error
 	RoomLockRepository
 }
 
@@ -81,7 +82,9 @@ func (m *MemoryRoomRepository) DeleteRoom(_ context.Context, id string) error {
 
 	if detail, ok := m.rooms[id]; ok {
 		for _, mem := range detail.Members {
-			delete(m.charRooms, mem.CharacterID)
+			if m.charRooms[mem.CharacterID] == id {
+				delete(m.charRooms, mem.CharacterID)
+			}
 		}
 	}
 	delete(m.rooms, id)
@@ -140,11 +143,13 @@ func (m *MemoryRoomRepository) SetCharacterRoom(_ context.Context, characterID s
 	return nil
 }
 
-func (m *MemoryRoomRepository) DeleteCharacterRoom(_ context.Context, characterID string) error {
+func (m *MemoryRoomRepository) DeleteCharacterRoom(_ context.Context, characterID string, roomID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.charRooms, characterID)
+	if m.charRooms[characterID] == roomID {
+		delete(m.charRooms, characterID)
+	}
 	return nil
 }
 
@@ -197,7 +202,11 @@ func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room ColosseumRoom,
 	}
 
 	detail := RoomDetail{Room: room, Members: members}
-	data, err := json.Marshal(detail)
+	data, err := json.Marshal(struct {
+		RoomDetail
+		PasswordHash     string `json:"password_hash,omitempty"`
+		FinancialVersion int    `json:"financial_version,omitempty"`
+	}{detail, room.PasswordHash, room.FinancialVersion})
 	if err != nil {
 		return err
 	}
@@ -229,17 +238,25 @@ func (v *ValkeyRoomRepository) GetRoom(ctx context.Context, id string) (RoomDeta
 		return RoomDetail{}, err
 	}
 
-	var detail RoomDetail
+	var detail struct {
+		RoomDetail
+		PasswordHash     string `json:"password_hash,omitempty"`
+		FinancialVersion int    `json:"financial_version,omitempty"`
+	}
 	if err := json.Unmarshal([]byte(str), &detail); err != nil {
 		return RoomDetail{}, err
 	}
-	return detail, nil
+	detail.Room.PasswordHash = detail.PasswordHash
+	detail.Room.FinancialVersion = detail.FinancialVersion
+	return detail.RoomDetail, nil
 }
 
 func (v *ValkeyRoomRepository) DeleteRoom(ctx context.Context, id string) error {
 	key := DefaultRoomKeyPrefix + id
 	delCmd := v.client.B().Del().Key(key).Build()
-	_ = v.client.Do(ctx, delCmd)
+	if err := v.client.Do(ctx, delCmd).Error(); err != nil {
+		return err
+	}
 
 	zremCmd := v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(id).Build()
 	return v.client.Do(ctx, zremCmd).Error()
@@ -312,8 +329,12 @@ func (v *ValkeyRoomRepository) SetCharacterRoom(ctx context.Context, characterID
 	return v.client.Do(ctx, cmd).Error()
 }
 
-func (v *ValkeyRoomRepository) DeleteCharacterRoom(ctx context.Context, characterID string) error {
+//go:embed lua/delete_character_room.lua
+var deleteCharacterRoomLua string
+
+var deleteCharacterRoomScript = valkey.NewLuaScript(deleteCharacterRoomLua)
+
+func (v *ValkeyRoomRepository) DeleteCharacterRoom(ctx context.Context, characterID string, roomID string) error {
 	key := DefaultCharacterKeyPrefix + characterID
-	cmd := v.client.B().Del().Key(key).Build()
-	return v.client.Do(ctx, cmd).Error()
+	return deleteCharacterRoomScript.Exec(ctx, v.client, []string{key}, []string{roomID}).Error()
 }

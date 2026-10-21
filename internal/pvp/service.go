@@ -58,6 +58,7 @@ type Service struct {
 	victoryHook        VictoryHook
 	participantBuilder ParticipantBuilder
 	txProvider         TransactionProvider
+	transitions        TransitionRepository
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
@@ -82,6 +83,9 @@ func NewService(
 
 	for _, opt := range opts {
 		opt(svc)
+	}
+	if svc.transitions == nil {
+		return nil, ErrInvalidDependencies
 	}
 
 	return svc, nil
@@ -130,6 +134,14 @@ func checkNeedJoin(char corecharacter.Character, needJoin string) error {
 
 // CreateRoom creates a new colosseum room (quest.cgi:type=4).
 func (s *Service) CreateRoom(ctx context.Context, characterID string, req CreateRoomRequest) (RoomDetail, error) {
+	recovered, err := s.recoverCharacter(ctx, characterID)
+	if err != nil {
+		return RoomDetail{}, err
+	}
+	if recovered.Kind == "create" && recovered.ActorID == characterID {
+		recovered.Detail.Room.PasswordHash = recovered.PasswordHash
+		return recovered.Detail, nil
+	}
 	char, err := s.characters.FindByID(ctx, characterID)
 	if err != nil {
 		return RoomDetail{}, err
@@ -176,20 +188,6 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 		return RoomDetail{}, err
 	}
 
-	// Deduct Bet from leader wallet
-	if err := s.runInTx(ctx, func(txCtx context.Context) error {
-		c, err := s.characters.FindByIDForUpdate(txCtx, char.ID)
-		if err != nil {
-			return err
-		}
-		if err := c.DeductMoney(req.Bet); err != nil {
-			return ErrInsufficientBetFunds
-		}
-		return s.characters.Update(txCtx, c)
-	}); err != nil {
-		return RoomDetail{}, err
-	}
-
 	now := time.Now().UTC()
 	roomID := id.New()
 	room := ColosseumRoom{
@@ -227,18 +225,24 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	}
 
 	members := []RoomMember{leaderMember}
-	if err := s.repo.SaveRoom(ctx, room, members); err != nil {
-		return RoomDetail{}, err
-	}
-	if err := s.repo.SetCharacterRoom(ctx, char.ID, roomID); err != nil {
+	detail := RoomDetail{Room: room, Members: members}
+	if err := s.repo.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		return s.commitTransition(lockedCtx, Transition{Kind: "create", ActorID: char.ID, Detail: detail, AddedID: char.ID}, func(txCtx context.Context) error {
+			return s.deductBet(txCtx, char.ID, req.Bet)
+		})
+	}); err != nil {
 		return RoomDetail{}, err
 	}
 
-	return RoomDetail{Room: room, Members: members}, nil
+	detail.Room.FinancialVersion++
+	return detail, nil
 }
 
 // JoinRoom adds a character to an active colosseum room (quest.cgi:type=4).
 func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID string, password string) (RoomDetail, error) {
+	if _, err := s.recoverCharacter(ctx, characterID); err != nil {
+		return RoomDetail{}, err
+	}
 	var result RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		char, err := s.characters.FindByID(lockedCtx, characterID)
@@ -259,15 +263,14 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 		if detail.Room.Status != StatusRecruiting {
 			return ErrRoomNotRecruiting
 		}
-		if len(detail.Members) >= detail.Room.MaxMembers {
-			return ErrRoomFull
-		}
-
 		for _, m := range detail.Members {
 			if m.CharacterID == char.ID {
 				result = detail
 				return nil
 			}
+		}
+		if len(detail.Members) >= detail.Room.MaxMembers {
+			return ErrRoomFull
 		}
 
 		if existingRoomID, err := s.repo.GetCharacterRoom(lockedCtx, char.ID); err == nil && existingRoomID != "" && existingRoomID != roomID {
@@ -282,20 +285,6 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 			return ErrInvalidPassword
 		}
 		if err := checkNeedJoin(char, detail.Room.NeedJoin); err != nil {
-			return err
-		}
-
-		// Deduct Bet from participant wallet
-		if err := s.runInTx(lockedCtx, func(txCtx context.Context) error {
-			c, err := s.characters.FindByIDForUpdate(txCtx, char.ID)
-			if err != nil {
-				return err
-			}
-			if err := c.DeductMoney(detail.Room.Bet); err != nil {
-				return ErrInsufficientBetFunds
-			}
-			return s.characters.Update(txCtx, c)
-		}); err != nil {
 			return err
 		}
 
@@ -318,12 +307,12 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 		}
 
 		detail.Members = append(detail.Members, newMember)
-		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+		if err := s.commitTransition(lockedCtx, Transition{Kind: "join", ActorID: char.ID, Detail: detail, AddedID: char.ID}, func(txCtx context.Context) error {
+			return s.deductBet(txCtx, char.ID, detail.Room.Bet)
+		}); err != nil {
 			return err
 		}
-		if err := s.repo.SetCharacterRoom(lockedCtx, char.ID, roomID); err != nil {
-			return err
-		}
+		detail.Room.FinancialVersion++
 
 		result = detail
 		return nil
@@ -373,6 +362,13 @@ func (s *Service) SelectTeam(ctx context.Context, characterID string, roomID str
 // LeaveRoom removes a participant or disbands the room (@にげる).
 func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID string) error {
 	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		last, err := s.transitions.FindTransition(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
+		if last.Kind == "disband" && last.ActorID == characterID {
+			return nil
+		}
 		detail, err := s.repo.GetRoom(lockedCtx, roomID)
 		if err != nil {
 			return err
@@ -393,6 +389,9 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 			}
 		}
 		if !found {
+			if last.Kind == "leave" && last.ActorID == characterID {
+				return nil
+			}
 			return ErrCharacterNotInRoom
 		}
 		if detail.Room.Status == StatusInProgress {
@@ -409,26 +408,12 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				for _, m := range detail.Members {
 					memberIDs = append(memberIDs, m.CharacterID)
 				}
-				if err := s.refundMembers(lockedCtx, memberIDs, detail.Room.Bet); err != nil {
-					return err
-				}
-				for _, m := range detail.Members {
-					if err := s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID); err != nil {
-						return err
-					}
-				}
 				detail.Room.Status = StatusDisbanded
 				detail.Room.PrizePool = 0
 				detail.Room.UpdatedAt = now
-				return s.repo.DeleteRoom(lockedCtx, roomID)
-			}
-
-			// Non-leader leaving: refund bet
-			if err := s.refundMembers(lockedCtx, []string{char.ID}, detail.Room.Bet); err != nil {
-				return err
-			}
-			if err := s.repo.DeleteCharacterRoom(lockedCtx, char.ID); err != nil {
-				return err
+				return s.commitTransition(lockedCtx, Transition{Kind: "disband", ActorID: characterID, Detail: detail, RemovedIDs: memberIDs}, func(txCtx context.Context) error {
+					return s.refundMembers(txCtx, memberIDs, detail.Room.Bet)
+				})
 			}
 
 			var updatedMembers []RoomMember
@@ -443,11 +428,13 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				detail.Room.PrizePool = 0
 			}
 			detail.Room.UpdatedAt = now
-			return s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members)
+			return s.commitTransition(lockedCtx, Transition{Kind: "leave", ActorID: characterID, Detail: detail, RemovedIDs: []string{char.ID}}, func(txCtx context.Context) error {
+				return s.refundMembers(txCtx, []string{char.ID}, detail.Room.Bet)
+			})
 		}
 
 		// In completed or disbanded status: simply remove mapping
-		return s.repo.DeleteCharacterRoom(lockedCtx, char.ID)
+		return s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID)
 	})
 }
 

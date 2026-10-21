@@ -112,6 +112,7 @@ func TestSettlement_LeaveRoom_LeaderDisband_RollbackOnFailure(t *testing.T) {
 		charRepo,
 		mockBattleEngine{result: corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin}},
 		pvp.WithTransactionProvider(charRepo),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -203,6 +204,7 @@ func TestSettlement_LeaveRoom_NonLeader_RollbackOnFailure(t *testing.T) {
 		charRepo,
 		mockBattleEngine{result: corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin}},
 		pvp.WithTransactionProvider(charRepo),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -277,6 +279,7 @@ func TestSettlement_AdvanceRound_PrizeDistribution_RollbackOnFailure(t *testing.
 		charRepo,
 		battleEngine,
 		pvp.WithTransactionProvider(charRepo),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -365,6 +368,7 @@ func TestSettlement_AdvanceRound_DrawRefund_RollbackOnFailure(t *testing.T) {
 		charRepo,
 		battleEngine,
 		pvp.WithTransactionProvider(charRepo),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -431,6 +435,7 @@ func TestSettlement_HappyPath_AscendingLockOrder_AndCommit(t *testing.T) {
 		charRepo,
 		mockBattleEngine{result: corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin}},
 		pvp.WithTransactionProvider(charRepo),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)

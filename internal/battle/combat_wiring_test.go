@@ -80,6 +80,7 @@ func TestCombatWiring_PvPEquippedParticipant(t *testing.T) {
 		charRepo,
 		capture,
 		pvp.WithParticipantBuilder(battleAdapter),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)

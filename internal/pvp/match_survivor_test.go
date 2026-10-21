@@ -33,7 +33,7 @@ func TestColosseum_3Teams_ThirdTeamSurvives(t *testing.T) {
 			Logs: []corebattle.TurnLog{{Turn: 1, Message: "Combat finished"}},
 		},
 	}
-	svc, err := pvp.NewService(roomRepo, charRepo, battleEngine)
+	svc, err := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestColosseum_AllTeamsFell_Draw(t *testing.T) {
 			Logs: []corebattle.TurnLog{{Turn: 1, Message: "Mutual annihilation"}},
 		},
 	}
-	svc, err := pvp.NewService(roomRepo, charRepo, battleEngine)
+	svc, err := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestColosseum_3Teams_RealBattleEngine_LeaderFallsEarly(t *testing.T) {
 	charRepo.add(c2)
 	charRepo.add(c3)
 
-	svc, err := pvp.NewService(roomRepo, charRepo, corebattle.Engine{})
+	svc, err := pvp.NewService(roomRepo, charRepo, corebattle.Engine{}, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}

@@ -114,6 +114,7 @@ type ColosseumRoom struct {
 	PrizePerMember    int            `json:"prize_per_member,omitempty"`
 	CreatedAt         time.Time      `json:"created_at"`
 	UpdatedAt         time.Time      `json:"updated_at"`
+	FinancialVersion  int            `json:"-"`
 }
 
 // RoomMember represents a participant in a colosseum room.
