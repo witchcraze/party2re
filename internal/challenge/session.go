@@ -69,14 +69,6 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		return nil, nil, err
 	}
 
-	maxHP := char.Stats.MaxHP
-	if maxHP <= 0 {
-		maxHP = char.Stats.HP
-	}
-	if maxHP <= 0 {
-		maxHP = 100
-	}
-
 	round := session.CurrentRound
 
 	// Select monster from pool or base monster
@@ -97,129 +89,19 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 	mName := fmt.Sprintf("%s (Round %d)", baseM.Name, round)
 
 	monsterParticipant := corebattle.MustNewParticipant(mName, mHP, mAtk, mDef)
-	var battleRes corebattle.Result
-	var won bool
-	var remainingHPs map[string]int
-
-	if pResolver, ok := s.battleEngine.(corebattle.PartyBattleResolver); ok && len(session.Members) > 1 {
-		allies := make([]corebattle.Participant, 0, len(session.Members))
-		for _, m := range session.Members {
-			if m.CharacterCurrentHP > 0 {
-				mChar := corecharacter.Character{
-					ID:    m.CharacterID,
-					Name:  m.CharacterName,
-					JobID: m.JobID,
-					Level: m.Level,
-					Stats: corecharacter.Stats{
-						HP:      m.CharacterCurrentHP,
-						MaxHP:   m.MaxHP,
-						MP:      m.MaxMP,
-						MaxMP:   m.MaxMP,
-						Attack:  m.Attack,
-						Defense: m.Defense,
-						Agility: m.Agility,
-					},
-				}
-				var p corebattle.Participant
-				if s.participantBuilder != nil {
-					var err error
-					p, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, m.CharacterID, m.CharacterCurrentHP)
-					if err != nil {
-						return nil, nil, err
-					}
-				} else {
-					p = buildFallbackParticipantWithHP(mChar, m.CharacterCurrentHP)
-				}
-				allies = append(allies, p)
-			}
-		}
-		if len(allies) == 0 {
-			var p corebattle.Participant
-			if s.participantBuilder != nil {
-				var err error
-				p, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, char.ID, session.CharacterCurrentHP)
-				if err != nil {
-					return nil, nil, err
-				}
-			} else {
-				p = buildFallbackParticipantWithHP(char, session.CharacterCurrentHP)
-			}
-			allies = append(allies, p)
-		}
-		pRes, pErr := pResolver.ResolvePartyBattle(corebattle.PartyBattleRequest{
-			Allies:  allies,
-			Enemies: []corebattle.Participant{monsterParticipant},
-		})
-		if pErr != nil {
-			return nil, nil, pErr
-		}
-		won = pRes.Outcome == corebattle.OutcomeWin && pRes.WinnerSide == "allies"
-		remainingHPs = pRes.RemainingHP
-		battleRes = corebattle.Result{
-			Outcome:  pRes.Outcome,
-			WinnerID: char.ID,
-			LoserID:  monsterParticipant.ID,
-			Turns:    pRes.Turns,
-			Logs:     pRes.Logs,
-		}
-	} else {
-		var charParticipant corebattle.Participant
-		if s.participantBuilder != nil {
-			var err error
-			charParticipant, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, char.ID, session.CharacterCurrentHP)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else {
-			charParticipant = buildFallbackParticipantWithHP(char, session.CharacterCurrentHP)
-		}
-		battleReq := corebattle.Request{
-			Participants: []corebattle.Participant{charParticipant, monsterParticipant},
-		}
-		var bErr error
-		battleRes, bErr = s.battleEngine.Resolve(battleReq)
-		if bErr != nil {
-			return nil, nil, bErr
-		}
-		won = battleRes.Outcome == corebattle.OutcomeWin && battleRes.WinnerID != monsterParticipant.ID
-		if len(battleRes.Logs) > 0 {
-			remainingHPs = battleRes.Logs[len(battleRes.Logs)-1].RemainingHP
-		}
+	battleRes, won, err := s.resolveRound(ctx, session, char, monsterParticipant)
+	if err != nil {
+		return nil, nil, err
 	}
+	leaderSurvivingHP := session.CharacterCurrentHP
 
 	if won {
-		// Update member HPs (legacy parity with vs_challenge.cgi: direct HP carryover, zero inter-round recovery)
-		leaderSurvivingHP := 0
 		for i := range session.Members {
 			m := &session.Members[i]
 			if m.CharacterCurrentHP > 0 {
-				remHP := 0
-				if hp, ok := remainingHPs[m.CharacterID]; ok {
-					remHP = hp
-				}
-				if remHP > 0 {
-					if remHP > m.MaxHP {
-						remHP = m.MaxHP
-					}
-					m.CharacterCurrentHP = remHP
-				} else {
-					m.CharacterCurrentHP = 0
-				}
+				m.AccumulatedExp += mExp
+				m.AccumulatedGold += mGold
 			}
-			if m.CharacterID == char.ID {
-				leaderSurvivingHP = m.CharacterCurrentHP
-			}
-		}
-
-		if len(session.Members) == 0 {
-			survivingHP := 1
-			if hp, ok := remainingHPs[char.ID]; ok && hp > 0 {
-				survivingHP = hp
-			}
-			if survivingHP > maxHP {
-				survivingHP = maxHP
-			}
-			leaderSurvivingHP = survivingHP
 		}
 
 		// Authentic Treasure Room trigger: round >= TreasureRound, 10% chance if no item awarded yet
@@ -254,21 +136,6 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 					Attack:        m.Attack,
 					Defense:       m.Defense,
 					Agility:       m.Agility,
-				}
-			}
-			if len(hofMembers) == 0 {
-				hofMembers = []HallOfFameMember{
-					{
-						CharacterID:   char.ID,
-						CharacterName: char.Name,
-						Icon:          "chr/001.gif",
-						JobID:         char.JobID,
-						HP:            char.Stats.MaxHP,
-						MP:            char.Stats.MaxMP,
-						Attack:        char.Stats.Attack,
-						Defense:       char.Stats.Defense,
-						Agility:       char.Stats.Agility,
-					},
 				}
 			}
 			pName := session.PartyName

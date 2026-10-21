@@ -2,6 +2,7 @@ package battle
 
 import (
 	"context"
+	"maps"
 	"sort"
 	"strings"
 
@@ -86,8 +87,12 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		s.applyResourceUpdates(&tc.Character, charID, req.BattleResult, req.ExitFatigue)
 
 		// 3. Process item consumption
-		consumed := s.applyConsumedItems(charID, req.BattleResult.ConsumedItems[charID], &tc.Inventory, &equip, &equipModified)
-		resp.ConsumedItems[charID] = consumed
+		slots := equip.Slots
+		if err := consumeBufferedItems(&tc.Inventory, &equip, req.BattleResult.ConsumedItems[charID]); err != nil {
+			return err
+		}
+		equipModified = !maps.Equal(slots, equip.Slots)
+		resp.ConsumedItems[charID] = req.BattleResult.ConsumedItems[charID]
 
 		// 4. Save equipment if modified
 		if equipModified && s.equipRepo != nil {
@@ -199,8 +204,12 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 
 			s.applyResourceUpdates(&char, id, req.BattleResult, req.ExitFatigue)
 
-			consumed := s.applyConsumedItems(id, req.BattleResult.ConsumedItems[id], &inv, &equip, &equipModified)
-			resp.ConsumedItems[id] = consumed
+			slots := equip.Slots
+			if err := consumeBufferedItems(&inv, &equip, req.BattleResult.ConsumedItems[id]); err != nil {
+				return err
+			}
+			equipModified = !maps.Equal(slots, equip.Slots)
+			resp.ConsumedItems[id] = req.BattleResult.ConsumedItems[id]
 
 			if equipModified {
 				equipsModified[id] = true
@@ -252,13 +261,14 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			}
 		}
 		for _, id := range sortedIDs {
-			if s.invRepo != nil {
-				if err := s.invRepo.Save(txCtx, invs[id]); err != nil {
+			// Remove equipped references before deleting consumed inventory rows.
+			if equipsModified[id] && s.equipRepo != nil {
+				if err := s.equipRepo.Save(txCtx, equips[id]); err != nil {
 					return err
 				}
 			}
-			if equipsModified[id] && s.equipRepo != nil {
-				if err := s.equipRepo.Save(txCtx, equips[id]); err != nil {
+			if s.invRepo != nil {
+				if err := s.invRepo.Save(txCtx, invs[id]); err != nil {
 					return err
 				}
 			}
@@ -356,60 +366,6 @@ func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID str
 	if exitFatigue > 0 {
 		char.AddTired(exitFatigue)
 	}
-}
-
-func (s *Service) applyConsumedItems(
-	charID string,
-	consumed []corebattle.ConsumedItem,
-	inv *coreinventory.Inventory,
-	equip *coreequipment.Equipment,
-	equipModified *bool,
-) []corebattle.ConsumedItem {
-	if len(consumed) == 0 || inv == nil {
-		return nil
-	}
-
-	applied := make([]corebattle.ConsumedItem, 0, len(consumed))
-	for _, itemEntry := range consumed {
-		// 1. Unequip slot if this consumed item was equipped
-		if itemEntry.InstanceID != "" && equip != nil && equip.Slots != nil {
-			for slot, equippedInstID := range equip.Slots {
-				if equippedInstID == itemEntry.InstanceID {
-					delete(equip.Slots, slot)
-					if equipModified != nil {
-						*equipModified = true
-					}
-					break
-				}
-			}
-		}
-
-		// 2. Consume from inventory
-		if itemEntry.InstanceID != "" {
-			if err := inv.Consume(itemEntry.InstanceID, itemEntry.Quantity); err == nil {
-				applied = append(applied, itemEntry)
-				continue
-			}
-		}
-
-		// Fallback: consume by DefinitionID
-		remaining := itemEntry.Quantity
-		for _, inst := range inv.Items {
-			if inst.DefinitionID == itemEntry.ID && inst.Quantity > 0 {
-				toTake := inst.Quantity
-				if toTake > remaining {
-					toTake = remaining
-				}
-				_ = inv.Consume(inst.ID, toTake)
-				remaining -= toTake
-				if remaining <= 0 {
-					break
-				}
-			}
-		}
-		applied = append(applied, itemEntry)
-	}
-	return applied
 }
 
 func deduplicateAndSortIDs(ids []string) []string {

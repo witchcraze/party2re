@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -21,6 +22,12 @@ const DefaultMaxCapacity = 1
 type Inventory struct {
 	CharacterID string
 	Items       []item.Instance
+}
+
+// Clone returns an inventory whose item mutations are isolated from the original.
+func (i Inventory) Clone() Inventory {
+	i.Items = slices.Clone(i.Items)
+	return i
 }
 
 // MaxCapacity returns the maximum number of items an inventory can hold.

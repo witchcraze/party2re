@@ -137,6 +137,7 @@ func (s *Service) startRoster(
 			OldJobID:           char.OldJobID,
 			Level:              char.Level,
 			CharacterCurrentHP: currHP,
+			CharacterCurrentMP: &char.Stats.MP,
 			MaxHP:              maxHP,
 			MaxMP:              maxMP,
 			Attack:             char.Stats.Attack,

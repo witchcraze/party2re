@@ -4,14 +4,15 @@ import "fmt"
 
 // RevivalResult describes the outcome of a defeat revival check.
 type RevivalResult struct {
-	Revived     bool
-	HP          int
-	Message     string
-	Cursed      bool
-	Status      string
-	AttackBuff  int
-	DefenseBuff int
-	AgilityBuff int
+	Revived      bool
+	HP           int
+	Message      string
+	Cursed       bool
+	Status       string
+	AttackBuff   int
+	DefenseBuff  int
+	AgilityBuff  int
+	ConsumedItem *ConsumedItem
 }
 
 // CheckRevival inspects participant abilities and resources when HP reaches 0 to determine if revival triggers.
@@ -80,10 +81,11 @@ func CheckRevival(p *Participant, currentMP *int) RevivalResult {
 				hp = 1
 			}
 			return RevivalResult{
-				Revived: true,
-				HP:      hp,
-				Status:  StatusDofuu,
-				Message: fmt.Sprintf("%sは瀕死でよみがえった！", name),
+				Revived:      true,
+				ConsumedItem: &ConsumedItem{ID: "item-193", Quantity: 1},
+				HP:           hp,
+				Status:       StatusDofuu,
+				Message:      fmt.Sprintf("%sは瀕死でよみがえった！", name),
 			}
 		case "cursed_revive":
 			hp := maxHP * 3 / 10

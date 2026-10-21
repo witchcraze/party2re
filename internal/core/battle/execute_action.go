@@ -93,11 +93,7 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 
 	if ctx.hpMap[target.ID] <= 0 {
 		if !ctx.banishedMap[target.ID] {
-			curMP := ctx.mpMap[target.ID]
-			targetCopy := target
-			targetCopy.Abilities = ctx.abilitiesMap[target.ID]
-			rev := CheckRevival(&targetCopy, &curMP)
-			ctx.mpMap[target.ID] = curMP
+			rev := ctx.checkRevival(target)
 			if rev.Revived {
 				ctx.hpMap[target.ID] = rev.HP
 				ctx.attackBuff[target.ID] += rev.AttackBuff

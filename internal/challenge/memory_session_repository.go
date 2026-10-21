@@ -2,9 +2,22 @@ package challenge
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 )
+
+func cloneMembers(members []ChallengeMember) []ChallengeMember {
+	cp := slices.Clone(members)
+	for i := range cp {
+		if cp[i].CharacterCurrentMP != nil {
+			mp := *cp[i].CharacterCurrentMP
+			cp[i].CharacterCurrentMP = &mp
+		}
+		cp[i].ConsumedItems = slices.Clone(cp[i].ConsumedItems)
+	}
+	return cp
+}
 
 // MemorySessionRepository provides an in-memory, thread-safe implementation
 // of ActiveSessionStore matching the exact semantics and error codes of the Valkey Lua script.
@@ -61,7 +74,7 @@ func (m *MemorySessionRepository) GetActiveSession(ctx context.Context, characte
 
 	cp := s
 	cp.AccumulatedItems = append([]string(nil), s.AccumulatedItems...)
-	cp.Members = append([]ChallengeMember(nil), s.Members...)
+	cp.Members = cloneMembers(s.Members)
 	return &cp, nil
 }
 
@@ -71,7 +84,7 @@ func (m *MemorySessionRepository) SaveActiveSession(ctx context.Context, session
 
 	cp := session
 	cp.AccumulatedItems = append([]string(nil), session.AccumulatedItems...)
-	cp.Members = append([]ChallengeMember(nil), session.Members...)
+	cp.Members = cloneMembers(session.Members)
 	m.sessions[session.CharacterID] = cp
 	for _, member := range session.Members {
 		if member.CharacterID != session.CharacterID {
@@ -161,7 +174,7 @@ func (m *MemorySessionRepository) AdvanceRound(ctx context.Context, characterID 
 
 	s.CurrentRound++
 	s.CharacterCurrentHP = params.SurvivingHP
-	s.Members = append([]ChallengeMember(nil), params.Members...)
+	s.Members = cloneMembers(params.Members)
 	s.AccumulatedExp += params.ExpDelta
 	s.AccumulatedGold += params.GoldDelta
 	if params.RewardItemID != "" {
@@ -174,7 +187,7 @@ func (m *MemorySessionRepository) AdvanceRound(ctx context.Context, characterID 
 
 	cp := s
 	cp.AccumulatedItems = append([]string(nil), s.AccumulatedItems...)
-	cp.Members = append([]ChallengeMember(nil), s.Members...)
+	cp.Members = cloneMembers(s.Members)
 	return AdvanceRoundOutcome{
 		Session: cp,
 		Status:  cp.Status,

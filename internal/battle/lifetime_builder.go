@@ -33,7 +33,7 @@ func (s *Service) BuildLifetimeActor(ctx context.Context, characterID, icon stri
 	if err != nil {
 		return corebattle.LifetimeActor{}, err
 	}
-	p, err := s.buildParticipantFromCharacter(ctx, char)
+	p, err := s.buildParticipantFromCharacter(ctx, char, nil)
 	if err != nil {
 		return corebattle.LifetimeActor{}, err
 	}
