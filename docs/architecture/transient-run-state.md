@@ -198,8 +198,13 @@ active-state migrations are historical work, not a remaining rollout plan.
 
 `ChallengeRepository.FinalizeSession` requires the SQL row created at start and
 a `defeated` or `claimed` terminal snapshot. In one transaction it locks the
-Character, conditionally updates the owned session from `active`, checks
-`RowsAffected`, and applies rewards and the challenge record. It reuses an
+admitted Characters in ascending ID order, conditionally updates the owned session
+from `active`, checks `RowsAffected`, and uses the shared battle adapter to save
+all participants' HP/MP and consumed inventory/equipment. Each member receives
+their earned EXP/Gold and challenge record in that transaction; shared treasure
+retains its designated leader recipient rather than being cloned. The terminal
+roster must match the durable admission snapshot. Fallen characters use the
+shared combat survival floor of 1 HP on durable exit. It reuses an
 ambient transaction. An error rolls back the claim with its coupled effects.
 Missing sessions return `ErrSessionNotFound`; ownership mismatches return
 `ErrForbidden`; completed sessions return `ErrSessionNotActive` without changing
@@ -208,10 +213,14 @@ their snapshot or granting rewards again. Finalization never recreates a row.
 The retained SQL row protects sequential and concurrent retries independently
 of Valkey deletion. Post-commit cleanup failure leaves the buffer observable;
 another defeat settlement returns `ErrSessionNotActive` and grants nothing.
-This guard does not repair that buffer, serialize live rounds, or extend the
-current leader-only reward settlement to all participants. Those behavior gaps
-remain tracked in #1210 and #1209. No new HTTP operation or automatic retry is
-introduced.
+This guard does not repair that buffer. Live victories use the existing round
+CAS to commit the complete member snapshot, including MP, cumulative consumption
+and individual rewards. A fresh participant is rebuilt through the shared battle
+adapter with consumed items removed before equipment and abilities are evaluated.
+Pre-upgrade snapshots without MP initialize it from durable state once and retain
+their shared reward balance; already-lost MP/consumption history cannot be recovered.
+No new HTTP exit operation or automatic retry is introduced; voluntary exit is
+tracked separately in #1208.
 
 ## Crash Recovery
 

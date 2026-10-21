@@ -60,18 +60,22 @@ type ChallengeTier struct {
 }
 
 type ChallengeMember struct {
-	CharacterID        string `json:"character_id"`
-	CharacterName      string `json:"character_name"`
-	Icon               string `json:"icon"`
-	JobID              string `json:"job_id"`
-	OldJobID           string `json:"old_job_id,omitempty"`
-	Level              int    `json:"level"`
-	CharacterCurrentHP int    `json:"character_current_hp"`
-	MaxHP              int    `json:"max_hp"`
-	MaxMP              int    `json:"max_mp"`
-	Attack             int    `json:"attack"`
-	Defense            int    `json:"defense"`
-	Agility            int    `json:"agility"`
+	CharacterID        string                    `json:"character_id"`
+	CharacterName      string                    `json:"character_name"`
+	Icon               string                    `json:"icon"`
+	JobID              string                    `json:"job_id"`
+	OldJobID           string                    `json:"old_job_id,omitempty"`
+	Level              int                       `json:"level"`
+	CharacterCurrentHP int                       `json:"character_current_hp"`
+	CharacterCurrentMP *int                      `json:"character_current_mp,omitempty"`
+	ConsumedItems      []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	AccumulatedExp     int                       `json:"accumulated_exp"`
+	AccumulatedGold    int                       `json:"accumulated_gold"`
+	MaxHP              int                       `json:"max_hp"`
+	MaxMP              int                       `json:"max_mp"`
+	Attack             int                       `json:"attack"`
+	Defense            int                       `json:"defense"`
+	Agility            int                       `json:"agility"`
 }
 
 type HallOfFameMember struct {
@@ -210,9 +214,9 @@ type Repository interface {
 	HallOfFameRepository
 }
 
-// ParticipantBuilder constructs a Participant from character ID with current HP.
+// ParticipantBuilder reconstructs a participant from its buffered resources and consumptions.
 type ParticipantBuilder interface {
-	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+	BuildParticipantWithState(ctx context.Context, characterID string, hp int, mp *int, consumed []corebattle.ConsumedItem) (corebattle.Participant, error)
 }
 
 type Service struct {

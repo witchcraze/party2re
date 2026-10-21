@@ -190,6 +190,13 @@
       "lock_mode": "SELECT ... FOR UPDATE (ascending ID for multiple characters)",
       "lock_order": 2,
       "purpose": "Financial mutation inside the durable room transition transaction; room claim precedes characters and participation claims follow them"
+    },
+    {
+      "module": "challenge",
+      "caller_method": "internal/database/challenge_finalization.go#ChallengeRepository.FinalizeSession",
+      "lock_mode": "SELECT ... FOR UPDATE (ascending character IDs; shared battle adapter)",
+      "lock_order": 2,
+      "purpose": "Settle every admitted participant in the terminal session claim transaction"
     }
   ]
 }

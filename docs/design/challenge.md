@@ -8,13 +8,13 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 
 ## Architectural Policy & Boundaries
 
-- **Session-Based Consecutive Combat**: Characters enter a challenge stage (`0`〜`8`) and battle consecutively from Round 1 onwards until party defeat. HP is carried forward directly across rounds without inter-round healing (legacy parity with `vs_challenge.cgi` and `_battle.cgi`).
+- **Session-Based Consecutive Combat**: Characters enter a challenge stage (`0`〜`8`) and battle consecutively from Round 1 onwards until party defeat. Each participant carries HP, MP and consumed-item state directly across rounds without inter-round recovery (legacy parity with `vs_challenge.cgi` and `_battle.cgi`).
 - **Authentic Stat Scaling Formula**: Enemy combat stats scale dynamically based on the current round number according to the authentic fixed legacy formula (`vs_challenge.cgi:68`):
   $$\text{Scale} = 1.0 + 0.10 \times \text{Round}$$
 - **100% Defeat Reward Retention**:
-  - EXP, Gold, and items accumulate in the session ledger across defeated monsters during the run.
-  - On party wipe/defeat, players retain **100% of all accumulated EXP, Gold, and items** earned during the run.
-  - There is no fictional "retire and cash out" mechanic or 50% defeat penalty.
+  - Each living participant earns the round's EXP and Gold; a fallen member retains prior earnings but earns no new rewards until revived (`_battle.cgi:208–214`). Leader death does not stop surviving allies.
+  - On party wipe/defeat, all participants retain **100% of their earned EXP and Gold**. The current shared treasure ledger pays its designated leader recipient once; per-player treasure interactions remain part of [#1207](https://github.com/witchcraze/party2re/issues/1207).
+  - Voluntary exit (`_battle.cgi:nigeru`, HP/MP/item settlement at lines 1208–1222) remains tracked in [#1208](https://github.com/witchcraze/party2re/issues/1208); its eventual command must use the same terminal settlement contract. There is no 50% defeat penalty.
 - **Authentic Treasure Room Trigger**:
   - For rounds $\ge \text{TreasureRound}$ (10, 20, or 30 depending on the stage), there is a 10% chance per floor (`rand < 0.10`) to encounter a treasure room / receive treasure from the stage's item pool if no treasure has been awarded yet in that run (`vs_challenge.cgi:64`).
 - **Leaderboards & Hall of Fame**: Tracks all-time highest round reached per stage with tie-breaking by earliest completion timestamp.
@@ -45,8 +45,8 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
       v
 [Execute Round] -> Core Battle Engine Resolve
       |
-      +---> [Victory] -> HP Carryover (no inter-round recovery)
-      |                  + Accumulate Round EXP & Gold
+      +---> [Victory] -> HP/MP/Consumption Carryover (no inter-round recovery)
+      |                  + Accumulate EXP & Gold for living members
       |                  + Check Treasure Room Trigger (if Round >= TreasureRound and rand < 0.10)
       |                  + Advance Round (CurrentRound++)
       |                  + [Execute Next Round]
@@ -66,7 +66,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 
 - **Error Propagation**: All database writes (`SaveSession`, `SaveHallOfFame`, `FinalizeSession`) and Valkey active session mutations (`SaveActiveSession`, `AdvanceRound`) strictly propagate errors to the caller without suppression.
 - **Repository Error Distinction**: Unexpected database errors during character lookups are directly propagated to the caller, while `corecharacter.ErrNotFound` is mapped to domain `ErrCharacterNotFound`.
-- **Two-Phase Settlement**: On session defeat, `FinalizeSession` claims the existing active SQL session and commits the terminal snapshot, rewards and record together. Duplicate claims return `ErrSessionNotActive` without another payout. Valkey cleanup follows commit and is best-effort; see the [settlement contract](../architecture/transient-run-state.md#challenge-finalization) for failure and retry behavior.
+- **Two-Phase Settlement**: On session defeat, `FinalizeSession` claims the existing active SQL session and commits the terminal snapshot, all participants' resources/consumptions, earned rewards and records together. Duplicate claims return `ErrSessionNotActive` without another payout. Valkey cleanup follows commit and is best-effort; see the [settlement contract](../architecture/transient-run-state.md#challenge-finalization) for failure and retry behavior.
 
 ---
 
@@ -75,7 +75,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 ### 1. Multi-Player Party Challenge
 - Party participation limits (`p_join`) range from 1 to 4 members depending on the stage.
 - Party battles resolve simultaneously using `internal/core/battle.Engine` with dynamic turn ordering, HP, MP, CMP, and skill execution.
-- Surviving party members carry forward their remaining HP to the next wave without inter-round healing.
+- Surviving party members carry forward remaining HP/MP and consumed-item state to the next wave without inter-round recovery (`vs_challenge.cgi:48–53`, `_battle.cgi:453–554`). Consumed revival items cannot be rebound on the next wave.
 
 ### 2. Hall of Fame (`challenge_hall_of_fame`)
 - Whenever a party sets a new tier high-water mark (`round > highest_round`), the run is immortalized in the Hall of Fame.

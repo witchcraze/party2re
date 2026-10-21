@@ -8637,6 +8637,28 @@
           },
           "old_job_id": {
             "type": "string"
+          },
+          "character_current_mp": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Remaining MP carried between rounds, including zero. Absent only in pre-upgrade snapshots."
+          },
+          "consumed_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BattleConsumedItem"
+            },
+            "description": "Cumulative combat consumption buffered until terminal settlement."
+          },
+          "accumulated_exp": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "EXP earned by this member while alive at each cleared round."
+          },
+          "accumulated_gold": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Gold earned by this member while alive at each cleared round."
           }
         },
         "required": [
@@ -8650,7 +8672,9 @@
           "max_mp",
           "attack",
           "defense",
-          "agility"
+          "agility",
+          "accumulated_exp",
+          "accumulated_gold"
         ],
         "type": "object",
         "additionalProperties": false

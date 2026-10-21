@@ -2,6 +2,7 @@ package equipment
 
 import (
 	"errors"
+	"maps"
 	"strings"
 
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -22,6 +23,12 @@ type Ownership interface {
 type Equipment struct {
 	CharacterID string
 	Slots       map[item.Slot]string
+}
+
+// Clone returns equipment whose slot mutations are isolated from the original.
+func (e Equipment) Clone() Equipment {
+	e.Slots = maps.Clone(e.Slots)
+	return e
 }
 
 func New(characterID string) (Equipment, error) {

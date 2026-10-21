@@ -152,11 +152,7 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 
 			msg := fmt.Sprintf("%s は禁呪により %d のダメージをうけた！", actor.NameOrID(), dmg)
 			if ctx.hpMap[actor.ID] <= 0 {
-				curMP := ctx.mpMap[actor.ID]
-				targetCopy := actor
-				targetCopy.Abilities = ctx.abilitiesMap[actor.ID]
-				rev := CheckRevival(&targetCopy, &curMP)
-				ctx.mpMap[actor.ID] = curMP
+				rev := ctx.checkRevival(actor)
 				if rev.Revived {
 					ctx.hpMap[actor.ID] = rev.HP
 					ctx.attackBuff[actor.ID] += rev.AttackBuff
@@ -237,11 +233,7 @@ func (ctx *battleContext) executePoisonTick(target Participant, statusName strin
 	msg := fmt.Sprintf("%s は%sにより %d のダメージをうけた！", target.NameOrID(), statusName, dotDmg)
 
 	if ctx.hpMap[target.ID] <= 0 {
-		curMP := ctx.mpMap[target.ID]
-		targetCopy := target
-		targetCopy.Abilities = ctx.abilitiesMap[target.ID]
-		rev := CheckRevival(&targetCopy, &curMP)
-		ctx.mpMap[target.ID] = curMP
+		rev := ctx.checkRevival(target)
 		if rev.Revived {
 			ctx.hpMap[target.ID] = rev.HP
 			ctx.attackBuff[target.ID] += rev.AttackBuff
