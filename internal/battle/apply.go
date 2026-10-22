@@ -78,9 +78,11 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		var equip coreequipment.Equipment
 		var equipModified bool
 		if s.equipRepo != nil {
-			if loadedEquip, err := s.equipRepo.FindByCharacterID(tc.Context, charID); err == nil {
-				equip = loadedEquip
+			loadedEquip, err := s.equipRepo.FindByCharacterID(tc.Context, charID)
+			if err != nil {
+				return err
 			}
+			equip = loadedEquip
 		}
 
 		// 2. Apply HP, MP, fatigue
@@ -186,9 +188,11 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 				invs[id] = inv
 			}
 			if s.equipRepo != nil {
-				if equip, err := s.equipRepo.FindByCharacterID(txCtx, id); err == nil {
-					equips[id] = equip
+				equip, err := s.equipRepo.FindByCharacterID(txCtx, id)
+				if err != nil {
+					return err
 				}
+				equips[id] = equip
 			}
 		}
 

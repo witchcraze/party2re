@@ -49,16 +49,20 @@ func (s *Service) buildParticipantFromCharacter(ctx context.Context, char corech
 
 	var inv coreinventory.Inventory
 	if s.invRepo != nil {
-		if loadedInv, err := s.invRepo.FindByCharacterID(ctx, charID); err == nil {
-			inv = loadedInv
+		loadedInv, err := s.invRepo.FindByCharacterID(ctx, charID)
+		if err != nil {
+			return corebattle.Participant{}, err
 		}
+		inv = loadedInv
 	}
 
 	var equip coreequipment.Equipment
 	if s.equipRepo != nil {
-		if loadedEquip, err := s.equipRepo.FindByCharacterID(ctx, charID); err == nil {
-			equip = loadedEquip
+		loadedEquip, err := s.equipRepo.FindByCharacterID(ctx, charID)
+		if err != nil {
+			return corebattle.Participant{}, err
 		}
+		equip = loadedEquip
 	}
 	if err := consumeBufferedItems(&inv, &equip, consumed); err != nil {
 		return corebattle.Participant{}, err

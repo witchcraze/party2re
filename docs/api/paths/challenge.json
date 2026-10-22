@@ -163,7 +163,7 @@
   },
   "/characters/{id}/challenges/advance": {
     "post": {
-      "description": "Computes combat from the active session snapshot and atomically applies a victory only if its session and round still match. Concurrent computations of the same round receive HTTP 409 after the first victory commits; observe the current run before continuing.",
+      "description": "Computes combat from the active session snapshot and atomically applies a victory only if its session and round still match. Concurrent computations of the same round receive HTTP 409 after the first victory commits; observe the current run before continuing. Inventory/equipment read failures before combat return HTTP 500 without advancing the round or changing buffered resources, rewards or Hall of Fame.",
       "operationId": "advanceChallengeRound",
       "parameters": [
         {

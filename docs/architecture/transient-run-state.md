@@ -218,6 +218,10 @@ This guard does not repair that buffer. Live victories use the existing round
 CAS to commit the complete member snapshot, including MP, cumulative consumption
 and individual rewards. A fresh participant is rebuilt through the shared battle
 adapter with consumed items removed before equipment and abilities are evaluated.
+Inventory/equipment read failures from configured repositories propagate before
+combat, leaving the round buffer, rewards and Hall of Fame unchanged. Equipment
+read failures during settlement roll back the SQL claim and its coupled effects;
+successful empty reads remain valid.
 Pre-upgrade snapshots without MP initialize it from durable state once and retain
 their shared reward balance; already-lost MP/consumption history cannot be recovered.
 No new HTTP exit operation or automatic retry is introduced; voluntary exit is
