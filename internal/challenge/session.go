@@ -14,48 +14,37 @@ import (
 )
 
 func (s *Service) StartSession(ctx context.Context, characterID string, tierID string) (*ChallengeSession, error) {
-	var result *ChallengeSession
-	start := func(ctx context.Context) error {
+	return s.startRun(ctx, characterID, func(ctx context.Context, runID string) (*ChallengeSession, error) {
+		var result *ChallengeSession
+		start := func(ctx context.Context) error {
+			var err error
+			result, err = s.startRoster(ctx, runID, characterID, []string{characterID}, tierID, "", "#FFFFFF", "")
+			return err
+		}
 		var err error
-		result, err = s.startRoster(ctx, characterID, []string{characterID}, tierID, "", "#FFFFFF", "")
-		return err
-	}
-	var err error
-	if s.admission != nil {
-		err = s.admission.AdmitSolo(ctx, characterID, start)
-	} else {
-		err = start(ctx)
-	}
-	if err != nil && result != nil {
-		return s.reconcileStart(ctx, result, err)
-	}
-	return result, err
+		if s.admission != nil {
+			err = s.admission.AdmitSolo(ctx, characterID, start)
+		} else {
+			err = start(ctx)
+		}
+		return result, err
+	})
 }
 
-func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*RoundResult, *ChallengeSession, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, nil, ErrCharacterNotFound
-	}
-
-	session, err := s.GetActiveSession(ctx, characterID)
-	if err != nil {
+func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionID string, expectedRevision int) (*RoundResult, *ChallengeSession, error) {
+	result, err := s.mutate(ctx, characterID, sessionID, expectedRevision, "advance", func(ctx context.Context, run ChallengeSession) (*CommandResult, []string, error) {
+		if run.CurrentRound == 1 && run.CharacterID != characterID {
+			return nil, nil, ErrForbidden
+		}
+		return s.computeRound(ctx, &run)
+	})
+	if result == nil {
 		return nil, nil, err
 	}
-	if session == nil || session.ID != sessionID {
-		if targetSession, fErr := s.repo.FindSessionByID(ctx, sessionID); fErr == nil && targetSession != nil {
-			if targetSession.CharacterID != characterID {
-				return nil, nil, ErrForbidden
-			}
-		}
-		return nil, nil, ErrSessionNotFound
-	}
-	if session.CharacterID != characterID {
-		return nil, nil, ErrForbidden
-	}
-	if session.Status != StatusActive {
-		return nil, nil, ErrSessionNotActive
-	}
+	return result.Round, &result.Session, err
+}
 
+func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (*CommandResult, []string, error) {
 	tier, err := s.GetTier(session.TierID)
 	if err != nil {
 		return nil, nil, err
@@ -158,22 +147,15 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			}
 		}
 
-		// Atomically advance round and buffer rewards in Valkey Master
-		outcome, err := s.activeStore.AdvanceRound(ctx, characterID, AdvanceRoundParams{
-			ExpectedSessionID: sessionID,
-			ExpectedRound:     round,
-			Members:           session.Members,
-			SurvivingHP:       leaderSurvivingHP,
-			ExpDelta:          mExp,
-			GoldDelta:         mGold,
-			RewardItemID:      awardedItem,
-			Now:               time.Now().UTC(),
-		})
-		if err != nil {
-			return nil, nil, err
+		session.CurrentRound++
+		session.AccumulatedExp += mExp
+		session.AccumulatedGold += mGold
+		if awardedItem != "" {
+			session.AccumulatedItems = append(session.AccumulatedItems, awardedItem)
+			session.TreasureAwards = append(session.TreasureAwards, TreasureAward{ItemID: awardedItem, RecipientID: session.CharacterID})
 		}
 
-		return &RoundResult{
+		return &CommandResult{Round: &RoundResult{
 			Round:              round,
 			MonsterName:        mName,
 			BattleResult:       battleRes,
@@ -185,7 +167,7 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			AwardedItem:        awardedItem,
 			SessionEnded:       false,
 			SessionStatus:      StatusActive,
-		}, &outcome.Session, nil
+		}, Session: *session}, nil, nil
 	}
 
 	// Defeat: session terminates
@@ -204,11 +186,20 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		return nil, nil, err
 	}
 
-	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
-	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
+	removed := make([]string, len(session.Members))
+	for i, m := range session.Members {
+		removed[i] = m.CharacterID
+		if s.fullness != nil {
+			if err := s.fullness.ResetFullness(ctx, m.CharacterID); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	for i := range session.TreasureAwards {
+		session.TreasureAwards[i].Delivered = true
+	}
 
-	return &RoundResult{
+	return &CommandResult{Round: &RoundResult{
 		Round:              round,
 		MonsterName:        mName,
 		BattleResult:       battleRes,
@@ -219,16 +210,7 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		RoundGold:          0,
 		SessionEnded:       true,
 		SessionStatus:      StatusDefeated,
-	}, session, nil
-}
-
-func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundResult, error) {
-	session, err := s.repo.FindSessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	res, _, err := s.AdvanceRound(ctx, session.CharacterID, sessionID)
-	return res, err
+	}, Session: *session, Settled: session.Members}, removed, nil
 }
 
 func (s *Service) GetSession(ctx context.Context, characterID string, sessionID string) (*ChallengeSession, error) {
@@ -253,6 +235,39 @@ func (s *Service) GetSession(ctx context.Context, characterID string, sessionID 
 func (s *Service) GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return nil, errors.New("character id is required")
+	}
+	claim, err := s.transitions.FindClaim(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	if claim != "" {
+		t, err := s.transitions.FindTransition(ctx, claim)
+		if err != nil {
+			return nil, err
+		}
+		if !t.Pending {
+			run, err := s.runStore.ReadRun(ctx, claim)
+			if err != nil {
+				return nil, err
+			}
+			if run != nil && run.ContainsCharacter(characterID) {
+				return run, nil
+			}
+			if t.Revision == 0 {
+				admission, err := s.repo.FindSessionByID(ctx, claim)
+				if err != nil {
+					return nil, err
+				}
+				old, _, err := s.runStore.ReadLegacyRun(ctx, admission.CharacterID)
+				if err != nil && !errors.Is(err, ErrRecoveryRequired) {
+					return nil, err
+				}
+				if old != nil && old.ID == claim && old.ContainsCharacter(characterID) {
+					return old, nil
+				}
+			}
+		}
+		return &ChallengeSession{ID: claim, Revision: t.Revision, Status: StatusActive, RecoveryPending: true, Members: []ChallengeMember{{CharacterID: characterID}}}, nil
 	}
 	run, err := s.activeStore.GetActiveSession(ctx, characterID)
 	if err != nil {

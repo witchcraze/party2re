@@ -72,11 +72,11 @@ func TestChallengeParticipantStateAcrossRounds(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() {
-				if err := store.DeleteActiveSession(ctx, "lead"); err != nil {
+				if err := clearRun(ctx, store, "lead"); err != nil {
 					t.Error(err)
 				}
 			})
-			_, run, err = svc.AdvanceRound(ctx, "lead", run.ID)
+			_, run, err = svc.AdvanceRound(ctx, "lead", run.ID, run.Revision)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,14 +92,14 @@ func TestChallengeParticipantStateAcrossRounds(t *testing.T) {
 			if err != nil || observed == nil || *observed.Members[1].CharacterCurrentMP != 0 || observed.Members[1].ConsumedItems[0].ID != "item-193" {
 				t.Fatalf("nested state alias: %+v, %v", observed, err)
 			}
-			_, run, err = svc.AdvanceRound(ctx, "lead", run.ID)
+			_, run, err = svc.AdvanceRound(ctx, "lead", run.ID, run.Revision)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if run.Status != challenge.StatusDefeated || run.Members[1].CharacterCurrentHP != 0 || len(run.Members[1].ConsumedItems) != 1 {
 				t.Fatalf("defeat snapshot: %+v", run)
 			}
-			stored := repo.sessions[run.ID]
+			stored := repo.finalized[run.ID]
 			if stored.Members[1].CharacterCurrentHP != 0 || *stored.Members[1].CharacterCurrentMP != 0 {
 				t.Fatalf("finalized snapshot: %+v", stored)
 			}

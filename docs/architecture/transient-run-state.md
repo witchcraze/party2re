@@ -205,34 +205,17 @@ and medals as well as responses:
 
 ## Candidate D: In-Progress Run Buffers
 
-Dungeon and Challenge are wired to Valkey working stores (#404/#405). Their
-current key patterns use a Cluster Hash Tag `{char:<character_id>}`:
+Dungeon and Challenge use Valkey as the live authority. Dungeon uses character-keyed
+state/reward/revealed buffers; Challenge uses immutable run-keyed session/reward
+hashes. The [keyspace owner](valkey-keyspace.md) defines their 7200-second activity
+lifetime and run-qualified member references.
 
-| Key | Type | Lifetime |
-|---|---|---|
-| `party2:dungeon:{char:<character_id>}:state` | Hash | 7200s sliding |
-| `party2:dungeon:{char:<character_id>}:rewards` | Hash (items as JSON array) | 7200s sliding |
-| `party2:dungeon:{char:<character_id>}:revealed` | Set of visited coordinates | 7200s |
-| `party2:challenge:{char:<character_id>}:session` | Hash | 7200s sliding |
-| `party2:challenge:{char:<character_id>}:rewards` | Hash (items as JSON array) | 7200s sliding |
-
-`dungeon_step` (`internal/dungeon/lua/dungeon_step.lua`) verifies expedition ID
-and active state, updates coordinates/HP/turns, accumulates provisional loot,
-and refreshes state/reward TTLs. `challenge_advance_round`
-(`internal/challenge/lua/challenge_round.lua`) verifies session ID, active
-state and the round used to calculate combat. It advances the round and saves
-leader HP, the complete member snapshot and provisional rewards in one atomic
-step, preserving party identity and refreshing TTLs. A stale round returns
-`ErrSessionRoundMismatch` (HTTP 409) without changing the buffer; callers must
-read the current run before computing another round. There is no later full
-session save that could overwrite a newer step. Exact fields,
-argument order, errors, and return tuples are defined in the embedded sources.
-These scripts protect their own transitions; application reads, combat
-resolution, and SQL settlement are separate operations.
-
-Active Dungeon/Challenge observations propagate required state and reward-read
-failures. A terminal buffer still present in Valkey remains observable until
-owner cleanup; reading it never retries settlement or refreshes lifetime.
+Dungeon's `dungeon_step` atomically updates its existing buffer. Challenge's
+[transition boundary](#challenge-participant-exit-target) serializes every start,
+advance, participant exit and defeat through SQL coordination before publishing
+the accepted live revision. Publication renews activity only for a newly accepted
+command; retries and GET never extend its recorded deadline. Required state and
+reward-read failures propagate rather than certifying idle activity.
 
 Cooperative entry resolves the saved, ready roster through Party's public
 `WithReadyRoster` handoff, under its existing lobby lock. Lobby membership and
@@ -246,42 +229,27 @@ PvP/GvG admission, unconsciousness and exhaustion before starting.
 The ordinary Party adventure start reuses that activity check so it cannot
 bypass an existing Dungeon/Challenge enrollment.
 
-Each run retains one canonical leader buffer. A per-member reference discovers
-that buffer through its immutable run ID and saved roster, independently of the
-Party lobby's shorter TTL. Members can observe their current run; advance and
-Dungeon escape remain leader operations. PlayerContext exposes member activity
-without leader continuation controls. GET neither renews nor repairs state.
-References have an explicit cleanup lifecycle, detailed in the
-[keyspace owner](valkey-keyspace.md), and do not provide SQL/Valkey atomicity or
-change the existing settlement guarantees below.
+Dungeon retains its canonical leader buffer and leader-only advance/escape.
+Challenge leadership is ordered live roster data and may transfer without moving
+keys. All admitted actors discover the same immutable run, independently of the
+Party lobby's shorter lifetime. Challenge's unfinished SQL claims also remain
+activity when discovery or the live body is missing. GET never repairs state.
 
-### Start outcome after publication (#1493)
+### Start outcome and publication
 
-**Decision status: approved 2026-10-18 in #1493.** Publication to Valkey precedes
-the shared SQL transaction's commit, which is not atomic with it. An admission
-error raised after the start callback succeeded therefore never implies that no
-run exists. The owning service reconciles it by the immutable run ID, outside the
-failed transaction and detached from request cancellation:
+Dungeon retains the approved #1493 start reconciliation: an admission error after
+publication is resolved from the owned run buffer outside the failed transaction;
+unreadable evidence returns `ErrStartOutcomeUnknown` without deleting it. Its
+publication precedes commit and does not exclude a still-in-flight server commit.
+The remaining Dungeon settlement work is tracked in #1205.
 
-| Feature | Evidence | Result |
-|---|---|---|
-| Dungeon (no SQL writes) | Leader's canonical buffer still holds the run ID | Success; the run is the start result |
-| Challenge | `challenge_sessions` row for the run ID exists | Success (commit acknowledgement was lost) |
-| Challenge | Row confirmed absent (`ErrSessionNotFound`) | Aborted: remove the run and its member references atomically by run ID; return the original error on clean removal, or `ErrStartOutcomeUnknown` wrapping both causes if cleanup fails |
-| Either | Evidence unreadable or run no longer verifiable | Preserve all state; return `ErrStartOutcomeUnknown` wrapping the cause |
-
-The Challenge start inserts its SQL row before publishing, so an insert failure
-never publishes, and a failed publication write discards its partial run using a
-detached timeout context (reporting `ErrStartOutcomeUnknown` wrapping both the save
-and cleanup errors if cleanup fails). A failed abort cleanup similarly returns
-`ErrStartOutcomeUnknown` wrapping both the admission and cleanup errors, and leaves
-the run discoverable; nothing deletes character keys blindly.
-HTTP maps an unknown outcome to `500` with only the sentinel message. Clients observe the active run through the
-owned readers and never replay the POST. Limitation: an absent row is treated as an
-abort, so a commit still in flight server-side when it is read is not excluded;
-excluding it needs durable start receipts like the Adventure contract below.
-Terminal payout/history idempotency is separate from start reconciliation; see
-the Challenge guarantee below and the remaining Dungeon work in #1205.
+Challenge commits admission, participant claims, its actor-owned revision-0 start
+receipt and pending publication before any Valkey write. Lost SQL acknowledgement
+is resolved from that receipt with a bounded cancellation-independent context.
+Unreadable evidence returns `ErrOutcomeUnknown`; failed publication returns
+`ErrRecoveryRequired` while retaining the committed outcome and claims. HTTP uses
+503 for these recovery states. Clients observe the owned active-run and command
+readers and never automatically replay POST.
 
 ## Two-Phase Settlement
 
@@ -300,43 +268,27 @@ active-state migrations are historical work, not a remaining rollout plan.
 
 ### Challenge finalization
 
-`ChallengeRepository.FinalizeSession` requires the SQL row created at start and
-a `defeated` or `claimed` terminal snapshot. In one transaction it locks the
-admitted Characters in ascending ID order, conditionally updates the owned session
-from `active`, checks `RowsAffected`, and uses the shared battle adapter to save
-all participants' HP/MP and consumed inventory/equipment. Each member receives
-their earned EXP/Gold and challenge record in that transaction; shared treasure
-retains its designated leader recipient rather than being cloned. The terminal
-roster must match the durable admission snapshot. Fallen characters use the
-shared combat survival floor of 1 HP on durable exit. It reuses an
-ambient transaction. An error rolls back the claim with its coupled effects.
-Missing sessions return `ErrSessionNotFound`; ownership mismatches return
-`ErrForbidden`; completed sessions return `ErrSessionNotActive` without changing
-their snapshot or granting rewards again. Finalization never recreates a row.
+`ChallengeRepository.FinalizeSession` shares one settlement implementation for
+participant exit and terminal defeat. Under the run coordination lock, it saves
+only unsettled admitted participants through the shared battle adapter and commits
+resources, cumulative consumption, individual earnings, designated treasure,
+records and required exit effects with the command receipt/publication intent.
+Fallen characters retain the shared survival floor of 1 HP. Equipment read errors
+and Tavern fullness failures roll back all coupled effects.
 
-The retained SQL row protects sequential and concurrent retries independently
-of Valkey deletion. Post-commit cleanup failure leaves the buffer observable;
-another defeat settlement returns `ErrSessionNotActive` and grants nothing.
-This guard does not repair that buffer. Live victories use the existing round
-CAS to commit the complete member snapshot, including MP, cumulative consumption
-and individual rewards. A fresh participant is rebuilt through the shared battle
-adapter with consumed items removed before equipment and abilities are evaluated.
-Inventory/equipment read failures from configured repositories propagate before
-combat, leaving the round buffer, rewards and Hall of Fame unchanged. Equipment
-read failures during settlement roll back the SQL claim and its coupled effects;
-successful empty reads remain valid.
-Pre-upgrade snapshots without MP initialize it from durable state once and retain
-their shared reward balance; already-lost MP/consumption history cannot be recovered.
-No new HTTP exit operation or automatic retry is introduced; voluntary exit is
-tracked separately in #1208 and requires the target below.
+The SQL admission roster remains immutable authorization evidence; it is not the
+current leader or active roster. The legacy full-roster finalizer remains only for
+unmigrated storage compatibility and cannot mutate a coordinated run outside its
+accepted revision. [Individual exit](../design/challenge.md#individual-exit) owns
+fatigue, attempted-versus-cleared round counts and accessory bonuses.
 
 ### Challenge participant exit target
 
 **Decision: option A in [#1584](https://github.com/witchcraze/party2re/issues/1584),
 user-approved 2026-10-22.** Retain Valkey live-round authority, make run identity
 independent of leadership, and add SQL participant settlement receipts and
-recoverable publication. This is an implementation target, not a claim that the
-current service supports individual exit. It does not change Dungeon or introduce
+recoverable publication. The runtime implements this boundary; Gateway
+exit adoption remains separate in #1208. It does not change Dungeon or introduce
 a generic cancellation framework. Gameplay evidence and exit effects belong to
 [Challenge](../design/challenge.md#individual-exit).
 
@@ -400,7 +352,8 @@ advancing again; an older publication cannot overwrite a newer revision. Update
 remaining actor references and conditionally remove departed references by run
 ID. Only after all required writes succeed may SQL acknowledge publication and
 release departed claims. Cleanup cannot delete a replacement run or enrollment.
-The last exit deletes only that run's buffer. No cross-slot or SQL/Valkey atomicity
+The last exit removes that run's live body/reward ledger; a revision fingerprint
+remains until its recorded deadline to reject stale publication. No cross-slot or SQL/Valkey atomicity
 is implied.
 
 Retain actor-scoped command results independently of current enrollment. Mutation
@@ -445,12 +398,24 @@ old state blocks that run for explicit recovery; never silently discard it or
 guess already-lost resources. Restore/rollback must not re-enable old writers
 against already-migrated runs.
 
-The runtime prerequisite couples run-keyed buffers, conditional publication,
-migration compatibility, participant claims/shared settlement and adoption by
-every existing Challenge writer. Keep that correctness boundary together; the
-Gateway exit adapter is a separate dependent unit. Each runtime PR owns its
-public-port, OpenAPI and Guidance changes; this decision adds no executable
-schema or port.
+SQL coordination, participant claims and command receipts are owned by the
+Challenge repository. Acknowledgement discards the pending publication snapshot;
+it does not turn SQL into the authority for an expired live run. Public
+`AdvanceRound` and `ExitSession` require the observed revision. Retained REST
+advance requires `expected_revision`, and owned GET routes expose active activity
+and actor-scoped command receipts. The Gateway exit adapter remains #1208.
+
+Upgrade procedure: quiesce all old writers, apply migration
+`107_challenge_run_transitions`, then run
+`go run ./cmd/challenge-migrate -character-id <admitted-actor> -run-id <run-id>`
+for each active legacy run with the normal SQL/Valkey environment. Repeating this
+explicit command finishes pending publication. Incomplete resource history,
+missing ledgers and expired buffers require recovery; they are never guessed.
+The migration's SQL triggers reject old-binary starts and updates to migrated
+admissions, including after application rollback. Committed migration publication
+first freezes the matching legacy session so old advance scripts reject it even
+if reference installation or cleanup later fails. Do not roll back these guards
+or restart old writers against retained legacy keys during partial migration.
 
 Use real SQL/Valkey tests for solo/party, zero/one/multiple wins, follower/leader/
 last exit, ordered handoff and former-leader re-entry. Check untouched survivors

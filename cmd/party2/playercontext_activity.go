@@ -152,11 +152,14 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if !session.ContainsCharacter(actor) {
 			return nil, errors.New("challenge activity ownership mismatch")
 		}
-		a := playercontext.Activity{Kind: "challenge", ID: session.ID, PartyID: session.PartyID, Phase: string(session.Status), Role: "actor", Round: session.CurrentRound, Actions: []string{}}
+		a := playercontext.Activity{Kind: "challenge", ID: session.ID, Revision: session.Revision, PartyID: session.PartyID, Phase: string(session.Status), Role: "actor", Round: session.CurrentRound, Actions: []string{}}
 		if session.CharacterID != actor {
 			a.Role = "member"
 		}
-		if session.CharacterID == actor && session.Status == challenge.StatusActive {
+		if session.RecoveryPending {
+			a.Phase = "recovery_pending"
+		}
+		if !session.RecoveryPending && session.Revision > 0 && session.Status == challenge.StatusActive && (session.CharacterID == actor || session.CurrentRound > 1) {
 			a.Actions = []string{"challenge_advance"}
 		}
 		facts = append(facts, a)

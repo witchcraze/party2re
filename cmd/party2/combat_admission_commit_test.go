@@ -113,7 +113,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 			if err := ds.DeleteActiveExpedition(ctx, c.ID); err != nil {
 				t.Error(err)
 			}
-			if err := cs.DeleteActiveSession(ctx, c.ID); err != nil {
+			if err := retireChallenge(ctx, combat.challenge, c.ID); err != nil {
 				t.Error(err)
 			}
 		}
@@ -156,7 +156,15 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 		adm := combatAdmission{party: combat.party, characters: core.charRepo, busy: busy,
 			tx: commitFault{inner: core.txProvider, mode: mode, err: errInjected}}
 		combat.dungeon.ConfigureAdmission(adm)
-		combat.challenge.ConfigureAdmission(adm)
+		challengeRepo, err := database.NewChallengeRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		challengeAdmission := combatAdmission{party: combat.party, characters: core.charRepo, busy: busy, tx: core.txProvider}
+		combat.challenge, err = challenge.NewService(challengeRepo, core.charRepo, nil, challenge.WithActiveSessionStore(cs), challenge.WithAdmission(challengeAdmission), challenge.WithTransitionRepository(&challengeCommitFault{TransitionRepository: challengeRepo, mode: mode, err: errInjected}))
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	sqlRows := func(characterID string) int {
 		var n int
@@ -169,7 +177,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 	t.Run("challenge solo rolled back", func(t *testing.T) {
 		useAdmission("abort")
 		_, err := combat.challenge.StartSession(ctx, leader.ID, "1")
-		if !errors.Is(err, errInjected) || errors.Is(err, challenge.ErrStartOutcomeUnknown) {
+		if !errors.Is(err, errInjected) || errors.Is(err, challenge.ErrOutcomeUnknown) {
 			t.Fatalf("confirmed abort must return the commit failure: %v", err)
 		}
 		if run, err := combat.challenge.GetActiveSession(ctx, leader.ID); err != nil || run != nil || sqlRows(leader.ID) != 0 {
@@ -180,7 +188,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 		if err != nil || run == nil {
 			t.Fatalf("retry after abort: %+v %v", run, err)
 		}
-		if err := cs.DeleteActiveSession(ctx, leader.ID); err != nil {
+		if err := retireChallenge(ctx, combat.challenge, leader.ID); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -197,7 +205,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 		if _, err := combat.challenge.StartSession(ctx, leader.ID, "1"); !errors.Is(err, challenge.ErrActiveSessionExists) {
 			t.Fatalf("no duplicate run: %v", err)
 		}
-		if err := cs.DeleteActiveSession(ctx, leader.ID); err != nil {
+		if err := retireChallenge(ctx, combat.challenge, leader.ID); err != nil {
 			t.Fatal(err)
 		}
 	})

@@ -459,13 +459,14 @@ func TestTransientRunStateDocCoversLuaAndPersistenceBoundaries(t *testing.T) {
 	requiredTerms := []string{
 		"Candidate D",
 		"dungeon_step",
-		"challenge_advance_round",
-		"Cluster Hash Tag",
+		"SQL coordination",
+		"participant claims",
+		"command receipts",
+		"run-keyed",
+		"ErrRecoveryRequired",
 		"Two-Phase Settlement",
 		"Crash Recovery",
 		"In-Memory Fallback Parity",
-		"party2:dungeon:{char:<character_id>}:state",
-		"party2:challenge:{char:<character_id>}:session",
 	}
 
 	for _, term := range requiredTerms {

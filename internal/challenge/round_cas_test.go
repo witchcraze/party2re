@@ -127,32 +127,6 @@ func TestAdvanceRound_CompareAndSwap(t *testing.T) {
 	}
 }
 
-type synchronizedRoundStore struct {
-	challenge.ActiveSessionStore
-	reads atomic.Int64
-	ready chan struct{}
-}
-
-func (s *synchronizedRoundStore) GetActiveSession(ctx context.Context, characterID string) (*challenge.ChallengeSession, error) {
-	run, err := s.ActiveSessionStore.GetActiveSession(ctx, characterID)
-	if err != nil || run == nil || run.CurrentRound != 1 {
-		return run, err
-	}
-	if s.reads.Add(1) == 2 {
-		close(s.ready)
-	}
-	select {
-	case <-s.ready:
-		return run, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
-
-func (s *synchronizedRoundStore) SaveActiveSession(context.Context, challenge.ChallengeSession) error {
-	return errors.New("round advancement must not perform a second save")
-}
-
 type roundWinEngine struct{}
 
 func (roundWinEngine) Resolve(req corebattle.Request) (corebattle.Result, error) {
@@ -183,33 +157,34 @@ func TestServiceAdvanceRound_ConcurrentSnapshot(t *testing.T) {
 				store = r
 			}
 			leader := id.New()
-			run := sampleChallengeSession(id.New(), leader, "0")
-			run.Members = []challenge.ChallengeMember{{CharacterID: leader, CharacterCurrentHP: 200, MaxHP: 200}}
-			if err := store.SaveActiveSession(ctx, run); err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				if err := store.DeleteActiveSession(context.Background(), leader); err != nil {
-					t.Error(err)
-				}
-			})
+
 			repo := newMockChallengeRepo()
 			// Hall-of-fame settlement is outside the active-step concurrency boundary.
 			repo.hof["0"] = challenge.HallOfFameEntry{HighestRound: 100}
 			chars := &mockCharRepo{chars: map[string]corecharacter.Character{leader: createPartyTestChar(leader, 30, 200, 100, 100)}}
-			barrier := &synchronizedRoundStore{ActiveSessionStore: store, ready: make(chan struct{})}
+			barrier := store
 			svc, err := challenge.NewService(repo, chars, roundWinEngine{}, challenge.WithActiveSessionStore(barrier))
 			if err != nil {
 				t.Fatal(err)
 			}
+			run, err := svc.StartSession(ctx, leader, "0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := clearRun(context.Background(), store, leader); err != nil {
+					t.Error(err)
+				}
+			})
 			advance := func() error {
-				_, _, err := svc.AdvanceRound(ctx, leader, run.ID)
+				_, _, err := svc.AdvanceRound(ctx, leader, run.ID, run.Revision)
 				return err
 			}
 			a, b := testutil.RunRace2(advance, advance)
-			if !((a == nil && errors.Is(b, challenge.ErrSessionRoundMismatch)) || (b == nil && errors.Is(a, challenge.ErrSessionRoundMismatch))) {
-				t.Fatalf("expected one success and one conflict: %v, %v", a, b)
+			if a != nil || b != nil {
+				t.Fatalf("duplicate command must replay: %v, %v", a, b)
 			}
+
 			got, err := store.GetActiveSession(ctx, leader)
 			if err != nil || got == nil || got.CurrentRound != 2 || got.CharacterCurrentHP != 190 ||
 				got.Members[0].CharacterCurrentHP != 190 || got.AccumulatedExp != 22 || got.AccumulatedGold != 6 {

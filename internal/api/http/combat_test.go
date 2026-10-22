@@ -16,15 +16,30 @@ import (
 )
 
 type stubChallengeService struct {
+	activeFn              func(context.Context, string) (*challenge.ChallengeSession, error)
+	commandFn             func(context.Context, string, string, int) (*challenge.CommandResult, error)
 	listTiersFn           func() []challenge.ChallengeTier
 	getTierFn             func(tierID string) (*challenge.ChallengeTier, error)
 	startSessionFn        func(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
-	advanceRoundFn        func(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
+	advanceRoundFn        func(ctx context.Context, characterID string, sessionID string, expectedRevision int) (*challenge.RoundResult, *challenge.ChallengeSession, error)
 	retireSessionFn       func(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	getCharacterRecordsFn func(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
 	startPartySessionFn   func(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
 	getHallOfFameFn       func(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
 	listHallOfFameFn      func(ctx context.Context) ([]challenge.HallOfFameEntry, error)
+}
+
+func (s *stubChallengeService) GetActiveSession(ctx context.Context, actor string) (*challenge.ChallengeSession, error) {
+	if s.activeFn != nil {
+		return s.activeFn(ctx, actor)
+	}
+	return nil, nil
+}
+func (s *stubChallengeService) GetCommandResult(ctx context.Context, actor, run string, rev int) (*challenge.CommandResult, error) {
+	if s.commandFn != nil {
+		return s.commandFn(ctx, actor, run, rev)
+	}
+	return nil, challenge.ErrForbidden
 }
 
 func (s *stubChallengeService) ListTiers() []challenge.ChallengeTier {
@@ -51,9 +66,9 @@ func (s *stubChallengeService) StartPartySession(ctx context.Context, leaderID s
 	}
 	return &challenge.ChallengeSession{ID: "sess-party-1", CharacterID: leaderID, TierID: tierID, PartyName: partyName, PartyColor: partyColor, Status: challenge.StatusActive}, nil
 }
-func (s *stubChallengeService) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
+func (s *stubChallengeService) AdvanceRound(ctx context.Context, characterID string, sessionID string, expectedRevision int) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
 	if s.advanceRoundFn != nil {
-		return s.advanceRoundFn(ctx, characterID, sessionID)
+		return s.advanceRoundFn(ctx, characterID, sessionID, expectedRevision)
 	}
 	return &challenge.RoundResult{Round: 1, Won: true}, &challenge.ChallengeSession{ID: sessionID, CharacterID: characterID, CurrentRound: 2, Status: challenge.StatusActive}, nil
 }
@@ -229,7 +244,7 @@ func TestCombatEndpoints(t *testing.T) {
 	})
 
 	t.Run("POST /characters/{id}/challenges/advance", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/advance", `{"session_id":"sess-1"}`)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/advance", `{"session_id":"sess-1","expected_revision":1}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -238,6 +253,18 @@ func TestCombatEndpoints(t *testing.T) {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
 		}
 	})
+
+	for _, body := range []string{`{"session_id":"sess-1"}`, `{"session_id":"sess-1","expected_revision":0}`, `{"session_id":"sess-1","expected_revision":-1}`} {
+		t.Run("advance requires observed revision "+body, func(t *testing.T) {
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/advance", body)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("missing revision accepted: %d %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
 
 	for _, tc := range []struct {
 		name string
@@ -258,12 +285,12 @@ func TestCombatEndpoints(t *testing.T) {
 				&stubAdventureService{},
 				&stubShopService{},
 				apihttp.WithChallenge(&stubChallengeService{
-					advanceRoundFn: func(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
+					advanceRoundFn: func(ctx context.Context, characterID string, sessionID string, expectedRevision int) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
 						return nil, nil, tc.err
 					},
 				}),
 			)
-			req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/advance", `{"session_id":"other-sess"}`)
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/advance", `{"session_id":"other-sess","expected_revision":1}`)
 			req.Header.Set("Authorization", "Bearer valid-token")
 			rec := httptest.NewRecorder()
 			hError.Router().ServeHTTP(rec, req)

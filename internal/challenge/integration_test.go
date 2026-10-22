@@ -74,7 +74,10 @@ func TestChallengeIntegrationFlow(t *testing.T) {
 	// 2. Execute Consecutive Rounds until defeat so FinalizeSession is triggered
 	var lastRes *challenge.RoundResult
 	for r := 1; r <= 100; r++ {
-		roundRes, err := service.ExecuteRound(ctx, session.ID)
+		roundRes, next, err := service.AdvanceRound(ctx, session.CharacterID, session.ID, session.Revision)
+		if next != nil {
+			session = next
+		}
 		if err != nil {
 			t.Fatalf("ExecuteRound %d failed: %v", r, err)
 		}

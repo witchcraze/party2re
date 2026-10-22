@@ -173,6 +173,9 @@ func wireHooks(
 		}
 	}
 	if misc.tavern != nil {
+		if cmbt.challenge != nil {
+			cmbt.challenge.ConfigureFullnessResetter(misc.tavern)
+		}
 		soc.home.SetFullnessResetter(misc.tavern)
 		postAdventureHook := buildPostAdventureHook(misc.tavern)
 		if cmbt.adv != nil {

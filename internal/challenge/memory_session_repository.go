@@ -27,6 +27,9 @@ type MemorySessionRepository struct {
 	expirations map[string]time.Time
 	ttl         time.Duration
 	members     map[string]string
+	runs        map[string]ChallengeSession
+	runExpiry   map[string]time.Time
+	actorRuns   map[string]string
 }
 
 // NewMemorySessionRepository creates a new thread-safe in-memory store.
@@ -35,6 +38,9 @@ func NewMemorySessionRepository(opts ...ValkeyOption) *MemorySessionRepository {
 		sessions:    make(map[string]ChallengeSession),
 		expirations: make(map[string]time.Time),
 		members:     make(map[string]string),
+		runs:        make(map[string]ChallengeSession),
+		runExpiry:   make(map[string]time.Time),
+		actorRuns:   make(map[string]string),
 		ttl:         DefaultSessionTTL,
 	}
 	for _, opt := range opts {
@@ -48,6 +54,13 @@ func NewMemorySessionRepository(opts ...ValkeyOption) *MemorySessionRepository {
 func (m *MemorySessionRepository) GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if id := m.actorRuns[characterID]; id != "" {
+		if run, ok := m.runs[id]; ok && time.Now().Before(m.runExpiry[id]) && run.ContainsCharacter(characterID) {
+			cp := cloneRun(run)
+			return &cp, nil
+		}
+		return nil, nil
+	}
 
 	if expires, ok := m.expirations[characterID]; ok && time.Now().After(expires) {
 		delete(m.sessions, characterID)

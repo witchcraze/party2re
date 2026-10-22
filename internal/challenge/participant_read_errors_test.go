@@ -123,16 +123,14 @@ func TestChallengeParticipantReadErrorsPreserveRound(t *testing.T) {
 					m.CharacterCurrentHP, m.CharacterCurrentMP = 150, &mp
 					m.AccumulatedExp, m.AccumulatedGold = 22, 6
 					m.ConsumedItems = []corebattle.ConsumedItem{{ID: battle.ItemDokuroAmulet, Quantity: 1}}
-					if err := store.SaveActiveSession(ctx, *run); err != nil {
-						t.Fatal(err)
-					}
+					saveRunFixture(t, ctx, repo, store, run)
 				}
 				before, err := store.GetActiveSession(ctx, "hero")
 				if err != nil {
 					t.Fatal(err)
 				}
 				durableBefore := challenge.EncodeJSON(repo.sessions[run.ID])
-				result, _, err := svc.AdvanceRound(ctx, "hero", run.ID)
+				result, _, err := svc.AdvanceRound(ctx, "hero", run.ID, run.Revision)
 				if !errors.Is(err, wantErr) {
 					t.Fatalf("error=%v, want %v", err, wantErr)
 				}

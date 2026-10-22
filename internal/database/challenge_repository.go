@@ -33,8 +33,8 @@ func (r *ChallengeRepository) SaveSession(ctx context.Context, s challenge.Chall
 		INSERT INTO challenge_sessions (
 			id, character_id, party_id, members_json, tier_id, current_round, character_current_hp,
 			accumulated_exp, accumulated_gold, accumulated_items_json, status,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_at, updated_at, write_protocol
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 	`
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
@@ -165,6 +165,13 @@ func (r *ChallengeRepository) FindActiveSessionByCharacter(ctx context.Context, 
 }
 
 func (r *ChallengeRepository) UpdateSession(ctx context.Context, s challenge.ChallengeSession) error {
+	t, err := r.FindTransition(ctx, s.ID)
+	if err != nil {
+		return err
+	}
+	if t.Revision > 0 {
+		return challenge.ErrRevisionConflict
+	}
 	itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
 	var membersJSON sql.NullString
 	if len(s.Members) > 0 {
@@ -174,10 +181,10 @@ func (r *ChallengeRepository) UpdateSession(ctx context.Context, s challenge.Cha
 		UPDATE challenge_sessions
 		SET current_round = ?, character_current_hp = ?, accumulated_exp = ?,
 		    accumulated_gold = ?, accumulated_items_json = ?, members_json = ?, status = ?,
-		    updated_at = ?
+		    updated_at = ?, write_protocol = write_protocol + 1
 		WHERE id = ? AND character_id = ?
 	`
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
+	_, err = ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
 		query,
 		s.CurrentRound,

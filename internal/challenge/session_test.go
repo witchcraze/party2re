@@ -58,7 +58,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 	t.Run("empty character ID returns ErrCharacterNotFound", func(t *testing.T) {
 		svc, _, _, _ := setupSessionTestService(t)
-		_, _, err := svc.AdvanceRound(ctx, "", "sess-1")
+		_, _, err := svc.AdvanceRound(ctx, "", "sess-1", 1)
 		if !errors.Is(err, challenge.ErrCharacterNotFound) {
 			t.Errorf("expected ErrCharacterNotFound, got %v", err)
 		}
@@ -67,8 +67,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 	t.Run("activeStore GetActiveSession error propagates", func(t *testing.T) {
 		svc, _, _, activeStore := setupSessionTestService(t)
 		activeStore.getActiveSessionErr = errors.New("valkey connection reset")
-
-		_, _, err := svc.AdvanceRound(ctx, "hero", "sess-1")
+		_, err := svc.GetActiveSession(ctx, "hero")
 		if err == nil || !strings.Contains(err.Error(), "valkey connection reset") {
 			t.Errorf("expected valkey error, got %v", err)
 		}
@@ -83,7 +82,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 		charRepo.findByIDErr = errors.New("character db read failed")
 
-		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID)
+		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID, sess.Revision)
 		if err == nil || !strings.Contains(err.Error(), "character db read failed") {
 			t.Errorf("expected charRepo error, got %v", err)
 		}
@@ -98,7 +97,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 		repo.getHofErr = errors.New("db connection refused")
 
-		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID)
+		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID, sess.Revision)
 		if err == nil || !strings.Contains(err.Error(), "getting hall of fame: db connection refused") {
 			t.Errorf("expected wrapped hall of fame error, got %v", err)
 		}
@@ -113,7 +112,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 		repo.saveHofErr = errors.New("hall of fame write lock failed")
 
-		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID)
+		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID, sess.Revision)
 		if err == nil || !strings.Contains(err.Error(), "saving hall of fame: hall of fame write lock failed") {
 			t.Errorf("expected wrapped save hall of fame error, got %v", err)
 		}
@@ -128,7 +127,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 		activeStore.advanceRoundErr = errors.New("lua script timeout")
 
-		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID)
+		_, _, err = svc.AdvanceRound(ctx, "hero", sess.ID, sess.Revision)
 		if err == nil || !strings.Contains(err.Error(), "lua script timeout") {
 			t.Errorf("expected advance round error, got %v", err)
 		}
@@ -143,7 +142,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 		activeStore.saveActiveSessionErr = errors.New("valkey oom")
 
-		_, updated, err := svc.AdvanceRound(ctx, "hero", sess.ID)
+		_, updated, err := svc.AdvanceRound(ctx, "hero", sess.ID, sess.Revision)
 		if err != nil || updated == nil || updated.CurrentRound != 2 {
 			t.Errorf("expected an atomic successful round, got %+v, err=%v", updated, err)
 		}
@@ -158,7 +157,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 		repo.finalizeSessionErr = errors.New("mariadb deadlocked")
 
-		_, _, err = svc.AdvanceRound(ctx, "weakling", sess.ID)
+		_, _, err = svc.AdvanceRound(ctx, "weakling", sess.ID, sess.Revision)
 		if err == nil || !strings.Contains(err.Error(), "mariadb deadlocked") {
 			t.Errorf("expected finalize session error, got %v", err)
 		}
@@ -172,7 +171,7 @@ func TestExecuteRound_Errors(t *testing.T) {
 		svc, repo, _, _ := setupSessionTestService(t)
 		repo.findSessionByIDErr = errors.New("db session query failed")
 
-		_, err := svc.ExecuteRound(ctx, "sess-1")
+		_, _, err := svc.AdvanceRound(ctx, "hero", "sess-1", 1)
 		if err == nil || !strings.Contains(err.Error(), "db session query failed") {
 			t.Errorf("expected repo find error, got %v", err)
 		}

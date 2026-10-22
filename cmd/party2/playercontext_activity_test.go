@@ -86,7 +86,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	pv.room = pvp.RoomDetail{Room: pvp.ColosseumRoom{ID: "pvp", Status: pvp.StatusInProgress, LeaderCharacterID: "hero", Round: 2}, Members: []pvp.RoomMember{{CharacterID: "hero"}}}
 	gv.room = gvg.RoomDetail{Room: gvg.GvGRoom{ID: "gvg", Status: gvg.StatusInProgress, LeaderCharacterID: "hero", Round: 3}, Members: []gvg.GvGMember{{CharacterID: "hero"}}}
 	f.exp = &dungeon.ActiveExpedition{ID: "dungeon", CharacterID: "hero", Status: dungeon.StatusExploring, CurrentFloor: 4}
-	f.session = &challenge.ChallengeSession{ID: "challenge", CharacterID: "hero", Status: challenge.StatusActive, CurrentRound: 5}
+	f.session = &challenge.ChallengeSession{ID: "challenge", Revision: 1, CharacterID: "hero", Status: challenge.StatusActive, CurrentRound: 5}
 	f.casino = &casino.RoomView{Room: casino.RoomObservation{RoomSummary: casino.RoomSummary{ID: "casino", Status: casino.RoomStatusInProgress, GameType: casino.GameTypeIndian}, Round: 6}, Members: []casino.MemberObservation{{CharacterID: "hero", IsSpectator: true}}}
 	facts, err := r.read(ctx, "owner", "hero")
 	if err != nil || len(facts) != 6 {
@@ -233,5 +233,15 @@ func TestCombatMemberActivityHasNoLeaderControls(t *testing.T) {
 		if fact.Role != "member" || len(fact.Actions) != 0 {
 			t.Fatalf("member received leader controls: %+v", fact)
 		}
+	}
+}
+
+func TestChallengePendingActivitySuppressesProgress(t *testing.T) {
+	f, pv, gv := &activityFixtures{}, &pvpActivityFixture{}, &gvgActivityFixture{}
+	f.session = &challenge.ChallengeSession{ID: "run", Revision: 4, CurrentRound: 3, Status: challenge.StatusActive, RecoveryPending: true, Members: []challenge.ChallengeMember{{CharacterID: "hero"}}}
+	readers := contextActivityReaders{party: f, pvp: pv, gvg: gv, dungeon: f, challenge: f, casino: f}
+	facts, err := readers.read(context.Background(), "owner", "hero")
+	if err != nil || len(facts) != 1 || facts[0].Phase != "recovery_pending" || facts[0].Revision != 4 || len(facts[0].Actions) != 0 {
+		t.Fatalf("pending claim lost or progressed: %+v %v", facts, err)
 	}
 }

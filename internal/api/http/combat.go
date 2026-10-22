@@ -16,7 +16,9 @@ type ChallengeService interface {
 	GetTier(tierID string) (*challenge.ChallengeTier, error)
 	StartSession(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
 	StartPartySession(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
-	AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
+	AdvanceRound(ctx context.Context, characterID string, sessionID string, expectedRevision int) (*challenge.RoundResult, *challenge.ChallengeSession, error)
+	GetActiveSession(context.Context, string) (*challenge.ChallengeSession, error)
+	GetCommandResult(context.Context, string, string, int) (*challenge.CommandResult, error)
 	GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
 	GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
 	ListHallOfFame(ctx context.Context) ([]challenge.HallOfFameEntry, error)
@@ -45,7 +47,8 @@ type startPartyChallengeRequest struct {
 }
 
 type advanceChallengeRequest struct {
-	SessionID string `json:"session_id"`
+	SessionID        string `json:"session_id"`
+	ExpectedRevision int    `json:"expected_revision"`
 }
 
 type challengeSessionResponse struct {
@@ -185,14 +188,17 @@ func (h *Handler) handleAdvanceChallenge(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		if req.SessionID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("session_id is required"))
+		if req.SessionID == "" || req.ExpectedRevision < 1 {
+			writeError(w, http.StatusBadRequest, errors.New("session_id and positive expected_revision are required"))
 			return
 		}
 
-		roundRes, session, err := h.challenges.AdvanceRound(r.Context(), char.ID, req.SessionID)
+		roundRes, session, err := h.challenges.AdvanceRound(r.Context(), char.ID, req.SessionID, req.ExpectedRevision)
 		if err != nil {
-			if errors.Is(err, challenge.ErrSessionRoundMismatch) {
+			if writeChallengeRecoveryError(w, err) {
+				return
+			}
+			if errors.Is(err, challenge.ErrSessionRoundMismatch) || errors.Is(err, challenge.ErrRevisionConflict) {
 				writeError(w, http.StatusConflict, err)
 				return
 			}

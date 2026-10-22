@@ -26,7 +26,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 The original `lib/_skill.cgi:set_action` exposes `にげる`, dispatched to
 `lib/_battle.cgi:nigeru:1184–1222,1330–1346` (reference revision
 `ff97fc549932a146cc945d7edf71b44c868a840e`). These are reconstruction requirements;
-the current all-participant finalizer does not implement individual exit.
+the participant exit service settles these effects under the run transition boundary.
 
 - A participant leaves and receives only their own earned EXP/Gold, remaining
   HP/MP and consumed-item settlement. Other participants keep their resources,
@@ -106,14 +106,14 @@ Gateway adoption remain tracked by [#1208](https://github.com/witchcraze/party2r
 ---
 
 - `character_challenge_records`: Primary key (`character_id`, `tier_id`), tracking `highest_round`, `total_attempts`, `total_victories`, and `best_cleared_at`.
-- `challenge_sessions`: Durable start identity and terminal snapshot; live rounds and provisional rewards reside in Valkey. The session ID also guards final settlement.
+- `challenge_sessions`: Immutable admission evidence and terminal status; live rounds and provisional rewards reside in Valkey. Run coordination, participant claims/settlement outcomes and actor-owned command receipts have separate durable tables.
 - `challenge_hall_of_fame`: Record-holding parties for each tier (`tier_id` PK, `highest_round`, `party_name`, `party_color`, `cleared_at`, `members_json`).
 
 ### Error Handling & Persistence Policy
 
-- **Error Propagation**: All database writes (`SaveSession`, `SaveHallOfFame`, `FinalizeSession`) and Valkey active session mutations (`SaveActiveSession`, `AdvanceRound`) strictly propagate errors to the caller without suppression.
+- **Error Propagation**: All database writes (`SaveSession`, `SaveHallOfFame`, `FinalizeSession`) and Valkey publication (`PublishRun`) strictly propagate errors to the caller without suppression.
 - **Repository Error Distinction**: Unexpected database errors during character lookups are directly propagated to the caller, while `corecharacter.ErrNotFound` is mapped to domain `ErrCharacterNotFound`.
-- **Two-Phase Settlement**: On session defeat, `FinalizeSession` claims the existing active SQL session and commits the terminal snapshot, all participants' resources/consumptions, earned rewards and records together. Duplicate claims return `ErrSessionNotActive` without another payout. Valkey cleanup follows commit and is best-effort; see the [settlement contract](../architecture/transient-run-state.md#challenge-finalization) for failure and retry behavior.
+- **Settlement and Publication**: Participant exit pays only the caller; defeat pays only remaining unsettled participants. SQL commits resources, consumption, earnings, records, exit effects and the receipt/publication intent together. Publication failure remains observable pending recovery; an identical actor/run/revision retry returns its receipt without paying or drawing a bonus again. See the [settlement contract](../architecture/transient-run-state.md#challenge-finalization).
 
 ---
 
