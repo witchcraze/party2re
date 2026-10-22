@@ -613,6 +613,26 @@ func TestHandleCreateCharacter_InvalidSession(t *testing.T) {
 	}
 }
 
+func TestHandleCreateCharacter_InvalidName(t *testing.T) {
+	player := coreplayer.Player{ID: "p1"}
+	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		createWithOptionsFn: func(_ context.Context, _ string, _ string, _ character.CreationOptions) (corecharacter.Character, error) {
+			return corecharacter.Character{}, character.ErrInvalidName
+		},
+	}
+	h := newTestHandler(t, ps, cs, &stubAdventureService{}, &stubShopService{})
+
+	rec := httptest.NewRecorder()
+	req := jsonRequest(t, http.MethodPost, "/characters", `{"name":"TooLongName","job_id":"job-01","gender":"m"}`)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want %d\nbody: %s", rec.Code, http.StatusUnprocessableEntity, rec.Body.String())
+	}
+}
+
 // -------------------------------------------------------------------
 // Character get
 // -------------------------------------------------------------------

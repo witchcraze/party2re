@@ -121,7 +121,7 @@ func setupHelperSleepIntegrationEnv(t *testing.T) *helperSleepIntegrationEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	char, err := corecharacter.New("HelperHero")
+	char, err := corecharacter.New("HlpHero")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func setupHelperSleepIntegrationEnv(t *testing.T) *helperSleepIntegrationEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherChar, err := corecharacter.New("OtherHero")
+	otherChar, err := corecharacter.New("OthHero")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -285,7 +285,7 @@
                   "type": "string"
                 },
                 "name": {
-                  "description": "Character name (1..32 runes)",
+                  "description": "Character name (1..8 runes)",
                   "type": "string"
                 },
                 "sex": {
@@ -2161,6 +2161,7 @@
             "schema": {
               "properties": {
                 "name": {
+                  "description": "New character name (1..8 runes)",
                   "type": "string"
                 }
               },

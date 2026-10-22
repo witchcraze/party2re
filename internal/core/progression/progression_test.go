@@ -329,7 +329,7 @@ func TestApplyExperience_AfterJobChange_OverLevelReGrowth(t *testing.T) {
 	random := zeroRandomSource{}
 
 	t.Run("same job change preserves OverLevel and allows re-growth to 150", func(t *testing.T) {
-		char, err := character.New("RebornLegend")
+		char, err := character.New("RbrnLgd")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -371,7 +371,7 @@ func TestApplyExperience_AfterJobChange_OverLevelReGrowth(t *testing.T) {
 	})
 
 	t.Run("different job change resets OverLevel and caps at Lv 99", func(t *testing.T) {
-		char, err := character.New("FormerLegend")
+		char, err := character.New("FrmrLgd")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -532,7 +532,7 @@ func TestGrowthValueNoCapWhenBelowOrEqualNine(t *testing.T) {
 }
 
 func TestApplyExperienceStatOrbsAddOneToMatchingGrowthRoll(t *testing.T) {
-	char, _ := character.New("OrbBearer")
+	char, _ := character.New("OrbBear")
 	char.Stats = character.Stats{}
 	def := job.Definition{ID: "orb-job"}
 	random := &sequenceRandomSource{values: []int{1, 0, 0, 0, 0}}
@@ -581,7 +581,7 @@ func TestApplyHappySeed(t *testing.T) {
 }
 
 func TestApplyExperience_Job49DynamicSPGrowth(t *testing.T) {
-	char, err := character.New("OnionKnight")
+	char, err := character.New("OnionKgt")
 	if err != nil {
 		t.Fatal(err)
 	}

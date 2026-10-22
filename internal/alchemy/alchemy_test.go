@@ -210,7 +210,7 @@ func setupTestService(t *testing.T, simTime *time.Time) (*Service, *memoryCharRe
 	depotRepo := newMemoryDepotRepo()
 	alchemyRepo := newMemoryAlchemyRepo()
 
-	char, _ := corecharacter.New("Alchemist")
+	char, _ := corecharacter.New("Alchem")
 	char.Money = 0 // Parity check: 0 gold required!
 	charRepo.characters[char.ID] = char
 

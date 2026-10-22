@@ -14,7 +14,7 @@ func TestRealAndVirtualGuestsShareDisplayNameCleanup(t *testing.T) {
 	ctx := context.Background()
 	clock := &mockClock{now: time.Now().UTC()}
 	characters := newMemoryCharacterRepo()
-	char, err := corecharacter.New("Celebration guest 01")
+	char, err := corecharacter.New("Guest01")
 	if err != nil {
 		t.Fatal(err)
 	}

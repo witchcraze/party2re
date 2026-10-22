@@ -87,7 +87,7 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		char, err := corecharacter.New("OrchChar1_" + suffix)
+		char, err := corecharacter.New("C1_" + suffix[len(suffix)-5:])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -179,7 +179,7 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		char, err := corecharacter.New("OrchChar2_" + suffix)
+		char, err := corecharacter.New("C2_" + suffix[len(suffix)-5:])
 		if err != nil {
 			t.Fatal(err)
 		}

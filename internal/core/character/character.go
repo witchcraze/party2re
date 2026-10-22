@@ -13,7 +13,10 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
-const maxNameLength = 32
+const (
+	MaxNameLength = 8
+	maxNameLength = MaxNameLength
+)
 
 const (
 	DefaultColor = "#ffffff"
@@ -27,7 +30,7 @@ const (
 )
 
 var (
-	ErrInvalidName        = errors.New("character name must be between 1 and 32 characters")
+	ErrInvalidName        = errors.New("character name must be between 1 and 8 characters")
 	ErrNotFound           = errors.New("character not found")
 	ErrInvalidAmount      = errors.New("amount must be non-negative")
 	ErrInsufficientFunds  = errors.New("insufficient money")

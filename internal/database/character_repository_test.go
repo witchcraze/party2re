@@ -36,7 +36,7 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := "RepoTest_" + player.ID[:8]
+	name := "R_" + player.ID[:6]
 	want, err := corecharacter.New(name)
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +133,7 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	}
 
 	// Nonexistent character errors
-	nonexistent, _ := corecharacter.New("Nonexistent")
+	nonexistent, _ := corecharacter.New("Nonexist")
 	if err := repository.Update(ctx, nonexistent); err != corecharacter.ErrNotFound {
 		t.Fatalf("Update(nonexistent) error = %v, want %v", err, corecharacter.ErrNotFound)
 	}

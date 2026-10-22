@@ -428,7 +428,7 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	catalog := newMemoryItemCatalog()
 	collector := &memoryCollectionRecorder{}
 
-	char, _ := corecharacter.New("Item Collector")
+	char, _ := corecharacter.New("ItemColl")
 	charRepo.characters[char.ID] = char
 
 	inv, _ := coreinventory.New(char.ID)
@@ -475,7 +475,7 @@ func TestWithdrawItem_PropagatesCollectionError(t *testing.T) {
 	colErr := errors.New("depot collection failure")
 	collector := &memoryCollectionRecorder{err: colErr}
 
-	char, _ := corecharacter.New("Item Collector")
+	char, _ := corecharacter.New("ItemColl")
 	charRepo.characters[char.ID] = char
 
 	dep, _ := NewDepot(char.ID)
@@ -540,7 +540,7 @@ func TestDepositAndWithdrawItem_EnhancedEquipment(t *testing.T) {
 	invRepo := newMemoryInvRepo()
 	catalog := newMemoryItemCatalog()
 
-	char, _ := corecharacter.New("Blacksmith Customer")
+	char, _ := corecharacter.New("BsCust")
 	charRepo.characters[char.ID] = char
 
 	inv, _ := coreinventory.New(char.ID)
@@ -710,7 +710,7 @@ func TestSendMoneyAndItem(t *testing.T) {
 	sender.Money = 1000
 	charRepo.characters[sender.ID] = sender
 
-	recipient, _ := corecharacter.New("Recipient")
+	recipient, _ := corecharacter.New("Recip")
 	recipient.Money = 50
 	charRepo.characters[recipient.ID] = recipient
 

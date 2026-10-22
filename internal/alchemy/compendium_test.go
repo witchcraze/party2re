@@ -15,7 +15,7 @@ func TestLearnRecipe_BaseIngredientOnly(t *testing.T) {
 	depotRepo := newMemoryDepotRepo()
 	alchemyRepo := newMemoryAlchemyRepo()
 
-	char, _ := corecharacter.New("Alchemist")
+	char, _ := corecharacter.New("Alchem")
 	charRepo.characters[char.ID] = char
 
 	itemA, _ := coreitem.NewDefinition("item-A", "BaseHerb", 10)
@@ -57,7 +57,7 @@ func TestLearnRecipe_GodRecipeLeakagePrevented(t *testing.T) {
 	depotRepo := newMemoryDepotRepo()
 	alchemyRepo := newMemoryAlchemyRepo()
 
-	char, _ := corecharacter.New("Alchemist")
+	char, _ := corecharacter.New("Alchem")
 	charRepo.characters[char.ID] = char
 
 	recipes, err := InitialRecipeCatalog()
@@ -133,7 +133,7 @@ func TestLearnRecipe_BasicRecipePool(t *testing.T) {
 	depotRepo := newMemoryDepotRepo()
 	alchemyRepo := newMemoryAlchemyRepo()
 
-	char, _ := corecharacter.New("Alchemist")
+	char, _ := corecharacter.New("Alchem")
 	charRepo.characters[char.ID] = char
 
 	recipes, err := InitialRecipeCatalog()

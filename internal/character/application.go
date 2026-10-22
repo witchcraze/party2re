@@ -9,6 +9,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 var (
@@ -145,10 +146,11 @@ func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, 
 	if playerID == "" {
 		return corecharacter.Character{}, ErrInvalidPlayer
 	}
-	if err := ValidateName(name); err != nil {
-		return corecharacter.Character{}, err
+	validName, err := validation.ValidateCharacterName(name)
+	if err != nil {
+		return corecharacter.Character{}, ErrInvalidName
 	}
-	value, err := corecharacter.NewWithOptions(name, options.JobID, options.Gender, nil)
+	value, err := corecharacter.NewWithOptions(validName, options.JobID, options.Gender, nil)
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
@@ -185,15 +187,16 @@ func (s *Service) findForUpdate(ctx context.Context, id string) (corecharacter.C
 
 // ChangeName renames a character at the Naming Hall for 500,000 G.
 func (s *Service) ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error) {
-	if err := ValidateName(newName); err != nil {
-		return corecharacter.Character{}, err
+	validName, err := validation.ValidateCharacterName(newName)
+	if err != nil {
+		return corecharacter.Character{}, ErrInvalidName
 	}
-	newName = strings.TrimSpace(newName)
+	newName = validName
 
 	var result corecharacter.Character
 	var oldName string
 
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
 		// 1. Lock character
 		char, err := s.findForUpdate(txCtx, characterID)
 		if err != nil {

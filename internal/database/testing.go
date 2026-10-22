@@ -88,13 +88,13 @@ func CreateTestCharacter(ctx context.Context, db *sql.DB, name string) (corechar
 }
 
 // CreateTestCharacterWithFunds creates and persists a character with specified initial funds.
-// Automatically ensures the name adheres to the <= 32 char constraint.
+// Automatically ensures the name adheres to the <= 8 char constraint.
 func CreateTestCharacterWithFunds(ctx context.Context, db *sql.DB, name string, money int) (corecharacter.Character, error) {
 	p, err := CreateTestPlayer(ctx, db)
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
-	safeName := sanitizeTestName(name, 32, "Char")
+	safeName := sanitizeTestName(name, corecharacter.MaxNameLength, "Char")
 	char, err := corecharacter.New(safeName)
 	if err != nil {
 		return corecharacter.Character{}, err
@@ -114,7 +114,7 @@ func CreateTestCharacterWithFunds(ctx context.Context, db *sql.DB, name string, 
 // CreateTestGuildWithLeader creates and persists a guild with an associated leader character.
 func CreateTestGuildWithLeader(ctx context.Context, db *sql.DB, guildName string, leaderMoney int) (guild.Guild, corecharacter.Character, error) {
 	safeGuildName := sanitizeTestName(guildName, guild.MaxNameLength, "Gld")
-	leaderName := sanitizeTestName(safeGuildName+"_Ldr", 32, "Ldr")
+	leaderName := sanitizeTestName(safeGuildName+"_Ldr", corecharacter.MaxNameLength, "Ldr")
 	leaderChar, err := CreateTestCharacterWithFunds(ctx, db, leaderName, leaderMoney)
 	if err != nil {
 		return guild.Guild{}, corecharacter.Character{}, err

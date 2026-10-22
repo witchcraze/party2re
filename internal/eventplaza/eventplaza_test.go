@@ -530,7 +530,7 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 
 	// 7. Collection error propagation (inventory delivery)
 	emptyCharID := id.New()
-	emptyChar, _ := corecharacter.New("EmptyHero")
+	emptyChar, _ := corecharacter.New("EmptHero")
 	emptyChar.ID = emptyCharID
 	emptyChar.PlayerID = "player-empty"
 	emptyChar.Money = 50000

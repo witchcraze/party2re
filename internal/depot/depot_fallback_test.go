@@ -285,7 +285,7 @@ func TestExpand_ValidationAndExecutionErrors(t *testing.T) {
 	}
 
 	// Insufficient funds
-	charPoor, _ := corecharacter.New("Poor Hero")
+	charPoor, _ := corecharacter.New("PoorHero")
 	charPoor.Money = 100 // Need 200,000
 	charRepoPoor := &stubCharRepo{
 		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {

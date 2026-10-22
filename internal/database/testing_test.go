@@ -36,6 +36,15 @@ func TestSanitizeTestName(t *testing.T) {
 	if truncated != superLong[:32] {
 		t.Errorf("truncated name mismatch: got %s, want %s", truncated, superLong[:32])
 	}
+
+	// 4. Overly long name for 8 chars limit should be truncated to <= 8 chars
+	truncated8 := sanitizeTestName(superLong, 8, "Long")
+	if len(truncated8) > 8 {
+		t.Errorf("truncated name exceeded 8 chars: length=%d, name=%s", len(truncated8), truncated8)
+	}
+	if truncated8 != superLong[:8] {
+		t.Errorf("truncated name mismatch: got %s, want %s", truncated8, superLong[:8])
+	}
 }
 
 func TestDatabaseTestEntityFactories(t *testing.T) {

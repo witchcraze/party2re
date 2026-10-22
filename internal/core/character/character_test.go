@@ -83,7 +83,9 @@ func TestNewRejectsInvalidNames(t *testing.T) {
 	}{
 		{name: "empty", input: ""},
 		{name: "whitespace", input: "   "},
-		{name: "too long", input: "123456789012345678901234567890123"},
+		{name: "9 runes ascii too long", input: "123456789"},
+		{name: "9 runes japanese too long", input: "あいうえおかきくけ"},
+		{name: "33 runes too long", input: "123456789012345678901234567890123"},
 		{name: "control character", input: "Ali\x00ce"},
 	}
 
@@ -91,6 +93,30 @@ func TestNewRejectsInvalidNames(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := New(test.input); !errors.Is(err, ErrInvalidName) {
 				t.Fatalf("New(%q) error = %v, want %v", test.input, err, ErrInvalidName)
+			}
+		})
+	}
+}
+
+func TestNewAcceptsValidBoundaries(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "1 rune ascii", input: "A"},
+		{name: "1 rune japanese", input: "あ"},
+		{name: "8 runes ascii", input: "12345678"},
+		{name: "8 runes japanese", input: "あいうえおかきく"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			char, err := New(test.input)
+			if err != nil {
+				t.Fatalf("New(%q) unexpected error = %v", test.input, err)
+			}
+			if char.Name != test.input {
+				t.Fatalf("New(%q).Name = %q; want %q", test.input, char.Name, test.input)
 			}
 		})
 	}

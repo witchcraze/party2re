@@ -324,7 +324,7 @@ func TestAdventure_PostAdventureHook(t *testing.T) {
 }
 
 func TestAdventure_CrystalRewardPersistence(t *testing.T) {
-	character, err := corecharacter.New("CrystalExplorer")
+	character, err := corecharacter.New("CrysExp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestAdventure_CrystalRewardPersistence(t *testing.T) {
 }
 
 func TestAdventure_CrystalRewardClamping(t *testing.T) {
-	character, err := corecharacter.New("MaxCrystalExplorer")
+	character, err := corecharacter.New("MaxCrys")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -627,7 +627,7 @@ func TestExecuteCrawl_HookErrorHandling(t *testing.T) {
 }
 
 func TestExecuteCrawl_DailyOnceLock(t *testing.T) {
-	character, err := corecharacter.New("DailyExplorer")
+	character, err := corecharacter.New("DayExp")
 	if err != nil {
 		t.Fatal(err)
 	}

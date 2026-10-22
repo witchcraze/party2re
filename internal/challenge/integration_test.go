@@ -23,10 +23,15 @@ func TestChallengeIntegrationFlow(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
-	char, err := database.CreateTestCharacter(ctx, db, "Challenge Integrator Hero")
+	char, err := database.CreateTestCharacter(ctx, db, "ChlgHero")
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), "DELETE FROM character_challenge_records WHERE character_id = ?", char.ID)
+		_, _ = db.ExecContext(context.Background(), "DELETE FROM challenge_sessions WHERE character_id = ?", char.ID)
+		_, _ = db.ExecContext(context.Background(), "DELETE FROM characters WHERE id = ?", char.ID)
+	})
 
 	// Update character level to 10 and max HP to 300
 	_, err = db.ExecContext(ctx, "UPDATE characters SET level = 10, experience = 1000, hp = 300, max_hp = 300, attack = 60, defense = 40 WHERE id = ?", char.ID)
@@ -93,7 +98,7 @@ func TestChallengeIntegrationFlow(t *testing.T) {
 
 	// 3. Verify Leaderboard Score
 	clearedRounds := lastRes.Round - 1
-	leaderboard, err := service.GetLeaderboard(ctx, "0", 100)
+	leaderboard, err := service.GetLeaderboard(ctx, "0", 1000)
 	if err != nil {
 		t.Fatalf("GetLeaderboard failed: %v", err)
 	}

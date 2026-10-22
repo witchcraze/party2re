@@ -115,7 +115,7 @@ func setupTestAdventureService(t *testing.T, char corecharacter.Character, settl
 }
 
 func TestAdventure_Floor11Treasure_PersistedToInventory(t *testing.T) {
-	char, err := corecharacter.New("TreasureSeeker")
+	char, err := corecharacter.New("TrsSeek")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestAdventure_Floor11Treasure_PersistedToInventory(t *testing.T) {
 }
 
 func TestAdventure_Floor11Treasure_DepotFallbackWhenInventoryFull(t *testing.T) {
-	char, err := corecharacter.New("DepotSeeker")
+	char, err := corecharacter.New("DptSeek")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestAdventure_Floor11Treasure_DepotFallbackWhenInventoryFull(t *testing.T) 
 }
 
 func TestAdventure_Floor11Treasure_LostDropsWhenDepotFull(t *testing.T) {
-	char, err := corecharacter.New("LostSeeker")
+	char, err := corecharacter.New("LstSeek")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestAdventure_Defeat_HPSetToOneAndPersisted(t *testing.T) {
 
 func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
 	// Strong character capable of clearing stage-20 (封印の地)
-	char, err := corecharacter.New("MaoSlayer")
+	char, err := corecharacter.New("MaoSlay")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -525,7 +525,7 @@ func TestAdventure_TreasureBlessing_SingleChestGenerationNoItemDuplication(t *te
 	for _, blessing := range aliases {
 		t.Run("blessing_"+blessing, func(t *testing.T) {
 			ctx := context.Background()
-			char, err := corecharacter.New("BlessedSolo")
+			char, err := corecharacter.New("BlesSolo")
 			if err != nil {
 				t.Fatal(err)
 			}

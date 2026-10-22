@@ -53,7 +53,7 @@ func TestBankIntegrationConcurrentDepositsAndWithdrawals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char1, err := corecharacter.New("Depositor Concurrency")
+	char1, err := corecharacter.New("DepConc")
 	if err != nil {
 		t.Fatal(err)
 	}

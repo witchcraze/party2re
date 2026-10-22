@@ -170,7 +170,7 @@ func TestService_CreateAndGet(t *testing.T) {
 	}
 
 	// 2. Successful creation via Create using authentic defaults (job-01, m)
-	defaultChar, err := service.Create(context.Background(), "player-default", "DefaultHero")
+	defaultChar, err := service.Create(context.Background(), "player-default", "DefHero")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -188,6 +188,52 @@ func TestService_CreateAndGet(t *testing.T) {
 	}
 	if char.Name != "Hero" || char.PlayerID != "player-1" || char.JobID != "job-01" || char.Gender != "m" {
 		t.Fatalf("unexpected char: %+v", char)
+	}
+
+	// 3. Name boundary validation on creation (0, 1, 8, 9 runes, ASCII & Japanese, whitespace, prohibited chars)
+	validCreateNames := []string{
+		"A",
+		"あ",
+		"12345678",
+		"あいうえおかきく",
+	}
+	for _, n := range validCreateNames {
+		c, err := service.CreateWithOptions(context.Background(), "player-valid", n, CreationOptions{JobID: "job-01", Gender: "m"})
+		if err != nil {
+			t.Errorf("CreateWithOptions() with valid name %q unexpected error = %v", n, err)
+		}
+		if c.Name != n {
+			t.Errorf("CreateWithOptions() name = %q, want %q", c.Name, n)
+		}
+	}
+
+	invalidCreateNames := []string{
+		"",
+		"123456789",
+		"あいうえおかきくけ",
+		"   ",
+		" Hero",
+		"Hero ",
+		" Hero ",
+		"　Hero",
+		"Hero　",
+		"Hero Bob",
+		"アリ　ボブ",
+		"Hero,1",
+		"@Hero",
+		"＠Hero",
+		"Hero;1",
+		"Hero\"1",
+		"Hero'1",
+		"Hero&1",
+		"<Hero>",
+		"Hero\\1",
+		"Hero/1",
+	}
+	for _, n := range invalidCreateNames {
+		if _, err := service.CreateWithOptions(context.Background(), "player-inv", n, CreationOptions{JobID: "job-01", Gender: "m"}); !errors.Is(err, ErrInvalidName) {
+			t.Errorf("CreateWithOptions() with invalid name %q expected ErrInvalidName, got %v", n, err)
+		}
 	}
 
 	fetched, err := service.Get(context.Background(), char.ID)
@@ -247,28 +293,28 @@ func TestService_ChangeName(t *testing.T) {
 	// 4. Insufficient gold (< 500,000 G)
 	renamed.Money = 499999
 	_ = repo.Update(context.Background(), renamed)
-	if _, err := service.ChangeName(context.Background(), char.ID, "AnotherName"); !errors.Is(err, ErrInsufficientGold) {
+	if _, err := service.ChangeName(context.Background(), char.ID, "AnothHro"); !errors.Is(err, ErrInsufficientGold) {
 		t.Fatalf("expected ErrInsufficientGold, got %v", err)
 	}
 
 	// 5. Reset gold & test taken name
 	renamed.Money = 600000
 	_ = repo.Update(context.Background(), renamed)
-	_, _ = service.CreateWithOptions(context.Background(), "player-2", "TakenHero", CreationOptions{JobID: "job-01", Gender: "m"})
-	if _, err := service.ChangeName(context.Background(), char.ID, "TakenHero"); !errors.Is(err, ErrNameAlreadyTaken) {
+	_, _ = service.CreateWithOptions(context.Background(), "player-2", "TaknHero", CreationOptions{JobID: "job-01", Gender: "m"})
+	if _, err := service.ChangeName(context.Background(), char.ID, "TaknHero"); !errors.Is(err, ErrNameAlreadyTaken) {
 		t.Fatalf("expected ErrNameAlreadyTaken, got %v", err)
 	}
 
 	// 6. Guild membership block
 	guildChecker.inGuild = true
-	if _, err := service.ChangeName(context.Background(), char.ID, "ValidName"); !errors.Is(err, ErrInGuildDisallowed) {
+	if _, err := service.ChangeName(context.Background(), char.ID, "ValName"); !errors.Is(err, ErrInGuildDisallowed) {
 		t.Fatalf("expected ErrInGuildDisallowed, got %v", err)
 	}
 	guildChecker.inGuild = false
 
 	// 7. Active flea market listing block
 	fleaChecker.hasListings = true
-	if _, err := service.ChangeName(context.Background(), char.ID, "ValidName"); !errors.Is(err, ErrActiveMarketDisallowed) {
+	if _, err := service.ChangeName(context.Background(), char.ID, "ValName"); !errors.Is(err, ErrActiveMarketDisallowed) {
 		t.Fatalf("expected ErrActiveMarketDisallowed, got %v", err)
 	}
 	fleaChecker.hasListings = false
@@ -277,6 +323,13 @@ func TestService_ChangeName(t *testing.T) {
 	invalidNames := []string{
 		"",
 		"   ",
+		"123456789",
+		"あいうえおかきくけ",
+		" Hero",
+		"Hero ",
+		"  Hero  ",
+		"　Hero",
+		"Hero　",
 		"Hero\u3000Name",        // Japanese space
 		"Hero Name",             // Space
 		"Hero,Name",             // Comma
@@ -296,6 +349,21 @@ func TestService_ChangeName(t *testing.T) {
 		if _, err := service.ChangeName(context.Background(), char.ID, inv); !errors.Is(err, ErrInvalidName) {
 			t.Errorf("expected ErrInvalidName for %q, got %v", inv, err)
 		}
+	}
+
+	// 9. Valid name boundary checks (1 and 8 runes, ASCII and Japanese)
+	validRenameCases := []string{"A", "あ", "12345678", "あいうえおかきく"}
+	for _, validName := range validRenameCases {
+		renamed.Money = 600000
+		_ = repo.Update(context.Background(), renamed)
+		res, err := service.ChangeName(context.Background(), char.ID, validName)
+		if err != nil {
+			t.Errorf("ChangeName() to valid boundary %q failed: %v", validName, err)
+		}
+		if res.Name != validName {
+			t.Errorf("ChangeName() result name = %q, want %q", res.Name, validName)
+		}
+		renamed = res
 	}
 }
 
@@ -391,9 +459,9 @@ func TestService_ChangeGender(t *testing.T) {
 	}
 
 	// 7. Job gender restrictions: job-15 (黒魔術師, male-only)
-	job15Char, err := service.Create(context.Background(), "player-1", "BlackMage")
+	job15Char, err := service.Create(context.Background(), "player-1", "BlkMage")
 	if err != nil {
-		t.Fatalf("failed to create BlackMage: %v", err)
+		t.Fatalf("failed to create BlkMage: %v", err)
 	}
 	job15Char.JobID = "job-15"
 	job15Char.Gender = "m"
@@ -409,9 +477,9 @@ func TestService_ChangeGender(t *testing.T) {
 	}
 
 	// 8. Job gender restrictions: job-16 (白魔術師, female-only)
-	job16Char, err := service.Create(context.Background(), "player-1", "WhiteMage")
+	job16Char, err := service.Create(context.Background(), "player-1", "WhtMage")
 	if err != nil {
-		t.Fatalf("failed to create WhiteMage: %v", err)
+		t.Fatalf("failed to create WhtMage: %v", err)
 	}
 	job16Char.JobID = "job-16"
 	job16Char.Gender = "f"
@@ -443,7 +511,7 @@ func TestService_ChangeGender(t *testing.T) {
 		{ID: "custom-job", Name: "CustomJob", RequiredGender: "f"},
 	})
 	customService, _ := NewService(repo, WithJobDefinitionProvider(customCatalog))
-	customChar, _ := customService.Create(context.Background(), "player-1", "CustomChar")
+	customChar, _ := customService.Create(context.Background(), "player-1", "CustChar")
 	customChar.JobID = "custom-job"
 	customChar.Gender = "f"
 	customChar.Money = 30000
@@ -622,7 +690,7 @@ func TestService_Delete(t *testing.T) {
 	t.Run("rejects deletion by non-owner player", func(t *testing.T) {
 		repo := newMockRepository()
 		service, _ := NewService(repo)
-		char, _ := service.CreateWithOptions(ctx, "player-owner", "OwnerHero", CreationOptions{JobID: "job-01", Gender: "m"})
+		char, _ := service.CreateWithOptions(ctx, "player-owner", "OwnHero", CreationOptions{JobID: "job-01", Gender: "m"})
 
 		err := service.Delete(ctx, "player-intruder", char.ID)
 		if !errors.Is(err, ErrForbidden) {
@@ -633,7 +701,7 @@ func TestService_Delete(t *testing.T) {
 	t.Run("allows deletion when playerID is empty (system/admin delete)", func(t *testing.T) {
 		repo := newMockRepository()
 		service, _ := NewService(repo)
-		char, _ := service.CreateWithOptions(ctx, "player-owner", "OwnerHero", CreationOptions{JobID: "job-01", Gender: "m"})
+		char, _ := service.CreateWithOptions(ctx, "player-owner", "OwnHero", CreationOptions{JobID: "job-01", Gender: "m"})
 
 		if err := service.Delete(ctx, "", char.ID); err != nil {
 			t.Fatalf("expected nil error for admin delete, got %v", err)
@@ -737,7 +805,7 @@ func TestService_Profile_ReadErrorPropagationAndPreservation(t *testing.T) {
 	}
 
 	// 6. Genuinely absent profile returns default profile without error
-	absentChar, err := service.Create(context.Background(), "player-1", "AbsentHero")
+	absentChar, err := service.Create(context.Background(), "player-1", "AbsHero")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1060,5 +1128,42 @@ func TestService_UpdateProfile_NonexistentCharacterReturnsNotFound(t *testing.T)
 	}
 	if repo.saveProfileCalls != 0 {
 		t.Errorf("expected 0 SaveProfile calls for nonexistent character, got %d", repo.saveProfileCalls)
+	}
+}
+
+func TestService_ReadExistingLongerNames(t *testing.T) {
+	repo := newMockRepository()
+	service, err := NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pre-existing character with 32-character name directly in storage
+	longName := strings.Repeat("あ", 32)
+	preExisting := corecharacter.Character{
+		ID:       "pre-existing-id",
+		PlayerID: "player-long",
+		Name:     longName,
+		JobID:    "job-01",
+		Gender:   "m",
+	}
+	repo.characters[preExisting.ID] = preExisting
+
+	// 1. Get preserves long name without error or truncation
+	fetched, err := service.Get(context.Background(), preExisting.ID)
+	if err != nil {
+		t.Fatalf("Get() failed for pre-existing long name: %v", err)
+	}
+	if fetched.Name != longName {
+		t.Fatalf("Get() name = %q, want %q", fetched.Name, longName)
+	}
+
+	// 2. ListByPlayer preserves long name without error or truncation
+	list, err := service.ListByPlayer(context.Background(), "player-long")
+	if err != nil {
+		t.Fatalf("ListByPlayer() failed for pre-existing long name: %v", err)
+	}
+	if len(list) != 1 || list[0].Name != longName {
+		t.Fatalf("ListByPlayer() returned %+v, want name %q", list, longName)
 	}
 }
