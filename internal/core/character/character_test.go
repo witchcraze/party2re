@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewCreatesLevelOneCharacter(t *testing.T) {
-	got, err := New("  Alice  ")
+	got, err := New("Alice")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -82,17 +82,31 @@ func TestNewRejectsInvalidNames(t *testing.T) {
 		input string
 	}{
 		{name: "empty", input: ""},
-		{name: "whitespace", input: "   "},
+		{name: "whitespace only", input: "   "},
+		{name: "leading ascii space", input: " Hero"},
+		{name: "trailing ascii space", input: "Hero "},
+		{name: "surrounding ascii space", input: "  Hero  "},
+		{name: "internal ascii space", input: "He ro"},
+		{name: "leading fullwidth space", input: "　Hero"},
+		{name: "trailing fullwidth space", input: "Hero　"},
+		{name: "internal fullwidth space", input: "アリ　ボブ"},
+		{name: "tab whitespace", input: "He\tro"},
+		{name: "newline whitespace", input: "He\nro"},
+		{name: "carriage return whitespace", input: "He\rro"},
 		{name: "9 runes ascii too long", input: "123456789"},
 		{name: "9 runes japanese too long", input: "あいうえおかきくけ"},
 		{name: "33 runes too long", input: "123456789012345678901234567890123"},
 		{name: "control character", input: "Ali\x00ce"},
+		{name: "invalid utf8", input: "Ali\xffce"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := New(test.input); !errors.Is(err, ErrInvalidName) {
 				t.Fatalf("New(%q) error = %v, want %v", test.input, err, ErrInvalidName)
+			}
+			if _, err := NewWithOptions(test.input, "job-01", "m", nil); !errors.Is(err, ErrInvalidName) {
+				t.Fatalf("NewWithOptions(%q) error = %v, want %v", test.input, err, ErrInvalidName)
 			}
 		})
 	}
@@ -117,6 +131,14 @@ func TestNewAcceptsValidBoundaries(t *testing.T) {
 			}
 			if char.Name != test.input {
 				t.Fatalf("New(%q).Name = %q; want %q", test.input, char.Name, test.input)
+			}
+
+			charOpt, err := NewWithOptions(test.input, "job-01", "m", nil)
+			if err != nil {
+				t.Fatalf("NewWithOptions(%q) unexpected error = %v", test.input, err)
+			}
+			if charOpt.Name != test.input {
+				t.Fatalf("NewWithOptions(%q).Name = %q; want %q", test.input, charOpt.Name, test.input)
 			}
 		})
 	}

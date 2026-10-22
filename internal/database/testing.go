@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -36,26 +37,41 @@ func getStressConfig() (int, int) {
 	return cfg.Workers, cfg.OpsPerWorker
 }
 
-// sanitizeTestName ensures the name obeys domain length constraints (<= maxLen).
-// If empty, a default name with a unique suffix is generated.
-// If overly long, it is safely truncated to maxLen.
+// sanitizeTestName ensures the name obeys domain length and character constraints (<= maxLen runes, no whitespace).
+// If empty or whitespace-only, a default name with a unique suffix is generated.
+// If overly long, it is safely truncated to maxLen Unicode code points (runes).
 func sanitizeTestName(name string, maxLen int, defaultPrefix string) string {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		suffix := id.New()[:8]
-		if len(defaultPrefix)+1+len(suffix) > maxLen {
-			prefixLen := maxLen - (1 + len(suffix))
-			if prefixLen < 1 {
-				return suffix[:maxLen]
-			}
-			defaultPrefix = defaultPrefix[:prefixLen]
+	var b strings.Builder
+	for _, r := range name {
+		if !unicode.IsSpace(r) && r != '\u3000' {
+			b.WriteRune(r)
 		}
-		return fmt.Sprintf("%s_%s", defaultPrefix, suffix)
 	}
-	if len(name) > maxLen {
-		return name[:maxLen]
+	cleaned := b.String()
+	if cleaned == "" {
+		suffix := id.New()
+		suffixRunes := []rune(suffix)
+		if len(suffixRunes) > 8 {
+			suffixRunes = suffixRunes[:8]
+		}
+		prefixRunes := []rune(defaultPrefix)
+		if len(prefixRunes)+1+len(suffixRunes) > maxLen {
+			prefixLen := maxLen - (1 + len(suffixRunes))
+			if prefixLen < 1 {
+				if len(suffixRunes) > maxLen {
+					return string(suffixRunes[:maxLen])
+				}
+				return string(suffixRunes)
+			}
+			prefixRunes = prefixRunes[:prefixLen]
+		}
+		return fmt.Sprintf("%s_%s", string(prefixRunes), string(suffixRunes))
 	}
-	return name
+	runes := []rune(cleaned)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen])
+	}
+	return cleaned
 }
 
 // CreateTestPlayer creates and persists a player for testing purposes.
