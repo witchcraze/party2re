@@ -21,19 +21,9 @@ func rosterRegistryFixture() (corebattle.LifetimeState, corebattle.RosterContext
 	return s, c, d
 }
 
-func registerRosterJob(d *BattleDefinitions, c *corebattle.RosterContext, job int) {
-	entries := corebattle.RosterEntries(job)
-	d.Invocations.JobTables[job] = corebattle.CallbackTable{Variants: [][]corebattle.CallbackEntry{entries}}
-	for _, entry := range entries {
-		d.RosterSkills[entry.ID] = true
-		d.Invocations.Entries[entry.ID] = d.RosterInvocation(c, entry.ID)
-	}
-}
-
 func TestRosterDiscoveryDelegationOldJobAndListedCostWaiver(t *testing.T) {
 	s, c, d := rosterRegistryFixture()
-	registerRosterJob(&d, &c, 59)
-	registerRosterJob(&d, &c, 60)
+	d.RegisterCallingJobs(&c)
 	d.Invocations.Entries["calling"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-87"}}
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
 	if err := (BattleDefinitions{}).RosterAction(&s, &c, "job-59-summon", "", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
@@ -52,7 +42,6 @@ func TestRosterDiscoveryDelegationOldJobAndListedCostWaiver(t *testing.T) {
 	// First non-command selection uses the native rain composition without
 	// charging listed MP/SP; helper stats and original actor remain separate.
 	s.Actors[0].Jobs.OldJobID = "job-62"
-	registerRosterJob(&d, &c, 62)
 	if _, err := s.ApplyRoster(&c, "job-62-summon", "", random.NewDeterministic(1)); err != nil {
 		t.Fatal(err)
 	}
@@ -67,13 +56,12 @@ func TestRosterDiscoveryDelegationOldJobAndListedCostWaiver(t *testing.T) {
 	}
 }
 
-func TestRosterIndirectUnsupportedAndEarlierEffectsRejectBeforeAnyMutation(t *testing.T) {
+func TestRosterIndirectUnsupportedRejectsBeforeAnyMutation(t *testing.T) {
 	s, c, d := rosterRegistryFixture()
-	registerRosterJob(&d, &c, 59)
+	d.RegisterCallingJobs(&c)
 	if _, err := s.ApplyRoster(&c, "job-59-summon", "", random.NewDeterministic(1)); err != nil {
 		t.Fatal(err)
 	}
-	registerRosterJob(&d, &c, 61)
 	s.Actors[0].Jobs.OldJobID = "job-61"
 	if _, err := s.ApplyRoster(&c, "job-61-summon", "", random.NewDeterministic(1)); err != nil {
 		t.Fatal(err)
@@ -82,7 +70,7 @@ func TestRosterIndirectUnsupportedAndEarlierEffectsRejectBeforeAnyMutation(t *te
 	d.Invocations.Entries["unsupported"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-90"}}
 	d.Invocations.Entries["random"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "random"}}
 	before, _ := json.Marshal(s)
-	for _, ids := range [][]string{{"unsupported"}, {"random"}, {"job-59-dismiss", "job-59-attack"}} {
+	for _, ids := range [][]string{{"unsupported"}, {"random"}} {
 		if _, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(ids, err)
 		}
@@ -102,7 +90,7 @@ func TestRosterIndirectUnsupportedAndEarlierEffectsRejectBeforeAnyMutation(t *te
 
 func TestRosterInvocationConsumesOnlySourceUsedArgument(t *testing.T) {
 	s, c, d := rosterRegistryFixture()
-	registerRosterJob(&d, &c, 59)
+	d.RegisterCallingJobs(&c)
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "trailing"}}
 	def := d.Invocations.Entries["job-59-summon"]
 	if err := def.Execute(&s, &frame, random.NewDeterministic(1)); err != nil {

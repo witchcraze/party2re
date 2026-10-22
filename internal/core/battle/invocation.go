@@ -49,6 +49,11 @@ type CallbackDefinition struct {
 	Children   []CallbackInvocation
 	Validate   func(*LifetimeState, *CallbackContext) error
 	Execute    func(*LifetimeState, *CallbackContext, random.Generator) error
+	// Project supplies the complete deterministic transition on an isolated
+	// copy, without external Apply hooks or RNG. False leaves input unchanged
+	// and means unknown; later callbacks must admit arbitrary prior effects.
+	// Never sample outcomes or omit operation facts changed by the body.
+	Project func(*LifetimeState, *CallbackContext) (bool, error)
 }
 
 // CallbackCatalog is server-owned, default-empty certification. Table variants

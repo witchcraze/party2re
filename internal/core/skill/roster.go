@@ -35,6 +35,14 @@ func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id stri
 			}
 			return d.RosterAction(s, &child, id, target, random.Default())
 		},
+		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {
+			if c == nil || !d.RosterSkills[id] {
+				return false, corebattle.ErrUnsupportedEffect
+			}
+			child := *c
+			child.TargetContext = frame.TargetContext
+			return s.ProjectRoster(&child, id)
+		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

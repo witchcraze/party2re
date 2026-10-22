@@ -530,6 +530,14 @@ actor. A missing entry/variant or unresolved helper rejects the whole operation
 before costs or draws. An unusable gem86 last entry and job73's MP0 special case
 remain handled no-effect without demanding skipped callback context.
 
+A callback may supply a pure `Project` transition when its complete resulting
+state and caller context are deterministic. Admission applies it to a private
+copy, revalidates each later slot against those facts, and stops after projected
+actor death. No execution hook or caller RNG runs during projection. An unknown
+transition retains conservative `AfterEffects` validation; it must not be
+approximated by a sampled outcome. Delegated calling selection uses the projected
+current/previous jobs and preserves its explicit target boundary.
+
 Naked nested calls share their remaining arguments; each custom slot starts
 with its own copy of the outer resolved target. Explicit gem86/calling helpers
 pass only that target. Later slots stop after actor death, while accepted roster
@@ -1132,6 +1140,12 @@ The requester remains distinct from a temporary effect actor. Helpers use
 generic native identities and newly authored placeholder art. Evidence:
 `_skill.cgi:9793–9828`; `_data.cgi:1140–1174,1914–1924`.
 
+`RegisterCallingJobs` contributes complete `RosterEntries` tables and binds the
+certified roster bodies, retaining other owners' positions and registrations.
+Register revival and other descendant owners separately with their operation
+contexts; table presence alone never admits their effects. Rebuild these closures
+after loading saved facts. Ordinary learning/costs and normal-adventure consumer
+wiring remain with their callers.
 `RosterEntries` keeps the complete calling-table order and extended markers;
 `ValidateRoster`/`ApplyRoster` own its finite producers. Normal attack switches
 actor only for the existing attack helper, restores it even after an error or
@@ -1163,7 +1177,11 @@ remain whole-entry gates under #1365/#1337/#1338/#1366/#1357. No scalar damage
 substitution certifies those branches. Item110 remains rejected. The registry's
 `RosterAction` and `RosterInvocation` use the same admission; an arbitrary earlier
 indirect callback without a represented transition projection still rejects the
-enclosing continuation before any slot executes or costs are paid.
+enclosing continuation before any slot executes or costs are paid. Roster
+projections cover exact dismissal, merge, party revival, non-growing defense and
+already-present or missing/fallen helper no-effects. Random creation, growth,
+damage and recovery do not claim an exact transition. A revived helper's newly
+reachable descendants must be admitted before the revival executes.
 
 Enemy summoning consumes a complete current-stage payload pool and separate
 weighted appearance positions, falling back to position0 for an invalid sampled
