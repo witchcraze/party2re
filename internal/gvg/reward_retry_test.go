@@ -3,6 +3,7 @@ package gvg_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -13,8 +14,17 @@ var errRoomPublication = errors.New("room publication failed")
 
 type failingPublicationRepo struct {
 	gvg.RoomRepository
-	fail       bool
-	failDelete bool
+	fail          bool
+	failDelete    bool
+	failAfterSave bool
+	getErr        error
+}
+
+func (r *failingPublicationRepo) GetRoom(ctx context.Context, roomID string) (gvg.RoomDetail, error) {
+	if r.getErr != nil {
+		return gvg.RoomDetail{}, r.getErr
+	}
+	return r.RoomRepository.GetRoom(ctx, roomID)
 }
 
 func (r *failingPublicationRepo) DeleteRoom(ctx context.Context, roomID string) error {
@@ -28,7 +38,13 @@ func (r *failingPublicationRepo) SaveRoom(ctx context.Context, room gvg.GvGRoom,
 	if r.fail {
 		return errRoomPublication
 	}
-	return r.RoomRepository.SaveRoom(ctx, room, members)
+	if err := r.RoomRepository.SaveRoom(ctx, room, members); err != nil {
+		return err
+	}
+	if r.failAfterSave {
+		return errRoomPublication
+	}
+	return nil
 }
 
 func TestAdvanceRound_RetryRoomPublication(t *testing.T) {
@@ -54,13 +70,13 @@ func TestAdvanceRound_RetryRoomPublication(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := svc.AdvanceRound(ctx, leader, roomID); !errors.Is(err, errRoomPublication) {
+			if _, err := svc.AdvanceRound(ctx, leader, roomID, 1); !errors.Is(err, errRoomPublication) {
 				t.Fatalf("publication error: %v", err)
 			}
 			// Recovery must reuse the committed winner even if another battle would differ.
 			battle.outcome = corebattle.OutcomeDefeat
 			publication.fail = false
-			result, err := svc.AdvanceRound(ctx, leader, roomID)
+			result, err := svc.AdvanceRound(ctx, leader, roomID, 1)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -73,6 +89,10 @@ func TestAdvanceRound_RetryRoomPublication(t *testing.T) {
 			}
 			if target == 1 && len(standings.settlements) != 1 {
 				t.Fatalf("settlements=%d", len(standings.settlements))
+			}
+			replayed, err := svc.AdvanceRound(ctx, leader, roomID, 1)
+			if err != nil || !reflect.DeepEqual(replayed, result) {
+				t.Fatalf("published result replay: result=%+v err=%v", replayed, err)
 			}
 		})
 	}

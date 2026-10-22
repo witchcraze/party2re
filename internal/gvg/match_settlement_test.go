@@ -98,7 +98,7 @@ func TestAdvanceRound_RecordMatchSettlement_ErrorPropagation(t *testing.T) {
 
 	svc, roomRepo, leaderID, roomID := setupSettlementTest(t, failingStandings)
 
-	res, err := svc.AdvanceRound(ctx, leaderID, roomID)
+	res, err := svc.AdvanceRound(ctx, leaderID, roomID, 1)
 	if err == nil {
 		t.Fatalf("expected error from AdvanceRound when RecordMatchSettlement fails, got nil (res=%+v)", res)
 	}
@@ -141,7 +141,7 @@ func TestAdvanceRound_AddRoundWinGP_ErrorPropagation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := svc.AdvanceRound(ctx, leaderID, roomID)
+	res, err := svc.AdvanceRound(ctx, leaderID, roomID, 1)
 	if err == nil {
 		t.Fatalf("expected error from AdvanceRound when AddRoundWinGP fails, got nil (res=%+v)", res)
 	}
@@ -234,7 +234,7 @@ func TestAdvanceRound_RecordMatchSettlement_Draw_ErrorPropagation(t *testing.T) 
 		t.Fatalf("SaveRoom failed: %v", err)
 	}
 
-	res, err := svc.AdvanceRound(ctx, "c1", detail.Room.ID)
+	res, err := svc.AdvanceRound(ctx, "c1", detail.Room.ID, gvg.MaxRounds)
 	if err == nil {
 		t.Fatalf("expected error from AdvanceRound when draw RecordMatchSettlement fails, got nil (res=%+v)", res)
 	}

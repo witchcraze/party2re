@@ -29,9 +29,10 @@ type MatchSettlement struct {
 
 // RoundTransition retains the committed outcome and room state for publication retries.
 type RoundTransition struct {
-	Detail     RoomDetail
-	Result     RoundResolution
-	Settlement *MatchSettlement
+	ResolvedRound int `json:"-"` // Read from the SQL claim, including pre-existing JSON records.
+	Detail        RoomDetail
+	Result        RoundResolution
+	Settlement    *MatchSettlement
 }
 
 // GuildRewardGP returns earned GP; a deciding round replaces the intermediate win reward.
@@ -56,7 +57,7 @@ func (t RoundTransition) GuildRewardGP(guildID string) int64 {
 type StandingRepository interface {
 	GetOrCreateStanding(ctx context.Context, guildID string) (GvGStanding, error)
 	GetLeaderboard(ctx context.Context, limit int) ([]GvGStanding, error)
-	FindRoundTransition(ctx context.Context, roomID string, round int) (RoundTransition, bool, error)
+	FindRoundTransition(ctx context.Context, roomID string) (RoundTransition, bool, error)
 	CommitRoundTransition(ctx context.Context, roomID string, round int, transition RoundTransition) (RoundTransition, error)
 }
 

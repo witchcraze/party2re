@@ -55,17 +55,18 @@ func (m *mockStandingRepo) GetLeaderboard(_ context.Context, limit int) ([]gvg.G
 	return list, nil
 }
 
-func (m *mockStandingRepo) FindRoundTransition(_ context.Context, roomID string, round int) (gvg.RoundTransition, bool, error) {
+func (m *mockStandingRepo) FindRoundTransition(_ context.Context, roomID string) (gvg.RoundTransition, bool, error) {
 	var transition gvg.RoundTransition
-	if m.rounds[roomID] < round {
+	if m.rounds[roomID] == 0 {
 		return transition, false, nil
 	}
 	err := json.Unmarshal(m.transitions[roomID], &transition)
+	transition.ResolvedRound = m.rounds[roomID]
 	return transition, true, err
 }
 
 func (m *mockStandingRepo) CommitRoundTransition(ctx context.Context, roomID string, round int, transition gvg.RoundTransition) (gvg.RoundTransition, error) {
-	if saved, found, err := m.FindRoundTransition(ctx, roomID, round); err != nil || found {
+	if saved, found, err := m.FindRoundTransition(ctx, roomID); err != nil || (found && (saved.ResolvedRound >= round || saved.Result.MatchCompleted)) {
 		return saved, err
 	}
 	if transition.Result.WinnerGuildID != "" && (transition.Settlement == nil || transition.Settlement.IsDraw) {
@@ -84,6 +85,7 @@ func (m *mockStandingRepo) CommitRoundTransition(ctx context.Context, roomID str
 	}
 	m.transitions[roomID] = data
 	m.rounds[roomID] = round
+	transition.ResolvedRound = round
 	return transition, nil
 }
 
@@ -176,9 +178,11 @@ func (m *mockCharRepo) Update(_ context.Context, character corecharacter.Charact
 // mockBattleEngine implements gvg.BattleEngine for tests.
 type mockBattleEngine struct {
 	outcome corebattle.Outcome
+	calls   int
 }
 
 func (m *mockBattleEngine) ResolvePartyBattle(_ corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	m.calls++
 	return corebattle.PartyBattleResult{
 		Outcome: m.outcome,
 		Turns:   3,
@@ -487,7 +491,7 @@ func TestGvGMatchFlow(t *testing.T) {
 
 	t.Run("advance round resolves combat and completes match on target wins", func(t *testing.T) {
 		// Prize pool: 2 initial + 2 joiners (c2, c3) = 4 GP
-		res, err := svc.AdvanceRound(ctx, "c1", detail.Room.ID)
+		res, err := svc.AdvanceRound(ctx, "c1", detail.Room.ID, 1)
 		if err != nil {
 			t.Fatal(err)
 		}

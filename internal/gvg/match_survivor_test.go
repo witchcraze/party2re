@@ -76,7 +76,7 @@ func TestGvG_3Guilds_ThirdGuildSurvives(t *testing.T) {
 		t.Fatalf("StartMatch failed: %v", err)
 	}
 
-	res, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID)
+	res, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID, 1)
 	if err != nil {
 		t.Fatalf("AdvanceRound failed: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestGvG_AllGuildsFell_Draw(t *testing.T) {
 		t.Fatalf("StartMatch failed: %v", err)
 	}
 
-	res, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID)
+	res, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID, 1)
 	if err != nil {
 		t.Fatalf("AdvanceRound failed: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestGvG_3Guilds_RealBattleEngine_LeaderFallsEarly(t *testing.T) {
 		t.Fatalf("StartMatch failed: %v", err)
 	}
 
-	res, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID)
+	res, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID, 1)
 	if err != nil {
 		t.Fatalf("AdvanceRound failed: %v", err)
 	}

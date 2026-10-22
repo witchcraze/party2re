@@ -132,7 +132,7 @@ func TestGvGSaveRoomCommandFailureIntegration(t *testing.T) {
 				if err := f.client.Do(ctx, f.client.B().Expire().Key(roomKey).Seconds(60).Build()).Error(); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := service.AdvanceRound(ctx, before.Room.LeaderCharacterID, before.Room.ID); err == nil || !strings.Contains(err.Error(), "WRONGTYPE") {
+				if _, err := service.AdvanceRound(ctx, before.Room.LeaderCharacterID, before.Room.ID, 1); err == nil || !strings.Contains(err.Error(), "WRONGTYPE") {
 					t.Fatalf("expected %s server error: %v", command, err)
 				}
 				after, err := rooms.GetRoom(ctx, before.Room.ID)
@@ -150,7 +150,7 @@ func TestGvGSaveRoomCommandFailureIntegration(t *testing.T) {
 					gp, opponentGP, wins = 7, 4, 1
 				}
 				f.assertRewards(t, gp, opponentGP, wins, 0)
-				saved, found, err := f.standings.FindRoundTransition(ctx, before.Room.ID, 1)
+				saved, found, err := f.standings.FindRoundTransition(ctx, before.Room.ID)
 				if err != nil || !found {
 					t.Fatalf("SQL commit missing: %v %v", found, err)
 				}
@@ -162,7 +162,7 @@ func TestGvGSaveRoomCommandFailureIntegration(t *testing.T) {
 					t.Errorf("index after failed %s: score=%v want=%v err=%v", command, score, expectedScore, err)
 				}
 				fault.fail = false
-				result, err := service.AdvanceRound(ctx, before.Room.LeaderCharacterID, before.Room.ID)
+				result, err := service.AdvanceRound(ctx, before.Room.LeaderCharacterID, before.Room.ID, 1)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -177,7 +177,7 @@ func TestGvGSaveRoomCommandFailureIntegration(t *testing.T) {
 				}
 				f.assertRewards(t, gp, opponentGP, wins, 0)
 				if target == 2 {
-					result, err = service.AdvanceRound(ctx, before.Room.LeaderCharacterID, before.Room.ID)
+					result, err = service.AdvanceRound(ctx, before.Room.LeaderCharacterID, before.Room.ID, 2)
 					if err != nil {
 						t.Fatal(err)
 					}

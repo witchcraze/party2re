@@ -11,12 +11,13 @@ import (
 	"github.com/witchcraze/party2re/internal/gvg"
 )
 
-// FindRoundTransition returns the committed state when the cached room is behind SQL.
-func (r *GvGRepository) FindRoundTransition(ctx context.Context, roomID string, round int) (gvg.RoundTransition, bool, error) {
+// FindRoundTransition returns the latest outcome and its resolved SQL round identity.
+func (r *GvGRepository) FindRoundTransition(ctx context.Context, roomID string) (gvg.RoundTransition, bool, error) {
 	var data []byte
+	var round int
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT transition_json FROM gvg_match_transitions WHERE room_id = ? AND round_number >= ?
-	`, roomID, round).Scan(&data)
+		SELECT round_number, transition_json FROM gvg_match_transitions WHERE room_id = ? AND round_number > 0
+	`, roomID).Scan(&round, &data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return gvg.RoundTransition{}, false, nil
 	}
@@ -27,6 +28,7 @@ func (r *GvGRepository) FindRoundTransition(ctx context.Context, roomID string, 
 	if err := json.Unmarshal(data, &transition); err != nil {
 		return gvg.RoundTransition{}, false, err
 	}
+	transition.ResolvedRound = round
 	return transition, true, nil
 }
 
@@ -58,6 +60,7 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 			if err := json.Unmarshal(data, &committed); err != nil {
 				return err
 			}
+			committed.ResolvedRound = previous
 			if previous >= round || committed.Result.MatchCompleted {
 				return nil
 			}
@@ -119,6 +122,7 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 			return err
 		}
 		committed = transition
+		committed.ResolvedRound = round
 		return nil
 	})
 	if err != nil {

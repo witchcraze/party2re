@@ -67,14 +67,16 @@ func (f guildDecayFixture) transition(draw bool) gvg.RoundTransition {
 	a, b := f.guildIDs[0], f.guildIDs[1]
 	roomID := id.New()
 	transition := gvg.RoundTransition{
-		Detail: gvg.RoomDetail{Room: gvg.GvGRoom{ID: roomID, Round: 1, Status: gvg.StatusCompleted}},
-		Result: gvg.RoundResolution{Round: 1, WinnerGuildID: a, OverallWinnerGuildID: a, MatchCompleted: true},
+		ResolvedRound: 1,
+		Detail:        gvg.RoomDetail{Room: gvg.GvGRoom{ID: roomID, Round: 1, Status: gvg.StatusCompleted}},
+		Result:        gvg.RoundResolution{Round: 1, WinnerGuildID: a, OverallWinnerGuildID: a, MatchCompleted: true},
 		Settlement: &gvg.MatchSettlement{
 			WinnerGuildID: a, WinnerPrizeGP: 3,
 			GuildIDs: []string{b, a}, ParticipantGP: map[string]int{a: 4, b: 4},
 		},
 	}
 	if draw {
+		transition.ResolvedRound = gvg.MaxRounds
 		transition.Detail.Room.Round, transition.Result.Round = gvg.MaxRounds, gvg.MaxRounds
 		transition.Result.WinnerGuildID, transition.Result.OverallWinnerGuildID = "", ""
 		transition.Settlement.WinnerGuildID = ""
@@ -87,7 +89,7 @@ func (f guildDecayFixture) transition(draw bool) gvg.RoundTransition {
 func (f guildDecayFixture) assertSettlement(t *testing.T, transitions ...gvg.RoundTransition) {
 	t.Helper()
 	for _, transition := range transitions {
-		got, found, err := f.gvg.FindRoundTransition(context.Background(), transition.Detail.Room.ID, 1)
+		got, found, err := f.gvg.FindRoundTransition(context.Background(), transition.Detail.Room.ID)
 		if err != nil || !found || !reflect.DeepEqual(got, transition) {
 			t.Fatalf("saved transition: got=%+v found=%v err=%v want=%+v", got, found, err, transition)
 		}

@@ -3759,10 +3759,16 @@
                   "properties": {
                     "room_id": {
                       "type": "string"
+                    },
+                    "expected_round": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10
                     }
                   },
                   "required": [
-                    "room_id"
+                    "room_id",
+                    "expected_round"
                   ]
                 }
               },

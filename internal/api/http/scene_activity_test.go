@@ -69,7 +69,8 @@ func TestVerifiedContinuationAndConflictRecovery(t *testing.T) {
 	timers := timer.NewService(nil)
 	pc := playercontext.NewService(f, f, timers, playercontext.WithActivities(func(context.Context, string, string) ([]playercontext.Activity, error) { return facts, readErr }))
 	type roomParams struct {
-		RoomID string `json:"room_id"`
+		RoomID        string `json:"room_id"`
+		ExpectedRound int    `json:"expected_round"`
 	}
 	exec := func(ctx context.Context, actor string, p roomParams) (any, error) {
 		if p.RoomID != "room" {
@@ -82,7 +83,7 @@ func TestVerifiedContinuationAndConflictRecovery(t *testing.T) {
 	if status != 200 || len(obs.AvailableActions) != 3 || obs.AvailableActions[1].ParamsTemplate["room_id"] != "room" {
 		t.Fatalf("continuation schema: %d %+v", status, obs)
 	}
-	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"gvg_advance","params":{"room_id":"room"}}`, nil)
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"gvg_advance","params":{"room_id":"room","expected_round":1}}`, nil)
 	if status != 200 || string(raw["success"]) != "true" || f.executions != 1 {
 		t.Fatalf("legal continuation: %d %s", status, raw)
 	}
