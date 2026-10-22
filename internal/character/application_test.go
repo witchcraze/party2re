@@ -1112,6 +1112,52 @@ func TestService_UpdateProfile_InvokesTransactionProvider(t *testing.T) {
 	}
 }
 
+func TestService_CreateWithOptions_InvokesTransactionProvider(t *testing.T) {
+	repo := newMockRepository()
+	txProv := &mockTransactionProvider{}
+	service, err := NewService(repo, WithTransactionProvider(txProv))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{
+		JobID:  "job-01",
+		Gender: "m",
+	})
+	if err != nil {
+		t.Fatalf("CreateWithOptions failed: %v", err)
+	}
+	if char.Name != "Hero" {
+		t.Errorf("char.Name = %q, want Hero", char.Name)
+	}
+	if txProv.runInTxCalls != 1 {
+		t.Fatalf("expected RunInTx to be called exactly once, got %d", txProv.runInTxCalls)
+	}
+}
+
+func TestService_CreateWithOptions_PropagatesSaveError(t *testing.T) {
+	repo := newMockRepository()
+	saveErr := errors.New("simulated database failure")
+	repo.err = saveErr
+
+	txProv := &mockTransactionProvider{}
+	service, err := NewService(repo, WithTransactionProvider(txProv))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{
+		JobID:  "job-01",
+		Gender: "m",
+	})
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("expected error %v, got %v", saveErr, err)
+	}
+	if txProv.runInTxCalls != 1 {
+		t.Fatalf("expected RunInTx to be called once, got %d", txProv.runInTxCalls)
+	}
+}
+
 func TestService_UpdateProfile_NonexistentCharacterReturnsNotFound(t *testing.T) {
 	repo := newMockRepository()
 	service, err := NewService(repo)

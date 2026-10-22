@@ -128,6 +128,13 @@ In Party2re's relational domain model, identity and game progression are separat
 #### 2.8.3 Implementation & Verification
 Runtime enforcement of this specification is implemented across `cmd/party2/config.go`, `internal/player`, and `internal/api/http`, with verified transaction locking and paired concurrency stress tests (`internal/player/registration_concurrency_integration_test.go`, `internal/player/application_test.go`). When active account capacity (`WHERE banned_at IS NULL`) reaches `PARTY2_MAX_PLAYERS`, `POST /players` atomically rejects with `409 Conflict` (`registration_limit_reached`).
 
+### 2.9 Transactional Character Creation & Storage Atomicity (#1093)
+
+Character creation (`POST /characters`, `character.Service.CreateWithOptions`) coordinates persistence through an ambient database transaction (`s.runInTx` via injected `TransactionProvider`):
+1. **Atomic Dual-Table Persistence**: Both the primary character entity (`characters`) and its auto-initialized storage record (`character_depots`, capacity = 5) are persisted within this single transaction boundary.
+2. **Rollback Guarantee**: If any persistence failure occurs—whether inserting the character row or initializing the depot row—the ambient transaction is rolled back, guaranteeing that no orphaned character records without depots or half-initialized state can remain in the database.
+3. **Ambient Transaction Propagation**: When called within an existing ambient transaction, character creation participates in the caller's transaction without premature commit, ensuring full rollback if subsequent enclosing operations fail.
+
 ---
 
 ## 3. Data Schema & Persistence
