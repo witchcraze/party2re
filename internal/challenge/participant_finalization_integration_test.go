@@ -94,7 +94,7 @@ func TestChallengeParticipantFinalizationIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"claimed", "defeated", "member update rollback", "concurrent"} {
+	for _, scenario := range []string{"claimed", "defeated", "member update rollback", "equipment read rollback", "concurrent"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
@@ -208,7 +208,26 @@ func TestChallengeParticipantFinalizationIntegration(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if scenario == "concurrent" {
+			if scenario == "equipment read rollback" {
+				// Only this dedicated DB loses its equipment table during fault injection.
+				if _, err := db.ExecContext(ctx, "RENAME TABLE equipment_slots TO unavailable_equipment_slots"); err != nil {
+					t.Fatal(err)
+				}
+				err := finalize()
+				if _, restoreErr := db.ExecContext(ctx, "RENAME TABLE unavailable_equipment_slots TO equipment_slots"); restoreErr != nil {
+					t.Fatal(restoreErr)
+				}
+				var readErr *mysql.MySQLError
+				if !errors.As(err, &readErr) || readErr.Number != 1146 {
+					t.Fatalf("expected original missing equipment table read error: %v", err)
+				}
+				assertState(false)
+				stored, err := repo.FindSessionByID(ctx, run.ID)
+				if err != nil || stored.Status != challenge.StatusActive {
+					t.Fatalf("claim not rolled back: %+v %v", stored, err)
+				}
+			}
+			if scenario == "concurrent" || scenario == "equipment read rollback" {
 				var claims atomic.Int64
 				result := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(_, _ int) error {
 					err := finalize()

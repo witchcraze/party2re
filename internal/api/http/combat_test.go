@@ -2,6 +2,7 @@ package http_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -245,6 +246,9 @@ func TestCombatEndpoints(t *testing.T) {
 	}{
 		{"forbidden for non-owned session", challenge.ErrForbidden, http.StatusForbidden},
 		{"conflict for stale round", challenge.ErrSessionRoundMismatch, http.StatusConflict},
+		{"inventory read failure", errors.New("inventory storage unavailable"), http.StatusInternalServerError},
+		{"equipment read failure", errors.New("equipment storage unavailable"), http.StatusInternalServerError},
+		{"canceled repository read", context.Canceled, http.StatusInternalServerError},
 	} {
 		t.Run("POST /characters/{id}/challenges/advance - "+tc.name, func(t *testing.T) {
 			hError := newTestHandler(
