@@ -839,6 +839,173 @@ func TestService_UpdateProfile_ValidationFailureMakesZeroSaveCalls(t *testing.T)
 	}
 }
 
+func TestService_UpdateProfile_BioData_Bounds(t *testing.T) {
+	repo := newMockRepository()
+	service, _ := NewService(repo)
+
+	char, err := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
+	if err != nil {
+		t.Fatalf("CreateWithOptions() failed: %v", err)
+	}
+
+	// Setup initial profile
+	initialComment := "Initial comment"
+	initialBio := map[string]string{"hobby": "Reading"}
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment: &initialComment,
+		BioData: initialBio,
+	})
+	if err != nil {
+		t.Fatalf("setup UpdateProfile() failed: %v", err)
+	}
+	repo.saveProfileCalls = 0
+
+	cases := []struct {
+		name      string
+		key       string
+		val       string
+		wantErr   error
+		wantSaved bool
+	}{
+		{
+			name:      "0 characters value is valid",
+			key:       "hobby",
+			val:       "",
+			wantErr:   nil,
+			wantSaved: true,
+		},
+		{
+			name:      "160 ASCII characters is valid",
+			key:       "hobby",
+			val:       strings.Repeat("a", 160),
+			wantErr:   nil,
+			wantSaved: true,
+		},
+		{
+			name:      "161 ASCII characters is rejected",
+			key:       "hobby",
+			val:       strings.Repeat("a", 161),
+			wantErr:   ErrBioValueTooLong,
+			wantSaved: false,
+		},
+		{
+			name:      "160 Japanese characters is valid",
+			key:       "hobby",
+			val:       strings.Repeat("あ", 160),
+			wantErr:   nil,
+			wantSaved: true,
+		},
+		{
+			name:      "161 Japanese characters is rejected",
+			key:       "hobby",
+			val:       strings.Repeat("あ", 161),
+			wantErr:   ErrBioValueTooLong,
+			wantSaved: false,
+		},
+		{
+			name:      "single space is valid and preserved",
+			key:       "hobby",
+			val:       " ",
+			wantErr:   nil,
+			wantSaved: true,
+		},
+		{
+			name:      "160 spaces is valid and preserved",
+			key:       "hobby",
+			val:       strings.Repeat(" ", 160),
+			wantErr:   nil,
+			wantSaved: true,
+		},
+		{
+			name:      "161 spaces is rejected",
+			key:       "hobby",
+			val:       strings.Repeat(" ", 161),
+			wantErr:   ErrBioValueTooLong,
+			wantSaved: false,
+		},
+		{
+			name:      "edge whitespace totaling 160 runes is valid and preserved",
+			key:       "hobby",
+			val:       " " + strings.Repeat("あ", 158) + " ",
+			wantErr:   nil,
+			wantSaved: true,
+		},
+		{
+			name:      "leading whitespace exceeding 160 runes (1 + 160 = 161) is rejected",
+			key:       "hobby",
+			val:       " " + strings.Repeat("あ", 160),
+			wantErr:   ErrBioValueTooLong,
+			wantSaved: false,
+		},
+		{
+			name:      "trailing whitespace exceeding 160 runes (160 + 1 = 161) is rejected",
+			key:       "hobby",
+			val:       strings.Repeat("あ", 160) + " ",
+			wantErr:   ErrBioValueTooLong,
+			wantSaved: false,
+		},
+		{
+			name:      "32-rune key is valid",
+			key:       strings.Repeat("k", 32),
+			val:       "val",
+			wantErr:   nil,
+			wantSaved: true,
+		},
+		{
+			name:      "33-rune key is rejected",
+			key:       strings.Repeat("k", 33),
+			val:       "val",
+			wantErr:   ErrBioKeyTooLong,
+			wantSaved: false,
+		},
+		{
+			name:      "33-rune key with space (32 chars + 1 space) is rejected",
+			key:       strings.Repeat("k", 32) + " ",
+			val:       "val",
+			wantErr:   ErrBioKeyTooLong,
+			wantSaved: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			beforeProfile := repo.profiles[char.ID]
+			repo.saveProfileCalls = 0
+
+			prof, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+				BioData: map[string]string{tc.key: tc.val},
+			})
+
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected error %v, got %v", tc.wantErr, err)
+				}
+				if repo.saveProfileCalls != 0 {
+					t.Errorf("expected 0 SaveProfile calls on rejected update, got %d", repo.saveProfileCalls)
+				}
+				// Verify existing profile remains unchanged
+				afterProfile := repo.profiles[char.ID]
+				if afterProfile.Comment != beforeProfile.Comment || afterProfile.BioData["hobby"] != beforeProfile.BioData["hobby"] {
+					t.Fatalf("failed update corrupted profile: before=%+v, after=%+v", beforeProfile, afterProfile)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if tc.wantSaved {
+					if prof.BioData[tc.key] != tc.val {
+						t.Fatalf("returned profile bio[%q] = %q, want %q", tc.key, prof.BioData[tc.key], tc.val)
+					}
+					stored := repo.profiles[char.ID]
+					if stored.BioData[tc.key] != tc.val {
+						t.Fatalf("persisted profile bio[%q] = %q, want %q", tc.key, stored.BioData[tc.key], tc.val)
+					}
+				}
+			}
+		})
+	}
+}
+
 type mockTransactionProvider struct {
 	runInTxCalls int
 	fn           func(ctx context.Context, fn func(ctx context.Context) error) error

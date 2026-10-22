@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // handleNamingHallDialogue returns NPC @マリナン dialogue and pricing information.
@@ -138,7 +139,11 @@ func (h *Handler) handleUpdateCharacterProfile(w http.ResponseWriter, r *http.Re
 				errors.Is(err, character.ErrBioKeyTooLong),
 				errors.Is(err, character.ErrBioValueTooLong),
 				errors.Is(err, character.ErrInvalidAvatarURL),
-				errors.Is(err, character.ErrInvalidAuraEffect):
+				errors.Is(err, character.ErrInvalidAuraEffect),
+				errors.Is(err, validation.ErrControlCharacter),
+				errors.Is(err, validation.ErrZeroWidth),
+				errors.Is(err, validation.ErrBidiOverride),
+				errors.Is(err, validation.ErrZalgo):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			case errors.Is(err, corecharacter.ErrNotFound):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "character not found"})

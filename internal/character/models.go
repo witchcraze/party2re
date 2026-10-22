@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/validation"
@@ -148,12 +149,18 @@ func ValidateBioData(bio map[string]string) error {
 		return nil
 	}
 	for k, v := range bio {
+		if utf8.RuneCountInString(k) > MaxBioKeyLength {
+			return ErrBioKeyTooLong
+		}
 		kTrimmed := strings.TrimSpace(k)
 		if _, err := validation.ValidateSingleLine(kTrimmed, MaxBioKeyLength); err != nil {
 			if errors.Is(err, validation.ErrTooLong) || errors.Is(err, validation.ErrEmpty) {
 				return ErrBioKeyTooLong
 			}
 			return err
+		}
+		if utf8.RuneCountInString(v) > MaxBioFieldLength {
+			return ErrBioValueTooLong
 		}
 		vTrimmed := strings.TrimSpace(v)
 		if vTrimmed != "" {

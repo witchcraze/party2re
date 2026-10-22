@@ -5514,6 +5514,7 @@
           },
           "bio_data": {
             "additionalProperties": {
+              "maxLength": 160,
               "type": "string"
             },
             "type": [
@@ -28218,6 +28219,7 @@
                   },
                   "bio_data": {
                     "additionalProperties": {
+                      "maxLength": 160,
                       "type": "string"
                     },
                     "type": "object"
@@ -28248,6 +28250,7 @@
                     },
                     "bio_data": {
                       "additionalProperties": {
+                        "maxLength": 160,
                         "type": "string"
                       },
                       "type": "object"
@@ -28333,6 +28336,7 @@
                   },
                   "bio_data": {
                     "additionalProperties": {
+                      "maxLength": 160,
                       "type": "string"
                     },
                     "type": "object"
@@ -28363,6 +28367,7 @@
                     },
                     "bio_data": {
                       "additionalProperties": {
+                        "maxLength": 160,
                         "type": "string"
                       },
                       "type": "object"
