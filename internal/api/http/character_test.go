@@ -198,6 +198,22 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK for rename, got %d (err: %v)", resp.StatusCode, err)
 	}
+	resp.Body.Close()
+
+	// 4b. POST /characters/{id}/name - Invalid name -> 400 Bad Request
+	charSvc.changeNameFn = func(ctx context.Context, characterID, newName string) (corecharacter.Character, error) {
+		return corecharacter.Character{}, character.ErrInvalidName
+	}
+	invBody, _ := json.Marshal(map[string]string{"name": "TooLongName"})
+	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/name", bytes.NewReader(invBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for invalid rename, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	charSvc.changeNameFn = nil
 
 	// 5. POST /characters/{id}/gender - Authenticated -> 200 OK
 	genderBody, _ := json.Marshal(map[string]string{"gender": "f"})

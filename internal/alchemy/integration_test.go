@@ -49,7 +49,7 @@ func TestAlchemyIntegrationOvernightDepotSynthesis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdChar, err := charService.Create(ctx, player.ID, "AlchemyIntegrator")
+	createdChar, err := charService.Create(ctx, player.ID, "AlchInt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
 
 	charService, _ := character.NewService(charRepo)
 	player, _ := database.CreateTestPlayer(ctx, db)
-	char, _ := charService.Create(ctx, player.ID, "ConcurrentAlchemist")
+	char, _ := charService.Create(ctx, player.ID, "AlchConc")
 
 	itemCatalog, _ := item.InitialCatalog()
 	recipeCatalog, _ := alchemy.InitialRecipeCatalog()

@@ -44,7 +44,7 @@ func TestAdventure_ImmediateDungeonCrawlIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	char, err := characterService.Create(ctx, player.ID, "DungeonCrawler")
+	char, err := characterService.Create(ctx, player.ID, "DungCrwl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	char, err := characterService.Create(ctx, player.ID, "ChronicleHero")
+	char, err := characterService.Create(ctx, player.ID, "ChrnHero")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -592,7 +592,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := characterService.Create(ctx, player.ID, "SettlerHero")
+	char, err := characterService.Create(ctx, player.ID, "SetlHero")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -716,7 +716,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	}
 
 	// 3. Defeat verification: A weak character defeated in crawl survives with 1 HP and exit fatigue in MariaDB
-	weakling, err := characterService.Create(ctx, player.ID, "DefeatedHero")
+	weakling, err := characterService.Create(ctx, player.ID, "DftdHero")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -832,8 +832,8 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		return c
 	}
 
-	hero1 := makeHero("AtomicSolo")
-	hero2 := makeHero("AtomicParty")
+	hero1 := makeHero("AtmSolo")
+	hero2 := makeHero("AtmParty")
 
 	battleAdapter := battle.NewService(
 		battle.WithCharacterRepository(charRepo),

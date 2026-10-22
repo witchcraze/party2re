@@ -20,7 +20,8 @@ var (
 	ErrBidiOverride        = errors.New("input contains bidirectional override characters")
 	ErrZalgo               = errors.New("input contains excessive combining diacritical marks")
 	ErrProhibitedCharacter = errors.New("input contains prohibited characters")
-	ErrInternalWhitespace  = errors.New("input contains disallowed internal whitespace")
+	ErrInternalWhitespace  = errors.New("input contains disallowed whitespace")
+	ErrWhitespace          = ErrInternalWhitespace
 	ErrInvalidStarterJob   = errors.New("starter job must be between 1 and 12 (job-01 to job-12)")
 	ErrInvalidGender       = errors.New("gender must be 'm' or 'f'")
 )
@@ -109,24 +110,25 @@ func ValidateMultiLine(input string, maxRunes int) (string, error) {
 }
 
 // ValidateCharacterName validates character names according to legacy Party2 rules and modern safety checks:
-// - Max 32 runes
-// - No internal spaces or Japanese fullwidth spaces
+// - Max 8 runes (legacy: new_entry.cgi:114; name_change.cgi:125)
+// - No whitespace (\s or \u3000) permitted anywhere in the name (surrounding or internal) (legacy: new_entry.cgi:113; name_change.cgi:124)
 // - No prohibited symbols ([,;\"\'&<>\\\/@＠])
 // - No control characters, zero-width characters, bidi overrides, or Zalgo marks
+// - Unicode NFC normalization
 func ValidateCharacterName(name string) (string, error) {
-	sanitized := SanitizeText(name)
-	if sanitized == "" {
+	if name == "" {
 		return "", ErrEmpty
 	}
-	if utf8.RuneCountInString(sanitized) > 32 {
-		return "", ErrTooLong
+	normalized := norm.NFC.String(name)
+	if normalized == "" {
+		return "", ErrEmpty
 	}
-	if prohibitedNameChars.MatchString(sanitized) {
+	if prohibitedNameChars.MatchString(normalized) {
 		return "", ErrProhibitedCharacter
 	}
 
 	consecutiveCombining := 0
-	for _, r := range sanitized {
+	for _, r := range normalized {
 		if unicode.IsSpace(r) || r == '\u3000' {
 			return "", ErrInternalWhitespace
 		}
@@ -149,7 +151,11 @@ func ValidateCharacterName(name string) (string, error) {
 		}
 	}
 
-	return sanitized, nil
+	if utf8.RuneCountInString(normalized) > 8 {
+		return "", ErrTooLong
+	}
+
+	return normalized, nil
 }
 
 // ValidateGuildName validates guild names according to legacy Party2 rules and modern safety checks:

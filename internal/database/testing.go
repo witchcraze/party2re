@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -36,26 +37,41 @@ func getStressConfig() (int, int) {
 	return cfg.Workers, cfg.OpsPerWorker
 }
 
-// sanitizeTestName ensures the name obeys domain length constraints (<= maxLen).
-// If empty, a default name with a unique suffix is generated.
-// If overly long, it is safely truncated to maxLen.
+// sanitizeTestName ensures the name obeys domain length and character constraints (<= maxLen runes, no whitespace).
+// If empty or whitespace-only, a default name with a unique suffix is generated.
+// If overly long, it is safely truncated to maxLen Unicode code points (runes).
 func sanitizeTestName(name string, maxLen int, defaultPrefix string) string {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		suffix := id.New()[:8]
-		if len(defaultPrefix)+1+len(suffix) > maxLen {
-			prefixLen := maxLen - (1 + len(suffix))
-			if prefixLen < 1 {
-				return suffix[:maxLen]
-			}
-			defaultPrefix = defaultPrefix[:prefixLen]
+	var b strings.Builder
+	for _, r := range name {
+		if !unicode.IsSpace(r) && r != '\u3000' {
+			b.WriteRune(r)
 		}
-		return fmt.Sprintf("%s_%s", defaultPrefix, suffix)
 	}
-	if len(name) > maxLen {
-		return name[:maxLen]
+	cleaned := b.String()
+	if cleaned == "" {
+		suffix := id.New()
+		suffixRunes := []rune(suffix)
+		if len(suffixRunes) > 8 {
+			suffixRunes = suffixRunes[:8]
+		}
+		prefixRunes := []rune(defaultPrefix)
+		if len(prefixRunes)+1+len(suffixRunes) > maxLen {
+			prefixLen := maxLen - (1 + len(suffixRunes))
+			if prefixLen < 1 {
+				if len(suffixRunes) > maxLen {
+					return string(suffixRunes[:maxLen])
+				}
+				return string(suffixRunes)
+			}
+			prefixRunes = prefixRunes[:prefixLen]
+		}
+		return fmt.Sprintf("%s_%s", string(prefixRunes), string(suffixRunes))
 	}
-	return name
+	runes := []rune(cleaned)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen])
+	}
+	return cleaned
 }
 
 // CreateTestPlayer creates and persists a player for testing purposes.
@@ -88,13 +104,13 @@ func CreateTestCharacter(ctx context.Context, db *sql.DB, name string) (corechar
 }
 
 // CreateTestCharacterWithFunds creates and persists a character with specified initial funds.
-// Automatically ensures the name adheres to the <= 32 char constraint.
+// Automatically ensures the name adheres to the <= 8 char constraint.
 func CreateTestCharacterWithFunds(ctx context.Context, db *sql.DB, name string, money int) (corecharacter.Character, error) {
 	p, err := CreateTestPlayer(ctx, db)
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
-	safeName := sanitizeTestName(name, 32, "Char")
+	safeName := sanitizeTestName(name, corecharacter.MaxNameLength, "Char")
 	char, err := corecharacter.New(safeName)
 	if err != nil {
 		return corecharacter.Character{}, err
@@ -114,7 +130,7 @@ func CreateTestCharacterWithFunds(ctx context.Context, db *sql.DB, name string, 
 // CreateTestGuildWithLeader creates and persists a guild with an associated leader character.
 func CreateTestGuildWithLeader(ctx context.Context, db *sql.DB, guildName string, leaderMoney int) (guild.Guild, corecharacter.Character, error) {
 	safeGuildName := sanitizeTestName(guildName, guild.MaxNameLength, "Gld")
-	leaderName := sanitizeTestName(safeGuildName+"_Ldr", 32, "Ldr")
+	leaderName := sanitizeTestName(safeGuildName+"_Ldr", corecharacter.MaxNameLength, "Ldr")
 	leaderChar, err := CreateTestCharacterWithFunds(ctx, db, leaderName, leaderMoney)
 	if err != nil {
 		return guild.Guild{}, corecharacter.Character{}, err

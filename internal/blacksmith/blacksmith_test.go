@@ -248,7 +248,7 @@ func TestValidateCustomName(t *testing.T) {
 }
 
 func TestCharacterCrystalOperations(t *testing.T) {
-	char, _ := corecharacter.New("CrystalTester")
+	char, _ := corecharacter.New("CrysTest")
 	if char.Crystal != 0 {
 		t.Fatalf("expected initial crystal 0, got %d", char.Crystal)
 	}
@@ -459,7 +459,7 @@ func TestNameEquipment(t *testing.T) {
 
 func TestStorageDepositAndWithdraw(t *testing.T) {
 	catalog := setupTestCatalog(t)
-	char, _ := corecharacter.New("StorageHero")
+	char, _ := corecharacter.New("StrgHero")
 	char.Crystal = 2000
 
 	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}

@@ -81,7 +81,8 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 		}
 	})
 
-	c, err := corecharacter.NewWithOptions(prefix+"Char", "job-01", "m", nil)
+	cName := fmt.Sprintf("rx_%05d", time.Now().UnixNano()%100000)
+	c, err := corecharacter.NewWithOptions(cName, "job-01", "m", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +114,8 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 
 	const numInterfering = 11
 	for i := 0; i < numInterfering; i++ {
-		intChar, err := corecharacter.NewWithOptions(fmt.Sprintf("%si%d", prefix, i), "job-01", "m", nil)
+		intCharName := fmt.Sprintf("x%02d%05d", i, time.Now().UnixNano()%100000)
+		intChar, err := corecharacter.NewWithOptions(intCharName, "job-01", "m", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -396,8 +398,8 @@ func TestRankingExtraRepository_Integration_ResetIsolation(t *testing.T) {
 		}
 	})
 
-	sentinelPrefix := fmt.Sprintf("snt_%d_", time.Now().UnixNano()%1000000)
-	sentinelChar, err := corecharacter.NewWithOptions(sentinelPrefix+"Char", "job-01", "m", nil)
+	sentinelCharName := fmt.Sprintf("sn_%05d", time.Now().UnixNano()%100000)
+	sentinelChar, err := corecharacter.NewWithOptions(sentinelCharName, "job-01", "m", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

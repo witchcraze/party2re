@@ -13,7 +13,10 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
-const maxNameLength = 32
+const (
+	MaxNameLength = 8
+	maxNameLength = MaxNameLength
+)
 
 const (
 	DefaultColor = "#ffffff"
@@ -27,7 +30,7 @@ const (
 )
 
 var (
-	ErrInvalidName        = errors.New("character name must be between 1 and 32 characters")
+	ErrInvalidName        = errors.New("character name must be between 1 and 8 characters")
 	ErrNotFound           = errors.New("character not found")
 	ErrInvalidAmount      = errors.New("amount must be non-negative")
 	ErrInsufficientFunds  = errors.New("insufficient money")
@@ -144,13 +147,12 @@ func NewWithOptions(name, jobID, gender string, random RandomSource) (Character,
 	if !utf8.ValidString(name) {
 		return Character{}, ErrInvalidName
 	}
-	trimmedName := strings.TrimSpace(name)
-	runeCount := utf8.RuneCountInString(trimmedName)
+	runeCount := utf8.RuneCountInString(name)
 	if runeCount < 1 || runeCount > maxNameLength {
 		return Character{}, ErrInvalidName
 	}
-	for _, r := range trimmedName {
-		if unicode.IsControl(r) {
+	for _, r := range name {
+		if unicode.IsControl(r) || unicode.IsSpace(r) || r == '\u3000' {
 			return Character{}, ErrInvalidName
 		}
 	}
@@ -174,7 +176,7 @@ func NewWithOptions(name, jobID, gender string, random RandomSource) (Character,
 
 	return Character{
 		ID:     id.New(),
-		Name:   trimmedName,
+		Name:   name,
 		JobID:  validJob,
 		Gender: validGender,
 		Stats:  stats,

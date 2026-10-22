@@ -128,7 +128,7 @@ func TestRestoredRecipes_SynthesisAndLearn(t *testing.T) {
 	depotRepo := newMemoryDepotRepo()
 	alchemyRepo := newMemoryAlchemyRepo()
 
-	char, _ := corecharacter.New("TestAlchemist")
+	char, _ := corecharacter.New("TestAlch")
 	charRepo.characters[char.ID] = char
 
 	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)

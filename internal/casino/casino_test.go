@@ -228,7 +228,7 @@ func (s *stubTransactionRunner) ExecuteTransaction(ctx context.Context, req econ
 	s.called = true
 	s.req = req
 
-	char, _ := corecharacter.New("Casino Gambler")
+	char, _ := corecharacter.New("CasGambl")
 	char.ID = req.CharacterID
 	char.Money = s.money
 
@@ -351,7 +351,7 @@ func TestCasinoService_Exchanges_WithEconomyService(t *testing.T) {
 	charRepo := &inMemoryCharRepo{
 		chars: make(map[string]corecharacter.Character),
 	}
-	char, _ := corecharacter.New("Economy Gambler")
+	char, _ := corecharacter.New("EcoGambl")
 	char.ID = "char-eco-1"
 	char.Money = 5000
 	charRepo.chars[char.ID] = char

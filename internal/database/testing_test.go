@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/id"
@@ -14,8 +15,8 @@ import (
 func TestSanitizeTestName(t *testing.T) {
 	// 1. Empty name should use defaultPrefix and suffix <= maxLen
 	nameEmpty := sanitizeTestName("", 32, "testpref")
-	if len(nameEmpty) > 32 {
-		t.Errorf("empty name exceeded maxLen: %d", len(nameEmpty))
+	if utf8.RuneCountInString(nameEmpty) > 32 {
+		t.Errorf("empty name exceeded maxLen: %d", utf8.RuneCountInString(nameEmpty))
 	}
 	if !strings.HasPrefix(nameEmpty, "testpref_") {
 		t.Errorf("empty name should start with defaultPrefix: %s", nameEmpty)
@@ -27,14 +28,72 @@ func TestSanitizeTestName(t *testing.T) {
 		t.Errorf("normal name should be kept as-is: got %s, want %s", res, normal)
 	}
 
-	// 3. Overly long name (>32 chars) should be truncated to <= 32 chars
+	// 3. Overly long name (>32 chars) should be truncated to <= 32 runes
 	superLong := "ThisIsAnExtremelyLongCharacterNameExceedingThirtyTwoChars"
 	truncated := sanitizeTestName(superLong, 32, "Long")
-	if len(truncated) > 32 {
-		t.Errorf("truncated name exceeded 32 chars: length=%d, name=%s", len(truncated), truncated)
+	if utf8.RuneCountInString(truncated) > 32 {
+		t.Errorf("truncated name exceeded 32 chars: length=%d, name=%s", utf8.RuneCountInString(truncated), truncated)
 	}
 	if truncated != superLong[:32] {
 		t.Errorf("truncated name mismatch: got %s, want %s", truncated, superLong[:32])
+	}
+
+	// 4. Overly long name for 8 chars limit should be truncated to <= 8 runes
+	truncated8 := sanitizeTestName(superLong, 8, "Long")
+	if utf8.RuneCountInString(truncated8) > 8 {
+		t.Errorf("truncated name exceeded 8 chars: length=%d, name=%s", utf8.RuneCountInString(truncated8), truncated8)
+	}
+	if truncated8 != superLong[:8] {
+		t.Errorf("truncated name mismatch: got %s, want %s", truncated8, superLong[:8])
+	}
+
+	// 5. Japanese names: 3 runes, 8 runes, 9 runes, 10+ runes
+	jp3 := "勇者丸" // 3 runes, 9 bytes
+	resJP3 := sanitizeTestName(jp3, 8, "Hero")
+	if !utf8.ValidString(resJP3) {
+		t.Errorf("resJP3 is not valid UTF-8: %q", resJP3)
+	}
+	if utf8.RuneCountInString(resJP3) != 3 {
+		t.Errorf("resJP3 rune count mismatch: got %d, want 3", utf8.RuneCountInString(resJP3))
+	}
+	if resJP3 != jp3 {
+		t.Errorf("resJP3 content mismatch: got %q, want %q", resJP3, jp3)
+	}
+
+	jp8 := "あいうえおかきく" // 8 runes, 24 bytes
+	resJP8 := sanitizeTestName(jp8, 8, "Hero")
+	if !utf8.ValidString(resJP8) {
+		t.Errorf("resJP8 is not valid UTF-8: %q", resJP8)
+	}
+	if utf8.RuneCountInString(resJP8) != 8 {
+		t.Errorf("resJP8 rune count mismatch: got %d, want 8", utf8.RuneCountInString(resJP8))
+	}
+	if resJP8 != jp8 {
+		t.Errorf("resJP8 content mismatch: got %q, want %q", resJP8, jp8)
+	}
+
+	jp9 := "あいうえおかきくけ" // 9 runes, 27 bytes
+	resJP9 := sanitizeTestName(jp9, 8, "Hero")
+	if !utf8.ValidString(resJP9) {
+		t.Errorf("resJP9 is not valid UTF-8: %q", resJP9)
+	}
+	if utf8.RuneCountInString(resJP9) != 8 {
+		t.Errorf("resJP9 rune count mismatch: got %d, want 8", utf8.RuneCountInString(resJP9))
+	}
+	if resJP9 != jp8 {
+		t.Errorf("resJP9 content mismatch: got %q, want %q", resJP9, jp8)
+	}
+
+	jp10 := "あいうえおかきくけこ" // 10 runes, 30 bytes
+	resJP10 := sanitizeTestName(jp10, 8, "Hero")
+	if !utf8.ValidString(resJP10) {
+		t.Errorf("resJP10 is not valid UTF-8: %q", resJP10)
+	}
+	if utf8.RuneCountInString(resJP10) != 8 {
+		t.Errorf("resJP10 rune count mismatch: got %d, want 8", utf8.RuneCountInString(resJP10))
+	}
+	if resJP10 != jp8 {
+		t.Errorf("resJP10 content mismatch: got %q, want %q", resJP10, jp8)
 	}
 }
 

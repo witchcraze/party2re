@@ -170,7 +170,7 @@ func TestUpdateCharacterAtomically_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := corecharacter.New("Atomic Update Test")
+	char, err := corecharacter.New("AtomTest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestUpdateCharacter_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := corecharacter.New("Update Character Test")
+	char, err := corecharacter.New("UpdTest")
 	if err != nil {
 		t.Fatal(err)
 	}

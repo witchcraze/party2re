@@ -22,12 +22,13 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 - **Flea Market Constraint**: The character must not have active listings in the flea market (`HasActiveListings == false`).
 
 ### 3.2 Name Format & Validation Rules
-1. **Length**: $1 \le \text{Length} \le 32$ (UTF-8 rune count).
+1. **Length**: $1 \le \text{Length} \le 8$ (UTF-8 rune count; legacy `new_entry.cgi:114`, `name_change.cgi:125`).
 2. **Prohibited Characters**:
-   - Punctuation & symbols: `,`, `;`, `"`, `'`, `&`, `<`, `>`, `\`, `/`, `@`, `＠`.
-   - Whitespace: ASCII spaces, tabs, newline characters, and Japanese fullwidth space `\u3000`.
-   - Control characters: Any Unicode control characters.
-3. **Uniqueness**: The new name must not be identical to the character's current name, and must not already be taken by any other active character in the system.
+   - Punctuation & symbols: `,`, `;`, `"`, `'`, `&`, `<`, `>`, `\`, `/`, `@`, `＠` (legacy `new_entry.cgi:111–112`, `name_change.cgi:122–123`).
+   - Whitespace: ASCII spaces, tabs, newline characters, and Japanese fullwidth space `\u3000` anywhere in the name (surrounding or internal) are strictly rejected without trimming (legacy `new_entry.cgi:113`, `name_change.cgi:124`).
+   - Control & Invisible characters: Any Unicode control characters, zero-width characters, bidirectional overrides, and excessive combining diacritical marks (Zalgo text > 2 combining marks).
+3. **Normalization**: Unicode NFC normalized.
+4. **Uniqueness**: The new name must not be identical to the character's current name, and must not already be taken by any other active character in the system.
 
 ### 3.3 Side Effects
 - Deducts 500,000 Gold within the Unit of Work transaction.

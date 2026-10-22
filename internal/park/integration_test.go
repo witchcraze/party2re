@@ -23,7 +23,7 @@ func TestParkServiceIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	char, err := database.CreateTestCharacter(ctx, db, "ParkIntegrationChar")
+	char, err := database.CreateTestCharacter(ctx, db, "ParkChar")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,8 +54,8 @@ func TestParkServiceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PostMessage failed: %v", err)
 	}
-	if post.CharacterName != "ParkIntegrationChar" {
-		t.Errorf("expected ParkIntegrationChar, got %s", post.CharacterName)
+	if post.CharacterName != "ParkChar" {
+		t.Errorf("expected ParkChar, got %s", post.CharacterName)
 	}
 
 	// 2. Immediate post should trigger rate limit

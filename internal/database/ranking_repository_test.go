@@ -67,7 +67,8 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// 2. Create characters with funds and deposits
-	c1, err := corecharacter.NewWithOptions(prefix+"Hero", "job-01", "m", nil)
+	c1Name := fmt.Sprintf("r1_%05d", time.Now().UnixNano()%100000)
+	c1, err := corecharacter.NewWithOptions(c1Name, "job-01", "m", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +84,8 @@ func TestRankingRepository_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c2, err := corecharacter.NewWithOptions(prefix+"Mage", "job-02", "f", nil)
+	c2Name := fmt.Sprintf("r2_%05d", time.Now().UnixNano()%100000)
+	c2, err := corecharacter.NewWithOptions(c2Name, "job-02", "f", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

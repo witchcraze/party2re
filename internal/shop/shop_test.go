@@ -585,7 +585,7 @@ func TestConcurrentPurchase_StrictAtomicBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char := createTestCharacter(t, charRepo, "ConcurrentHero", 350)
+	char := createTestCharacter(t, charRepo, "CncHero", 350)
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 5)
@@ -649,7 +649,7 @@ func TestConcurrentSell_StrictAtomicQuantity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char := createTestCharacter(t, charRepo, "SellerHero", 0)
+	char := createTestCharacter(t, charRepo, "SelHero", 0)
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
 	herbInst, _ := item.NewInstance("herb", 1)
 	_ = inv.Add(herbInst)
@@ -745,7 +745,7 @@ func TestService_Sell_LockHierarchy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char := createTestCharacter(t, charRepo, "SellerHero", 0)
+	char := createTestCharacter(t, charRepo, "SelHero", 0)
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
 	swordInst, _ := item.NewInstance("bronze_sword", 1)
 	_ = inv.Add(swordInst)
@@ -774,7 +774,7 @@ func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char := createTestCharacter(t, charRepo, "TraderHero", 1000)
+	char := createTestCharacter(t, charRepo, "TrdHero", 1000)
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
 
 	// Add 10 herbs for selling
