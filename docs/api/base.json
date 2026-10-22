@@ -10160,6 +10160,7 @@
           },
           "bio_data": {
             "additionalProperties": {
+              "maxLength": 160,
               "type": "string"
             },
             "type": [

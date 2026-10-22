@@ -55,7 +55,7 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 - **Self-Introduction Comment**: Up to 160 characters (`MaxCommentLength = 160`).
 - **Avatar URL**: Up to 512 characters. May be a valid `http://` or `https://` URL, a relative path `/...`, or an inline data URI (`data:image/...;base64,...`).
 - **Aura Effect (`aura_effect`)**: Selectable visual aura effect (integer `0` through `8`). Restored from legacy `custom_image.cgi` (`effect1` / `@effects` in `_data.cgi`). `0`: None (default), `1`: Flame, `2`: Dark/Wings 1, `3`: Light/Wings 2, `4`: Thunder/Blue Flame, `5`: Wind/Black Flame, `6`: Rainbow/Wings 3, `7`: Star/Mysterious Object 1, `8`: Cherry Blossom/Mysterious Object 2. Validated with `0 <= aura_effect <= 8`.
-- **Bio Data**: Optional structured key-value map (e.g. `hobby`, `dream`, `like_food`, `dislike_food`, `blood_type`, `birthday`) with keys $\le 32$ characters and values $\le 160$ characters.
+- **Bio Data**: Optional structured key-value map (e.g. `hobby`, `dream`, `like_food`, `dislike_food`, `blood_type`, `birthday`) with keys $\le 32$ characters (`MaxBioKeyLength = 32`) and values $\le 160$ Unicode characters (`MaxBioFieldLength = 160`). In parity with legacy Party2 (`lib/profile.cgi`), bio field values preserve original whitespace without arbitrary trimming, and length limits (0–160 characters) are enforced directly against persisted values.
 
 ### 5.2 Avatar Image Upload
 - **Maximum File Size**: 2 MB (`MaxAvatarSizeBytes = 2097152`).

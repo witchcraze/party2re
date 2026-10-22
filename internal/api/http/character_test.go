@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
@@ -96,6 +97,11 @@ func (s *stubCharacterServiceExtended) UpdateProfile(ctx context.Context, charac
 			return character.Profile{}, err
 		}
 		auraEffect = *req.AuraEffect
+	}
+	if req.BioData != nil {
+		if err := character.ValidateBioData(req.BioData); err != nil {
+			return character.Profile{}, err
+		}
 	}
 	return character.Profile{
 		CharacterID: characterID,
@@ -256,6 +262,57 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request for invalid aura_effect, got %d (err: %v)", resp.StatusCode, err)
 	}
+	resp.Body.Close()
+
+	// 6c. PUT /characters/{id}/profile - 161 spaces in bio_data -> 400 Bad Request
+	tooLongBioBody, _ := json.Marshal(map[string]interface{}{
+		"bio_data": map[string]string{
+			"hobby": strings.Repeat(" ", 161),
+		},
+	})
+	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(tooLongBioBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for 161 spaces in bio_data, got %d (err: %v)", resp.StatusCode, err)
+	}
+	resp.Body.Close()
+
+	// 6d. PUT /characters/{id}/profile - 160 spaces in bio_data -> 200 OK
+	validSpacesBioBody, _ := json.Marshal(map[string]interface{}{
+		"bio_data": map[string]string{
+			"hobby": strings.Repeat(" ", 160),
+		},
+	})
+	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(validSpacesBioBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for 160 spaces in bio_data, got %d (err: %v)", resp.StatusCode, err)
+	}
+	var spacesProf character.Profile
+	_ = json.NewDecoder(resp.Body).Decode(&spacesProf)
+	resp.Body.Close()
+	if spacesProf.BioData["hobby"] != strings.Repeat(" ", 160) {
+		t.Fatalf("expected preserved 160 spaces in bio_data, got %q", spacesProf.BioData["hobby"])
+	}
+
+	// 6e. PUT /characters/{id}/profile - Control character in bio_data -> 400 Bad Request
+	controlCharBioBody, _ := json.Marshal(map[string]interface{}{
+		"bio_data": map[string]string{
+			"hobby": "hello\x07world",
+		},
+	})
+	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(controlCharBioBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for control character in bio_data, got %d (err: %v)", resp.StatusCode, err)
+	}
+	resp.Body.Close()
 
 	// 7. POST /characters/{id}/avatar - Multipart Upload -> 200 OK
 	var buf bytes.Buffer
