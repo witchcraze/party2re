@@ -500,6 +500,11 @@ authority; it makes no combat, wager or settlement formula parity claim.
 | Inherited `lib/_skill.cgi:22–29,78–79,282–317`: spectator `ささやき`/`にげる`/`すくしょ`, generated job/custom skills and `すとっく`, then `add_battle_action` | Shared member/spectator dispatch is inspected only to establish activity authority. No generated skill menu or per-turn battle command is replaced here; skill/stock/combat and battle spectator reconciliation remain #948, screenshot/social presentation #949/#140. Existing feature and battle operations stay registered. |
 | `lib/sleep.cgi:18–42`: empty action menu, elapsed automatic vitality recovery | Existing timer facts preserve sleep and elapsed recovery pending; only explicit connected Wake/Rescue commands can recover. GET changes no vitality, timer or feature record. |
 
+GvG advance clients must adopt the
+[expected-round retry target](transient-run-state.md#gvg-round-retry-identity-target)
+when it is implemented, including explicit continuation inputs. Until then an
+unknown advance outcome requires observation rather than automatic POST replay.
+
 #### Route retirement and deliberate exceptions
 
 Gameplay operations migrate through commands; required references migrate through
