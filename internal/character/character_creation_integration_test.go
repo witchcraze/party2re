@@ -9,53 +9,81 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
-type faultInjectingCharacterRepo struct {
-	*database.CharacterRepository
-	db        *sql.DB
-	failDepot bool
-}
-
-func (r *faultInjectingCharacterRepo) Save(ctx context.Context, value corecharacter.Character) error {
-	if !r.failDepot {
-		return r.CharacterRepository.Save(ctx, value)
+func characterIsolatedDB(t *testing.T) *sql.DB {
+	t.Helper()
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated character creation tests")
 	}
 
-	color := value.Color
-	if color == "" {
-		color = corecharacter.DefaultColor
-	}
-
-	// Execute the REAL character insert using ambient transaction from ctx
-	_, err := database.ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
-		INSERT INTO characters
-			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, job_memory_kind, small_medals, help_count, hero_count, pvp_wins, casino_wins, monster_kills, mao_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit, crystal, wea_seal, wea_name, arm_name, pending_wake)
-		VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?
-		)
-	`, value.ID, value.PlayerID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
-		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
-		value.Money, value.Level, value.Experience, value.SP, value.JobLevel, value.OldJobID, value.OldSP,
-		"", 0, "", 0, string(corecharacter.JobMemoryKindPersistent), value.SmallMedals, value.HelpCount, value.HeroCount, value.PvPWins, value.CasinoWins,
-		value.MonsterKills, value.MaoCount,
-		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
-		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName, value.PendingWake)
+	ctx := context.Background()
+	source, err := database.OpenFromEnvironment()
 	if err != nil {
-		return err
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Errorf("failed to close source DB: %v", err)
+		}
+	})
+
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Errorf("failed to close admin DB: %v", err)
+		}
+	})
+
+	name := "party2_char_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Errorf("failed to drop isolated database %s: %v", name, err)
+		}
+	})
+
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close isolated DB: %v", err)
+		}
+	})
+
+	for _, table := range []string{"players", "characters", "character_depots", "depot_items"} {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	// Simulate failure of the 2nd insert (initial depot auto-initialization)
-	return errors.New("simulated initial depot persistence failure")
+	return db
 }
 
 func countCharactersByName(ctx context.Context, db *sql.DB, name string) (int, error) {
@@ -71,25 +99,23 @@ func countDepotsByCharacterID(ctx context.Context, db *sql.DB, charID string) (i
 }
 
 func TestCharacterCreationRollbackOnDepotFailure_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
+	db := characterIsolatedDB(t)
 	ctx := context.Background()
+
 	player, err := database.CreateTestPlayer(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM character_depots WHERE character_id IN (SELECT id FROM characters WHERE player_id = ?)", player.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE player_id = ?", player.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", player.ID)
+		if _, err := db.ExecContext(ctx, "DELETE FROM character_depots WHERE character_id IN (SELECT id FROM characters WHERE player_id = ?)", player.ID); err != nil {
+			t.Errorf("failed to cleanup character_depots: %v", err)
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM characters WHERE player_id = ?", player.ID); err != nil {
+			t.Errorf("failed to cleanup characters: %v", err)
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", player.ID); err != nil {
+			t.Errorf("failed to cleanup players: %v", err)
+		}
 	})
 
 	charRepo, err := database.NewCharacterRepository(db)
@@ -98,32 +124,34 @@ func TestCharacterCreationRollbackOnDepotFailure_Integration(t *testing.T) {
 	}
 	txProvider := database.NewTransactionProvider(db)
 
-	faultRepo := &faultInjectingCharacterRepo{
-		CharacterRepository: charRepo,
-		db:                  db,
-		failDepot:           true,
-	}
-
 	service, err := character.NewService(
-		faultRepo,
+		charRepo,
 		character.WithTransactionProvider(txProvider),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	charName := fmt.Sprintf("F_%d", time.Now().UnixNano()%100000)
+	charName := fmt.Sprintf("F_%05d", time.Now().UnixNano()%100000)
 
-	// 1. Attempt creation with depot failure injected (2nd INSERT failure)
+	// Inject a real database-level failure on character_depots INSERT statement.
+	// This ensures the real CharacterRepository.Save executes characters INSERT successfully,
+	// but the second INSERT (character_depots) fails at the real MariaDB SQL level.
+	_, err = db.ExecContext(ctx, "CREATE TRIGGER trg_fail_depot BEFORE INSERT ON character_depots FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'simulated depot insert failure'")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Attempt creation: characters INSERT succeeds, but character_depots INSERT fails at MariaDB level
 	_, err = service.CreateWithOptions(ctx, player.ID, charName, character.CreationOptions{
 		JobID:  "job-01",
 		Gender: "m",
 	})
 	if err == nil {
-		t.Fatal("expected error due to simulated depot persistence failure, got nil")
+		t.Fatal("expected error due to real database depot persistence failure, got nil")
 	}
 
-	// 2. Verify rollback: Character row must NOT exist in DB
+	// 2. Verify rollback: Neither character row nor depot row must exist in DB
 	charCount, err := countCharactersByName(ctx, db, charName)
 	if err != nil {
 		t.Fatalf("failed to query characters: %v", err)
@@ -132,14 +160,25 @@ func TestCharacterCreationRollbackOnDepotFailure_Integration(t *testing.T) {
 		t.Fatalf("character leaked into database on depot failure! count = %d, want 0", charCount)
 	}
 
-	// 3. Retry after failure with healthy repo: must succeed cleanly without duplicate/orphan state
-	faultRepo.failDepot = false
+	var totalDepots int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM character_depots").Scan(&totalDepots); err != nil {
+		t.Fatalf("failed to query total depots: %v", err)
+	}
+	if totalDepots != 0 {
+		t.Fatalf("depot leaked into database on depot failure! count = %d, want 0", totalDepots)
+	}
+
+	// 3. Remove DB fault injection and retry: must succeed cleanly without duplicate/orphan state
+	if _, err := db.ExecContext(ctx, "DROP TRIGGER trg_fail_depot"); err != nil {
+		t.Fatal(err)
+	}
+
 	retryChar, err := service.CreateWithOptions(ctx, player.ID, charName, character.CreationOptions{
 		JobID:  "job-01",
 		Gender: "m",
 	})
 	if err != nil {
-		t.Fatalf("retry after failure failed: %v", err)
+		t.Fatalf("retry after resolving depot failure failed: %v", err)
 	}
 
 	if retryChar.PlayerID != player.ID || retryChar.Name != charName {
@@ -158,17 +197,9 @@ func TestCharacterCreationRollbackOnDepotFailure_Integration(t *testing.T) {
 }
 
 func TestCharacterCreationRollbackOnFirstInsertFailure_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
+	db := characterIsolatedDB(t)
 	ctx := context.Background()
+
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -205,25 +236,23 @@ func TestCharacterCreationRollbackOnFirstInsertFailure_Integration(t *testing.T)
 }
 
 func TestCharacterCreationRollbackOnAmbientTransaction_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
+	db := characterIsolatedDB(t)
 	ctx := context.Background()
+
 	player, err := database.CreateTestPlayer(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM character_depots WHERE character_id IN (SELECT id FROM characters WHERE player_id = ?)", player.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE player_id = ?", player.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", player.ID)
+		if _, err := db.ExecContext(ctx, "DELETE FROM character_depots WHERE character_id IN (SELECT id FROM characters WHERE player_id = ?)", player.ID); err != nil {
+			t.Errorf("failed to cleanup character_depots: %v", err)
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM characters WHERE player_id = ?", player.ID); err != nil {
+			t.Errorf("failed to cleanup characters: %v", err)
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", player.ID); err != nil {
+			t.Errorf("failed to cleanup players: %v", err)
+		}
 	})
 
 	charRepo, err := database.NewCharacterRepository(db)
@@ -282,25 +311,23 @@ func TestCharacterCreationRollbackOnAmbientTransaction_Integration(t *testing.T)
 }
 
 func TestCharacterCreationNormalSuccess_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
+	db := characterIsolatedDB(t)
 	ctx := context.Background()
+
 	player, err := database.CreateTestPlayer(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM character_depots WHERE character_id IN (SELECT id FROM characters WHERE player_id = ?)", player.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE player_id = ?", player.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", player.ID)
+		if _, err := db.ExecContext(ctx, "DELETE FROM character_depots WHERE character_id IN (SELECT id FROM characters WHERE player_id = ?)", player.ID); err != nil {
+			t.Errorf("failed to cleanup character_depots: %v", err)
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM characters WHERE player_id = ?", player.ID); err != nil {
+			t.Errorf("failed to cleanup characters: %v", err)
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", player.ID); err != nil {
+			t.Errorf("failed to cleanup players: %v", err)
+		}
 	})
 
 	charRepo, err := database.NewCharacterRepository(db)
