@@ -155,7 +155,9 @@ func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, 
 		return corecharacter.Character{}, err
 	}
 	value.PlayerID = playerID
-	if err := s.repository.Save(ctx, value); err != nil {
+	if err := s.runInTx(ctx, func(txCtx context.Context) error {
+		return s.repository.Save(txCtx, value)
+	}); err != nil {
 		return corecharacter.Character{}, err
 	}
 
