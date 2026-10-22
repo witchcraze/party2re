@@ -251,16 +251,7 @@ func (s *LifetimeState) ApplyRoster(c *RosterContext, id, targetID string, rng r
 	case "small":
 		return s.smallHelpers(c, helperID, rng)
 	case "revive-party":
-		for _, id := range c.PartyIDs {
-			a := s.actor(id)
-			if a.HP <= 0 {
-				a.HP = int(float64(a.MaxHP) * .42)
-				a.Attack += 300
-				a.Agility += 300
-				a.Icon = "assets/images/placeholders/battle/helpers.svg#revived"
-				r.Applied = true
-			}
-		}
+		r.Applied = s.reviveCallingParty(c)
 	case "party-heal":
 		r.Effects, err = s.ApplyPartyHealing(&c.EffectContext, 999, CategoryMagic, rng)
 	case "rain":

@@ -12,10 +12,26 @@ func (s *LifetimeState) ValidateInvocations(c *CallbackContext, d CallbackCatalo
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
 	}
-	p := callbackAdmission{s: s, c: c, d: d, seen: map[callbackVisit]bool{}}
+	state := s.callbackCopy()
+	context := cloneCallbackContext(*c)
+	p := callbackAdmission{s: &state, c: &context, d: d}
+	known := true
 	for i, op := range ops {
-		if err := p.visit(op, i > 0); err != nil {
+		// Visits depend on the projected state, not just entry identity.
+		p.seen = map[callbackVisit]bool{}
+		p.c.Arguments = append([]string(nil), c.Arguments...)
+		if err := p.visit(op, !known); err != nil {
 			return err
+		}
+		if known && i+1 < len(ops) {
+			var err error
+			known, err = p.project(op)
+			if err != nil {
+				return err
+			}
+			if known && p.s.actor(p.c.ActorID).HP <= 0 {
+				return nil
+			}
 		}
 	}
 	return nil

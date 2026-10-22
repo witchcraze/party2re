@@ -26,7 +26,8 @@ func TestRosterUsesAdapterSnapshotWithoutChangingPermanentJobs(t *testing.T) {
 	a.TeamID = "party"
 	s := corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{a}}
 	c := corebattle.RosterContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: corebattle.TargetContext{ActorID: a.ID, PartyIDs: []string{a.ID}}, RequesterLevel: &char.Level}}, EnemyTeamID: "npc"}
-	d := skill.BattleDefinitions{RosterSkills: map[string]bool{"job-59-summon": true, "job-59-merge": true}}
+	d := skill.BattleDefinitions{}
+	d.RegisterCallingJobs(&c)
 	for _, id := range []string{"job-59-summon", "job-59-merge"} {
 		if err := d.RosterAction(&s, &c, id, "", random.NewDeterministic(1)); err != nil {
 			t.Fatal(err)
