@@ -1011,7 +1011,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
 		for _, cid := range cleanupCharIDs {
