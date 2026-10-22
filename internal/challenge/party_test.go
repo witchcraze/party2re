@@ -101,7 +101,7 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	}
 
 	// Advance round 1
-	roundRes, updatedSess, err := svc.AdvanceRound(ctx, "lead", sess.ID)
+	roundRes, updatedSess, err := svc.AdvanceRound(ctx, "lead", sess.ID, sess.Revision)
 	if err != nil {
 		t.Fatalf("AdvanceRound failed: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 		t.Fatalf("StartSession failed: %v", err)
 	}
 
-	roundRes, updatedSess, err := svc.AdvanceRound(ctx, c1.ID, sess.ID)
+	roundRes, updatedSess, err := svc.AdvanceRound(ctx, c1.ID, sess.ID, sess.Revision)
 	if err != nil {
 		t.Fatalf("AdvanceRound failed: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 		t.Fatalf("StartPartySession failed: %v", err)
 	}
 
-	roundRes, updatedSess, err := svc.AdvanceRound(ctx, c1.ID, sess.ID)
+	roundRes, updatedSess, err := svc.AdvanceRound(ctx, c1.ID, sess.ID, sess.Revision)
 	if err != nil {
 		t.Fatalf("AdvanceRound failed: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 
 	t.Run("activeStore SaveActiveSession error propagates", func(t *testing.T) {
 		svc, _, _, activeStore := setupService()
-		activeStore.saveActiveSessionErr = errors.New("valkey write timeout")
+		activeStore.publishRunErr = errors.New("valkey write timeout")
 
 		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
 		if err == nil || !strings.Contains(err.Error(), "valkey write timeout") {

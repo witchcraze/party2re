@@ -72,7 +72,7 @@ func participantSettlementDB(t *testing.T) *sql.DB {
 			t.Error(err)
 		}
 	})
-	for _, table := range []string{"players", "characters", "inventory_items", "equipment_slots", "character_depots", "depot_items", "challenge_sessions", "character_challenge_records"} {
+	for _, table := range []string{"players", "characters", "inventory_items", "equipment_slots", "character_depots", "depot_items", "challenge_sessions", "character_challenge_records", "challenge_run_transitions", "challenge_participants", "challenge_character_claims", "challenge_command_results", "tavern_character_status", "challenge_hall_of_fame"} {
 		var tableName, ddl string
 		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
 			t.Fatal(err)

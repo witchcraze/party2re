@@ -196,7 +196,7 @@
       "caller_method": "internal/database/challenge_finalization.go#ChallengeRepository.FinalizeSession",
       "lock_mode": "SELECT ... FOR UPDATE (ascending character IDs; shared battle adapter)",
       "lock_order": 2,
-      "purpose": "Settle every admitted participant in the terminal session claim transaction"
+      "purpose": "Shared participant settlement under the accepted run/revision; preserves unsettled survivors and commits consumption, earnings, bonuses and receipts together"
     }
   ]
 }

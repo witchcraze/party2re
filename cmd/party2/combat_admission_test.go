@@ -93,13 +93,12 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		t.Fatal(err)
 	}
 	ds, _ := dungeon.NewValkeyExpeditionRepository(client)
-	cs, _ := challenge.NewValkeySessionRepository(client)
 	t.Cleanup(func() {
 		for _, char := range chars {
 			if err := ds.DeleteActiveExpedition(ctx, char.ID); err != nil {
 				t.Error(err)
 			}
-			if err := cs.DeleteActiveSession(ctx, char.ID); err != nil {
+			if err := retireChallenge(ctx, combat.challenge, char.ID); err != nil {
 				t.Error(err)
 			}
 		}
@@ -168,7 +167,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 				if err != nil || run == nil || run.CharacterID != leader.ID || len(run.Members) != 2 || run.PartyID != lobby.Party.ID {
 					t.Fatalf("member discovery: %+v %v", run, err)
 				}
-				if _, _, err := combat.challenge.AdvanceRound(ctx, member.ID, run.ID); !errors.Is(err, challenge.ErrForbidden) {
+				if _, _, err := combat.challenge.AdvanceRound(ctx, member.ID, run.ID, run.Revision); !errors.Is(err, challenge.ErrForbidden) {
 					t.Fatalf("member advanced leader: %v", err)
 				}
 				if _, err := combat.challenge.GetSession(ctx, id.New(), run.ID); !errors.Is(err, challenge.ErrForbidden) {
@@ -177,8 +176,10 @@ func TestCombatAdmissionProduction(t *testing.T) {
 				if _, err := combat.dungeon.StartExpedition(ctx, member.ID, "dungeon-01"); !errors.Is(err, challenge.ErrActiveSessionExists) {
 					t.Fatalf("busy member accepted: %v", err)
 				}
-				if err := cs.DeleteActiveSession(ctx, leader.ID); err != nil {
-					t.Fatal(err)
+				for _, actor := range chars {
+					if err := retireChallenge(ctx, combat.challenge, actor.ID); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 		})

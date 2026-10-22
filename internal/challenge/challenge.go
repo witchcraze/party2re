@@ -71,6 +71,8 @@ type ChallengeMember struct {
 	ConsumedItems      []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
 	AccumulatedExp     int                       `json:"accumulated_exp"`
 	AccumulatedGold    int                       `json:"accumulated_gold"`
+	ExitBonusExp       int                       `json:"exit_bonus_exp,omitempty"`
+	ExitBonusGold      int                       `json:"exit_bonus_gold,omitempty"`
 	MaxHP              int                       `json:"max_hp"`
 	MaxMP              int                       `json:"max_mp"`
 	Attack             int                       `json:"attack"`
@@ -104,6 +106,9 @@ type HallOfFameEntry struct {
 
 type ChallengeSession struct {
 	ID                 string            `json:"id"`
+	Revision           int               `json:"revision"`
+	RecoveryPending    bool              `json:"recovery_pending,omitempty"`
+	TreasureAwards     []TreasureAward   `json:"treasure_awards,omitempty"`
 	CharacterID        string            `json:"character_id"`
 	PartyID            string            `json:"party_id,omitempty"`
 	PartyName          string            `json:"party_name,omitempty"`
@@ -173,6 +178,7 @@ type AdvanceRoundOutcome struct {
 
 // ActiveSessionStore defines the storage contract for transient in-flight challenge sessions (Candidate D).
 type ActiveSessionStore interface {
+	RunStore
 	GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error)
 	SaveActiveSession(ctx context.Context, session ChallengeSession) error
 	DeleteActiveSession(ctx context.Context, characterID string) error
@@ -220,6 +226,9 @@ type ParticipantBuilder interface {
 }
 
 type Service struct {
+	transitions        TransitionRepository
+	runStore           RunStore
+	fullness           FullnessResetter
 	admission          Admission
 	repo               Repository
 	charRepo           CharacterRepository
@@ -288,6 +297,14 @@ func NewService(
 	if s.activeStore == nil {
 		s.activeStore = NewMemorySessionRepository()
 	}
+	if s.transitions == nil {
+		if durable, ok := repo.(TransitionRepository); ok {
+			s.transitions = durable
+		} else {
+			return nil, errors.New("challenge transition repository is required")
+		}
+	}
+	s.runStore = s.activeStore
 
 	return s, nil
 }

@@ -8588,6 +8588,34 @@
           "updated_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "recovery_pending": {
+            "type": "boolean"
+          },
+          "treasure_awards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "item_id": {
+                  "type": "string"
+                },
+                "recipient_id": {
+                  "type": "string"
+                },
+                "delivered": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "item_id",
+                "recipient_id",
+                "delivered"
+              ]
+            }
           }
         },
         "required": [
@@ -8665,6 +8693,12 @@
             "type": "integer",
             "minimum": 0,
             "description": "Gold earned by this member while alive at each cleared round."
+          },
+          "exit_bonus_exp": {
+            "type": "integer"
+          },
+          "exit_bonus_gold": {
+            "type": "integer"
           }
         },
         "required": [
@@ -15094,6 +15128,38 @@
         ],
         "type": "object",
         "additionalProperties": false
+      },
+      "ChallengeCommandResult": {
+        "type": "object",
+        "properties": {
+          "actor_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "expected_revision": {
+            "type": "integer"
+          },
+          "session": {
+            "$ref": "#/components/schemas/ChallengeSession"
+          },
+          "round": {
+            "$ref": "#/components/schemas/ChallengeRoundResult"
+          },
+          "settled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChallengeMember"
+            }
+          }
+        },
+        "required": [
+          "actor_id",
+          "action",
+          "expected_revision",
+          "session"
+        ]
       }
     },
     "securitySchemes": {

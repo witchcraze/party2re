@@ -466,7 +466,7 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 	}
 
 	// 2. Trigger session defeat while MariaDB FinalizeSession fails
-	res, _, err := service.AdvanceRound(ctx, charID, sess.ID)
+	res, _, err := service.AdvanceRound(ctx, charID, sess.ID, sess.Revision)
 	if err == nil {
 		t.Fatalf("expected AdvanceRound to fail on defeat due to MariaDB commit failure")
 	}
@@ -484,7 +484,7 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 	// 3. Resolve MariaDB failure and retry defeat settlement
 	failingRepo.failFinalize = false
 
-	resRetry, _, err := service.AdvanceRound(ctx, charID, sess.ID)
+	resRetry, _, err := service.AdvanceRound(ctx, charID, sess.ID, sess.Revision)
 	if err != nil {
 		t.Fatalf("retry AdvanceRound failed: %v", err)
 	}

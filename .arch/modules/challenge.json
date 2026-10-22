@@ -1,0 +1,70 @@
+{
+  "module": "challenge",
+  "tier": 2,
+  "description": "Valkey live Challenge runs with SQL coordination, participant settlement and recoverable publication (C1, C2, C3).",
+  "package": "internal/challenge",
+  "dependencies": [
+    {
+      "name": "transitions",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/challenge/transition.go#TransitionRepository"
+    },
+    {
+      "name": "live_runs",
+      "target_module": "challenge",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/challenge/transition.go#RunStore"
+    },
+    {
+      "name": "fullness",
+      "target_module": "tavern",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/challenge/transition.go#FullnessResetter"
+    },
+    {
+      "name": "battle",
+      "target_module": "battle",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/challenge/challenge.go#ParticipantBuilder"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "WithRunLock",
+      "source_ref": "internal/database/challenge_transition.go#ChallengeRepository.WithRunLock",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "challenge_run_transitions",
+          "tier": 0,
+          "mode": "INSERT / SELECT ... FOR UPDATE",
+          "note": "Serializes recovery and computation before assets; nested calls share the owned context."
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (ascending ID)",
+          "note": "Admission and shared settlement reuse the ambient transaction."
+        },
+        {
+          "table": "inventory_items / equipment_slots",
+          "tier": 3,
+          "mode": "shared battle adapter",
+          "note": "Cumulative consumption precedes bonus equipment eligibility."
+        },
+        {
+          "table": "character_depots / depot_items",
+          "tier": 5,
+          "mode": "conditional overflow reward delivery"
+        },
+        {
+          "table": "challenge_participants / challenge_character_claims / challenge_command_results / character_challenge_records / tavern_character_status",
+          "tier": 8,
+          "mode": "owner-scoped writes",
+          "note": "Participant payout, bonuses, fullness and pending intent commit together. Publication acknowledgement releases only departed claims."
+        }
+      ]
+    }
+  ]
+}

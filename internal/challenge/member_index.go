@@ -22,6 +22,16 @@ func (r *ValkeySessionRepository) getMemberRun(ctx context.Context, actor string
 		return nil, err
 	}
 	ids := decodeMemberReference(value)
+	if len(ids) == 0 {
+		run, err := r.ReadRun(ctx, value)
+		if err != nil || run == nil {
+			return run, err
+		}
+		if !run.ContainsCharacter(actor) {
+			return nil, ErrForbidden
+		}
+		return run, nil
+	}
 	if len(ids) != 2 || ids[0] == actor {
 		return nil, fmt.Errorf("invalid challenge member reference")
 	}

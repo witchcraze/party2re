@@ -78,8 +78,8 @@ func TestStartOutcomeUnknownHTTP(t *testing.T) {
 	}{
 		{"dungeon solo", "/characters/c1/dungeons/start", `{"dungeon_id":"dungeon-01"}`, dungeon.ErrStartOutcomeUnknown},
 		{"dungeon party", "/characters/c1/dungeons/party-start", `{"dungeon_id":"dungeon-01"}`, dungeon.ErrStartOutcomeUnknown},
-		{"challenge solo", "/characters/c1/challenges/start", `{"tier_id":"1"}`, challenge.ErrStartOutcomeUnknown},
-		{"challenge party", "/characters/c1/challenges/party-start", `{"tier_id":"1"}`, challenge.ErrStartOutcomeUnknown},
+		{"challenge solo", "/characters/c1/challenges/start", `{"tier_id":"1"}`, challenge.ErrOutcomeUnknown},
+		{"challenge party", "/characters/c1/challenges/party-start", `{"tier_id":"1"}`, challenge.ErrOutcomeUnknown},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			joined := errors.Join(tc.sentinel, causeSave, causeCleanup)
@@ -103,7 +103,11 @@ func TestStartOutcomeUnknownHTTP(t *testing.T) {
 			rec := httptest.NewRecorder()
 			h.Router().ServeHTTP(rec, req)
 			body := rec.Body.String()
-			if rec.Code != http.StatusInternalServerError || !strings.Contains(body, tc.sentinel.Error()) || strings.Contains(body, "secret") {
+			wantStatus := http.StatusInternalServerError
+			if errors.Is(tc.sentinel, challenge.ErrOutcomeUnknown) {
+				wantStatus = http.StatusServiceUnavailable
+			}
+			if rec.Code != wantStatus || !strings.Contains(body, tc.sentinel.Error()) || strings.Contains(body, "secret") {
 				t.Fatalf("status=%d body=%s", rec.Code, body)
 			}
 		})

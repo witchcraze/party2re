@@ -10,6 +10,9 @@ import (
 )
 
 func writeCombatAdmissionError(w http.ResponseWriter, err error) bool {
+	if writeChallengeRecoveryError(w, err) {
+		return true
+	}
 	switch {
 	case errors.Is(err, party.ErrNotFound), errors.Is(err, party.ErrCharacterNotInParty):
 		writeError(w, http.StatusBadRequest, err)
@@ -23,8 +26,6 @@ func writeCombatAdmissionError(w http.ResponseWriter, err error) bool {
 	case errors.Is(err, dungeon.ErrStartOutcomeUnknown):
 		// Only the stable sentinel is exposed; joined causes may carry internals.
 		writeError(w, http.StatusInternalServerError, dungeon.ErrStartOutcomeUnknown)
-	case errors.Is(err, challenge.ErrStartOutcomeUnknown):
-		writeError(w, http.StatusInternalServerError, challenge.ErrStartOutcomeUnknown)
 	default:
 		return false
 	}

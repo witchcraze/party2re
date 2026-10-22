@@ -10,13 +10,14 @@ import (
 // Activity is a whitelist of owned membership/run facts, never raw feature state.
 // Actions are service-verified continuation candidates, not execution approval.
 type Activity struct {
-	Kind    string   `json:"kind"`
-	ID      string   `json:"id"`
-	Role    string   `json:"role"`
-	Phase   string   `json:"phase"`
-	Round   int      `json:"round"`
-	Actions []string `json:"actions"`
-	PartyID string   `json:"party_id,omitempty"`
+	Kind     string   `json:"kind"`
+	ID       string   `json:"id"`
+	Role     string   `json:"role"`
+	Phase    string   `json:"phase"`
+	Round    int      `json:"round"`
+	Revision int      `json:"revision,omitempty"`
+	Actions  []string `json:"actions"`
+	PartyID  string   `json:"party_id,omitempty"`
 }
 
 // ActivityReader adapts public feature services at the composition root.

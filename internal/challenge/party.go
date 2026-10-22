@@ -9,7 +9,6 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/id"
 )
 
 var (
@@ -31,20 +30,20 @@ func (s *Service) StartPartySession(
 	if s.admission == nil {
 		return nil, ErrPartyUnavailable
 	}
-	var session *ChallengeSession
-	err := s.admission.AdmitParty(ctx, leaderCharID, "", memberIDs, func(ctx context.Context, partyID string, ids []string) error {
-		var err error
-		session, err = s.startRoster(ctx, leaderCharID, ids, tierID, partyName, partyColor, partyID)
-		return err
+	return s.startRun(ctx, leaderCharID, func(ctx context.Context, runID string) (*ChallengeSession, error) {
+		var session *ChallengeSession
+		err := s.admission.AdmitParty(ctx, leaderCharID, "", memberIDs, func(ctx context.Context, partyID string, ids []string) error {
+			var err error
+			session, err = s.startRoster(ctx, runID, leaderCharID, ids, tierID, partyName, partyColor, partyID)
+			return err
+		})
+		return session, err
 	})
-	if err != nil && session != nil {
-		return s.reconcileStart(ctx, session, err)
-	}
-	return session, err
 }
 
 func (s *Service) startRoster(
 	ctx context.Context,
+	runID string,
 	leaderCharID string,
 	memberIDs []string,
 	tierID string,
@@ -56,6 +55,19 @@ func (s *Service) startRoster(
 		return nil, ErrCharacterNotFound
 	}
 
+	if len(memberIDs) == 0 {
+		return nil, ErrPartyEmpty
+	}
+	seen := map[string]bool{}
+	for _, actor := range memberIDs {
+		if actor == "" || seen[actor] {
+			return nil, ErrForbidden
+		}
+		seen[actor] = true
+	}
+	if !seen[leaderCharID] {
+		return nil, ErrForbidden
+	}
 	tier, err := s.GetTier(tierID)
 	if err != nil {
 		return nil, err
@@ -73,7 +85,7 @@ func (s *Service) startRoster(
 	leaderHP := 0
 
 	for _, mID := range memberIDs {
-		existing, err := s.activeStore.GetActiveSession(ctx, mID)
+		existing, err := s.GetActiveSession(ctx, mID)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +171,8 @@ func (s *Service) startRoster(
 
 	now := time.Now().UTC()
 	session := ChallengeSession{
-		ID:                 id.New(),
+		ID:                 runID,
+		Revision:           1,
 		PartyID:            partyID,
 		CharacterID:        leaderCharID,
 		PartyName:          partyName,
@@ -176,22 +189,16 @@ func (s *Service) startRoster(
 		UpdatedAt:          now,
 	}
 
-	// The SQL start row precedes Valkey publication: an insert failure then
-	// leaves nothing published, and the row is the commit evidence used by
-	// reconcileStart when the enclosing transaction fails afterwards.
 	if err := s.repo.SaveSession(ctx, session); err != nil {
 		return nil, fmt.Errorf("saving challenge session: %w", err)
 	}
-
-	if err := s.activeStore.SaveActiveSession(ctx, session); err != nil {
-		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startReconcileTimeout)
-		defer cancel()
-		if discardErr := s.discardPublished(dctx, &session); discardErr != nil {
-			return nil, errors.Join(ErrStartOutcomeUnknown, err, discardErr)
-		}
+	if err := s.transitions.EnrollRun(ctx, session); err != nil {
 		return nil, err
 	}
-
+	result := &CommandResult{ActorID: leaderCharID, Action: "start", ExpectedRevision: 0, Session: session}
+	if err := s.transitions.SaveTransition(ctx, Transition{RunID: runID, Revision: 1, Pending: true, Publication: &session, Deadline: now.Add(s.runStore.SessionTTL())}, result); err != nil {
+		return nil, err
+	}
 	return &session, nil
 }
 

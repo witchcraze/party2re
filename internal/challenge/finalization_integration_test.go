@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/challenge"
-	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
@@ -34,7 +33,7 @@ func TestChallengeFinalizationIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, scenario := range []string{"sequential", "concurrent", "rollback", "cleanup failure", "invalid status", "missing session", "wrong owner"} {
+	for _, scenario := range []string{"sequential", "concurrent", "rollback", "invalid status", "missing session", "wrong owner"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
@@ -158,36 +157,6 @@ func TestChallengeFinalizationIntegration(t *testing.T) {
 					t.Fatal(err)
 				}
 				assertAwards(1)
-			case "cleanup failure":
-				client := openTestValkey(t)
-				defer client.Close()
-				store, err := challenge.NewValkeySessionRepository(client)
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer cleanupChallengeValkey(t, client, char.ID)
-				session.Status = challenge.StatusActive
-				if err := store.SaveActiveSession(ctx, session); err != nil {
-					t.Fatal(err)
-				}
-				failingStore := newMockActiveStore(store)
-				failingStore.deleteActiveSessionErr = errors.New("cleanup unavailable")
-				svc, err := challenge.NewService(repo, charRepo, finalizationDefeatEngine{}, challenge.WithActiveSessionStore(failingStore))
-				if err != nil {
-					t.Fatal(err)
-				}
-				result, _, err := svc.AdvanceRound(ctx, char.ID, session.ID)
-				if err != nil || result == nil || !result.SessionEnded {
-					t.Fatalf("first settlement: %+v, %v", result, err)
-				}
-				buffer, err := store.GetActiveSession(ctx, char.ID)
-				if err != nil || buffer == nil {
-					t.Fatalf("cleanup failure must retain buffer: %+v, %v", buffer, err)
-				}
-				if _, _, err := svc.AdvanceRound(ctx, char.ID, session.ID); !errors.Is(err, challenge.ErrSessionNotActive) {
-					t.Fatalf("retry after failed cleanup: %v", err)
-				}
-				assertAwards(1)
 			case "invalid status":
 				for _, status := range []challenge.SessionStatus{challenge.StatusActive, "invalid"} {
 					session.Status = status
@@ -214,10 +183,4 @@ func TestChallengeFinalizationIntegration(t *testing.T) {
 			}
 		})
 	}
-}
-
-type finalizationDefeatEngine struct{}
-
-func (finalizationDefeatEngine) Resolve(req corebattle.Request) (corebattle.Result, error) {
-	return corebattle.Result{Outcome: corebattle.OutcomeWin, WinnerID: req.Participants[1].ID}, nil
 }

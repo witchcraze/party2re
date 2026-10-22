@@ -161,9 +161,95 @@
       ]
     }
   },
+  "/characters/{id}/challenges/active": {
+    "get": {
+      "description": "Read-only: never publishes, settles, cleans up or renews TTL. Missing live state with an unfinished SQL claim remains visible as recovery_pending.",
+      "operationId": "getActiveChallenge",
+      "parameters": [
+        {
+          "description": "Owned Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChallengeSessionResponse"
+              }
+            }
+          },
+          "description": "Owned activity observation"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Observe owned Challenge activity and pending recovery",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
   "/characters/{id}/challenges/advance": {
     "post": {
-      "description": "Computes combat from the active session snapshot and atomically applies a victory only if its session and round still match. Concurrent computations of the same round receive HTTP 409 after the first victory commits; observe the current run before continuing. Inventory/equipment read failures before combat return HTTP 500 without advancing the round or changing buffered resources, rewards or Hall of Fame.",
+      "description": "Requires the observed positive expected_revision. Run coordination serializes combat with exits and defeat. An identical actor/run/revision command returns its stored result; reusing that identity for another action returns 409. SQL commits the result and publication intent before publishing Valkey state. A 503 requires GET observation of the owned receipt and active activity; clients never automatically replay POST.",
       "operationId": "advanceChallengeRound",
       "parameters": [
         {
@@ -181,12 +267,17 @@
           "application/json": {
             "schema": {
               "properties": {
+                "expected_revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
                 "session_id": {
                   "type": "string"
                 }
               },
               "required": [
-                "session_id"
+                "session_id",
+                "expected_revision"
               ],
               "type": "object"
             }
@@ -264,6 +355,16 @@
         "501": {
           "$ref": "#/components/responses/Error",
           "description": "Not Implemented"
+        },
+        "503": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Owned command outcome is unknown or live publication requires explicit recovery. Read the active run and owned command result; do not automatically replay POST."
         }
       },
       "security": [
@@ -395,11 +496,21 @@
               }
             }
           },
-          "description": "Internal server error. For the start outcome sentinel (the start failed after publication and could not be confirmed) the run is preserved: observe the active run before retrying and never replay the start."
+          "description": "Internal server error before a confirmed command result."
         },
         "501": {
           "$ref": "#/components/responses/Error",
           "description": "Not Implemented"
+        },
+        "503": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Owned command outcome is unknown or live publication requires explicit recovery. Read the active run and owned command result; do not automatically replay POST."
         }
       },
       "security": [
@@ -595,7 +706,128 @@
               }
             }
           },
-          "description": "Internal server error. For the start outcome sentinel (the start failed after publication and could not be confirmed) the run is preserved: observe the active run before retrying and never replay the start."
+          "description": "Internal server error before a confirmed command result."
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
+        },
+        "503": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Owned command outcome is unknown or live publication requires explicit recovery. Read the active run and owned command result; do not automatically replay POST."
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Start continuous challenge session",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/characters/{id}/challenges/{session_id}/commands/{revision}": {
+    "get": {
+      "description": "Read-only: never publishes, settles, cleans up or renews TTL. The path revision is the command expected_revision. Start uses revision 0. Only the authenticated character may read their result, including after departure. An absent or foreign receipt returns 404.",
+      "operationId": "getChallengeCommandResult",
+      "parameters": [
+        {
+          "description": "Owned Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Immutable run ID",
+          "in": "path",
+          "name": "session_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Command expected revision",
+          "in": "path",
+          "name": "revision",
+          "required": true,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChallengeCommandResult"
+              }
+            }
+          },
+          "description": "Original actor-owned command result"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "No command result owned by this character"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
         },
         "501": {
           "$ref": "#/components/responses/Error",
@@ -607,7 +839,7 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Start continuous challenge session",
+      "summary": "Read an actor-owned Challenge command receipt",
       "tags": [
         "Combat"
       ]

@@ -259,10 +259,12 @@ connected entry discovery remains usable. Dispatcher entry evaluation is
 separate: a full explicit command never binds its target to the displayed scene.
 Actual sleep, unfinished scheduling, Party/PvP/GvG/Casino membership and
 Dungeon/Challenge buffers override ordinary selection. Activity observations
-contain only kind, ID, owned role, phase, round/floor, an existing optional party
+contain only kind, ID, owned role, phase, round/floor, an optional expected revision,
+an existing optional party
 relation and eligible continuation IDs. Room secrets, cards, provisional rewards
 and private member data are excluded. These observations use production
-public-service readers; historical SQL records never determine activity.
+public-service readers; historical records alone never determine activity, while
+unfinished Challenge SQL claims explicitly preserve unresolved activity.
 
 `scene.kind:activity` carries `data.activities`; `activity_conflict` retains all
 contradictory exclusive facts and only verified leave/recovery candidates.
@@ -272,19 +274,22 @@ missing relationship is inferred. Terminal run buffers remain observable until
 their feature owner removes them; observing them never replays settlement.
 Dungeon/Challenge discovery uses the consented
 [run-member references](transient-run-state.md#candidate-d-in-progress-run-buffers).
-An enrolled follower observes `role:member` with no leader continuation controls;
+An enrolled follower observes `role:member`;
 membership never authorizes executing the controlling actor's commands.
 
-The approved [Challenge individual-exit target](transient-run-state.md#challenge-participant-exit-target)
-will replace its original-leader-only discovery with current roster/leadership
-and durable pending-publication facts. `challenge_retire` is the selected future
+The [Challenge individual-exit boundary](transient-run-state.md#challenge-participant-exit-target)
+uses current roster/leadership and durable pending-publication facts. `challenge_retire` is the selected future
 ActionID, scoped to the authenticated actor with explicit `session_id` and
 `expected_revision`; it is a continuation/recovery operation rather than town
 entry. Every remaining participant may leave; only the last departure ends the
 run. Mutation receipts remain actor-owned after departure. GET observes pending
 recovery and stored outcomes without publishing, settling or renewing lifetime.
-This target registers no command or schema; current OpenAPI remains the source
-for executable adapters, and operational REST reads remain until replaced.
+The domain port and retained REST advance require an observed revision. Owned
+REST GET routes expose active activity and command receipts; recovery observations
+suppress advance candidates. The initial advance remains leader-only; subsequent
+rounds accept remaining participants. Gateway exit remains unconnected pending
+#1208. Current OpenAPI owns executable adapters; operational REST reads remain
+until replaced.
 
 Continuation eligibility comes from actual membership, role and phase, instead
 of entry's town/cooldown/HP/fatigue/currency gates. Exact readiness, team setup,

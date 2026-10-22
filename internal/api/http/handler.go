@@ -548,6 +548,8 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /challenges/hall-of-fame", h.handleListChallengeHallOfFame)
 	mux.HandleFunc("GET /challenges/hall-of-fame/{tier_id}", h.handleGetChallengeHallOfFame)
 	mux.HandleFunc("GET /characters/{id}/challenges/records", h.handleGetChallengeRecords)
+	mux.HandleFunc("GET /characters/{id}/challenges/active", h.handleGetActiveChallenge)
+	mux.HandleFunc("GET /characters/{id}/challenges/{session_id}/commands/{revision}", h.handleGetChallengeCommand)
 	mux.HandleFunc("POST /characters/{id}/challenges/start", h.handleStartChallenge)
 	mux.HandleFunc("POST /characters/{id}/challenges/party-start", h.handleStartPartyChallenge)
 	mux.HandleFunc("POST /characters/{id}/challenges/advance", h.handleAdvanceChallenge)

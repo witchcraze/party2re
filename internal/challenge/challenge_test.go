@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -27,7 +28,9 @@ func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.C
 }
 
 type mockChallengeRepo struct {
+	*challenge.MemoryTransitionRepository
 	sessions             map[string]challenge.ChallengeSession
+	finalized            map[string]challenge.ChallengeSession
 	records              map[string]challenge.CharacterChallengeRecord
 	hof                  map[string]challenge.HallOfFameEntry
 	saveSessionErr       error
@@ -46,9 +49,11 @@ type mockChallengeRepo struct {
 
 func newMockChallengeRepo() *mockChallengeRepo {
 	return &mockChallengeRepo{
-		sessions: make(map[string]challenge.ChallengeSession),
-		records:  make(map[string]challenge.CharacterChallengeRecord),
-		hof:      make(map[string]challenge.HallOfFameEntry),
+		MemoryTransitionRepository: challenge.NewMemoryTransitionRepository(),
+		sessions:                   make(map[string]challenge.ChallengeSession),
+		finalized:                  make(map[string]challenge.ChallengeSession),
+		records:                    make(map[string]challenge.CharacterChallengeRecord),
+		hof:                        make(map[string]challenge.HallOfFameEntry),
 	}
 }
 
@@ -149,6 +154,10 @@ func (m *mockChallengeRepo) FinalizeSession(ctx context.Context, s challenge.Cha
 	if m.finalizeSessionErr != nil {
 		return m.finalizeSessionErr
 	}
+	m.finalized[s.ID] = s
+	if s.Revision > 0 {
+		s.Members = m.sessions[s.ID].Members
+	}
 	m.sessions[s.ID] = s
 	key := s.CharacterID + ":" + s.TierID
 	rec := m.records[key]
@@ -201,6 +210,26 @@ type mockActiveStore struct {
 	deleteActiveSessionErr  error
 	discardActiveSessionErr error
 	advanceRoundErr         error
+	publishRunErr           error
+}
+
+func (m *mockActiveStore) ReadRun(ctx context.Context, id string) (*challenge.ChallengeSession, error) {
+	if m.getActiveSessionErr != nil {
+		return nil, m.getActiveSessionErr
+	}
+	return m.underlying.ReadRun(ctx, id)
+}
+func (m *mockActiveStore) ReadLegacyRun(ctx context.Context, id string) (*challenge.ChallengeSession, time.Time, error) {
+	return m.underlying.ReadLegacyRun(ctx, id)
+}
+func (m *mockActiveStore) PublishRun(ctx context.Context, tr challenge.Transition) error {
+	if m.publishRunErr != nil {
+		return m.publishRunErr
+	}
+	if m.advanceRoundErr != nil {
+		return m.advanceRoundErr
+	}
+	return m.underlying.PublishRun(ctx, tr)
 }
 
 func newMockActiveStore(underlying challenge.ActiveSessionStore) *mockActiveStore {
@@ -319,7 +348,10 @@ func TestExecuteRound_VictoryProgression(t *testing.T) {
 
 	// Execute 3 rounds
 	for round := 1; round <= 3; round++ {
-		res, err := service.ExecuteRound(ctx, session.ID)
+		res, next, err := service.AdvanceRound(ctx, session.CharacterID, session.ID, session.Revision)
+		if next != nil {
+			session = next
+		}
 		if err != nil {
 			t.Fatalf("ExecuteRound %d failed: %v", round, err)
 		}
@@ -360,7 +392,10 @@ func TestExecuteRound_DefeatTerminatesSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := service.ExecuteRound(ctx, session.ID)
+	res, next, err := service.AdvanceRound(ctx, session.CharacterID, session.ID, session.Revision)
+	if next != nil {
+		session = next
+	}
 	if err != nil {
 		t.Fatalf("ExecuteRound failed: %v", err)
 	}
@@ -405,7 +440,7 @@ func TestChallenge_OwnershipVerification(t *testing.T) {
 	}
 
 	// 1. AdvanceRound from attacker_char should return ErrForbidden
-	_, _, err = service.AdvanceRound(ctx, "attacker_char", session.ID)
+	_, _, err = service.AdvanceRound(ctx, "attacker_char", session.ID, session.Revision)
 	if !errors.Is(err, challenge.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for AdvanceRound by non-owner, got %v", err)
 	}
@@ -417,7 +452,7 @@ func TestChallenge_OwnershipVerification(t *testing.T) {
 	}
 
 	// 3. Owner should succeed
-	roundRes, updatedSession, err := service.AdvanceRound(ctx, "owner_char", session.ID)
+	roundRes, updatedSession, err := service.AdvanceRound(ctx, "owner_char", session.ID, session.Revision)
 	if err != nil {
 		t.Fatalf("AdvanceRound by owner failed: %v", err)
 	}
@@ -449,3 +484,5 @@ func TestMockChallengeRepository_SaveRecord(t *testing.T) {
 		t.Errorf("expected HighestRound 4, got %d", found.HighestRound)
 	}
 }
+
+func (m *mockActiveStore) SessionTTL() time.Duration { return m.underlying.SessionTTL() }
