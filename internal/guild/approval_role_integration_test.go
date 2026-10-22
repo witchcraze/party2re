@@ -19,6 +19,8 @@ import (
 )
 
 type approvalRoleFixture struct {
+	ctx                     context.Context
+	cancel                  context.CancelFunc
 	db                      *sql.DB
 	repo                    *database.GuildRepository
 	service                 *guild.Service
@@ -38,6 +40,11 @@ func newApprovalRoleFixture(t *testing.T) *approvalRoleFixture {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
+	// Fixture creation and SQL share the scenario budget; worker stop detection is separate.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+	start := time.Now()
+	defer func() { t.Logf("fixture: %s", time.Since(start)) }()
 	db, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
@@ -51,11 +58,11 @@ func newApprovalRoleFixture(t *testing.T) *approvalRoleFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, leader, err := database.CreateTestGuildWithLeader(context.Background(), db, "Ar_"+id.New()[:8], 20000)
+	g, leader, err := database.CreateTestGuildWithLeader(ctx, db, "Ar_"+id.New()[:8], 20000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &approvalRoleFixture{db: db, repo: repo, g: g, leader: leader}
+	f := &approvalRoleFixture{ctx: ctx, cancel: cancel, db: db, repo: repo, g: g, leader: leader}
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +72,10 @@ func newApprovalRoleFixture(t *testing.T) *approvalRoleFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		ctx := context.Background()
+		start := time.Now()
+		defer func() { t.Logf("cleanup: %s; pool: %+v", time.Since(start), db.Stats()) }()
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
 		if err := repo.DisbandGuild(ctx, g.ID); err != nil {
 			t.Error(err)
 		}
@@ -73,7 +83,9 @@ func newApprovalRoleFixture(t *testing.T) *approvalRoleFixture {
 			if c.ID == "" {
 				continue
 			}
-			_, _ = f.db.Exec("DELETE FROM character_letters WHERE recipient_character_id = ? OR sender_character_id = ?", c.ID, c.ID)
+			if _, err := f.db.ExecContext(ctx, "DELETE FROM character_letters WHERE recipient_character_id = ? OR sender_character_id = ?", c.ID, c.ID); err != nil {
+				t.Error(err)
+			}
 			if err := chars.Delete(ctx, c.ID); err != nil {
 				t.Error(err)
 			}
@@ -82,20 +94,20 @@ func newApprovalRoleFixture(t *testing.T) *approvalRoleFixture {
 			}
 		}
 	})
-	f.active, err = database.CreateTestCharacter(context.Background(), db, "ArActive_"+id.New()[:8])
+	f.active, err = database.CreateTestCharacter(ctx, db, "ArActive_"+id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.pending, err = database.CreateTestCharacter(context.Background(), db, "ArPending_"+id.New()[:8])
+	f.pending, err = database.CreateTestCharacter(ctx, db, "ArPending_"+id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.service = f.newService(t, repo)
 
-	if _, err = f.service.Join(context.Background(), g.ID, f.active.ID); err != nil {
+	if _, err = f.service.Join(ctx, g.ID, f.active.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.service.ApplyToJoin(context.Background(), g.ID, f.pending.ID); err != nil {
+	if err = f.service.ApplyToJoin(ctx, g.ID, f.pending.ID); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -142,7 +154,7 @@ func (f *approvalRoleFixture) executeOp(ctx context.Context, s *guild.Service, m
 
 func (f *approvalRoleFixture) assertRoster(t *testing.T) guild.Detail {
 	t.Helper()
-	d, err := f.service.Get(context.Background(), f.g.ID)
+	d, err := f.service.Get(f.ctx, f.g.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +175,7 @@ func (f *approvalRoleFixture) assertRoster(t *testing.T) guild.Detail {
 
 func (f *approvalRoleFixture) recipientLetters(t *testing.T, charID string) []string {
 	t.Helper()
-	rows, err := f.db.Query("SELECT content FROM character_letters WHERE recipient_character_id = ? ORDER BY created_at ASC", charID)
+	rows, err := f.db.QueryContext(f.ctx, "SELECT content FROM character_letters WHERE recipient_character_id = ? ORDER BY created_at ASC", charID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,13 +196,18 @@ func (f *approvalRoleFixture) recipientLetters(t *testing.T, charID string) []st
 
 type approvalRoleGateRepo struct {
 	*database.GuildRepository
+	t                       *testing.T
 	beforeLocked, afterRead func(context.Context)
 }
 
 func (r *approvalRoleGateRepo) GetGuild(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+	start := time.Now()
 	g, members, err := r.GuildRepository.GetGuild(ctx, guildID)
+	r.t.Logf("GetGuild SQL: %s, err=%v", time.Since(start), err)
 	if err == nil && r.afterRead != nil {
+		start = time.Now()
 		r.afterRead(ctx)
+		r.t.Logf("GetGuild barrier: %s", time.Since(start))
 	}
 	return g, members, err
 }
@@ -199,26 +216,67 @@ func (r *approvalRoleGateRepo) LockCharacterForUpdate(ctx context.Context, chara
 	if r.beforeLocked != nil {
 		r.beforeLocked(ctx)
 	}
-	return r.GuildRepository.LockCharacterForUpdate(ctx, characterID)
+	start := time.Now()
+	err := r.GuildRepository.LockCharacterForUpdate(ctx, characterID)
+	r.t.Logf("LockCharacterForUpdate SQL: %s, err=%v", time.Since(start), err)
+	return err
 }
 
 func (r *approvalRoleGateRepo) GetGuildForUpdate(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
 	if r.beforeLocked != nil {
 		r.beforeLocked(ctx)
 	}
+	start := time.Now()
 	g, members, err := r.GuildRepository.GetGuildForUpdate(ctx, guildID)
+	r.t.Logf("GetGuildForUpdate SQL: %s, err=%v", time.Since(start), err)
 	if err == nil && r.afterRead != nil {
+		start = time.Now()
 		r.afterRead(ctx)
+		r.t.Logf("GetGuildForUpdate barrier: %s", time.Since(start))
 	}
 	return g, members, err
 }
 
-func awaitApprovalRoleSignal(t *testing.T, ch <-chan struct{}) {
-	t.Helper()
+func awaitApprovalRoleSignal(ctx context.Context, ch <-chan struct{}) error {
 	select {
 	case <-ch:
-	case <-time.After(5 * time.Second):
-		t.Fatal("interleaving gate timed out")
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (f *approvalRoleFixture) startWorker(t *testing.T, name string, fn func() error) func() error {
+	t.Helper()
+	result, stopped := make(chan error, 1), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		start := time.Now()
+		err := fn()
+		t.Logf("%s worker (including gates): %s, err=%v; pool: %+v", name, time.Since(start), err, f.db.Stats())
+		result <- err
+	}()
+	join := func() {
+		t.Helper()
+		select {
+		case <-stopped:
+			return
+		case <-f.ctx.Done():
+		}
+		select {
+		case <-stopped:
+		case <-time.After(5 * time.Second):
+			// Stop the test process rather than clean up rows still used by a stuck worker.
+			panic(name + " worker did not stop after cancellation")
+		}
+	}
+	t.Cleanup(func() {
+		f.cancel() // Releases every context-aware barrier before fixture cleanup.
+		join()
+	})
+	return func() error {
+		join()
+		return <-result
 	}
 }
 
@@ -226,15 +284,14 @@ func TestGuildApprovalRole_TransferFirst(t *testing.T) {
 	for _, mode := range []string{"assignActive", "assignPending", "approvePending"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newApprovalRoleFixture(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+			ctx := f.ctx
 
 			locked, resume, opStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			committed := make(chan struct{})
 			var started sync.Once
 
 			var transferLockedOnce sync.Once
-			transferRepo := &approvalRoleGateRepo{GuildRepository: f.repo, afterRead: func(context.Context) {
+			transferRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t, afterRead: func(context.Context) {
 				transferLockedOnce.Do(func() {
 					close(locked)
 					select {
@@ -245,7 +302,7 @@ func TestGuildApprovalRole_TransferFirst(t *testing.T) {
 			}}
 			transfer := f.newService(t, transferRepo)
 
-			opRepo := &approvalRoleGateRepo{GuildRepository: f.repo,
+			opRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t,
 				beforeLocked: func(context.Context) { started.Do(func() { close(opStarted) }) },
 				afterRead: func(c context.Context) {
 					if database.TxFromContext(c) == nil {
@@ -259,22 +316,27 @@ func TestGuildApprovalRole_TransferFirst(t *testing.T) {
 			}
 			opService := f.newService(t, opRepo)
 
-			transferDone, opDone := make(chan error, 1), make(chan error, 1)
-			go func() {
-				transferDone <- transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID)
+			transferDone := f.startWorker(t, "transfer", func() error {
+				err := transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID)
 				close(committed)
-			}()
-			awaitApprovalRoleSignal(t, locked)
+				return err
+			})
+			if err := awaitApprovalRoleSignal(ctx, locked); err != nil {
+				t.Fatalf("transfer lock gate: %v", err)
+			}
 
-			go func() { opDone <- f.executeOp(ctx, opService, mode, "AuditChanged") }()
-			awaitApprovalRoleSignal(t, opStarted)
+			opDone := f.startWorker(t, "mutation", func() error { return f.executeOp(ctx, opService, mode, "AuditChanged") })
+			if err := awaitApprovalRoleSignal(ctx, opStarted); err != nil {
+				t.Fatalf("mutation start gate: %v", err)
+			}
 			close(resume)
 
-			if err := <-transferDone; err != nil {
-				t.Fatal(err)
+			transferErr, opErr := transferDone(), opDone()
+			if transferErr != nil {
+				t.Fatal(transferErr)
 			}
-			if err := <-opDone; !errors.Is(err, guild.ErrUnauthorized) {
-				t.Fatalf("former leader operation %s = %v, want unauthorized", mode, err)
+			if !errors.Is(opErr, guild.ErrUnauthorized) {
+				t.Fatalf("former leader operation %s = %v, want unauthorized", mode, opErr)
 			}
 
 			d := f.assertRoster(t)
@@ -310,12 +372,11 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 	for _, mode := range []string{"assignActive", "assignPending", "approvePending"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newApprovalRoleFixture(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+			ctx := f.ctx
 
 			var lockOnce, transferStartedOnce sync.Once
 			locked, resume, transferStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
-			opRepo := &approvalRoleGateRepo{GuildRepository: f.repo, afterRead: func(c context.Context) {
+			opRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t, afterRead: func(c context.Context) {
 				lockOnce.Do(func() {
 					close(locked)
 					select {
@@ -326,24 +387,28 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 			}}
 			opService := f.newService(t, opRepo)
 
-			transferRepo := &approvalRoleGateRepo{GuildRepository: f.repo, beforeLocked: func(context.Context) {
+			transferRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t, beforeLocked: func(context.Context) {
 				transferStartedOnce.Do(func() { close(transferStarted) })
 			}}
 			transfer := f.newService(t, transferRepo)
 
-			opDone, transferDone := make(chan error, 1), make(chan error, 1)
-			go func() { opDone <- f.executeOp(ctx, opService, mode, "MutTitle") }()
-			awaitApprovalRoleSignal(t, locked)
+			opDone := f.startWorker(t, "mutation", func() error { return f.executeOp(ctx, opService, mode, "MutTitle") })
+			if err := awaitApprovalRoleSignal(ctx, locked); err != nil {
+				t.Fatalf("mutation lock gate: %v", err)
+			}
 
-			go func() { transferDone <- transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID) }()
-			awaitApprovalRoleSignal(t, transferStarted)
+			transferDone := f.startWorker(t, "transfer", func() error { return transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID) })
+			if err := awaitApprovalRoleSignal(ctx, transferStarted); err != nil {
+				t.Fatalf("transfer start gate: %v", err)
+			}
 			close(resume)
 
-			if err := <-opDone; err != nil {
-				t.Fatalf("op %s failed: %v", mode, err)
+			opErr, transferErr := opDone(), transferDone()
+			if opErr != nil {
+				t.Fatalf("op %s failed: %v", mode, opErr)
 			}
-			if err := <-transferDone; err != nil {
-				t.Fatalf("transfer failed: %v", err)
+			if transferErr != nil {
+				t.Fatalf("transfer failed: %v", transferErr)
 			}
 
 			d := f.assertRoster(t)
