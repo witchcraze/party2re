@@ -142,7 +142,7 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 	}
 
 	// 6. Advance Round
-	roundRes, err := service.AdvanceRound(ctx, leaderA.ID, createdRoom.Room.ID)
+	roundRes, err := service.AdvanceRound(ctx, leaderA.ID, createdRoom.Room.ID, 1)
 	if err != nil {
 		t.Fatalf("AdvanceRound: %v", err)
 	}

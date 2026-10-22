@@ -47,6 +47,8 @@ var (
 	ErrGuildMemberLimitExceeded  = errors.New("同じギルドメンバー５人以上は参加することができません")
 	ErrMatchAlreadyStarted       = errors.New("match has already started")
 	ErrMatchNotInProgress        = errors.New("match is not in progress")
+	ErrInvalidExpectedRound      = errors.New("expected_round must be an integer between 1 and 10")
+	ErrRoundMismatch             = errors.New("gvg expected round conflicts with the latest round")
 	ErrMatchCompleted            = errors.New("match is already completed")
 	ErrInvalidDependencies       = errors.New("gvg dependencies cannot be nil")
 	ErrInvalidRoomName           = errors.New("room name must be between 1 and 50 characters")

@@ -19,7 +19,7 @@ type GvGService interface {
 	JoinRoom(ctx context.Context, charID string, roomID string, password string) (gvg.RoomDetail, error)
 	LeaveRoom(ctx context.Context, charID string, roomID string) error
 	StartMatch(ctx context.Context, leaderID string, roomID string) (gvg.RoomDetail, error)
-	AdvanceRound(ctx context.Context, leaderID string, roomID string) (gvg.RoundResolution, error)
+	AdvanceRound(ctx context.Context, leaderID string, roomID string, expectedRound int) (gvg.RoundResolution, error)
 	GetStanding(ctx context.Context, guildID string) (gvg.GvGStanding, error)
 	GetLeaderboard(ctx context.Context, limit int) ([]gvg.GvGStanding, error)
 }
@@ -260,8 +260,26 @@ func (h *Handler) handleAdvanceGvGRound(w http.ResponseWriter, r *http.Request) 
 	charID := r.PathValue("id")
 	roomID := r.PathValue("room_id")
 	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		res, err := h.gvg.AdvanceRound(r.Context(), char.ID, roomID)
+		var req struct {
+			ExpectedRound int `json:"expected_round"`
+		}
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+		if req.ExpectedRound < 1 || req.ExpectedRound > gvg.MaxRounds {
+			writeError(w, http.StatusBadRequest, gvg.ErrInvalidExpectedRound)
+			return
+		}
+		res, err := h.gvg.AdvanceRound(r.Context(), char.ID, roomID, req.ExpectedRound)
 		if err != nil {
+			if errors.Is(err, gvg.ErrInvalidExpectedRound) {
+				writeError(w, http.StatusBadRequest, err)
+				return
+			}
+			if errors.Is(err, gvg.ErrRoundMismatch) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
 			if errors.Is(err, gvg.ErrRoomNotFound) {
 				writeError(w, http.StatusNotFound, err)
 				return

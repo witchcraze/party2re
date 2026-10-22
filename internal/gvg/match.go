@@ -54,7 +54,10 @@ func (s *Service) StartMatch(ctx context.Context, leaderID string, roomID string
 }
 
 // AdvanceRound executes combat for the active round and advances the match (@かいし, vs_guild.cgi:60-154).
-func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID string) (RoundResolution, error) {
+func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID string, expectedRound int) (RoundResolution, error) {
+	if expectedRound < 1 || expectedRound > MaxRounds {
+		return RoundResolution{}, ErrInvalidExpectedRound
+	}
 	var result RoundResolution
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		detail, err := s.repo.GetRoom(lockedCtx, roomID)
@@ -64,19 +67,39 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		if detail.Room.LeaderCharacterID != leaderID {
 			return ErrNotRoomLeader
 		}
-		if detail.Room.Status != StatusInProgress {
-			return ErrMatchNotInProgress
-		}
-		committed, found, err := s.standings.FindRoundTransition(lockedCtx, roomID, detail.Room.Round)
+		committed, found, err := s.standings.FindRoundTransition(lockedCtx, roomID)
 		if err != nil {
 			return err
 		}
 		if found {
-			if err := s.repo.SaveRoom(lockedCtx, committed.Detail.Room, committed.Detail.Members); err != nil {
-				return err
+			if expectedRound < committed.ResolvedRound {
+				return ErrRoundMismatch
 			}
-			result = committed.Result
-			return nil
+			pending := detail.Room.Round < committed.Detail.Room.Round ||
+				(detail.Room.Status == StatusInProgress && committed.Result.MatchCompleted)
+			if pending {
+				if expectedRound != committed.ResolvedRound &&
+					(committed.Result.MatchCompleted || expectedRound != committed.Detail.Room.Round) {
+					return ErrRoundMismatch
+				}
+				if err := s.repo.SaveRoom(lockedCtx, committed.Detail.Room, committed.Detail.Members); err != nil {
+					return err
+				}
+			}
+			if expectedRound == committed.ResolvedRound {
+				result = committed.Result
+				return nil
+			}
+			// Recovery publishes the preceding round; it cannot execute a different request.
+			if pending {
+				return ErrRoundMismatch
+			}
+		}
+		if detail.Room.Status != StatusInProgress {
+			return ErrMatchNotInProgress
+		}
+		if expectedRound != detail.Room.Round {
+			return ErrRoundMismatch
 		}
 		round := detail.Room.Round
 

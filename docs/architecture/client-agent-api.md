@@ -501,9 +501,12 @@ authority; it makes no combat, wager or settlement formula parity claim.
 | `lib/sleep.cgi:18–42`: empty action menu, elapsed automatic vitality recovery | Existing timer facts preserve sleep and elapsed recovery pending; only explicit connected Wake/Rescue commands can recover. GET changes no vitality, timer or feature record. |
 
 GvG advance clients must adopt the
-[expected-round retry target](transient-run-state.md#gvg-round-retry-identity-target)
-when it is implemented, including explicit continuation inputs. Until then an
-unknown advance outcome requires observation rather than automatic POST replay.
+[expected-round retry contract](transient-run-state.md#gvg-round-retry-identity-target).
+Retain the observed round before an intentional advance and supply it as
+`expected_round` (integer 1–10). Resend that same number after an unknown outcome;
+409 requires observation and a separate intentional advance, and 404 ends recovery.
+The unconnected `gvg_advance` continuation also requires `room_id` and
+`expected_round`; this schema does not connect a Gateway command.
 
 #### Route retirement and deliberate exceptions
 

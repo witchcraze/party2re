@@ -1578,6 +1578,7 @@
   },
   "/characters/{id}/gvg/rooms/{room_id}/advance": {
     "post": {
+      "description": "Resolve the explicitly requested round. Retry the same room and expected_round after an unknown outcome. Only the latest committed result can be replayed; older or future rounds conflict (409). A missing room remains 404. Exact replay includes completed matches and does not renew the room TTL.",
       "operationId": "postCharactersIdGvgRoomsRoomIdAdvance",
       "parameters": [
         {
@@ -1599,6 +1600,26 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "expected_round": {
+                  "maximum": 10,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "expected_round"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
           "content": {
@@ -1628,7 +1649,7 @@
         },
         "409": {
           "$ref": "#/components/responses/Error",
-          "description": "Conflict"
+          "description": "Expected round conflicts with the latest committed/current round, or pending publication was recovered for a different requested round. Read the room and require a separate intentional advance."
         },
         "422": {
           "$ref": "#/components/responses/Error",

@@ -131,11 +131,11 @@ func TestGvGRewardPublicationIntegration(t *testing.T) {
 			f := newRewardFixture(t, tc.target, tc.round, tc.outcome)
 			ctx := context.Background()
 			f.rooms.fail = true
-			if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); !errors.Is(err, errRoomPublication) {
+			if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round); !errors.Is(err, errRoomPublication) {
 				t.Fatalf("publication: %v", err)
 			}
 			f.assertRewards(t, tc.gp, tc.opponentGP, tc.wins, tc.draws)
-			saved, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID, tc.round)
+			saved, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID)
 			if err != nil || !found {
 				t.Fatalf("durable transition: found=%v err=%v", found, err)
 			}
@@ -154,7 +154,7 @@ func TestGvGRewardPublicationIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := retry.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID)
+			result, err := retry.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,7 +179,7 @@ func TestGvGRewardConcurrentRetryIntegration(t *testing.T) {
 	f.rooms.fail = true
 	// Every service retry still sees round 1 because publication keeps failing.
 	stress := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(_, _ int) error {
-		_, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID)
+		_, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round)
 		if errors.Is(err, errRoomPublication) {
 			return nil
 		}
@@ -189,7 +189,7 @@ func TestGvGRewardConcurrentRetryIntegration(t *testing.T) {
 		t.Fatalf("retry stress: %+v", stress)
 	}
 	f.assertRewards(t, 7, 4, 1, 0)
-	saved, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID, 1)
+	saved, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID)
 	if err != nil || !found {
 		t.Fatalf("transition: %v %v", found, err)
 	}
@@ -257,7 +257,7 @@ func TestGvGRewardSuccessiveRoundsIntegration(t *testing.T) {
 	f := newRewardFixture(t, 2, 1, corebattle.OutcomeWin)
 	ctx := context.Background()
 	for i := 0; i < 2; i++ {
-		if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
+		if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, i+1); err != nil {
 			t.Fatal(err)
 		}
 		if i == 0 {
@@ -269,7 +269,7 @@ func TestGvGRewardSuccessiveRoundsIntegration(t *testing.T) {
 	if err := f.rooms.SaveRoom(ctx, f.detail.Room, f.detail.Members); err != nil {
 		t.Fatal(err)
 	}
-	result, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID)
+	result, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,21 +282,21 @@ func TestGvGRewardSuccessiveRoundsIntegration(t *testing.T) {
 func TestGvGRewardCleanupFailureIntegration(t *testing.T) {
 	f := newRewardFixture(t, 1, 1, corebattle.OutcomeWin)
 	ctx := context.Background()
-	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
+	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round); err != nil {
 		t.Fatal(err)
 	}
 	f.rooms.failDelete = true
 	if err := f.service.LeaveRoom(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); !errors.Is(err, errRoomPublication) {
 		t.Fatalf("cleanup: %v", err)
 	}
-	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); !errors.Is(err, gvg.ErrMatchNotInProgress) {
+	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round); err != nil {
 		t.Fatalf("completed room retry: %v", err)
 	}
 	f.rooms.failDelete = false
 	if err := f.service.LeaveRoom(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
 		t.Fatal(err)
 	}
-	committed, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID, 1)
+	committed, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID)
 	if err != nil || !found {
 		t.Fatalf("cleanup lost durable guard: %v %v", found, err)
 	}
@@ -318,7 +318,7 @@ func TestGvGRewardSettlementFailureIntegration(t *testing.T) {
 	if _, err := f.db.ExecContext(ctx, "UPDATE gvg_standings SET wins = 2147483647 WHERE guild_id = ?", winner); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err == nil {
+	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round); err == nil {
 		t.Fatal("expected settlement overflow")
 	}
 	st, err := f.standings.GetOrCreateStanding(ctx, winner)
@@ -328,7 +328,7 @@ func TestGvGRewardSettlementFailureIntegration(t *testing.T) {
 	if st.VictoryPoints != 0 || st.BronzeMedals != 0 || st.Wins != 2147483647 {
 		t.Fatalf("partial reward survived rollback: %+v", st)
 	}
-	if _, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID, 1); err != nil || found {
+	if _, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID); err != nil || found {
 		t.Fatalf("failed settlement claimed the round: %v %v", found, err)
 	}
 	var points int64
@@ -340,7 +340,7 @@ func TestGvGRewardSettlementFailureIntegration(t *testing.T) {
 	if _, err := f.db.ExecContext(ctx, "UPDATE gvg_standings SET wins = 0 WHERE guild_id = ?", winner); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
+	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round); err != nil {
 		t.Fatal(err)
 	}
 	f.assertRewards(t, 7, 4, 1, 0)
@@ -369,11 +369,11 @@ func TestGvGRewardRollbackIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.assertRewards(t, 0, 0, 0, 0)
-	if _, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID, 1); err != nil || found {
+	if _, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID); err != nil || found {
 		t.Fatalf("rolled back guard remains: %v %v", found, err)
 	}
 	// SQL rollback must leave the claim reusable.
-	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
+	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round); err != nil {
 		t.Fatal(err)
 	}
 	f.assertRewards(t, 7, 4, 1, 0)
@@ -407,10 +407,10 @@ func TestGvGRewardParticipantGPIntegration(t *testing.T) {
 	if err := f.rooms.SaveRoom(ctx, room, members); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.service.AdvanceRound(ctx, room.LeaderCharacterID, room.ID); err != nil {
+	if _, err := f.service.AdvanceRound(ctx, room.LeaderCharacterID, room.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	committed, found, err := f.standings.FindRoundTransition(ctx, room.ID, 1)
+	committed, found, err := f.standings.FindRoundTransition(ctx, room.ID)
 	if err != nil || !found {
 		t.Fatalf("transition: found=%v err=%v", found, err)
 	}

@@ -89,24 +89,24 @@ rejected room write may leave the index ahead, while the room remains available
 for replay from SQL. Listing loads the authoritative room and prunes index entries
 by age; it does not erase a missing body that may still be publishing.
 
-This does not make every failed request safe to retry. If the room write completed
-but its reply or the HTTP response was lost, the next request can observe the next
-round and start it. The [retry identity target below](#gvg-round-retry-identity-target)
-addresses that ambiguity; it is not implemented yet. Lobby deletion or expiration
-does not delete the durable guard. These records have no automatic expiry, and a
-missing Valkey room is not reconstructed by this operation.
+Every advance supplies the expected round under the
+[retry identity contract below](#gvg-round-retry-identity-target). A lost publication
+acknowledgement or HTTP response can be retried with the original number without
+executing the next round. Lobby deletion or expiration does not delete the durable
+guard. These records have no automatic expiry, and a missing Valkey room is not
+reconstructed by this operation.
 
 This guarantee applies to transitions committed through the guard. It cannot
 retroactively identify rewards committed by an older deployment. Reward amounts
 and recipients remain a separate [GvG domain contract](../design/gvg.md).
 
-#### GvG round retry identity target
+<a id="gvg-round-retry-identity-target"></a>
+
+#### GvG round retry identity
 
 **Decision: expected round, selected in [#1573](https://github.com/witchcraze/party2re/issues/1573)
-on 2026-10-22 to preserve gameplay results.** This is an implementation target;
-the current advance API still has no operation identity. Implementation is tracked
-in [#1589](https://github.com/witchcraze/party2re/issues/1589). No reward, combat,
-round-limit or participation rule changes as part of this decision.
+on 2026-10-22 to preserve gameplay results.** No reward, combat, round-limit or
+participation rule changes as part of this decision.
 
 The legacy dispatch adds `かいし` and pre-start `しらべる`
 (`party2/lib/vs_guild.cgi:31–38`). `かいし` initializes the match or evaluates the
@@ -141,12 +141,15 @@ returning any saved result. Compare the requested number with SQL's resolved
 | Older than the latest committed round | 409; never substitute a newer result or publish an older snapshot |
 | Uncommitted request in recruiting/completed phase | Existing phase rejection (422); exact final-result replay takes precedence |
 | Uncommitted current round of an in-progress room | Resolve that round once and return 200 after publication |
+| Next round while preceding publication is pending | Recover publication and return 409 without executing this request |
 | Other uncommitted number | 409 without combat, rewards or room changes |
 
 After SQL commit but before successful Valkey publication, retrying that exact
 round republishes the saved room before returning its result. Resolve pending
-publication before accepting a new round; recovery itself does not satisfy a
-different requested round. If publication still fails, propagate the failure
+publication before accepting a new round. If a next-round request encounters
+pending publication, publish the preceding transition and return 409; this does
+not execute the requested round or return the preceding result. Older or future
+requests do not repair the room. If publication still fails, propagate the failure
 and retry with the same number. Once already published, replay returns the result
 without rewriting the room or renewing its TTL. A lost SQL commit acknowledgement
 is likewise an unknown outcome: retry the original identity and consult durable
@@ -164,10 +167,9 @@ remains 30 minutes after its last write, and reads do not renew it. Storage erro
 remain errors, not absence. Authentication/ownership failures retain their common
 HTTP handling and a nonleader receives 403 before result disclosure.
 
-Until implementation, clients must not automatically retry advance after an
-unknown outcome. After cutover, capture `room.round` before an intentional advance
-and retain that number with the request. On timeout or lost response, resend the
-same room/number; do not replace it with an observed newer round. After 409, read
+Capture `room.round` before an intentional advance and retain that number with
+the request. On timeout or lost response, resend the same room/number; do not
+replace it with an observed newer round. After 409, read
 the room and require a separate intentional next-round action; after 404, stop.
 Observation alone cannot prove which older request completed and cannot recover
 an overwritten battle log. Request IDs and historical replay would add storage
@@ -175,9 +177,10 @@ and lifecycle policy without being needed to prevent unintended next-round
 execution. Observation alone was rejected as the sole safeguard because it leaves
 delayed or concurrent resends indistinguishable from a new action.
 
-**Implementation verification.** Cover these cases through the service, HTTP
-contract and real SQL/Valkey stores, observing combat calls and durable GP,
-standings and medals as well as responses:
+**Verification.** The service/HTTP tests and
+[SQL/Valkey integration tests](../../internal/gvg/expected_round_integration_test.go)
+cover the following contract, observing combat calls and durable GP, standings
+and medals as well as responses:
 
 - Consecutive rounds: resolving 1 and replaying 1 leaves round 2 untouched; an
   explicit request for 2 alone advances it. A delayed 1 after committing 2 returns
