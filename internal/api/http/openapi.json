@@ -1668,7 +1668,7 @@
             "type": "string"
           },
           "name": {
-            "example": "メタルキングの剣",
+            "example": "未来のカケラ",
             "type": "string"
           }
         },
@@ -1845,11 +1845,11 @@
             "type": "string"
           },
           "item_name": {
-            "example": "まほうのそろばん",
+            "example": "時の砂",
             "type": "string"
           },
           "message": {
-            "example": "取引成立だ…。まほうのそろばん はお前の預かり所に送っておいた…",
+            "example": "取引成立だ…。時の砂 はお前の預かり所に送っておいた…",
             "type": "string"
           },
           "prize_id": {
