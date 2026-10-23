@@ -113,7 +113,6 @@ func TestDualAgilitySavedStatsAndNoExtraSealInvocations(t *testing.T) {
 func TestDualAgilityCasterDeathBetweenHits(t *testing.T) {
 	for _, id := range []string{"job-77-entry-0", "job-77-entry-2", "job-77-entry-3", "job-77-entry-4", "job-77-entry-4-temporary", "job-83-entry-0", "job-83-entry-3"} {
 		s, c, d := dualAgilityFixture()
-		// One-use defense is bypassed by the captured release variant, which clears it.
 		s.Actors[0].HP = 1
 		s.Actors[1].Temporary = corebattle.TemporaryReflectAttack
 		if id == "job-77-entry-3" {

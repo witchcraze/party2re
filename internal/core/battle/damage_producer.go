@@ -269,10 +269,10 @@ func (s *LifetimeState) ApplyNormalAttack(c *DamageContext, targetID string, rng
 	var results []NormalHit
 	for range strikes {
 		hits, err := s.applyNormalStrike(c, targetID, rng)
+		results = append(results, hits...)
 		if err != nil {
 			return results, err
 		}
-		results = append(results, hits...)
 	}
 	return results, nil
 }
