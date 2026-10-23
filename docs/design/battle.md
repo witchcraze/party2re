@@ -1278,13 +1278,26 @@ over saved references used by appearance predicates.
 
 `LifetimeState.ApplyTransformation` and `ValidateTransformation` share explicit
 payload admission; `TransformationEntries` describes only this owner's subset,
-not a complete certified job catalog. Ordinary SP/cost/ban/asset ownership and
-complete random/delegated/custom closure remain with their invoking owners.
+not a complete certified job catalog. `BattleDefinitions.RegisterTransformations`
+binds the seven source positions (eight bodies including both job79 variants)
+to that same gate and executor. Its ordered job36/79/82/300 table contributions
+retain unbound positions; job79 selects its variant from current actor appearance
+and frozen requester gender, while a captured entry keeps its selected body.
+Table presence never certifies missing bodies or descendants. Ordinary
+SP/cost/ban/asset ownership and complete random/delegated/custom closure remain
+with their invoking owners. Initial random/generated discovery validates each
+alternative against the known input; unknown earlier effects still require
+conservative admission. Exact copy/form projections carry changed jobs, stats,
+maxima and appearance into later admission without running effect hooks or RNG.
+Other unknown transitions retain the conservative gate for state-dependent
+descendants; copy and form bodies themselves need no such external transition.
 Damage-dependent callbacks require the damage owner's completely admitted
 executor; absent damage/area executors, reachable stat equipment tails and
 unrepresented outer empty-target contexts reject before any RNG/cost/state
-change. No generic batch `ActionSkill`/`GemEffect` or partial transformed table
-certifies those paths. `BuildLifetimeActor` reuses the equipment-aware adapter,
+change. No generic batch `ActionSkill`/`GemEffect` certifies those paths. Save
+resulting facts and the continuation cursor, rebuilding registrations from
+frozen input after reload without replaying committed callbacks.
+`BuildLifetimeActor` reuses the equipment-aware adapter,
 loads job history read-only and preserves fallen entryHP; reload uses saved run
 state, not the original builder. Reset/advance retains copied maxima/base stats,
 jobs, icon, history and original identity. Exit writes only eligible current
