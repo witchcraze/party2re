@@ -713,6 +713,30 @@ agility draws precede the binding/forbidden-status and weapon63 exceptions.
 Critical power is current AT×0.75 at the normal-attack producer, not an extra
 multiplier in the helper, and direct alone does not skip hit checks.
 
+Job77/83 callbacks compose these same target, damage and instant-death owners
+(`_skill.cgi:5929–5983,6620–6667`). Job77's two ordinary attacks temporarily
+use floor(AT×0.75), restoring saved AT even after defeat/reset; the ordinary
+helper retains item147's followup but does not repeat the outer seal10 command.
+Its other bodies use target tension `(tension+1)/2`, 2–3 area attacks at AG×1.5,
+and two untyped attacks with one captured target. Its final callback freezes
+whether a temporary effect existed when the table was built: that variant
+clears the current temporary then performs six direct AT×0.55 hits; the other
+performs three ordinary AT hits. Preserve the selected variant's concrete ID
+in frozen input rather than recomputing it from later temporary state.
+
+Job83's ordinary attack temporarily uses AG×5 and hit+5, restoring both saved
+values after reset/defeat; the misplaced source hit-cap variable does not cap
+actor accuracy at99. Party accuracy adds20, capped95, including fallen allies.
+The remaining callbacks use physical instant death with chance19, three fresh
+target-argument shifts at AT×0.85, self rage, and one direct hit at
+max(AT×0.85, AG×1.5). Repeated skill hits stop on caster death; job77's two
+ordinary helper calls have no intervening living guard. Complete ordered
+job77/83 tables, including both final-job77 variants, share invocation admission;
+unimplemented random tables and reachable missing descendants remain whole-action
+gates. Listed MP/SP costs belong to ordinary dispatch, while indirect dispatch
+retains its existing cost rules. Runtime closures and operation counters are
+rebuilt after reload; committed effects are never replayed.
+
 Damage modifiers follow `_skill.cgi:9948–10129`, including strict magic143
 and area144 thresholds, independent direct/normal predicates, and item239's
 second/third/fourth invocation bonuses only outside area damage. Purification

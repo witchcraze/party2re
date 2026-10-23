@@ -9,6 +9,23 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
+func TestNormalAttackRetainsFirstHitWhenFollowupOwnerFails(t *testing.T) {
+	s, c := damageFixture()
+	c.GuaranteedHit = true
+	s.actor("enemy").HP = 100
+	s.actor("enemy").Defense = 0
+	s.actor("self").Attack = 150
+	s.actor("self").ItemDefinitionIDs = []string{"item-147"}
+	failure := errors.New("defeat owner failed")
+	c.Defeat = func(string) error { return failure }
+	rng := &targetRNG{t: t, draws: []float64{.5, 0, 0, 0}}
+	hits, err := s.ApplyNormalAttack(&c, "enemy", rng)
+	if !errors.Is(err, failure) || len(hits) != 1 || hits[0].Amount != 67 {
+		t.Fatal(hits, err)
+	}
+	rng.done()
+}
+
 func TestNormalAttackCriticalStillTestsPhysicalHit(t *testing.T) {
 	for _, miss := range []bool{false, true} {
 		s, c := damageFixture()
