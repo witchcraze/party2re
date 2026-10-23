@@ -2,193 +2,193 @@
   {
     "id": "bm_prize_087",
     "item_definition_id": "item-087",
-    "name": "まほうのそろばん",
+    "name": "時の砂",
     "cost": 1,
     "is_u_rare": false,
-    "description": "魔力を帯びた商人のそろばん。特殊な商談を可能にする。"
+    "description": ""
   },
   {
     "id": "bm_prize_057",
     "item_definition_id": "item-057",
-    "name": "ほのおのツメ",
+    "name": "気合の霊薬",
     "cost": 4,
     "is_u_rare": false,
-    "description": "火炎の魔力が込められた鋭利な爪。"
+    "description": ""
   },
   {
     "id": "bm_prize_060",
     "item_definition_id": "item-060",
-    "name": "氷の盾",
+    "name": "シルバーオーブ",
     "cost": 2,
     "is_u_rare": false,
-    "description": "永久凍土の氷で鍛えられた強固な盾。"
+    "description": ""
   },
   {
     "id": "bm_prize_061",
     "item_definition_id": "item-061",
-    "name": "炎の盾",
+    "name": "レッドオーブ",
     "cost": 2,
     "is_u_rare": false,
-    "description": "業火の炎を宿した防御盾。"
+    "description": ""
   },
   {
     "id": "bm_prize_062",
     "item_definition_id": "item-062",
-    "name": "風神の盾",
+    "name": "ブルーオーブ",
     "cost": 2,
     "is_u_rare": false,
-    "description": "旋風を巻き起こし攻撃を逸らす盾。"
+    "description": ""
   },
   {
     "id": "bm_prize_063",
     "item_definition_id": "item-063",
-    "name": "ドラゴンシールド",
+    "name": "グリーンオーブ",
     "cost": 2,
     "is_u_rare": false,
-    "description": "竜の鱗で覆われた頑丈な大盾。"
+    "description": ""
   },
   {
     "id": "bm_prize_064",
     "item_definition_id": "item-064",
-    "name": "水鏡の盾",
+    "name": "イエローオーブ",
     "cost": 2,
     "is_u_rare": false,
-    "description": "水面のように呪文を跳ね返す神秘の盾。"
+    "description": ""
   },
   {
     "id": "bm_prize_065",
     "item_definition_id": "item-065",
-    "name": "オーガシールド",
+    "name": "パープルオーブ",
     "cost": 2,
     "is_u_rare": false,
-    "description": "鬼の剛力を封じ込めた重装盾。"
+    "description": ""
   },
   {
     "id": "bm_prize_237",
     "item_definition_id": "item-237",
-    "name": "はやてのリング",
+    "name": "歴戦の褒章",
     "cost": 2,
     "is_u_rare": false,
-    "description": "身につけると疾風のように素早くなる指輪。"
+    "description": ""
   },
   {
     "id": "bm_prize_216",
     "item_definition_id": "item-216",
-    "name": "ちからのゆびわ",
+    "name": "モノリス",
     "cost": 3,
     "is_u_rare": false,
-    "description": "怪力を引き出す神秘の指輪。"
+    "description": ""
   },
   {
     "id": "bm_prize_243",
     "item_definition_id": "item-243",
-    "name": "いのりのゆびわ",
+    "name": "陽炎の追憶記",
     "cost": 3,
     "is_u_rare": false,
-    "description": "祈りを捧げることで使用者の魔力を回復する指輪。"
+    "description": ""
   },
   {
     "id": "bm_prize_207",
     "item_definition_id": "item-207",
-    "name": "メタルキングの剣",
+    "name": "未来のカケラ",
     "cost": 10,
     "is_u_rare": false,
-    "description": "メタルキングの装甲から削り出された伝説の剣。"
+    "description": ""
   },
   {
     "id": "bm_uprize_059",
     "item_definition_id": "item-059",
-    "name": "きせきのつるぎ",
+    "name": "天馬のたづな",
     "cost": 5,
     "is_u_rare": true,
-    "description": "与えたダメージに応じて傷を癒やす奇跡の霊剣。"
+    "description": ""
   },
   {
     "id": "bm_uprize_199",
     "item_definition_id": "item-199",
-    "name": "ふしぎなボレロ",
+    "name": "太古の財宝",
     "cost": 5,
     "is_u_rare": true,
-    "description": "受けた呪文の魔力を吸収する不思議な衣服。"
+    "description": ""
   },
   {
     "id": "bm_uprize_246",
     "item_definition_id": "item-246",
-    "name": "しあわせのくつ",
+    "name": "クリスタルミラー",
     "cost": 5,
     "is_u_rare": true,
-    "description": "歩くごとに経験値が蓄積される幸運の靴。"
+    "description": ""
   },
   {
     "id": "bm_uprize_185",
     "item_definition_id": "item-185",
-    "name": "はかいのつるぎ",
+    "name": "封光鏡",
     "cost": 10,
     "is_u_rare": true,
-    "description": "圧倒的な破壊力と呪いを秘めた大剣。"
+    "description": ""
   },
   {
     "id": "bm_uprize_194",
     "item_definition_id": "item-194",
-    "name": "あくまのよろい",
+    "name": "廻光鏡",
     "cost": 10,
     "is_u_rare": true,
-    "description": "悪魔の加護と呪縛が宿る漆黒の鎧。"
+    "description": ""
   },
   {
     "id": "bm_uprize_195",
     "item_definition_id": "item-195",
-    "name": "しにがみのたて",
+    "name": "幻光鏡",
     "cost": 10,
     "is_u_rare": true,
-    "description": "死神の怨嗟が込められた不吉な大盾。"
+    "description": ""
   },
   {
     "id": "bm_uprize_258",
     "item_definition_id": "item-258",
-    "name": "ほしふるうでわ",
+    "name": "異封の箱",
     "cost": 10,
     "is_u_rare": true,
-    "description": "星の如く素早さを倍増させる神話の腕輪。"
+    "description": ""
   },
   {
     "id": "bm_uprize_259",
     "item_definition_id": "item-259",
-    "name": "ごうけつのうでわ",
+    "name": "異封の鍵",
     "cost": 10,
     "is_u_rare": true,
-    "description": "豪傑の怪力を授ける剛腕の腕輪。"
+    "description": ""
   },
   {
     "id": "bm_uprize_255",
     "item_definition_id": "item-255",
-    "name": "おうごんのティアラ",
+    "name": "妖しい宝珠",
     "cost": 15,
     "is_u_rare": true,
-    "description": "黄金の輝きであらゆる状態異常を退ける冠。"
+    "description": ""
   },
   {
     "id": "bm_uprize_210",
     "item_definition_id": "item-210",
-    "name": "メタルキングの鎧",
+    "name": "智浄衣",
     "cost": 15,
     "is_u_rare": true,
-    "description": "メタルキングの装甲で造られた究極の防具。"
+    "description": ""
   },
   {
     "id": "bm_uprize_204",
     "item_definition_id": "item-204",
-    "name": "メタルキングの盾",
+    "name": "無心慧",
     "cost": 15,
     "is_u_rare": true,
-    "description": "あらゆる属性攻撃を軽減する最強の盾。"
+    "description": ""
   },
   {
     "id": "bm_uprize_262",
     "item_definition_id": "item-262",
-    "name": "やまびこのぼうし",
+    "name": "黒い天馬のたづな",
     "cost": 20,
     "is_u_rare": true,
-    "description": "唱えた呪文が二度こだまする伝説の帽子。"
+    "description": ""
   }
 ]

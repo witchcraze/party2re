@@ -81,13 +81,13 @@ func (s *stubBlackMarketService) TradePrize(ctx context.Context, characterID str
 		CharacterID:      characterID,
 		PrizeID:          prizeID,
 		ItemDefinitionID: "item-087",
-		ItemName:         "まほうのそろばん",
+		ItemName:         "時の砂",
 		DepotInstanceID:  "inst-prize-1",
 		Cost:             1,
 		IsURare:          false,
 		RemainingRare:    9,
 		RemainingURare:   2,
-		Message:          "取引成立だ…。まほうのそろばん はお前の預かり所に送っておいた…",
+		Message:          "取引成立だ…。時の砂 はお前の預かり所に送っておいた…",
 	}, nil
 }
 

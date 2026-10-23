@@ -731,7 +731,10 @@ func TestTradePrize_ToDepot(t *testing.T) {
 	if res.RemainingRare != 9 {
 		t.Errorf("expected 9 remaining rare points, got %d", res.RemainingRare)
 	}
-	if res.Message != "取引成立だ…。まほうのそろばん はお前の預かり所に送っておいた…" {
+	if res.ItemName != "時の砂" {
+		t.Errorf("expected item name 時の砂, got %s", res.ItemName)
+	}
+	if res.Message != "取引成立だ…。時の砂 はお前の預かり所に送っておいた…" {
 		t.Errorf("unexpected message: %s", res.Message)
 	}
 
@@ -884,5 +887,125 @@ func TestValidationErrors(t *testing.T) {
 	_ = charRepo.Update(ctx, char)
 	if _, err := svc.TradePrize(ctx, "char-nodepot", "bm_prize_087"); err != blackmarket.ErrDepotNotConfigured {
 		t.Errorf("expected ErrDepotNotConfigured, got %v", err)
+	}
+}
+
+func TestPrizeItemDefinitionsParity(t *testing.T) {
+	ctx := context.Background()
+	itemCatalog, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatalf("failed to load item catalog: %v", err)
+	}
+
+	bmCatalog, err := blackmarket.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load black market catalog: %v", err)
+	}
+
+	prizes := bmCatalog.Prizes()
+	if len(prizes) != 24 {
+		t.Fatalf("expected 24 prizes, got %d", len(prizes))
+	}
+
+	// 1. Verify every prize has name matching Core item definition and empty description
+	for _, p := range prizes {
+		def, err := itemCatalog.FindByID(p.ItemDefinitionID)
+		if err != nil {
+			t.Errorf("prize %s refers to unknown core item %s: %v", p.ID, p.ItemDefinitionID, err)
+			continue
+		}
+		if p.Name != def.Name {
+			t.Errorf("prize %s name mismatch: catalog has %q, core definition has %q", p.ID, p.Name, def.Name)
+		}
+		if p.Description != "" {
+			t.Errorf("prize %s description should be empty, got %q", p.ID, p.Description)
+		}
+	}
+
+	// 2. Verify GetStatus exposes resolved core item names
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	depotRepo := newMockDepotRepo()
+	bmRepo := newMockBlackMarketRepo()
+
+	svc, err := blackmarket.NewService(
+		charRepo,
+		invRepo,
+		bmRepo,
+		bmCatalog,
+		blackmarket.WithDepotRepository(depotRepo),
+		blackmarket.WithItemDefinitionProvider(itemCatalog),
+		blackmarket.WithTransactionProvider(&mockTxProvider{}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create black market service: %v", err)
+	}
+
+	char := corecharacter.Character{ID: "char-parity-test", Name: "Parity Hero", JobLevel: 10}
+	_ = charRepo.Update(ctx, char)
+
+	status, err := svc.GetStatus(ctx, "char-parity-test")
+	if err != nil {
+		t.Fatalf("GetStatus error: %v", err)
+	}
+
+	for _, p := range append(status.Prizes, status.UPrizes...) {
+		def, err := itemCatalog.FindByID(p.ItemDefinitionID)
+		if err != nil {
+			t.Errorf("status prize %s refers to unknown core item %s: %v", p.ID, p.ItemDefinitionID, err)
+			continue
+		}
+		if p.Name != def.Name {
+			t.Errorf("status prize %s name %q does not match core item definition %q", p.ID, p.Name, def.Name)
+		}
+	}
+
+	// 3. Verify representative trades and depot delivery
+	bmRepo.points["char-parity-test"] = blackmarket.CharacterPoints{
+		CharacterID: "char-parity-test",
+		RarePoints:  100,
+		URarePoints: 100,
+	}
+
+	testCases := []struct {
+		prizeID       string
+		expectedDefID string
+		expectedName  string
+	}{
+		{"bm_prize_087", "item-087", "時の砂"},
+		{"bm_prize_057", "item-057", "気合の霊薬"},
+		{"bm_prize_207", "item-207", "未来のカケラ"},
+		{"bm_uprize_059", "item-059", "天馬のたづな"},
+		{"bm_uprize_262", "item-262", "黒い天馬のたづな"},
+	}
+
+	for _, tc := range testCases {
+		res, err := svc.TradePrize(ctx, "char-parity-test", tc.prizeID)
+		if err != nil {
+			t.Fatalf("TradePrize(%s) failed: %v", tc.prizeID, err)
+		}
+		if res.ItemDefinitionID != tc.expectedDefID {
+			t.Errorf("expected def ID %s, got %s", tc.expectedDefID, res.ItemDefinitionID)
+		}
+		if res.ItemName != tc.expectedName {
+			t.Errorf("expected trade result ItemName %q, got %q", tc.expectedName, res.ItemName)
+		}
+		expectedMsg := "取引成立だ…。" + tc.expectedName + " はお前の預かり所に送っておいた…"
+		if res.Message != expectedMsg {
+			t.Errorf("expected trade message %q, got %q", expectedMsg, res.Message)
+		}
+	}
+
+	dep, err := depotRepo.FindByCharacterID(ctx, "char-parity-test")
+	if err != nil {
+		t.Fatalf("FindByCharacterID error: %v", err)
+	}
+	if len(dep.Items) != len(testCases) {
+		t.Fatalf("expected %d items in depot, got %d", len(testCases), len(dep.Items))
+	}
+	for i, tc := range testCases {
+		if dep.Items[i].DefinitionID != tc.expectedDefID {
+			t.Errorf("depot item %d has definition ID %s, expected %s", i, dep.Items[i].DefinitionID, tc.expectedDefID)
+		}
 	}
 }

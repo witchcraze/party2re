@@ -124,14 +124,29 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (*Status, e
 		}
 	}
 
+	prizes := s.catalog.RegularPrizes()
+	uPrizes := s.catalog.UPrizes()
+	if s.itemDefs != nil {
+		for i := range prizes {
+			if def, err := s.itemDefs.FindByID(prizes[i].ItemDefinitionID); err == nil && def.Name != "" {
+				prizes[i].Name = def.Name
+			}
+		}
+		for i := range uPrizes {
+			if def, err := s.itemDefs.FindByID(uPrizes[i].ItemDefinitionID); err == nil && def.Name != "" {
+				uPrizes[i].Name = def.Name
+			}
+		}
+	}
+
 	return &Status{
 		CharacterID:  char.ID,
 		LocationName: LocationName,
 		NPCName:      NPCName,
 		RarePoints:   points.RarePoints,
 		URarePoints:  points.URarePoints,
-		Prizes:       s.catalog.RegularPrizes(),
-		UPrizes:      s.catalog.UPrizes(),
+		Prizes:       prizes,
+		UPrizes:      uPrizes,
 	}, nil
 }
 
@@ -363,17 +378,24 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 			}
 		}
 
+		itemName := prize.Name
+		if s.itemDefs != nil {
+			if def, err := s.itemDefs.FindByID(prize.ItemDefinitionID); err == nil && def.Name != "" {
+				itemName = def.Name
+			}
+		}
+
 		result = &TradeResult{
 			CharacterID:      char.ID,
 			PrizeID:          prize.ID,
 			ItemDefinitionID: prize.ItemDefinitionID,
-			ItemName:         prize.Name,
+			ItemName:         itemName,
 			DepotInstanceID:  prizeItem.ID,
 			Cost:             prize.Cost,
 			IsURare:          prize.IsURare,
 			RemainingRare:    points.RarePoints,
 			RemainingURare:   points.URarePoints,
-			Message:          "取引成立だ…。" + prize.Name + " はお前の預かり所に送っておいた…",
+			Message:          "取引成立だ…。" + itemName + " はお前の預かり所に送っておいた…",
 		}
 		return nil
 	}
