@@ -67,3 +67,31 @@ func TestInvocationProjectionCyclesStayConservative(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRandomAndGeneratedAdmissionKeepKnownInitialState(t *testing.T) {
+	for _, kind := range []string{"random", "job-82-generated"} {
+		s, c, d := invocationFixture()
+		for job := 1; job <= 87; job++ {
+			d.JobTables[job] = invocationTable(CallbackEntry{ID: "initial"})
+		}
+		d.Entries["initial"] = CallbackDefinition{
+			Validate: func(_ *LifetimeState, frame *CallbackContext) error {
+				if frame.AfterEffects {
+					return ErrUnsupportedEffect
+				}
+				return nil
+			},
+			Execute: func(*LifetimeState, *CallbackContext, random.Generator) error { return nil },
+		}
+		d.Entries["unknown"] = CallbackDefinition{
+			Validate: func(*LifetimeState, *CallbackContext) error { return nil },
+			Execute:  func(*LifetimeState, *CallbackContext, random.Generator) error { return nil },
+		}
+		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: kind}}, &targetRNG{t: t}); err != nil {
+			t.Fatal(kind, err)
+		}
+		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: "entry", EntryID: "unknown"}, {Kind: kind}}, &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {
+			t.Fatal(kind, err)
+		}
+	}
+}

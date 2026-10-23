@@ -91,7 +91,7 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 			if job == 73 {
 				continue // Every possible proxy table is already in1..72.
 			}
-			if err := p.table(job, "random", true); err != nil {
+			if err := p.table(job, "random", afterEffects); err != nil {
 				return err
 			}
 		}
@@ -101,7 +101,7 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 			if job == 73 || job == 82 {
 				continue
 			}
-			if err := p.table(job, "generated", true); err != nil {
+			if err := p.table(job, "generated", afterEffects); err != nil {
 				return err
 			}
 		}

@@ -108,6 +108,7 @@ func TestFormStrikeRestoresTemporaryAfterDamageReset(t *testing.T) {
 		if e.TargetID != "enemy" || e.Payload.Number != 150 || e.Category != CategoryPhysical || !reflect.DeepEqual(e.Arguments, []string{"1"}) || s.actor("enemy").Temporary != "" {
 			t.Fatal(e, s)
 		}
+		s.actor("enemy").HP = 0
 		s.actor("enemy").ResetEffects(LifetimeReset{Temporary: TemporaryDefense})
 		s.Actors = append(s.Actors[:len(s.Actors):len(s.Actors)], LifetimeActor{Participant: Participant{ID: "new-helper"}})
 		return nil
@@ -116,6 +117,29 @@ func TestFormStrikeRestoresTemporaryAfterDamageReset(t *testing.T) {
 	if err != nil || !r.Applied || s.actor("enemy").Temporary != TemporaryStrongDefense {
 		t.Fatal(r, err, s)
 	}
+}
+
+func TestFormBurstLaterHitDeathStillRevertsPreviousForm(t *testing.T) {
+	s, c := transformationFixture()
+	a := s.actor("self")
+	a.Jobs.JobID, a.Jobs.OldJobID, a.Tension = "job-01", "job-300", 5
+	calls := 0
+	c.Damage = func(_ TargetContext, e TargetEffect, _ random.Generator) error {
+		calls++
+		if a.Tension != 5 || e.Payload.Number != 200 {
+			t.Fatal(calls, a, e)
+		}
+		a.Tension = 1
+		if calls == 2 {
+			a.HP = 0
+		}
+		return nil
+	}
+	rng := &targetRNG{t: t, draws: []float64{.999, 0}}
+	if _, err := s.ApplyTransformation(&c, "job-300-burst", "enemy", rng); err != nil || calls != 2 || a.Jobs.OldJobID != "job-82" || a.Status != StatusDofuu || a.Tension != 1 {
+		t.Fatal(err, calls, a)
+	}
+	rng.done()
 }
 
 func TestTransformationTailAfterRosterGrowth(t *testing.T) {

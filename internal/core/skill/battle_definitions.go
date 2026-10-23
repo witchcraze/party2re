@@ -11,13 +11,14 @@ type BattleDefinitions struct {
 	JobSkills map[string]corebattle.ActionSkill
 	Gems      map[string]corebattle.GemEffect
 	// Explicit callbacks stay separate from the batch engine's scalar payloads.
-	ArithmeticSkills map[string]bool
-	RosterSkills     map[string]bool
-	RecoveryStatGems map[string]bool
-	DamageGems       map[string]bool
-	RevivalSkills    map[string]bool
-	StatusSkills     map[string]bool
-	Invocations      corebattle.CallbackCatalog
+	ArithmeticSkills     map[string]bool
+	RosterSkills         map[string]bool
+	RecoveryStatGems     map[string]bool
+	DamageGems           map[string]bool
+	RevivalSkills        map[string]bool
+	StatusSkills         map[string]bool
+	TransformationSkills map[string]bool
+	Invocations          corebattle.CallbackCatalog
 }
 
 func (d BattleDefinitions) JobAction(def Definition) (corebattle.ActionSkill, error) {

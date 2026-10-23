@@ -67,6 +67,19 @@ func (s *LifetimeState) ValidateTransformation(c *TransformationContext, id, tar
 		if c.Damage == nil || len(c.EnemyIDs) == 0 {
 			return ErrUnsupportedEffect
 		}
+		if a.Status != StatusConfusion {
+			if target := s.actor(targetID); target != nil && target.TeamID != a.TeamID {
+				if target.HP <= 0 {
+					return ErrUnsupportedEffect
+				}
+			} else {
+				for _, enemyID := range c.EnemyIDs {
+					if s.actor(enemyID).HP <= 0 {
+						return ErrUnsupportedEffect
+					}
+				}
+			}
+		}
 	default:
 		return ErrUnsupportedEffect
 	}
@@ -167,14 +180,9 @@ func (s *LifetimeState) copyParticipant(c *TransformationContext, id, targetID s
 	}
 	target := s.actor(targetID)
 	r.TargetID = targetID
-	if target.HP <= 0 || target.MaxHP > 999 || target.BaseStats.Defense > 999 {
+	r.Applied = a.copyTransformation(target, id != "tool-214-copy")
+	if !r.Applied {
 		return r, nil
-	}
-	a.HP, a.MaxHP, a.MP, a.MaxMP = target.HP, target.MaxHP, target.MP, target.MaxMP
-	a.Attack, a.Defense, a.Agility, a.BaseStats = target.Attack, target.Defense, target.Agility, target.BaseStats
-	a.Jobs, a.Icon = target.Jobs, target.Icon
-	if id != "tool-214-copy" {
-		a.MP = max(50, a.MP)
 	}
 	if id == "book-211-copy" {
 		a.Status = StatusDofuu
@@ -183,8 +191,20 @@ func (s *LifetimeState) copyParticipant(c *TransformationContext, id, targetID s
 		}
 		s.SkillBans["copy"] = 999
 	}
-	r.Applied = true
 	return r, nil
+}
+
+func (a *LifetimeActor) copyTransformation(target *LifetimeActor, floorMP bool) bool {
+	if target.HP <= 0 || target.MaxHP > 999 || target.BaseStats.Defense > 999 {
+		return false
+	}
+	a.HP, a.MaxHP, a.MP, a.MaxMP = target.HP, target.MaxHP, target.MP, target.MaxMP
+	a.Attack, a.Defense, a.Agility, a.BaseStats = target.Attack, target.Defense, target.Agility, target.BaseStats
+	a.Jobs, a.Icon = target.Jobs, target.Icon
+	if floorMP {
+		a.MP = max(50, a.MP)
+	}
+	return true
 }
 
 func (a *LifetimeActor) switchForm(from, to string) bool {
