@@ -218,15 +218,19 @@ type NormalHit struct {
 
 // ValidateNormalAttack checks every reachable strike without drawing or changing state.
 func (s *LifetimeState) ValidateNormalAttack(c *DamageContext, targetID string, rng random.Generator) error {
+	strikes := 1
+	if s != nil && c != nil && s.actor(c.ActorID) != nil && hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
+		strikes = 2
+	}
+	return s.validateNormalStrikes(c, targetID, strikes, rng)
+}
+
+func (s *LifetimeState) validateNormalStrikes(c *DamageContext, targetID string, strikes int, rng random.Generator) error {
 	if c == nil {
 		return ErrInvalidRequest
 	}
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
-	}
-	strikes := 1
-	if hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
-		strikes = 2
 	}
 	a := s.actor(c.ActorID)
 	initialTargetID := targetID
@@ -264,6 +268,19 @@ func (s *LifetimeState) ApplyNormalAttack(c *DamageContext, targetID string, rng
 	}
 	var results []NormalHit
 	for range strikes {
+		hits, err := s.applyNormalStrike(c, targetID, rng)
+		if err != nil {
+			return results, err
+		}
+		results = append(results, hits...)
+	}
+	return results, nil
+}
+
+// A callback invokes the ordinary helper once; seal10 repeats the outer command.
+func (s *LifetimeState) applyNormalStrike(c *DamageContext, targetID string, rng random.Generator) ([]NormalHit, error) {
+	var results []NormalHit
+	if len(c.EnemyIDs) > 0 {
 		a := s.actor(c.ActorID)
 		t := s.actor(targetID)
 		if t == nil || t.TeamID == a.TeamID {
