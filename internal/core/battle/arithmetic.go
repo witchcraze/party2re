@@ -20,8 +20,9 @@ type ArithmeticContext struct {
 }
 
 type ArithmeticResult struct {
-	CastFailed   bool
-	Applications []EffectApplication
+	CastFailed     bool
+	TargetConsumed bool
+	Applications   []EffectApplication
 }
 
 var arithmeticCommand = regexp.MustCompile(`＠(.+?)(?:(?: |　)?＠(×.+?)(?: |　)| |　)`)
@@ -189,8 +190,6 @@ func (s *LifetimeState) ApplyArithmetic(c *ArithmeticContext, id, targetID strin
 		before, amount := a.HP, 0
 		beforeTemporary := a.Temporary
 		switch callback {
-		case "job-31-gravity":
-			a.HP = max(1, a.HP/4)
 		case "job-31-death", "job-72-death":
 			a.HP = 0
 		case "job-72-damage":
@@ -202,10 +201,8 @@ func (s *LifetimeState) ApplyArithmetic(c *ArithmeticContext, id, targetID strin
 		case "job-72-heal":
 			amount = int(500 * (.9 + rng.Float64()*.3))
 			a.HP = min(a.MaxHP, a.HP+amount)
-		case "job-72-reflect":
-			a.Temporary = TemporaryReflectMagic
-		case "job-72-revive":
-			a.HP = a.MaxHP
+		default:
+			applyArithmeticValue(a, callback)
 		}
 		if a.HP == 0 && (callback == "job-31-death" || callback == "job-72-death" || callback == "job-72-damage") {
 			if err := c.Defeat(targetID); err != nil {
@@ -231,7 +228,7 @@ func arithmeticApplication(id string, before, after, amount int) EffectApplicati
 }
 
 func (s *LifetimeState) reverseHP(c *ArithmeticContext, targetID string, rng random.Generator) (ArithmeticResult, error) {
-	r := ArithmeticResult{}
+	r := ArithmeticResult{TargetConsumed: true}
 	if s.actor(targetID) == nil {
 		target, err := s.ResolvePartyTarget(c.TargetContext, TargetEffect{Payload: CallbackPayload{Symbol: "digit_reversal"}}, rng)
 		if err != nil || !target.Resolved {
@@ -241,13 +238,32 @@ func (s *LifetimeState) reverseHP(c *ArithmeticContext, targetID string, rng ran
 	}
 	a := s.actor(targetID)
 	before := a.HP
+	if !reverseArithmeticHP(a) {
+		return r, nil
+	}
+	r.Applications = []EffectApplication{arithmeticApplication(targetID, before, a.HP, 0)}
+	return r, nil
+}
+
+func reverseArithmeticHP(a *LifetimeActor) bool {
+	before := a.HP
 	if before >= 10 && before < 100 {
 		a.HP = before%10*10 + before/10
 	} else if before >= 100 && before < 1000 {
 		a.HP = before%10*100 + before/10%10*10 + before/100
 	} else {
-		return r, nil
+		return false
 	}
-	r.Applications = []EffectApplication{arithmeticApplication(targetID, before, a.HP, 0)}
-	return r, nil
+	return true
+}
+
+func applyArithmeticValue(a *LifetimeActor, id string) {
+	switch id {
+	case "job-31-gravity":
+		a.HP = max(1, a.HP/4)
+	case "job-72-reflect":
+		a.Temporary = TemporaryReflectMagic
+	case "job-72-revive":
+		a.HP = a.MaxHP
+	}
 }

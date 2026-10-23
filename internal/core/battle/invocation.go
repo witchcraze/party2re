@@ -15,6 +15,8 @@ type CallbackContext struct {
 	TargetContext
 	Arguments    []string
 	AfterEffects bool
+	// ArithmeticDivisor is shared by nested callbacks in this operation only.
+	ArithmeticDivisor int
 	// Invoke executes a declared child in the current argument/actor frame. It
 	// is supplied only during Execute, after the enclosing closure was admitted.
 	Invoke func(CallbackInvocation) error
@@ -78,6 +80,7 @@ func (s *LifetimeState) ApplyInvocations(c *CallbackContext, d CallbackCatalog, 
 			return err
 		}
 		c.TargetContext = child.TargetContext
+		c.ArithmeticDivisor = child.ArithmeticDivisor
 		if s.actor(c.ActorID).HP <= 0 {
 			break
 		}
@@ -233,6 +236,7 @@ func (s *LifetimeState) executeExplicitCallback(c *CallbackContext, d CallbackCa
 	child := explicitCallbackTarget(c)
 	err := s.executeCallback(&child, d, entry, rng)
 	c.TargetContext = child.TargetContext
+	c.ArithmeticDivisor = child.ArithmeticDivisor
 	return err
 }
 

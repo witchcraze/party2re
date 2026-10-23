@@ -41,12 +41,15 @@ func TestArithmeticUsesAdapterSnapshotWithoutPersistentWrites(t *testing.T) {
 	}
 	s = reloaded
 	c := corebattle.ArithmeticContext{TargetContext: corebattle.TargetContext{ActorID: "self", PartyIDs: []string{"self"}, EnemyIDs: []string{"other"}}, Divisor: 4, Defeat: func(string) error { return nil }}
-	d := skill.BattleDefinitions{ArithmeticSkills: map[string]bool{"job-72-damage": true}}
-	if _, err := d.ArithmeticAction(&s, &c, "job-72-damage", "", random.NewDeterministic(1)); err != nil {
+	d := skill.BattleDefinitions{}
+	d.RegisterArithmetic(&c)
+	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, ArithmeticDivisor: 4}
+	ops, err := d.InvocationAction(&s, &frame, []string{"job-72-damage"}, random.NewDeterministic(1))
+	if err != nil {
 		t.Fatal(err)
 	}
 	before := map[string]corecharacter.Character{"self": chars.characters["self"], "other": chars.characters["other"]}
-	if _, err := s.ApplyArithmetic(&c, "job-72-damage", "", random.NewDeterministic(1)); err != nil || s.Actors[0].HP != 0 || s.Actors[1].HP < 98 || s.Actors[1].HP > 99 {
+	if err := s.ApplyInvocations(&frame, d.Invocations, ops, random.NewDeterministic(1)); err != nil || s.Actors[0].HP != 0 || s.Actors[1].HP < 98 || s.Actors[1].HP > 99 {
 		t.Fatal(s, err)
 	}
 	if !reflect.DeepEqual(before, chars.characters) {

@@ -91,6 +91,7 @@ func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[Callbac
 			copy.c = &child
 			known, err := copy.projectAfter(CallbackInvocation{Kind: "entry", EntryID: entry.ID}, seen)
 			p.c.TargetContext = child.TargetContext
+			p.c.ArithmeticDivisor = child.ArithmeticDivisor
 			return known, err
 		}
 	}
