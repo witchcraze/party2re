@@ -590,14 +590,29 @@ at callback entry, while HP/MP eligibility is reread after each defeat hook.
 Arithmetic HP writes do not enqueue darkness recoil or increment damage/risk
 counters; already-recorded end processing retains its normal owner and ordering.
 
-`skill.BattleDefinitions.ArithmeticAction` uses the same preflight as execution,
-with an explicit allowlist of concrete arithmetic IDs separate from batch scalar
-payloads. A discovered unsupported last-match child rejects the whole selector,
-even when an earlier duplicate is supported. Reachable lethal effects require
-an already admitted shared defeat/drop/reset closure; the arithmetic owner does
-not certify that catalog. Accepted nonlethal/no-effect paths need no defeat hook.
-The registry remains empty by default. These finite callbacks neither populate
-complete job tables nor certify #1357 random closures or #1329/#1330 consumers.
+`skill.BattleDefinitions.RegisterArithmetic` binds these eleven bodies to the
+shared `ValidateInvocations`/`ApplyInvocations` boundary, reusing
+`ArithmeticAction` and the intrinsic arithmetic executor. Its ordered job31/72
+table contributions preserve every source position, including job31's five
+unbound bodies; table presence does not certify those missing callbacks or a
+complete random pool. Batch scalar definitions remain separate, and the
+registry admits nothing by default. A discovered unsupported or unregistered
+last-match child rejects the whole selector, even when an earlier duplicate is
+supported. Reachable lethal effects require an already admitted shared
+defeat/drop/reset closure; this owner does not certify that catalog. Accepted
+nonlethal/no-effect paths need no defeat hook.
+
+`CallbackContext.ArithmeticDivisor` carries the divisor through the current
+nested invocation frame; start a fresh frame for each operation. Rebuild
+registrations with frozen submitted text and ordered discovery facts after
+reload, without persisting callbacks or replaying committed operations. Exact
+gravity, supplied-target reversal, reflection and revival projections carry
+changed eligibility into later admission without hooks or RNG. Random amounts,
+magic-seal cures, fallback target selection and reachable defeat hooks remain
+unknown transitions. After unknown earlier effects, admission requires defeat
+support for potentially lethal descendants and rejects reversal whose signed HP
+or fallback context cannot be certified. The operation consumer still owns
+ordinary SP/MP/item admission, receipts and production integration.
 
 #### Shared modifiers and callback outcomes
 
