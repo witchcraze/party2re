@@ -1,0 +1,45 @@
+{
+  "module": "casino",
+  "domain": "Casino multiplayer wagers",
+  "description": "C1: SQL accounts and character wins; C3: shared pots. Room coordination precedes ordinary account reads, atomic SQL account mutations and winner character SELECT FOR UPDATE (rank 2). Staged Valkey publication precedes SQL commit, without cross-store atomicity. Failure limits: docs/architecture/valkey-keyspace.md.",
+  "entrypoint": "internal/casino/casino.go",
+  "dependencies": [
+    {
+      "module": "core/character",
+      "relation_type": "public_service_call",
+      "source_ref": "internal/casino/casino.go#CharacterRepository"
+    },
+    {
+      "module": "database",
+      "relation_type": "transaction_provider",
+      "source_ref": "internal/casino/casino.go#TransactionProvider"
+    },
+    {
+      "module": "database",
+      "relation_type": "repository",
+      "source_ref": "internal/casino/casino.go#Repository"
+    },
+    {
+      "module": "valkey",
+      "relation_type": "repository",
+      "source_ref": "internal/casino/room.go#RoomRepository"
+    }
+  ],
+  "transaction_flows": [
+    {
+      "flow": "Indian Poker action and settlement",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/casino/indian_poker.go#Service.PlayIndianPokerAction"
+    },
+    {
+      "flow": "HighLow action and settlement",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/casino/highlow.go#Service.PlayHighLowAction"
+    },
+    {
+      "flow": "Doppel selection, reselection and settlement",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/casino/doppel.go#Service.PlayDoppelAction"
+    }
+  ]
+}
