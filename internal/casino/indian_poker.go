@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"time"
 )
 
@@ -115,6 +116,8 @@ func (s *Service) StartIndianPoker(ctx context.Context, roomID string, leaderID 
 
 // PlayIndianPokerAction processes a player's round action (call, showdown, fold)
 // and handles pot accumulation, round progression, and showdown settlement (party2/lib/casino_indian.cgi:64-176).
+// Transaction: RunInTx for SQL, with a separate staged Valkey publication boundary.
+// Locks: room coordination, atomic account mutations, then winner characters (rank 2).
 func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, characterID string, action Action) (*RoomDetail, error) {
 	if characterID == "" {
 		return nil, ErrInvalidCharacterID
@@ -141,7 +144,7 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 
 			member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
 			if err != nil {
-				return ErrMemberNotFound
+				return err
 			}
 			if member.IsSpectator {
 				return ErrSpectatorCannot
@@ -176,26 +179,24 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 
 			member.Action = string(effectiveAction)
 			member.UpdatedAt = time.Now().UTC()
-			if err := s.roomRepo.UpdateMember(txCtx, *member); err != nil {
-				if errors.Is(err, ErrSecondarySync) {
-					secondarySyncErr = err
-				} else {
-					return err
-				}
-			}
 
-			// Re-fetch all members to evaluate round completion
+			// Stage all member changes until the complete action can be published.
 			members, err := s.roomRepo.ListMembersForUpdate(txCtx, roomID)
 			if err != nil {
 				return err
 			}
 
-			var participants []RoomMember
+			var participants []*RoomMember
+			var eliminated []string
 			foldedCount := 0
 			showdownCount := 0
 			actedCount := 0
 
-			for _, m := range members {
+			for i := range members {
+				m := &members[i]
+				if m.CharacterID == characterID {
+					*m = *member
+				}
 				if m.IsSpectator {
 					continue
 				}
@@ -224,7 +225,10 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 				for _, m := range participants {
 					if m.Action != string(ActionFold) {
 						pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
-						if err == nil && pAcc.Coins <= 0 {
+						if err != nil {
+							return err
+						}
+						if pAcc.Coins <= 0 {
 							hasCoinlessPlayer = true
 							break
 						}
@@ -241,13 +245,6 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 						if m.Action != string(ActionFold) {
 							m.Action = ""
 							m.UpdatedAt = time.Now().UTC()
-							if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
-								if errors.Is(err, ErrSecondarySync) {
-									secondarySyncErr = err
-								} else {
-									return err
-								}
-							}
 						}
 					}
 				}
@@ -303,32 +300,20 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 						return fmt.Errorf("getting casino account for member %s: %w", m.CharacterID, err)
 					}
 					if pAcc.Coins <= 0 {
-						if err := s.roomRepo.RemoveMember(txCtx, roomID, m.CharacterID); err != nil {
-							if errors.Is(err, ErrSecondarySync) {
-								secondarySyncErr = err
-							} else {
-								return fmt.Errorf("removing eliminated member %s: %w", m.CharacterID, err)
-							}
-						}
+						eliminated = append(eliminated, m.CharacterID)
 						if room.LeaderCharacterID == m.CharacterID && winnerID != "" {
 							room.LeaderCharacterID = winnerID
 						}
 					} else {
 						m.Action = "待機中"
 						m.UpdatedAt = time.Now().UTC()
-						if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
-							if errors.Is(err, ErrSecondarySync) {
-								secondarySyncErr = err
-							} else {
-								return fmt.Errorf("updating member %s status: %w", m.CharacterID, err)
-							}
-						}
 					}
 				}
 			}
 
 			room.UpdatedAt = time.Now().UTC()
-			if err := s.roomRepo.UpdateRoom(txCtx, *room); err != nil {
+			members = slices.DeleteFunc(members, func(m RoomMember) bool { return slices.Contains(eliminated, m.CharacterID) })
+			if err := s.roomRepo.UpdateRoomDetail(txCtx, RoomDetail{Room: *room, Members: members}); err != nil {
 				if errors.Is(err, ErrSecondarySync) {
 					secondarySyncErr = err
 				} else {

@@ -277,7 +277,10 @@ func (v *ValkeyRoomRepository) AddMember(ctx context.Context, member RoomMember)
 func (v *ValkeyRoomRepository) GetMember(ctx context.Context, roomID string, characterID string) (*RoomMember, error) {
 	dto, err := v.getRoomDetail(ctx, roomID)
 	if err != nil {
-		return nil, ErrMemberNotFound
+		if errors.Is(err, ErrRoomNotFound) {
+			return nil, ErrMemberNotFound
+		}
+		return nil, err
 	}
 	for _, m := range dto.Members {
 		if m.CharacterID == characterID {

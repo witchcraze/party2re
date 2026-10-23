@@ -160,11 +160,25 @@ replace a legacy Set index and revoke its indexed tokens. This is not permission
 to blindly delete arbitrary financial/session state on any type error.
 
 Casino room persistence and writer-side partial failure boundary:
-`ValkeyRoomRepository.saveRoomDetail` updates the room payload (`party2:casino:room:<room_id>`) with sliding TTL before synchronizing the active index (`party2:casino:rooms:active` ZADD/ZREM). Similarly, `AddMember` and `RemoveMember` update room/member payloads before synchronizing character-to-room mappings (`party2:casino:member:<character_id>`).
-- **Primary Pre-Payload Failures**: If the authoritative room payload `SET` fails, the write is aborted, returning the raw error. In transactional game actions (`PlayIndianPokerAction`, `PlayHighLowAction`, `PlayDoppelAction`), this rolls back the enclosing MariaDB transaction, ensuring unapplied wagers, payouts, and casino wins do not commit.
-- **Post-Payload Secondary Synchronization Failures (`SecondarySyncError` / `ErrSecondarySync`)**: Once the room payload `SET` successfully commits to Valkey (advancing rounds or resetting pot/status), any subsequent secondary index or mapping write failures (e.g., active room index `ZADD`/`ZREM` or character mapping `DEL`/`SET`) are wrapped in `SecondarySyncError` (`errors.Is(err, ErrSecondarySync)`).
-- **Preserved Durable SQL Settlement**: The game service distinguishes secondary synchronization errors from authoritative write failures. When `ErrSecondarySync` occurs during an action or showdown settlement after the room payload has committed, the service permits the MariaDB transaction to commit. This strictly preserves durable currency movements (wagers, payouts, casino wins) and prevents the erasure of settled pots.
-- **Observability and Replay Prevention**: The secondary synchronization error is returned to the caller/API layer (HTTP 500) so that degradation remains fully observable. Callers and clients must NOT execute blind command replay on write errors: the underlying game step or settlement is already durable in SQL and Valkey. Any replay attempt will be rejected (e.g. `ErrGameNotInRound` or `ErrAlreadyActed`), preventing double-wagers or duplicate payouts. Room discovery via ID (`GetRoom`) reflects the updated state, and subsequent successful operations or renewals restore active index discovery.
+
+Indian Poker, HighLow and Doppel actions hold the room lock while staging the
+complete room/member result, including next-round resets and eliminations.
+Required reads, wagers, payouts and win updates run inside the SQL transaction
+before `UpdateRoomDetail` publishes that result with one authoritative payload
+`SET`. No intermediate accepted turn or removal is published. This keeps a
+rejected action from later settling against a rolled-back wager.
+
+- **Before publication**: A required read, SQL mutation or rejected payload write returns its error and rolls back SQL; the previously published room/member snapshot remains unchanged.
+- **After publication**: `saveRoomDetail` synchronizes the active index (`party2:casino:rooms:active` ZADD/ZREM); `UpdateRoomDetail` then removes eliminated characters' reverse mappings (`party2:casino:character:<character_id>`). These failures return `SecondarySyncError` / `ErrSecondarySync`. The action permits SQL to commit because the complete payload already applied. Secondary cleanup is attempted even when the active-index update fails.
+- **Observation and replay**: Secondary errors and subsequent response-read errors remain observable by callers (HTTP 500). Refresh room/account observations before deciding a new action; never blindly replay an unconfirmed command. Indian Poker/HighLow reject an already submitted turn; Doppel permits reselection before settlement without another wager. Settled rooms reject further game actions. A successful renewal restores the active index; failed reverse-mapping cleanup can leave stale discovery, whose admission must still be checked against live membership.
+
+This boundary handles confirmed command failures; it is not crash-proof
+cross-store atomicity. A lost SET acknowledgement, SQL commit failure after
+payload publication, process crash, or Valkey data loss still requires a
+separately designed durable recovery protocol. There is no settlement ledger or
+automatic replay/reconciliation guarantee. Room creation/start and admission
+operations retain their own publication boundaries. `AddMember` / `RemoveMember`
+also publish payloads before synchronizing reverse mappings.
 
 Candidate D: In-Progress Run Buffers currently store provisional rewards in
 hashes (including JSON item arrays), not in hypothetical `active_nodes` or

@@ -181,6 +181,9 @@ type RoomLifecycleRepository interface {
 	GetRoomForUpdate(ctx context.Context, roomID string) (*Room, error)
 	ListActiveRooms(ctx context.Context) ([]RoomDetail, error)
 	UpdateRoom(ctx context.Context, room Room) error
+	// UpdateRoomDetail publishes the complete staged action in one authoritative write.
+	// ErrSecondarySync means the payload applied; SQL must still commit.
+	UpdateRoomDetail(ctx context.Context, detail RoomDetail) error
 	DeleteRoom(ctx context.Context, roomID string) error
 	PurgeIdleRooms(ctx context.Context, cutoff time.Time) (int, error)
 }
