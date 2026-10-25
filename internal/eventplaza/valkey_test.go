@@ -210,7 +210,7 @@ func TestValkeyPresenceTrackerErrorsAndRetries(t *testing.T) {
 		})
 	}
 	store := newMockSortedSetStore()
-	store.aborts = 2
+	store.aborts = 16
 	tracker := NewValkeyPresenceTracker(store.Client())
 	if err := tracker.RecordPresence(context.Background(), "hero", time.Now()); err != nil {
 		t.Fatal(err)
@@ -218,7 +218,8 @@ func TestValkeyPresenceTrackerErrorsAndRetries(t *testing.T) {
 	if len(store.members) != 1 {
 		t.Fatal("retry duplicated/lost presence")
 	}
-	store.aborts = 16
+	tracker.retryLimit = 4
+	store.aborts = 4
 	if _, err := tracker.Observe(context.Background(), time.Now()); err == nil {
 		t.Fatal("contention limit ignored")
 	}

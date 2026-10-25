@@ -2,7 +2,6 @@ package eventplaza
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -12,17 +11,22 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-const ValkeyPresenceKey = "party2:eventplaza:presence"
+const (
+	ValkeyPresenceKey         = "party2:eventplaza:presence"
+	defaultPresenceRetryLimit = 64
+	maxPresenceRetryShift     = 8
+)
 
 // ValkeyPresenceTracker owns ordered presence records scored by their time markers.
 // WATCH protects snapshot selection and cleanup against concurrent crowd/heartbeat writes.
 type ValkeyPresenceTracker struct {
-	client valkey.Client
-	key    string
+	client     valkey.Client
+	key        string
+	retryLimit int
 }
 
 func NewValkeyPresenceTracker(client valkey.Client) *ValkeyPresenceTracker {
-	return &ValkeyPresenceTracker{client: client, key: ValkeyPresenceKey}
+	return &ValkeyPresenceTracker{client: client, key: ValkeyPresenceKey, retryLimit: defaultPresenceRetryLimit}
 }
 
 func (t *ValkeyPresenceTracker) RecordPresence(ctx context.Context, displayName string, at time.Time) error {
@@ -55,6 +59,10 @@ func (t *ValkeyPresenceTracker) update(ctx context.Context, change func([]Presen
 	if t.client == nil {
 		return PresenceSnapshot{}, nil
 	}
+	retryLimit := t.retryLimit
+	if retryLimit <= 0 {
+		retryLimit = defaultPresenceRetryLimit
+	}
 	var snapshot PresenceSnapshot
 	err := t.client.Dedicated(func(client valkey.DedicatedClient) error {
 		defer func() {
@@ -63,7 +71,7 @@ func (t *ValkeyPresenceTracker) update(ctx context.Context, change func([]Presen
 				client.Close()
 			}
 		}()
-		for attempt := 0; attempt < 16; attempt++ {
+		for attempt := 0; attempt < retryLimit; attempt++ {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -108,7 +116,7 @@ func (t *ValkeyPresenceTracker) update(ctx context.Context, change func([]Presen
 			committed, err := results[len(results)-1].ToArray()
 			if valkey.IsValkeyNil(err) {
 				// Back off contending writers instead of exhausting retries in a tight loop.
-				delay := time.Duration(1+random.Intn(1<<min(attempt, 8))) * time.Millisecond
+				delay := time.Duration(1+random.Intn(1<<min(attempt, maxPresenceRetryShift))) * time.Millisecond
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
@@ -126,7 +134,7 @@ func (t *ValkeyPresenceTracker) update(ctx context.Context, change func([]Presen
 			}
 			return nil
 		}
-		return errors.New("plaza presence changed concurrently; retry request")
+		return fmt.Errorf("plaza presence changed concurrently after %d attempts; retry request", retryLimit)
 	})
 	if err != nil {
 		return PresenceSnapshot{}, err
