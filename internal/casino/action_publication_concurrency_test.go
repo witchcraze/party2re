@@ -39,7 +39,7 @@ func TestActionPublication_ConcurrentWagers(t *testing.T) {
 				fixtures[i] = newPublicationFixture(t, ctx, db, raw, game, 500)
 			}
 			result := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
-				err := func() error {
+				return func() error {
 					f := fixtures[worker]
 					if op > 0 {
 						var err error
@@ -121,10 +121,6 @@ func TestActionPublication_ConcurrentWagers(t *testing.T) {
 					}
 					return nil
 				}()
-				if err != nil {
-					t.Logf("STRESS ERROR (worker=%d, op=%d): %v", worker, op, err)
-				}
-				return err
 			})
 			if result.Failures != 0 || result.Deadlocks != 0 {
 				t.Fatalf("concurrent wagers failed: %+v", result)
