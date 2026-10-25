@@ -50,8 +50,13 @@ func (s *LifetimeState) ValidateDamage(c *DamageContext, e TargetEffect, rng ran
 	if c == nil {
 		return ErrInvalidRequest
 	}
-	if err := s.validateRecovery(&c.EffectContext, e, rng); err != nil {
+	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
 		return err
+	}
+	// Wound-based callbacks can supply negative power above MaxHP; the damage
+	// roll retains its original positive floor. Recovery still rejects negatives.
+	if err := e.validate(); err != nil || e.Payload.Symbol != "" {
+		return ErrUnsupportedEffect
 	}
 	if len(e.Arguments) > 2 {
 		return ErrUnsupportedEffect
