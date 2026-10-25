@@ -64,8 +64,9 @@ entrypoint reads Go's JSON events and requires a passing test without observed
 child events, in a package that Go has not reported as having no tests to run.
 This excludes the parent-only empty runs reported by Go and observed parents
 whose children all skip. It does not independently prove that every requested
-subtest or regex alternative exists. Normal output and explicit `-json` output
-are both supported. Use
+subtest or regex alternative exists. With `-json`, stdout contains only Go test
+JSON Lines; setup, migration and progress messages go to stderr. Normal runs
+and `-json=false` retain human-readable stdout. Use
 `go test -list '<pattern>' ./...` separately to inspect selection without running
 tests. Full deep runs include ordinary tests as well; elapsed time depends on
 the selected suite and local services.
@@ -77,6 +78,10 @@ pool size may configure it explicitly; for environment-configured pools, use
 `PARTY2_DB_MAX_OPEN_CONNS` and `PARTY2_DB_MAX_IDLE_CONNS`. The stress entrypoint
 preserves these settings. Account for all concurrently running packages and
 pools against the server's total connection limit when increasing them.
+
+For local resource pressure, `GOFLAGS=-p=2 make check` limits concurrent package
+builds and test binaries using Go's standard flag. It preserves each concurrency
+test's worker count and assertions without changing temporary-directory settings.
 
 ## 4. Container Roles
 

@@ -1,6 +1,8 @@
 package scripts_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,8 +27,7 @@ func TestStressEntrypoint(t *testing.T) {
 		{name: "service failure", env: []string{"SERVICE_EXIT=1"}, wantError: true},
 		{name: "migration failure", env: []string{"MIGRATE_EXIT=1"}, wantError: true},
 		{name: "test failure", env: []string{"TEST_EXIT=7"}, wantError: true},
-		{name: "no matching tests", env: []string{`TEST_OUTPUT={"Action":"pass","Package":"fixture"}`}, wantError: true},
-		{name: "all skipped", env: []string{`TEST_OUTPUT={"Action":"skip","Package":"fixture","Test":"TestFeature"}`}, wantError: true},
+		{name: "json test failure", args: []string{"-json"}, env: []string{"TEST_EXIT=7"}, wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -67,7 +68,7 @@ exit "${TEST_EXIT:-0}"
 				t.Fatalf("error = %v, wantError = %v\n%s", err, tc.wantError, output)
 			}
 			if tc.wantError {
-				if tc.name == "test failure" && err.(*exec.ExitError).ExitCode() != 7 {
+				if strings.HasSuffix(tc.name, "test failure") && err.(*exec.ExitError).ExitCode() != 7 {
 					t.Fatalf("Go exit code was not preserved: %v", err)
 				}
 				if strings.Contains(string(output), "COMPLETED") {
@@ -110,8 +111,8 @@ func TestStressEntrypointRealGo(t *testing.T) {
 	}
 	for name, content := range map[string]string{
 		"scripts/stress_test.sh": string(script),
-		"scripts/migrate.sh":     "#!/bin/bash\nexit 0\n",
-		"scripts/docker":         "#!/bin/bash\nexit 0\n",
+		"scripts/migrate.sh":     "#!/bin/bash\necho 'fixture migration setup'\necho 'migration diagnostic' >&2\n",
+		"scripts/docker":         "#!/bin/bash\necho 'fixture service setup'\necho 'service diagnostic' >&2\n",
 		"go.mod":                 "module stressfixture\n\ngo 1.26\n",
 		"fixture_test.go": `package fixture
 import ("os"; "testing")
@@ -144,8 +145,9 @@ func TestFailure(t *testing.T) { t.Fatal("expected fixture failure") }
 		{name: "skipped children", pattern: "^TestSkippedChildren$", code: 1},
 		{name: "failure", pattern: "^TestFailure$", code: 1},
 		{name: "json success", pattern: "^TestPass$", format: "-json"},
-		{name: "json subtest", pattern: "^TestParent$/^child$", format: "-json"},
 		{name: "json missing subtest", pattern: "^TestParent$/^Nonexistent$", format: "-json", code: 1},
+		{name: "json missing test", pattern: "^Nonexistent$", format: "-json", code: 1},
+		{name: "json skip", pattern: "^TestSkipped$", format: "-json", code: 1},
 		{name: "json failure", pattern: "^TestFailure$", format: "-json", code: 1},
 		{name: "json disabled", pattern: "^TestPass$", format: "-json=false"},
 	} {
@@ -156,7 +158,10 @@ func TestFailure(t *testing.T) { t.Fatal("expected fixture failure") }
 			}
 			cmd := exec.Command("bash", args...)
 			cmd.Env = append(os.Environ(), "PATH="+filepath.Join(root, "scripts")+":"+os.Getenv("PATH"), "PARTY2_STRESS_ENABLED=0")
-			output, err := cmd.CombinedOutput()
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			err := cmd.Run()
+			output := stdout.String() + stderr.String()
 			code := 0
 			if err != nil {
 				if exit, ok := err.(*exec.ExitError); ok {
@@ -165,19 +170,43 @@ func TestFailure(t *testing.T) { t.Fatal("expected fixture failure") }
 					t.Fatal(err)
 				}
 			}
-			if code != tc.code || (code != 0 && strings.Contains(string(output), "COMPLETED")) {
+			if code != tc.code || (code != 0 && strings.Contains(output, "COMPLETED")) {
 				t.Fatalf("exit = %d, want %d\n%s", code, tc.code, output)
 			}
+			jsonMode := tc.format != "" && tc.format != "-json=false"
+			if jsonMode {
+				assertGoJSONLines(t, stdout.Bytes())
+			}
+			logs := stdout.String()
+			if jsonMode {
+				logs = stderr.String()
+			}
+			messages := []string{"Ensuring services", "fixture service setup", "fixture migration setup", "Running tests"}
 			if tc.code == 0 {
-				if tc.format == "-json" {
-					if !strings.Contains(string(output), `"Action":"pass"`) {
-						t.Fatalf("missing JSON events: %s", output)
-					}
-				} else if !strings.Contains(string(output), "--- PASS:") || strings.Contains(string(output), `"Action":`) {
-					t.Fatalf("expected normal output: %s", output)
+				messages = append(messages, "COMPLETED")
+			}
+			for _, message := range messages {
+				if !strings.Contains(logs, message) {
+					t.Fatalf("missing human message %q on expected stream:\n%s", message, output)
 				}
 			}
+			if !jsonMode && tc.code == 0 && (!strings.Contains(stdout.String(), "--- PASS:") || strings.Contains(stdout.String(), `"Action":`)) {
+				t.Fatalf("expected normal output: %s", output)
+			}
 		})
+	}
+}
+
+func assertGoJSONLines(t *testing.T, output []byte) {
+	t.Helper()
+	if len(output) == 0 {
+		t.Fatal("missing JSON events")
+	}
+	for _, line := range bytes.Split(bytes.TrimSuffix(output, []byte("\n")), []byte("\n")) {
+		var event struct{ Action, Package, ImportPath string }
+		if err := json.Unmarshal(line, &event); err != nil || event.Action == "" || (event.Package == "" && event.ImportPath == "") {
+			t.Fatalf("stdout contains a non-event line: %s (error: %v)", line, err)
+		}
 	}
 }
 

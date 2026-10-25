@@ -4,10 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-echo "==> Ensuring services and database migrations are ready..."
-docker compose up -d --wait mariadb valkey
-"${ROOT_DIR}/scripts/migrate.sh"
-
 if [ "$#" -eq 0 ]; then
     set -- ./...
 fi
@@ -27,7 +23,15 @@ for arg in "$@"; do
     esac
 done
 
-echo "==> Running tests with adaptive deep stress enabled..."
+LOG_FD=1
+case "$JSON_OUTPUT" in
+    1|t|T|true|TRUE|True) LOG_FD=2 ;;
+esac
+echo "==> Ensuring services and database migrations are ready..." >&"$LOG_FD"
+docker compose up -d --wait mariadb valkey >&"$LOG_FD"
+"${ROOT_DIR}/scripts/migrate.sh" >&"$LOG_FD"
+
+echo "==> Running tests with adaptive deep stress enabled..." >&"$LOG_FD"
 set +e
 PARTY2_DB_DSN="${PARTY2_DB_DSN:-party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true}" \
 PARTY2_TEST_DB_ADMIN_DSN="${PARTY2_TEST_DB_ADMIN_DSN:-root:root@tcp(127.0.0.1:3306)/?parseTime=true}" \
@@ -44,4 +48,4 @@ if [ "${TEST_STATUS[1]}" -ne 0 ]; then
     exit "${TEST_STATUS[1]}"
 fi
 
-echo "==> DEEP STRESS TEST RUN COMPLETED!"
+echo "==> DEEP STRESS TEST RUN COMPLETED!" >&"$LOG_FD"
