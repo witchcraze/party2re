@@ -108,8 +108,10 @@ func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID
 		settled := false
 		defer func() {
 			if !settled {
+				releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(txCtx), 2*time.Second)
+				defer cancel()
 				//lint:ignore error-swallow compensatory room release on aborted settlement
-				_ = s.partyRepo.UpdateParty(txCtx, p)
+				_ = s.partyRepo.UpdateParty(releaseCtx, p)
 			}
 		}()
 
