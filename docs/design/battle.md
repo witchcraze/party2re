@@ -737,6 +737,32 @@ gates. Listed MP/SP costs belong to ordinary dispatch, while indirect dispatch
 retains its existing cost rules. Runtime closures and operation counters are
 rebuilt after reload; committed effects are never replayed.
 
+Job74's duel (`_skill.cgi:5594–5720`) temporarily uses floor(AT×1.1) for up
+to two alternating ordinary attacks per combatant. Replies swap actor and the
+ordered side arrays; restore those arrays and the saved AT, retaining incidental
+effects and activation facts. Its unresolved-target fallback indexes all members
+by enemy count, including when the enemy array is empty. Compare HP losses after
+death stops: restore actor HP on a win, target HP on a loss, or both on a tie.
+Actor death takes precedence when both die. These direct HP writes do
+not undo defeat/reset, queued effects or rewards. A lethal win always grants an
+untyped base-AT×0.2 increase and five-turn crown; a damage win grants them with
+probability1/4.
+
+The other job74 bodies provoke each other living member with probability1/2,
+set self physical reduction directly, deal ordered direct untyped area power150,
+or choose self revival protection with probability1/3 versus equal chances of
+deadly poison/immobilization with tension reset to1. Its flurry captures the
+target only when crowned and starts with six hits, otherwise three fresh random
+targets. Power is current AT×0.9, with the coefficient multiplied by
+`1 + rand(0.1)` after a returned target. The first three successful hit positions
+may each extend the loop with probability1/2 while the actor is uncrowned; each
+returned target independently attempts recoil with probability1/3 at current
+AT×0.075×the increased coefficient. Misses and one-hit defense return no target
+and skip these tails. Losing the crown during an initially six-hit loop can
+therefore extend it to nine hits. Admission preserves later defense consumption, confusion
+activation and possible recoil cures before costs or committed RNG. The complete
+ordered table uses the same ordinary/indirect cost and reload boundary above.
+
 Damage modifiers follow `_skill.cgi:9948–10129`, including strict magic143
 and area144 thresholds, independent direct/normal predicates, and item239's
 second/third/fourth invocation bonuses only outside area damage. Purification

@@ -45,6 +45,9 @@ type TargetContext struct {
 	Item195Activated bool
 	PhantomTargetID  string
 	PhantomEnemyIDs  []string
+	// A duel reply swaps the source arrays even when its fallback chose an ally.
+	// This transient provenance is set only by the intrinsic duel body.
+	duelOriginID string
 }
 
 // TargetEffect is the input and continuation of a spell target helper.
@@ -90,24 +93,34 @@ func (s *LifetimeState) validateTargetContext(c TargetContext, rng random.Genera
 		seen[a.ID] = true
 	}
 	seen = make(map[string]bool, len(s.Actors))
-	actor := s.actor(c.ActorID)
+	actor, partySide := s.actor(c.ActorID), 0
+	if c.duelOriginID != "" {
+		actor, partySide = s.actor(c.duelOriginID), 1
+		if actor == nil {
+			return ErrInvalidParticipant
+		}
+	}
 	for side, ids := range [][]string{c.PartyIDs, c.EnemyIDs} {
 		for _, id := range ids {
 			a := s.actor(id)
-			if a == nil || seen[id] || ((a.TeamID == actor.TeamID) != (side == 0) && !(a.RosterDetached && a.RosterIdentity != "")) {
+			if a == nil || seen[id] || ((a.TeamID == actor.TeamID) != (side == partySide) && !(a.RosterDetached && a.RosterIdentity != "")) {
 				return ErrInvalidParticipant
 			}
 			seen[id] = true
 		}
 	}
-	if len(seen) != len(s.Actors) || !slices.Contains(c.PartyIDs, c.ActorID) {
+	party, enemy := c.PartyIDs, c.EnemyIDs
+	if c.duelOriginID != "" {
+		party, enemy = enemy, party
+	}
+	if len(seen) != len(s.Actors) || !slices.Contains(party, actor.ID) {
 		return ErrInvalidParticipant
 	}
-	if c.PhantomTargetID != "" && !slices.Contains(c.EnemyIDs, c.PhantomTargetID) {
+	if c.PhantomTargetID != "" && !slices.Contains(enemy, c.PhantomTargetID) {
 		return ErrUnsupportedEffect
 	}
 	for _, id := range c.PhantomEnemyIDs {
-		if !slices.Contains(c.EnemyIDs, id) || id == c.PhantomTargetID {
+		if !slices.Contains(enemy, id) || id == c.PhantomTargetID {
 			return ErrUnsupportedEffect
 		}
 	}
