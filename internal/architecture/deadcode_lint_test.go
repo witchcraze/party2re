@@ -180,6 +180,48 @@ func hasCaller(target methodTarget, repoFiles map[string][]byte) bool {
 	return false
 }
 
+// collectRepoFiles walks repoRoot and reads all .go files into memory,
+// skipping ignored directories (.git, vendor, .cache).
+func collectRepoFiles(repoRoot string) (map[string][]byte, error) {
+	repoFiles := make(map[string][]byte)
+	err := filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			rel, _ := filepath.Rel(repoRoot, path)
+			rel = filepath.ToSlash(rel)
+			if rel == ".git" || rel == "vendor" || rel == ".cache" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		repoFiles[path] = data
+		return nil
+	})
+	return repoFiles, err
+}
+
+func findOrphanedMethods(repoRoot string, targets []methodTarget, repoFiles map[string][]byte) []string {
+	var unhandledOrphans []string
+	for _, target := range targets {
+		if hasCaller(target, repoFiles) {
+			continue
+		}
+
+		relPath, _ := filepath.Rel(repoRoot, target.FilePath)
+		unhandledOrphans = append(unhandledOrphans, fmt.Sprintf("%s (%s:%d)", target.Key, relPath, target.Line))
+	}
+	return unhandledOrphans
+}
+
 func TestDeadCodeOrphanedMethods(t *testing.T) {
 	repoRoot := "../.."
 	start := time.Now()
@@ -195,38 +237,12 @@ func TestDeadCodeOrphanedMethods(t *testing.T) {
 	}
 
 	// Pre-load all .go files across repository into memory once for fast byte matching
-	repoFiles := make(map[string][]byte)
-	err = filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() || !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-		if strings.Contains(path, "vendor") || strings.Contains(path, ".git") {
-			return nil
-		}
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-		repoFiles[path] = data
-		return nil
-	})
+	repoFiles, err := collectRepoFiles(repoRoot)
 	if err != nil {
 		t.Fatalf("failed to read repository files: %v", err)
 	}
 
-	var unhandledOrphans []string
-
-	for _, target := range targets {
-		if hasCaller(target, repoFiles) {
-			continue
-		}
-
-		relPath, _ := filepath.Rel(repoRoot, target.FilePath)
-		unhandledOrphans = append(unhandledOrphans, fmt.Sprintf("%s (%s:%d)", target.Key, relPath, target.Line))
-	}
+	unhandledOrphans := findOrphanedMethods(repoRoot, targets, repoFiles)
 
 	if len(unhandledOrphans) > 0 {
 		t.Errorf("Detected %d orphaned method(s) with zero callers across repository:\n  - %s\nMethods must be referenced or deleted (prohibited by .agents/rules/01-development-workflow.md Section 4).",
@@ -304,5 +320,157 @@ func TestDeadCodeDetectorDetectsOrphan(t *testing.T) {
 	}
 	if !hasCaller(repoTarget, repoWithCallerFiles) {
 		t.Error("expected hasCaller to return true when interface caller exists")
+	}
+}
+
+func TestDeadCodeRepoWalkExcludesIgnoredDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	dirs := []string{
+		filepath.Join(tmpDir, "internal", "sample"),
+		filepath.Join(tmpDir, "cmd", "app"),
+		filepath.Join(tmpDir, "scripts"),
+		filepath.Join(tmpDir, ".cache"),
+		filepath.Join(tmpDir, ".git"),
+		filepath.Join(tmpDir, "vendor"),
+	}
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("failed to create dir %s: %v", d, err)
+		}
+	}
+
+	serviceSrc := `package sample
+
+type Service struct{}
+
+func (s *Service) CalledInCmd() {}
+func (s *Service) CalledInScript() {}
+func (s *Service) CalledInTest() {}
+func (s *Service) CacheHidden() {}
+func (s *Service) RealOrphan() {}
+
+type ItemRepository interface {
+	CalledRepoMethod() error
+	RealOrphanRepoMethod() error
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "internal", "sample", "service.go"), []byte(serviceSrc), 0644); err != nil {
+		t.Fatalf("failed to write service.go: %v", err)
+	}
+
+	cmdSrc := `package main
+
+import "sample"
+
+func run(s *sample.Service, r sample.ItemRepository) {
+	s.CalledInCmd()
+	_ = r.CalledRepoMethod()
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "cmd", "app", "main.go"), []byte(cmdSrc), 0644); err != nil {
+		t.Fatalf("failed to write main.go: %v", err)
+	}
+
+	scriptSrc := `package main
+
+import "sample"
+
+func runScript(s *sample.Service) {
+	s.CalledInScript()
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "scripts", "worker.go"), []byte(scriptSrc), 0644); err != nil {
+		t.Fatalf("failed to write worker.go: %v", err)
+	}
+
+	testSrc := `package sample_test
+
+import (
+	"sample"
+	"testing"
+)
+
+func TestSample(t *testing.T) {
+	var s sample.Service
+	s.CalledInTest()
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "internal", "sample", "service_test.go"), []byte(testSrc), 0644); err != nil {
+		t.Fatalf("failed to write service_test.go: %v", err)
+	}
+
+	// Ignored directory contents:
+	// 1. .cache/probe.go referencing CacheHidden: must NOT count as caller
+	cacheSrc := `package cache
+
+import "sample"
+
+func cached(s *sample.Service) {
+	s.CacheHidden()
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".cache", "probe.go"), []byte(cacheSrc), 0644); err != nil {
+		t.Fatalf("failed to write cache probe.go: %v", err)
+	}
+
+	// 2. Dangling symlinks in .cache, .git, vendor: deterministic reproduction of vanished build artifacts
+	for _, dir := range []string{".cache", ".git", "vendor"} {
+		symlinkPath := filepath.Join(tmpDir, dir, "dangling.go")
+		if err := os.Symlink("already-removed.go", symlinkPath); err != nil {
+			t.Logf("symlink not supported on this filesystem: %v", err)
+		}
+	}
+
+	targets, err := collectTargetMethods(tmpDir)
+	if err != nil {
+		t.Fatalf("collectTargetMethods failed: %v", err)
+	}
+	if len(targets) != 7 {
+		t.Fatalf("expected 7 target methods, got %d", len(targets))
+	}
+
+	repoFiles, err := collectRepoFiles(tmpDir)
+	if err != nil {
+		t.Fatalf("collectRepoFiles failed on directory with ignored dirs: %v", err)
+	}
+
+	// Verify ignored directories are completely absent from collected files
+	for filePath := range repoFiles {
+		rel, _ := filepath.Rel(tmpDir, filePath)
+		relSlash := filepath.ToSlash(rel)
+		if strings.HasPrefix(relSlash, ".cache/") || strings.HasPrefix(relSlash, ".git/") || strings.HasPrefix(relSlash, "vendor/") {
+			t.Errorf("repoFiles contains file from ignored directory: %s", relSlash)
+		}
+	}
+
+	orphans := findOrphanedMethods(tmpDir, targets, repoFiles)
+
+	orphanSet := make(map[string]bool)
+	for _, o := range orphans {
+		orphanSet[o] = true
+	}
+
+	// Must detect RealOrphan, CacheHidden, RealOrphanRepoMethod
+	for _, expected := range []string{"RealOrphan", "CacheHidden", "RealOrphanRepoMethod"} {
+		found := false
+		for o := range orphanSet {
+			if strings.Contains(o, expected) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected %s to be detected as orphan, but it was not; detected orphans: %v", expected, orphans)
+		}
+	}
+
+	// Must NOT detect CalledInCmd, CalledInScript, CalledInTest, CalledRepoMethod
+	for _, notExpected := range []string{"CalledInCmd", "CalledInScript", "CalledInTest", "CalledRepoMethod"} {
+		for o := range orphanSet {
+			if strings.Contains(o, notExpected) {
+				t.Errorf("expected %s to have a caller, but detected as orphan: %s", notExpected, o)
+			}
+		}
 	}
 }
