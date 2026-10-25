@@ -131,7 +131,7 @@ func newProtocolFixture(t *testing.T, n int) *protocolFixture {
 		t.Fatal(err)
 	}
 	f.fullness, f.adapter = fullness, adapter
-	f.svc, err = challenge.NewService(f.repo, f.chars, f.engine, challenge.WithActiveSessionStore(f.store), challenge.WithAdmission(approvedRoster{}), challenge.WithParticipantBuilder(adapter), challenge.WithFullnessResetter(fullness), challenge.WithCustomTiers(map[string]challenge.ChallengeTier{"test": {ID: "test", MaxParticipants: 4, BaseMonster: challenge.ChallengeMonster{Name: "Test", BaseHP: 1, BaseExp: 20, BaseGold: 5}}}))
+	f.svc, err = challenge.NewService(f.repo, f.chars, f.engine, challenge.WithActiveSessionStore(f.store), challenge.WithAdmission(approvedRoster{}), challenge.WithParticipantBuilder(adapter), challenge.WithFullnessResetter(fullness), challenge.WithRNG(zeroRNG{}), challenge.WithCustomTiers(map[string]challenge.ChallengeTier{"test": {ID: "test", MaxParticipants: 4, BaseMonster: challenge.ChallengeMonster{Name: "Test", BaseHP: 1, BaseExp: 20, BaseGold: 5}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,11 +188,7 @@ func (f *protocolFixture) assertSettled(t *testing.T, actor int, rounds, attempt
 		hp = 1
 		mp -= 2
 	}
-	exp, gold := 0, 0
-	for r := 1; r <= rounds; r++ {
-		exp += int(float64(20)*(1+.1*float64(r)) + .5)
-		gold += int(float64(5)*(1+.1*float64(r)) + .5)
-	}
+	exp, gold := 20*rounds, 5*rounds
 	if got.Stats.HP != hp || got.Stats.MP != mp || got.Experience != original.Experience+exp+20*attempted || got.Money != original.Money+gold || got.Tired != attempted*3+1 {
 		t.Fatalf("settlement rounds=%d attempted=%d: %+v", rounds, attempted, got)
 	}

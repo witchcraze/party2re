@@ -75,14 +75,14 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	c1 := createPartyTestChar("lead", 30, 350, 100, 80)
+	c1 := createPartyTestChar("lead", 30, 350, 500, 300)
 	c1.Name = "勇者アリス"
 	c1.JobID = "paladin"
 	c1.Stats.MP = 50
 	c1.Stats.MaxMP = 50
 	charRepo.chars[c1.ID] = c1
 
-	c2 := createPartyTestChar("c2", 30, 350, 90, 70)
+	c2 := createPartyTestChar("c2", 30, 350, 450, 280)
 	c2.Name = "魔法使いボブ"
 	c2.JobID = "wizard"
 	c2.Stats.MP = 100
@@ -148,8 +148,8 @@ func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	// Level 10 character with MaxHP 350, Attack 150, Defense 5 so monster damage goes through
-	c1 := createPartyTestChar("solo1", 10, 350, 150, 5)
+	// Level 10 character with MaxHP 350, Attack 400, Defense 5 so monster damage goes through
+	c1 := createPartyTestChar("solo1", 10, 350, 400, 5)
 	c1.Name = "ソロ戦士"
 	c1.JobID = "warrior"
 	charRepo.chars[c1.ID] = c1
@@ -193,12 +193,12 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	c1 := createPartyTestChar("p_lead", 15, 350, 140, 5)
+	c1 := createPartyTestChar("p_lead", 15, 350, 450, 5)
 	c1.Name = "勇者"
 	c1.JobID = "hero"
 	charRepo.chars[c1.ID] = c1
 
-	c2 := createPartyTestChar("p_mem", 15, 300, 135, 5)
+	c2 := createPartyTestChar("p_mem", 15, 300, 420, 5)
 	c2.Name = "戦士"
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2

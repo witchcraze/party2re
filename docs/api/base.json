@@ -8404,6 +8404,9 @@
           },
           "treasure_round": {
             "type": "integer"
+          },
+          "treasure_round_max": {
+            "type": "integer"
           }
         },
         "required": [

@@ -331,7 +331,7 @@ func TestExecuteRound_VictoryProgression(t *testing.T) {
 				ID:         "hero",
 				Level:      31,
 				Experience: 10000,
-				Stats:      corecharacter.Stats{HP: 350, MaxHP: 350, Attack: 150, Defense: 100},
+				Stats:      corecharacter.Stats{HP: 350, MaxHP: 350, Attack: 500, Defense: 300},
 			},
 		},
 	}
@@ -418,13 +418,13 @@ func TestChallenge_OwnershipVerification(t *testing.T) {
 				ID:         "owner_char",
 				Level:      20,
 				Experience: 5000,
-				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 180, Defense: 100},
+				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 500, Defense: 300},
 			},
 			"attacker_char": {
 				ID:         "attacker_char",
 				Level:      20,
 				Experience: 5000,
-				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 180, Defense: 100},
+				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 500, Defense: 300},
 			},
 		},
 	}

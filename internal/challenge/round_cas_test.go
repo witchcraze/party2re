@@ -137,6 +137,12 @@ func (roundWinEngine) Resolve(req corebattle.Request) (corebattle.Result, error)
 	}, nil
 }
 
+type zeroRNG struct{}
+
+func (zeroRNG) Intn(int) int     { return 0 }
+func (zeroRNG) IntN(int) int     { return 0 }
+func (zeroRNG) Float64() float64 { return 0 }
+
 func TestServiceAdvanceRound_ConcurrentSnapshot(t *testing.T) {
 	for _, live := range []bool{false, true} {
 		name := "memory"
@@ -163,7 +169,7 @@ func TestServiceAdvanceRound_ConcurrentSnapshot(t *testing.T) {
 			repo.hof["0"] = challenge.HallOfFameEntry{HighestRound: 100}
 			chars := &mockCharRepo{chars: map[string]corecharacter.Character{leader: createPartyTestChar(leader, 30, 200, 100, 100)}}
 			barrier := store
-			svc, err := challenge.NewService(repo, chars, roundWinEngine{}, challenge.WithActiveSessionStore(barrier))
+			svc, err := challenge.NewService(repo, chars, roundWinEngine{}, challenge.WithActiveSessionStore(barrier), challenge.WithRNG(zeroRNG{}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -187,7 +193,7 @@ func TestServiceAdvanceRound_ConcurrentSnapshot(t *testing.T) {
 
 			got, err := store.GetActiveSession(ctx, leader)
 			if err != nil || got == nil || got.CurrentRound != 2 || got.CharacterCurrentHP != 190 ||
-				got.Members[0].CharacterCurrentHP != 190 || got.AccumulatedExp != 22 || got.AccumulatedGold != 6 {
+				got.Members[0].CharacterCurrentHP != 190 || got.AccumulatedExp != 20 || got.AccumulatedGold != 5 {
 				t.Fatalf("incorrect persisted combat state: %+v, err=%v", got, err)
 			}
 		})

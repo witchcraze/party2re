@@ -9,14 +9,14 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 ## Architectural Policy & Boundaries
 
 - **Session-Based Consecutive Combat**: Characters enter a challenge stage (`0`〜`8`) and battle consecutive rounds until defeat or individual departure. Each participant carries HP, MP and consumed-item state directly across rounds without inter-round recovery (legacy parity with `vs_challenge.cgi` and `_battle.cgi`).
-- **Authentic Stat Scaling Formula**: Enemy combat stats scale dynamically based on the current round number according to the authentic fixed legacy formula (`vs_challenge.cgi:68`):
+- **Authentic Stat Scaling Formula**: Each non-treasure wave spawns `int(rand(2.5 + len(party) * 0.6)) + 1` enemies drawn randomly from the stage's monster pool (`vs_challenge.cgi:68`, `_npc_action.cgi:add_monster`). Enemy combat stats scale dynamically by `(0.9 + rand(0.3) + (len(party) - 2) * 0.1) * Scale` and truncate via `int(...)`, while EXP and Gold rewards remain unscaled:
   $$\text{Scale} = 1.0 + 0.10 \times \text{Round}$$
 - **100% Defeat Reward Retention**:
   - Each living participant earns the round's EXP and Gold; a fallen member retains prior earnings but earns no new rewards until revived (`_battle.cgi:208–214`). Leader death does not stop surviving allies.
   - On party wipe/defeat, all participants retain **100% of their earned EXP and Gold**. The current shared treasure ledger pays its designated leader recipient once; the [individual-exit rules](#individual-exit) distinguish that ledger from unreconciled per-player treasure interactions.
   - There is no 50% defeat penalty. Voluntary departure follows the [individual-exit rules](#individual-exit); the current service has no exit command.
 - **Authentic Treasure Room Trigger**:
-  - For rounds $\ge \text{TreasureRound}$ (10, 20, or 30 depending on the stage), there is a 10% chance per floor (`rand < 0.10`) to encounter a treasure room / receive treasure from the stage's item pool if no treasure has been awarded yet in that run (`vs_challenge.cgi:64`).
+  - When no treasure has been awarded yet in the run and $\text{Round} \ge \text{TreasureThreshold}$ (drawn in `10..20` inclusive on Stage `0` per `challenge/0.cgi`, or fixed at `TreasureRound` on other stages), a 10% roll (`rand < 0.10`) enters the treasure branch instead of spawning monsters (`vs_challenge.cgi:64–69`), awarding an item from the stage's pool with no combat.
 - **Leaderboards & Hall of Fame**: Tracks all-time highest round reached per stage with tie-breaking by earliest completion timestamp.
 
 ---
@@ -73,7 +73,7 @@ settlement and publication recovery to this boundary.
 
 | Stage ID | Name | Max Participants (`p_join`) | Join Constraints (`need_join`) | Treasure Floor Threshold | Base Monster Pool / Enemy |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `0` | 最弱逆襲 | 1 | `hp_400_u` (Max HP < 400) | Round 10 | スライム |
+| `0` | 最弱逆襲 | 1 | `hp_400_u` (Max HP < 400) | Round 10–20 (`int(rand(11)+10)`) | スライム |
 | `1` | 怒羊牧場 | 2 | `hp_400_u` (Max HP < 400) | Round 10 | ラースシープ |
 | `2` | 恐怖肝試 | 2 | None | Round 10 | ゴースト, メイジゴースト, ミイラ男, マミー, ガイコツ剣士, ブラッドハンド, 死霊 |
 | `3` | 幻覚猛毒 | 3 | None | Round 10 | オバケキノコ, ドクキノコ, マージマタンゴ |
@@ -91,17 +91,21 @@ settlement and publication recovery to this boundary.
 [Start Session] -> Active (Round 1, 100% Max HP)
       |
       v
-[Execute Round] -> Core Battle Engine Resolve
+[Execute Round]
       |
-      +---> [Victory] -> HP/MP/Consumption Carryover (no inter-round recovery)
-      |                  + Accumulate EXP & Gold for living members
-      |                  + Check Treasure Room Trigger (if Round >= TreasureRound and rand < 0.10)
-      |                  + Advance Round (CurrentRound++)
-      |                  + [Execute Next Round]
+      +---> [Treasure Branch] (no treasure yet, Round >= Threshold, rand < 0.10)
+      |            -> Award Item from Stage Pool (no combat, 0 EXP/Gold)
+      |            -> Update Hall of Fame & Advance Round (CurrentRound++)
       |
-      +---> [Defeat]  -> Award 100% Accumulated EXP, Gold, and Items
-                         Record High Score & Update Leaderboard / Hall of Fame
-                         Session Terminated (Status: Defeated)
+      +---> [Monster Combat Branch] -> Core Battle Engine Resolve
+                   |
+                   +---> [Victory] -> HP/MP/Consumption Carryover (no inter-round recovery)
+                   |                  + Accumulate unscaled EXP & Gold for living members
+                   |                  + Update Hall of Fame & Advance Round (CurrentRound++)
+                   |
+                   +---> [Defeat]  -> Award 100% Accumulated EXP, Gold, and Items
+                                      Record High Score & Update Leaderboard / Hall of Fame
+                                      Session Terminated (Status: Defeated)
 ```
 
 ---

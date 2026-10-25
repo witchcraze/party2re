@@ -11,6 +11,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 //go:embed data/challenge_tiers.json
@@ -54,6 +55,7 @@ type ChallengeTier struct {
 	NeedJoin         string             `json:"need_join,omitempty"`
 	NeedOverLv       bool               `json:"need_over_lv,omitempty"`
 	TreasureRound    int                `json:"treasure_round"`
+	TreasureRoundMax int                `json:"treasure_round_max,omitempty"`
 	TreasureItemPool []string           `json:"treasure_item_pool,omitempty"`
 	BaseMonster      ChallengeMonster   `json:"base_monster,omitempty"`
 	MonsterPool      []ChallengeMonster `json:"monster_pool,omitempty"`
@@ -236,6 +238,7 @@ type Service struct {
 	activeStore        ActiveSessionStore
 	tiers              map[string]ChallengeTier
 	participantBuilder ParticipantBuilder
+	rng                random.Generator
 }
 
 // Option configures optional parameters on Service.
@@ -245,6 +248,13 @@ type Option func(*Service)
 func WithParticipantBuilder(builder ParticipantBuilder) Option {
 	return func(s *Service) {
 		s.participantBuilder = builder
+	}
+}
+
+// WithRNG configures the random generator used for encounter and treasure rolls.
+func WithRNG(rng random.Generator) Option {
+	return func(s *Service) {
+		s.rng = rng
 	}
 }
 
@@ -296,6 +306,9 @@ func NewService(
 
 	if s.activeStore == nil {
 		s.activeStore = NewMemorySessionRepository()
+	}
+	if s.rng == nil {
+		s.rng = random.Default()
 	}
 	if s.transitions == nil {
 		if durable, ok := repo.(TransitionRepository); ok {

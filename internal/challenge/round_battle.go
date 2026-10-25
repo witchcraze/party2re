@@ -8,7 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-func (s *Service) resolveRound(ctx context.Context, session *ChallengeSession, leader corecharacter.Character, enemy corebattle.Participant) (corebattle.Result, bool, error) {
+func (s *Service) resolveRound(ctx context.Context, session *ChallengeSession, leader corecharacter.Character, enemies ...corebattle.Participant) (corebattle.Result, bool, error) {
 	// Older solo snapshots have no roster. Upgrade on the next computed round.
 	if len(session.Members) == 0 {
 		session.Members = []ChallengeMember{{CharacterID: leader.ID, CharacterName: leader.Name,
@@ -56,22 +56,22 @@ func (s *Service) resolveRound(ctx context.Context, session *ChallengeSession, l
 	}
 	res := corebattle.PartyBattleResult{}
 	var display corebattle.Result
-	if len(allies) == 0 {
+	if len(allies) == 0 || len(enemies) == 0 {
 		res.RemainingHP = map[string]int{}
 	} else if resolver, ok := s.battleEngine.(corebattle.PartyBattleResolver); ok {
 		var err error
-		res, err = resolver.ResolvePartyBattle(corebattle.PartyBattleRequest{Allies: allies, Enemies: []corebattle.Participant{enemy}})
+		res, err = resolver.ResolvePartyBattle(corebattle.PartyBattleRequest{Allies: allies, Enemies: enemies, RNG: s.rng})
 		if err != nil {
 			return display, false, err
 		}
-		display = corebattle.Result{Outcome: res.Outcome, WinnerID: leader.ID, LoserID: enemy.ID, Turns: res.Turns, Logs: res.Logs}
+		display = corebattle.Result{Outcome: res.Outcome, WinnerID: leader.ID, LoserID: enemies[0].ID, Turns: res.Turns, Logs: res.Logs}
 	} else {
 		// A two-combatant resolver cannot safely execute a party roster.
 		if len(session.Members) > 1 {
 			return display, false, corebattle.ErrInvalidRequest
 		}
 		var err error
-		display, err = s.battleEngine.Resolve(corebattle.Request{Participants: []corebattle.Participant{allies[0], enemy}})
+		display, err = s.battleEngine.Resolve(corebattle.Request{Participants: []corebattle.Participant{allies[0], enemies[0]}, RNG: s.rng})
 		if err != nil {
 			return display, false, err
 		}

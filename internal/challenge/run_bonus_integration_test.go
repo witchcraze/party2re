@@ -31,7 +31,7 @@ func TestRunProtocolRandomBonusReceiptIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bonus < 0 || bonus >= 231 || got.Money != f.actors[0].Money+19+bonus || got.Experience != f.actors[0].Experience+72 {
+	if bonus < 0 || bonus >= 231 || got.Money != f.actors[0].Money+15+bonus || got.Experience != f.actors[0].Experience+60 {
 		t.Fatalf("bonus/earnings: %+v %+v", result, got)
 	}
 	for i := 0; i < 3; i++ {
@@ -61,7 +61,7 @@ func TestRunProtocolConsumedBonusEquipmentIntegration(t *testing.T) {
 		t.Fatal("consumed accessory granted bonus")
 	}
 	got, err := f.chars.FindByID(ctx, run.CharacterID)
-	if err != nil || got.Experience != f.actors[0].Experience+72 {
+	if err != nil || got.Experience != f.actors[0].Experience+60 {
 		t.Fatalf("consumed bonus: %+v %v", got, err)
 	}
 	var count int
