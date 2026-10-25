@@ -191,6 +191,9 @@ func (r *CharacterRepository) SaveProfile(ctx context.Context, profile character
 
 func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 	exec := ExecutorFromContext(ctx, r.db)
+	if err := r.deleteChallengeAdmissions(ctx, id); err != nil {
+		return err
+	}
 
 	queries := []string{
 		`DELETE FROM casino_accounts WHERE character_id = ?`,
@@ -217,7 +220,6 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM dungeon_active_expeditions WHERE character_id = ?`,
 		`DELETE FROM dungeon_expedition_history WHERE character_id = ?`,
 		`DELETE FROM character_challenge_records WHERE character_id = ?`,
-		`DELETE FROM challenge_sessions WHERE character_id = ?`,
 		`DELETE FROM character_monsters WHERE character_id = ?`,
 		`DELETE FROM character_monster_book WHERE character_id = ?`,
 		`DELETE FROM character_item_collection WHERE character_id = ?`,
@@ -257,5 +259,40 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		}
 	}
 
+	return nil
+}
+
+func (r *CharacterRepository) deleteChallengeAdmissions(ctx context.Context, characterID string) error {
+	// Other participants retain admission through terminal publication acknowledgement.
+	const unused = `character_id = ? AND NOT EXISTS (
+		SELECT 1 FROM challenge_character_claims
+		WHERE run_id = challenge_sessions.id AND character_id <> challenge_sessions.character_id
+	)`
+	exec := ExecutorFromContext(ctx, r.db)
+	rows, err := exec.QueryContext(ctx, `SELECT id FROM challenge_sessions WHERE `+unused+` ORDER BY id`, characterID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		// Match SaveTransition's primary-key lock order; recheck claims at deletion.
+		if _, err := exec.ExecContext(ctx, `DELETE FROM challenge_sessions WHERE id = ? AND `+unused, id, characterID); err != nil {
+			return err
+		}
+	}
 	return nil
 }

@@ -20,6 +20,11 @@ character deletion; SQL repository cleanup removes dependent records before the
 character root in one transaction. The concrete table list belongs to the
 [repository](../../internal/database/character_repository.go) and migrations.
 
+Challenge admission is shared run evidence: deleting a departed original leader
+preserves the admission row while another participant's durable claim remains,
+including completed settlement awaiting publication. Surviving participants retain
+their existing run and rewards. See the [run lifetime contract](../architecture/transient-run-state.md#identity-and-admission).
+
 Current `character.Service.Delete` invokes hooks **before** its SQL transaction
 and treats hook errors as best-effort. SQL rollback therefore does not restore
 Valkey/external cleanup. This is not an atomic cross-store cascade; callers must
