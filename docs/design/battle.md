@@ -564,6 +564,51 @@ changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
 
+#### High-power and vulnerability callbacks
+
+Evidence: `_skill.cgi:3418–3568,3693–3718,11001–11018` and
+`_battle.cgi:1390–1409` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterHighPower` contributes complete ordered job47/48/49/52 tables through
+the existing invocation boundary. Listed costs belong to ordinary admission;
+indirect invocation retains its own cost and argument rules.
+
+Job47 retains returned-target guards for recoil and the 10% current-AT loss.
+Its wound strike uses missing target HP plus10, capped at400, then resolves the
+physical direct hit again. HP above MaxHP can produce zero or negative power;
+nonzero damage retains the shared positive roll floor. Four strikes choose
+targets afresh and stop on caster death. The extension adds floor(current HP×25%)
+to AT, caps the resulting AT at999 (over-level: max(999,min(1998,base AT×3))),
+then grants regeneration and sets hit95.
+
+Job48's magic waves deal direct damage before their separate poison/sleep
+helpers; status iteration continues after caster death. The single flare reduces
+hit by8% only on a returned, living target. Life collapse sets HP1 on a strict
+one-in-three draw when MaxHP and base DF are both ≤999. Its extension resets
+every ordered member through equipment reapplication, restores saved tension,
+then revives any still-fallen member to HP1; finally the caster gains magic
+absorption. Accessory callbacks run before revival and can restore statuses or
+temporary effects during reset. Package target-cursor changes remain operation
+facts for subsequent owners.
+
+Job49 cures the resolved ally's current status, raises defense by60% of base DF
+with the existing stat-up modifiers/cap, or performs its physical strike. The
+defense callback always grants physical mitigation after its buff helper.
+Job52's armor break clears the returned target's temporary and tension, restores
+base DF, then resolves the 10% defense reduction independently. Its focus reuses
+the double-tension/vulnerability operation; the direct area200 callback writes
+vulnerability after the hit even when the caster died.
+
+Admission preserves consumed defenses, category cures and item195 activation
+before later helpers. Missing reset facts reject before the first member.
+Deterministic weapon extension and equipment resets without accessory/variable
+weapon callbacks can project exact state into later slots, including newly
+revived targets. Other preceding outcomes retain the existing `AfterEffects`
+gate; admission never samples reset RNG or executes external hooks. Save the
+resulting facts and frozen next input, rebuild ports after reload, and never
+replay a committed callback. Adventure production integration remains with its
+consumer owners above.
+
 #### Possession, control and climax callbacks
 
 Evidence: `_skill.cgi:3723–3754,3943–4024,5293–5345` and
