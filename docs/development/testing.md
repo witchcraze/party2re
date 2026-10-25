@@ -15,15 +15,21 @@ Avoid tests tightly coupled to private data structures; a refactor preserving be
 
 ## 2. Tiered Verification Strategy
 
+Verification is scoped by change type:
+
+- **Pure / Unit changes** (domain logic, battle calculations, algorithms, or pure helpers without database/cache dependencies): do not require starting local backing services or running all packages. Execute focused tests (`go test -count=1 ./<package> -run '<test>'`) or affected-package tests directly on host Go.
+- **DB / Valkey changes**: require live services (`make up`) and applied schema migrations (`make db-migrate`). Run affected-package tests with connection settings (`PARTY2_DB_DSN`, `PARTY2_TEST_DB_ADMIN_DSN`, `PARTY2_VALKEY_ADDR`). Tests requiring dedicated database isolation must have an admin account configured (`PARTY2_TEST_DB_ADMIN_DSN`; see [Dedicated Database Setup](#52-dedicated-database-setup)).
+- **Documentation-only changes**: inspect changed requirements, local links/anchors, and examples against their sources. Backing services and full runtime test suites are not required solely for prose. Configured pre-push hooks and CI will run their automated checks.
+
 | Stage | Verification |
 | --- | --- |
 | TDD iteration | `go test -count=1 ./<package> -run '<test>'` |
 | Change ready | `go test -count=1 ./<package>` for affected packages |
-| Before commit | `make check`; wait for completion |
+| Before commit / ready to merge | `make check`; wait for completion |
 | Push | Let the pre-push hook reuse the successful check or verify changed content |
 | Clean database verification needed | `make check-clean` resets the database and forces full verification |
 
-For DB/Valkey changes, run affected-package tests with live services and connection settings (`PARTY2_DB_DSN`, `PARTY2_VALKEY_ADDR`). `make test-integration` supplies local connection settings and tests all packages; start services via `make up` and apply migrations via `make db-migrate`. `make test` also tests all packages; integration coverage depends on connection settings.
+For DB/Valkey changes, run affected-package tests with live services and connection settings (`PARTY2_DB_DSN`, `PARTY2_TEST_DB_ADMIN_DSN`, `PARTY2_VALKEY_ADDR`). `make test-integration` supplies local connection settings and tests all packages; start services via `make up` and apply migrations via `make db-migrate`. `make test` runs all packages on host without supplying connection settings; DB-backed tests skip automatically when connection variables are absent.
 
 `make check` runs formatting, static analysis, OpenAPI/architecture checks, migrations, the full test suite and a smoke image build. It and the pre-push hook call the same `scripts/verify.sh`, which reuses a successful result for an unchanged working tree. The verified tree hash is captured after code formatting and OpenAPI sync; if working tree files change before verification completes, the run exits non-zero without updating the stamp, ensuring subsequent runs verify the modified contents. Do not start duplicate checks concurrently or repeat a successful check solely for push or session end. If the verification environment changes, use `FORCE_VERIFY=1 make check`.
 
@@ -37,11 +43,19 @@ their configured checks.
 
 ## 3. Canonical Commands
 
-The [Makefile](../../Makefile) owns command definitions. Use `make up` for local
-services, `make test-integration` for host tests with DB/Valkey, `make test-docker`
-for the container runner, and `make check` for full verification. `make test`
-does not supply connection settings. Environment reset/disposal is described in
-[development-environment.md](development-environment.md#database-initialization-and-migration).
+The [Makefile](../../Makefile) owns command definitions:
+
+- `make up`: Start local MariaDB and Valkey containers in the background.
+- `make down`: Stop local services.
+- `make db-migrate`: Apply pending SQL schema migrations to the local database.
+- `make db-reset`: Drop and recreate the local database from migration files.
+- `make test`: Run host test suite without connection settings (pure unit tests run; DB/Valkey tests skip).
+- `make test-integration`: Run host test suite with default local MariaDB and Valkey connection settings.
+- `make test-docker`: Run the test suite inside the containerized Go test runner.
+- `make check`: Run the full unified local verification pipeline (`scripts/verify.sh`).
+- `make check-clean`: Reset the database and force full verification (`FORCE_VERIFY=1`).
+
+Environment reset/disposal is described in [development-environment.md](development-environment.md#database-initialization-and-migration).
 
 `make test-stress` runs the full Go suite with `PARTY2_STRESS_ENABLED=1`, so
 adaptive concurrency tests are included regardless of package or test name.

@@ -74,12 +74,15 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
   - **Capped Files:** Touching a file near a production line ceiling or ratchet MUST NOT by itself force a split. Assess whether the required restructuring is cohesive with the objective or would be easier to review as a prerequisite. Existing architecture boundaries, production-file ceilings and ratchets MUST still be satisfied.
 
 ## 3. TDD and Local Verification (Tiered Strategy)
-For non-trivial behavior:
-1. **Prepare Environment:** Run `make up` to ensure the local DB and Cache are running. This is required for fast integration testing and MCP tool access.
-2. Identify acceptance criteria and write/update tests.
-3. Implement the smallest change satisfying the tests.
-4. **Inner Loop:** Run fast host tests continuously using `make test` (or `make test-integration`).
-5. **Outer Loop:** Auto-format code with `make fmt`, then run unified local verification with `make check` (runs format check, `go vet`, host test suite, and fast smoke build).
+
+Agents and developers MUST follow a tiered verification strategy scoped to the change type. Detailed commands, execution budgets, and operating examples reside in [`docs/development/testing.md`](../../docs/development/testing.md).
+
+- **Scope Verification and Environment by Change Type:**
+  - **Pure / Unit changes** (domain logic, battle formulas, algorithms, or pure helpers without DB/cache dependencies): do NOT require starting backing services or running the full test suite during iteration. Run focused or affected-package tests directly on host Go.
+  - **DB / Valkey changes**: MUST ensure backing services are running (`make up`), migrations are applied (`make db-migrate`), and appropriate connection settings are configured (`PARTY2_DB_DSN`, `PARTY2_TEST_DB_ADMIN_DSN`, `PARTY2_VALKEY_ADDR`) before running integration tests. MUST comply with the [test database ownership and isolation](#test-database-ownership-and-isolation) rules below.
+  - **Documentation-only changes**: verify changed requirements, local links/anchors, and examples against their sources. Do NOT start backing services or run runtime test suites solely for prose changes. Configured pre-push hooks and CI will run their verification checks.
+- **TDD Inner Loop:** Identify acceptance criteria and write/update tests before or alongside code. Implement the smallest change satisfying the tests. Run focused tests continuously (`go test -count=1 ./<package> -run '<test>'`), expanding to the affected package(s) when the change is ready. MUST NOT run the full 80+ package test suite on every edit.
+- **Outer Loop & Ready to Merge:** Before committing and opening a PR for code changes, MUST format code (`make fmt`) and pass unified local checks (`make check`). When full database reset and verification are required, use `make check-clean`.
 
 ### Test Database Ownership and Isolation
 
