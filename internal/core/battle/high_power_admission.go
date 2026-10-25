@@ -83,66 +83,7 @@ func (s *LifetimeState) ValidateHighPower(c *HighPowerContext, id string, rng ra
 		if id == "job-48-entry-1" {
 			power, chance, status = 70, 30, StatusSleep
 		}
-		e = dualAgilityEffect("", power, CategoryMagic, true)
-		if err := p.validateAreaDamage(&child.DamageContext, e, rng); err != nil {
-			return err
-		}
-		// A guaranteed first helper count suppresses item239's status tail even
-		// when one-hit defense blocks damage. Keep the skipped-area alternative.
-		counted := a.HP > 0 && !a.categorySealed(CategoryMagic) && len(child.EnemyIDs) > 0
-		if counted {
-			first := e
-			first.TargetID = child.EnemyIDs[0]
-			converted, _, err := a.ConvertEnemyCategory(child.TargetContext, first)
-			if err != nil {
-				return err
-			}
-			candidates := p.damageCandidates(&child.DamageContext, converted)
-			counted = len(candidates) > 0
-			for _, candidate := range candidates {
-				counted = counted && candidate.Payload.Number != 0
-			}
-		}
-		if !counted {
-			if err := p.highPowerStatuses(&child, status, chance, rng); err != nil {
-				return err
-			}
-		}
-		if a.HP <= 0 {
-			return nil
-		}
-		if a.categorySealed(CategoryMagic) {
-			a.Status = ""
-		}
-		child.AreaDamageCalls++
-		if counted {
-			child.DamageCalls++
-		}
-		for _, target := range child.EnemyIDs {
-			e.TargetID = target
-			converted, _, err := a.ConvertEnemyCategory(child.TargetContext, e)
-			if err != nil {
-				return err
-			}
-			var lowered []string
-			for _, candidate := range p.damageCandidates(&child.DamageContext, converted) {
-				t := p.actor(candidate.TargetID)
-				if candidate.Payload.Number != 0 && t.Temporary != TemporaryOneHitDefense && damageHasPower(a, t, candidate) {
-					lowered = append(lowered, t.ID)
-				}
-			}
-			if err := p.admitDamageSequence(&child.DamageContext, []TargetEffect{e}, rng); err != nil {
-				return err
-			}
-			for _, id := range lowered {
-				if p.actor(id).HP > 999 {
-					p.actor(id).HP = 999
-				}
-			}
-		}
-		// A positive hit can cross current-HP status immunity. Its gear and
-		// defeat/reset descendants were already admitted by the damage owner.
-		return p.highPowerStatuses(&child, status, chance, rng)
+		return p.validateAreaDamageStatus(&child.DamageContext, power, status, chance, rng)
 	case "job-48-entry-2":
 		child.AdditionalEffect = true
 		e = dualAgilityEffect(child.shift(), 300, CategoryMagic, true)
@@ -181,10 +122,6 @@ func (s *LifetimeState) ValidateHighPower(c *HighPowerContext, id string, rng ra
 		return p.validateAreaDamage(&child.DamageContext, dualAgilityEffect("", 200, CategoryPhysical, true), rng)
 	}
 	return nil
-}
-
-func (s *LifetimeState) highPowerStatuses(c *HighPowerContext, status string, chance float64, rng random.Generator) error {
-	return s.validateControlStatuses(&ControlClimaxContext{DamageContext: c.DamageContext}, []string{status}, CategoryMagic, chance, rng)
 }
 
 func (s *LifetimeState) ProjectHighPower(c *HighPowerContext, id string) (bool, error) {
