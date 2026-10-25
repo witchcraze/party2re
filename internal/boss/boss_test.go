@@ -131,6 +131,10 @@ func newMockPartyRepo() *mockPartyRepo {
 	}
 }
 
+func (m *mockPartyRepo) WithPartyAdventureLock(ctx context.Context, _ string, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
 func (m *mockPartyRepo) GetPartyForUpdate(_ context.Context, id string) (party.Party, error) {
 	p, ok := m.parties[id]
 	if !ok || m.deleted[id] {

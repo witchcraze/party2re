@@ -18,7 +18,7 @@ var (
 	ErrPartyNotFound        = errors.New("party not found")
 	ErrNotPartyLeader       = errors.New("only party leader can start sealing battle")
 	ErrPartyNotReady        = errors.New("all party members must be ready before starting")
-	ErrPartyNotRecruiting   = errors.New("party is not currently recruiting")
+	ErrPartyNotRecruiting   = party.ErrPartyNotRecruiting
 	ErrNeedJoinNotMet       = errors.New("character does not meet party join condition")
 	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0)")
 	ErrCharacterExhausted   = errors.New("character is exhausted (tired >= 100)")
@@ -152,6 +152,7 @@ type CharacterRepository interface {
 }
 
 type PartyRepository interface {
+	party.PartyAdventureLockRepository
 	GetPartyForUpdate(ctx context.Context, id string) (party.Party, error)
 	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
 	DeleteParty(ctx context.Context, id string) error

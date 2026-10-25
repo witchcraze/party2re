@@ -136,7 +136,7 @@ func (h *Handler) handleStartSealingBattle(w http.ResponseWriter, r *http.Reques
 				writeError(w, http.StatusNotFound, err)
 			case errors.Is(err, boss.ErrNotPartyLeader), errors.Is(err, boss.ErrPartyNotReady):
 				writeError(w, http.StatusForbidden, err)
-			case errors.Is(err, boss.ErrNeedJoinNotMet), errors.Is(err, boss.ErrCharacterExhausted), errors.Is(err, boss.ErrCharacterUnconscious):
+			case errors.Is(err, boss.ErrNeedJoinNotMet), errors.Is(err, boss.ErrCharacterExhausted), errors.Is(err, boss.ErrCharacterUnconscious), errors.Is(err, boss.ErrPartyNotRecruiting):
 				writeError(w, http.StatusUnprocessableEntity, err)
 			default:
 				writeError(w, http.StatusInternalServerError, err)

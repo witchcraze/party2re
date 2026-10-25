@@ -17,11 +17,28 @@ import (
 )
 
 // StartSealingBattle starts and resolves an authentic 4-player Party Sealing Battle (vs_king.cgi).
+//
+// Concurrency & Persistence Boundary (mirrors party.StartPartyAdventure):
+//  1. Acquire the exclusive party lock (Rank 0), so overlapping starts for one room are rejected.
+//  2. Inside one SQL transaction, claim the room (recruiting -> in_progress), lock characters in
+//     ascending ID order, and settle rewards, participant state, boss records, mandatory
+//     Collection/Hall of Fame records and room completion together.
+//  3. Any failure rolls back the SQL state and releases the room claim.
 func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID string) (SealingBattleResult, error) {
 	if s.partyRepo == nil {
 		return SealingBattleResult{}, errors.New("party repository not configured")
 	}
 
+	var result SealingBattleResult
+	err := s.partyRepo.WithPartyAdventureLock(ctx, partyID, func(lockedCtx context.Context) error {
+		var err error
+		result, err = s.settleSealingBattle(lockedCtx, partyID, leaderCharID)
+		return err
+	})
+	return result, err
+}
+
+func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID string) (SealingBattleResult, error) {
 	var result SealingBattleResult
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// 1. Lock party
@@ -81,6 +98,21 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 			chars[cID] = c
 		}
 
+		// 4b. Claim the room (recruiting -> in_progress) so a lapsed lock or retry cannot
+		// settle it twice. An aborted settlement releases the claim again.
+		claimed := p
+		claimed.Status = party.StatusInProgress
+		if err := s.partyRepo.UpdateParty(txCtx, claimed); err != nil {
+			return err
+		}
+		settled := false
+		defer func() {
+			if !settled {
+				//lint:ignore error-swallow compensatory room release on aborted settlement
+				_ = s.partyRepo.UpdateParty(txCtx, p)
+			}
+		}()
+
 		// 5. Entry fatigue cost: each participant gets +20% Tired ($m{tired} += 20)
 		for _, cID := range charIDs {
 			c := chars[cID]
@@ -96,7 +128,7 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 			var p corebattle.Participant
 			if s.participantBuilder != nil {
 				var err error
-				p, err = s.participantBuilder.BuildParticipant(ctx, c.ID)
+				p, err = s.participantBuilder.BuildParticipant(txCtx, c.ID)
 				if err != nil {
 					return err
 				}
@@ -212,41 +244,9 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", s.now())
 			}
 
-			if s.monsterRecorder != nil {
-				for _, m := range members {
-					if stage.ID == "king99" {
-						if rec, ok := cloneRecords[m.CharacterID]; ok {
-							_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, rec)
-						}
-					} else {
-						for i, b := range stage.Bosses {
-							monID := parseBossMonsterID(b.Icon, fmt.Sprintf("%s-boss-%d", stage.ID, i))
-							hp := b.MaxHP
-							if hp <= 0 {
-								hp = b.HP
-							}
-							mp := b.MaxMP
-							if mp <= 0 {
-								mp = b.MP
-							}
-							strong := int(float64(hp) + float64(mp) + float64(b.Attack) + float64(b.Defense)*0.5 + float64(b.Agility))
-							rec := DefeatedMonsterRecord{
-								MonsterID:        monID,
-								MonsterName:      b.Name,
-								Habitat:          "封印戦",
-								Icon:             b.Icon,
-								Strong:           strong,
-								HP:               hp,
-								MP:               mp,
-								Attack:           b.Attack,
-								Defense:          b.Defense,
-								Agility:          b.Agility,
-								ExperienceReward: b.GetExp,
-								GoldReward:       b.GetMoney,
-							}
-							_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, rec)
-						}
-					}
+			for _, m := range members {
+				if err := s.recordBossDefeats(txCtx, stage, m.CharacterID, cloneRecords); err != nil {
+					return err
 				}
 			}
 
@@ -320,6 +320,7 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 		if err := s.partyRepo.DeleteParty(txCtx, partyID); err != nil {
 			return fmt.Errorf("failed to disband party: %w", err)
 		}
+		settled = true
 
 		result = SealingBattleResult{
 			StageID:           stage.ID,

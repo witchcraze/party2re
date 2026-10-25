@@ -50,7 +50,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		var p corebattle.Participant
 		if s.participantBuilder != nil {
 			var err error
-			p, err = s.participantBuilder.BuildParticipant(ctx, char.ID)
+			p, err = s.participantBuilder.BuildParticipant(txCtx, char.ID)
 			if err != nil {
 				return err
 			}
@@ -148,40 +148,8 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", s.now())
 			}
 
-			if s.monsterRecorder != nil {
-				if stage.ID == "king99" {
-					if rec, ok := cloneRecords[char.ID]; ok {
-						_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, char.ID, rec)
-					}
-				} else {
-					for i, b := range stage.Bosses {
-						monID := parseBossMonsterID(b.Icon, fmt.Sprintf("%s-boss-%d", stage.ID, i))
-						hp := b.MaxHP
-						if hp <= 0 {
-							hp = b.HP
-						}
-						mp := b.MaxMP
-						if mp <= 0 {
-							mp = b.MP
-						}
-						strong := int(float64(hp) + float64(mp) + float64(b.Attack) + float64(b.Defense)*0.5 + float64(b.Agility))
-						rec := DefeatedMonsterRecord{
-							MonsterID:        monID,
-							MonsterName:      b.Name,
-							Habitat:          "封印戦",
-							Icon:             b.Icon,
-							Strong:           strong,
-							HP:               hp,
-							MP:               mp,
-							Attack:           b.Attack,
-							Defense:          b.Defense,
-							Agility:          b.Agility,
-							ExperienceReward: b.GetExp,
-							GoldReward:       b.GetMoney,
-						}
-						_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, char.ID, rec)
-					}
-				}
+			if err := s.recordBossDefeats(txCtx, stage, char.ID, cloneRecords); err != nil {
+				return err
 			}
 
 			stageTier := stageTierFromID(stage.ID)
