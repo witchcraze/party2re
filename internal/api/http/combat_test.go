@@ -22,7 +22,6 @@ type stubChallengeService struct {
 	getTierFn             func(tierID string) (*challenge.ChallengeTier, error)
 	startSessionFn        func(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
 	advanceRoundFn        func(ctx context.Context, characterID string, sessionID string, expectedRevision int) (*challenge.RoundResult, *challenge.ChallengeSession, error)
-	retireSessionFn       func(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	getCharacterRecordsFn func(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
 	startPartySessionFn   func(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
 	getHallOfFameFn       func(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
@@ -39,6 +38,10 @@ func (s *stubChallengeService) GetCommandResult(ctx context.Context, actor, run 
 	if s.commandFn != nil {
 		return s.commandFn(ctx, actor, run, rev)
 	}
+	return nil, challenge.ErrForbidden
+}
+
+func (s *stubChallengeService) ExitSession(context.Context, string, string, int) (*challenge.CommandResult, error) {
 	return nil, challenge.ErrForbidden
 }
 
@@ -71,12 +74,6 @@ func (s *stubChallengeService) AdvanceRound(ctx context.Context, characterID str
 		return s.advanceRoundFn(ctx, characterID, sessionID, expectedRevision)
 	}
 	return &challenge.RoundResult{Round: 1, Won: true}, &challenge.ChallengeSession{ID: sessionID, CharacterID: characterID, CurrentRound: 2, Status: challenge.StatusActive}, nil
-}
-func (s *stubChallengeService) RetireSession(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error) {
-	if s.retireSessionFn != nil {
-		return s.retireSessionFn(ctx, characterID, sessionID)
-	}
-	return &challenge.ChallengeSession{ID: sessionID, CharacterID: characterID, Status: challenge.StatusClaimed}, nil
 }
 func (s *stubChallengeService) GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error) {
 	if s.getCharacterRecordsFn != nil {

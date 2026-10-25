@@ -278,8 +278,8 @@ An enrolled follower observes `role:member`;
 membership never authorizes executing the controlling actor's commands.
 
 The [Challenge individual-exit boundary](transient-run-state.md#challenge-participant-exit-target)
-uses current roster/leadership and durable pending-publication facts. `challenge_retire` is the selected future
-ActionID, scoped to the authenticated actor with explicit `session_id` and
+uses current roster/leadership and durable pending-publication facts.
+`challenge_retire` is scoped to the authenticated actor with explicit `session_id` and
 `expected_revision`; it is a continuation/recovery operation rather than town
 entry. Every remaining participant may leave; only the last departure ends the
 run. Mutation receipts remain actor-owned after departure. GET observes pending
@@ -287,9 +287,14 @@ recovery and stored outcomes without publishing, settling or renewing lifetime.
 The domain port and retained REST advance require an observed revision. Owned
 REST GET routes expose active activity and command receipts; recovery observations
 suppress advance candidates. The initial advance remains leader-only; subsequent
-rounds accept remaining participants. Gateway exit remains unconnected pending
-#1208. Current OpenAPI owns executable adapters; operational REST reads remain
-until replaced.
+rounds accept remaining participants. Context supplies the run ID and observed revision
+for each participant's exit control. The result retains the actor-owned receipt and
+`recovery_pending`: a committed settlement remains successful even if publication
+is pending. A known result survives context refresh failure. Clients observe the
+active run, receipt and context by GET without automatically replaying POST; an
+explicit identical retry delegates to the domain receipt/recovery boundary even
+after departure. Current OpenAPI owns executable adapters; operational REST reads
+remain until replaced.
 
 Continuation eligibility comes from actual membership, role and phase, instead
 of entry's town/cooldown/HP/fatigue/currency gates. Exact readiness, team setup,
@@ -502,6 +507,7 @@ authority; it makes no combat, wager or settlement formula parity claim.
 | `lib/casino_indian.cgi:10–16`: `つづける`, `しょうぶ`, `おりる`; `casino_highlow.cgi:10–27`: `つづける`, `ハイ`, conditional `ロウ`, `おりる`; `casino_doppel.cgi:10–15`: generated marks | Existing PlayRoomAction delegates to each game service. Context supplies service-owned game choices and visibility; legacy/current menu differences are recorded in the [scoped Casino mapping](../design/casino.md#scoped-legacy-dispatch-reconciliation). Gateway mutation connection remains #949; existing REST action route stays available. |
 | `lib/vs_dungeon.cgi:33–48`: leader initial `すすむ`, `にし`, `きた`, `みなみ`, `ひがし`, `ちず`, treasure `しらべる` | Owned GetActiveExpedition supplies phase/floor; Move and Escape remain existing REST operations and unconnected continuation candidates. Current StartPartyExpedition/Move bundle initialization/tile resolution; separate initial advance/treasure observation is not a verified replacement. Map, treasure and per-turn battle/action reconciliation remain #948. |
 | `lib/vs_challenge.cgi:20–46`: treasure `しらべる`, phase-dependent `すすむ` | Owned GetActiveSession supplies phase/round; AdvanceRound remains the retained character challenge advance operation and unconnected candidate. Treasure/battle/party detail reconciliation remains #948. |
+| `lib/_skill.cgi:158` → `lib/_battle.cgi:1184–1222,1330–1346`: participant `にげる` | Gateway `challenge_retire` → `Challenge.Service.ExitSession` settles the caller, preserves survivors and hands leadership to the first remaining member; last exit ends the run. Shared settlement owns resource/consumption/reward/record/fullness effects. |
 | Inherited `lib/_skill.cgi:22–29,78–79,282–317`: spectator `ささやき`/`にげる`/`すくしょ`, generated job/custom skills and `すとっく`, then `add_battle_action` | Shared member/spectator dispatch is inspected only to establish activity authority. No generated skill menu or per-turn battle command is replaced here; skill/stock/combat and battle spectator reconciliation remain #948, screenshot/social presentation #949/#140. Existing feature and battle operations stay registered. |
 | `lib/sleep.cgi:18–42`: empty action menu, elapsed automatic vitality recovery | Existing timer facts preserve sleep and elapsed recovery pending; only explicit connected Wake/Rescue commands can recover. GET changes no vitality, timer or feature record. |
 

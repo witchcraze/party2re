@@ -92,7 +92,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	if err != nil || len(facts) != 6 {
 		t.Fatalf("all facts: %+v %v", facts, err)
 	}
-	for i, want := range [][]string{{"party_leave", "party_ready", "party_start"}, {"pvp_advance"}, {"gvg_leave", "gvg_advance"}, {"dungeon_move", "dungeon_escape"}, {"challenge_advance"}, {"casino_room_leave"}} {
+	for i, want := range [][]string{{"party_leave", "party_ready", "party_start"}, {"pvp_advance"}, {"gvg_leave", "gvg_advance"}, {"dungeon_move", "dungeon_escape"}, {"challenge_advance", "challenge_retire"}, {"casino_room_leave"}} {
 		if !slices.Equal(facts[i].Actions, want) {
 			t.Fatalf("%s actions=%v want=%v", facts[i].Kind, facts[i].Actions, want)
 		}
@@ -243,5 +243,23 @@ func TestChallengePendingActivitySuppressesProgress(t *testing.T) {
 	facts, err := readers.read(context.Background(), "owner", "hero")
 	if err != nil || len(facts) != 1 || facts[0].Phase != "recovery_pending" || facts[0].Revision != 4 || len(facts[0].Actions) != 0 {
 		t.Fatalf("pending claim lost or progressed: %+v %v", facts, err)
+	}
+}
+
+func TestChallengeExitActivityForEveryParticipant(t *testing.T) {
+	for _, leader := range []string{"hero", "other"} {
+		for _, round := range []int{1, 2} {
+			f, pv, gv := &activityFixtures{}, &pvpActivityFixture{}, &gvgActivityFixture{}
+			f.session = &challenge.ChallengeSession{ID: "run", Revision: 3, CharacterID: leader, CurrentRound: round, Status: challenge.StatusActive, Members: []challenge.ChallengeMember{{CharacterID: "hero"}}}
+			readers := contextActivityReaders{party: f, pvp: pv, gvg: gv, dungeon: f, challenge: f, casino: f}
+			facts, err := readers.read(context.Background(), "owner", "hero")
+			want := []string{"challenge_retire"}
+			if leader == "hero" || round > 1 {
+				want = []string{"challenge_advance", "challenge_retire"}
+			}
+			if err != nil || len(facts) != 1 || facts[0].Revision != 3 || !slices.Equal(facts[0].Actions, want) {
+				t.Fatalf("leader=%s round=%d: %+v %v", leader, round, facts, err)
+			}
+		}
 	}
 }
