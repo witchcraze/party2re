@@ -8404,6 +8404,9 @@
           },
           "treasure_round": {
             "type": "integer"
+          },
+          "treasure_round_max": {
+            "type": "integer"
           }
         },
         "required": [
@@ -8419,6 +8422,9 @@
       },
       "ChallengeMonster": {
         "properties": {
+          "base_agility": {
+            "type": "integer"
+          },
           "base_attack": {
             "type": "integer"
           },

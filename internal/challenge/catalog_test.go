@@ -46,11 +46,17 @@ func TestLoadTiers_EmbeddedJSON(t *testing.T) {
 			if tier.BaseMonster.BaseHP != 150 {
 				t.Errorf("stage 0: expected BaseHP=150, got %d", tier.BaseMonster.BaseHP)
 			}
+			if tier.BaseMonster.BaseAgility != 200 {
+				t.Errorf("stage 0: expected BaseAgility=200, got %d", tier.BaseMonster.BaseAgility)
+			}
 			if tier.TreasureRound != 10 {
 				t.Errorf("stage 0: expected TreasureRound=10, got %d", tier.TreasureRound)
 			}
-			if len(tier.TreasureItemPool) != 2 {
-				t.Errorf("stage 0: expected 2 treasure items, got %d", len(tier.TreasureItemPool))
+			if tier.TreasureRoundMax != 20 {
+				t.Errorf("stage 0: expected TreasureRoundMax=20, got %d", tier.TreasureRoundMax)
+			}
+			if len(tier.TreasureItemPool) != 18 {
+				t.Errorf("stage 0: expected 18 treasure items, got %d", len(tier.TreasureItemPool))
 			}
 		}
 	}

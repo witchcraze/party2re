@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 func (s *Service) StartSession(ctx context.Context, characterID string, tierID string) (*ChallengeSession, error) {
@@ -44,6 +42,60 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 	return result.Round, &result.Session, err
 }
 
+func (s *Service) rollTreasureThreshold(tier *ChallengeTier) int {
+	if tier.TreasureRoundMax > tier.TreasureRound {
+		return tier.TreasureRound + s.rng.Intn(tier.TreasureRoundMax-tier.TreasureRound+1)
+	}
+	return tier.TreasureRound
+}
+
+func (s *Service) updateHallOfFameIfNeeded(ctx context.Context, session *ChallengeSession, char corecharacter.Character, round int) error {
+	hof, err := s.repo.GetHallOfFame(ctx, session.TierID)
+	if err != nil {
+		return fmt.Errorf("getting hall of fame: %w", err)
+	}
+	if hof == nil || round > hof.HighestRound {
+		hofMembers := make([]HallOfFameMember, len(session.Members))
+		for i, m := range session.Members {
+			icon := m.Icon
+			if m.CharacterCurrentHP <= 0 {
+				icon = "chr/099.gif"
+			}
+			hofMembers[i] = HallOfFameMember{
+				CharacterID:   m.CharacterID,
+				CharacterName: m.CharacterName,
+				Icon:          icon,
+				JobID:         m.JobID,
+				OldJobID:      m.OldJobID,
+				HP:            m.MaxHP,
+				MP:            m.MaxMP,
+				Attack:        m.Attack,
+				Defense:       m.Defense,
+				Agility:       m.Agility,
+			}
+		}
+		pName := session.PartyName
+		if pName == "" {
+			pName = char.Name
+		}
+		pColor := session.PartyColor
+		if pColor == "" {
+			pColor = "#FFFFFF"
+		}
+		if err := s.repo.SaveHallOfFame(ctx, HallOfFameEntry{
+			TierID:       session.TierID,
+			HighestRound: round,
+			PartyName:    pName,
+			PartyColor:   pColor,
+			ClearedAt:    time.Now().UTC(),
+			Members:      hofMembers,
+		}); err != nil {
+			return fmt.Errorf("saving hall of fame: %w", err)
+		}
+	}
+	return nil
+}
+
 func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (*CommandResult, []string, error) {
 	tier, err := s.GetTier(session.TierID)
 	if err != nil {
@@ -59,26 +111,85 @@ func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (
 	}
 
 	round := session.CurrentRound
+	treasureThreshold := s.rollTreasureThreshold(tier)
 
-	// Select monster from pool or base monster
-	var baseM ChallengeMonster
-	if len(tier.MonsterPool) > 0 {
-		baseM = tier.MonsterPool[(round-1)%len(tier.MonsterPool)]
-	} else {
-		baseM = tier.BaseMonster
+	// Authentic Treasure Room branch (vs_challenge.cgi:64-66):
+	// When no treasure has been obtained yet, round >= threshold, and 10% roll succeeds,
+	// add_treasure() replaces add_monster() with no combat.
+	if len(session.AccumulatedItems) == 0 && len(tier.TreasureItemPool) > 0 && round >= treasureThreshold && s.rng.Float64() < 0.10 {
+		awardedItem := tier.TreasureItemPool[s.rng.Intn(len(tier.TreasureItemPool))]
+
+		if err := s.updateHallOfFameIfNeeded(ctx, session, char, round); err != nil {
+			return nil, nil, err
+		}
+
+		session.CurrentRound++
+		session.AccumulatedItems = append(session.AccumulatedItems, awardedItem)
+		session.TreasureAwards = append(session.TreasureAwards, TreasureAward{ItemID: awardedItem, RecipientID: session.CharacterID})
+
+		return &CommandResult{Round: &RoundResult{
+			Round:              round,
+			MonsterName:        "宝箱",
+			BattleResult:       corebattle.Result{Outcome: corebattle.OutcomeWin, WinnerID: char.ID},
+			Won:                true,
+			RecoveredHP:        0,
+			CharacterCurrentHP: session.CharacterCurrentHP,
+			RoundExp:           0,
+			RoundGold:          0,
+			AwardedItem:        awardedItem,
+			SessionEnded:       false,
+			SessionStatus:      StatusActive,
+		}, Session: *session}, nil, nil
 	}
 
-	// Scale monster for round: fixed formula 1.0 + 0.10 * round
-	scale := 1.0 + 0.10*float64(round)
-	mHP := int(math.Round(float64(baseM.BaseHP) * scale))
-	mAtk := int(math.Round(float64(baseM.BaseAttack) * scale))
-	mDef := int(math.Round(float64(baseM.BaseDefense) * scale))
-	mExp := int(math.Round(float64(baseM.BaseExp) * scale))
-	mGold := int(math.Round(float64(baseM.BaseGold) * scale))
-	mName := fmt.Sprintf("%s (Round %d)", baseM.Name, round)
+	// Monster encounter branch (vs_challenge.cgi:68, _npc_action.cgi:add_monster):
+	// Count c = int(rand(2.5 + @partys * 0.6)), spawning c + 1 monsters.
+	partyCount := len(session.Members)
+	if partyCount <= 0 {
+		partyCount = 1
+	}
+	c := int(s.rng.Float64() * (2.5 + float64(partyCount)*0.6))
+	monsterCount := c + 1
 
-	monsterParticipant := corebattle.MustNewParticipant(mName, mHP, mAtk, mDef)
-	battleRes, won, err := s.resolveRound(ctx, session, char, monsterParticipant)
+	scale := 1.0 + 0.10*float64(round)
+	enemies := make([]corebattle.Participant, 0, monsterCount)
+	var mExp, mGold int
+	var firstMonsterName string
+
+	for i := 0; i < monsterCount; i++ {
+		var baseM ChallengeMonster
+		if len(tier.MonsterPool) > 0 {
+			baseM = tier.MonsterPool[s.rng.Intn(len(tier.MonsterPool))]
+		} else {
+			baseM = tier.BaseMonster
+		}
+		if i == 0 {
+			firstMonsterName = fmt.Sprintf("%s (Round %d)", baseM.Name, round)
+		}
+
+		statFactor := func() float64 {
+			return (0.9 + s.rng.Float64()*0.3 + float64(partyCount-2)*0.1) * scale
+		}
+		mHP := max(1, int(float64(baseM.BaseHP)*statFactor()))
+		mAtk := max(0, int(float64(baseM.BaseAttack)*statFactor()))
+		mDef := max(0, int(float64(baseM.BaseDefense)*statFactor()))
+		mAg := max(0, int(float64(baseM.BaseAgility)*statFactor()))
+
+		suffix := rune('A' + (i % 26))
+		enemyID := fmt.Sprintf("%s-%d-%c", baseM.Name, round, suffix)
+		p := corebattle.MustNewParticipant(enemyID, mHP, mAtk, mDef)
+		p.Name = fmt.Sprintf("%s%c", baseM.Name, suffix)
+		p.MaxHP = mHP
+		p.Agility = mAg
+		p.ExperienceReward = baseM.BaseExp
+		p.GoldReward = baseM.BaseGold
+		enemies = append(enemies, p)
+
+		mExp += baseM.BaseExp
+		mGold += baseM.BaseGold
+	}
+
+	battleRes, won, err := s.resolveRound(ctx, session, char, enemies...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -93,78 +204,23 @@ func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (
 			}
 		}
 
-		// Authentic Treasure Room trigger: round >= TreasureRound, 10% chance if no item awarded yet
-		var awardedItem string
-		if len(session.AccumulatedItems) == 0 && round >= tier.TreasureRound && len(tier.TreasureItemPool) > 0 {
-			if random.Float64() < 0.10 {
-				idx := random.Intn(len(tier.TreasureItemPool))
-				awardedItem = tier.TreasureItemPool[idx]
-			}
-		}
-
-		// Update Hall of Fame if round > highestRound for tier
-		hof, err := s.repo.GetHallOfFame(ctx, session.TierID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("getting hall of fame: %w", err)
-		}
-		if hof == nil || round > hof.HighestRound {
-			hofMembers := make([]HallOfFameMember, len(session.Members))
-			for i, m := range session.Members {
-				icon := m.Icon
-				if m.CharacterCurrentHP <= 0 {
-					icon = "chr/099.gif"
-				}
-				hofMembers[i] = HallOfFameMember{
-					CharacterID:   m.CharacterID,
-					CharacterName: m.CharacterName,
-					Icon:          icon,
-					JobID:         m.JobID,
-					OldJobID:      m.OldJobID,
-					HP:            m.MaxHP,
-					MP:            m.MaxMP,
-					Attack:        m.Attack,
-					Defense:       m.Defense,
-					Agility:       m.Agility,
-				}
-			}
-			pName := session.PartyName
-			if pName == "" {
-				pName = char.Name
-			}
-			pColor := session.PartyColor
-			if pColor == "" {
-				pColor = "#FFFFFF"
-			}
-			if err := s.repo.SaveHallOfFame(ctx, HallOfFameEntry{
-				TierID:       session.TierID,
-				HighestRound: round,
-				PartyName:    pName,
-				PartyColor:   pColor,
-				ClearedAt:    time.Now().UTC(),
-				Members:      hofMembers,
-			}); err != nil {
-				return nil, nil, fmt.Errorf("saving hall of fame: %w", err)
-			}
+		if err := s.updateHallOfFameIfNeeded(ctx, session, char, round); err != nil {
+			return nil, nil, err
 		}
 
 		session.CurrentRound++
 		session.AccumulatedExp += mExp
 		session.AccumulatedGold += mGold
-		if awardedItem != "" {
-			session.AccumulatedItems = append(session.AccumulatedItems, awardedItem)
-			session.TreasureAwards = append(session.TreasureAwards, TreasureAward{ItemID: awardedItem, RecipientID: session.CharacterID})
-		}
 
 		return &CommandResult{Round: &RoundResult{
 			Round:              round,
-			MonsterName:        mName,
+			MonsterName:        firstMonsterName,
 			BattleResult:       battleRes,
 			Won:                true,
 			RecoveredHP:        0,
 			CharacterCurrentHP: leaderSurvivingHP,
 			RoundExp:           mExp,
 			RoundGold:          mGold,
-			AwardedItem:        awardedItem,
 			SessionEnded:       false,
 			SessionStatus:      StatusActive,
 		}, Session: *session}, nil, nil
@@ -201,7 +257,7 @@ func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (
 
 	return &CommandResult{Round: &RoundResult{
 		Round:              round,
-		MonsterName:        mName,
+		MonsterName:        firstMonsterName,
 		BattleResult:       battleRes,
 		Won:                false,
 		RecoveredHP:        0,

@@ -134,7 +134,7 @@ func (s *beforePublicationStore) PublishRun(ctx context.Context, t challenge.Tra
 
 func (f *protocolFixture) service(t *testing.T, store challenge.ActiveSessionStore, transitions challenge.TransitionRepository) *challenge.Service {
 	t.Helper()
-	svc, err := challenge.NewService(f.repo, f.chars, f.engine, challenge.WithActiveSessionStore(store), challenge.WithTransitionRepository(transitions), challenge.WithAdmission(approvedRoster{}), challenge.WithParticipantBuilder(f.adapter), challenge.WithFullnessResetter(f.fullness), challenge.WithCustomTiers(map[string]challenge.ChallengeTier{"test": {ID: "test", MaxParticipants: 4, BaseMonster: challenge.ChallengeMonster{Name: "Test", BaseHP: 1, BaseExp: 20, BaseGold: 5}}}))
+	svc, err := challenge.NewService(f.repo, f.chars, f.engine, challenge.WithActiveSessionStore(store), challenge.WithTransitionRepository(transitions), challenge.WithAdmission(approvedRoster{}), challenge.WithParticipantBuilder(f.adapter), challenge.WithFullnessResetter(f.fullness), challenge.WithRNG(zeroRNG{}), challenge.WithCustomTiers(map[string]challenge.ChallengeTier{"test": {ID: "test", MaxParticipants: 4, BaseMonster: challenge.ChallengeMonster{Name: "Test", BaseHP: 1, BaseExp: 20, BaseGold: 5}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
