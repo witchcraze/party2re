@@ -59,8 +59,13 @@ including the package selector (omitting all arguments defaults to `./...`):
 ./scripts/stress_test.sh -run 'TestGvGRewardConcurrentRetryIntegration|TestActionPublication_ConcurrentWagers' ./internal/gvg ./internal/casino
 ```
 
-Setup or test failure returns nonzero. A selection with no passing tests,
-including an empty match or an entirely skipped run, also fails. Use
+Setup or test failure returns nonzero, preserving the Go test exit code. The
+entrypoint reads Go's JSON events and requires a passing test without observed
+child events, in a package that Go has not reported as having no tests to run.
+This excludes the parent-only empty runs reported by Go and observed parents
+whose children all skip. It does not independently prove that every requested
+subtest or regex alternative exists. Normal output and explicit `-json` output
+are both supported. Use
 `go test -list '<pattern>' ./...` separately to inspect selection without running
 tests. Full deep runs include ordinary tests as well; elapsed time depends on
 the selected suite and local services.
