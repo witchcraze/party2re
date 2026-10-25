@@ -3375,6 +3375,9 @@
       "ChallengeMonster": {
         "additionalProperties": false,
         "properties": {
+          "base_agility": {
+            "type": "integer"
+          },
           "base_attack": {
             "type": "integer"
           },

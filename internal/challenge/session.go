@@ -173,12 +173,14 @@ func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (
 		mHP := max(1, int(float64(baseM.BaseHP)*statFactor()))
 		mAtk := max(0, int(float64(baseM.BaseAttack)*statFactor()))
 		mDef := max(0, int(float64(baseM.BaseDefense)*statFactor()))
+		mAg := max(0, int(float64(baseM.BaseAgility)*statFactor()))
 
 		suffix := rune('A' + (i % 26))
 		enemyID := fmt.Sprintf("%s-%d-%c", baseM.Name, round, suffix)
 		p := corebattle.MustNewParticipant(enemyID, mHP, mAtk, mDef)
 		p.Name = fmt.Sprintf("%s%c", baseM.Name, suffix)
 		p.MaxHP = mHP
+		p.Agility = mAg
 		p.ExperienceReward = baseM.BaseExp
 		p.GoldReward = baseM.BaseGold
 		enemies = append(enemies, p)

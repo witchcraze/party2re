@@ -42,6 +42,7 @@ type ChallengeMonster struct {
 	BaseHP      int    `json:"base_hp"`
 	BaseAttack  int    `json:"base_attack"`
 	BaseDefense int    `json:"base_defense"`
+	BaseAgility int    `json:"base_agility,omitempty"`
 	BaseExp     int    `json:"base_exp"`
 	BaseGold    int    `json:"base_gold"`
 }

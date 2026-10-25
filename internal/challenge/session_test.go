@@ -25,6 +25,7 @@ func setupSessionTestService(t *testing.T) (*challenge.Service, *mockChallengeRe
 					MaxHP:   350,
 					Attack:  500,
 					Defense: 300,
+					Agility: 250,
 				},
 			},
 			"weakling": {
@@ -298,12 +299,12 @@ func TestTierZero_TreasureBranchReplacesCombatAndThresholds(t *testing.T) {
 	}
 
 	t.Run("threshold 10 boundary: round 9 fights monster, round 10 with <0.10 gets treasure without combat", func(t *testing.T) {
-		// Round 9: Intn(11)->0 (threshold=10); round 9 < 10 so monster spawns (Float64()->0.0 for count=1)
+		// Round 9: Intn(11)->0 (threshold=10); round 9 < 10 so monster spawns (Float64()->0.0 for count=1, 4x 0.0 for stats)
 		// Round 10: Intn(11)->0 (threshold=10), Float64()->0.0999 (<0.10), Intn(18)->17 ("item-103")
 		// Round 11: already has treasure, so even with Intn(11)->0 and Float64()->0.0, fights monster
 		rng := &scriptedRNG{
 			ints:   []int{0, 0, 17, 0},
-			floats: []float64{0.0, 0.0, 0.0, 0.0, 0.0999, 0.0, 0.0, 0.0, 0.0},
+			floats: []float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0999, 0.0, 0.0, 0.0, 0.0, 0.0},
 		}
 		svc, engine, sess := newTierZeroFixture(t, 9, rng)
 
@@ -339,11 +340,11 @@ func TestTierZero_TreasureBranchReplacesCombatAndThresholds(t *testing.T) {
 	})
 
 	t.Run("threshold 20 boundary: round 19 fights monster, round 20 triggers treasure", func(t *testing.T) {
-		// Round 19: Intn(11)->10 (threshold=20); round 19 < 20 -> combat
+		// Round 19: Intn(11)->10 (threshold=20); round 19 < 20 -> combat (1 count draw + 4 stat draws)
 		// Round 20: Intn(11)->10 (threshold=20), Float64()->0.0 (<0.10), Intn(18)->0 ("item-004") -> treasure
 		rng := &scriptedRNG{
 			ints:   []int{10, 10, 0},
-			floats: []float64{0.0, 0.0, 0.0, 0.0, 0.0},
+			floats: []float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
 		}
 		svc, engine, sess := newTierZeroFixture(t, 19, rng)
 
@@ -391,10 +392,12 @@ func TestChallenge_IntTruncationUnscaledRewardsAndMonsterPool(t *testing.T) {
 		// Slime BaseHP=150 -> 150 * 1.045 = 156.75 -> int truncates to 156 (math.Round would be 157).
 		// Slime BaseAttack=100 -> 100 * 1.045 = 104.5 -> int truncates to 104 (math.Round would be 105).
 		// Slime BaseDefense=50 -> 50 * 1.045 = 52.25 -> int truncates to 52.
+		// Slime BaseAgility=200 with variance Float64() = 0.42: (0.9 + 0.126 - 0.1) * 1.1 = 1.0186
+		//   -> 200 * 1.0186 = 203.72 -> int truncates to 203 (math.Round would be 204).
 		// Rewards remain unscaled: Exp=20, Gold=5 (not 22 and 6).
 		rng := &scriptedRNG{
 			ints:   []int{0},
-			floats: []float64{0.0, 0.5, 0.5, 0.5},
+			floats: []float64{0.0, 0.5, 0.5, 0.5, 0.42},
 		}
 		repo := newMockChallengeRepo()
 		charRepo := &mockCharRepo{
@@ -419,8 +422,8 @@ func TestChallenge_IntTruncationUnscaledRewardsAndMonsterPool(t *testing.T) {
 			t.Fatalf("expected 1 enemy, got %d", len(engine.enemies))
 		}
 		got := engine.enemies[0]
-		if got.HP != 156 || got.Attack != 104 || got.Defense != 52 {
-			t.Fatalf("expected truncated stats HP=156 Attack=104 Defense=52, got HP=%d Attack=%d Defense=%d", got.HP, got.Attack, got.Defense)
+		if got.HP != 156 || got.Attack != 104 || got.Defense != 52 || got.Agility != 203 {
+			t.Fatalf("expected truncated stats HP=156 Attack=104 Defense=52 Agility=203, got HP=%d Attack=%d Defense=%d Agility=%d", got.HP, got.Attack, got.Defense, got.Agility)
 		}
 		if res.RoundExp != 20 || res.RoundGold != 5 {
 			t.Fatalf("expected unscaled rewards Exp=20 Gold=5, got Exp=%d Gold=%d", res.RoundExp, res.RoundGold)
@@ -433,7 +436,7 @@ func TestChallenge_IntTruncationUnscaledRewardsAndMonsterPool(t *testing.T) {
 		// Pool of 3 candidates selected via Intn(3) with sequence [2, 0, 1, 2].
 		rng := &scriptedRNG{
 			ints:   []int{2, 0, 1, 2},
-			floats: []float64{0.99, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+			floats: []float64{0.99},
 		}
 		repo := newMockChallengeRepo()
 		charRepo := &mockCharRepo{
@@ -480,6 +483,34 @@ func TestChallenge_IntTruncationUnscaledRewardsAndMonsterPool(t *testing.T) {
 		// Total unscaled rewards: 25 + 10 + 15 + 25 = 75 Exp, 11 + 3 + 7 + 11 = 32 Gold
 		if res.RoundExp != 75 || res.RoundGold != 32 {
 			t.Fatalf("expected total unscaled rewards Exp=75 Gold=32, got Exp=%d Gold=%d", res.RoundExp, res.RoundGold)
+		}
+	})
+
+	t.Run("tier 0 slime agility propagates to real battle engine turn order", func(t *testing.T) {
+		rng := &scriptedRNG{
+			ints:   []int{0},
+			floats: []float64{0.0},
+		}
+		repo := newMockChallengeRepo()
+		charRepo := &mockCharRepo{
+			chars: map[string]corecharacter.Character{
+				"hero": {ID: "hero", Level: 10, Stats: corecharacter.Stats{HP: 350, MaxHP: 350, Attack: 500, Defense: 300, Agility: 50}},
+			},
+		}
+		svc, err := challenge.NewService(repo, charRepo, corebattle.Engine{}, challenge.WithRNG(rng))
+		if err != nil {
+			t.Fatalf("NewService: %v", err)
+		}
+		sess, err := svc.StartSession(ctx, "hero", "0")
+		if err != nil {
+			t.Fatalf("StartSession: %v", err)
+		}
+		res, _, err := svc.AdvanceRound(ctx, "hero", sess.ID, sess.Revision)
+		if err != nil {
+			t.Fatalf("AdvanceRound: %v", err)
+		}
+		if len(res.BattleResult.Logs) == 0 || res.BattleResult.Logs[0].ActorID != "スライム-1-A" {
+			t.Fatalf("expected faster Slime (base_agility=200 -> scaled 176 > hero agility 50) to act first, got logs=%+v", res.BattleResult.Logs)
 		}
 	})
 }

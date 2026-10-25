@@ -148,8 +148,9 @@ func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	// Level 10 character with MaxHP 350, Attack 400, Defense 5 so monster damage goes through
-	c1 := createPartyTestChar("solo1", 10, 350, 400, 5)
+	// Level 10 character with MaxHP 350, Attack 400, Defense 120 so monster damage goes through
+	c1 := createPartyTestChar("solo1", 10, 350, 400, 120)
+	c1.Stats.Agility = 150
 	c1.Name = "ソロ戦士"
 	c1.JobID = "warrior"
 	charRepo.chars[c1.ID] = c1

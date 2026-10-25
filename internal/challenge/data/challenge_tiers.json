@@ -33,6 +33,7 @@
       "base_hp": 150,
       "base_attack": 100,
       "base_defense": 50,
+      "base_agility": 200,
       "base_exp": 20,
       "base_gold": 5
     }
