@@ -159,8 +159,11 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if session.RecoveryPending {
 			a.Phase = "recovery_pending"
 		}
-		if !session.RecoveryPending && session.Revision > 0 && session.Status == challenge.StatusActive && (session.CharacterID == actor || session.CurrentRound > 1) {
-			a.Actions = []string{"challenge_advance"}
+		if !session.RecoveryPending && session.Revision > 0 && session.Status == challenge.StatusActive {
+			if session.CharacterID == actor || session.CurrentRound > 1 {
+				a.Actions = append(a.Actions, "challenge_advance")
+			}
+			a.Actions = append(a.Actions, "challenge_retire")
 		}
 		facts = append(facts, a)
 	}

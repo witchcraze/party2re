@@ -63,6 +63,9 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 					template[field] = a.ID
 				}
 			}
+			if slices.Contains(def.RequiredParams, "expected_revision") {
+				template["expected_revision"] = a.Revision
+			}
 		}
 		action, err := h.contextAction(def.ID, template, result.Snapshot.Character)
 		if err != nil {

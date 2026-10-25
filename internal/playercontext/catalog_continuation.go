@@ -1,6 +1,6 @@
 package playercontext
 
-// These controls are deliberately unconnected until their mutation migration.
+// Controls are connected by their individual mutation adapters.
 // Their role/phase eligibility comes from public feature reads, not town gates.
 var continuationCatalog = []ActionDefinition{
 	{ID: "party_ready", Label: "準備する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"party_id", "ready"}, ActivityKind: "party"},
@@ -16,6 +16,7 @@ var continuationCatalog = []ActionDefinition{
 	{ID: "dungeon_move", Label: "探索を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"direction"}, ActivityKind: "dungeon"},
 	{ID: "dungeon_escape", Label: "探索から脱出する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{}, ActivityKind: "dungeon", Recovery: true},
 	{ID: "challenge_advance", Label: "試練を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"session_id"}, ActivityKind: "challenge"},
+	{ID: "challenge_retire", Label: "試練から退出する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"session_id", "expected_revision"}, ActivityKind: "challenge", Recovery: true},
 	{ID: "casino_room_start", Label: "ゲームを始める", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "casino"},
 	{ID: "casino_room_leave", Label: "カジノ部屋を離れる", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "casino", Recovery: true},
 	{ID: "casino_room_action", Label: "ゲームの行動を選ぶ", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "action"}, ActivityKind: "casino"},

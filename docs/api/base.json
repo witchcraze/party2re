@@ -4391,6 +4391,45 @@
               ],
               "type": "object"
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "challenge_retire"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "session_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "expected_revision": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "session_id",
+                    "expected_revision"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
           }
         ]
       },
@@ -15159,6 +15198,25 @@
           "action",
           "expected_revision",
           "session"
+        ]
+      },
+      "ChallengeRetireResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChallengeCommandResult"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "recovery_pending": {
+                "type": "boolean",
+                "description": "Settlement is committed; publication still requires explicit recovery. GET never repairs it."
+              }
+            },
+            "required": [
+              "recovery_pending"
+            ]
+          }
         ]
       }
     },

@@ -63,8 +63,9 @@ the participant exit service settles these effects under the run transition boun
   owns the encounter/treasure-branch correction, not that entire lifecycle.
 
 The approved [participant-exit storage contract](../architecture/transient-run-state.md#challenge-participant-exit-target)
-defines identity, receipts and recovery. Its implementation prerequisites and
-Gateway adoption remain tracked by [#1208](https://github.com/witchcraze/party2re/issues/1208).
+defines identity, receipts and recovery. The [Gateway contract](../architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)
+exposes caller-only exit with explicit run identity and revision, delegating all
+settlement and publication recovery to this boundary.
 
 ---
 

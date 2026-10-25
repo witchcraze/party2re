@@ -12,13 +12,13 @@ import (
 
 // ChallengeService defines endurance challenge operations exposed over HTTP.
 type ChallengeService interface {
+	challengeExitService
 	ListTiers() []challenge.ChallengeTier
 	GetTier(tierID string) (*challenge.ChallengeTier, error)
 	StartSession(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
 	StartPartySession(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
 	AdvanceRound(ctx context.Context, characterID string, sessionID string, expectedRevision int) (*challenge.RoundResult, *challenge.ChallengeSession, error)
 	GetActiveSession(context.Context, string) (*challenge.ChallengeSession, error)
-	GetCommandResult(context.Context, string, string, int) (*challenge.CommandResult, error)
 	GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
 	GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
 	ListHallOfFame(ctx context.Context) ([]challenge.HallOfFameEntry, error)
@@ -28,6 +28,7 @@ type ChallengeService interface {
 func WithChallenge(c ChallengeService) Option {
 	return func(h *Handler) {
 		h.challenges = c
+		challengeRetireCommand(c)(h)
 	}
 }
 
