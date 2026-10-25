@@ -1,11 +1,140 @@
 package skill
 
 import (
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
+
+func TestControlClimaxCasterDeathAdmission(t *testing.T) {
+	for _, row := range []struct {
+		name            string
+		hp              int
+		revived, reject bool
+	}{
+		{"certain-death", 1, false, false},
+		{"damage-boundary-certain-death", 90, false, false},
+		{"survives", 1000, false, true},
+		{"damage-boundary-can-survive", 91, false, true},
+		{"revival-can-survive", 1, true, true},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			s, c, d := controlFixture()
+			a := &s.Actors[0]
+			a.HP, a.Attack, a.Defense, a.Agility, a.BaseStats.Agility = row.hp, 50, 60, 100, 100
+			a.Status = corebattle.StatusConfusion
+			a.ItemDefinitionIDs = []string{"item-201"}
+			if row.revived {
+				a.ItemDefinitionIDs = append(a.ItemDefinitionIDs, "item-193")
+			}
+			defeats := 0
+			c.Defeat = func(string) error { defeats++; return nil }
+			frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self"}}
+			original := frame
+			before, err := json.Marshal(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ops, err := d.InvocationAction(&s, &frame, []string{"job-70-entry-4"}, noArithmeticDraws{t})
+			if row.reject {
+				if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+					t.Fatal(err)
+				}
+				if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "job-70-entry-4"}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+					t.Fatal(err)
+				}
+			} else if err != nil {
+				t.Fatalf("unreachable AG hook was required: %v", err)
+			}
+			after, marshalErr := json.Marshal(s)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			if string(before) != string(after) || !reflect.DeepEqual(frame, original) || defeats != 0 || c.DamageCalls != 0 {
+				t.Fatal("admission changed inputs", s, c, frame)
+			}
+			if row.reject {
+				return
+			}
+			if err := s.ApplyInvocations(&frame, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{0}}); err != nil {
+				t.Fatal(err)
+			}
+			if s.Actors[0].HP != 0 || s.Actors[0].Agility != 100 || c.StatUpCalls != 0 || c.DamageCalls != 1 || defeats != 1 {
+				t.Fatal(s, c, defeats)
+			}
+		})
+	}
+}
+
+func TestControlClimaxLivingAlternativesRemainGated(t *testing.T) {
+	for _, name := range []string{"other-target", "confused-target-alternatives", "pre-hit-reset", "pharaoh", "retained-revival-tension", "random-damage-can-survive"} {
+		t.Run(name, func(t *testing.T) {
+			s, c, d := controlFixture()
+			a := &s.Actors[0]
+			a.HP, a.Attack, a.Defense, a.Agility, a.BaseStats.Agility = 1, 50, 60, 100, 100
+			a.Status = corebattle.StatusConfusion
+			a.ItemDefinitionIDs = []string{"item-201"}
+			args := []string{"self"}
+			switch name {
+			case "other-target":
+				a.Status = ""
+				args[0] = "enemy"
+			case "confused-target-alternatives":
+				args[0] = "enemy"
+			case "pre-hit-reset":
+				a.Extended = corebattle.ExtendedPurification
+				c.Reset = func(string) error { t.Fatal("reset during admission"); return nil }
+			case "pharaoh":
+				a.Abilities = append(a.Abilities, "pharaoh")
+			case "retained-revival-tension":
+				a.Tension = 8
+				a.ItemDefinitionIDs = append(a.ItemDefinitionIDs, "item-161", "item-149")
+			case "random-damage-can-survive":
+				a.HP = 50
+				a.ItemDefinitionIDs = append(a.ItemDefinitionIDs, "item-190")
+			}
+			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: args}
+			if _, err := d.InvocationAction(&s, &f, []string{"job-70-entry-4"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+				t.Fatal(err)
+			}
+		})
+	}
+	// The selected self target loses its revival temporary before the hit.
+	s, c, d := controlFixture()
+	s.Actors[0].HP, s.Actors[0].Status, s.Actors[0].Temporary = 1, corebattle.StatusConfusion, corebattle.TemporaryRevival
+	s.Actors[0].Agility, s.Actors[0].BaseStats.Agility = 200, 200
+	s.Actors[0].ItemDefinitionIDs = []string{"item-201"}
+	executeControl(t, &s, c, d, "job-70-entry-4", []string{"self"}, 0)
+	if s.Actors[0].HP != 0 || c.StatUpCalls != 0 {
+		t.Fatal(s, c)
+	}
+}
+
+func TestControlClimaxDeathStillRequiresPrimaryDamage(t *testing.T) {
+	for _, missing := range []string{"defeat", "gear"} {
+		t.Run(missing, func(t *testing.T) {
+			s, c, d := controlFixture()
+			s.Actors[0].HP, s.Actors[0].Status = 1, corebattle.StatusConfusion
+			s.Actors[0].Agility, s.Actors[0].BaseStats.Agility = 200, 200
+			s.Actors[0].ItemDefinitionIDs = []string{"item-201"}
+			if missing == "defeat" {
+				c.Defeat = nil
+			} else {
+				s.Actors[0].Gear = nil
+			}
+			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self"}}
+			if _, err := d.InvocationAction(&s, &f, []string{"job-70-entry-4"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+				t.Fatal(err)
+			}
+			if s.Actors[0].HP != 1 || c.DamageCalls != 0 {
+				t.Fatal(s, c)
+			}
+		})
+	}
+}
 
 func TestControlStatusBoundaries(t *testing.T) {
 	for _, row := range []struct {

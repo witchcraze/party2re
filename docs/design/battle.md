@@ -595,7 +595,10 @@ MaxHP; AG raises self AG by 30% and can immobilize the original target. Helper
 redirection, counters and incidental resource effects retain their existing
 owners. Admission includes earlier status changes, consumed defenses and
 item195 activation before later helpers. Unprojected preceding callbacks retain
-the shared `AfterEffects` gate. Full service/receipt integration remains with
+the shared `AfterEffects` gate. A follow-up is omitted from admission only when
+every positive-hit path proves caster death; possible survival, automatic revival,
+retargeting or a pre-hit reset retains its descendant requirements.
+Full service/receipt integration remains with
 the normal-adventure consumer; saved committed results are never replayed.
 
 #### Arithmetic selectors and digit reversal

@@ -262,18 +262,20 @@ func (s *LifetimeState) validateClimax(c *ControlClimaxContext, rng random.Gener
 		if err != nil {
 			return err
 		}
-		returned := false
+		canContinue := false
 		for _, candidate := range p.damageCandidates(&child.DamageContext, converted) {
 			t := p.actor(candidate.TargetID)
 			if t.HP <= 0 {
 				t = p.actor(c.ActorID)
 			}
-			returned = returned || candidate.Payload.Number > 0 && t.Temporary != TemporaryOneHitDefense && damageHasPower(p.actor(c.ActorID), t, candidate)
+			if candidate.Payload.Number > 0 && t.Temporary != TemporaryOneHitDefense && damageHasPower(p.actor(c.ActorID), t, candidate) {
+				canContinue = canContinue || p.climaxCasterMaySurvive(&child, t, candidate)
+			}
 		}
 		if err := p.admitDamageSequence(&child.DamageContext, []TargetEffect{e}, rng); err != nil {
 			return err
 		}
-		if !returned || a.HP <= 0 {
+		if !canContinue || a.HP <= 0 {
 			continue
 		}
 		child.DamageCalls++
@@ -291,6 +293,46 @@ func (s *LifetimeState) validateClimax(c *ControlClimaxContext, rng random.Gener
 		}
 	}
 	return nil
+}
+
+func (s *LifetimeState) climaxCasterMaySurvive(c *ControlClimaxContext, target *LifetimeActor, e TargetEffect) bool {
+	a := *s.actor(c.ActorID)
+	// Keep alternatives separate: another recipient or a pre-hit reset can
+	// leave the caster alive even when the selected target is the caster.
+	if target.ID != a.ID || a.Extended == ExtendedPurification || a.HP > s.minimumClimaxHit(c, target, e) {
+		return true
+	}
+	if !hasItem(a.ItemDefinitionIDs, "item-149") {
+		a.Tension = 1
+	}
+	if a.Temporary == TemporaryAbsorbMagic && e.Category == CategoryMagic {
+		a.MP = a.MaxMP // Absorption may unlock the pharaoh revival threshold.
+	}
+	return automaticRevivalBranch(&a) != ""
+}
+
+func (s *LifetimeState) minimumClimaxHit(c *ControlClimaxContext, target *LifetimeActor, e TargetEffect) int {
+	a := s.actor(c.ActorID)
+	direct, normal := damageFlags(e)
+	// Random modifiers retain the universal positive-hit floor. Deterministic
+	// modifiers reuse the damage owner and its exact lower roll boundary.
+	if !direct || e.Category != CategoryMagic || target.Gear == nil ||
+		hasItem(a.ItemDefinitionIDs, "item-192") && target.Temporary != "" ||
+		hasItem(target.ItemDefinitionIDs, "item-190") || hasItem(a.ItemDefinitionIDs, "weapon-34") ||
+		hasItem(a.ItemDefinitionIDs, "weapon-37") || hasItem(a.ItemDefinitionIDs, "weapon-63") {
+		return 1
+	}
+	child := *c
+	child.DamageCalls++
+	power := s.modifyDamage(&child.DamageContext, target, e.Payload.Number, e.Category, direct, normal, nil)
+	if !hasItem(a.ItemDefinitionIDs, "item-149") {
+		power *= a.Tension
+	}
+	minus := toolDefense(target)
+	if hasItem(a.ItemDefinitionIDs, "item-187") {
+		minus -= float64(target.Defense-target.BaseStats.Defense) * .3
+	}
+	return rollDamage(power, minus, direct, target.BaseStats.Defense, resetBoundary(0))
 }
 
 func (s *LifetimeState) validateClimaxTail(c *ControlClimaxContext, power int, rng random.Generator) error {
