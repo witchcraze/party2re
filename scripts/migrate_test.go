@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +15,93 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/database"
 )
+
+func TestMain(m *testing.M) {
+	if os.Getenv("PARTY2_TEST_DOCKER_BRIDGE") == "1" {
+		os.Exit(runTestDockerBridge(os.Args[1:]))
+	}
+	os.Exit(m.Run())
+}
+
+// runTestDockerBridge emulates the subset of `docker` commands used by scripts/migrate.sh
+// by forwarding SQL execution over PARTY2_TEST_BRIDGE_DSN when the test runs inside
+// a container where the `docker` CLI is not installed (e.g. `docker compose run app go test`).
+func runTestDockerBridge(args []string) int {
+	if len(args) > 0 && args[0] == "inspect" {
+		fmt.Println("healthy")
+		return 0
+	}
+	if len(args) >= 2 && args[0] == "compose" {
+		switch args[1] {
+		case "up":
+			return 0
+		case "ps":
+			fmt.Println("bridge-mariadb")
+			return 0
+		case "exec":
+			var (
+				hasQuery bool
+				query    string
+				noHeader bool
+			)
+			rest := args[2:]
+			for i := 0; i < len(rest); i++ {
+				switch rest[i] {
+				case "-N":
+					noHeader = true
+				case "-e":
+					hasQuery = true
+					if i+1 < len(rest) {
+						query = rest[i+1]
+						i++
+					}
+				}
+			}
+
+			dsn := os.Getenv("PARTY2_TEST_BRIDGE_DSN")
+			if dsn == "" {
+				fmt.Fprintln(os.Stderr, "PARTY2_TEST_BRIDGE_DSN is not set")
+				return 1
+			}
+			db, err := sql.Open("mysql", dsn)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+			defer db.Close()
+
+			if !hasQuery {
+				b, err := io.ReadAll(os.Stdin)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					return 1
+				}
+				if _, err := db.Exec(string(b)); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					return 1
+				}
+				return 0
+			}
+
+			if noHeader {
+				var val string
+				if err := db.QueryRow(query).Scan(&val); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					return 1
+				}
+				fmt.Println(val)
+				return 0
+			}
+
+			if _, err := db.Exec(query); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+			return 0
+		}
+	}
+	return 0
+}
 
 type migrateFakeFixture struct {
 	root       string
@@ -403,6 +492,30 @@ INSERT IGNORE INTO schema_migrations (version) VALUES ('001_self_registered');
 	env := []string{
 		"COMPOSE_FILE=" + composePath,
 		"PARTY2_DB_NAME=" + dbName,
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		partyCfg, err := mysql.ParseDSN(adminDSN)
+		if err != nil {
+			t.Fatal(err)
+		}
+		partyCfg.User = "party2"
+		partyCfg.Passwd = "party2"
+		partyCfg.DBName = dbName
+		partyCfg.MultiStatements = true
+
+		selfBin, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		binDir := filepath.Join(root, "bin")
+		if err := os.MkdirAll(binDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		shim := fmt.Sprintf("#!/usr/bin/env bash\nPARTY2_TEST_DOCKER_BRIDGE=1 PARTY2_TEST_BRIDGE_DSN=%q exec %q \"$@\"\n", partyCfg.FormatDSN(), selfBin)
+		if err := os.WriteFile(filepath.Join(binDir, "docker"), []byte(shim), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		env = append(env, "PATH="+binDir+":"+os.Getenv("PATH"))
 	}
 
 	// 1. Apply single unapplied migration (001_self_registered)
