@@ -564,6 +564,36 @@ changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
 
+#### Hybrid and breath callbacks
+
+Evidence: `_skill.cgi:3074–3125,3222–3238` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterHybridBreath` contributes ordered job39/40/41/44 tables and binds22
+intrinsic bodies through the existing invocation boundary. Job39's half revival
+retains its separate `RegisterRevivals` binding; an unbound position still rejects
+the enclosing random/tool action. Listed SP/MP remain ordinary admission metadata.
+
+Fixed direct area magic25/60 and breath15/55/115/180/195 retain their distinct
+powers, categories and ordered area modifiers. Job39's extension uses AG×1.8
+physical direct damage. Job40's MP wave captures current MP×2 before the area
+helper and writes MP1 on normal return, including a sealed or empty area. Indirect
+random/tool invocation restores only decreases, so MP0 becomes1.
+
+Job41's extension resolves an untyped target first, then uses current AT×1.8
+when that returned target has no temporary, otherwise AT×2. Its physical direct
+helper resolves the target again; cover/reflection and absent-target fallback
+retain their ordinary semantics. Job44 uses AT×1.4 physical damage, a50% base-DF
+untyped self buff, DF×2 physical damage with7% of positive returned damage as
+immediate recoil, direct magic170, magic healing150, and AG×1.5 direct **magic**.
+Job39's healing30, party base-DF buff25%, enemy current-DF reduction25% and
+confusion50%, and job41's paralysis35% reuse their existing effect owners.
+
+Discovery validates complete reachable descendants without applying hooks or
+consuming arguments/RNG. Unknown preceding callback transitions retain the
+conservative whole-action gate. Consumers save resulting lifetime facts and
+operation counters with frozen input, then rebuild ports/registrations on reload
+without replaying committed effects; Adventure command wiring remains separate.
+
 #### High-power and vulnerability callbacks
 
 Evidence: `_skill.cgi:3418–3568,3693–3718,11001–11018` and
