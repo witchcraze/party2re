@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestHomeRepository_Database(t *testing.T) {
@@ -25,8 +27,11 @@ func TestHomeRepository_Database(t *testing.T) {
 
 	ctx := context.Background()
 
-	char1Name := fmt.Sprintf("Hero1_%d", time.Now().UnixNano()%1000000)
-	char2Name := fmt.Sprintf("Hero2_%d", time.Now().UnixNano()%1000000)
+	char1Name := id.New()[:corecharacter.MaxNameLength]
+	char2Name := id.New()[:corecharacter.MaxNameLength]
+	if char1Name == char2Name || len([]rune(char1Name)) > corecharacter.MaxNameLength || len([]rune(char2Name)) > corecharacter.MaxNameLength {
+		t.Fatalf("fixture names must be distinct and fit without truncation: %q, %q", char1Name, char2Name)
+	}
 	char1, err := database.CreateTestCharacter(ctx, db, char1Name)
 	if err != nil {
 		t.Fatal(err)
