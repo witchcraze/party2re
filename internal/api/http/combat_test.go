@@ -429,4 +429,61 @@ func TestCombatEndpoints(t *testing.T) {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
 		}
 	})
+
+	for _, errCase := range []struct {
+		name string
+		err  error
+		code int
+	}{
+		{"level too high", challenge.ErrLevelTooHigh, http.StatusUnprocessableEntity},
+		{"need over lv not met", challenge.ErrNeedOverLvNotMet, http.StatusUnprocessableEntity},
+		{"need join not met", challenge.ErrNeedJoinNotMet, http.StatusUnprocessableEntity},
+		{"pending level up", challenge.ErrPendingLevelUp, http.StatusUnprocessableEntity},
+		{"unconscious character", challenge.ErrCharacterUnconscious, http.StatusUnprocessableEntity},
+		{"exhausted character", challenge.ErrCharacterExhausted, http.StatusUnprocessableEntity},
+	} {
+		t.Run("POST /characters/{id}/challenges/start - "+errCase.name, func(t *testing.T) {
+			hErr := newTestHandler(
+				t,
+				pService,
+				cService,
+				&stubAdventureService{},
+				&stubShopService{},
+				apihttp.WithChallenge(&stubChallengeService{
+					startSessionFn: func(context.Context, string, string) (*challenge.ChallengeSession, error) {
+						return nil, errCase.err
+					},
+				}),
+			)
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/start", `{"tier_id":"0"}`)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			hErr.Router().ServeHTTP(rec, req)
+			if rec.Code != errCase.code {
+				t.Fatalf("expected %d, got %d: %s", errCase.code, rec.Code, rec.Body.String())
+			}
+		})
+
+		t.Run("POST /characters/{id}/challenges/party-start - "+errCase.name, func(t *testing.T) {
+			hErr := newTestHandler(
+				t,
+				pService,
+				cService,
+				&stubAdventureService{},
+				&stubShopService{},
+				apihttp.WithChallenge(&stubChallengeService{
+					startPartySessionFn: func(context.Context, string, []string, string, string, string) (*challenge.ChallengeSession, error) {
+						return nil, errCase.err
+					},
+				}),
+			)
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/party-start", `{"tier_id":"1","member_ids":["c1"]}`)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			hErr.Router().ServeHTTP(rec, req)
+			if rec.Code != errCase.code {
+				t.Fatalf("expected %d, got %d: %s", errCase.code, rec.Code, rec.Body.String())
+			}
+		})
+	}
 }

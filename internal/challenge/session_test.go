@@ -19,7 +19,7 @@ func setupSessionTestService(t *testing.T) (*challenge.Service, *mockChallengeRe
 			"hero": {
 				ID:         "hero",
 				Level:      30,
-				Experience: 10000,
+				Experience: 0,
 				Stats: corecharacter.Stats{
 					HP:      350,
 					MaxHP:   350,

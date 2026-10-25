@@ -445,7 +445,7 @@
   {
     "id": "8",
     "name": "真・最強王者",
-    "description": "転生者のみが足を踏み入れることを許される、真の極限試練。",
+    "description": "レベル限界突破者（Lv100以上）のみが足を踏み入れることを許される、真の極限試練。",
     "min_level": 1,
     "max_participants": 4,
     "need_over_lv": true,

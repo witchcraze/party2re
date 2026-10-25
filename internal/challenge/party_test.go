@@ -15,7 +15,7 @@ func createPartyTestChar(id string, level int, hp int, atk int, def int) corecha
 	return corecharacter.Character{
 		ID:         id,
 		Level:      level,
-		Experience: 5000,
+		Experience: 0,
 		Stats: corecharacter.Stats{
 			HP:      hp,
 			MaxHP:   hp,
@@ -334,5 +334,233 @@ func TestPartyRequiresAdmission(t *testing.T) {
 	}
 	if _, err := svc.StartPartySession(context.Background(), "leader", []string{"leader", "member"}, "1", "Party", ""); !errors.Is(err, challenge.ErrPartyUnavailable) {
 		t.Fatalf("party start without consent port: %v", err)
+	}
+}
+
+func TestChallengeAdmissionRules_SoloAndParty(t *testing.T) {
+	ctx := context.Background()
+
+	type testCase struct {
+		name    string
+		tierID  string
+		modChar func(*corecharacter.Character)
+		wantErr error
+	}
+
+	cases := []testCase{
+		{
+			name:   "normal tier accepts level 99 without OldJobID",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 99
+				c.Experience = 98010
+				c.OldJobID = ""
+			},
+			wantErr: nil,
+		},
+		{
+			name:   "normal tier accepts level 99 with OldJobID",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 99
+				c.Experience = 0
+				c.OldJobID = "warrior"
+			},
+			wantErr: nil,
+		},
+		{
+			name:   "normal tier rejects level 100 without OldJobID",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 100
+				c.Experience = 0
+				c.OldJobID = ""
+			},
+			wantErr: challenge.ErrLevelTooHigh,
+		},
+		{
+			name:   "normal tier rejects level 100 even with OldJobID",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 100
+				c.Experience = 0
+				c.OldJobID = "warrior"
+			},
+			wantErr: challenge.ErrLevelTooHigh,
+		},
+		{
+			name:   "over-level tier 8 accepts level 100 even with empty OldJobID",
+			tierID: "8",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 100
+				c.Experience = 100000
+				c.OldJobID = ""
+			},
+			wantErr: nil,
+		},
+		{
+			name:   "over-level tier 8 accepts level 150 with OldJobID",
+			tierID: "8",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 150
+				c.Experience = 0
+				c.OldJobID = "warrior"
+			},
+			wantErr: nil,
+		},
+		{
+			name:   "over-level tier 8 rejects level 99 even with OldJobID",
+			tierID: "8",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 99
+				c.Experience = 0
+				c.OldJobID = "warrior"
+			},
+			wantErr: challenge.ErrNeedOverLvNotMet,
+		},
+		{
+			name:   "over-level tier 8 rejects level 1 with OldJobID",
+			tierID: "8",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 1
+				c.Experience = 0
+				c.OldJobID = "warrior"
+			},
+			wantErr: challenge.ErrNeedOverLvNotMet,
+		},
+		{
+			name:   "pending level-up rejected at exact threshold (lv 10, exp 1000)",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 10
+				c.Experience = 1000
+			},
+			wantErr: challenge.ErrPendingLevelUp,
+		},
+		{
+			name:   "experience just below threshold accepted (lv 10, exp 999)",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Level = 10
+				c.Experience = 999
+			},
+			wantErr: nil,
+		},
+		{
+			name:   "unconscious character (HP 0) rejected instead of healing to MaxHP",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Stats.HP = 0
+				c.Stats.MaxHP = 200
+			},
+			wantErr: challenge.ErrCharacterUnconscious,
+		},
+		{
+			name:   "exhausted character (Tired 100) rejected",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Tired = 100
+			},
+			wantErr: challenge.ErrCharacterExhausted,
+		},
+		{
+			name:   "tired 99 character accepted",
+			tierID: "2",
+			modChar: func(c *corecharacter.Character) {
+				c.Tired = 99
+			},
+			wantErr: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run("solo/"+tc.name, func(t *testing.T) {
+			repo := newMockChallengeRepo()
+			c1 := createPartyTestChar("solo", 10, 200, 50, 30)
+			tc.modChar(&c1)
+			charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"solo": c1}}
+			svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			sess, err := svc.StartSession(ctx, "solo", tc.tierID)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected error %v, got %v (sess=%+v)", tc.wantErr, err, sess)
+				}
+				if active, _ := svc.GetActiveSession(ctx, "solo"); active != nil {
+					t.Fatalf("rejected start left active session: %+v", active)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if sess == nil || sess.CharacterCurrentHP != c1.Stats.HP {
+				t.Fatalf("unexpected session: %+v", sess)
+			}
+		})
+
+		t.Run("party-leader/"+tc.name, func(t *testing.T) {
+			repo := newMockChallengeRepo()
+			c1 := createPartyTestChar("lead", 10, 200, 50, 30)
+			tc.modChar(&c1)
+			charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"lead": c1}}
+			svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			sess, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, tc.tierID, "Party", "#FFFFFF")
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected error %v, got %v (sess=%+v)", tc.wantErr, err, sess)
+				}
+				if active, _ := svc.GetActiveSession(ctx, "lead"); active != nil {
+					t.Fatalf("rejected start left active session: %+v", active)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if sess == nil || sess.CharacterCurrentHP != c1.Stats.HP {
+				t.Fatalf("unexpected session: %+v", sess)
+			}
+		})
+
+		if tc.tierID == "2" {
+			t.Run("party-member/"+tc.name, func(t *testing.T) {
+				repo := newMockChallengeRepo()
+				lead := createPartyTestChar("lead", 10, 200, 50, 30)
+				mem := createPartyTestChar("mem", 10, 180, 45, 25)
+				tc.modChar(&mem)
+				charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"lead": lead, "mem": mem}}
+				svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				sess, err := svc.StartPartySession(ctx, "lead", []string{"lead", "mem"}, tc.tierID, "Party", "#FFFFFF")
+				if tc.wantErr != nil {
+					if !errors.Is(err, tc.wantErr) {
+						t.Fatalf("expected error %v, got %v (sess=%+v)", tc.wantErr, err, sess)
+					}
+					for _, id := range []string{"lead", "mem"} {
+						if active, _ := svc.GetActiveSession(ctx, id); active != nil {
+							t.Fatalf("rejected party start left active session for %s: %+v", id, active)
+						}
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if sess == nil || len(sess.Members) != 2 || sess.Members[1].CharacterCurrentHP != mem.Stats.HP {
+					t.Fatalf("unexpected session: %+v", sess)
+				}
+			})
+		}
 	}
 }

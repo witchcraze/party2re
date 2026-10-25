@@ -8,7 +8,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 
 ## Architectural Policy & Boundaries
 
-- **Session-Based Consecutive Combat**: Characters enter a challenge stage (`0`〜`8`) and battle consecutive rounds until defeat or individual departure. Each participant carries HP, MP and consumed-item state directly across rounds without inter-round recovery (legacy parity with `vs_challenge.cgi` and `_battle.cgi`).
+- **Session-Based Consecutive Combat**: Characters enter a challenge stage (`0`〜`8`) and battle consecutive rounds until defeat or individual departure. Entry requires positive current HP, fatigue below 100%, no pending level-up below level 99 (`level < 99 && exp >= level * level * 10`), and tier level eligibility: normal tiers (`0`〜`7`, `need_over_lv = false`) require `level <= 99`, while the limit-break tier (`8`, `need_over_lv = true`) requires `level >= 100` (`lib/quest.cgi:477–482,538–541,713–714,969–972`, independent of `old_job_id`). Each participant carries HP, MP and consumed-item state directly across rounds without inter-round recovery (legacy parity with `vs_challenge.cgi` and `_battle.cgi`).
 - **Authentic Stat Scaling Formula**: Each non-treasure wave spawns `int(rand(2.5 + len(party) * 0.6)) + 1` enemies drawn randomly from the stage's monster pool (`vs_challenge.cgi:68`, `_npc_action.cgi:add_monster`). Enemy combat stats scale dynamically by `(0.9 + rand(0.3) + (len(party) - 2) * 0.1) * Scale` and truncate via `int(...)`, while EXP and Gold rewards remain unscaled:
   $$\text{Scale} = 1.0 + 0.10 \times \text{Round}$$
 - **100% Defeat Reward Retention**:
@@ -81,7 +81,7 @@ settlement and publication recovery to this boundary.
 | `5` | 花火大会 | 4 | None | Round 20 | 爆弾岩 |
 | `6` | 鉄壁要塞 | 3 | None | Round 20 | レッドストーン, ブルーストーン, イエローストーン, グリーンストーン, パープルストーン, シルバーストーン, ブラックストーン, メタルスライム, ハグレメタル |
 | `7` | 最強王者 | 1 | None | Round 30 | 人面樹, 亡霊剣士, デビルシェル, ゴーレム, 闇の魔術士, ギガンテス, ひくいどり, ベヒーモス, キングスライム, 死霊の騎士, 竜王, 片翼の天使, ディアボロス, ボマー |
-| `8` | 真・最強王者 | 1 | Celestial OverLevel (`need_over_lv`; no level reset) | Round 30 | Stage 7 pool with Hard Mode stat scaling |
+| `8` | 真・最強王者 | 1 | Celestial OverLevel (`need_over_lv`: `level >= 100`; normal stages `0`〜`7` require `level <= 99`) | Round 30 | Stage 7 pool with Hard Mode stat scaling |
 
 ---
 
