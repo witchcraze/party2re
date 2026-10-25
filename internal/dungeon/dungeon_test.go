@@ -66,6 +66,11 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
 ) error {
+	for _, h := range m.histories[record.CharacterID] {
+		if history.ID != "" && h.ID == history.ID {
+			return dungeon.ErrExpeditionAlreadyFinished
+		}
+	}
 	m.records[record.CharacterID] = record
 	m.histories[record.CharacterID] = append([]dungeon.DungeonExpeditionHistory{history}, m.histories[record.CharacterID]...)
 	if character != nil {

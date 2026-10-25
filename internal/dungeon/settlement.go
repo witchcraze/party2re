@@ -2,6 +2,7 @@ package dungeon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -83,7 +84,10 @@ func (s *Service) handleDungeonClear(
 	}
 
 	// 3. Save History
-	histID := id.New()
+	histID := exp.ID
+	if histID == "" {
+		histID = id.New()
+	}
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -98,7 +102,7 @@ func (s *Service) handleDungeonClear(
 	}
 
 	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems); err != nil {
+	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
 		return ExpeditionStepResult{}, err
 	}
 
@@ -160,7 +164,10 @@ func (s *Service) handleEscape(
 	rec.TotalExpeditions++
 	rec.TotalFloorsCleared += exp.CurrentFloor
 
-	histID := id.New()
+	histID := exp.ID
+	if histID == "" {
+		histID = id.New()
+	}
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -175,7 +182,7 @@ func (s *Service) handleEscape(
 	}
 
 	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems); err != nil {
+	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
 		return ExpeditionStepResult{}, err
 	}
 
@@ -212,7 +219,10 @@ func (s *Service) handleWipeout(
 	}
 	rec.TotalExpeditions++
 
-	histID := id.New()
+	histID := exp.ID
+	if histID == "" {
+		histID = id.New()
+	}
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -227,7 +237,7 @@ func (s *Service) handleWipeout(
 
 	// Wiping out forfeits unbanked ledger rewards (0 EXP, 0 Gold, 0 items awarded)
 	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, nil); err != nil {
+	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, nil); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
 		return ExpeditionStepResult{}, err
 	}
 

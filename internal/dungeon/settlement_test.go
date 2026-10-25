@@ -398,6 +398,94 @@ func TestDungeonClear_ErrorPropagation(t *testing.T) {
 	})
 }
 
+type failDeleteActiveStore struct {
+	dungeon.ActiveExpeditionStore
+	failDelete bool
+}
+
+func (s *failDeleteActiveStore) DeleteActiveExpedition(ctx context.Context, characterID string) error {
+	if s.failDelete {
+		return errors.New("simulated valkey delete failure")
+	}
+	return s.ActiveExpeditionStore.DeleteActiveExpedition(ctx, characterID)
+}
+
+func TestEscape_IdempotentOnDeleteFailureRetry(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockDungeonRepo()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"hero": createTestChar("hero", 10, 100, 50, 30),
+		},
+	}
+	memStore := dungeon.NewMemoryExpeditionRepository()
+	store := &failDeleteActiveStore{ActiveExpeditionStore: memStore, failDelete: true}
+
+	service, err := dungeon.NewService(
+		repo,
+		charRepo,
+		corebattle.Engine{},
+		dungeon.WithActiveExpeditionStore(store),
+		dungeon.WithCustomDungeons(customSettlementDungeons()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().UTC()
+	_ = store.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
+		ID:                "exp-retry-1",
+		CharacterID:       "hero",
+		DungeonID:         "test-dg-01",
+		Status:            dungeon.StatusExploring,
+		CurrentFloor:      2,
+		AccumulatedExp:    100,
+		AccumulatedGold:   250,
+		AccumulatedMedals: 1,
+		AccumulatedItems:  []string{"potion"},
+		StartedAt:         now,
+		UpdatedAt:         now,
+	})
+
+	// First Escape succeeds in SQL (mock repo), but activeStore.DeleteActiveExpedition fails
+	res1, err := service.Escape(ctx, "hero")
+	if err != nil {
+		t.Fatalf("first escape failed: %v", err)
+	}
+	if res1.Expedition.ID != "exp-retry-1" {
+		t.Fatalf("unexpected expedition ID: %s", res1.Expedition.ID)
+	}
+
+	// Active expedition is still in store due to simulated cleanup failure
+	active, _ := store.GetActiveExpedition(ctx, "hero")
+	if active == nil {
+		t.Fatal("expected active expedition to remain after delete failure")
+	}
+
+	// Retry Escape when delete succeeds
+	store.failDelete = false
+	res2, err := service.Escape(ctx, "hero")
+	if err != nil {
+		t.Fatalf("second escape retry failed: %v", err)
+	}
+	if !res2.IsFinished || res2.EventType != dungeon.EventEscape {
+		t.Fatalf("unexpected second escape result: %+v", res2)
+	}
+
+	// Verify only 1 history entry and 1 item reward were recorded
+	histories, _ := repo.GetHistory(ctx, "hero", 10)
+	if len(histories) != 1 || histories[0].ID != "exp-retry-1" {
+		t.Fatalf("expected exactly 1 history with ID exp-retry-1, got %+v", histories)
+	}
+	if len(repo.awardedItems["hero"]) != 1 {
+		t.Fatalf("expected 1 awarded item, got %d", len(repo.awardedItems["hero"]))
+	}
+	activeAfter, _ := store.GetActiveExpedition(ctx, "hero")
+	if activeAfter != nil {
+		t.Fatalf("expected active expedition purged on retry, got %+v", activeAfter)
+	}
+}
+
 func TestWipeout_ErrorPropagation(t *testing.T) {
 	ctx := context.Background()
 
