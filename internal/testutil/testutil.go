@@ -70,6 +70,19 @@ func RunConcurrentStressTest(
 	var res ConcurrencyStressResult
 	res.TotalOps = int64(cfg.Workers * cfg.OpsPerWorker)
 
+	type workerErrorSample struct {
+		worker int
+		op     int
+		err    error
+	}
+
+	var (
+		failureOnce    sync.Once
+		failureSample  *workerErrorSample
+		deadlockOnce   sync.Once
+		deadlockSample *workerErrorSample
+	)
+
 	var start sync.WaitGroup
 	var done sync.WaitGroup
 	start.Add(1)
@@ -85,8 +98,22 @@ func RunConcurrentStressTest(
 				if err != nil {
 					if IsDeadlockError(err) {
 						atomic.AddInt64(&res.Deadlocks, 1)
+						deadlockOnce.Do(func() {
+							deadlockSample = &workerErrorSample{
+								worker: workerID,
+								op:     op,
+								err:    err,
+							}
+						})
 					} else {
 						atomic.AddInt64(&res.Failures, 1)
+						failureOnce.Do(func() {
+							failureSample = &workerErrorSample{
+								worker: workerID,
+								op:     op,
+								err:    err,
+							}
+						})
 					}
 				} else {
 					atomic.AddInt64(&res.Successes, 1)
@@ -99,6 +126,13 @@ func RunConcurrentStressTest(
 	start.Done()
 	done.Wait()
 	res.Duration = time.Since(startTime)
+
+	if failureSample != nil {
+		t.Logf("concurrent stress worker failure sample (worker=%d, op=%d): %v", failureSample.worker, failureSample.op, failureSample.err)
+	}
+	if deadlockSample != nil {
+		t.Logf("concurrent stress deadlock sample (worker=%d, op=%d): %v", deadlockSample.worker, deadlockSample.op, deadlockSample.err)
+	}
 
 	if res.Deadlocks > 0 {
 		t.Fatalf("Deadlock detected during concurrent stress test: count = %d", res.Deadlocks)

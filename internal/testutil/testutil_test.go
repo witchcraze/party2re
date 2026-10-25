@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -120,5 +122,127 @@ func TestRunRaceEmpty(t *testing.T) {
 	errs := RunRace()
 	if errs != nil {
 		t.Errorf("expected nil slice for empty RunRace, got %v", errs)
+	}
+}
+
+func TestRunConcurrentStressTest_WorkerFailureSubprocess(t *testing.T) {
+	if os.Getenv("TESTUTIL_SUBPROCESS") == "failure" {
+		cfg := ConcurrencyStressConfig{Workers: 2, OpsPerWorker: 2}
+		res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+			if workerID == 1 && op == 0 {
+				return errors.New("sentinel worker failure")
+			}
+			return nil
+		})
+		if res.Failures > 0 {
+			t.Fatalf("caller observed failure: %d", res.Failures)
+		}
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRunConcurrentStressTest_WorkerFailureSubprocess$")
+	cmd.Env = append(os.Environ(), "TESTUTIL_SUBPROCESS=failure")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected subprocess to fail, got success")
+	}
+	output := string(out)
+	if !strings.Contains(output, "concurrent stress worker failure sample (worker=1, op=0): sentinel worker failure") {
+		t.Fatalf("expected failure sample log in output, got:\n%s", output)
+	}
+}
+
+func TestRunConcurrentStressTest_MultipleFailuresBoundedToOneSample(t *testing.T) {
+	if os.Getenv("TESTUTIL_SUBPROCESS") == "multi_failure" {
+		cfg := ConcurrencyStressConfig{Workers: 4, OpsPerWorker: 4}
+		res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+			return errors.New("recurring failure")
+		})
+		if res.Failures > 0 {
+			t.Fatalf("caller observed failure: %d", res.Failures)
+		}
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRunConcurrentStressTest_MultipleFailuresBoundedToOneSample$")
+	cmd.Env = append(os.Environ(), "TESTUTIL_SUBPROCESS=multi_failure")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected subprocess to fail, got success")
+	}
+	count := strings.Count(string(out), "concurrent stress worker failure sample")
+	if count != 1 {
+		t.Fatalf("expected exactly 1 failure sample logged, got %d; output:\n%s", count, string(out))
+	}
+}
+
+func TestRunConcurrentStressTest_DeadlockLoggingSubprocess(t *testing.T) {
+	if os.Getenv("TESTUTIL_SUBPROCESS") == "deadlock" {
+		cfg := ConcurrencyStressConfig{Workers: 4, OpsPerWorker: 4}
+		RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+			return errors.New("1213: Deadlock found when trying to get lock")
+		})
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRunConcurrentStressTest_DeadlockLoggingSubprocess$")
+	cmd.Env = append(os.Environ(), "TESTUTIL_SUBPROCESS=deadlock")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected subprocess to fail due to deadlock fatal, got success")
+	}
+	output := string(out)
+	if !strings.Contains(output, "concurrent stress deadlock sample") || !strings.Contains(output, "Deadlock found when trying to get lock") {
+		t.Fatalf("expected deadlock sample log in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Deadlock detected during concurrent stress test: count = 16") {
+		t.Fatalf("expected deadlock fatal summary in output, got:\n%s", output)
+	}
+	count := strings.Count(output, "concurrent stress deadlock sample")
+	if count != 1 {
+		t.Fatalf("expected exactly 1 deadlock sample logged, got %d; output:\n%s", count, output)
+	}
+}
+
+func TestRunConcurrentStressTest_MixedFailureAndDeadlockSamples(t *testing.T) {
+	if os.Getenv("TESTUTIL_SUBPROCESS") == "mixed" {
+		cfg := ConcurrencyStressConfig{Workers: 2, OpsPerWorker: 2}
+		RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+			if workerID == 0 {
+				return errors.New("domain validation error")
+			}
+			return errors.New("1213: Deadlock found")
+		})
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRunConcurrentStressTest_MixedFailureAndDeadlockSamples$")
+	cmd.Env = append(os.Environ(), "TESTUTIL_SUBPROCESS=mixed")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected subprocess to fail due to deadlock fatal, got success")
+	}
+	output := string(out)
+	if strings.Count(output, "concurrent stress worker failure sample") != 1 {
+		t.Fatalf("expected exactly 1 failure sample, output:\n%s", output)
+	}
+	if strings.Count(output, "concurrent stress deadlock sample") != 1 {
+		t.Fatalf("expected exactly 1 deadlock sample, output:\n%s", output)
+	}
+}
+
+func TestRunConcurrentStressTest_RaceAndConsistency(t *testing.T) {
+	cfg := ConcurrencyStressConfig{Workers: 20, OpsPerWorker: 20}
+	res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+		if (workerID+op)%3 == 0 {
+			return errors.New("some regular error")
+		}
+		return nil
+	})
+	expectedTotal := int64(400)
+	if res.TotalOps != expectedTotal {
+		t.Fatalf("expected TotalOps %d, got %d", expectedTotal, res.TotalOps)
+	}
+	if res.Successes+res.Failures != expectedTotal {
+		t.Fatalf("expected successes (%d) + failures (%d) == total (%d)", res.Successes, res.Failures, expectedTotal)
+	}
+	if res.Deadlocks != 0 {
+		t.Fatalf("expected 0 deadlocks, got %d", res.Deadlocks)
 	}
 }
