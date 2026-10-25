@@ -18,18 +18,24 @@ func (s *LifetimeState) validateDamageSequence(c *DamageContext, effects []Targe
 	projected := *s
 	projected.Actors = slices.Clone(s.Actors)
 	context := *c
+	return projected.admitDamageSequence(&context, effects, rng)
+}
+
+// The caller owns this private projection, allowing alternating actors to share
+// consumed defenses and activation facts without changing the submitted state.
+func (projected *LifetimeState) admitDamageSequence(context *DamageContext, effects []TargetEffect, rng random.Generator) error {
 	for _, e := range effects {
-		if err := projected.ValidateDamage(&context, e, rng); err != nil {
+		if err := projected.ValidateDamage(context, e, rng); err != nil {
 			return err
 		}
-		a := projected.actor(c.ActorID)
+		a := projected.actor(context.ActorID)
 		converted, _, err := a.ConvertEnemyCategory(context.TargetContext, e)
 		if err != nil {
 			return err
 		}
 		var blocked []string
 		activate := false
-		for _, candidate := range projected.damageCandidates(&context, converted) {
+		for _, candidate := range projected.damageCandidates(context, converted) {
 			if candidate.Payload.Number == 0 {
 				continue
 			}
