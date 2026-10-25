@@ -34,7 +34,7 @@ func TestChallengeIntegrationFlow(t *testing.T) {
 	})
 
 	// Update character level to 10 and max HP to 300
-	_, err = db.ExecContext(ctx, "UPDATE characters SET level = 10, experience = 1000, hp = 300, max_hp = 300, attack = 60, defense = 40 WHERE id = ?", char.ID)
+	_, err = db.ExecContext(ctx, "UPDATE characters SET level = 10, experience = 0, hp = 300, max_hp = 300, attack = 60, defense = 40 WHERE id = ?", char.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -284,13 +284,13 @@ func TestStartSession_ValidationAndCreation(t *testing.T) {
 			"high_hp_char": {
 				ID:         "high_hp_char",
 				Level:      1,
-				Experience: 10,
+				Experience: 0,
 				Stats:      corecharacter.Stats{HP: 500, MaxHP: 500, Attack: 20, Defense: 10},
 			},
 			"valid_char": {
 				ID:         "valid_char",
 				Level:      15,
-				Experience: 2500,
+				Experience: 0,
 				Stats:      corecharacter.Stats{HP: 200, MaxHP: 200, Attack: 40, Defense: 20},
 			},
 		},
@@ -330,7 +330,7 @@ func TestExecuteRound_VictoryProgression(t *testing.T) {
 			"hero": {
 				ID:         "hero",
 				Level:      31,
-				Experience: 10000,
+				Experience: 0,
 				Stats:      corecharacter.Stats{HP: 350, MaxHP: 350, Attack: 500, Defense: 300, Agility: 250},
 			},
 		},
@@ -417,13 +417,13 @@ func TestChallenge_OwnershipVerification(t *testing.T) {
 			"owner_char": {
 				ID:         "owner_char",
 				Level:      20,
-				Experience: 5000,
+				Experience: 0,
 				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 500, Defense: 300, Agility: 250},
 			},
 			"attacker_char": {
 				ID:         "attacker_char",
 				Level:      20,
-				Experience: 5000,
+				Experience: 0,
 				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 500, Defense: 300, Agility: 250},
 			},
 		},

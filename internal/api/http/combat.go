@@ -121,7 +121,10 @@ func (h *Handler) handleStartChallenge(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
-			if errors.Is(err, challenge.ErrLevelTooLow) || errors.Is(err, challenge.ErrActiveSessionExists) {
+			if errors.Is(err, challenge.ErrLevelTooLow) || errors.Is(err, challenge.ErrLevelTooHigh) ||
+				errors.Is(err, challenge.ErrNeedJoinNotMet) || errors.Is(err, challenge.ErrNeedOverLvNotMet) ||
+				errors.Is(err, challenge.ErrPendingLevelUp) || errors.Is(err, challenge.ErrCharacterUnconscious) ||
+				errors.Is(err, challenge.ErrCharacterExhausted) || errors.Is(err, challenge.ErrActiveSessionExists) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -162,7 +165,11 @@ func (h *Handler) handleStartPartyChallenge(w http.ResponseWriter, r *http.Reque
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
-			if errors.Is(err, challenge.ErrLevelTooLow) || errors.Is(err, challenge.ErrActiveSessionExists) || errors.Is(err, challenge.ErrTooManyPartyMembers) {
+			if errors.Is(err, challenge.ErrLevelTooLow) || errors.Is(err, challenge.ErrLevelTooHigh) ||
+				errors.Is(err, challenge.ErrNeedJoinNotMet) || errors.Is(err, challenge.ErrNeedOverLvNotMet) ||
+				errors.Is(err, challenge.ErrPendingLevelUp) || errors.Is(err, challenge.ErrCharacterUnconscious) ||
+				errors.Is(err, challenge.ErrCharacterExhausted) || errors.Is(err, challenge.ErrActiveSessionExists) ||
+				errors.Is(err, challenge.ErrTooManyPartyMembers) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

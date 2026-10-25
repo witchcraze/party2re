@@ -9,13 +9,18 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/progression"
 )
 
 var (
-	ErrTooManyPartyMembers = errors.New("challenge party exceeds stage maximum participants")
-	ErrPartyEmpty          = errors.New("challenge party must have at least 1 member")
-	ErrNeedJoinNotMet      = errors.New("character does not meet stage join condition")
-	ErrNeedOverLvNotMet    = errors.New("character does not meet reincarnation requirement")
+	ErrTooManyPartyMembers  = errors.New("challenge party exceeds stage maximum participants")
+	ErrPartyEmpty           = errors.New("challenge party must have at least 1 member")
+	ErrNeedJoinNotMet       = errors.New("character does not meet stage join condition")
+	ErrNeedOverLvNotMet     = errors.New("character must be at least level 100 for this challenge tier")
+	ErrLevelTooHigh         = errors.New("character level must be 99 or below for this challenge tier")
+	ErrPendingLevelUp       = errors.New("character has pending level-up and cannot start challenge")
+	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0) and cannot adventure")
+	ErrCharacterExhausted   = errors.New("character is exhausted (tired >= 100) and must rest")
 )
 
 // StartPartySession initializes a survival challenge run for up to stage MaxParticipants party members.
@@ -100,12 +105,24 @@ func (s *Service) startRoster(
 			return nil, err
 		}
 
+		if char.Stats.HP <= 0 {
+			return nil, ErrCharacterUnconscious
+		}
+		if char.IsExhausted() {
+			return nil, ErrCharacterExhausted
+		}
+
 		level := char.Level
 		if level <= 0 {
 			level = 1
 		}
 		if level < tier.MinLevel {
 			return nil, ErrLevelTooLow
+		}
+		if level < progression.MaxLevel {
+			if nextExp, err := progression.ExperienceForNextLevel(level); err == nil && char.Experience >= nextExp {
+				return nil, ErrPendingLevelUp
+			}
 		}
 
 		if tier.NeedJoin != "" {
@@ -114,21 +131,19 @@ func (s *Service) startRoster(
 			}
 		}
 
-		if tier.NeedOverLv && char.OldJobID == "" {
-			return nil, ErrNeedOverLvNotMet
+		if tier.NeedOverLv {
+			if level < 100 {
+				return nil, ErrNeedOverLvNotMet
+			}
+		} else if level >= 100 {
+			return nil, ErrLevelTooHigh
 		}
 
 		maxHP := char.Stats.MaxHP
 		if maxHP <= 0 {
 			maxHP = char.Stats.HP
 		}
-		if maxHP <= 0 {
-			maxHP = 100
-		}
 		currHP := char.Stats.HP
-		if currHP <= 0 {
-			currHP = maxHP
-		}
 
 		if char.ID == leaderCharID || mID == leaderCharID {
 			leaderHP = currHP
