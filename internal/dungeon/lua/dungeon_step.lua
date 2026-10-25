@@ -13,6 +13,7 @@ local medals_delta = tonumber(ARGV[9]) or 0
 local reward_item = ARGV[10]
 local now_timestamp = ARGV[11]
 local ttl_seconds = tonumber(ARGV[12]) or 7200
+local event_key = ARGV[13] or ''
 
 -- 1. Check existence of active expedition state key
 if redis.call('EXISTS', state_key) == 0 then
@@ -47,7 +48,35 @@ elseif turns_remaining <= 0 then
     final_status = 'wiped_out'
 end
 
--- 5. Update state hash
+-- 5. Check and record event consumption
+local events_str = redis.call('HGET', state_key, 'consumed_events')
+local consumed_events = {}
+if events_str and events_str ~= '' and events_str ~= '[]' then
+    local ok, decoded = pcall(cjson.decode, events_str)
+    if ok and type(decoded) == 'table' then
+        consumed_events = decoded
+    end
+end
+
+local event_consumed = 1
+if event_key ~= '' then
+    for _, k in ipairs(consumed_events) do
+        if k == event_key then
+            event_consumed = 0
+            break
+        end
+    end
+    if event_consumed == 1 then
+        table.insert(consumed_events, event_key)
+    end
+end
+
+local new_events_str = '[]'
+if #consumed_events > 0 then
+    new_events_str = cjson.encode(consumed_events)
+end
+
+-- 6. Update state hash
 redis.call('HMSET', state_key,
     'current_floor', new_floor,
     'pos_x', new_x,
@@ -55,10 +84,17 @@ redis.call('HMSET', state_key,
     'current_hp', tostring(current_hp),
     'turns_remaining', tostring(turns_remaining),
     'status', final_status,
+    'consumed_events', new_events_str,
     'updated_at', now_timestamp
 )
 
--- 6. Update rewards hash
+-- 7. Update rewards hash
+if event_consumed == 0 then
+    exp_delta = 0
+    gold_delta = 0
+    medals_delta = 0
+    reward_item = ''
+end
 local total_exp = redis.call('HINCRBY', rewards_key, 'exp', exp_delta)
 local total_gold = redis.call('HINCRBY', rewards_key, 'gold', gold_delta)
 local total_medals = redis.call('HINCRBY', rewards_key, 'medals', medals_delta)
@@ -82,11 +118,11 @@ if #items > 0 then
 end
 redis.call('HSET', rewards_key, 'items', new_items_str)
 
--- 7. Refresh sliding TTL (2 hours)
+-- 8. Refresh sliding TTL (2 hours)
 redis.call('EXPIRE', state_key, ttl_seconds)
 redis.call('EXPIRE', rewards_key, ttl_seconds)
 
--- 8. Fetch static identifiers for full object reconstruction
+-- 9. Fetch static identifiers for full object reconstruction
 local dungeon_id = redis.call('HGET', state_key, 'dungeon_id') or ''
 local started_at = redis.call('HGET', state_key, 'started_at') or ''
 
@@ -106,5 +142,7 @@ return {
     started_at,
     redis.call('HGET', state_key, 'party_id') or '',
     redis.call('HGET', state_key, 'party_name') or '',
-    redis.call('HGET', state_key, 'members') or '[]'
+    redis.call('HGET', state_key, 'members') or '[]',
+    new_events_str,
+    tostring(event_consumed)
 }

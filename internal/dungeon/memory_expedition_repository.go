@@ -61,6 +61,7 @@ func (m *MemoryExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 
 	cp := exp
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
+	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	return &cp, nil
 }
@@ -71,6 +72,7 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 
 	cp := exp
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
+	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	m.expeditions[exp.CharacterID] = cp
 	for _, member := range exp.Members {
@@ -164,11 +166,27 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	exp.CurrentHP = currentHP
 	exp.TurnsRemaining = turnsRemaining
 	exp.Status = finalStatus
-	exp.AccumulatedExp += params.ExpDelta
-	exp.AccumulatedGold += params.GoldDelta
-	exp.AccumulatedMedals += params.MedalsDelta
-	if params.RewardItemID != "" {
-		exp.AccumulatedItems = append(exp.AccumulatedItems, params.RewardItemID)
+
+	eventConsumed := true
+	if params.EventKey != "" {
+		for _, k := range exp.ConsumedEvents {
+			if k == params.EventKey {
+				eventConsumed = false
+				break
+			}
+		}
+		if eventConsumed {
+			exp.ConsumedEvents = append(exp.ConsumedEvents, params.EventKey)
+		}
+	}
+
+	if eventConsumed {
+		exp.AccumulatedExp += params.ExpDelta
+		exp.AccumulatedGold += params.GoldDelta
+		exp.AccumulatedMedals += params.MedalsDelta
+		if params.RewardItemID != "" {
+			exp.AccumulatedItems = append(exp.AccumulatedItems, params.RewardItemID)
+		}
 	}
 	exp.UpdatedAt = params.Now
 
@@ -177,9 +195,11 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 
 	cp := exp
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
+	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	return StepOutcome{
-		Expedition: cp,
-		Status:     finalStatus,
+		Expedition:    cp,
+		Status:        finalStatus,
+		EventConsumed: eventConsumed,
 	}, nil
 }

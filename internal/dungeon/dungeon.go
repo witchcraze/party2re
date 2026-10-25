@@ -108,6 +108,7 @@ type ActiveExpedition struct {
 	AccumulatedGold   int                `json:"accumulated_gold"`
 	AccumulatedItems  []string           `json:"accumulated_items"`
 	AccumulatedMedals int                `json:"accumulated_medals"`
+	ConsumedEvents    []string           `json:"consumed_events,omitempty"`
 	Status            ExpeditionStatus   `json:"status"`
 	StartedAt         time.Time          `json:"started_at"`
 	UpdatedAt         time.Time          `json:"updated_at"`
@@ -172,13 +173,15 @@ type StepParams struct {
 	GoldDelta            int
 	MedalsDelta          int
 	RewardItemID         string
+	EventKey             string
 	Now                  time.Time
 }
 
 // StepOutcome represents the result of executing an atomic step against the active expedition store.
 type StepOutcome struct {
-	Expedition ActiveExpedition
-	Status     ExpeditionStatus
+	Expedition    ActiveExpedition
+	Status        ExpeditionStatus
+	EventConsumed bool
 }
 
 // ActiveExpeditionStore defines the storage contract for transient in-flight dungeon expeditions (Candidate D).

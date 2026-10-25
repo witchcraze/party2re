@@ -144,6 +144,7 @@ func (s *Service) startRoster(
 		AccumulatedGold:   0,
 		AccumulatedItems:  []string{},
 		AccumulatedMedals: 0,
+		ConsumedEvents:    []string{},
 		Status:            StatusExploring,
 		StartedAt:         now,
 		UpdatedAt:         now,

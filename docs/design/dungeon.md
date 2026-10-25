@@ -46,7 +46,9 @@ delivery and replay prevention; do not invent a floor-scaled 100G chest rule.
 ## Current implementation and remaining reconciliation
 
 Go currently dispatches generic `T/X/D/B/E` events in `expedition.go`, uses
-Valkey working state/rewards, and finalizes durable records in MariaDB.
+Valkey working state/rewards (including `consumed_events` so each `T` tile event
+grants treasure at most once per expedition and subsequent visits resolve as
+normal movement), and finalizes durable records in MariaDB.
 That generic event model does not reproduce all legacy map-owned events.
 Its turn-limit wipeout, trap bases, treasure generation, and party scouting
 need comparison with the behavior above; they are implementation differences,

@@ -567,3 +567,128 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 		t.Fatalf("Valkey buffer was NOT purged after successful commit: %#v", valkeyExpAfterSuccess)
 	}
 }
+
+func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
+	client := openTestValkey(t)
+	defer client.Close()
+
+	charID := "vk-treasure-char"
+	expID := "vk-treasure-exp"
+	cleanupDungeonValkey(t, client, charID)
+	defer cleanupDungeonValkey(t, client, charID)
+
+	repo, err := dungeon.NewValkeyExpeditionRepository(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	exp := sampleExpedition(expID, charID, "dungeon-01")
+	if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+		t.Fatalf("SaveActiveExpedition failed: %v", err)
+	}
+
+	// 1. Concurrent arrival at the same treasure event key ("T:1:3:0")
+	const workers = 8
+	outcomes := make([]dungeon.StepOutcome, workers)
+	errs := make([]error, workers)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		idx := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			outcomes[idx], errs[idx] = repo.Step(ctx, charID, dungeon.StepParams{
+				ExpectedExpeditionID: expID,
+				NewFloor:             1,
+				NewX:                 3,
+				NewY:                 0,
+				TurnsDelta:           -1,
+				GoldDelta:            100,
+				MedalsDelta:          1,
+				RewardItemID:         "potion",
+				EventKey:             "T:1:3:0",
+				Now:                  time.Now().UTC(),
+			})
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	consumedCount := 0
+	for i := 0; i < workers; i++ {
+		if errs[i] != nil {
+			t.Fatalf("worker %d step failed: %v", i, errs[i])
+		}
+		if outcomes[i].EventConsumed {
+			consumedCount++
+		}
+	}
+	if consumedCount != 1 {
+		t.Fatalf("expected exactly 1 step to consume event T:1:3:0, got %d", consumedCount)
+	}
+
+	// 2. Verify stored Valkey state has accumulated reward once and persisted consumed_events
+	got, err := repo.GetActiveExpedition(ctx, charID)
+	if err != nil || got == nil {
+		t.Fatalf("GetActiveExpedition failed: %v", err)
+	}
+	if got.AccumulatedGold != 100 || got.AccumulatedMedals != 1 || len(got.AccumulatedItems) != 1 {
+		t.Fatalf("expected single reward grant in Valkey, got gold=%d medals=%d items=%v",
+			got.AccumulatedGold, got.AccumulatedMedals, got.AccumulatedItems)
+	}
+	if len(got.ConsumedEvents) != 1 || got.ConsumedEvents[0] != "T:1:3:0" {
+		t.Fatalf("expected ConsumedEvents=[T:1:3:0], got %v", got.ConsumedEvents)
+	}
+
+	// 3. SaveActiveExpedition round-trip preserves ConsumedEvents and blocks revisit
+	if err := repo.SaveActiveExpedition(ctx, *got); err != nil {
+		t.Fatalf("SaveActiveExpedition failed: %v", err)
+	}
+	revisit, err := repo.Step(ctx, charID, dungeon.StepParams{
+		ExpectedExpeditionID: expID,
+		NewFloor:             1,
+		NewX:                 3,
+		NewY:                 0,
+		TurnsDelta:           -1,
+		GoldDelta:            100,
+		MedalsDelta:          1,
+		RewardItemID:         "potion",
+		EventKey:             "T:1:3:0",
+		Now:                  time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("revisit Step failed: %v", err)
+	}
+	if revisit.EventConsumed {
+		t.Fatalf("expected EventConsumed=false on revisit after save/load")
+	}
+	if revisit.Expedition.AccumulatedGold != 100 || revisit.Expedition.AccumulatedMedals != 1 || len(revisit.Expedition.AccumulatedItems) != 1 {
+		t.Fatalf("expected rewards unchanged after revisit, got %+v", revisit.Expedition)
+	}
+
+	// 4. Different floor treasure ("T:2:2:2") is consumed normally
+	floor2Out, err := repo.Step(ctx, charID, dungeon.StepParams{
+		ExpectedExpeditionID: expID,
+		NewFloor:             2,
+		NewX:                 2,
+		NewY:                 2,
+		TurnsDelta:           -1,
+		GoldDelta:            200,
+		MedalsDelta:          1,
+		RewardItemID:         "high-potion",
+		EventKey:             "T:2:2:2",
+		Now:                  time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("floor 2 treasure Step failed: %v", err)
+	}
+	if !floor2Out.EventConsumed {
+		t.Fatalf("expected EventConsumed=true for distinct floor treasure T:2:2:2")
+	}
+	if floor2Out.Expedition.AccumulatedGold != 300 || floor2Out.Expedition.AccumulatedMedals != 2 || len(floor2Out.Expedition.AccumulatedItems) != 2 {
+		t.Fatalf("expected cumulative rewards after floor 2 treasure, got %+v", floor2Out.Expedition)
+	}
+}
