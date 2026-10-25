@@ -564,6 +564,39 @@ changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
 
+#### Counter and reset callbacks
+
+Evidence: `_skill.cgi:2871–3013` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterCounterReset` contributes complete ordered job35/36/37 tables and binds
+18 intrinsic bodies. The all-member equipment reset35.1 retains its
+`RegisterStatuses` binding and preserves each member's tension; copy36.4 retains
+`RegisterTransformations`. Missing bindings reject the complete indirect pool.
+
+Job35 grants unguarded self deflection, magic instant-death20%, direct area
+breath180, untyped self healing300, or magic immunity after a caster magic-seal
+check. Its final callback sets the additional-effect flag, deals direct area
+magic150, then independently attempts area magic paralysis20%. Damage stops on
+caster death; status iteration continues. Each helper retains its own seal
+check, target resolution, counters, incidental resources and immunity rules.
+
+Job36's four self counters independently replace the temporary with dance,
+breath, magic or physical reflection, without a caster seal or living guard.
+Job37 uses area magic seal70% and dance seal70% in their respective categories,
+magic-seal-guarded self absorption, and magic mitigation for every living ally
+without an outer seal check. Its reflection resolves a single ally through the
+magic helper, including fallen-target fallback and temporary redirection.
+Physical seal80% and self healing300 are untyped. Final break resolves a physical
+enemy target, clears that returned target's temporary, sets tension1 and restores
+base AT/DF; it adds no proportional stat-down tail and keeps the baselines intact.
+
+Intrinsic callbacks leave listed SP/MP charges to their invocation owner;
+random/tool invocation retains MP restoration and ordinary admission exceptions.
+Admission checks the complete descendant sequence before mutation or committed
+RNG. Consumers persist lifetime facts, operation counters and frozen input, then
+rebuild operation ports after reload without replaying committed callbacks.
+Production Adventure command adoption remains with its consumer owners.
+
 #### Hybrid and breath callbacks
 
 Evidence: `_skill.cgi:3074–3125,3222–3238` at revision

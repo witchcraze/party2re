@@ -15,13 +15,7 @@ func transformationTables(c *corebattle.TransformationContext) map[int]corebattl
 	speed := append([]corebattle.CallbackEntry(nil), breath...)
 	speed[3].ID, speed[3].Name = "job-79-speed", "翼形解除"
 	return map[int]corebattle.CallbackTable{
-		36: {Variants: [][]corebattle.CallbackEntry{{
-			{ID: "job-36-entry-0", Name: "dance-counter", RequiredSP: 10, MPCost: 5},
-			{ID: "job-36-entry-1", Name: "breath-counter", RequiredSP: 20, MPCost: 5},
-			{ID: "job-36-entry-2", Name: "magic-counter", RequiredSP: 40, MPCost: 5},
-			{ID: "job-36-entry-3", Name: "attack-counter", RequiredSP: 60, MPCost: 5},
-			{ID: "job-36-copy", Name: "姿写し", RequiredSP: 100, MPCost: 50},
-		}}},
+		36: {Variants: [][]corebattle.CallbackEntry{corebattle.CounterResetEntries(36)}},
 		79: {Variants: [][]corebattle.CallbackEntry{breath, speed}, Select: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) int {
 			if c == nil {
 				return -1
