@@ -46,11 +46,13 @@ func (r participantReadEquipment) FindByCharacterID(context.Context, string) (co
 
 type observedRoundEngine struct {
 	corebattle.Engine
-	calls int
+	calls   int
+	request corebattle.PartyBattleRequest
 }
 
 func (e *observedRoundEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 	e.calls++
+	e.request = req
 	return e.Engine.ResolvePartyBattle(req)
 }
 
@@ -107,7 +109,9 @@ func TestChallengeParticipantReadErrorsPreserveRound(t *testing.T) {
 				store := challenge.NewMemorySessionRepository()
 				repo := &observedRoundRepository{mockChallengeRepo: newMockChallengeRepo()}
 				engine := &observedRoundEngine{}
-				svc, err := challenge.NewService(repo, chars, engine, challenge.WithParticipantBuilder(builder), challenge.WithActiveSessionStore(store))
+				// One enemy and fixed combat rolls keep healthy reads on the win path.
+				rng := zeroRNG{}
+				svc, err := challenge.NewService(repo, chars, engine, challenge.WithParticipantBuilder(builder), challenge.WithActiveSessionStore(store), challenge.WithRNG(rng))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -147,6 +151,9 @@ func TestChallengeParticipantReadErrorsPreserveRound(t *testing.T) {
 					}
 				} else if result == nil || !result.Won || after == nil || after.CurrentRound != before.CurrentRound+1 || after.AccumulatedExp <= before.AccumulatedExp || after.AccumulatedGold <= before.AccumulatedGold || engine.calls != 1 {
 					t.Fatalf("healthy read did not advance round: result=%+v after=%+v", result, after)
+				}
+				if wantErr == nil && (engine.request.RNG != rng || len(engine.request.Enemies) != 1) {
+					t.Fatalf("healthy read did not use deterministic encounter and battle inputs: %+v", engine.request)
 				}
 			})
 		}
