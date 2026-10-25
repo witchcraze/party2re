@@ -564,6 +564,40 @@ changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
 
+#### Possession, control and climax callbacks
+
+Evidence: `_skill.cgi:3723–3754,3943–4024,5293–5345` and
+`_battle.cgi:587–594` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterControlClimax` binds the seventeen intrinsic bodies and contributes
+complete ordered job53/58/70 tables. The field53.6 and revival70.3 entries retain
+their own registrations; a missing body or descendant rejects an indirect
+closure rather than removing an entry from its original pool. Job58.3 requires
+the MP owner's pure validation and execution through `ControlMPDrain`; no
+resource operation is certified by table presence alone.
+
+Possession temporarily changes the effect actor for one ordinary attack,
+retaining the source side arrays, requester facts and outer command. Restore
+the actor even when a descendant fails. Trance clears status before its ordered
+AT/AG buffs, then writes magic absorption and confusion. Arrow consumes status
+before current temporary, falling back to the pre-action temporary snapshot;
+transfer the selected seal/temporary before resolving its magic hit. Consumers
+must save that snapshot with frozen operation input and reconstruct hooks after
+reload. Unguarded writes through an absent target remain unsupported source
+contexts; guarded no-effect results remain accepted.
+
+Climax captures the maximum AT/DF/AG, strips the selected target's temporary
+around its magic hit and restores it only while that target lives. Positive
+damage and a living caster permit the follow-up: compare the captured maximum
+against current AT first, then DF, otherwise use the AG branch. The AT branch
+deals 30% of returned damage to enemies; DF heals the party using 30% caster
+MaxHP; AG raises self AG by 30% and can immobilize the original target. Helper
+redirection, counters and incidental resource effects retain their existing
+owners. Admission includes earlier status changes, consumed defenses and
+item195 activation before later helpers. Unprojected preceding callbacks retain
+the shared `AfterEffects` gate. Full service/receipt integration remains with
+the normal-adventure consumer; saved committed results are never replayed.
+
 #### Arithmetic selectors and digit reversal
 
 Evidence: `_skill.cgi:2653–2713,5450–5581` at revision

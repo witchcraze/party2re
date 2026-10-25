@@ -48,6 +48,8 @@ type TargetContext struct {
 	// A duel reply swaps the source arrays even when its fallback chose an ally.
 	// This transient provenance is set only by the intrinsic duel body.
 	duelOriginID string
+	// Possession changes only the actor; source rosters retain their origin.
+	possessionOriginID string
 }
 
 // TargetEffect is the input and continuation of a spell target helper.
@@ -94,6 +96,12 @@ func (s *LifetimeState) validateTargetContext(c TargetContext, rng random.Genera
 	}
 	seen = make(map[string]bool, len(s.Actors))
 	actor, partySide := s.actor(c.ActorID), 0
+	if c.possessionOriginID != "" {
+		actor = s.actor(c.possessionOriginID)
+		if actor == nil {
+			return ErrInvalidParticipant
+		}
+	}
 	if c.duelOriginID != "" {
 		actor, partySide = s.actor(c.duelOriginID), 1
 		if actor == nil {
