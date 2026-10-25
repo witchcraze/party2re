@@ -20,9 +20,9 @@ actor/target match adds `private` unread-letter, phrase and delivery counts.
 Public reads do not fetch any of those private collections. Required home, pet
 or owned enrichment failures fail the observation, without a partial response.
 The existing settings reader returns defaults for a character without a home
-row; observation never creates that row. Viewing settings is distinct from the
-active lease required by the existing other-home Sleep service. Lease/formula
-parity is outside this observation slice.
+row; observation never creates that row. A town estate lease is distinct from
+private Home existence; the [Sleep contract](#6-resting--sleeping-sleepcgi-homecgi)
+requires an existing host for other-home Sleep, without requiring a town lease.
 
 Own Home offers `home_inbox` and `home_outbox`, both parented to `home`. They
 always read the owned actor's mailbox, even when entered explicitly after a

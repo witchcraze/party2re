@@ -531,8 +531,50 @@ the [replay ownership contract](../design/replay.md#original-content-and-access-
 sanitized public home/store/guild projections may retain anonymous routes; normal
 interactive clients still obtain gameplay information through context. Other
 public facility GETs are migration candidates, not automatic permanent exceptions.
-The complete checked route inventory and implementation ownership live in #1047
-and its linked migration issues, rather than a duplicate permanent rollout log.
+The route matrix in [#1047](https://github.com/witchcraze/party2re/issues/1047)
+is historical investigation evidence. Current registrations and payloads come
+from [handler.go](../../internal/api/http/handler.go) and the modular
+[OpenAPI sources](../api/paths/). Command execution support comes from the
+HTTP `action_*.go` registrations; catalog entries, resolver URLs and strict
+candidate schemas alone do not establish a connected command.
+Selected observations come from the
+[scene composer](../../internal/api/http/scene_composer.go) and its feature
+adapters; activity observations use the owning services. Compare all of these
+before choosing a replacement or deleting a route, rather than maintaining
+current route counts or a second live inventory in prose.
+
+#### Migration ownership and verification
+
+The migration issues own remaining work and its bounded implementation units;
+native GitHub relations own prerequisite and parent/child state. A closed
+specification or shared foundation is a contract to adopt, not proof that every
+facility operation has a replacement.
+
+| Migration owner | Responsibility and contract sources |
+| --- | --- |
+| [Economy #947](https://github.com/witchcraze/party2re/issues/947) | Shop, Bank, Depot, SecretShop and markets/crafting. Feature-owned retained-operation mappings: [Shops](../design/shops.md#retained-routes), [Bank](../design/bank.md#observation-and-retained-routes), [Depot](../design/depot.md#gateway-observation-and-retained-operations). |
+| [Combat/Adventure #948](https://github.com/witchcraze/party2re/issues/948) | Run/room/Party commands, owned observations, monsters and Replay. Adopt [run authority and recovery](transient-run-state.md), [Adventure](../design/adventure.md) and [Replay visibility](../design/replay.md); generic activity facts do not replace maps, explicit battle choices or receipt reads. |
+| [Town/Faith/Social #949](https://github.com/witchcraze/party2re/issues/949) | Home, Casino, faith and social facilities. [Home](../design/home.md#retained-rest-and-deferred-detail-ownership) and [Casino](../design/casino.md#scoped-legacy-dispatch-reconciliation) own their visibility/action mappings; observation does not connect mutations. |
+| [Final cleanup #950](https://github.com/witchcraze/party2re/issues/950) | Final router/OpenAPI cleanup, deliberate exceptions and otherwise unassigned core profile/inventory/equipment, Event Plaza, ranking/news/notification surfaces. Assign remaining gameplay replacements to bounded children before deleting them. |
+
+Each implementation unit identifies the exact retained operation, direct public
+service, explicit inputs/results, actor versus target visibility, legacy action
+disposition and any unresolved prerequisite. Commands with approved contracts
+can proceed independently of other facility readers. Retire a mutation only
+after verified Gateway coverage, and a read only after verified observation
+coverage or an approved public/system exception. Preserve shared handlers,
+result formatters and wiring still serving retained operations.
+
+Verification covers required-read failure without partial/private data, bounded
+paging, entry versus continuation/recovery, known-outcome GET-only refresh
+recovery and unknown-outcome non-replay. Adopt feature-owned receipt/revision
+contracts where present; a fresh context alone is not proof that an unknown
+command committed. Move applicable real-service, rollback and concurrent asset
+coverage to the replacement; also verify retired paths cannot read or mutate.
+Remove obsolete resolver/catalog references, update modular OpenAPI sources and
+regenerate/check coverage. Final router cleanup still requires every retained
+operation's verified disposition; specification consolidation satisfies none
+of those runtime deletion gates.
 
 ---
 
