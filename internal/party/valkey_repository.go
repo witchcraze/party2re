@@ -468,15 +468,10 @@ func (r *ValkeyRepository) UpdateParty(ctx context.Context, p Party) error {
 		return err
 	}
 
-	res := r.updatePartyScript.Exec(ctx, r.client, []string{
-		r.lobbyKey(p.ID),
-		r.lobbiesIndexKey,
-	}, []string{
-		string(partyJSON),
-		strconv.FormatInt(int64(r.lobbyTTL.Seconds()), 10),
-		p.Status,
-		p.ID,
-	})
+	res := r.updatePartyScript.Exec(ctx, r.client,
+		[]string{r.lobbyKey(p.ID), r.lobbiesIndexKey},
+		[]string{string(partyJSON), strconv.FormatInt(int64(r.lobbyTTL.Seconds()), 10), p.Status, p.ID},
+	)
 	return mapLuaError(res.Error())
 }
 
@@ -498,22 +493,29 @@ func (r *ValkeyRepository) DeleteParty(ctx context.Context, id string) error {
 	}
 
 	data, err := r.client.Do(ctx, r.client.B().Get().Key(r.lobbyKey(id)).Build()).AsBytes()
+	if err != nil && !valkey.IsValkeyNil(err) {
+		return err
+	}
+	var keys []string
 	if err == nil {
 		var state LobbyState
-		if json.Unmarshal(data, &state) == nil {
-			for _, m := range state.Members {
-				_ = r.client.Do(ctx, r.client.B().Del().Key(r.characterKey(m.CharacterID)).Build()).Error()
-				_ = r.client.Do(ctx, r.client.B().Del().Key(r.readyKey(id, m.CharacterID)).Build()).Error()
-			}
-			if state.Party.LeaderCharacterID != "" {
-				_ = r.client.Do(ctx, r.client.B().Del().Key(r.characterKey(state.Party.LeaderCharacterID)).Build()).Error()
-			}
+		if err := json.Unmarshal(data, &state); err != nil {
+			return err
+		}
+		for _, m := range state.Members {
+			keys = append(keys, r.characterKey(m.CharacterID), r.readyKey(id, m.CharacterID))
+		}
+		if state.Party.LeaderCharacterID != "" {
+			keys = append(keys, r.characterKey(state.Party.LeaderCharacterID))
 		}
 	}
-
-	_ = r.client.Do(ctx, r.client.B().Del().Key(r.lobbyKey(id)).Build()).Error()
-	_ = r.client.Do(ctx, r.client.B().Zrem().Key(r.lobbiesIndexKey).Member(id).Build()).Error()
-	return nil
+	keys = append(keys, r.lobbyKey(id))
+	for _, key := range keys {
+		if err := r.client.Do(ctx, r.client.B().Del().Key(key).Build()).Error(); err != nil {
+			return err
+		}
+	}
+	return r.client.Do(ctx, r.client.B().Zrem().Key(r.lobbiesIndexKey).Member(id).Build()).Error()
 }
 
 // AddMember adds a member to a party lobby in Valkey Master.

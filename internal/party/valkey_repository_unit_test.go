@@ -348,6 +348,38 @@ func TestValkeyRepository_DeleteParty(t *testing.T) {
 	if len(cmds) < 4 {
 		t.Fatalf("expected cleanup commands, got %d: %v", len(cmds), cmds)
 	}
+
+	delErr := errors.New("valkey delete failure")
+	// Fail at each command step (including after earlier commands succeed) and verify error propagation.
+	for failIdx := 1; failIdx <= len(cmds); failIdx++ {
+		callCount := 0
+		partialClient := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+			callCount++
+			if callCount == failIdx {
+				return valkeytest.MakeErrorResult(delErr)
+			}
+			if cmd.Commands()[0] == "GET" {
+				return valkeytest.MakeStringResult(string(validData))
+			}
+			return valkeytest.MakeOKResult()
+		}))
+		partialRepo := party.NewValkeyRepository(partialClient)
+		if err := partialRepo.DeleteParty(ctx, "party-del-1"); !errors.Is(err, delErr) {
+			t.Fatalf("step %d/%d (%s): expected delErr, got %v", failIdx, len(cmds), cmds[failIdx-1], err)
+		}
+	}
+
+	// Corrupt JSON on GET must also fail rather than silently succeeding.
+	corruptClient := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		if cmd.Commands()[0] == "GET" {
+			return valkeytest.MakeStringResult("{corrupt-json")
+		}
+		return valkeytest.MakeOKResult()
+	}))
+	corruptRepo := party.NewValkeyRepository(corruptClient)
+	if err := corruptRepo.DeleteParty(ctx, "party-del-1"); err == nil {
+		t.Fatal("expected error on corrupt lobby JSON, got nil")
+	}
 }
 
 func TestValkeyRepository_AddMember(t *testing.T) {

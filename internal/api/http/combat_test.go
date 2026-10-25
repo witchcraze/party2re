@@ -332,6 +332,29 @@ func TestCombatEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /parties/{id}/sealing-battle - room already claimed", func(t *testing.T) {
+		hClaimed := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithBoss(&stubBossService{
+				startSealingBattleFn: func(context.Context, string, string) (boss.SealingBattleResult, error) {
+					return boss.SealingBattleResult{}, boss.ErrPartyNotRecruiting
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/parties/party-1/sealing-battle", `{"character_id":"c1"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hClaimed.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d (body: %s)", rec.Code, rec.Body.String())
+		}
+	})
+
 	// Dungeons
 	t.Run("GET /characters/{id}/dungeons", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/characters/c1/dungeons", nil)
