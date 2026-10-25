@@ -124,7 +124,7 @@ READMEには方針と参照先のみを記載し、詳細な依存関係や配�
 ```bash
 make up
 ```
-コンテナ起動後は、ホストマシン側で `make test-integration` などを実行することで、透過的にコンテナ内のDBへアクセスしてテストを行うことができます。
+コンテナ起動後は、ホストマシン側で `make test-integration` などを実行することで、透過的にコンテナ内のDBへアクセスしてテストを行うことができます。検証ステージに応じた手順の詳細は [`docs/development/testing.md`](docs/development/testing.md) を参照してください。
 
 ### 代替環境: ホストネイティブでの構築 (Dockerを使用しない場合)
 Docker を使用しない環境でも開発は可能です。その場合は、ホストマシンに直接以下のミドルウェアをインストールして起動してください。
@@ -132,12 +132,13 @@ Docker を使用しない環境でも開発は可能です。その場合は、�
 1. **MariaDB** (または互換性のあるMySQL)
 2. **Valkey** (または互換性のあるRedis)
 
-起動後、テスト実行時に環境変数として接続先 (DSN) を指定することで、フルスタックの検証が可能になります。
+起動後、テスト実行時に環境変数として接続先 (DSN) を指定することで、フルスタックの検証が可能になります。専用データベース分離を必要とするテストを実行するには、データベース作成・削除権限を持つ `PARTY2_TEST_DB_ADMIN_DSN` も指定してください（詳細は [`docs/development/testing.md#52-dedicated-database-setup`](docs/development/testing.md#52-dedicated-database-setup) を参照）。
 
 ```bash
 PARTY2_DB_DSN="user:pass@tcp(127.0.0.1:3306)/party2?parseTime=true" \
+PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:3306)/?parseTime=true" \
 PARTY2_VALKEY_ADDR="127.0.0.1:6379" \
-go test -tags=integration ./...
+go test -count=1 ./...
 ```
 
 

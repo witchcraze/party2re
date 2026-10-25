@@ -53,7 +53,7 @@ The application daemon supports the following core environment variables:
 The development connection string is supplied to the application through
 `PARTY2_DB_DSN` in `compose.yaml`.
 
-Running outside Compose also requires `PARTY2_DB_DSN`; startup fails when it is unset. For host execution, supply a DSN pointing to the local MariaDB service at `127.0.0.1:3306`.
+Running outside Compose also requires `PARTY2_DB_DSN`; startup fails when it is unset. For host execution, supply a DSN pointing to the local MariaDB service at `127.0.0.1:3306` (e.g. `party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true`). For host tests requiring dedicated database isolation, also configure `PARTY2_TEST_DB_ADMIN_DSN` with database creation/drop privileges (e.g. `root:root@tcp(127.0.0.1:3306)/?parseTime=true`). See [`testing.md`](testing.md#52-dedicated-database-setup).
 
 ## Database initialization and migration
 

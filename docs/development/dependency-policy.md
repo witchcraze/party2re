@@ -36,9 +36,12 @@ Update the file in the same Issue/PR that adds or changes a dependency. Keep
 Software dependency records do not replace the separate provenance and license
 records for images, fonts, or other creative assets.
 
-The development workflow runs Go and resolves dependencies inside Docker
-containers. Dependencies must not be installed into the host environment as
-part of normal project setup.
+The standard development workflow uses the host Go toolchain for formatting,
+testing, static analysis, and dependency management (`go.mod` / `go.sum`).
+Docker Compose provides backing services (MariaDB and Valkey) and an optional
+containerized development and test environment (`make test-docker`).
+Dependencies must be tracked through standard Go modules; any new dependency
+must satisfy the review criteria above and be documented in `THIRD_PARTY_LICENSES.md`.
 
 ## Project license
 
