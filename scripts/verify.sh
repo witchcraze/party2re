@@ -45,6 +45,8 @@ if command -v go >/dev/null 2>&1; then
     go run ./scripts/sync_openapi
 fi
 
+CHECKED_TREE=$(get_tree_hash)
+
 echo "==> [2/7] Running static analysis (go vet)..."
 if command -v go >/dev/null 2>&1; then
     go vet ./...
@@ -89,6 +91,12 @@ echo "==> [7/7] Running smoke image build..."
 docker build -f Dockerfile -t party2re:smoke .
 
 FINAL_TREE=$(get_tree_hash)
+if [ "$CHECKED_TREE" != "$FINAL_TREE" ]; then
+    echo "==> [verify.sh] ERROR: Working tree changed during verification (expected ${CHECKED_TREE:0:8}, got ${FINAL_TREE:0:8})." >&2
+    echo "==> [verify.sh] Verification aborted without saving stamp." >&2
+    exit 1
+fi
+
 if [ "$FINAL_TREE" != "none" ]; then
     mkdir -p "${ROOT_DIR}/.cache"
     echo "$FINAL_TREE" > "$STAMP_FILE"
