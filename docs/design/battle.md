@@ -564,6 +564,38 @@ changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
 
+#### Protective magic callbacks
+
+Evidence: `_skill.cgi:2722–2862` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterProtectiveMagic` contributes complete ordered job32/33/34 tables and
+binds19 intrinsic bodies. Revival32.4/33.6 retain their `RegisterRevivals`
+bindings; a missing binding rejects the entire indirect pool.
+
+Job32's single direct magic strike chooses power100 with25% probability,
+otherwise30, before its target helper. Its party physical mitigation and magic
+reflection, and job33's party magic/breath mitigation, check the caster's magic
+seal and replace only living party members' temporaries. Job34's magic immunity
+uses the same seal check on self. Fixed damage, party healing, self meditation300
+and job33's100% base-AT buff compose the existing effect owners. Healing retains
+party order, fallen-target fallback, tension, modifiers and caps.
+
+Job34's cover resolves a physical ally helper before assigning the caster's
+covering role and the returned nonself target's covered role. Its group strike
+first resolves a symbolic magic enemy helper. Only a resolved result debits15MP
+from each nonself party member with at least15MP, including fallen members, and
+adds85 per member to base100. Helper resource effects precede those debits; the
+numeric direct magic hit resolves its target again. A zero symbolic payload
+does not cancel cooperation, while an unresolved helper consumes no ally MP.
+
+Job33's extension captures the caster's status for an untyped cure helper, then
+grants five additional-submission uses regardless of the cure's returned effect.
+Admission validates complete descendants before costs or committed RNG and
+projects only exact deterministic transitions for subsequent callbacks. Unknown
+prior transitions retain the whole-action gate. Consumers save resulting facts,
+operation counters and frozen input, then rebuild ports and registrations without
+replaying committed callbacks; production Adventure adoption remains separate.
+
 #### Counter and reset callbacks
 
 Evidence: `_skill.cgi:2871–3013` at revision
