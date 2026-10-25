@@ -158,6 +158,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 			itemFound = floor.Monsters[0].DropItemID
 		}
 		medalsFound := 1 * chestsCount
+		eventKey := fmt.Sprintf("T:%d:%d:%d", exp.CurrentFloor, newX, newY)
 
 		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
 			ExpectedExpeditionID: exp.ID,
@@ -170,6 +171,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 			GoldDelta:            goldFound,
 			MedalsDelta:          medalsFound,
 			RewardItemID:         itemFound,
+			EventKey:             eventKey,
 			Now:                  now,
 		})
 		if err != nil {
@@ -178,6 +180,14 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 
 		if stepRes.Status == StatusWipedOut {
 			return s.handleWipeout(ctx, &stepRes.Expedition, &char, "行動限界（ターン切れ）により意識を失い、探索に失敗した…")
+		}
+
+		if !stepRes.EventConsumed {
+			return ExpeditionStepResult{
+				Expedition: stepRes.Expedition,
+				EventType:  EventMove,
+				Message:    "静かな通路を進んだ。",
+			}, nil
 		}
 
 		msg := fmt.Sprintf("宝箱を発見した！ %d G と %s 、ちいさなメダル %d枚を手に入れた！", goldFound, itemFound, medalsFound)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -926,4 +927,255 @@ func TestService_GetRecordAndItemEncoding(t *testing.T) {
 	if len(decoded) != 2 || decoded[0] != "item-1" || decoded[1] != "item-2" {
 		t.Errorf("unexpected decoded items: %v", decoded)
 	}
+}
+
+func TestMove_TreasureConsumedOncePerExpedition(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockDungeonRepo()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"hero": createTestChar("hero", 10, 200, 50, 40),
+		},
+	}
+
+	customDungeons := []dungeon.Dungeon{
+		{
+			ID:               "treasure-dg",
+			Name:             "宝箱検証迷宮",
+			MinLevel:         1,
+			Tier:             1,
+			MaxTurnsPerFloor: 30,
+			Floors: []dungeon.Floor{
+				{
+					FloorNumber: 1,
+					Width:       4,
+					Height:      1,
+					StartX:      0,
+					StartY:      0,
+					Grid: []string{
+						"STTD",
+					},
+				},
+				{
+					FloorNumber: 2,
+					Width:       3,
+					Height:      1,
+					StartX:      0,
+					StartY:      0,
+					Grid: []string{
+						"STE",
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("round-trip revisit and different floor treasure", func(t *testing.T) {
+		activeStore := dungeon.NewMemoryExpeditionRepository()
+		service, err := dungeon.NewService(
+			repo,
+			charRepo,
+			corebattle.Engine{},
+			dungeon.WithCustomDungeons(customDungeons),
+			dungeon.WithActiveExpeditionStore(activeStore),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := service.StartExpedition(ctx, "hero", "treasure-dg"); err != nil {
+			t.Fatal(err)
+		}
+
+		// 1. First visit to 1F (1,0) 'T': grants reward
+		res1, err := service.Move(ctx, "hero", dungeon.DirectionEast)
+		if err != nil {
+			t.Fatalf("first move to T failed: %v", err)
+		}
+		if res1.EventType != dungeon.EventTreasure || res1.GoldFound != 100 || res1.MedalsFound != 1 || res1.ItemFound != "potion" {
+			t.Fatalf("expected treasure reward on first visit, got %+v", res1)
+		}
+		if res1.Expedition.AccumulatedGold != 100 || res1.Expedition.AccumulatedMedals != 1 || len(res1.Expedition.AccumulatedItems) != 1 {
+			t.Fatalf("unexpected accumulated rewards after first T: %+v", res1.Expedition)
+		}
+
+		// 2. Step back West to (0,0) 'S', then revisit East to (1,0) 'T': move only, no extra reward
+		if _, err := service.Move(ctx, "hero", dungeon.DirectionWest); err != nil {
+			t.Fatalf("move back to S failed: %v", err)
+		}
+		resRevisit, err := service.Move(ctx, "hero", dungeon.DirectionEast)
+		if err != nil {
+			t.Fatalf("revisit move to T failed: %v", err)
+		}
+		if resRevisit.EventType != dungeon.EventMove || resRevisit.GoldFound != 0 || resRevisit.MedalsFound != 0 || resRevisit.ItemFound != "" || resRevisit.ChestsOpened != 0 {
+			t.Fatalf("expected EventMove with 0 reward on revisit, got %+v", resRevisit)
+		}
+		if resRevisit.Expedition.AccumulatedGold != 100 || resRevisit.Expedition.AccumulatedMedals != 1 || len(resRevisit.Expedition.AccumulatedItems) != 1 {
+			t.Fatalf("expected accumulated rewards unchanged on revisit, got %+v", resRevisit.Expedition)
+		}
+
+		// 3. Save/load (round-trip through store) then revisit (1,0) 'T' again
+		loaded, err := activeStore.GetActiveExpedition(ctx, "hero")
+		if err != nil || loaded == nil {
+			t.Fatalf("GetActiveExpedition failed: %v", err)
+		}
+		if err := activeStore.SaveActiveExpedition(ctx, *loaded); err != nil {
+			t.Fatalf("SaveActiveExpedition failed: %v", err)
+		}
+		if _, err := service.Move(ctx, "hero", dungeon.DirectionWest); err != nil {
+			t.Fatalf("move west before post-save revisit failed: %v", err)
+		}
+		resAfterSaveLoad, err := service.Move(ctx, "hero", dungeon.DirectionEast)
+		if err != nil {
+			t.Fatalf("revisit after save/load failed: %v", err)
+		}
+		if resAfterSaveLoad.EventType != dungeon.EventMove || resAfterSaveLoad.Expedition.AccumulatedGold != 100 {
+			t.Fatalf("expected consumed state preserved across save/load, got %+v", resAfterSaveLoad)
+		}
+
+		// 4. Distinct treasure tile on same floor (2,0) 'T' still grants reward once
+		resSecondChest, err := service.Move(ctx, "hero", dungeon.DirectionEast)
+		if err != nil {
+			t.Fatalf("move to second T on 1F failed: %v", err)
+		}
+		if resSecondChest.EventType != dungeon.EventTreasure || resSecondChest.GoldFound != 100 || resSecondChest.Expedition.AccumulatedGold != 200 {
+			t.Fatalf("expected second distinct chest on 1F to grant reward, got %+v", resSecondChest)
+		}
+
+		// 5. Descend stairs at (3,0) 'D' to 2F, then visit 2F (1,0) 'T' (same X/Y as 1F chest, different floor)
+		resStairs, err := service.Move(ctx, "hero", dungeon.DirectionEast)
+		if err != nil || resStairs.EventType != dungeon.EventStairs || resStairs.Expedition.CurrentFloor != 2 {
+			t.Fatalf("expected stairs to 2F, got %+v, err=%v", resStairs, err)
+		}
+		resFloor2Chest, err := service.Move(ctx, "hero", dungeon.DirectionEast)
+		if err != nil {
+			t.Fatalf("move to 2F T failed: %v", err)
+		}
+		if resFloor2Chest.EventType != dungeon.EventTreasure || resFloor2Chest.GoldFound != 200 || resFloor2Chest.Expedition.AccumulatedGold != 400 {
+			t.Fatalf("expected 2F treasure at (1,0) to grant 200G, got %+v", resFloor2Chest)
+		}
+	})
+
+	t.Run("retry after step save failure still grants treasure once", func(t *testing.T) {
+		memStore := dungeon.NewMemoryExpeditionRepository()
+		failNextStep := false
+		flakyStore := &mockCustomActiveStore{
+			ActiveExpeditionStore: memStore,
+			stepFn: func(ctx context.Context, characterID string, params dungeon.StepParams) (dungeon.StepOutcome, error) {
+				if failNextStep {
+					return dungeon.StepOutcome{}, errors.New("simulated transient step write failure")
+				}
+				return memStore.Step(ctx, characterID, params)
+			},
+		}
+
+		service, err := dungeon.NewService(
+			repo,
+			charRepo,
+			corebattle.Engine{},
+			dungeon.WithCustomDungeons(customDungeons),
+			dungeon.WithActiveExpeditionStore(flakyStore),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := service.StartExpedition(ctx, "hero", "treasure-dg"); err != nil {
+			t.Fatal(err)
+		}
+
+		// First attempt fails during Step persistence
+		failNextStep = true
+		if _, err := service.Move(ctx, "hero", dungeon.DirectionEast); err == nil {
+			t.Fatal("expected error when Step fails")
+		}
+
+		// Retry succeeds and grants the treasure
+		failNextStep = false
+		resRetry, err := service.Move(ctx, "hero", dungeon.DirectionEast)
+		if err != nil {
+			t.Fatalf("retry Move to T failed: %v", err)
+		}
+		if resRetry.EventType != dungeon.EventTreasure || resRetry.GoldFound != 100 || resRetry.Expedition.AccumulatedGold != 100 {
+			t.Fatalf("expected treasure granted on retry after failed step, got %+v", resRetry)
+		}
+	})
+
+	t.Run("concurrent arrival at same treasure tile awards reward once", func(t *testing.T) {
+		singleTreasureDungeons := []dungeon.Dungeon{
+			{
+				ID:               "single-treasure-dg",
+				Name:             "単一宝箱迷宮",
+				MinLevel:         1,
+				Tier:             1,
+				MaxTurnsPerFloor: 30,
+				Floors: []dungeon.Floor{
+					{
+						FloorNumber: 1,
+						Width:       3,
+						Height:      1,
+						StartX:      0,
+						StartY:      0,
+						Grid: []string{
+							"ST1",
+						},
+					},
+				},
+			},
+		}
+		memStore := dungeon.NewMemoryExpeditionRepository()
+		service, err := dungeon.NewService(
+			repo,
+			charRepo,
+			corebattle.Engine{},
+			dungeon.WithCustomDungeons(singleTreasureDungeons),
+			dungeon.WithActiveExpeditionStore(memStore),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := service.StartExpedition(ctx, "hero", "single-treasure-dg"); err != nil {
+			t.Fatal(err)
+		}
+
+		const workers = 8
+		results := make([]dungeon.ExpeditionStepResult, workers)
+		errs := make([]error, workers)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for i := 0; i < workers; i++ {
+			idx := i
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				results[idx], errs[idx] = service.Move(ctx, "hero", dungeon.DirectionEast)
+			}()
+		}
+		close(start)
+		wg.Wait()
+
+		treasureCount := 0
+		for i := 0; i < workers; i++ {
+			if errs[i] != nil {
+				continue
+			}
+			if results[i].EventType == dungeon.EventTreasure {
+				treasureCount++
+			}
+		}
+		if treasureCount != 1 {
+			t.Fatalf("expected exactly 1 concurrent Move to claim EventTreasure, got %d", treasureCount)
+		}
+
+		exp, err := service.GetActiveExpedition(ctx, "hero")
+		if err != nil || exp == nil {
+			t.Fatalf("GetActiveExpedition failed: %v", err)
+		}
+		if exp.AccumulatedGold != 100 || exp.AccumulatedMedals != 1 || len(exp.AccumulatedItems) != 1 {
+			t.Fatalf("expected treasure reward accumulated exactly once, got gold=%d medals=%d items=%v",
+				exp.AccumulatedGold, exp.AccumulatedMedals, exp.AccumulatedItems)
+		}
+	})
 }

@@ -149,6 +149,7 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 	if mJSON, ok := sMap["members"]; ok && mJSON != "" {
 		members = DecodeMembers(mJSON)
 	}
+	consumedEvents := DecodeItems(sMap["consumed_events"])
 
 	active := &ActiveExpedition{
 		ID:                sMap["expedition_id"],
@@ -166,6 +167,7 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 		AccumulatedGold:   gold,
 		AccumulatedMedals: medals,
 		AccumulatedItems:  items,
+		ConsumedEvents:    consumedEvents,
 		Status:            ExpeditionStatus(sMap["status"]),
 		StartedAt:         startedAt,
 		UpdatedAt:         updatedAt,
@@ -186,6 +188,7 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	rKey := r.rewardsKey(exp.CharacterID)
 
 	itemsJSON := EncodeItems(exp.AccumulatedItems)
+	eventsJSON := EncodeItems(exp.ConsumedEvents)
 	membersJSON := EncodeMembers(exp.Members)
 	ttlSec := int64(r.ttl.Seconds())
 
@@ -203,6 +206,7 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 			FieldValue("current_hp", strconv.Itoa(exp.CurrentHP)).
 			FieldValue("turns_remaining", strconv.Itoa(exp.TurnsRemaining)).
 			FieldValue("status", string(exp.Status)).
+			FieldValue("consumed_events", eventsJSON).
 			FieldValue("started_at", exp.StartedAt.Format(time.RFC3339Nano)).
 			FieldValue("updated_at", exp.UpdatedAt.Format(time.RFC3339Nano)).
 			Build(),
@@ -281,6 +285,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		params.RewardItemID,
 		params.Now.Format(time.RFC3339Nano),
 		strconv.FormatInt(int64(r.ttl.Seconds()), 10),
+		params.EventKey,
 	})
 
 	if err := res.Error(); err != nil {
@@ -306,6 +311,15 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	dungeonID := vals[11]
 	startedAt, _ := time.Parse(time.RFC3339Nano, vals[12])
 
+	consumedEvents := []string{}
+	if len(vals) >= 17 {
+		consumedEvents = DecodeItems(vals[16])
+	}
+	eventConsumed := true
+	if len(vals) >= 18 {
+		eventConsumed = vals[17] != "0"
+	}
+
 	exp := ActiveExpedition{
 		PartyID: vals[13], PartyName: vals[14], Members: DecodeMembers(vals[15]),
 		ID:                params.ExpectedExpeditionID,
@@ -320,13 +334,15 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		AccumulatedGold:   totGold,
 		AccumulatedMedals: totMedals,
 		AccumulatedItems:  items,
+		ConsumedEvents:    consumedEvents,
 		Status:            status,
 		StartedAt:         startedAt,
 		UpdatedAt:         updatedAt,
 	}
 
 	return StepOutcome{
-		Expedition: exp,
-		Status:     status,
+		Expedition:    exp,
+		Status:        status,
+		EventConsumed: eventConsumed,
 	}, nil
 }

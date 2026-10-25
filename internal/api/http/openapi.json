@@ -7135,6 +7135,15 @@
           "character_id": {
             "type": "string"
           },
+          "consumed_events": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "current_floor": {
             "type": "integer"
           },
