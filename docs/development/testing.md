@@ -43,6 +43,36 @@ for the container runner, and `make check` for full verification. `make test`
 does not supply connection settings. Environment reset/disposal is described in
 [development-environment.md](development-environment.md#database-initialization-and-migration).
 
+`make test-stress` runs the full Go suite with `PARTY2_STRESS_ENABLED=1`, so
+adaptive concurrency tests are included regardless of package or test name.
+The existing harness raises its default load from 15 workers × 10 operations
+to 50 × 20; ordinary test runs keep the smaller configuration. This command
+waits for local MariaDB/Valkey and applies migrations, then supplies the same
+local DB, admin DB and cache defaults as `make test-integration`. Connection
+environment overrides are preserved; the admin account must permit dedicated
+database creation/deletion. There is no shared-database fallback.
+
+For a focused deep run, pass standard Go test arguments directly to the script,
+including the package selector (omitting all arguments defaults to `./...`):
+
+```sh
+./scripts/stress_test.sh -run 'TestGvGRewardConcurrentRetryIntegration|TestActionPublication_ConcurrentWagers' ./internal/gvg ./internal/casino
+```
+
+Setup or test failure returns nonzero. A selection with no passing tests,
+including an empty match or an entirely skipped run, also fails. Use
+`go test -list '<pattern>' ./...` separately to inspect selection without running
+tests. Full deep runs include ordinary tests as well; elapsed time depends on
+the selected suite and local services.
+
+Test connections use the application's normal DB pool defaults (25 open and
+25 idle connections per pool). The worker count is independent of the connection
+count: 50 workers can queue for a 25-connection pool. Tests that need a different
+pool size may configure it explicitly; for environment-configured pools, use
+`PARTY2_DB_MAX_OPEN_CONNS` and `PARTY2_DB_MAX_IDLE_CONNS`. The stress entrypoint
+preserves these settings. Account for all concurrently running packages and
+pools against the server's total connection limit when increasing them.
+
 ## 4. Container Roles
 
 - **`Dockerfile.dev` & `compose.yaml`**: Development and integration test environment. Spawns MariaDB and Valkey alongside Go test runner with bind-mounted source and BuildKit cache mounts.

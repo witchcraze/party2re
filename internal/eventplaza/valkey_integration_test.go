@@ -97,7 +97,11 @@ func TestRealValkeyConcurrentCrowdAndObservation(t *testing.T) {
 	cfg := testutil.GetStressConfig()
 	result := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
 		name := fmt.Sprintf("guest-%d-%d", worker, op)
-		return tracker.AppendCrowd(ctx, []Presence{{name, now.Add(time.Hour)}})
+		err := tracker.AppendCrowd(ctx, []Presence{{name, now.Add(time.Hour)}})
+		if err != nil {
+			t.Logf("worker=%d op=%d: %v", worker, op, err)
+		}
+		return err
 	})
 	if result.Failures != 0 {
 		t.Fatalf("concurrent append failures: %+v", result)
