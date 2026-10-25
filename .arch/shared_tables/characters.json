@@ -13,7 +13,8 @@
     "internal/gemstore/types.go#CharacterRepository",
     "internal/bank/bank.go#Repository",
     "internal/auction/types.go#CharacterRepository",
-    "internal/pvp/service.go#CharacterRepository"
+    "internal/pvp/service.go#CharacterRepository",
+    "internal/dungeon/dungeon.go#CharacterRepository"
   ],
   "callers": [
     {
@@ -197,6 +198,13 @@
       "lock_mode": "SELECT ... FOR UPDATE (ascending character IDs; shared battle adapter)",
       "lock_order": 2,
       "purpose": "Shared participant settlement under the accepted run/revision; preserves unsettled survivors and commits consumption, earnings, bonuses and receipts together"
+    },
+    {
+      "module": "dungeon",
+      "caller_method": "internal/database/dungeon_repository.go#DungeonRepository.FinalizeExpedition",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character row before claiming expedition history by run ID and applying experience, gold, and small medal rewards"
     }
   ]
 }

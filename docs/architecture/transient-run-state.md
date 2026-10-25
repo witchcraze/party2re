@@ -237,11 +237,10 @@ activity when discovery or the live body is missing. GET never repairs state.
 
 ### Start outcome and publication
 
-Dungeon retains the approved #1493 start reconciliation: an admission error after
+Dungeon retains the approved start reconciliation: an admission error after
 publication is resolved from the owned run buffer outside the failed transaction;
 unreadable evidence returns `ErrStartOutcomeUnknown` without deleting it. Its
 publication precedes commit and does not exclude a still-in-flight server commit.
-The remaining Dungeon settlement work is tracked in #1205.
 
 Challenge commits admission, participant claims, its actor-owned revision-0 start
 receipt and pending publication before any Valkey write. Lost SQL acknowledgement
@@ -265,6 +264,19 @@ Inspect the owning finalizer, durable idempotency guard, and failure tests when
 changing this boundary. Durable records include `character_dungeon_records`,
 `dungeon_expedition_history`, and `character_challenge_records`; legacy SQL
 active-state migrations are historical work, not a remaining rollout plan.
+
+### Dungeon finalization
+
+`DungeonRepository.FinalizeExpedition` claims expedition settlement once per run
+by inserting `dungeon_expedition_history` keyed by the active expedition's run ID
+(`dungeon_expedition_history.id = exp.ID`). Inside `RunInTx`, it locks the owning
+`characters` row first (`SELECT ... FOR UPDATE`, Rank 2), claims the history row,
+applies experience, gold, and small medal rewards directly to the locked character
+row, delivers reward items to inventory/depot (Rank 3/5), and atomically increments
+`character_dungeon_records` (Rank 8). Duplicate run-ID claims map to
+`ErrExpeditionAlreadyFinished`, which `internal/dungeon` treats as idempotent
+completion so post-commit Valkey `DeleteActiveExpedition` can safely retry without
+double-granting rewards or overwriting concurrent wallet updates.
 
 ### Challenge finalization
 

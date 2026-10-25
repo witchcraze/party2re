@@ -4,10 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/id"
 )
@@ -51,15 +55,25 @@ func (r *DungeonRepository) GetRecord(ctx context.Context, characterID string) (
 				total_floors_cleared, total_chests_opened, total_monsters_slain,
 				created_at, updated_at
 			) VALUES (?, 0, 0, 0, 0, 0, ?, ?)
+			ON DUPLICATE KEY UPDATE character_id = VALUES(character_id)
 		`
 		if _, err := executor.ExecContext(ctx, insertQuery, characterID, now, now); err != nil {
 			return dungeon.CharacterDungeonRecord{}, err
 		}
-		return dungeon.CharacterDungeonRecord{
-			CharacterID: characterID,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}, nil
+		err = executor.QueryRowContext(ctx, query, characterID).Scan(
+			&rec.CharacterID,
+			&rec.HighestDungeonCleared,
+			&rec.TotalExpeditions,
+			&rec.TotalFloorsCleared,
+			&rec.TotalChestsOpened,
+			&rec.TotalMonstersSlain,
+			&rec.CreatedAt,
+			&rec.UpdatedAt,
+		)
+		if err != nil {
+			return dungeon.CharacterDungeonRecord{}, err
+		}
+		return rec, nil
 	}
 	if err != nil {
 		return dungeon.CharacterDungeonRecord{}, err
@@ -178,6 +192,9 @@ func (r *DungeonRepository) DeleteActiveExpedition(ctx context.Context, characte
 	return err
 }
 
+// FinalizeExpedition claims expedition completion once by history.ID (run ID) inside a SQL transaction.
+// Lock order: Rank 2 (characters FOR UPDATE) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items) -> Rank 5 (character_depots) -> Rank 8 (character_dungeon_records).
+// Returns dungeon.ErrExpeditionAlreadyFinished if history.ID has already been settled.
 func (r *DungeonRepository) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
@@ -185,42 +202,34 @@ func (r *DungeonRepository) FinalizeExpedition(
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
 ) error {
+	charID := history.CharacterID
+	if charID == "" {
+		charID = record.CharacterID
+	}
+	if charID == "" || (record.CharacterID != "" && record.CharacterID != charID) || (character != nil && character.ID != "" && character.ID != charID) {
+		return dungeon.ErrForbidden
+	}
+	record.CharacterID = charID
+	history.CharacterID = charID
+	if history.ID == "" {
+		history.ID = id.New()
+	}
+
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 		now := time.Now().UTC()
 
-		// 1. Upsert Character Dungeon Record
-		upsertRecordQuery := `
-			INSERT INTO character_dungeon_records (
-				character_id, highest_dungeon_cleared, total_expeditions,
-				total_floors_cleared, total_chests_opened, total_monsters_slain,
-				created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-			ON DUPLICATE KEY UPDATE
-				highest_dungeon_cleared = VALUES(highest_dungeon_cleared),
-				total_expeditions = VALUES(total_expeditions),
-				total_floors_cleared = VALUES(total_floors_cleared),
-				total_chests_opened = VALUES(total_chests_opened),
-				total_monsters_slain = VALUES(total_monsters_slain),
-				updated_at = VALUES(updated_at)
-		`
-		_, err := executor.ExecContext(
-			txCtx,
-			upsertRecordQuery,
-			record.CharacterID,
-			record.HighestDungeonCleared,
-			record.TotalExpeditions,
-			record.TotalFloorsCleared,
-			record.TotalChestsOpened,
-			record.TotalMonstersSlain,
-			now,
-			now,
-		)
+		// 1. Lock Character (Rank 2) before dependent inventory/depot or secondary records
+		charRepo := &CharacterRepository{db: r.db}
+		lockedChar, err := charRepo.FindByIDForUpdate(txCtx, charID)
 		if err != nil {
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return dungeon.ErrCharacterNotFound
+			}
 			return err
 		}
 
-		// 2. Insert Dungeon Expedition History
+		// 2. Claim expedition finalization durably by run ID and owner
 		insertHistoryQuery := `
 			INSERT INTO dungeon_expedition_history (
 				id, character_id, dungeon_id, floors_reached, outcome,
@@ -241,38 +250,86 @@ func (r *DungeonRepository) FinalizeExpedition(
 			history.CreatedAt,
 		)
 		if err != nil {
+			var mysqlErr *mysql.MySQLError
+			if (errors.As(err, &mysqlErr) && mysqlErr.Number == 1062) || strings.Contains(err.Error(), "Duplicate entry") {
+				return dungeon.ErrExpeditionAlreadyFinished
+			}
 			return err
 		}
 
-		// 3. Update Character if rewards were applied
-		if character != nil {
-			if err := updateCharacter(txCtx, executor, *character); err != nil {
+		// 3. Apply rewards onto the locked character snapshot and update (Rank 2)
+		if history.ExpReward > 0 {
+			if _, err := progression.ApplyExperience(&lockedChar, history.ExpReward); err != nil {
+				return fmt.Errorf("applying experience: %w", err)
+			}
+		}
+		if history.GoldReward > 0 {
+			if err := lockedChar.AddMoney(history.GoldReward); err != nil {
+				return fmt.Errorf("adding gold: %w", err)
+			}
+		}
+		if history.MedalsReward > 0 {
+			if err := lockedChar.AddSmallMedals(history.MedalsReward); err != nil {
+				return fmt.Errorf("adding small medals: %w", err)
+			}
+		}
+		if character != nil || history.ExpReward > 0 || history.GoldReward > 0 || history.MedalsReward > 0 {
+			if err := updateCharacter(txCtx, executor, lockedChar); err != nil {
 				return err
+			}
+			if character != nil {
+				*character = lockedChar
 			}
 		}
 
 		// 4. Deliver reward item instances (Rank 3 Inventory -> Rank 5 Depot)
 		if len(rewardItems) > 0 {
-			charToUse := corecharacter.Character{ID: record.CharacterID}
-			if character != nil {
-				charToUse = *character
-			} else {
-				charRepo := &CharacterRepository{db: r.db}
-				if loaded, err := charRepo.FindByIDForUpdate(txCtx, record.CharacterID); err == nil {
-					charToUse = loaded
-				}
-			}
 			for i := range rewardItems {
 				if rewardItems[i].ID == "" {
 					rewardItems[i].ID = id.New()
 				}
 			}
-			if err := deliverRewardItems(txCtx, r.db, charToUse, rewardItems); err != nil {
+			if err := deliverRewardItems(txCtx, r.db, lockedChar, rewardItems); err != nil {
 				return err
 			}
 		}
 
-		// 5. Delete active expedition
+		// 5. Upsert Character Dungeon Record (Rank 8)
+		upsertRecordQuery := `
+			INSERT INTO character_dungeon_records (
+				character_id, highest_dungeon_cleared, total_expeditions,
+				total_floors_cleared, total_chests_opened, total_monsters_slain,
+				created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				highest_dungeon_cleared = GREATEST(highest_dungeon_cleared, VALUES(highest_dungeon_cleared)),
+				total_expeditions = total_expeditions + 1,
+				total_floors_cleared = total_floors_cleared + ?,
+				total_chests_opened = GREATEST(total_chests_opened, VALUES(total_chests_opened)),
+				total_monsters_slain = GREATEST(total_monsters_slain, VALUES(total_monsters_slain)),
+				updated_at = VALUES(updated_at)
+		`
+		floorDelta := 0
+		if history.Outcome == dungeon.StatusCleared || history.Outcome == dungeon.StatusEscaped {
+			floorDelta = history.FloorsReached
+		}
+		if _, err := executor.ExecContext(
+			txCtx,
+			upsertRecordQuery,
+			record.CharacterID,
+			record.HighestDungeonCleared,
+			record.TotalExpeditions,
+			record.TotalFloorsCleared,
+			record.TotalChestsOpened,
+			record.TotalMonstersSlain,
+			now,
+			now,
+			floorDelta,
+		); err != nil {
+			return err
+		}
+
+		// 6. Delete fallback active expedition scoped by owner
 		deleteActiveQuery := `DELETE FROM dungeon_active_expeditions WHERE character_id = ?`
 		if _, err := executor.ExecContext(txCtx, deleteActiveQuery, record.CharacterID); err != nil {
 			return err

@@ -9,7 +9,8 @@
     "internal/adventure/adventure.go#InventoryRepository",
     "internal/blackmarket/blackmarket.go#InventoryRepository",
     "internal/gemstore/types.go#InventoryRepository",
-    "internal/auction/types.go#InventoryRepository"
+    "internal/auction/types.go#InventoryRepository",
+    "internal/dungeon/dungeon.go#InventoryProvider"
   ],
   "callers": [
     {
@@ -67,6 +68,13 @@
       "lock_mode": "SELECT ... FOR UPDATE (ascending character IDs; shared battle adapter)",
       "lock_order": 3,
       "purpose": "Shared participant settlement under the accepted run/revision; preserves unsettled survivors and commits consumption, earnings, bonuses and receipts together"
+    },
+    {
+      "module": "dungeon",
+      "caller_method": "internal/database/dungeon_repository.go#DungeonRepository.FinalizeExpedition",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory after Rank 2 character lock to deliver expedition reward items before falling back to depot"
     }
   ]
 }
