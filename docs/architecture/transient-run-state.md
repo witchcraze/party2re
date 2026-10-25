@@ -311,6 +311,13 @@ precedes publishing live state. Lobby readiness still comes from Party's public
 handoff; a run never infers consent from a stale lobby or changes another actor's
 lobby membership as a side effect of exit.
 
+Character/account deletion treats the original leader recorded on admission as
+historical identity. It preserves that row while another participant has a durable
+run claim, including terminal settlement awaiting publication acknowledgement.
+Deletion neither cancels nor settles the survivors and leaves their run coordination,
+participant outcomes and command receipts intact. Once no other claim remains,
+the existing character-deletion cleanup may remove the admission row.
+
 #### Mutation ordering and settlement
 
 All Challenge writers adopt one owner-specific transition boundary, including
