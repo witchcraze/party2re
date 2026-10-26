@@ -325,6 +325,24 @@ defeat closure (`2455–2486`). Tables retain wallet28.3 for its separate asset
 owner; its missing binding rejects an enclosing indirect choice. Operation
 facts survive reload and ports are rebuilt; completed callbacks are not replayed.
 
+Basic-magic callbacks compose the shared target, direct magic damage, healing,
+stat and status owners (`internal/core/battle/basic_magic.go`). Jobs5/6 both
+start with extended SP0/currentMP×0.18 damage. Job5's area bases are continuous
+uniform draws in [10,35), [25,65) and [80,180), drawn once before the area helper;
+helper rounding, ordered decay and the stop after caster death still apply.
+Single living-target healing uses90/999, the defense buff uses40% of baseDF,
+and the separate cure removes poison/deadly poison/virulent poison. Fallen ally
+fallback and full-HP healing retain ordinary helper behavior. Job6 uses fixed
+single damage70/220/600, area60, currentDF reduction40%, area accuracy reduction20%
+and sleep65 through their existing immunity, floors and target hooks
+(`_skill.cgi:1235–1274`). Ordered tables retain the separately owned representative
+heal30/single20/area25 and half-revival positions; registration never certifies
+or overwrites those bindings. Missing descendants reject enclosing indirect
+invocations before costs, mutation or RNG. Listed ordinary costs belong to the
+consumer; delegated extended invocation charges after the body. Consumers rebuild
+operation ports after reload and retain frozen input and prior helper facts
+without replaying completed callbacks.
+
 Time and mixed-magic callbacks compose the shared target, stat, damage, healing
 and fully admitted defeat operations (`internal/core/battle/time_mixed_magic.go`).
 Job29's repeated magic draws two or three hits at base50, or four through six at
