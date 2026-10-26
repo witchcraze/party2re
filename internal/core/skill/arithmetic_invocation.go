@@ -22,18 +22,11 @@ func (d *BattleDefinitions) RegisterArithmetic(c *corebattle.ArithmeticContext) 
 	for _, job := range []int{31, 72} {
 		var entries []corebattle.CallbackEntry
 		if job == 31 {
-			// _skill.cgi:2608-2715; other bodies retain their own owners.
-			entries = []corebattle.CallbackEntry{
-				{ID: "job-31-entry-0", Name: "self-destruct", RequiredSP: 11, MPCost: 11},
-				{ID: "job-31-entry-1", Name: "death-roulette", RequiredSP: 44, MPCost: 4},
-				{ID: "job-31-entry-2", Name: "missing-hp", RequiredSP: 66, MPCost: 18},
-				{ID: "job-31-entry-3", Name: "party-guard", RequiredSP: 77, MPCost: 34},
-			}
+			entries = corebattle.TimeMixedMagicEntries(31)
 		}
 		for _, entry := range corebattle.ArithmeticEntries("job-" + strconv.Itoa(job)) {
-			entries = append(entries, corebattle.CallbackEntry(entry))
-			if entry.ID == "job-31-gravity" {
-				entries = append(entries, corebattle.CallbackEntry{ID: "job-31-entry-5", Name: "party-hp-heal", RequiredSP: 121, MPCost: 36})
+			if job != 31 {
+				entries = append(entries, corebattle.CallbackEntry(entry))
 			}
 			d.ArithmeticSkills[entry.ID] = true
 			d.Invocations.Entries[entry.ID] = d.ArithmeticInvocation(c, entry.ID)
