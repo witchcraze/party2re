@@ -21,6 +21,7 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockBossRepo struct {
+	settlements  map[string]*boss.SealingSettlement
 	records      map[string]boss.CharacterBossRecord
 	histories    map[string][]boss.BossChallengeHistory
 	savedChars   map[string]corecharacter.Character
@@ -35,6 +36,17 @@ func newMockBossRepo() *mockBossRepo {
 		savedChars:   make(map[string]corecharacter.Character),
 		awardedItems: make(map[string][]coreitem.Instance),
 	}
+}
+
+func (m *mockBossRepo) LockSealingSettlement(_ context.Context, roomID string) (*boss.SealingSettlement, error) {
+	return m.settlements[roomID], nil
+}
+func (m *mockBossRepo) SaveSealingSettlement(_ context.Context, receipt boss.SealingSettlement) error {
+	if m.settlements == nil {
+		m.settlements = make(map[string]*boss.SealingSettlement)
+	}
+	m.settlements[receipt.Lobby.Party.ID] = &receipt
+	return nil
 }
 
 func (m *mockBossRepo) GetOrCreateRecord(ctx context.Context, characterID string) (boss.CharacterBossRecord, error) {
@@ -148,6 +160,10 @@ func (m *mockPartyRepo) GetMembers(_ context.Context, partyID string) ([]party.M
 		return nil, boss.ErrPartyNotFound
 	}
 	return m.members[partyID], nil
+}
+
+func (m *mockPartyRepo) CleanupParty(ctx context.Context, state party.LobbyState) error {
+	return m.DeleteParty(ctx, state.Party.ID)
 }
 
 func (m *mockPartyRepo) DeleteParty(_ context.Context, id string) error {

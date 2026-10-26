@@ -73,6 +73,11 @@ Dungeon and Challenge additionally use the hash-tagged state/reward keys in
 Valkey key. The withdrawn Candidate E `party2:boss:` keys and `boss_damage`
 script are documented only in [the historical note](transient-boss-hp.md).
 
+Boss sealing deletes lobby, Ready and reverse-mapping keys only after its SQL
+receipt commits. Its saved roster supports partial-cleanup retries after lobby
+loss, and reverse-mapping deletion compares the room ID. See
+[Boss completion recovery](transient-run-state.md#boss-completion-recovery).
+
 ## Scheduled terminal persistence and recovery
 
 `ValkeyRepository.Save` persists Completed/Failed before deleting the worker

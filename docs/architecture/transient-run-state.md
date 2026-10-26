@@ -37,6 +37,34 @@ Do not invent generic auto-fold, forfeiture/refund, turn-history keys, or a
 60-second post-game retention policy. Each owning game must define and verify
 its actual transitions against the original CGI.
 
+### Boss completion recovery
+
+Party sealing locks the SQL `boss_room_settlements` row (Rank 0) before ascending
+character locks (Rank 2). Its room identity, roster and battle result commit with
+all participant rewards, history and mandatory Collection records. Valkey's
+`in_progress` status excludes ordinary lobby activity; the SQL receipt prevents
+repeat settlement even after the short party lock expires. An interrupted room
+without a committed receipt can resume under that SQL lock.
+
+No room, roster, reverse mapping or Ready key is deleted before SQL commit.
+On a transaction error, a bounded, cancellation-independent locking read waits
+for its outcome. Confirmed rollback releases the room to recruiting. A committed
+receipt leads only to cleanup. If outcome confirmation or release fails, the
+error is returned and the room is preserved for another attempt; an unknown
+commit is never treated as permission to repeat rewards.
+
+A retry of the same sealing request by the saved leader returns the recorded
+result and retries cleanup using the saved roster, even if the lobby is already
+missing. Cleanup failures propagate with the committed result retained in SQL.
+Reverse mappings are removed only if they still name that room, preserving new
+membership. Ready keys and the lobby are room-scoped, and index removal is
+idempotent. Recovery uses the next sealing request, without a background worker.
+Receipts have no automatic expiry: their room IDs must not be reused, and deletion
+would remove the replay guard. This is recovery evidence, not a second live lobby.
+Unsettled lobbies retain their ordinary idle TTL; this protocol does not rebuild
+expired uncommitted rooms or make Valkey loss harmless. Sealing must own its SQL
+transaction boundary; cleanup must not run inside a caller-owned transaction.
+
 ### PvP financial publication
 
 PvP keeps live teams and rounds in Valkey. The SQL `pvp_room_transitions` record

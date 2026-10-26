@@ -1,0 +1,41 @@
+{
+  "module": "boss",
+  "tier": 2,
+  "description": "Sealing settlement commits participant assets and a room receipt in SQL, then retries Valkey cleanup from that receipt without repeating battle.",
+  "package": "internal/boss",
+  "dependencies": [
+    {
+      "name": "settlements",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/boss/settlement.go#SealingSettlementRepository"
+    },
+    {
+      "name": "rooms",
+      "target_module": "party",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/boss/boss.go#PartyRepository"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "completeSealingBattle",
+      "source_ref": "internal/boss/settlement.go#Service.completeSealingBattle",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "boss_room_settlements",
+          "tier": 0,
+          "mode": "INSERT / SELECT ... FOR UPDATE",
+          "note": "Serialize room settlement and confirm uncertain commit outcomes. Valkey cleanup follows this SQL boundary."
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (ascending character ID)",
+          "note": "Lock the whole roster before participant assets, Collection, boss records, history and loot delivery."
+        }
+      ]
+    }
+  ]
+}

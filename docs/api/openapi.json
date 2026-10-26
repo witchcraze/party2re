@@ -38306,6 +38306,7 @@
     },
     "/parties/{id}/sealing-battle": {
       "post": {
+        "description": "Resolve a ready sealing room. Retrying the same room as its saved leader returns the committed result and retries remaining lobby cleanup without repeating combat or rewards. Cleanup failures return an error while retaining the committed result for retry.",
         "operationId": "postPartiesIdSealingBattle",
         "parameters": [
           {

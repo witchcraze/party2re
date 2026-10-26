@@ -252,7 +252,8 @@ func newCmbtServices(
 	// Wire party repository, participant builder, and news publisher into boss service so that
 	// StartSealingBattle (パーティー封印戦) can resolve party membership and publish sealing news.
 	// The shared transaction provider makes rewards, boss records and mandatory Collection/Hall
-	// of Fame records settle in one Unit of Work for both solo and party battles.
+	// of Fame records settle in one Unit of Work. BossRepository also supplies durable room receipts
+	// so party cleanup follows the committed outcome and retries cannot repeat rewards.
 	bossService.Configure(
 		boss.WithPartyRepository(partyRepo),
 		boss.WithTransactionProvider(core.txProvider),
