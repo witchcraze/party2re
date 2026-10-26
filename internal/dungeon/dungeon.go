@@ -188,7 +188,8 @@ type StepOutcome struct {
 type ActiveExpeditionStore interface {
 	GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error)
 	SaveActiveExpedition(ctx context.Context, exp ActiveExpedition) error
-	DeleteActiveExpedition(ctx context.Context, characterID string) error
+	// DeleteActiveExpedition atomically removes only the owner's matching run; absent/replaced runs are a no-op.
+	DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error
 	Step(ctx context.Context, characterID string, params StepParams) (StepOutcome, error)
 }
 
@@ -196,7 +197,7 @@ type Repository interface {
 	GetRecord(ctx context.Context, characterID string) (CharacterDungeonRecord, error)
 	GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error)
 	SaveActiveExpedition(ctx context.Context, exp ActiveExpedition) error
-	DeleteActiveExpedition(ctx context.Context, characterID string) error
+	DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error
 	FinalizeExpedition(
 		ctx context.Context,
 		history DungeonExpeditionHistory,

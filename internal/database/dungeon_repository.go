@@ -150,7 +150,9 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 			accumulated_items_json, members_json, status, started_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
+			id = VALUES(id),
 			party_id = VALUES(party_id),
+			dungeon_id = VALUES(dungeon_id),
 			current_floor = VALUES(current_floor),
 			pos_x = VALUES(pos_x),
 			pos_y = VALUES(pos_y),
@@ -161,6 +163,7 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 			accumulated_items_json = VALUES(accumulated_items_json),
 			members_json = VALUES(members_json),
 			status = VALUES(status),
+			started_at = VALUES(started_at),
 			updated_at = VALUES(updated_at)
 	`
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
@@ -186,9 +189,9 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 	return err
 }
 
-func (r *DungeonRepository) DeleteActiveExpedition(ctx context.Context, characterID string) error {
-	query := `DELETE FROM dungeon_active_expeditions WHERE character_id = ?`
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, characterID)
+func (r *DungeonRepository) DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error {
+	query := `DELETE FROM dungeon_active_expeditions WHERE character_id = ? AND id = ?`
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, characterID, expeditionID)
 	return err
 }
 
@@ -329,9 +332,8 @@ func (r *DungeonRepository) FinalizeExpedition(
 			return err
 		}
 
-		// 6. Delete fallback active expedition scoped by owner
-		deleteActiveQuery := `DELETE FROM dungeon_active_expeditions WHERE character_id = ?`
-		if _, err := executor.ExecContext(txCtx, deleteActiveQuery, record.CharacterID); err != nil {
+		// 6. Delete only this owner's finalized run, preserving any replacement.
+		if err := r.DeleteActiveExpedition(txCtx, record.CharacterID, history.ID); err != nil {
 			return err
 		}
 

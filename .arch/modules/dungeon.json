@@ -1,0 +1,23 @@
+{
+  "module": "dungeon",
+  "tier": 2,
+  "description": "Valkey-owned expedition buffers with run-qualified cleanup and SQL reward/history settlement (C1, C2).",
+  "package": "internal/dungeon",
+  "dependencies": [
+    {"name": "settlement", "target_module": "database", "relation_type": "consumer_interface", "source_ref": "internal/dungeon/dungeon.go#Repository"},
+    {"name": "live_run", "target_module": "dungeon", "relation_type": "consumer_interface", "source_ref": "internal/dungeon/dungeon.go#ActiveExpeditionStore"}
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "FinalizeExpedition",
+      "source_ref": "internal/database/dungeon_repository.go#DungeonRepository.FinalizeExpedition",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {"table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE", "note": "Lock the current owner snapshot before claiming the run and applying rewards."},
+        {"table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE via reward delivery", "note": "Only when delivering reward items."},
+        {"table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE via reward delivery", "note": "Conditional overflow delivery."}
+      ],
+      "note": "The run-ID history INSERT claims settlement once after the character lock; record updates and owner/run-qualified SQL fallback deletion share that transaction. Live-store/member cleanup runs separately after commit."
+    }
+  ]
+}

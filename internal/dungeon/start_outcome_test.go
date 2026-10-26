@@ -109,7 +109,11 @@ func TestStartAfterPublicationFailureReportsUnknownWhenRunUnverifiable(t *testin
 		}},
 		{"run absent", func(s *readFailStore) postStartFailure {
 			return postStartFailure{err: failure, after: func() {
-				if err := s.ActiveExpeditionStore.DeleteActiveExpedition(ctx, "char-1"); err != nil {
+				run, err := s.ActiveExpeditionStore.GetActiveExpedition(ctx, "char-1")
+				if err != nil || run == nil {
+					t.Fatalf("published run missing: %+v %v", run, err)
+				}
+				if err := s.ActiveExpeditionStore.DeleteActiveExpedition(ctx, "char-1", run.ID); err != nil {
 					t.Fatal(err)
 				}
 			}}

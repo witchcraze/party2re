@@ -304,7 +304,16 @@ row, delivers reward items to inventory/depot (Rank 3/5), and atomically increme
 `character_dungeon_records` (Rank 8). Duplicate run-ID claims map to
 `ErrExpeditionAlreadyFinished`, which `internal/dungeon` treats as idempotent
 completion so post-commit Valkey `DeleteActiveExpedition` can safely retry without
-double-granting rewards or overwriting concurrent wallet updates.
+double-granting rewards or overwriting concurrent wallet updates. Clear, escape
+and wipeout pass both the owner and finalized run ID to each cleanup port;
+missing or replaced runs are a successful no-op. Valkey compares that identity
+and deletes state/rewards in one Lua invocation, while memory compares and
+deletes under its store lock. Member references are released only when their
+saved owner/run pair still matches, independently in each member's hash slot.
+SQL fallback deletion, including inside finalization, likewise requires both
+owner and run ID; replacing a fallback row also saves the new run's identity.
+Thus delayed finalization or cleanup retries cannot remove a later run or its
+unsettled rewards. SQL commit and Valkey cleanup remain separate boundaries.
 
 ### Challenge finalization
 

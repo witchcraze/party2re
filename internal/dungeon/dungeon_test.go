@@ -55,8 +55,10 @@ func (m *mockDungeonRepo) SaveActiveExpedition(ctx context.Context, exp dungeon.
 	return nil
 }
 
-func (m *mockDungeonRepo) DeleteActiveExpedition(ctx context.Context, characterID string) error {
-	delete(m.active, characterID)
+func (m *mockDungeonRepo) DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error {
+	if run := m.active[characterID]; run != nil && run.ID == expeditionID {
+		delete(m.active, characterID)
+	}
 	return nil
 }
 

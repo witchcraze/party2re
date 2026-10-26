@@ -19,6 +19,14 @@ import (
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
+func retireDungeon(ctx context.Context, store dungeon.ActiveExpeditionStore, actor string) error {
+	run, err := store.GetActiveExpedition(ctx, actor)
+	if err != nil || run == nil || run.CharacterID != actor {
+		return err
+	}
+	return store.DeleteActiveExpedition(ctx, actor, run.ID)
+}
+
 func TestCombatAdmissionProduction(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("requires MariaDB and Valkey")
@@ -95,7 +103,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	ds, _ := dungeon.NewValkeyExpeditionRepository(client)
 	t.Cleanup(func() {
 		for _, char := range chars {
-			if err := ds.DeleteActiveExpedition(ctx, char.ID); err != nil {
+			if err := retireDungeon(ctx, ds, char.ID); err != nil {
 				t.Error(err)
 			}
 			if err := retireChallenge(ctx, combat.challenge, char.ID); err != nil {
@@ -159,7 +167,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 				if _, err := combat.party.StartPartyAdventure(ctx, lobby.Party.ID, leader.ID); !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
 					t.Fatalf("ordinary party start bypassed enrollment: %v", err)
 				}
-				if err := ds.DeleteActiveExpedition(ctx, leader.ID); err != nil {
+				if err := ds.DeleteActiveExpedition(ctx, leader.ID, run.ID); err != nil {
 					t.Fatal(err)
 				}
 			} else {

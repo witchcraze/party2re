@@ -403,11 +403,11 @@ type failDeleteActiveStore struct {
 	failDelete bool
 }
 
-func (s *failDeleteActiveStore) DeleteActiveExpedition(ctx context.Context, characterID string) error {
+func (s *failDeleteActiveStore) DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error {
 	if s.failDelete {
 		return errors.New("simulated valkey delete failure")
 	}
-	return s.ActiveExpeditionStore.DeleteActiveExpedition(ctx, characterID)
+	return s.ActiveExpeditionStore.DeleteActiveExpedition(ctx, characterID, expeditionID)
 }
 
 func TestEscape_IdempotentOnDeleteFailureRetry(t *testing.T) {

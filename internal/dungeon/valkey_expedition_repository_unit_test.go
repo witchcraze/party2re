@@ -77,7 +77,7 @@ func TestValkeyExpeditionRepository_NewAndFallback(t *testing.T) {
 	}
 
 	// 4. DeleteActiveExpedition fallback
-	if err := repo.DeleteActiveExpedition(ctx, "char-fallback-1"); err != nil {
+	if err := repo.DeleteActiveExpedition(ctx, "char-fallback-1", exp.ID); err != nil {
 		t.Fatalf("fallback DeleteActiveExpedition error: %v", err)
 	}
 	afterDelete, err := repo.GetActiveExpedition(ctx, "char-fallback-1")
@@ -314,35 +314,26 @@ func TestValkeyExpeditionRepository_DeleteActiveExpedition(t *testing.T) {
 	ctx := context.Background()
 
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
-		return valkeytest.MakeNilResult()
+		return valkeytest.MakeIntResult(2)
 	}), valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
-		if multi[0].Commands()[0] == "HGETALL" {
-			return []valkeygo.ValkeyResult{valkeytest.MakeStringMapResult(map[string]string{}), valkeytest.MakeStringMapResult(map[string]string{})}
-		}
 		return []valkeygo.ValkeyResult{
-			valkeytest.MakeOKResult(),
-			valkeytest.MakeOKResult(),
+			valkeytest.MakeStringMapResult(map[string]string{"character_id": "char-del-1", "expedition_id": "run-del-1"}),
+			valkeytest.MakeStringMapResult(map[string]string{}),
 		}
 	}))
 	repo, _ := dungeon.NewValkeyExpeditionRepository(client)
 
-	if err := repo.DeleteActiveExpedition(ctx, "char-del-1"); err != nil {
+	if err := repo.DeleteActiveExpedition(ctx, "char-del-1", "run-del-1"); err != nil {
 		t.Fatalf("unexpected DeleteActiveExpedition error: %v", err)
 	}
 
 	cmds := client.RecordedCommandStrings()
-	if len(cmds) != 5 {
+	if len(cmds) != 3 {
 		t.Fatalf("expected discovery followed by deletion, got %v", cmds)
 	}
-	cmds = cmds[3:]
-	if len(cmds) != 2 {
-		t.Fatalf("expected 2 delete commands, got %d: %v", len(cmds), cmds)
-	}
-	if cmds[0][0] != "DEL" || !strings.Contains(cmds[0][1], "char:char-del-1}:state") {
-		t.Errorf("unexpected DEL state command: %v", cmds[0])
-	}
-	if cmds[1][0] != "DEL" || !strings.Contains(cmds[1][1], "char:char-del-1}:rewards") {
-		t.Errorf("unexpected DEL rewards command: %v", cmds[1])
+	args := cmds[2]
+	if args[0] != "EVALSHA" || args[2] != "2" || args[5] != "char-del-1" || args[6] != "run-del-1" {
+		t.Errorf("cleanup must pass owner and run identity to atomic script: %v", args)
 	}
 }
 
