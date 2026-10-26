@@ -155,7 +155,7 @@ func TestMemoryExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	}
 
 	// 8. Delete
-	if err := repo.DeleteActiveExpedition(ctx, charID); err != nil {
+	if err := repo.DeleteActiveExpedition(ctx, charID, expID); err != nil {
 		t.Fatalf("DeleteActiveExpedition failed: %v", err)
 	}
 	got, _ = repo.GetActiveExpedition(ctx, charID)
@@ -356,7 +356,7 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	}
 
 	// 10. Test DeleteActiveExpedition purges both state and rewards keys
-	if err := repo.DeleteActiveExpedition(ctx, charID); err != nil {
+	if err := repo.DeleteActiveExpedition(ctx, charID, expID); err != nil {
 		t.Fatalf("DeleteActiveExpedition failed: %v", err)
 	}
 

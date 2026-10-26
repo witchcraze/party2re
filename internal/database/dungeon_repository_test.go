@@ -87,7 +87,7 @@ func TestDungeonRepository(t *testing.T) {
 	rec.TotalChestsOpened = 1
 	rec.TotalMonstersSlain = 3
 
-	histID := fmt.Sprintf("hist_%016x", now.UnixNano())
+	histID := expID
 	history := dungeon.DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,

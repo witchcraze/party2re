@@ -108,9 +108,9 @@ func (s *Service) handleDungeonClear(
 
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
 	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID, exp.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
-	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	_ = s.repo.DeleteActiveExpedition(ctx, char.ID, exp.ID)
 
 	return ExpeditionStepResult{
 		Expedition:  *exp,
@@ -188,9 +188,9 @@ func (s *Service) handleEscape(
 
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
 	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID, exp.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
-	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	_ = s.repo.DeleteActiveExpedition(ctx, char.ID, exp.ID)
 
 	return ExpeditionStepResult{
 		Expedition:  *exp,
@@ -243,9 +243,9 @@ func (s *Service) handleWipeout(
 
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
 	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID, exp.ID)
 	//lint:ignore error-swallow best-effort post-commit fallback cleanup
-	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
+	_ = s.repo.DeleteActiveExpedition(ctx, char.ID, exp.ID)
 
 	return ExpeditionStepResult{
 		Expedition: *exp,

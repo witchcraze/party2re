@@ -326,8 +326,10 @@ func (d *integrationDungeonRepo) GetActiveExpedition(_ context.Context, charID s
 	return d.expedition, nil
 }
 
-func (d *integrationDungeonRepo) DeleteActiveExpedition(_ context.Context, charID string) error {
-	d.expedition = nil
+func (d *integrationDungeonRepo) DeleteActiveExpedition(_ context.Context, charID, expeditionID string) error {
+	if d.expedition != nil && d.expedition.CharacterID == charID && d.expedition.ID == expeditionID {
+		d.expedition = nil
+	}
 	return nil
 }
 

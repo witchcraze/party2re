@@ -195,11 +195,11 @@ func (f *failOnceDeleteStore) SaveActiveExpedition(ctx context.Context, exp dung
 	return f.inner.SaveActiveExpedition(ctx, exp)
 }
 
-func (f *failOnceDeleteStore) DeleteActiveExpedition(ctx context.Context, charID string) error {
+func (f *failOnceDeleteStore) DeleteActiveExpedition(ctx context.Context, charID, expeditionID string) error {
 	if f.failCalls.Add(-1) >= 0 {
 		return errors.New("simulated valkey delete outage")
 	}
-	return f.inner.DeleteActiveExpedition(ctx, charID)
+	return f.inner.DeleteActiveExpedition(ctx, charID, expeditionID)
 }
 
 func (f *failOnceDeleteStore) Step(ctx context.Context, charID string, params dungeon.StepParams) (dungeon.StepOutcome, error) {

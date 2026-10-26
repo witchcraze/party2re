@@ -110,7 +110,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 			if _, err := db.ExecContext(ctx, "DELETE FROM challenge_sessions WHERE character_id = ?", c.ID); err != nil {
 				t.Error(err)
 			}
-			if err := ds.DeleteActiveExpedition(ctx, c.ID); err != nil {
+			if err := retireDungeon(ctx, ds, c.ID); err != nil {
 				t.Error(err)
 			}
 			if err := retireChallenge(ctx, combat.challenge, c.ID); err != nil {
@@ -236,7 +236,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 		if _, err := combat.dungeon.StartPartyExpedition(ctx, leader.ID, nil, "dungeon-01", lobby.Party.ID); !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
 			t.Fatalf("no duplicate run: %v", err)
 		}
-		if err := ds.DeleteActiveExpedition(ctx, leader.ID); err != nil {
+		if err := ds.DeleteActiveExpedition(ctx, leader.ID, run.ID); err != nil {
 			t.Fatal(err)
 		}
 	})

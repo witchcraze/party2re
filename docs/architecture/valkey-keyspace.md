@@ -199,7 +199,10 @@ follow a reference once and verify both run ID and saved membership; a missing,
 replaced or unrelated canonical run never grants access. Reads perform no
 cleanup or renewal. Start writes references before publishing canonical state;
 explicit owner cleanup conditionally deletes only references matching that run,
-using each member key's own hash slot. A later enrollment can replace a stale
+using each member key's own hash slot, then atomically compares the owner/run ID
+in canonical state before deleting state and rewards together. A replacement
+between discovery and deletion preserves its buffers and member references;
+missing or different runs are a no-op without TTL renewal. A later enrollment can replace a stale
 reference. Natural run expiry or a failed start may leave at most one inert
 reference per character; it carries no rewards and never establishes activity
 without a matching live run. There is no cross-slot atomicity claim.
@@ -236,6 +239,7 @@ a claim that every service operation consists of one atomic script.
 | `party_update_member_ready` | `internal/party/valkey_repository.go` (`updateMemberReadyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `readyKey` | `ARGV[1]`: Character ID<br>`ARGV[2]`: Ready Flag (`"1"` or `"0"`)<br>`ARGV[3]`: Lobby TTL<br>`ARGV[4]`: Ready TTL | Atomically toggles a member's ready flag in the lobby state and synchronizes the 60-second ready countdown key (`SET EX 60` or `DEL`). Rejects if character is not a member (`ERR_CHAR_NOT_IN_PARTY`). |
 | `party_update_party` | `internal/party/valkey_repository.go` (`updatePartyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `lobbiesIndexKey` | `ARGV[1]`: Party JSON<br>`ARGV[2]`: Lobby TTL<br>`ARGV[3]`: Status (`"recruiting"`, `"disbanded"`, `"completed"`)<br>`ARGV[4]`: Party ID | Atomically updates party configuration (e.g. stage, speed, max members) and removes the party from the recruiting index set (`ZREM`) if transitioned to `disbanded` or `completed`. |
 | `dungeon_step` | `internal/dungeon/lua/dungeon_step.lua` (`dungeonStepLua`) | `KEYS[1]`: `party2:dungeon:{char:<id>}:state`<br>`KEYS[2]`: `party2:dungeon:{char:<id>}:rewards` | `ARGV[1]`: Expected Expedition ID<br>`ARGV[2]`: Floor<br>`ARGV[3]`: Pos X<br>`ARGV[4]`: Pos Y<br>`ARGV[5]`: HP Delta<br>`ARGV[6]`: Turns Delta<br>`ARGV[7]`: Exp Delta<br>`ARGV[8]`: Gold Delta<br>`ARGV[9]`: Medals Delta<br>`ARGV[10]`: Item ID<br>`ARGV[11]`: Timestamp<br>`ARGV[12]`: TTL (7200s)<br>`ARGV[13]`: Event Key | Atomically advances exploration coordinates, updates HP/turns budget, records one-time consumed event keys in `state.consumed_events`, and buffers provisional room loot once per event without touching MariaDB during active run. |
+| `dungeon_delete_expedition` | `internal/dungeon/lua/delete_expedition.lua` (`deleteExpeditionLua`) | Owner's state and rewards keys in the same `{char:<id>}` hash slot | Owner character ID, finalized run ID | Atomically deletes both buffers only when state still matches that owner/run; absent or replaced runs are a no-op. |
 | `challenge_publish_run` | `internal/challenge/lua/publish_run.lua` | Run session/reward hashes in one hash slot | Accepted revision, exact snapshot/ledger, status and absolute deadline | Conditional publication; retry restores both hashes without renewing the deadline; older revisions cannot overwrite newer ones. |
 | `challenge_freeze_legacy` | `internal/challenge/lua/freeze_legacy.lua` | One matching legacy session hash | Immutable run ID | Freezes old advance writers before canonical migration publication, without renewing TTL. |
 | `challenge_claim_member` | `internal/challenge/lua/claim_member.lua` | One actor member key | Immutable run ID and optional matching legacy reference | Installs the run reference; rejects another enrollment. |

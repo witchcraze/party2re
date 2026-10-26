@@ -25,6 +25,11 @@ var (
 //go:embed lua/dungeon_step.lua
 var dungeonStepLua string
 
+//go:embed lua/delete_expedition.lua
+var deleteExpeditionLua string
+
+var deleteExpeditionScript = valkeygo.NewLuaScript(deleteExpeditionLua)
+
 type valkeyConfig struct {
 	ttl time.Duration
 }
@@ -229,9 +234,9 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	return nil
 }
 
-func (r *ValkeyExpeditionRepository) DeleteActiveExpedition(ctx context.Context, characterID string) error {
+func (r *ValkeyExpeditionRepository) DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error {
 	if r.client == nil {
-		return r.fallback.DeleteActiveExpedition(ctx, characterID)
+		return r.fallback.DeleteActiveExpedition(ctx, characterID, expeditionID)
 	}
 
 	run, err := r.GetActiveExpedition(ctx, characterID)
@@ -241,27 +246,16 @@ func (r *ValkeyExpeditionRepository) DeleteActiveExpedition(ctx context.Context,
 	if run != nil && run.CharacterID != characterID {
 		return ErrForbidden
 	}
-	if run != nil {
-		if err := r.deleteMemberIndex(ctx, *run); err != nil {
-			return err
-		}
+	if run == nil || run.ID != expeditionID {
+		return nil
+	}
+	if err := r.deleteMemberIndex(ctx, *run); err != nil {
+		return err
 	}
 
-	sKey := r.stateKey(characterID)
-	rKey := r.rewardsKey(characterID)
-
-	cmds := r.client.DoMulti(ctx,
-		r.client.B().Del().Key(sKey).Build(),
-		r.client.B().Del().Key(rKey).Build(),
-	)
-
-	for _, cmd := range cmds {
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return deleteExpeditionScript.Exec(ctx, r.client,
+		[]string{r.stateKey(characterID), r.rewardsKey(characterID)},
+		[]string{characterID, expeditionID}).Error()
 }
 
 func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID string, params StepParams) (StepOutcome, error) {

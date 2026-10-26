@@ -84,7 +84,7 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	return nil
 }
 
-func (m *MemoryExpeditionRepository) DeleteActiveExpedition(ctx context.Context, characterID string) error {
+func (m *MemoryExpeditionRepository) DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -94,11 +94,13 @@ func (m *MemoryExpeditionRepository) DeleteActiveExpedition(ctx context.Context,
 		}
 	}
 
-	if run, ok := m.expeditions[characterID]; ok {
-		for _, member := range run.Members {
-			if m.members[member.CharacterID] == characterID {
-				delete(m.members, member.CharacterID)
-			}
+	run, ok := m.expeditions[characterID]
+	if !ok || run.ID != expeditionID {
+		return nil
+	}
+	for _, member := range run.Members {
+		if m.members[member.CharacterID] == characterID {
+			delete(m.members, member.CharacterID)
 		}
 	}
 	delete(m.expeditions, characterID)

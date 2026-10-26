@@ -43,7 +43,7 @@ func TestMemberIndex(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() {
-				if err := store.DeleteActiveExpedition(ctx, leader); err != nil {
+				if err := store.DeleteActiveExpedition(ctx, leader, run.ID); err != nil {
 					t.Error(err)
 				}
 			})
@@ -72,11 +72,11 @@ func TestMemberIndex(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() {
-				if err := store.DeleteActiveExpedition(ctx, replacement.CharacterID); err != nil {
+				if err := store.DeleteActiveExpedition(ctx, replacement.CharacterID, replacement.ID); err != nil {
 					t.Error(err)
 				}
 			})
-			if err := store.DeleteActiveExpedition(ctx, leader); err != nil {
+			if err := store.DeleteActiveExpedition(ctx, leader, run.ID); err != nil {
 				t.Fatal(err)
 			}
 			got, err = store.GetActiveExpedition(ctx, follower)
@@ -89,7 +89,7 @@ func TestMemberIndex(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := store.DeleteActiveExpedition(ctx, leader); err != nil {
+			if err := store.DeleteActiveExpedition(ctx, leader, run.ID); err != nil {
 				t.Fatal(err)
 			}
 			if got, err := store.GetActiveExpedition(ctx, follower); err != nil || got != nil {
