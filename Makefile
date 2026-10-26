@@ -1,4 +1,6 @@
-.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress bench smoke db-migrate db-reset up down setup-hooks arch-lint lock-lint
+.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress bench smoke db-migrate db-reset up down setup-hooks arch-lint lock-lint run
+
+PORT ?= 8080
 
 all: check
 
@@ -32,6 +34,10 @@ up:
 down:
 	@echo "Stopping services..."
 	@docker compose down
+
+run:
+	@echo "Starting application server (port $(PORT))..."
+	@docker compose run --rm -p 127.0.0.1:$(PORT):$(PORT) -e PARTY2_PORT=$(PORT) app go run ./cmd/party2
 
 db-migrate:
 	@./scripts/migrate.sh

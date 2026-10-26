@@ -116,15 +116,16 @@ READMEには方針と参照先のみを記載し、詳細な依存関係や配�
 
 ## 開発環境 (Development Environment)
 
-総合的なローカル開発とテスト（データベースを用いたインテグレーションテスト等）を行うには、以下のいずれかの環境が必要です。
+ローカル開発環境の全体的な手順（サービスの起動・スキーマ準備・APIサーバー起動・ヘルスチェック確認・停止）の正本は [`docs/development/development-environment.md`](docs/development/development-environment.md) を参照してください。
 
 ### 推奨環境: Docker Compose を利用
-プロジェクトにはローカル開発用の `compose.yaml` が用意されています。Docker がインストールされていれば、以下のコマンドだけでデータベース (MariaDB) とキャッシュ (Valkey) を含む完全な開発環境が立ち上がります。
+プロジェクトにはローカル開発用の `compose.yaml` が用意されています。Docker がインストールされていれば、以下のコマンドだけでデータベース (MariaDB) とキャッシュ (Valkey) を含む開発環境が立ち上がります。
 
 ```bash
 make up
+make db-migrate
 ```
-コンテナ起動後は、ホストマシン側で `make test-integration` などを実行することで、透過的にコンテナ内のDBへアクセスしてテストを行うことができます。検証ステージに応じた手順の詳細は [`docs/development/testing.md`](docs/development/testing.md) を参照してください。
+コンテナ起動後は、ホストマシン側で `make test-integration` などを実行することで、透過的にコンテナ内のDBへアクセスしてテストを行うことができます。APIサーバーの起動や検証ステージに応じた手順の詳細は [`docs/development/development-environment.md`](docs/development/development-environment.md) および [`docs/development/testing.md`](docs/development/testing.md) を参照してください。
 
 ### 代替環境: ホストネイティブでの構築 (Dockerを使用しない場合)
 Docker を使用しない環境でも開発は可能です。その場合は、ホストマシンに直接以下のミドルウェアをインストールして起動してください。
@@ -154,7 +155,7 @@ ghcr.io/witchcraze/party2re:sha-XXXXXXX  # コミットSHAタグ
 ghcr.io/witchcraze/party2re:v1.0.0      # リリースタグ
 ```
 
-イメージは `gcr.io/distroless/static-debian12:nonroot` をベースにした最小構成です。シェル、パッケージマネージャー、Go ツールチェーン、ソースコードはいずれも含まれません（約7 MB）。
+イメージは [`Dockerfile`](Dockerfile) に基づき `gcr.io/distroless/static-debian13:nonroot` をベースにした最小構成です。シェル、パッケージマネージャー、Go ツールチェーン、ソースコードはいずれも含まれません。
 
 ### 実行環境変数
 
