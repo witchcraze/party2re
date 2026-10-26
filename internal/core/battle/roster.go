@@ -45,35 +45,45 @@ type HelperPayload struct {
 	Jobs           BattleJobs
 }
 
+func (s *LifetimeState) validateHelper(c *RosterContext, p HelperPayload, rng random.Generator) error {
+	if c == nil {
+		return ErrInvalidRequest
+	}
+	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
+		return err
+	}
+	if p.Identity == "" || p.Name == "" {
+		return ErrInvalidParticipant
+	}
+	if s.rosterIdentity(p.Identity) != nil {
+		return nil
+	}
+	if p.Jobs.SP < 0 || p.Jobs.OldSP < 0 {
+		return ErrInvalidParticipant
+	}
+	if c.RequesterLevel == nil || *c.RequesterLevel < 0 {
+		return ErrUnsupportedEffect
+	}
+	for _, v := range p.Stats {
+		if v < 0 || v > 1e12 || v != v {
+			return ErrInvalidParticipant
+		}
+	}
+	if s.RosterSequence >= 1e15 {
+		return ErrInvalidParticipant
+	}
+	return nil
+}
+
 // AddHelper is shared by calling, tools and field recreation. Duplicate
 // presence, including a fallen record, is checked before draws or prerequisites.
 func (s *LifetimeState) AddHelper(c *RosterContext, p HelperPayload, rng random.Generator) (RosterResult, error) {
 	r := RosterResult{}
-	if c == nil {
-		return r, ErrInvalidRequest
-	}
-	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
+	if err := s.validateHelper(c, p, rng); err != nil {
 		return r, err
-	}
-	if p.Identity == "" || p.Name == "" {
-		return r, ErrInvalidParticipant
 	}
 	if s.rosterIdentity(p.Identity) != nil {
 		return r, nil
-	}
-	if p.Jobs.SP < 0 || p.Jobs.OldSP < 0 {
-		return r, ErrInvalidParticipant
-	}
-	if c.RequesterLevel == nil || *c.RequesterLevel < 0 {
-		return r, ErrUnsupportedEffect
-	}
-	for _, v := range p.Stats {
-		if v < 0 || v > 1e12 || v != v {
-			return r, ErrInvalidParticipant
-		}
-	}
-	if s.RosterSequence >= 1e15 {
-		return r, ErrInvalidParticipant
 	}
 	a := s.actor(c.ActorID)
 	values := summonStats(p.Stats, c.RequesterItemID == "item-165", rng)
