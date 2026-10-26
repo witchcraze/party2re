@@ -13,6 +13,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       - .:/workspace
       - go-build-cache:/root/.cache/go-build
