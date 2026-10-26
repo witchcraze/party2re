@@ -305,6 +305,32 @@ Native admission is enforced across these boundaries:
   Their entire reachable closure must be certified; substituting a supported-only draw pool
   is prohibited.
 
+Time and mixed-magic callbacks compose the shared target, stat, damage, healing
+and fully admitted defeat operations (`internal/core/battle/time_mixed_magic.go`).
+Job29's repeated magic draws two or three hits at base50, or four through six at
+base99; each hit resolves a fresh target and stops after caster death. Its HP
+reduction uses the ordinary stat-down immunity and 20%MaxHP floor, rather than
+directly halving HP (`_skill.cgi:2492–2515`).
+
+Job30's extended callback branches on the submitted participant before helper
+targeting: an unknown participant triggers magic hits using current AT, DF and
+AG in that order, rereading each stat and stopping after caster death. An ally
+has a 50% chance to receive physical mitigation before party healing at base250;
+an enemy receives base350×(tension+5)/6 through ordinary magic damage, including
+its subsequent tension multiplier (`_skill.cgi:2584–2603`).
+
+Job31's roulette first checks the magic seal, then draws from all members,
+substitutes the caster for a fallen selection, and invokes raw defeat only when
+both current HP and current defense are ≤999. It bypasses helper targeting and
+ordinary instant-death immunity. Self-destruction attempts current-HP magic
+damage before unconditionally invoking caster defeat, even after a failed cast.
+The wound attack uses MaxHP−currentHP+5, and party healing captures current HP
+before the first heal. The party guard's living-member magic-mitigation tail
+still runs after a sealed defense buff (`_skill.cgi:2612–2651,2670`). Ordered tables
+retain separately owned field/arithmetic positions; missing bindings reject the
+enclosing indirect invocation without narrowing its original pool. Operation
+ports are rebuilt after reload; saved results are never replayed as callbacks.
+
 Specification evidence and per-entry provenance use `party2/lib/` at revision
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item, gem, and job references are
 provenance identifiers, not authorization to reuse distinctive display names.
