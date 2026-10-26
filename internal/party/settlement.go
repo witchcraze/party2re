@@ -79,7 +79,8 @@ func (s *Service) settleWithBattleSettler(
 	}
 
 	postBattleReq := battleadapter.ApplyPostBattleRequest{
-		CharacterIDs: charIDs,
+		CharacterIDs:          charIDs,
+		PreserveEarnedRewards: crawlResult.Mode != adventure.CrawlModeTry,
 		BattleResult: corebattle.PartyBattleResult{
 			Outcome: crawlResult.Outcome,
 			Turns:   crawlResult.TotalTurns,

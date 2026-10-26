@@ -261,7 +261,7 @@ func TestCrawlSession_CrystalRewardAccumulation(t *testing.T) {
 	}
 }
 
-func TestCrawlSession_DefeatZeroesCrystals(t *testing.T) {
+func TestCrawlSession_DefeatPreservesEarnedRewards(t *testing.T) {
 	stages, monsters := setupTestCatalogs(t)
 	stage, err := stages.FindByID("stage-01")
 	if err != nil {
@@ -293,8 +293,9 @@ func TestCrawlSession_DefeatZeroesCrystals(t *testing.T) {
 	if res.Cleared {
 		t.Fatalf("floor 2 should not be cleared")
 	}
-	if session.TotalCrystals != 0 {
-		t.Errorf("after defeat, TotalCrystals = %d, want 0", session.TotalCrystals)
+	result := session.Result()
+	if result.TotalEXP != 10 || result.TotalGold != 20 || result.TotalCrystals != 5 {
+		t.Fatalf("defeat lost prior earnings: EXP=%d gold=%d crystals=%d", result.TotalEXP, result.TotalGold, result.TotalCrystals)
 	}
 }
 

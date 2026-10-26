@@ -406,9 +406,11 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 				}
 				c.AddTired(result.EffectiveExitFatigue(req.Mode))
 
-				if result.Outcome == corebattle.OutcomeWin {
+				if result.Outcome == corebattle.OutcomeWin || result.Mode != CrawlModeTry {
 					if result.TotalEXP > 0 {
-						_, _ = progression.ApplyExperience(&c, result.TotalEXP)
+						if _, err := progression.ApplyExperience(&c, result.TotalEXP); err != nil {
+							return fmt.Errorf("adding experience for character %s: %w", c.ID, err)
+						}
 					}
 					if result.TotalGold > 0 {
 						if err := c.AddMoney(result.TotalGold); err != nil {

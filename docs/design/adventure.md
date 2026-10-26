@@ -92,7 +92,7 @@ Restore shared action processing, resumable adventure/individual settlement,
 then verified Gateway commands and owned observations as bounded implementation
 units under #1323. Keep unrelated combat modes unchanged and retain current REST
 routes until #948 verifies replacements. EX progression (#1191), inspection
-allowances (#1196), consumed-item carry (#1197), earned-reward handling (#1198),
+allowances (#1196), consumed-item carry (#1197), per-operation earnings (#1328/#1329),
 exit fatigue (#1221), chronicle records (#1222) and transaction repair (#1224)
 remain separately owned; no full parity for these is certified here.
 
@@ -139,7 +139,7 @@ The user requested original behavior as the default on 2026-10-12 (#1327).
 | `こうげき`, `ぼうぎょ`, `てんしょん`; current/previous-job, equipment/book/seal, custom and tool actions | `_skill.cgi:set_action:33–151,219–309`; current resources, job/SP, curse, equipment and encounter predicates select callbacks. Tool category 1 is also discovered outside the enemy-present skill block | #1188 supplies jobs; #1332/#1333 effect gates; #1197 consumption; #1329 command consumer; #1330 discovery. No automatic action when interval elapses |
 | `すすむ` → `susumu` | `vs_monster.cgi:37–82`: no enemies, initial leader only, explicit one-floor advance; resets effects, creates encounter, disables NPC response. Ordinary treasure entry is a further explicit advance | #1328 owns phase/encounter state, #1329 reset effects, #1330 transport. Test floor 0/nonleader, living enemies and final ordinary floor |
 | `しらべる` → `shiraberu` | Treasure floor only (`vs_monster.cgi:38–41`); chosen existing unopened NPC chest, individual allowance/key (`_npc_action.cgi:6–80`). No NPC response; inventory/depot outcome and chest state commit together | #1196 allowance/keys, #1197 consumption, #1328 individual claim, #1330 choice/observations |
-| `にげる` → `nigeru` | `_skill.cgi:157–160`, `_battle.cgi:1184–1345`: participant exits individually; spectator exits without reward. Living and fallen roles differ from combat admission. Remaining roster continues; leader follows preserved order | #1328 owns settlement/removal; #1198/#1225 earnings, #1221 fatigue, #1222 chronicle; #1330 tests survivor continuation |
+| `にげる` → `nigeru` | `_skill.cgi:157–160`, `_battle.cgi:1184–1345`: participant exits individually; spectator exits without reward. Living and fallen roles differ from combat admission. Remaining roster continues; leader follows preserved order | #1328 owns settlement/removal and outstanding earnings; #1225 cooperative multiplier, #1221 fatigue, #1222 chronicle; #1330 tests survivor continuation |
 | `まえ`, `うしろ` → `mae`, `ushiro` | `_skill.cgi:152–154,894–929`: party size >1, move actor to front/back; no listed MP. Ordinary accepted-action/status/tail processing applies; no blanket noncombat NPC suppression | #1329 owns ordered formation mutation and applicable response, #1330 advertises it; test persisted order and status-blocked action |
 | `サバイバル`, `フォームチェンジ`, calling | `_skill.cgi:166–217,226–258`: no-enemy/job/SP/curse/item gates; self recovery, forward/reverse transformation and dynamic helpers; original costs in Battle matrix | #1333 owns missing native effects, #1329 executes certified entries. These cannot be omitted just because there is no enemy |
 | `すとっく` → `stock_lv_up` | `_skill.cgi:312–317`: no enemies, level/EXP gates; `_battle.cgi:358–379` performs accumulated level processing, no listed MP. Distinct from pending recipient reward stock | #1328 uses existing progression/settlement primitives, #1329 handles operation facts, #1330 discovery; test threshold, repeated command and restart |
@@ -161,8 +161,11 @@ defeat operation: directly for the acting character, and through a per-user
 `stock.cgi` for other recipients. `get_stock` (`1459–1473`) consumes that stock
 on applicable actions (`912`) and personal exit (`1208`). Try-mode stock has
 different release behavior (`1915–1939`); ordinary unconditional earnings must
-not be confused with conditional mode rewards. #1198 owns the reward correction,
-#1225 the cooperative multiplier, #1221 personal exit fatigue/flags, and #1222
+not be confused with conditional mode rewards. Ordinary earnings survive later
+defeat; the batch crawl settles cleared-floor earnings even when its final
+outcome is defeat. Defeat does not grant new victory drops or clear credit.
+Per-operation durable recipient grants remain with #1328/#1329;
+#1225 owns the cooperative multiplier, #1221 personal exit fatigue/flags, and #1222
 chronicle consistency. Native durable entitlements replace stock files without
 copying their architecture or claiming all reward formulas were audited here.
 
@@ -171,15 +174,15 @@ resolver: `vs_monster.cgi:91–102` calls `success_try` only on explicit ordinar
 treasure-floor creation. `_battle.cgi:1915–1949` aggregates each real party
 recipient's pending EXP/gold/crystals, multiplies each aggregate by 1.5 with
 integer truncation, rewrites pending stock and returns room mode to normal.
-The generic action stock release at `912` excludes Try mode. #1198 owns this
-conditional entitlement disposition and #1328 the atomic transition; #1225
+The generic action stock release at `912` excludes Try mode. #1328 owns this
+conditional entitlement disposition and atomic transition; #1225
 owns the separate cooperative multiplier. A retry must not apply 1.5 twice,
 and ordinary unconditional earned assets must not be replaced by conditional
 Try stock. On participant exit, `nigeru:1208` calls `get_stock`; while Try is
 still active, `get_stock:1459–1473` reads and clears pending stock **without
 crediting it**. After successful treasure entry, the mode is normal and the
 converted stock can be credited once on a subsequent action or exit. Falling
-alone does not invoke that personal exit disposition. #1198/#1328 must test
+alone does not invoke that personal exit disposition. #1328 must test
 pre-success exit forfeiture separately from normal earned assets and timeout
 preservation; timeout's already-approved retention is not an ordinary exit.
 
@@ -321,8 +324,8 @@ Refresh observes the committed result without running another action. Native
 SQL receipts must freeze draws/results and consumption once (#1328/#1197).
 
 Travel itself neither pays nor erases earnings; normal stock processing still
-runs (#1198). Assignment-only callbacks retain `$is_clear` and existing EX
-markers. Tool 150's encounter creation at floor 10 sets clear; stage 24 also
+runs through the lifecycle owner (#1328). Assignment-only callbacks retain
+`$is_clear` and existing EX markers. Tool 150's encounter creation at floor 10 sets clear; stage 24 also
 creates its EX marker and applies its ordinary special boss-field reset/caps
 owned by #1342. Ordinary
 treasure creation at floor 11 consumes the retained clear flag for the
@@ -333,8 +336,8 @@ path before creating floor 11 (`52–80,227–249`); existing EX files are not
 deleted by travel. Try mode is retained until treasure creation invokes
 `success_try`, multiplies pending stock by 1.5/floors it and changes mode to
 normal (`_battle.cgi:1915–1949`). Preserve these transition hooks under the
-existing #1191/#1198 owners, including their ordering before any old-enemy
-response; do not replay rewards or infer clear solely from coordinates. Exit
+existing EX (#1191) and Try lifecycle (#1328) owners, including their ordering
+before any old-enemy response; do not replay rewards or infer clear solely from coordinates. Exit
 uses the changed floor for fatigue/other floor-dependent effects (#1221), not
 the number of encounters actually fought (`_battle.cgi:1208–1222`).
 
@@ -357,7 +360,7 @@ closure, registration and production wiring. Its implementation owners remain
 cutover prerequisites after the audit itself closes; #1346 enforces support for
 the whole reachable effect in both discovery and execution. Indirect invocation
 must not bypass that gate or narrow the original random pool to implemented
-effects. Missing original choices remain cutover blockers. #1198 implements
+effects. Missing original choices remain cutover blockers. #1328 implements
 Try success/exit disposition and #1196/#1197 item rules.
 Random/delegated discovery and submission also depend on the
 [transitive job closure](battle.md#random-and-delegated-job-closure): discovery
@@ -492,7 +495,7 @@ Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and
 ### Early Defeat Handling
 - If all living party members are knocked unconscious at any floor (1–10), the crawl terminates immediately.
 - `FloorsCleared` is set to the last fully cleared floor number.
-- Total accumulated EXP is halved (`TotalEXP / 2`), and Gold and Crystal rewards are reduced to 0 (`TotalGold = 0`, `TotalCrystals = 0`).
+- Previously earned unconditional EXP, gold and crystals are retained and settled, without granting rewards for the lost floor. Try stock follows the separate [conditional release contract](#earnings-and-inactivity-evidence).
 - Participating characters survive with 1 HP (preventing permanent death).
 
 ---

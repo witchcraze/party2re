@@ -334,9 +334,6 @@ func (s *CrawlSession) AdvanceFloor(
 		// Defeat! Crawl terminates immediately
 		s.Concluded = true
 		s.Outcome = corebattle.OutcomeDefeat
-		s.TotalEXP = s.TotalEXP / 2
-		s.TotalGold = 0
-		s.TotalCrystals = 0
 		return res, nil
 	}
 
