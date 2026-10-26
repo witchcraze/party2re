@@ -642,6 +642,54 @@ prior transitions retain the whole-action gate. Consumers save resulting facts,
 operation counters and frozen input, then rebuild ports and registrations without
 replaying committed callbacks; production Adventure adoption remains separate.
 
+#### Beast and clone callbacks
+
+Evidence: `_skill.cgi:1546–1596,1674–1703,2341–2401` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterBeastClone` contributes complete ordered job10/12/26 tables and binds
+26 intrinsic bodies. Both opening extensions retain their separate positional
+identities and SP0/MP0 metadata. Ordinary listed charges stay with the caller;
+random/tool and extended delegation retain their existing cost/MP rules.
+
+The opening physical hit uses current HP×0.75 and applies immediate recoil at
+10% of positive returned damage. Job10's DF×1.6 hit instead recoils at7%.
+Sleeping writes self sleep before untyped half-MaxHP healing. Its magic DF40%
+buff, magic healing90 and area song sleep45% retain their helper guards.
+Magic absorption checks the caster's magic seal; the untyped self DF50% buff
+always sets magic mitigation on normal return, including a capped/bound buff.
+The barrage draws2–4 physical AG×1.6 hits with fresh absent-target resolution.
+
+Job12's direct area breaths use18/50/90. Its physical AT×1.1 strike sets the
+additional-effect flag before damage and attempts paralysis40% only on the
+returned living target, resolving that physical status helper separately.
+Physical immobilization85% and area breath poison60% retain their own guards.
+The final pair captures one argument and makes two physical AT×1.6 calls with
+that same argument; a defeated selected target does not become an absent target.
+Both repeated bodies stop when the actor falls and read current stats per hit.
+
+Job26 composes direct area breath50, area breath paralysis35%/poison60%, area
+magic hit reduction20% and base-AG increase25%, physical instant-death19%, and
+an untyped self base-AG increase100%. Armor break uses the same body as job52.2:
+resolve a physical enemy, clear the returned target's temporary, set tension1
+and DF to base DF, then resolve a physical current-DF reduction10% separately.
+
+Its extension identifies a single cover clone by presence, including a fallen
+record. An existing clone receives the covering role and the actor the covered
+role before either full actor HP or clone HP≤1 stops transfer. Otherwise HP moves
+from clone to actor, capped at actor MaxHP and leaving clone HP≥1; existing status
+is untouched. Absent clones use `AddHelper`: requester levels below40,40–69,70+
+select HP bases2.5×level+5,3×level+5,3.5×level+5 and MP500 with AT/DF/AG
+350/50/150,400/180/80,450/200/50 respectively. The shared independent rolls,
+requester item165 bonus and rewards apply. The new clone takes the actor's status
+and clears it from the actor. Requester facts stay distinct from the effect actor;
+generic placeholder appearance and serialized helper identity/form survive reload.
+
+Discovery admits all reachable descendants before mutation or committed RNG;
+unknown preceding callback transitions retain whole-action rejection. Consumers
+save resulting lifetime facts, operation counters and frozen input, then rebuild
+ports/registrations without replaying committed callbacks. Production Adventure
+composition and receipts remain with the consuming service.
+
 #### Counter and reset callbacks
 
 Evidence: `_skill.cgi:2871–3013` at revision
