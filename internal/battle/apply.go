@@ -17,15 +17,16 @@ import (
 
 // ApplyPostBattleRequest specifies combatants, resolution, and additional rewards to persist.
 type ApplyPostBattleRequest struct {
-	CharacterIDs         []string
-	BattleResult         corebattle.PartyBattleResult
-	DropItems            []string            // Extra dropped item definition IDs (e.g. stage/boss drops)
-	RecipientDrops       map[string][]string // Optional recipient-targeted drop item definition IDs (characterID -> []itemDefID)
-	RecipientCharacterID string              // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
-	DefeatedEnemies      []corebattle.Participant
-	Habitat              string // Habitat/stage name for monster book recording
-	ExitFatigue          int    // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
-	UnsealDemonKing      bool   // Completing Stage EX / unsealing demon king (vs_monster.cgi:218)
+	CharacterIDs          []string
+	BattleResult          corebattle.PartyBattleResult
+	PreserveEarnedRewards bool                // TotalReward currency/EXP/crystals were earned before the final outcome.
+	DropItems             []string            // Extra dropped item definition IDs (e.g. stage/boss drops)
+	RecipientDrops        map[string][]string // Optional recipient-targeted drop item definition IDs (characterID -> []itemDefID)
+	RecipientCharacterID  string              // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
+	DefeatedEnemies       []corebattle.Participant
+	Habitat               string // Habitat/stage name for monster book recording
+	ExitFatigue           int    // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
+	UnsealDemonKing       bool   // Completing Stage EX / unsealing demon king (vs_monster.cgi:218)
 }
 
 // ApplyPostBattleResponse contains the committed state for each participating character.
@@ -103,9 +104,12 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			}
 		}
 
-		// 5. Apply victory rewards
-		if req.BattleResult.Outcome == corebattle.OutcomeWin {
-			charDrops := req.dropsForCharacter(charID)
+		// 5. Apply earned assets independently of the final encounter outcome.
+		if req.BattleResult.Outcome == corebattle.OutcomeWin || req.PreserveEarnedRewards {
+			var charDrops []string
+			if req.BattleResult.Outcome == corebattle.OutcomeWin {
+				charDrops = req.dropsForCharacter(charID)
+			}
 			gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, err := s.applyRewardsForCharacter(
 				tc.Context,
 				&tc.Character,
@@ -126,7 +130,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			if err := s.deliverToDepot(tc.Context, charID, tc.Character, depotDrops, &resp); err != nil {
 				return err
 			}
+		}
 
+		if req.BattleResult.Outcome == corebattle.OutcomeWin {
 			s.applyMonsterKills(&tc.Character, tc.Inventory, equip, req.BattleResult, req.DefeatedEnemies)
 			s.applyMaoCount(&tc.Character, req)
 
@@ -220,8 +226,11 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 				equips[id] = equip
 			}
 
-			if req.BattleResult.Outcome == corebattle.OutcomeWin {
-				charDrops := req.dropsForCharacter(id)
+			if req.BattleResult.Outcome == corebattle.OutcomeWin || req.PreserveEarnedRewards {
+				var charDrops []string
+				if req.BattleResult.Outcome == corebattle.OutcomeWin {
+					charDrops = req.dropsForCharacter(id)
+				}
 				gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, err := s.applyRewardsForCharacter(
 					txCtx,
 					&char,
@@ -240,7 +249,9 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 				if len(depotDrops) > 0 {
 					pendingDepotDeliveries[id] = append(pendingDepotDeliveries[id], depotDrops...)
 				}
+			}
 
+			if req.BattleResult.Outcome == corebattle.OutcomeWin {
 				s.applyMonsterKills(&char, inv, equip, req.BattleResult, req.DefeatedEnemies)
 				s.applyMaoCount(&char, req)
 			}

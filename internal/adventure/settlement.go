@@ -39,7 +39,8 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 	}
 
 	postBattleReq := battle.ApplyPostBattleRequest{
-		CharacterIDs: req.CharacterIDs,
+		CharacterIDs:          req.CharacterIDs,
+		PreserveEarnedRewards: result.Mode != CrawlModeTry,
 		BattleResult: corebattle.PartyBattleResult{
 			Outcome: result.Outcome,
 			Turns:   result.TotalTurns,
