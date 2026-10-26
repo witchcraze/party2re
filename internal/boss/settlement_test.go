@@ -2,18 +2,15 @@ package boss_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/boss"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/party"
-	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
 var errInjected = errors.New("injected settlement failure")
@@ -39,12 +36,17 @@ func (t snapshotTx) RunInTx(ctx context.Context, fn func(context.Context) error)
 	for k, v := range t.f.bossRepo.awardedItems {
 		items[k] = v
 	}
+	settlements := make(map[string]*boss.SealingSettlement)
+	for k, v := range t.f.bossRepo.settlements {
+		settlements[k] = v
+	}
 	err := fn(ctx)
 	if err != nil {
 		t.f.charRepo.chars = chars
 		t.f.bossRepo.records = records
 		t.f.bossRepo.histories = histories
 		t.f.bossRepo.awardedItems = items
+		t.f.bossRepo.settlements = settlements
 	}
 	return err
 }
@@ -63,11 +65,6 @@ func (r *failingBossRepo) RecordChallenge(ctx context.Context, h boss.BossChalle
 	}
 	return r.mockBossRepo.RecordChallenge(ctx, h, rec, c, item)
 }
-
-// failingDeletePartyRepo fails room completion (DeleteParty).
-type failingDeletePartyRepo struct{ *mockPartyRepo }
-
-func (r failingDeletePartyRepo) DeleteParty(context.Context, string) error { return errInjected }
 
 // failingRecorder fails the failOn-th mandatory Collection/Hall of Fame record.
 type failingRecorder struct {
@@ -152,9 +149,6 @@ func TestStartSealingBattle_RequiredFailureRollsBackWholeSettlement(t *testing.T
 		}},
 		{"boss record failure for second member", func(f *sealFixture, t *testing.T) *boss.Service {
 			return f.service(t, &failingBossRepo{mockBossRepo: f.bossRepo, failOn: 2}, f.partyRepo)
-		}},
-		{"room completion failure", func(f *sealFixture, t *testing.T) *boss.Service {
-			return f.service(t, f.bossRepo, failingDeletePartyRepo{f.partyRepo})
 		}},
 	}
 	for _, tc := range cases {
@@ -251,8 +245,8 @@ func TestStartSealingBattle_ConcurrentStartSettlesOnce(t *testing.T) {
 		t.Fatalf("first start failed: %v", err)
 	}
 
-	if _, err := svc.StartSealingBattle(ctx, f.pID, "leader"); !errors.Is(err, boss.ErrPartyNotFound) {
-		t.Fatalf("settled room must be gone, got %v", err)
+	if _, err := svc.StartSealingBattle(ctx, f.pID, "leader"); err != nil {
+		t.Fatalf("settled room retry must return the saved outcome, got %v", err)
 	}
 	for _, id := range []string{"leader", "m1"} {
 		if got := f.charRepo.chars[id].HeroCount; got != 1 {
@@ -309,72 +303,5 @@ func TestStartSealingBattle_RequestCancellationReleasesRoomClaim(t *testing.T) {
 	}
 	if !pr.hasReleaseDeadline {
 		t.Fatal("expected room release context to carry a timeout deadline")
-	}
-}
-
-func TestStartSealingBattle_ValkeyDeletePartyPartialFailureRollsBackSettlement(t *testing.T) {
-	for _, failCmd := range []string{"DEL", "ZREM"} {
-		t.Run(failCmd, func(t *testing.T) {
-			f := newSealFixture("leader", "m1")
-			state := party.LobbyState{
-				Party:   f.partyRepo.parties[f.pID],
-				Members: f.partyRepo.members[f.pID],
-			}
-			lobbyBytes, err := json.Marshal(state)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			delCalls := 0
-			client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-				if err := ctx.Err(); err != nil {
-					return valkeytest.MakeErrorResult(err)
-				}
-				args := cmd.Commands()
-				switch args[0] {
-				case "SET":
-					return valkeytest.MakeOKResult()
-				case "GET":
-					return valkeytest.MakeStringResult(string(lobbyBytes))
-				case "EXISTS":
-					return valkeytest.MakeIntResult(1)
-				case "EVALSHA", "EVAL":
-					if len(args) >= 6 {
-						var updated party.Party
-						if json.Unmarshal([]byte(args[3]), &updated) == nil {
-							state.Party = updated
-							lobbyBytes, _ = json.Marshal(state)
-						}
-					}
-					return valkeytest.MakeStringResult("OK")
-				case "DEL":
-					delCalls++
-					// Let member DELs succeed, then fail on the lobby key DEL (5th DEL: 2 members * 2 + leader).
-					if failCmd == "DEL" && delCalls == 5 {
-						return valkeytest.MakeErrorResult(errInjected)
-					}
-					return valkeytest.MakeIntResult(1)
-				case "ZREM":
-					if failCmd == "ZREM" {
-						return valkeytest.MakeErrorResult(errInjected)
-					}
-					return valkeytest.MakeIntResult(1)
-				default:
-					return valkeytest.MakeOKResult()
-				}
-			}))
-
-			valkeyRepo := party.NewValkeyRepository(client)
-			svc := f.service(t, f.bossRepo, valkeyRepo)
-
-			_, err = svc.StartSealingBattle(context.Background(), f.pID, "leader")
-			if !errors.Is(err, errInjected) {
-				t.Fatalf("expected Valkey %s error to propagate, got %v", failCmd, err)
-			}
-			f.requireNothingSettled(t)
-			if state.Party.Status != party.StatusRecruiting {
-				t.Fatalf("expected room status to recover to %q, got %q", party.StatusRecruiting, state.Party.Status)
-			}
-		})
 	}
 }

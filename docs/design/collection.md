@@ -122,5 +122,5 @@ callers for the live inventory; adding a caller must preserve this contract.
 ### Intentional Boundary Exceptions
 
 - **Server News Broadcast (`PublishNews`)**: Informational and strictly best-effort. Failure to publish news (e.g. redis/queue outage) does NOT abort or roll back the transaction.
-- **Boss Sealing Battle Atomicity**: Tracked independently in #1200; boss battle completion atomicity follows boss raid lifecycle rules.
+- **Boss Sealing Battle Atomicity**: Required discovery participates in the [Boss SQL settlement](boss.md#architectural-policy--boundaries); post-commit lobby cleanup cannot undo these committed records.
 - **Battle Post-Commit Recording**: Adventure and PvE combat settlement incorporates monster discovery within the post-battle settlement transaction boundary (`ApplyPostBattleResult`).

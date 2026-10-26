@@ -16,14 +16,12 @@ import (
 	"github.com/witchcraze/party2re/internal/party"
 )
 
-// StartSealingBattle starts and resolves an authentic 4-player Party Sealing Battle (vs_king.cgi).
+// StartSealingBattle starts and resolves a party sealing battle (vs_king.cgi).
 //
-// Concurrency & Persistence Boundary (mirrors party.StartPartyAdventure):
-//  1. Acquire the exclusive party lock (Rank 0), so overlapping starts for one room are rejected.
-//  2. Inside one SQL transaction, claim the room (recruiting -> in_progress), lock characters in
-//     ascending ID order, and settle rewards, participant state, boss records, mandatory
-//     Collection/Hall of Fame records and room completion together.
-//  3. Any failure rolls back the SQL state and releases the room claim.
+// SQL room receipts serialize settlement and retain the committed result/roster.
+// Valkey cleanup runs after commit and is retried without resolving battle again.
+// Transaction: RunInTx (SQL settlement only; cleanup follows commit)
+// Lock Order: boss_room_settlements(0) -> characters(2, ascending ID) -> inventory_items(3) -> depot_items(5)
 func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID string) (SealingBattleResult, error) {
 	if s.partyRepo == nil {
 		return SealingBattleResult{}, errors.New("party repository not configured")
@@ -32,15 +30,15 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 	var result SealingBattleResult
 	err := s.partyRepo.WithPartyAdventureLock(ctx, partyID, func(lockedCtx context.Context) error {
 		var err error
-		result, err = s.settleSealingBattle(lockedCtx, partyID, leaderCharID)
+		result, err = s.completeSealingBattle(lockedCtx, partyID, leaderCharID)
 		return err
 	})
 	return result, err
 }
 
-func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID string) (SealingBattleResult, error) {
-	var result SealingBattleResult
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
+func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderCharID string, original **party.Party) (*SealingSettlement, error) {
+	var receipt *SealingSettlement
+	err := func() error {
 		// 1. Lock party
 		p, err := s.partyRepo.GetPartyForUpdate(txCtx, partyID)
 		if err != nil {
@@ -49,9 +47,12 @@ func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID
 		if p.LeaderCharacterID != leaderCharID {
 			return ErrNotPartyLeader
 		}
-		if p.Status != party.StatusRecruiting {
+		if p.Status != party.StatusRecruiting && p.Status != party.StatusInProgress {
 			return ErrPartyNotRecruiting
 		}
+		// The SQL room lock proves that an interrupted in_progress room has no committed battle.
+		p.Status = party.StatusRecruiting
+		*original = &p
 
 		// 2. Fetch members
 		members, err := s.partyRepo.GetMembers(txCtx, partyID)
@@ -98,22 +99,12 @@ func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID
 			chars[cID] = c
 		}
 
-		// 4b. Claim the room (recruiting -> in_progress) so a lapsed lock or retry cannot
-		// settle it twice. An aborted settlement releases the claim again.
+		// Hide the active room from ordinary admission; the SQL receipt guards settlement retries.
 		claimed := p
 		claimed.Status = party.StatusInProgress
 		if err := s.partyRepo.UpdateParty(txCtx, claimed); err != nil {
 			return err
 		}
-		settled := false
-		defer func() {
-			if !settled {
-				releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(txCtx), 2*time.Second)
-				defer cancel()
-				//lint:ignore error-swallow compensatory room release on aborted settlement
-				_ = s.partyRepo.UpdateParty(releaseCtx, p)
-			}
-		}()
 
 		// 5. Entry fatigue cost: each participant gets +20% Tired ($m{tired} += 20)
 		for _, cID := range charIDs {
@@ -175,7 +166,7 @@ func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID
 		}
 
 		// 9. Process Banished combatants (Dejon) and HP/MP
-		banishedList := make([]string, 0)
+		var banishedList []string
 		for _, cID := range charIDs {
 			c := chars[cID]
 			if remHP, ok := battleRes.RemainingHP[cID]; ok {
@@ -272,14 +263,6 @@ func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID
 
 		// 12. Record challenge history & records
 		now := s.now()
-		var rewardItemInst *coreitem.Instance
-		if rewardItemID != "" {
-			rewardItemInst = &coreitem.Instance{
-				ID:           id.New(),
-				DefinitionID: rewardItemID,
-				Quantity:     1,
-			}
-		}
 
 		stageTier := stageTierFromID(stage.ID)
 		for _, cID := range charIDs {
@@ -313,18 +296,20 @@ func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID
 				IsFirstClear: isFirstClear,
 				CreatedAt:    now,
 			}
+			var rewardItemInst *coreitem.Instance
+			if rewardItemID != "" {
+				rewardItemInst = &coreitem.Instance{
+					ID:           id.New(),
+					DefinitionID: rewardItemID,
+					Quantity:     1,
+				}
+			}
 			if err := s.repo.RecordChallenge(txCtx, hist, rec, chars[cID], rewardItemInst); err != nil {
 				return fmt.Errorf("failed to record challenge for %s: %w", cID, err)
 			}
 		}
 
-		// 13. Disband party lobby
-		if err := s.partyRepo.DeleteParty(txCtx, partyID); err != nil {
-			return fmt.Errorf("failed to disband party: %w", err)
-		}
-		settled = true
-
-		result = SealingBattleResult{
+		result := SealingBattleResult{
 			StageID:           stage.ID,
 			StageName:         stage.Name,
 			Outcome:           outcome,
@@ -339,8 +324,9 @@ func (s *Service) settleSealingBattle(ctx context.Context, partyID, leaderCharID
 			BanquetHeld:       banquetHeld,
 			BattleResult:      battleRes,
 		}
-		return nil
-	})
+		receipt = &SealingSettlement{Lobby: party.LobbyState{Party: p, Members: members}, Result: result}
+		return s.settlementRepo.SaveSealingSettlement(txCtx, *receipt)
+	}()
 
-	return result, err
+	return receipt, err
 }

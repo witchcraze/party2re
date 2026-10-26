@@ -155,7 +155,7 @@ type PartyRepository interface {
 	party.PartyAdventureLockRepository
 	GetPartyForUpdate(ctx context.Context, id string) (party.Party, error)
 	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
-	DeleteParty(ctx context.Context, id string) error
+	CleanupParty(ctx context.Context, state party.LobbyState) error
 	UpdateParty(ctx context.Context, p party.Party) error
 }
 
@@ -251,6 +251,7 @@ func WithNowFunc(fn func() time.Time) ServiceOption {
 
 type Service struct {
 	repo               Repository
+	settlementRepo     SealingSettlementRepository
 	characterRepo      CharacterRepository
 	partyRepo          PartyRepository
 	battleEngine       corebattle.Resolver
@@ -311,12 +312,14 @@ func NewService(
 		stageMap[b.ID] = b
 	}
 
+	settlements, _ := repo.(SealingSettlementRepository)
 	return &Service{
-		repo:          repo,
-		characterRepo: characterRepo,
-		battleEngine:  battleEngine,
-		stages:        catalog,
-		stageMap:      stageMap,
+		repo:           repo,
+		settlementRepo: settlements,
+		characterRepo:  characterRepo,
+		battleEngine:   battleEngine,
+		stages:         catalog,
+		stageMap:       stageMap,
 	}, nil
 }
 
