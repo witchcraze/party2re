@@ -164,9 +164,12 @@ func (s *Service) settleFallback(
 		cID := m.CharacterID
 		c := charMap[cID]
 		levelBefore := c.Level
-		gainedEXP := crawlResult.TotalEXP
-		gainedGold := crawlResult.TotalGold
-		gainedCrystals := crawlResult.TotalCrystals
+		var gainedEXP, gainedGold, gainedCrystals int
+		if crawlResult.Outcome == corebattle.OutcomeWin || crawlResult.Mode != adventure.CrawlModeTry {
+			gainedEXP = crawlResult.TotalEXP
+			gainedGold = crawlResult.TotalGold
+			gainedCrystals = crawlResult.TotalCrystals
+		}
 
 		if err := c.AddMoney(gainedGold); err != nil {
 			return nil, nil, fmt.Errorf("adding gold for character %s: %w", cID, err)
