@@ -37,11 +37,12 @@ func (s *LifetimeState) statusTargetCandidates(c *DamageContext, e TargetEffect)
 
 // Each possible recipient keeps its own continuation. Combining mutually
 // exclusive hits would invent deaths; dropping survivors loses later lethal hits.
-func (s *LifetimeState) validateAreaDeath(c *StatusContext, e TargetEffect, chance float64, bypass bool, rng random.Generator) error {
+// followed also projects the last reward/field tail before an enclosing effect.
+func (s *LifetimeState) projectAreaDeath(c *StatusContext, e TargetEffect, chance float64, bypass, followed bool, rng random.Generator) ([]LifetimeState, error) {
 	p := s.defeatCopy()
 	converted, _, err := p.actor(c.ActorID).ConvertEnemyCategory(c.TargetContext, e)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if p.actor(c.ActorID).categorySealed(converted.Category) {
 		p.actor(c.ActorID).Status = ""
@@ -52,15 +53,15 @@ func (s *LifetimeState) validateAreaDeath(c *StatusContext, e TargetEffect, chan
 		var next []LifetimeState
 		for _, state := range states {
 			if err := state.ValidateStatus(c, e, chance, bypass, true, rng); err != nil {
-				return err
+				return nil, err
 			}
 			converted, _, err := state.actor(c.ActorID).ConvertEnemyCategory(c.TargetContext, e)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			candidates, err := state.statusTargetCandidates(&DamageContext{EffectContext: c.EffectContext}, converted)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			// A failed death roll still retains the resolved helper's recovery.
 			// Only an unresolved helper can continue without those resource facts.
@@ -77,9 +78,9 @@ func (s *LifetimeState) validateAreaDeath(c *StatusContext, e TargetEffect, chan
 				}
 				child := *c.Defeat
 				child.TargetContext = c.TargetContext
-				continuations, err := p.projectDefeatContinuation(&child, t.ID, rng, map[string]bool{}, index+1 < len(c.EnemyIDs))
+				continuations, err := p.projectDefeatContinuation(&child, t.ID, rng, map[string]bool{}, followed || index+1 < len(c.EnemyIDs))
 				if err != nil {
-					return err
+					return nil, err
 				}
 				for _, continuation := range continuations {
 					next = appendDefeatState(next, continuation)
@@ -88,5 +89,5 @@ func (s *LifetimeState) validateAreaDeath(c *StatusContext, e TargetEffect, chan
 		}
 		states = next
 	}
-	return nil
+	return states, nil
 }
