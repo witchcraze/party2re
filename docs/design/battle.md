@@ -1781,6 +1781,30 @@ capped at 200, and clears temporary/status/extended state; a grave-field helper
 can be restored or recreated. These tails cannot be represented by one generic
 “end turn” hook with the same eligibility for every actor.
 
+Ordinary job97 uses eleven positions at `_skill.cgi:7215–7307` at
+`ff97fc549932a146cc945d7edf71b44c868a840e`. Both random physical flurries
+(3–4 hits at AT×0.85 and3–5 at AT×0.9) stop at caster death and reread AT
+per hit. The all-member dispel includes fallen members and preserves each
+saved tension through equipment reset. The defense trade subtracts half the
+current defense, rounded down, before the untyped base-AT+100% helper, even
+when that buff has no effect. Direct physical area300 precedes unconditional
+self vulnerability; the AT×2.5 physical strike incurs immediate recoil only
+for a positive returned damage amount, at20%. Self vulnerability precedes
+two tension calls with the shared requester/equipment rules. Other attacks
+are direct breath area400 and direct magic area250/paralysis20% or
+area260/sleep30%. Damage and status resolve targets independently; caster
+death stops area damage but does not skip its status tail.
+
+Job97's life reduction first resolves a magic target and requires both MaxHP
+and base defense at most999, then invokes magic HP−75% through a second
+target resolution. Deadly poison is written directly to the first resolved
+target even when HP reduction has no effect; it has no job93.3 probability
+gate and does not use ordinary status immunity. `RegisterNPCJob97` binds the
+complete table to shared whole-body admission. Unknown descendants reject
+before effects, costs or committed RNG; accepted no-effect remains distinct.
+Frozen facts survive reload and operation ports are rebuilt. Ordinary NPC
+selection/charging and durable receipts remain consumer-owned, as for job98.
+
 Ordinary stage20 job98 uses the table at `_skill.cgi:7309–7408` at
 `ff97fc549932a146cc945d7edf71b44c868a840e`, independently of other modes sharing
 the job identity. Its eleven positions retain both same-name HP1 entries and
