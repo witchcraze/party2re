@@ -3,6 +3,7 @@ package party
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -178,5 +179,46 @@ func TestSettleWithBattleSettler_ErrorPropagation(t *testing.T) {
 	}
 	if !errors.Is(err, injectedErr) {
 		t.Errorf("expected injected error %v, got %v", injectedErr, err)
+	}
+}
+
+type capturingBattleSettler struct {
+	req battleadapter.ApplyPostBattleRequest
+}
+
+func (c *capturingBattleSettler) ApplyPostBattleResult(_ context.Context, req battleadapter.ApplyPostBattleRequest) (battleadapter.ApplyPostBattleResponse, error) {
+	c.req = req
+	return battleadapter.ApplyPostBattleResponse{}, nil
+}
+
+func TestSettleWithBattleSettler_UsesAccumulatedConsumedItems(t *testing.T) {
+	settler := &capturingBattleSettler{}
+	svc, err := NewService(
+		newMockPartyRepository(),
+		newMockCharacterRepository(),
+		&mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)},
+		&mockStageProvider{stages: make(map[string]adventure.Stage)},
+		&mockMonsterProvider{monsters: make(map[string]adventure.Monster)},
+		nil,
+		WithPostBattleSettler(settler),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := []Member{{CharacterID: "a", PartyID: "p"}, {CharacterID: "b", PartyID: "p"}}
+	charMap := map[string]corecharacter.Character{"a": {ID: "a"}, "b": {ID: "b"}}
+	accumulated := map[string][]corebattle.ConsumedItem{
+		"a": {{ID: "item-001", InstanceID: "herb-1", Quantity: 1}, {ID: "item-002", InstanceID: "herb-2", Quantity: 1}},
+		"b": {{ID: "item-001", InstanceID: "herb-3", Quantity: 1}},
+	}
+	crawlResult := &adventure.DungeonCrawlResult{Outcome: corebattle.OutcomeDefeat, ConsumedItems: accumulated}
+	// The last floor only consumed one herb; earlier floors must not be lost.
+	last := corebattle.PartyBattleResult{ConsumedItems: map[string][]corebattle.ConsumedItem{"a": {{ID: "item-002", InstanceID: "herb-2", Quantity: 1}}}}
+
+	if _, _, err := svc.settlePostBattle(context.Background(), members, charMap, crawlResult, last); err != nil {
+		t.Fatal(err)
+	}
+	if got := settler.req.BattleResult.ConsumedItems; !reflect.DeepEqual(got, accumulated) {
+		t.Fatalf("settlement ConsumedItems = %v, want %v", got, accumulated)
 	}
 }

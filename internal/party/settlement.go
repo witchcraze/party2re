@@ -93,7 +93,7 @@ func (s *Service) settleWithBattleSettler(
 			RemainingMP:   crawlResult.ParticipantMPs,
 			AlliesFallen:  lastBattleRes.AlliesFallen,
 			BanishedIDs:   lastBattleRes.BanishedIDs,
-			ConsumedItems: lastBattleRes.ConsumedItems,
+			ConsumedItems: crawlResult.ConsumedItems,
 		},
 		RecipientDrops:  recipientDrops,
 		DefeatedEnemies: defeatedEnemies,

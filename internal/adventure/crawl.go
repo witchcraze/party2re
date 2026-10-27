@@ -65,36 +65,38 @@ type DungeonCrawlResult struct {
 	PartySize      int                                   `json:"party_size"`
 	ParticipantHPs map[string]int                        `json:"participant_hps"`
 	ParticipantMPs map[string]int                        `json:"participant_mps,omitempty"`
+	ConsumedItems  map[string][]corebattle.ConsumedItem  `json:"consumed_items,omitempty"`
 	LostDrops      map[string][]string                   `json:"lost_drops,omitempty"`
 	MonsterTames   map[string][]battle.MonsterTameResult `json:"monster_tames,omitempty"`
 }
 
 // CrawlSession tracks step-by-step state across the 10-floor dungeon crawl and Floor 11 treasure room.
 type CrawlSession struct {
-	ID                  string                    `json:"id"`
-	StageID             string                    `json:"stage_id"`
-	StageName           string                    `json:"stage_name"`
-	Stage               Stage                     `json:"-"`
-	Mode                string                    `json:"mode,omitempty"`
-	LeaderID            string                    `json:"leader_id"`
-	CharacterIDs        []string                  `json:"character_ids"`
-	Characters          []corecharacter.Character `json:"-"`
-	Round               int                       `json:"round"`
-	CurrentFloor        int                       `json:"current_floor"`
-	FloorsCleared       int                       `json:"floors_cleared"`
-	StageCleared        bool                      `json:"stage_cleared"`
-	Concluded           bool                      `json:"concluded"`
-	Outcome             corebattle.Outcome        `json:"outcome"`
-	TotalTurns          int                       `json:"total_turns"`
-	TotalEXP            int                       `json:"total_exp"`
-	TotalGold           int                       `json:"total_gold"`
-	TotalCrystals       int                       `json:"total_crystals"`
-	FloorResults        []DungeonFloorResult      `json:"floor_results"`
-	TreasureBoxes       []TreasureBox             `json:"treasure_boxes,omitempty"`
-	Participants        []corebattle.Participant  `json:"participants"`
-	HasTreasureBlessing bool                      `json:"has_treasure_blessing,omitempty"`
-	Rng                 func(n int) int           `json:"-"`
-	nowFunc             func() time.Time          `json:"-"`
+	ID                  string                               `json:"id"`
+	StageID             string                               `json:"stage_id"`
+	StageName           string                               `json:"stage_name"`
+	Stage               Stage                                `json:"-"`
+	Mode                string                               `json:"mode,omitempty"`
+	LeaderID            string                               `json:"leader_id"`
+	CharacterIDs        []string                             `json:"character_ids"`
+	Characters          []corecharacter.Character            `json:"-"`
+	Round               int                                  `json:"round"`
+	CurrentFloor        int                                  `json:"current_floor"`
+	FloorsCleared       int                                  `json:"floors_cleared"`
+	StageCleared        bool                                 `json:"stage_cleared"`
+	Concluded           bool                                 `json:"concluded"`
+	Outcome             corebattle.Outcome                   `json:"outcome"`
+	TotalTurns          int                                  `json:"total_turns"`
+	TotalEXP            int                                  `json:"total_exp"`
+	TotalGold           int                                  `json:"total_gold"`
+	TotalCrystals       int                                  `json:"total_crystals"`
+	FloorResults        []DungeonFloorResult                 `json:"floor_results"`
+	TreasureBoxes       []TreasureBox                        `json:"treasure_boxes,omitempty"`
+	Participants        []corebattle.Participant             `json:"participants"`
+	ConsumedItems       map[string][]corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	HasTreasureBlessing bool                                 `json:"has_treasure_blessing,omitempty"`
+	Rng                 func(n int) int                      `json:"-"`
+	nowFunc             func() time.Time                     `json:"-"`
 }
 
 func (s *CrawlSession) now() time.Time {
@@ -318,6 +320,7 @@ func (s *CrawlSession) AdvanceFloor(
 			s.Participants[i].MP = mp
 		}
 	}
+	s.recordConsumedItems(battleRes.ConsumedItems)
 
 	s.TotalTurns += battleRes.Turns
 	floorCleared := battleRes.Outcome == corebattle.OutcomeWin
@@ -473,6 +476,7 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		PartySize:      len(s.Characters),
 		ParticipantHPs: participantHPs,
 		ParticipantMPs: participantMPs,
+		ConsumedItems:  cloneConsumedItems(s.ConsumedItems),
 	}
 }
 

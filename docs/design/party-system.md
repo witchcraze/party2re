@@ -66,6 +66,7 @@ a resumable battle state.
 - **Participant Identity & Turn Resolution**:
   - Combat participants are strictly indexed and tracked by their canonical entity `ID` (`Participant.ID`), eliminating name collisions when multiple characters share the same display name.
   - Display names (`Participant.Name`) are maintained for combat turn log output and user presentation.
+- **Combat Item Consumption Across Floors**: A crawl run (solo or party) removes each floor's consumed combat items from the owner's carried battle state, so later floors cannot reuse the same instance, and accumulates the consumption (`DungeonCrawlResult.ConsumedItems`). Post-battle settlement debits it from each owner exactly once, including defeat; stage/floor-travel and other callback-specific consumption remain owned by the Adventure interaction contract.
 - **Reward Distribution & Damage Persistence**:
   - On Victory: Each participating member receives full boosted EXP and Gold, monster crystal drops (`TotalCrystals`, 刻印晶) are credited to character crystal reserves (`character.Crystal`, clamped to 999,999), character level-ups are evaluated using canonical progression rules (`progression.ApplyExperience`, properly supporting OverLevel limit breaks up to Lv 150), surviving members have their remaining battle HP persisted to `Stats.HP` (fallen members survive with 1 HP), and surviving battle MP from `RemainingMP` is clamped to `Stats.MaxMP` and persisted to `Stats.MP`.
   - **Floor 11 Treasure Room Drops & Depot Fallback (`vs_monster.cgi:91-137`, `_npc_action.cgi:60-80`)**:
