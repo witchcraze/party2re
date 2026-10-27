@@ -305,6 +305,28 @@ Native admission is enforced across these boundaries:
   Their entire reachable closure must be certified; substituting a supported-only draw pool
   is prohibited.
 
+Base attack and guard callbacks (`internal/core/battle/base_guard.go`) compose
+the existing effect owners, preserving ordered job0–3 tables and all three
+independent job0 attack positions (`_skill.cgi:1002–1183` at
+`ff97fc549932a146cc945d7edf71b44c868a840e`). Each job0 attack invokes the ordinary
+helper once; weapon-seal repetition belongs to the outer attack command.
+Physical cover rejects self after ally resolution and assigns both temporary
+roles only for a returned nonself target. Armor strike applies AT×0.9 before
+DF−15% through a second helper on the returned living target; reflection and
+target fallback apply independently at each helper. Variable strikes choose
+AT×3 versus20 at probability1/2, or AT×3 versus AT×2 at probability2/3.
+Job2's twin strike captures one argument for both AG×2.2 hits and stops on caster
+death. Its ratio strike inspects the supplied enemy before resolution: ordered
+strict HP thresholds15×caster MaxHP, then10/8/5/3×caster current HP select
+direct AT×1.5/1.4/1.3/1.2/1.1, otherwise AT×1; missing or allied identities
+instead use direct area AT×0.8. Job3's reckless attack assigns vulnerability
+after damage even on accepted no-effect. Sacrifice3.6 retains the revival
+owner's separate registration and defeat admission. Ordinary costs remain with
+the consumer; all reachable indirect descendants must pass preflight before
+costs, state mutation or RNG. Exact unconditional stance writes project into
+later admission; unknown effects retain the conservative gate. Saved state and
+frozen input resume with rebuilt ports, without replaying completed callbacks.
+
 Martial callbacks compose the shared damage, status, healing, stat and lifetime
 owners (`internal/core/battle/martial.go`; `_skill.cgi:1190–1226,2237–2265,2296–2334`
 at `ff97fc549932a146cc945d7edf71b44c868a840e`). Job4 preserves extended SP0
