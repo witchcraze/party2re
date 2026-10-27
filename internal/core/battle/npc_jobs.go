@@ -3,7 +3,7 @@ package battle
 // NPCJobEntries retains source positions, including duplicate-name weights.
 // The NPC selector binds names to the last eligible entry; it must not dedupe
 // this list or treat it as the full NPC catalog. Evidence: _skill.cgi:7183–7189,
-// 7309–7412,8077–8121; _npc_action.cgi:177–224,313–322.
+// 7215–7412,8077–8121; _npc_action.cgi:177–224,313–322.
 func NPCJobEntries(job int) []CallbackEntry {
 	switch job {
 	case 95:
@@ -13,6 +13,20 @@ func NPCJobEntries(job int) []CallbackEntry {
 		}
 	case 99:
 		return []CallbackEntry{{ID: "npc-job-99-position-0", Name: "escape"}}
+	case 97:
+		return []CallbackEntry{
+			{ID: "npc-job-97-position-0", Name: "scattered-strikes", MPCost: 24},
+			{ID: "npc-job-97-position-1", Name: "burst-strikes", MPCost: 20},
+			{ID: "npc-job-97-position-2", Name: "effect-dispel", MPCost: 30},
+			{ID: "npc-job-97-position-3", Name: "defense-for-strength", MPCost: 9},
+			{ID: "npc-job-97-position-4", Name: "reckless-wave", MPCost: 30},
+			{ID: "npc-job-97-position-5", Name: "recoil-strike", MPCost: 40},
+			{ID: "npc-job-97-position-6", Name: "vulnerable-charge", MPCost: 33},
+			{ID: "npc-job-97-position-7", Name: "dark-breath-wave", MPCost: 80},
+			{ID: "npc-job-97-position-8", Name: "paralyzing-magic-wave", MPCost: 70},
+			{ID: "npc-job-97-position-9", Name: "poisoned-life-reduction", MPCost: 42},
+			{ID: "npc-job-97-position-10", Name: "sleeping-magic-wave", MPCost: 66},
+		}
 	case 98:
 		return []CallbackEntry{
 			{ID: "npc-job-98-position-0", Name: "life-to-one", MPCost: 44},

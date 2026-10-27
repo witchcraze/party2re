@@ -3,6 +3,7 @@ package battle_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -15,7 +16,17 @@ import (
 	"github.com/witchcraze/party2re/internal/core/skill"
 )
 
+func TestNPC97ResetUsesAdapterGearRequesterAndSavedTension(t *testing.T) {
+	testNPCResetAdapter(t, 97)
+}
+
 func TestNPC98ResetUsesAdapterGearRequesterAndSavedTension(t *testing.T) {
+	testNPCResetAdapter(t, 98)
+}
+
+func testNPCResetAdapter(t *testing.T, jobID int) {
+	t.Helper()
+
 	ctx := context.Background()
 	chars, inventory, equipment := newMockCharRepo(), newMockInvRepo(), newMockEquipRepo()
 	char := corecharacter.Character{ID: "player", Level: 150, JobID: "job-01", WeaponSeal: 3, Stats: corecharacter.Stats{HP: 50, MaxHP: 100, Attack: 100, Defense: 80, Agility: 100}}
@@ -40,7 +51,7 @@ func TestNPC98ResetUsesAdapterGearRequesterAndSavedTension(t *testing.T) {
 	}
 	s := corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{a, {
 		Participant: corebattle.Participant{ID: "npc", TeamID: "npc", HP: 1000, MaxHP: 1000, MP: 500, Gear: &corebattle.BattleGearStats{}},
-		NPC:         true, Tension: 3, Jobs: corebattle.BattleJobs{JobID: "job-98"},
+		NPC:         true, Tension: 3, Jobs: corebattle.BattleJobs{JobID: fmt.Sprintf("job-%d", jobID)},
 	}}}
 	data, err := json.Marshal(s)
 	if err != nil {
@@ -55,9 +66,15 @@ func TestNPC98ResetUsesAdapterGearRequesterAndSavedTension(t *testing.T) {
 		EffectContext: corebattle.EffectContext{TargetContext: corebattle.TargetContext{ActorID: "npc", PartyIDs: []string{"npc"}, EnemyIDs: []string{"player"}}, ActorNPC: true, RequesterLevel: &level},
 	}, EquipmentReset: &corebattle.EquipmentResetContext{RequesterLevel: &level, Seals: &seals}}
 	var d skill.BattleDefinitions
-	d.RegisterNPCJob98(&c)
+	position := 1
+	if jobID == 97 {
+		d.RegisterNPCJob97(&corebattle.NPCJob97Context{DamageContext: c.DamageContext, EquipmentReset: c.EquipmentReset})
+		position = 2
+	} else {
+		d.RegisterNPCJob98(&c)
+	}
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext}
-	ops, err := d.InvocationAction(&loaded, &f, []string{"npc-job-98-position-1"}, rng)
+	ops, err := d.InvocationAction(&loaded, &f, []string{fmt.Sprintf("npc-job-%d-position-%d", jobID, position)}, rng)
 	if err != nil || rng.draws != 1 {
 		t.Fatal(err, rng.draws)
 	}
