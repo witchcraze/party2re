@@ -904,6 +904,47 @@ func TestCrawlSession_LeaderVsMemberBonuses(t *testing.T) {
 	if len(sess6.TreasureBoxes) != 2 {
 		t.Errorf("non-leader lucky pendant: len(TreasureBoxes) = %d, want 2", len(sess6.TreasureBoxes))
 	}
+
+	// 7. Leader has Lucky Pendant in unequipped inventory only (not in Gear.AccessoryID) -> NO pendant bonus (2 boxes)
+	p1UnequippedPendant := corebattle.MustNewParticipant("leader-unequipped", 50000, 10000, 10000)
+	p1UnequippedPendant.ItemDefinitionIDs = []string{adventure.ItemLuckyPendant}
+	charsUnequippedLeader := []corecharacter.Character{
+		{ID: "leader-unequipped", Name: "Leader", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-plain", Name: "Member", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess7, err := adventure.NewCrawlSessionWithParticipants(stage, charsUnequippedLeader, []corebattle.Participant{p1UnequippedPendant, p2Plain}, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess7)
+	if len(sess7.TreasureBoxes) != 2 {
+		t.Errorf("unequipped lucky pendant: len(TreasureBoxes) = %d, want 2", len(sess7.TreasureBoxes))
+	}
+
+	// 8. 2-player party with Pirate (job-81) leader, delta -1 roll, no pendant:
+	// Initial count = 1. Gambler delta -1 -> count becomes 0.
+	// Legacy shift || $#partys fallback restores count to 1 -> 2 boxes!
+	rngGamblerNeg := func(n int) int {
+		if n == 3 {
+			return 0
+		}
+		if n == 2 {
+			return 1
+		}
+		return 1
+	}
+	charsPirateLeader := []corecharacter.Character{
+		{ID: "leader-pirate", Name: "Leader", JobID: "job-81", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-plain", Name: "Member", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess8, err := adventure.NewCrawlSession(stage, charsPirateLeader, rngGamblerNeg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess8)
+	if len(sess8.TreasureBoxes) != 2 {
+		t.Errorf("pirate leader delta -1 fallback: len(TreasureBoxes) = %d, want 2", len(sess8.TreasureBoxes))
+	}
 }
 
 func TestCrawlSession_Stage17TwoPlayersInclusiveCount(t *testing.T) {

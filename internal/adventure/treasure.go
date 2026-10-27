@@ -110,6 +110,13 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 		count++
 	}
 
+	// Legacy party2/lib/_npc_action.cgi:499 fallback:
+	//   my $count = shift || $#partys;
+	// In Perl, if $count passed from vs_monster.cgi evaluated to 0 (falsy), it falls back to $#partys (total - 1).
+	if count == 0 {
+		count = total - 1
+	}
+
 	// Chapel Blessing 4 ("宝箱がほしい"): 20% chance of +1 box (party2/lib/_npc_action.cgi:501, rand(5) < 1)
 	if input.HasTreasureBlessing && rng(5) == 0 {
 		count++
@@ -169,17 +176,10 @@ func IsLuckyPendantID(id string) bool {
 	}
 }
 
-// ParticipantHasLuckyPendant reports whether a combat participant holds or has equipped Lucky Pendant (item-191).
+// ParticipantHasLuckyPendant reports whether a combat participant has equipped Lucky Pendant (item-191).
+// In legacy Party2 ($m{ite} eq '191'), this checks the currently equipped accessory slot, not unequipped inventory.
 func ParticipantHasLuckyPendant(p corebattle.Participant) bool {
-	if p.Gear != nil && IsLuckyPendantID(p.Gear.AccessoryID) {
-		return true
-	}
-	for _, id := range p.ItemDefinitionIDs {
-		if IsLuckyPendantID(id) {
-			return true
-		}
-	}
-	return false
+	return p.Gear != nil && IsLuckyPendantID(p.Gear.AccessoryID)
 }
 
 func (s *CrawlSession) spawnTreasureBoxes() {

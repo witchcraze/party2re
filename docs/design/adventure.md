@@ -518,9 +518,11 @@ $$\text{Index} = \text{BaseIndex} + \text{MerchantBonus} + \text{TreasureHunterB
    - **Merchant Job Bonus** (`job-07` / 商人): +1 treasure chest.
    - **Treasure Hunter Job Bonus** (`job-78` / トレジャーハンター): +1 to +2 treasure chests ($1 + \text{rand}(2)$).
    - **Gambler / Pirate Job Bonus** (`job-81` / 海賊): $+\text{rand}(3) - \text{rand}(2)$ treasure chests. If the leader holds Lucky Pendant (`item-191`), the index cannot drop below $P - 1$.
-   - **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント / 海賊ハット): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest.
-3. **Chapel Treasure Blessing Bonus** (`DROP` / `4` / `treasure_wish` / `宝箱がほしい`): $1/5$ chance ($\text{rand}(5) == 0$) of +1 treasure chest (`_npc_action.cgi:501`), evaluated once when spawning chests in the treasure room.
-4. **Lower Bound**: If surviving party members $\le 0$, 0 chests are spawned. If the final index $< 0$, 0 chests are spawned; otherwise, $\text{Index} + 1$ chests are spawned.
+   - **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント / 海賊ハット): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest. Checked strictly on the equipped accessory slot (`$m{ite}`), not unequipped inventory items.
+3. **Legacy Falsy Index Fallback**:
+   In legacy `_npc_action.cgi:499` (`my $count = shift || $#partys;`), if the index passed from `vs_monster.cgi` is `0` (Perl falsy, e.g., a 2-player party whose Pirate roll resulted in $1 - 1 = 0$), it falls back to $P - 1$ before evaluating the Chapel Blessing and dead member penalty.
+4. **Chapel Treasure Blessing Bonus** (`DROP` / `4` / `treasure_wish` / `宝箱がほしい`): $1/5$ chance ($\text{rand}(5) == 0$) of +1 treasure chest (`_npc_action.cgi:501`), evaluated once when spawning chests in the treasure room.
+5. **Lower Bound**: If surviving party members $\le 0$, 0 chests are spawned. If the final index $< 0$, 0 chests are spawned; otherwise, $\text{Index} + 1$ chests are spawned.
 
 ### Treasure Box Loot Pool Distribution & Weekday Orbs
 Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons`, `treasure_armors`, `treasure_items`) per `_npc_action.cgi:540-550`:

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
 func TestCalculateTreasureCount_BaseCases(t *testing.T) {
@@ -520,5 +521,75 @@ func TestCalculateTreasureCount_GamblerPendantProtection(t *testing.T) {
 	})
 	if gotGuarded != 4 {
 		t.Errorf("Gambler -1 WITH pendant (guarded at 4): got %d, want 4", gotGuarded)
+	}
+}
+
+func TestParticipantHasLuckyPendant(t *testing.T) {
+	// 1. Participant without gear
+	pNoGear := corebattle.MustNewParticipant("p1", 100, 10, 10)
+	if adventure.ParticipantHasLuckyPendant(pNoGear) {
+		t.Errorf("ParticipantHasLuckyPendant with no gear = true, want false")
+	}
+
+	// 2. Participant with Lucky Pendant equipped in accessory slot
+	pEquipped := corebattle.MustNewParticipant("p2", 100, 10, 10)
+	pEquipped.Gear = &corebattle.BattleGearStats{AccessoryID: adventure.ItemLuckyPendant}
+	if !adventure.ParticipantHasLuckyPendant(pEquipped) {
+		t.Errorf("ParticipantHasLuckyPendant with equipped accessory = false, want true")
+	}
+
+	// 3. Participant with Lucky Pendant only in inventory (unequipped)
+	pUnequipped := corebattle.MustNewParticipant("p3", 100, 10, 10)
+	pUnequipped.Gear = &corebattle.BattleGearStats{AccessoryID: "item-012"}
+	pUnequipped.ItemDefinitionIDs = []string{adventure.ItemLuckyPendant}
+	if adventure.ParticipantHasLuckyPendant(pUnequipped) {
+		t.Errorf("ParticipantHasLuckyPendant with unequipped inventory item = true, want false")
+	}
+}
+
+func TestCalculateTreasureCount_LegacyFalsyFallback(t *testing.T) {
+	// Legacy _npc_action.cgi:499 (my $count = shift || $#partys):
+	// When $count is 0 in Perl, it is falsy and falls back to $#partys (total - 1).
+	// Scenario: Standard stage, 2-player party (total=2).
+	// Initial count = 1.
+	// Gambler rolls delta = -1 (rng(3)=0, rng(2)=1).
+	// count becomes 1 - 1 = 0.
+	// Legacy fallback resets count to $#partys = 1.
+	// Final boxes spawned = 0..1 = 2 boxes!
+	rngGamblerNeg := func(n int) int {
+		if n == 3 {
+			return 0
+		}
+		if n == 2 {
+			return 1
+		}
+		return 1
+	}
+
+	// 2 alive, 0 dead: fallback resets count to 1 -> 2 boxes
+	got2Alive := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		StageID:         "stage-01",
+		AliveMembers:    2,
+		TotalMembers:    2,
+		HasGambler:      true,
+		HasLuckyPendant: false,
+		Rng:             rngGamblerNeg,
+	})
+	if got2Alive != 2 {
+		t.Errorf("2-player party with Gambler delta -1 (fallback to 1): got %d, want 2", got2Alive)
+	}
+
+	// 1 alive, 1 dead: fallback resets count to 1, dead penalty subtracts 1 -> count = 0 -> 1 box
+	got1Alive1Dead := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		StageID:         "stage-01",
+		AliveMembers:    1,
+		DeadMembers:     1,
+		TotalMembers:    2,
+		HasGambler:      true,
+		HasLuckyPendant: false,
+		Rng:             rngGamblerNeg,
+	})
+	if got1Alive1Dead != 1 {
+		t.Errorf("2-player party (1 dead) with Gambler delta -1: got %d, want 1", got1Alive1Dead)
 	}
 }
