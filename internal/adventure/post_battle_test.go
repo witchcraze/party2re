@@ -78,6 +78,11 @@ func (r *memoryAdvRepo) GetAggregatedStats(_ context.Context, characterID string
 
 func setupTestAdventureService(t *testing.T, char corecharacter.Character, settler adventure.PostBattleSettler) (*adventure.Service, *memoryCharRepo) {
 	t.Helper()
+	return setupTestAdventureServiceWithBattle(t, char, settler, corebattle.Engine{})
+}
+
+func setupTestAdventureServiceWithBattle(t *testing.T, char corecharacter.Character, settler adventure.PostBattleSettler, resolver corebattle.Resolver) (*adventure.Service, *memoryCharRepo) {
+	t.Helper()
 	charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 	advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
 	clock := &fixedAdvClock{now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)}
@@ -102,7 +107,7 @@ func setupTestAdventureService(t *testing.T, char corecharacter.Character, settl
 		nil,
 		stages,
 		monsters,
-		corebattle.Engine{},
+		resolver,
 		nil,
 		nil,
 		clock,
