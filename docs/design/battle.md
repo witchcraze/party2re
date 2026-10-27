@@ -305,6 +305,27 @@ Native admission is enforced across these boundaries:
   Their entire reachable closure must be certified; substituting a supported-only draw pool
   is prohibited.
 
+Martial callbacks compose the shared damage, status, healing, stat and lifetime
+owners (`internal/core/battle/martial.go`; `_skill.cgi:1190–1226,2237–2265,2296–2334`
+at `ff97fc549932a146cc945d7edf71b44c868a840e`). Job4 preserves extended SP0
+area AT×0.75, raw hit95, self AG+40%, physical AT×1.2/AT×1.5, immobilization75%
+and instant death19%. Its flurry draws three through five independent random
+targets at current AT×0.8 and stops after caster death. The final extension
+invokes AT+40% then DF+40%, then assigns six qualifying damage-helper tails of
+flame even when the stat helpers have no effect. Job23 uses AG×1.8, ordered
+AT/DF+40%, AT×0.9 followed by self healing from the returned damage amount,
+two fresh argument shifts at current AG×2.2 with a living-caster guard, and
+direct physical AT×1.4. Job25 retains area AT×0.8, physical heal100 followed by
+raw hit95, AT×2 followed by vulnerability even after no-effect or caster death,
+and direct physical area120. Its separate raw temporary assignments are physical
+counter, major defense, party cover (including fallen allies) and self revival.
+Stat caps, helper category cures, target redirection and incidental equipment
+effects remain with their existing owners. Ordinary costs belong to the
+consumer; indirect invocation retains its existing waiver/extended charge rules.
+Frozen identities/input and operation facts survive reload, with ports rebuilt
+and completed callbacks never replayed. Global catalog assembly and actual
+adventure command wiring remain separate adoption work.
+
 Weapon, weather and stance callbacks compose the shared effect owners
 (`internal/core/battle/weapon_weather_stance.go`). Job24's attacks preserve
 physical AT×1.2/AT×1.5, direct untyped AT×0.4 and direct physical230; its
