@@ -1781,6 +1781,23 @@ capped at 200, and clears temporary/status/extended state; a grave-field helper
 can be restored or recreated. These tails cannot be represented by one generic
 “end turn” hook with the same eligibility for every actor.
 
+Job403 composes the existing target, damage, stat and equipment-reset owners
+(`_skill.cgi:8077–8121` at `ff97fc549932a146cc945d7edf71b44c868a840e`). Its
+ordered callbacks are direct untyped area AT×0.6; untyped self DF+50% followed
+by physical reduction even when the stat helper has no effect; and three
+direct physical hits. The three-hit callback resolves its final target once,
+saves tension and sets it to1, makes two independently random AT×0.5 hits,
+then restores saved tension before the selected-target AT×0.8 hit. Each hit
+requires a living actor; death before the third leaves tension unrestored.
+The fourth callback resets each enemy before reading current HP for direct
+untyped min(HP×0.5,500) damage, then resets every ally, including fallen allies.
+This loop has no living-actor guard. Reset includes equipment callbacks, so
+HP, defenses, temporary effects and the package cursor can change before damage.
+`RegisterNPCOrderedReset` binds these four generic positions to complete
+invocation admission; it does not enable scalar batch substitutes. Rebuild
+operation ports from saved facts on reload and resume after completed callbacks.
+Stage selection, ordinary costs and NPC tails remain consumer responsibilities.
+
 The shared NPC curse hook releases its stored count of 400-base all-enemy
 attacks **before** action selection, clears the payload and rebuilds living
 opponents (`116–135`); damage can reduce that count (`_skill.cgi:8896–8902`).
