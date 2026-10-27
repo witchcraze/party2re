@@ -131,9 +131,9 @@ func TestCrawlSession_Full10FloorsAndTreasureRoom(t *testing.T) {
 		t.Fatalf("expected next floor to be 11 (Treasure Room), got %d", session.CurrentFloor)
 	}
 
-	// Treasure boxes should be spawned (Base 3 alive + Merchant +1 + Treasure Hunter +1 = 5)
-	if len(session.TreasureBoxes) != 5 {
-		t.Fatalf("expected 5 treasure boxes, got %d", len(session.TreasureBoxes))
+	// Treasure boxes should be spawned (Base 3 alive; leader is Hero without job bonuses, so 3 boxes)
+	if len(session.TreasureBoxes) != 3 {
+		t.Fatalf("expected 3 treasure boxes, got %d", len(session.TreasureBoxes))
 	}
 
 	// Examine treasure on Floor 11 (@しらべる)
@@ -357,10 +357,10 @@ func TestCrawlSession_GamblerAndStageMultipliers(t *testing.T) {
 	}
 
 	// Expected boxes:
-	// Stage 17 has 3x multiplier: 1 alive member * 3 = 3 base boxes.
-	// Gambler adds +2 bonus. Total = 5 boxes!
-	if len(session.TreasureBoxes) != 5 {
-		t.Errorf("len(TreasureBoxes) = %d, want 5 (1*3 + 2)", len(session.TreasureBoxes))
+	// Stage 17 has 3x multiplier: 1 alive member * 3 = 3 base index.
+	// Gambler adds +2 bonus -> index 5. Inclusive generation 0..5 generates 6 boxes!
+	if len(session.TreasureBoxes) != 6 {
+		t.Errorf("len(TreasureBoxes) = %d, want 6 (1*3 + 2 + 1)", len(session.TreasureBoxes))
 	}
 }
 
@@ -790,5 +790,227 @@ func TestCrawlSession_SoloVsParty_SynergyMultipliers(t *testing.T) {
 	if partyResult.TotalEXP < soloResult.TotalEXP || partyResult.TotalEXP > approxScale+20 {
 		t.Errorf("party TotalEXP (%d) unexpected relative to solo (%d), approx expected %d",
 			partyResult.TotalEXP, soloResult.TotalEXP, approxScale)
+	}
+}
+
+func TestCrawlSession_LeaderVsMemberBonuses(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+	engine := corebattle.Engine{}
+	fixedRng := func(n int) int { return 0 }
+
+	advanceToFloor11 := func(t *testing.T, sess *adventure.CrawlSession) {
+		t.Helper()
+		for f := 1; f <= 10; f++ {
+			res, err := sess.AdvanceFloor(stages, monsters, engine)
+			if err != nil {
+				t.Fatalf("floor %d advance error: %v", f, err)
+			}
+			if !res.Cleared {
+				t.Fatalf("floor %d should be cleared", f)
+			}
+		}
+	}
+
+	// 1. Leader is Merchant (job-07) -> +1 box (2 alive + 1 = 3 boxes)
+	charsLeaderMerchant := []corecharacter.Character{
+		{ID: "leader-merch", Name: "Leader", JobID: "job-07", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-hero", Name: "Member", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess1, err := adventure.NewCrawlSession(stage, charsLeaderMerchant, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess1)
+	if len(sess1.TreasureBoxes) != 3 {
+		t.Errorf("leader merchant: len(TreasureBoxes) = %d, want 3", len(sess1.TreasureBoxes))
+	}
+
+	// 2. Leader is Hero (job-01), Member is Merchant (job-07) -> NO merchant bonus (2 boxes)
+	charsMemberMerchant := []corecharacter.Character{
+		{ID: "leader-hero", Name: "Leader", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-merch", Name: "Member", JobID: "job-07", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess2, err := adventure.NewCrawlSession(stage, charsMemberMerchant, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess2)
+	if len(sess2.TreasureBoxes) != 2 {
+		t.Errorf("non-leader merchant: len(TreasureBoxes) = %d, want 2 (bonus must not apply to non-leader)", len(sess2.TreasureBoxes))
+	}
+
+	// 3. Leader is Treasure Hunter (job-78) -> +1 box with rng=0 (2 alive + 1 = 3 boxes)
+	charsLeaderTH := []corecharacter.Character{
+		{ID: "leader-th", Name: "Leader", JobID: "job-78", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-hero", Name: "Member", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess3, err := adventure.NewCrawlSession(stage, charsLeaderTH, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess3)
+	if len(sess3.TreasureBoxes) != 3 {
+		t.Errorf("leader treasure hunter: len(TreasureBoxes) = %d, want 3", len(sess3.TreasureBoxes))
+	}
+
+	// 4. Leader is Hero, Member is Treasure Hunter -> NO TH bonus (2 boxes)
+	charsMemberTH := []corecharacter.Character{
+		{ID: "leader-hero", Name: "Leader", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-th", Name: "Member", JobID: "job-78", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess4, err := adventure.NewCrawlSession(stage, charsMemberTH, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess4)
+	if len(sess4.TreasureBoxes) != 2 {
+		t.Errorf("non-leader treasure hunter: len(TreasureBoxes) = %d, want 2", len(sess4.TreasureBoxes))
+	}
+
+	// 5. Leader holds Lucky Pendant (item-191) -> triggers +1 box with rng=0 (2 alive + 1 = 3 boxes)
+	p1Pendant := corebattle.MustNewParticipant("leader-pendant", 50000, 10000, 10000)
+	p1Pendant.Gear = &corebattle.BattleGearStats{AccessoryID: adventure.ItemLuckyPendant}
+	p2Plain := corebattle.MustNewParticipant("member-plain", 50000, 10000, 10000)
+	charsPendantLeader := []corecharacter.Character{
+		{ID: "leader-pendant", Name: "Leader", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-plain", Name: "Member", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess5, err := adventure.NewCrawlSessionWithParticipants(stage, charsPendantLeader, []corebattle.Participant{p1Pendant, p2Plain}, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess5)
+	if len(sess5.TreasureBoxes) != 3 {
+		t.Errorf("leader lucky pendant: len(TreasureBoxes) = %d, want 3", len(sess5.TreasureBoxes))
+	}
+
+	// 6. Member holds Lucky Pendant, but Leader does not -> NO pendant bonus (2 boxes)
+	p1Plain := corebattle.MustNewParticipant("leader-plain", 50000, 10000, 10000)
+	p2Pendant := corebattle.MustNewParticipant("member-pendant", 50000, 10000, 10000)
+	p2Pendant.Gear = &corebattle.BattleGearStats{AccessoryID: adventure.ItemLuckyPendant}
+	charsPendantMember := []corecharacter.Character{
+		{ID: "leader-plain", Name: "Leader", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-pendant", Name: "Member", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess6, err := adventure.NewCrawlSessionWithParticipants(stage, charsPendantMember, []corebattle.Participant{p1Plain, p2Pendant}, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess6)
+	if len(sess6.TreasureBoxes) != 2 {
+		t.Errorf("non-leader lucky pendant: len(TreasureBoxes) = %d, want 2", len(sess6.TreasureBoxes))
+	}
+
+	// 7. Leader has Lucky Pendant in unequipped inventory only (not in Gear.AccessoryID) -> NO pendant bonus (2 boxes)
+	p1UnequippedPendant := corebattle.MustNewParticipant("leader-unequipped", 50000, 10000, 10000)
+	p1UnequippedPendant.ItemDefinitionIDs = []string{adventure.ItemLuckyPendant}
+	charsUnequippedLeader := []corecharacter.Character{
+		{ID: "leader-unequipped", Name: "Leader", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-plain", Name: "Member", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess7, err := adventure.NewCrawlSessionWithParticipants(stage, charsUnequippedLeader, []corebattle.Participant{p1UnequippedPendant, p2Plain}, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess7)
+	if len(sess7.TreasureBoxes) != 2 {
+		t.Errorf("unequipped lucky pendant: len(TreasureBoxes) = %d, want 2", len(sess7.TreasureBoxes))
+	}
+
+	// 8. 2-player party with Pirate (job-81) leader, delta -1 roll, no pendant:
+	// Initial count = 1. Gambler delta -1 -> count becomes 0.
+	// Legacy shift || $#partys fallback restores count to 1 -> 2 boxes!
+	rngGamblerNeg := func(n int) int {
+		if n == 3 {
+			return 0
+		}
+		if n == 2 {
+			return 1
+		}
+		return 1
+	}
+	charsPirateLeader := []corecharacter.Character{
+		{ID: "leader-pirate", Name: "Leader", JobID: "job-81", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "member-plain", Name: "Member", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess8, err := adventure.NewCrawlSession(stage, charsPirateLeader, rngGamblerNeg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess8)
+	if len(sess8.TreasureBoxes) != 2 {
+		t.Errorf("pirate leader delta -1 fallback: len(TreasureBoxes) = %d, want 2", len(sess8.TreasureBoxes))
+	}
+}
+
+func TestCrawlSession_Stage17TwoPlayersInclusiveCount(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage17, err := stages.FindByID("stage-17")
+	if err != nil {
+		t.Fatalf("FindByID(stage-17): %v", err)
+	}
+	engine := corebattle.Engine{}
+	fixedRng := func(n int) int { return 0 }
+
+	advanceToFloor11 := func(t *testing.T, sess *adventure.CrawlSession) {
+		t.Helper()
+		for f := 1; f <= 10; f++ {
+			res, err := sess.AdvanceFloor(stages, monsters, engine)
+			if err != nil {
+				t.Fatalf("floor %d advance error: %v", f, err)
+			}
+			if !res.Cleared {
+				t.Fatalf("floor %d should be cleared", f)
+			}
+		}
+	}
+
+	// Case 1: 2 alive players clear stage-17 -> exactly 7 boxes (2*3 + 1)
+	chars2Alive := []corecharacter.Character{
+		{ID: "p1", Name: "P1", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "p2", Name: "P2", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess1, err := adventure.NewCrawlSession(stage17, chars2Alive, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess1)
+	if len(sess1.TreasureBoxes) != 7 {
+		t.Errorf("stage 17 with 2 alive players: len(TreasureBoxes) = %d, want 7", len(sess1.TreasureBoxes))
+	}
+
+	// Case 2: 2 players on stage-17, 1 alive, 1 dead -> exactly 6 boxes (2*3 - 1 + 1)
+	p1Alive := corebattle.MustNewParticipant("p1-alive", 50000, 10000, 10000)
+	p2Dead := corebattle.MustNewParticipant("p2-dead", 100, 10000, 10000)
+	p2Dead.HP = 0 // explicitly unconscious
+	chars1Dead := []corecharacter.Character{
+		{ID: "p1-alive", Name: "P1", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "p2-dead", Name: "P2", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess2, err := adventure.NewCrawlSessionWithParticipants(stage17, chars1Dead, []corebattle.Participant{p1Alive, p2Dead}, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess2)
+	if len(sess2.TreasureBoxes) != 6 {
+		t.Errorf("stage 17 with 1 alive, 1 dead: len(TreasureBoxes) = %d, want 6", len(sess2.TreasureBoxes))
+	}
+
+	// Case 3: 2 alive players on stage-17 with leader job-07 (Merchant) -> exactly 8 boxes (2*3 + 1 + 1)
+	charsMerchantLeader := []corecharacter.Character{
+		{ID: "p1-merch", Name: "P1", JobID: "job-07", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+		{ID: "p2-plain", Name: "P2", JobID: "job-01", Level: 50, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	sess3, err := adventure.NewCrawlSession(stage17, charsMerchantLeader, fixedRng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceToFloor11(t, sess3)
+	if len(sess3.TreasureBoxes) != 8 {
+		t.Errorf("stage 17 with 2 alive players and merchant leader: len(TreasureBoxes) = %d, want 8", len(sess3.TreasureBoxes))
 	}
 }
