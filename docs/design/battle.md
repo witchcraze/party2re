@@ -1781,6 +1781,31 @@ capped at 200, and clears temporary/status/extended state; a grave-field helper
 can be restored or recreated. These tails cannot be represented by one generic
 “end turn” hook with the same eligibility for every actor.
 
+Ordinary stage20 job98 uses the table at `_skill.cgi:7309–7408` at
+`ff97fc549932a146cc945d7edf71b44c868a840e`, independently of other modes sharing
+the job identity. Its eleven positions retain both same-name HP1 entries and
+their selection weight; ordinary name binding uses the final eligible position.
+HP1 applies to the resolved target only when MaxHP and base defense are both
+at most999, bypassing damage/status modifiers and their counters. The dispel
+resets every member, including fallen members, while preserving each tension.
+Party reflection checks the caster's magic seal once and writes only to living
+allies. The defense+50% helper precedes living-party magic reduction even if the
+buff has no effect or fails its seal check. Self vulnerability precedes two
+tension calls, including requester-level and equipment tails.
+
+Job98's damage/heal callback performs direct magic area200 before magic party
+heal200; caster death stops the area loop but does not skip the healing helper.
+Its breath100 loop writes vulnerability to each original enemy after the hit,
+including dead, redirected or blocked targets, and continues after caster death.
+The remaining attacks are direct breath area350,4–6 independently random direct
+magic250 hits stopping at caster death, and direct magic area400. Area helpers
+retain their shared decay/modifier ordering. `RegisterNPCJob98` binds the complete
+table to native whole-body admission; missing descendants reject before costs,
+effects or committed RNG. Operation ports are rebuilt after reload, and the
+consumer resumes after completed callbacks rather than reexecuting them. This
+registration does not supply NPC selection, ordinary charging, SQL or Gateway
+integration.
+
 Job403 composes the existing target, damage, stat and equipment-reset owners
 (`_skill.cgi:8077–8121` at `ff97fc549932a146cc945d7edf71b44c868a840e`). Its
 ordered callbacks are direct untyped area AT×0.6; untyped self DF+50% followed
