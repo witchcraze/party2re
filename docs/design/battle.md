@@ -362,8 +362,8 @@ once before any child, then heals each ordered ally at untyped300 and cures
 using that loop ally's current status, even when a helper redirects to another
 member (`2408–2445`). Full/fallen allies retain ordinary helper behavior.
 Job28's self accuracy assignment sets95; deflection and physical immunity are
-raw assignments without seal/living guards. Physical status uses80% single or
-65% area; physical instant death uses25% with the shared death immunity and
+raw assignments without seal/living guards. Physical-category immobilization
+(動封) uses80% single or 65% area; physical instant death uses25% with the shared death immunity and
 defeat closure (`2455–2486`). Tables retain wallet28.3 for its separate asset
 owner; its missing binding rejects an enclosing indirect choice. Operation
 facts survive reload and ports are rebuilt; completed callbacks are not replayed.
