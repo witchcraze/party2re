@@ -1781,6 +1781,32 @@ capped at 200, and clears temporary/status/extended state; a grave-field helper
 can be restored or recreated. These tails cannot be represented by one generic
 “end turn” hook with the same eligibility for every actor.
 
+Ordinary jobs88/90–94 retain nineteen independent positions at
+`_skill.cgi:7043–7178` at `ff97fc549932a146cc945d7edf71b44c868a840e`.
+Job88's physical immobilization and armed/unarmed direct claw use the shared
+helpers. Its grooming position resolves an ally (including incidental helper
+effects) but only reads equipment; the last position computes unused locals.
+Both are accepted no-effect bodies. Stage27 starts job88 at SP20, so only its
+first two positions are initially eligible (`stage/27.cgi:76–89`).
+
+Jobs90–92 retain their distinct physical/magic damage and poison/paralysis/sleep
+probabilities. A damage-status tail uses the returned living recipient, resolving
+it again through the status helper; missing/dead damage returns skip that tail.
+Job93 has single/area magic death and area dance death, plus magic HP−75% with
+MaxHP/baseDF≤999 and a separate 1/2 gate. The latter writes deadly poison directly
+to the first resolved recipient even when the second HP helper has no effect.
+Job94's untyped area death60% precedes living-actor defeat (including automatic
+revival), then MP1; the ordinary listed MP debit/clamp follows outside the body.
+Its rest position writes self sleep before half-MaxHP healing with no category.
+
+`RegisterNPCStatus` binds these complete tables to shared discovery/execution
+admission, including descendants after damage and area-death continuations before
+self sacrifice. Missing facts reject before effects, costs or committed RNG.
+The intrinsic registrations do not extend player-job discovery or apply player
+cost modifiers. Frozen facts survive reload; consumers rebuild operation ports
+and resume after completed callbacks rather than replaying them. Selection,
+ordinary charging, NPC tails and durable receipts remain consumer-owned.
+
 Ordinary job97 uses eleven positions at `_skill.cgi:7215–7307` at
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Both random physical flurries
 (3–4 hits at AT×0.85 and3–5 at AT×0.9) stop at caster death and reread AT

@@ -177,7 +177,8 @@ func (s *LifetimeState) ValidateAreaStatus(c *StatusContext, e TargetEffect, cha
 		return err
 	}
 	if death {
-		return s.validateAreaDeath(c, e, chance, bypass, rng)
+		_, err := s.projectAreaDeath(c, e, chance, bypass, false, rng)
+		return err
 	}
 	projected := *s
 	projected.Actors = slices.Clone(s.Actors)

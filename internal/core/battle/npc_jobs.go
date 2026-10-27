@@ -2,10 +2,12 @@ package battle
 
 // NPCJobEntries retains source positions, including duplicate-name weights.
 // The NPC selector binds names to the last eligible entry; it must not dedupe
-// this list or treat it as the full NPC catalog. Evidence: _skill.cgi:7183–7189,
+// this list or treat it as the full NPC catalog. Evidence: _skill.cgi:7043–7189,
 // 7215–7412,8077–8121; _npc_action.cgi:177–224,313–322.
 func NPCJobEntries(job int) []CallbackEntry {
 	switch job {
+	case 88, 90, 91, 92, 93, 94:
+		return npcStatusEntries(job)
 	case 95:
 		return []CallbackEntry{
 			{ID: "npc-job-95-position-0", Name: "stage-summon", MPCost: 50},
