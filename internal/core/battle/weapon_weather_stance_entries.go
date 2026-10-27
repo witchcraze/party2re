@@ -28,11 +28,11 @@ func WeaponWeatherStanceEntries(job int) []CallbackEntry {
 	case 28:
 		return []CallbackEntry{
 			{ID: "job-28-entry-0", Name: "accuracy-restore", RequiredSP: 5},
-			{ID: "job-28-entry-1", Name: "physical-seal", RequiredSP: 15, MPCost: 3},
+			{ID: "job-28-entry-1", Name: "immobilization", RequiredSP: 15, MPCost: 3},
 			{ID: "job-28-entry-2", Name: "deflection", RequiredSP: 30, MPCost: 5},
 			{ID: "job-28-entry-3", Name: "wallet-wave", RequiredSP: 50},
 			{ID: "job-28-entry-4", Name: "physical-immunity", RequiredSP: 70, MPCost: 4},
-			{ID: "job-28-entry-5", Name: "physical-seal-wave", RequiredSP: 100, MPCost: 20},
+			{ID: "job-28-entry-5", Name: "immobilization-wave", RequiredSP: 100, MPCost: 20},
 			{ID: "job-28-entry-6", Name: "physical-death", RequiredSP: 140, MPCost: 10},
 		}
 	}

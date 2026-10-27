@@ -141,7 +141,7 @@ func TestWeaponWeatherStanceStatusAndDeathChanceBoundaries(t *testing.T) {
 				if (s.Actors[1].HP == 0) != success {
 					t.Fatal(row, delta, s)
 				}
-			} else if (s.Actors[1].Status == corebattle.StatusPhysicalSeal) != success || success && s.Actors[1].Tension != 1 {
+			} else if (s.Actors[1].Status == corebattle.StatusDofuu) != success || success && s.Actors[1].Tension != 1 {
 				t.Fatal(row, delta, s)
 			}
 		}

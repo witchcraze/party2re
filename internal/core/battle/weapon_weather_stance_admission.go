@@ -69,7 +69,7 @@ func (s *LifetimeState) ValidateWeaponWeatherStance(c *WeaponWeatherStanceContex
 		return nil
 	case "job-28-entry-1", "job-28-entry-5", "job-28-entry-6":
 		status := child.statusContext()
-		e, chance, death := controlSymbol("", StatusPhysicalSeal, CategoryPhysical), 80.0, false
+		e, chance, death := controlSymbol("", StatusDofuu, CategoryPhysical), 80.0, false
 		if id == "job-28-entry-5" {
 			return p.ValidateAreaStatus(&status, e, 65, false, false, rng)
 		}

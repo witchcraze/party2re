@@ -122,8 +122,19 @@ func TestWeaponWeatherStanceManifest(t *testing.T) {
 					t.Fatal(a)
 				}
 			case "job-28-entry-1", "job-28-entry-5":
-				if e.Status != corebattle.StatusPhysicalSeal || c.StatusCalls != 1 || c.AreaStatusCalls != row.pos/5 {
+				name := "immobilization"
+				if row.pos == 5 {
+					name = "immobilization-wave"
+				}
+				if entry.Name != name {
+					t.Fatal(entry)
+				}
+				if e.Status != corebattle.StatusDofuu || c.StatusCalls != 1 || c.AreaStatusCalls != row.pos/5 {
 					t.Fatal(e, c)
+				}
+				decision, err := s.Actors[1].CheckIncapacitation(corebattle.IncapacitationContext{}, noArithmeticDraws{t})
+				if err != nil || decision.NormalAction || s.Actors[1].Status != "" {
+					t.Fatal(decision, err, s.Actors[1])
 				}
 			case "job-28-entry-6":
 				if c.DeathCalls != 1 {

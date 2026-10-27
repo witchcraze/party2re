@@ -145,9 +145,9 @@ func (s *LifetimeState) ApplyWeaponWeatherStance(c *WeaponWeatherStanceContext, 
 			c.EffectContext = child.EffectContext
 		}
 	case "job-28-entry-1":
-		_, err = s.ApplyStatus(&child, controlSymbol(c.shift(), StatusPhysicalSeal, CategoryPhysical), 80, false, false, rng)
+		_, err = s.ApplyStatus(&child, controlSymbol(c.shift(), StatusDofuu, CategoryPhysical), 80, false, false, rng)
 	case "job-28-entry-5":
-		_, err = s.ApplyAreaStatus(&child, controlSymbol("", StatusPhysicalSeal, CategoryPhysical), 65, false, false, rng)
+		_, err = s.ApplyAreaStatus(&child, controlSymbol("", StatusDofuu, CategoryPhysical), 65, false, false, rng)
 	case "job-28-entry-6":
 		_, err = s.ApplyStatus(&child, controlSymbol(c.shift(), "death", CategoryPhysical), 25, false, true, rng)
 	}
