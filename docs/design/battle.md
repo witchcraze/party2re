@@ -671,6 +671,38 @@ changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
 
+#### Guardian and restoration callbacks
+
+Evidence: `_skill.cgi:1873–1986` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterGuardianHealing` binds eleven intrinsic bodies and contributes the full
+ordered job17/18 tables. Revival17.4/17.6/18.4/18.6 keep their independent
+`RegisterRevivals` bindings; an absent descendant rejects the original pool.
+
+Job17 covers a resolved nonself ally, heals30 with magic, grants magic mitigation
+only to living party members after the caster's magic-seal check, cures party
+paralysis with magic, and deals nondirect physical area damage at DF×1.5. Job18
+uses a single magic poison cure, area dance-seal70, party sleep cure with song,
+single-ally magic reflection, and party magic healing120. Each body retains its
+helper's target redirects, category guards, argument consumption and counters.
+
+Job18's extension saves the caster's tension and sets it to1. In party order it
+raises each fallen member to1HP, then invokes a single magic heal with base power
+min(300, floor(that member's MaxHP×0.3)). It sums returned healing amounts,
+including capped or overflow healing, rather than actual HP gains. Only the
+first use for the caster's color invokes direct magic damage using that sum and
+then records room history, including an accepted no-effect hit. Repeated uses
+still run the entire revival/healing loop and leave the target argument intact.
+Saved tension is restored after normal return, including reflected damage that
+defeats the caster. This is not a party-heal helper or a single outer seal check.
+
+Admission projects ordered revivals and possible seal cures before checking the
+damage descendants, without mutating state or consuming RNG. The unsealed magic
+barrier supplies an exact transition for later slots; unknown prior transitions
+retain whole-action rejection. Consumers persist history, resulting battle facts,
+operation facts and frozen input, then rebuild ports after reload without
+replaying committed callbacks. Production Adventure adoption remains separate.
+
 #### Protective magic callbacks
 
 Evidence: `_skill.cgi:2722–2862` at revision
