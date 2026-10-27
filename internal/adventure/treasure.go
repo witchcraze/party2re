@@ -5,12 +5,13 @@ import (
 	"strings"
 	"time"
 
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 // Legacy item IDs with special adventure interactions.
 const (
-	//lint:ignore unused legacy item ID for treasure room bonus calculation
 	ItemLuckyPendant = "item-191" // ラッキーペンダント (1/3 chance +1 treasure box)
 	//lint:ignore unused legacy item ID for master key interaction
 	ItemMasterKey = "item-215" // マスターキー (allows opening multiple treasure boxes)
@@ -30,6 +31,8 @@ var defaultBoxNames = []string{
 type TreasureCalculationInput struct {
 	StageID             string
 	AliveMembers        int
+	DeadMembers         int // Number of dead party members (legacy add_treasure: --$count if hp <= 0)
+	TotalMembers        int // Total party members; if 0, defaults to AliveMembers + DeadMembers
 	HasMerchant         bool
 	HasGambler          bool
 	HasTreasureHunter   bool
@@ -56,35 +59,53 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 		rng = random.Intn
 	}
 
-	// Base count: 1 box per alive party member
-	// Legacy vs_monster.cgi:92: Stages 17, 20, 21 grant 3x treasure multiplier
-	count := input.AliveMembers
-	if isThreeTimesTreasureStage(input.StageID) {
-		count = input.AliveMembers * 3
+	total := input.TotalMembers
+	if total <= 0 {
+		total = input.AliveMembers + input.DeadMembers
 	}
-	baseCount := count
+	if total < input.AliveMembers {
+		total = input.AliveMembers
+	}
+	dead := input.DeadMembers
+	if dead <= 0 && total > input.AliveMembers {
+		dead = total - input.AliveMembers
+	}
+	if dead < 0 {
+		dead = 0
+	}
 
-	// Merchant (job 7): +1 box
+	// Legacy vs_monster.cgi:92:
+	//   my $count = $stage eq '17' || $stage eq '20' || $stage eq '21' ? ($#partys+1) * 3 : $#partys;
+	// where ($#partys + 1) is total party members, and $#partys is (total - 1).
+	var count int
+	if isThreeTimesTreasureStage(input.StageID) {
+		count = total * 3
+	} else {
+		count = total - 1
+	}
+
+	// Merchant (job 7 / job-07): +1 box (vs_monster.cgi:93: ++$count if $m{job} eq '7')
 	if input.HasMerchant {
 		count++
 	}
 
-	// Gambler (job 81): + rand(3) - rand(2)
+	// Gambler / Pirate (job 81 / job-81): + rand(3) - rand(2)
 	// (party2/lib/vs_monster.cgi:94-97)
-	// If Lucky Pendant (item-191) is held and count drops below baseCount, restored to baseCount.
+	// If Lucky Pendant (item-191) is held and count drops below $#partys (total - 1), restored to (total - 1).
 	if input.HasGambler {
 		count += rng(3) - rng(2)
-		if input.HasLuckyPendant && count < baseCount {
-			count = baseCount
+		minCount := total - 1
+		if input.HasLuckyPendant && count < minCount {
+			count = minCount
 		}
 	}
 
-	// Treasure Hunter (job 78): +1 to +2 boxes (1 + rand(2))
+	// Treasure Hunter (job 78 / job-78): +1 to +2 boxes (1 + rand(2)) (vs_monster.cgi:98)
 	if input.HasTreasureHunter {
 		count += 1 + rng(2)
 	}
 
-	// Lucky Pendant (item-191): 1/3 chance of +1 box (rand(3) < 1)
+	// Lucky Pendant (item-191): 1/3 chance of +1 box (rand(3) < 1) (vs_monster.cgi:100)
 	if input.HasLuckyPendant && rng(3) == 0 {
 		count++
 	}
@@ -94,10 +115,155 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 		count++
 	}
 
+	// Dead party members penalty (party2/lib/_npc_action.cgi:503-505):
+	//   for my $name (@partys) { --$count if $ms{$name}{hp} <= 0; }
+	count -= dead
+
+	// Legacy box generation loop: for my $i (0 .. $count) (party2/lib/_npc_action.cgi:519)
+	// In Perl, 0 .. $count is inclusive:
+	// - If count < 0: produces 0 boxes (empty range)
+	// - If count >= 0: produces count + 1 boxes
 	if count < 0 {
-		count = 0
+		return 0
 	}
-	return count
+	return count + 1
+}
+
+// IsMerchantJob reports whether the job ID represents the Merchant class (job 7 / job-07).
+func IsMerchantJob(jobID string) bool {
+	switch strings.ToLower(strings.TrimSpace(jobID)) {
+	case "job-07", "job-7", "7", "merchant", "商人":
+		return true
+	default:
+		return false
+	}
+}
+
+// IsGamblerJob reports whether the job ID represents the Gambler / Pirate class (job 81 / job-81).
+func IsGamblerJob(jobID string) bool {
+	switch strings.ToLower(strings.TrimSpace(jobID)) {
+	case "job-81", "81", "gambler", "pirate", "海賊", "勝負師":
+		return true
+	default:
+		return false
+	}
+}
+
+// IsTreasureHunterJob reports whether the job ID represents the Treasure Hunter class (job 78 / job-78).
+func IsTreasureHunterJob(jobID string) bool {
+	switch strings.ToLower(strings.TrimSpace(jobID)) {
+	case "job-78", "78", "treasure_hunter", "treasurehunter", "トレジャーハンター", "トレハン":
+		return true
+	default:
+		return false
+	}
+}
+
+// IsLuckyPendantID reports whether the item ID represents the Lucky Pendant (item-191).
+func IsLuckyPendantID(id string) bool {
+	switch strings.ToLower(strings.TrimSpace(id)) {
+	case ItemLuckyPendant, "191", "lucky_pendant", "lucky-pendant", "海賊ハット", "ラッキーペンダント":
+		return true
+	default:
+		return false
+	}
+}
+
+// ParticipantHasLuckyPendant reports whether a combat participant holds or has equipped Lucky Pendant (item-191).
+func ParticipantHasLuckyPendant(p corebattle.Participant) bool {
+	if p.Gear != nil && IsLuckyPendantID(p.Gear.AccessoryID) {
+		return true
+	}
+	for _, id := range p.ItemDefinitionIDs {
+		if IsLuckyPendantID(id) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *CrawlSession) spawnTreasureBoxes() {
+	aliveCount := 0
+	deadCount := 0
+
+	for _, c := range s.Characters {
+		isAlive := true
+		for _, p := range s.Participants {
+			if p.ID == c.ID && p.HP <= 0 {
+				isAlive = false
+				break
+			}
+		}
+		if isAlive {
+			aliveCount++
+		} else {
+			deadCount++
+		}
+	}
+
+	// Identify the acting player (操作主体: session leader, matching legacy %m in vs_monster.cgi)
+	var leader *corecharacter.Character
+	for i := range s.Characters {
+		if s.Characters[i].ID == s.LeaderID {
+			leader = &s.Characters[i]
+			break
+		}
+	}
+	if leader == nil && len(s.Characters) > 0 {
+		leader = &s.Characters[0]
+	}
+
+	hasMerchant := false
+	hasGambler := false
+	hasTreasureHunter := false
+	hasLuckyPendant := false
+
+	if leader != nil {
+		if IsMerchantJob(leader.JobID) {
+			hasMerchant = true
+		}
+		if IsGamblerJob(leader.JobID) {
+			hasGambler = true
+		}
+		if IsTreasureHunterJob(leader.JobID) {
+			hasTreasureHunter = true
+		}
+
+		for _, p := range s.Participants {
+			if p.ID == leader.ID {
+				if ParticipantHasLuckyPendant(p) {
+					hasLuckyPendant = true
+				}
+				break
+			}
+		}
+	}
+
+	boxCount := CalculateTreasureCount(TreasureCalculationInput{
+		StageID:             s.StageID,
+		AliveMembers:        aliveCount,
+		DeadMembers:         deadCount,
+		TotalMembers:        len(s.Characters),
+		HasMerchant:         hasMerchant,
+		HasGambler:          hasGambler,
+		HasTreasureHunter:   hasTreasureHunter,
+		HasLuckyPendant:     hasLuckyPendant,
+		HasTreasureBlessing: s.HasTreasureBlessing,
+		Rng:                 s.Rng,
+	})
+
+	itemPool := s.Stage.TreasureItems
+	if len(itemPool) == 0 && len(s.Stage.TreasureWeapons) == 0 && len(s.Stage.TreasureArmors) == 0 {
+		itemPool = []string{"item-001", "item-002"}
+	}
+
+	pools := StageTreasurePools{
+		Weapons: s.Stage.TreasureWeapons,
+		Armors:  s.Stage.TreasureArmors,
+		Items:   itemPool,
+	}
+
+	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, s.now(), s.Rng)
 }
 
 // IsTreasureBlessing reports whether the blessing string matches Chapel Blessing 4 ("宝箱がほしい") or its supported aliases.

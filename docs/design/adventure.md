@@ -505,19 +505,22 @@ Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and
 Upon defeating the Floor 10 boss, the party enters Floor 11 (Treasure Room) per legacy `vs_monster.cgi` (`$boss_round + 1`) and `_npc_action.cgi` (`add_treasure`).
 
 ### Treasure Box Count Calculation
-The number of treasure chests generated in Floor 11 follows legacy Party2 rules (`vs_monster.cgi:90-101`, `_npc_action.cgi:501`):
+The number of treasure chests generated in Floor 11 follows authentic legacy Party2 rules (`vs_monster.cgi:90-101`, `_npc_action.cgi:498-519`):
 
-$$\text{Count} = \text{BaseCount} + \text{MerchantBonus} + \text{TreasureHunterBonus} + \text{LuckyPendantBonus} + \text{GamblerBonus} + \text{TreasureBlessingBonus}$$
+$$\text{Index} = \text{BaseIndex} + \text{MerchantBonus} + \text{TreasureHunterBonus} + \text{LuckyPendantBonus} + \text{GamblerBonus} + \text{TreasureBlessingBonus} - \text{DeadMembers}$$
 
-1. **Base Count**:
-   - Standard Stages: 1 treasure chest per surviving (alive) party member (`AliveMembers`).
-   - Multiplier Stages (Stage 17 幻の秘境, Stage 20 天空城, Stage 21 カオスフィールド): 3 treasure chests per surviving party member ($\text{AliveMembers} \times 3$).
-2. **Merchant Job Bonus** (`merchant` / Job 7): +1 treasure chest.
-3. **Treasure Hunter Job Bonus** (`treasure_hunter` / Job 78): +1 to +2 treasure chests ($1 + \text{rand}(2)$).
-4. **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest.
-5. **Gambler Job Bonus** (`gambler` / Job 81): $+\text{rand}(3) - \text{rand}(2)$ treasure chests. If the gambler holds a Lucky Pendant (`item-191`), the total cannot drop below $\text{BaseCount}$.
-6. **Chapel Treasure Blessing Bonus** (`DROP` / `4` / `treasure_wish` / `宝箱がほしい`): $1/5$ chance ($\text{rand}(5) == 0$) of +1 treasure chest (`_npc_action.cgi:501`), evaluated once when spawning chests in the treasure room.
-7. **Lower Bound**: The total count is unclamped above zero, but clamped to a minimum of 0.
+1. **Base Index & Inclusive Generation**:
+   In legacy Party2, treasure generation initializes a loop upper bound `$count` (`vs_monster.cgi:92`) and spawns chests via an inclusive loop `for my $i (0 .. $count)` (`_npc_action.cgi:519`):
+   - Standard Stages: $\text{BaseIndex} = P - 1$ (where $P$ is total party members). With $D$ dead members, $\text{Index} = P - 1 - D = A - 1$. The inclusive loop $0 .. \text{Index}$ produces $A$ (surviving members) chests when no job/item bonuses apply.
+   - Multiplier Stages (Stage 17 幻の秘境, Stage 20 天空城, Stage 21 カオスフィールド): $\text{BaseIndex} = 3 \times P$. With $D$ dead members, $\text{Index} = 3P - D$. The inclusive loop $0 .. \text{Index}$ produces $3P - D + 1$ chests ($3A + 2D + 1$; e.g., $N=2$ with 2 alive yields $2 \times 3 + 1 = 7$ chests).
+2. **Acting Player (操作主体) Bonus Scope**:
+   Job and accessory bonuses are evaluated strictly for the session leader / acting player (matching legacy `%m` in `vs_monster.cgi`), never aggregated across arbitrary party members:
+   - **Merchant Job Bonus** (`job-07` / 商人): +1 treasure chest.
+   - **Treasure Hunter Job Bonus** (`job-78` / トレジャーハンター): +1 to +2 treasure chests ($1 + \text{rand}(2)$).
+   - **Gambler / Pirate Job Bonus** (`job-81` / 海賊): $+\text{rand}(3) - \text{rand}(2)$ treasure chests. If the leader holds Lucky Pendant (`item-191`), the index cannot drop below $P - 1$.
+   - **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント / 海賊ハット): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest.
+3. **Chapel Treasure Blessing Bonus** (`DROP` / `4` / `treasure_wish` / `宝箱がほしい`): $1/5$ chance ($\text{rand}(5) == 0$) of +1 treasure chest (`_npc_action.cgi:501`), evaluated once when spawning chests in the treasure room.
+4. **Lower Bound**: If surviving party members $\le 0$, 0 chests are spawned. If the final index $< 0$, 0 chests are spawned; otherwise, $\text{Index} + 1$ chests are spawned.
 
 ### Treasure Box Loot Pool Distribution & Weekday Orbs
 Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons`, `treasure_armors`, `treasure_items`) per `_npc_action.cgi:540-550`:

@@ -166,8 +166,9 @@ func TestCalculateTreasureCount_StageMultiplier(t *testing.T) {
 			AliveMembers: 2,
 			StageID:      stageID,
 		})
-		if got != 6 {
-			t.Errorf("CalculateTreasureCount for %s: got %d, want 6 (2 * 3)", stageID, got)
+		// Legacy vs_monster.cgi:92 ($#partys+1)*3 = 2*3 = 6. Inclusive 0..6 produces 7 boxes.
+		if got != 7 {
+			t.Errorf("CalculateTreasureCount for %s: got %d, want 7 (2 * 3 + 1)", stageID, got)
 		}
 	}
 
@@ -304,5 +305,220 @@ func TestGenerateTreasureBoxesWithPools(t *testing.T) {
 	}
 	if boxes[1].ItemID != "armor-01" {
 		t.Errorf("box[1] ItemID = %s, want armor-01", boxes[1].ItemID)
+	}
+}
+
+func TestCalculateTreasureCount_PartySizeAndSpecialStages(t *testing.T) {
+	specialStages := []string{"stage-17", "17", "stage-20", "20", "stage-21", "21"}
+	normalStages := []string{"stage-01", "stage-10", "stage-00", ""}
+
+	for _, stage := range specialStages {
+		// In special stages (17, 20, 21), initial count = 3 * N.
+		// Inclusive loop 0..count yields 3*N + 1 boxes when 0 dead.
+		tests := []struct {
+			partySize int
+			wantBoxes int
+		}{
+			{partySize: 1, wantBoxes: 4},  // 1*3 + 1 = 4
+			{partySize: 2, wantBoxes: 7},  // 2*3 + 1 = 7
+			{partySize: 3, wantBoxes: 10}, // 3*3 + 1 = 10
+			{partySize: 4, wantBoxes: 13}, // 4*3 + 1 = 13
+		}
+		for _, tc := range tests {
+			got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+				StageID:      stage,
+				AliveMembers: tc.partySize,
+				TotalMembers: tc.partySize,
+			})
+			if got != tc.wantBoxes {
+				t.Errorf("stage %s, partySize %d: got %d, want %d", stage, tc.partySize, got, tc.wantBoxes)
+			}
+		}
+	}
+
+	for _, stage := range normalStages {
+		// In normal stages, initial count = N - 1.
+		// Inclusive loop 0..count yields N boxes when 0 dead.
+		tests := []struct {
+			partySize int
+			wantBoxes int
+		}{
+			{partySize: 1, wantBoxes: 1}, // 0 + 1 = 1
+			{partySize: 2, wantBoxes: 2}, // 1 + 1 = 2
+			{partySize: 3, wantBoxes: 3}, // 2 + 1 = 3
+			{partySize: 4, wantBoxes: 4}, // 3 + 1 = 4
+		}
+		for _, tc := range tests {
+			got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+				StageID:      stage,
+				AliveMembers: tc.partySize,
+				TotalMembers: tc.partySize,
+			})
+			if got != tc.wantBoxes {
+				t.Errorf("normal stage %s, partySize %d: got %d, want %d", stage, tc.partySize, got, tc.wantBoxes)
+			}
+		}
+	}
+}
+
+func TestCalculateTreasureCount_DeadMembersPenalty(t *testing.T) {
+	// Normal stage: count = total - 1 - dead = alive - 1. Boxes = alive.
+	testsNormal := []struct {
+		total, alive, dead, want int
+	}{
+		{total: 4, alive: 3, dead: 1, want: 3},
+		{total: 4, alive: 2, dead: 2, want: 2},
+		{total: 4, alive: 1, dead: 3, want: 1},
+		{total: 4, alive: 0, dead: 4, want: 0},
+		{total: 2, alive: 1, dead: 1, want: 1},
+		{total: 2, alive: 0, dead: 2, want: 0},
+	}
+	for _, tc := range testsNormal {
+		got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+			StageID:      "stage-01",
+			AliveMembers: tc.alive,
+			DeadMembers:  tc.dead,
+			TotalMembers: tc.total,
+		})
+		if got != tc.want {
+			t.Errorf("normal stage total=%d, alive=%d, dead=%d: got %d, want %d", tc.total, tc.alive, tc.dead, got, tc.want)
+		}
+	}
+
+	// Special stage 17: count = 3*total - dead. Boxes = 3*total - dead + 1.
+	testsSpecial := []struct {
+		total, alive, dead, want int
+	}{
+		{total: 4, alive: 3, dead: 1, want: 12}, // 3*4 - 1 + 1 = 12
+		{total: 4, alive: 2, dead: 2, want: 11}, // 3*4 - 2 + 1 = 11
+		{total: 4, alive: 1, dead: 3, want: 10}, // 3*4 - 3 + 1 = 10
+		{total: 4, alive: 0, dead: 4, want: 0},  // Alive <= 0 clamped to 0
+		{total: 2, alive: 1, dead: 1, want: 6},  // 3*2 - 1 + 1 = 6
+		{total: 2, alive: 0, dead: 2, want: 0},  // Alive <= 0 clamped to 0
+	}
+	for _, tc := range testsSpecial {
+		got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+			StageID:      "stage-17",
+			AliveMembers: tc.alive,
+			DeadMembers:  tc.dead,
+			TotalMembers: tc.total,
+		})
+		if got != tc.want {
+			t.Errorf("special stage 17 total=%d, alive=%d, dead=%d: got %d, want %d", tc.total, tc.alive, tc.dead, got, tc.want)
+		}
+	}
+}
+
+func TestCalculateTreasureCount_CanonicalJobAndItemAliases(t *testing.T) {
+	// Verify Merchant job aliases
+	merchantAliases := []string{"job-07", "job-7", "7", "merchant", "商人"}
+	for _, alias := range merchantAliases {
+		if !adventure.IsMerchantJob(alias) {
+			t.Errorf("IsMerchantJob(%q) = false, want true", alias)
+		}
+	}
+	nonMerchant := []string{"job-01", "hero", "warrior", "78", "81", ""}
+	for _, alias := range nonMerchant {
+		if adventure.IsMerchantJob(alias) {
+			t.Errorf("IsMerchantJob(%q) = true, want false", alias)
+		}
+	}
+
+	// Verify Treasure Hunter job aliases
+	thAliases := []string{"job-78", "78", "treasure_hunter", "treasurehunter", "トレジャーハンター", "トレハン"}
+	for _, alias := range thAliases {
+		if !adventure.IsTreasureHunterJob(alias) {
+			t.Errorf("IsTreasureHunterJob(%q) = false, want true", alias)
+		}
+	}
+	nonTH := []string{"job-07", "7", "81", "thief", ""}
+	for _, alias := range nonTH {
+		if adventure.IsTreasureHunterJob(alias) {
+			t.Errorf("IsTreasureHunterJob(%q) = true, want false", alias)
+		}
+	}
+
+	// Verify Gambler / Pirate job aliases
+	gamblerAliases := []string{"job-81", "81", "gambler", "pirate", "海賊", "勝負師"}
+	for _, alias := range gamblerAliases {
+		if !adventure.IsGamblerJob(alias) {
+			t.Errorf("IsGamblerJob(%q) = false, want true", alias)
+		}
+	}
+	nonGambler := []string{"job-07", "job-78", "7", "78", ""}
+	for _, alias := range nonGambler {
+		if adventure.IsGamblerJob(alias) {
+			t.Errorf("IsGamblerJob(%q) = true, want false", alias)
+		}
+	}
+
+	// Verify Lucky Pendant item aliases
+	pendantAliases := []string{"item-191", "191", "lucky_pendant", "lucky-pendant", "海賊ハット", "ラッキーペンダント"}
+	for _, alias := range pendantAliases {
+		if !adventure.IsLuckyPendantID(alias) {
+			t.Errorf("IsLuckyPendantID(%q) = false, want true", alias)
+		}
+	}
+	nonPendant := []string{"item-001", "item-215", "158", ""}
+	for _, alias := range nonPendant {
+		if adventure.IsLuckyPendantID(alias) {
+			t.Errorf("IsLuckyPendantID(%q) = true, want false", alias)
+		}
+	}
+}
+
+func TestCalculateTreasureCount_GamblerPendantProtection(t *testing.T) {
+	// When Gambler rolls -1 in normal stage with 4 party members (count = 3):
+	// Without Lucky Pendant: count becomes 2 -> 3 boxes.
+	// With Lucky Pendant: count guarded at total - 1 (3). If pendant roll does not trigger -> 4 boxes!
+	rngGamblerNeg := func(n int) int {
+		if n == 3 {
+			return 0 // Gambler rng(3) = 0
+		}
+		if n == 2 {
+			return 1 // Gambler rng(2) = 1 -> delta = -1
+		}
+		return 1 // Pendant rng(3) does not trigger (must be 0 to trigger)
+	}
+
+	gotWithoutPendant := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		StageID:         "stage-01",
+		AliveMembers:    4,
+		TotalMembers:    4,
+		HasGambler:      true,
+		HasLuckyPendant: false,
+		Rng:             rngGamblerNeg,
+	})
+	if gotWithoutPendant != 3 {
+		t.Errorf("Gambler -1 without pendant: got %d, want 3", gotWithoutPendant)
+	}
+
+	// Call 1: Gambler rng(3) -> 0
+	// Call 2: Gambler rng(2) -> 1
+	// Call 3: Lucky pendant rng(3) -> 1 (no trigger)
+	callCount := 0
+	seqRng := func(n int) int {
+		callCount++
+		switch callCount {
+		case 1:
+			return 0 // Gambler rng(3)
+		case 2:
+			return 1 // Gambler rng(2) -> -1 penalty
+		case 3:
+			return 1 // Pendant rng(3) -> no bonus
+		default:
+			return 0
+		}
+	}
+	gotGuarded := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		StageID:         "stage-01",
+		AliveMembers:    4,
+		TotalMembers:    4,
+		HasGambler:      true,
+		HasLuckyPendant: true,
+		Rng:             seqRng,
+	})
+	if gotGuarded != 4 {
+		t.Errorf("Gambler -1 WITH pendant (guarded at 4): got %d, want 4", gotGuarded)
 	}
 }

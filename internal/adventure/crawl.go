@@ -357,61 +357,6 @@ func (s *CrawlSession) AdvanceFloor(
 	return res, nil
 }
 
-func (s *CrawlSession) spawnTreasureBoxes() {
-	aliveCount := 0
-	hasMerchant := false
-	hasGambler := false
-	hasTreasureHunter := false
-	hasLuckyPendant := false
-
-	for _, c := range s.Characters {
-		isAlive := true
-		for _, p := range s.Participants {
-			if p.ID == c.ID && p.HP <= 0 {
-				isAlive = false
-				break
-			}
-		}
-		if !isAlive {
-			continue
-		}
-		aliveCount++
-		if c.JobID == "merchant" || c.JobID == "7" {
-			hasMerchant = true
-		}
-		if c.JobID == "gambler" || c.JobID == "81" {
-			hasGambler = true
-		}
-		if c.JobID == "treasure_hunter" || c.JobID == "78" {
-			hasTreasureHunter = true
-		}
-	}
-
-	boxCount := CalculateTreasureCount(TreasureCalculationInput{
-		StageID:             s.StageID,
-		AliveMembers:        aliveCount,
-		HasMerchant:         hasMerchant,
-		HasGambler:          hasGambler,
-		HasTreasureHunter:   hasTreasureHunter,
-		HasLuckyPendant:     hasLuckyPendant,
-		HasTreasureBlessing: s.HasTreasureBlessing,
-		Rng:                 s.Rng,
-	})
-
-	itemPool := s.Stage.TreasureItems
-	if len(itemPool) == 0 && len(s.Stage.TreasureWeapons) == 0 && len(s.Stage.TreasureArmors) == 0 {
-		itemPool = []string{"item-001", "item-002"}
-	}
-
-	pools := StageTreasurePools{
-		Weapons: s.Stage.TreasureWeapons,
-		Armors:  s.Stage.TreasureArmors,
-		Items:   itemPool,
-	}
-
-	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, s.now(), s.Rng)
-}
-
 // ExamineTreasure opens a treasure box on Floor 11 (@しらべる).
 func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error) {
 	if s.CurrentFloor != TreasureRoomFloor {
