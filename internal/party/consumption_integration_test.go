@@ -196,11 +196,12 @@ func TestAdventureConsumptionSQLIntegration(t *testing.T) {
 						t.Fatal(err)
 					}
 					originals = append(originals, c)
-					// Separate same-definition stacks expose definition-only or wrong-owner debits.
+					// Retained batch tools in separate stacks expose definition-only
+					// or wrong-owner debits; HP tools require explicit callbacks.
 					items[c.ID] = []coreitem.Instance{
-						{ID: id.New(), DefinitionID: "item-001", Quantity: 3},
-						{ID: id.New(), DefinitionID: "item-001", Quantity: 4},
-						{ID: id.New(), DefinitionID: "item-001", Quantity: 2},
+						{ID: id.New(), DefinitionID: "item-012", Quantity: 3},
+						{ID: id.New(), DefinitionID: "item-012", Quantity: 4},
+						{ID: id.New(), DefinitionID: "item-012", Quantity: 2},
 						{ID: id.New(), DefinitionID: battle.ItemDokuroAmulet, Quantity: 1},
 					}
 					if _, err := database.CreateTestInventoryWithItems(ctx, db, c.ID, items[c.ID]); err != nil {

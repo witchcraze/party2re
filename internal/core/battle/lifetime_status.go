@@ -132,6 +132,10 @@ func (a *LifetimeActor) AdvanceTension(requesterLevel int, rng random.Generator)
 	if a.Status == StatusSabaku {
 		return nil
 	}
+	return a.advanceTension(requesterLevel, rng)
+}
+
+func (a *LifetimeActor) advanceTension(requesterLevel int, rng random.Generator) error {
 	switch {
 	case a.Tension <= 1:
 		a.Tension = 1.7

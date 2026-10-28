@@ -303,34 +303,10 @@ func isEquipped(equip coreequipment.Equipment, instanceID string) bool {
 	return false
 }
 
-// actionItemFromDefinition maps known combat consumables to ActionItem.
+// actionItemFromDefinition maps only retained batch consumables. Explicit HP
+// tools and reduction tools require OrdinaryToolEntries and its callback ports.
 func actionItemFromDefinition(defID, instanceID string) (corebattle.ActionItem, bool) {
 	switch defID {
-	case "item-001": // 薬草
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "薬草",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 40, TargetScope: corebattle.TargetScopeSingleAlly,
-		}, true
-	case "item-002": // 上薬草
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "上薬草",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 100, TargetScope: corebattle.TargetScopeSingleAlly,
-		}, true
-	case "item-003": // 特薬草
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "特薬草",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 250, TargetScope: corebattle.TargetScopeSingleAlly,
-		}, true
-	case "item-004": // 賢者の石
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "賢者の石",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 200, TargetScope: corebattle.TargetScopeAllAllies,
-		}, true
-	case "item-005": // 世界樹のしずく
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "世界樹のしずく",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 999, TargetScope: corebattle.TargetScopeAllAllies,
-		}, true
 	case "item-011": // 魔法の聖水
 		return corebattle.ActionItem{
 			ID: defID, InstanceID: instanceID, Name: "魔法の聖水",
@@ -345,11 +321,6 @@ func actionItemFromDefinition(defID, instanceID string) (corebattle.ActionItem, 
 		return corebattle.ActionItem{
 			ID: defID, InstanceID: instanceID, Name: "エルフの飲み薬",
 			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 999, TargetScope: corebattle.TargetScopeSingleAlly,
-		}, true
-	case "item-014": // 守りの石
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "守りの石",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindBuff, BuffStat: "defense", Power: 30, TargetScope: corebattle.TargetScopeSingleAlly,
 		}, true
 	default:
 		return corebattle.ActionItem{}, false

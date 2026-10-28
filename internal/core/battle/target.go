@@ -17,6 +17,7 @@ const (
 	CategoryBreath   CallbackCategory = "breath"
 	CategoryDance    CallbackCategory = "dance"
 	CategorySong     CallbackCategory = "song"
+	CategoryTool     CallbackCategory = "tool"
 )
 
 const (
@@ -73,7 +74,7 @@ type TargetResolution struct {
 
 func (e TargetEffect) validate() error {
 	switch e.Category {
-	case CategoryUntyped, CategoryPhysical, CategoryMagic, CategoryBreath, CategoryDance, CategorySong:
+	case CategoryUntyped, CategoryPhysical, CategoryMagic, CategoryBreath, CategoryDance, CategorySong, CategoryTool:
 	default:
 		return ErrUnsupportedEffect
 	}

@@ -195,11 +195,15 @@ func (s *LifetimeState) statTension(c *EffectContext, t *LifetimeActor, recursiv
 	if t.Status == StatusSabaku {
 		return nil
 	}
+	return s.statTensionAfterBinding(c, t, recursive, rng)
+}
+
+func (s *LifetimeState) statTensionAfterBinding(c *EffectContext, t *LifetimeActor, recursive bool, rng random.Generator) error {
 	level := 0
 	if c.RequesterLevel != nil {
 		level = *c.RequesterLevel
 	}
-	if err := t.AdvanceTension(level, rng); err != nil {
+	if err := t.advanceTension(level, rng); err != nil {
 		return err
 	}
 	a := s.actor(c.ActorID)
