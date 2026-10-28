@@ -315,22 +315,9 @@ func TestBuildParticipant(t *testing.T) {
 		t.Errorf("abilities missing: touki=%v, dokuro=%v, cursed=%v, pharaoh=%v (got: %v)", hasTouki, hasDokuro, hasCursed, hasPharaoh, part.Abilities)
 	}
 
-	// 3. HP tools require explicit callbacks; the batch ring stays available.
-	foundHerb := false
-	foundRing := false
-	for _, act := range part.ActionItems {
-		if act.ID == "item-001" {
-			foundHerb = true
-		}
-		if act.ID == battle.ItemPrayerRing {
-			foundRing = true
-			if act.InstanceID != pRing.ID {
-				t.Errorf("prayer ring InstanceID = %s, want %s", act.InstanceID, pRing.ID)
-			}
-		}
-	}
-	if foundHerb || !foundRing {
-		t.Errorf("expected only the retained batch ring, got: %+v", part.ActionItems)
+	// HP and MP tools require explicit callbacks, never batch HP payloads.
+	if len(part.ActionItems) != 0 {
+		t.Errorf("unexpected batch tools: %+v", part.ActionItems)
 	}
 
 	// 4. Skills & Custom Skills validation

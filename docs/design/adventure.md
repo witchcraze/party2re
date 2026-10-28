@@ -349,6 +349,10 @@ tail consumed by #1329 and typed discovery/submission by #1330. Other tool
 arguments also include recorded jobs and participants; this travel contract
 does not certify those callbacks (`lib/_data.cgi:1879–1924`).
 
+MP restoration, MP drain and resource-consuming gems use the
+[shared battle resource contract](battle.md#resources-revival-and-roster-changes).
+Run consumers persist the resulting facts and apply enclosing costs in order.
+
 The operation matrix establishes the family boundary. Production cutover still
 requires #1188 job supply, #1332 effect lifetimes and the effects/transactions
 decomposed by [#1333](https://github.com/witchcraze/party2re/issues/1333) into

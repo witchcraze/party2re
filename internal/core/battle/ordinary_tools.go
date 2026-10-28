@@ -20,7 +20,7 @@ type OrdinaryToolEntry struct {
 // These identities require explicit callbacks, never the batch scalar mapper.
 func OrdinaryToolEntries() []OrdinaryToolEntry {
 	var entries []OrdinaryToolEntry
-	for _, source := range []int{1, 2, 3, 4, 5, 7, 8, 9, 10, 14, 15, 41, 42, 75, 76, 77, 79, 80, 81, 82, 86, 87, 102, 103, 130, 151, 213} {
+	for _, source := range []int{1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 41, 42, 75, 76, 77, 79, 80, 81, 82, 86, 87, 101, 102, 103, 130, 151, 213} {
 		id := fmt.Sprintf("tool-%d", source)
 		entries = append(entries, OrdinaryToolEntry{CallbackEntry: CallbackEntry{ID: id, Name: id}, DefinitionID: fmt.Sprintf("item-%03d", source), UsageCategory: item.UsageCategoryCombatOnly})
 	}
@@ -118,7 +118,11 @@ func (s *LifetimeState) ApplyOrdinaryTool(c *OrdinaryToolContext, id string, rng
 	c.targetResources, c.EffectContext.targetResources = resources, resources
 	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
 	result := OrdinaryToolResult{ID: id, Consume: true}
-	if power := ordinaryToolHealing(id); power != 0 {
+	if power := ordinaryToolMP(id); power != 0 {
+		if _, err := s.ApplyMPHealing(&c.EffectContext, controlEffect(c.toolTarget(), power, CategoryTool), rng); err != nil {
+			return err
+		}
+	} else if power := ordinaryToolHealing(id); power != 0 {
 		if id == "tool-4" || id == "tool-5" {
 			if _, err := s.ApplyPartyHealing(&c.EffectContext, power, CategoryTool, rng); err != nil {
 				return err

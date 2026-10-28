@@ -17,7 +17,7 @@ type TemporaryReplacement struct {
 }
 
 // ResolveTemporary evaluates exactly the selected target's one temporary
-// effect. Resource writes belong to #1337; return the requested recovery before
+// effect. Resource writes belong to the resource owner; return requested recovery before
 // its MaxMP clamp, without replacing or canceling the incoming payload.
 // _skill.cgi:9464–9573; optional tool hooks:10559–10584.
 func (s *LifetimeState) ResolveTemporary(c TargetContext, e TargetEffect, rng random.Generator) (TemporaryReplacement, error) {

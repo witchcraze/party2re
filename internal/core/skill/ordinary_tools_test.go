@@ -49,7 +49,7 @@ func TestOrdinaryToolRegistration(t *testing.T) {
 	var d BattleDefinitions
 	d.RegisterOrdinaryTools(c)
 	entries := corebattle.OrdinaryToolEntries()
-	if len(entries) != 27 {
+	if len(entries) != 31 {
 		t.Fatal(len(entries))
 	}
 	for _, entry := range entries {

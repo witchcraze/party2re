@@ -156,17 +156,6 @@ func BuildParticipantFromDataWithRNG(
 				hasDokuroAmulet = true
 			case ItemCursedTalisman:
 				hasCursedTalisman = true
-			case ItemPrayerRing:
-				// Equipped combat tool (Category 1) available for use
-				builder.WithActionItems(corebattle.ActionItem{
-					ID:            ItemPrayerRing,
-					InstanceID:    inst.ID,
-					Name:          "祈りの指輪",
-					UsageCategory: item.UsageCategoryCombatOnly,
-					Kind:          corebattle.ActionKindHeal,
-					Power:         100,
-					TargetScope:   corebattle.TargetScopeSingleAlly,
-				})
 			}
 		}
 	}
@@ -183,13 +172,6 @@ func BuildParticipantFromDataWithRNG(
 			hasCursedTalisman = true
 		}
 
-		// Actionable combat items (@どうぐ)
-		if actItem, ok := actionItemFromDefinition(inst.DefinitionID, inst.ID); ok {
-			// Do not re-add prayer ring if already bound from equipment
-			if inst.DefinitionID != ItemPrayerRing || !isEquipped(equip, inst.ID) {
-				builder.WithActionItems(actItem)
-			}
-		}
 	}
 
 	// Bind passive abilities
@@ -292,37 +274,4 @@ func ExtractStatOrbOptions(inv coreinventory.Inventory) progression.ApplyExperie
 		}
 	}
 	return opts
-}
-
-func isEquipped(equip coreequipment.Equipment, instanceID string) bool {
-	for _, id := range equip.Slots {
-		if id == instanceID {
-			return true
-		}
-	}
-	return false
-}
-
-// actionItemFromDefinition maps only retained batch consumables. Explicit HP
-// tools and reduction tools require OrdinaryToolEntries and its callback ports.
-func actionItemFromDefinition(defID, instanceID string) (corebattle.ActionItem, bool) {
-	switch defID {
-	case "item-011": // 魔法の聖水
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "魔法の聖水",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 40, TargetScope: corebattle.TargetScopeSingleAlly,
-		}, true
-	case "item-012": // 祈りの指輪
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "祈りの指輪",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 100, TargetScope: corebattle.TargetScopeSingleAlly,
-		}, true
-	case "item-013": // エルフの飲み薬
-		return corebattle.ActionItem{
-			ID: defID, InstanceID: instanceID, Name: "エルフの飲み薬",
-			UsageCategory: item.UsageCategoryCombatOnly, Kind: corebattle.ActionKindHeal, Power: 999, TargetScope: corebattle.TargetScopeSingleAlly,
-		}, true
-	default:
-		return corebattle.ActionItem{}, false
-	}
 }

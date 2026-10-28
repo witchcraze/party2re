@@ -307,9 +307,9 @@ Native admission is enforced across these boundaries:
 
 Ordinary held tools use `OrdinaryToolEntries`, `RegisterOrdinaryTools` and the
 same `InvocationAction` gate as submission. Category1 tools retain the distinct
-`CategoryTool` helper category: HP tools use shared healing modifiers and caps;
+`CategoryTool` helper category: HP and MP tools use their respective shared recovery helpers;
 damage tools supply their fixed base power to shared damage rather than adding
-actor attack. Scalar batch adaptation omits these HP tools and the physical
+actor attack. Scalar batch adaptation omits these recovery tools and the physical
 reduction tool. Omitted held-tool selectors default to self; ambient-cursor
 bodies instead use the verified request cursor. Temporary assignments retain
 each body's living guard, stat-helper return and order. Full reset reapplies
@@ -1484,12 +1484,36 @@ gate does not close #1329/#1330's native effect prerequisites.
 
 #### Resources, revival and roster changes
 
-HP recovery and MP recovery are separate operations. `_mp_h:9150–9187`
-requires a living resolved ally, applies effect modifiers, random variation and
-tension, clears rage, enforces the maximum and special-item exclusions, and has
-a sanctuary overflow penalty. MP drain uses `_st_down:9252–9290`, with its own
-immunity/floor/cap rules; it is not damage against HP. Immediate values become
-committed state; no reload may draw their random result again.
+HP recovery and MP recovery are separate operations. `ApplyMPHealing`
+(`_mp_h:9150–9187`) resolves a living ally and applies the shared recovery
+modifiers. After a nonzero result it clears rage, rounds random variation times
+actor tension, then adds1. Target items189/202 exclude recovery; item198 excludes
+it only when the actor's MP is strictly above floor(actor MaxMP×0.5). These
+exclusions still consume tension. Recovery caps at MaxMP; magic in sanctuary
+subtracts overflow after the cap, with a floor of1. Den applies
+floor(modified power×0.025)+1 after earlier zeroing.
+
+MP reduction uses `ApplyStatDown` with `StatMP` (`_st_down:9252–9290`):
+base defense above999, item159 or curse prevents reduction; the floor is20%MaxMP.
+The requested debit is floor(current MP×modified coefficient×actor tension).
+Only a debit strictly above150×tension is replaced by
+floor(random[0,50)+100×tension). Return that requested debit even when the floor
+limits actual loss. MP absorption passes this amount into the separate MP
+recovery helper; it never changes HP.
+
+`RegisterResources` binds intrinsic resource bodies independently of scalar
+batch effects and complete job tables. Tools11/12/13/101 restore base40/100/999/50;
+gems24/25 restore50/100 (25 supplies self),27 absorbs MP,97 reduces enemy-party MP,
+and job50 position5 supplies base50 magic recovery (SP110, listed MP50).
+Gems98/99 pass current MP×1.5/CMP×3.5 to the shared direct magic area helper,
+then set MP=0/CMP=1. Gems103/104 subtract3/10 CMP with a floor of0 only while
+actor status is nonempty; they never assign poison. Their negative CMP
+contributions remain metadata for the enclosing consumer's late charge.
+Mixed slot transitions require their owner's whole-action projection; unknown
+preceding effects and unsupported damage descendants remain execution gates
+(`_data.cgi:653–658,1302–1309,2112–2115,2185–2187,2196–2197`;
+`_skill.cgi:3594`). Immediate results become stored lifetime facts; reloads rebuild
+operation closures without repeating gains, debits or RNG.
 
 Revival requires its own callback predicate. Tool 6 restores full MaxHP;
 book 173 succeeds with probability 1/2 at floor(MaxHP×0.5); book 196 restores

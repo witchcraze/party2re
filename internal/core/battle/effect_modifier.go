@@ -10,6 +10,7 @@ type EffectContext struct {
 	TargetContext
 	DamageCalls, AreaDamageCalls         int
 	HealCalls, PartyHealCalls            int
+	MPHealCalls                          int
 	StatUpCalls, StatDownCalls           int
 	PartyStatUpCalls, PartyStatDownCalls int
 	TensionCalls                         int
