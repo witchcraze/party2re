@@ -470,6 +470,12 @@ func (p staticBlessingProvider) GetActiveBlessing(_ context.Context, _ string) (
 	return p.blessing, nil
 }
 
+type mapBlessingProvider map[string]string
+
+func (m mapBlessingProvider) GetActiveBlessing(_ context.Context, charID string) (string, error) {
+	return m[charID], nil
+}
+
 type fixedBattleRand struct{ val int }
 
 func (r fixedBattleRand) Intn(n int) (int, error) {
@@ -582,6 +588,104 @@ func TestAdventure_TreasureBlessing_SingleChestGenerationNoItemDuplication(t *te
 			inv, _ := invRepo.FindByCharacterID(ctx, char.ID)
 			if len(inv.Items) != 1 {
 				t.Fatalf("expected exactly 1 item in inventory (no duplication on unopened extra chest), got %d", len(inv.Items))
+			}
+		})
+	}
+}
+
+func TestAdventure_TreasureBlessing_ActorScope(t *testing.T) {
+	tests := []struct {
+		name        string
+		leaderBless string
+		memberBless string
+		wantChests  int
+	}{
+		{
+			name:        "none",
+			leaderBless: "",
+			memberBless: "",
+			wantChests:  2,
+		},
+		{
+			name:        "leader_only",
+			leaderBless: "4",
+			memberBless: "",
+			wantChests:  3,
+		},
+		{
+			name:        "member_only",
+			leaderBless: "",
+			memberBless: "4",
+			wantChests:  2,
+		},
+		{
+			name:        "both",
+			leaderBless: "4",
+			memberBless: "4",
+			wantChests:  3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			leader, err := corecharacter.New("Leader")
+			if err != nil {
+				t.Fatal(err)
+			}
+			leader.Level = 50
+			leader.JobID = "job-01"
+			leader.Stats = corecharacter.Stats{HP: 500, MaxHP: 500, MP: 100, MaxMP: 100, Attack: 150, Defense: 100}
+
+			member, err := corecharacter.New("Member")
+			if err != nil {
+				t.Fatal(err)
+			}
+			member.Level = 50
+			member.JobID = "job-01"
+			member.Stats = corecharacter.Stats{HP: 500, MaxHP: 500, MP: 100, MaxMP: 100, Attack: 150, Defense: 100}
+
+			charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{
+				leader.ID: leader,
+				member.ID: member,
+			}}
+			invRepo := &memoryInvRepo{invs: make(map[string]coreinventory.Inventory)}
+			advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
+			clock := &fixedAdvClock{now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)}
+			stages, _ := adventure.InitialStageCatalog()
+			monsters, _ := adventure.InitialMonsterCatalog()
+
+			blessingProv := mapBlessingProvider{
+				leader.ID: tt.leaderBless,
+				member.ID: tt.memberBless,
+			}
+			battleSvc := battle.NewService(
+				battle.WithCharacterRepository(charRepo),
+				battle.WithInventoryRepository(invRepo),
+				battle.WithBlessingProvider(blessingProv),
+				battle.WithRandomSource(fixedBattleRand{val: 0}), // Lucky roll (0 % 5 == 0)
+				battle.WithMaxInventoryCapacity(10),
+			)
+
+			svc, err := adventure.NewServiceWithCatalogs(
+				advRepo, charRepo, nil, stages, monsters, corebattle.Engine{}, nil, nil, clock,
+				adventure.WithPostBattleSettler(battleSvc),
+				adventure.WithBlessingProvider(blessingProv),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			res, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+				CharacterIDs: []string{leader.ID, member.ID},
+				StageID:      "stage-00",
+				Rng:          func(n int) int { return 0 },
+			})
+			if err != nil {
+				t.Fatalf("ExecuteCrawl failed: %v", err)
+			}
+			if len(res.TreasureBoxes) != tt.wantChests {
+				t.Fatalf("expected %d treasure boxes, got %d", tt.wantChests, len(res.TreasureBoxes))
 			}
 		})
 	}

@@ -19,7 +19,7 @@ In accordance with `party2/lib/chapel.cgi`, characters can select from exactly f
 | **1** | `GOLD` | お金がほしい | モンスターを倒したとき、ゴールドが増えるかも？ | 25% chance of 1.5x Gold on battle victory (`rand(4) < 1`) |
 | **2** | `EXP` | 強くなりたい | モンスターを倒したとき、経験値が増えるかも？ | 25% chance of 1.5x EXP on battle victory (`rand(4) < 1`) |
 | **3** | `MONSTER` | モンスターと仲良くしたい | モンスターが仲間になりやすくなるかも？ | +0.25% Monster recruit rate bonus flat (`$par += 0.5` out of 200 in `rand(200) < $par`) |
-| **4** | `DROP` | 宝箱がほしい | 宝箱が増えるかも？ | 20% chance of +1 treasure chest at the chest-generation boundary (`_npc_action.cgi:501, 729`, `rand(5) < 1`); does not duplicate acquired items during post-battle settlement |
+| **4** | `DROP` | 宝箱がほしい | 宝箱が増えるかも？ | 20% chance of +1 treasure chest at the chest-generation boundary (`_npc_action.cgi:501, 729`, `rand(5) < 1`); evaluated strictly for the acting player (session leader); does not duplicate acquired items during post-battle settlement |
 | **5** | `CASINO` | コインがほしい | コインが増えるかも？ | Casino bonus coin luck (`rand(4) < 1`) |
 
 ---

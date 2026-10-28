@@ -322,11 +322,14 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}
 
 	if s.blessingProvider != nil {
-		for _, c := range characters {
-			if b, err := s.blessingProvider.GetActiveBlessing(ctx, c.ID); err == nil {
+		actorID := session.LeaderID
+		if actorID == "" && len(characters) > 0 {
+			actorID = characters[0].ID
+		}
+		if actorID != "" {
+			if b, err := s.blessingProvider.GetActiveBlessing(ctx, actorID); err == nil {
 				if IsTreasureBlessing(b) {
 					session.HasTreasureBlessing = true
-					break
 				}
 			}
 		}
