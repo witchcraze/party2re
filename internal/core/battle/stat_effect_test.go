@@ -171,9 +171,9 @@ func TestStatModifiersAndTargetReflection(t *testing.T) {
 	if err != nil || r.Amount != 300 || r.Delta != -130 || s.actor("enemy").Agility != 20 {
 		t.Fatal(r, err, s)
 	}
-	// Resource drain and unknown/native flat kinds are not certified here.
+	// Unknown/native flat kinds are not certified here.
 	before := reloadLifetime(t, s)
-	_, err = s.ApplyStatDown(&c, TargetEffect{TargetID: "enemy", Payload: CallbackPayload{Number: .25}}, BattleStat("mp"), &targetRNG{t: t})
+	_, err = s.ApplyStatDown(&c, TargetEffect{TargetID: "enemy", Payload: CallbackPayload{Number: .25}}, BattleStat("cmp"), &targetRNG{t: t})
 	if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
 		t.Fatal(err, s)
 	}

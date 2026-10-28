@@ -30,6 +30,9 @@ func (s *LifetimeState) ValidateOrdinaryTool(c *OrdinaryToolContext, id string, 
 	}
 	p, child := s.callbackCopy(), *c
 	child.Arguments = slices.Clone(c.Arguments)
+	if power := ordinaryToolMP(id); power != 0 {
+		return p.validatePartyTarget(c.TargetContext, controlEffect(child.toolTarget(), power, CategoryTool), rng)
+	}
 	if power := ordinaryToolHealing(id); power != 0 {
 		if id == "tool-4" || id == "tool-5" {
 			for _, target := range c.PartyIDs {

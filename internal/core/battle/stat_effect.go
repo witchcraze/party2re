@@ -9,6 +9,7 @@ const (
 	StatDefense BattleStat = "defense"
 	StatAgility BattleStat = "agility"
 	StatHP      BattleStat = "hp"
+	StatMP      BattleStat = "mp"
 	StatHit     BattleStat = "hit"
 )
 
@@ -24,6 +25,8 @@ func (a *LifetimeActor) currentStat(k BattleStat) *int {
 		return &a.Agility
 	case StatHP:
 		return &a.HP
+	case StatMP:
+		return &a.MP
 	case StatHit:
 		return &a.Hit
 	}
@@ -40,6 +43,8 @@ func (a LifetimeActor) baseStat(k BattleStat) int {
 		return a.BaseStats.Agility
 	case StatHP:
 		return a.MaxHP
+	case StatMP:
+		return a.MaxMP
 	}
 	return 0 // Original mhit is absent; hit has its independent floor50.
 }
@@ -221,14 +226,13 @@ func (s *LifetimeState) statTensionAfterBinding(c *EffectContext, t *LifetimeAct
 	return nil
 }
 
-// ApplyStatDown is for HP/AT/DF/AG/hit. MP drain remains the resource owner's
-// separate operation; unknown stats reject before enemy conversion or RNG.
+// ApplyStatDown returns the requested debit, which can exceed the clamped loss.
 func (s *LifetimeState) ApplyStatDown(c *EffectContext, e TargetEffect, stat BattleStat, rng random.Generator) (EffectApplication, error) {
 	r := EffectApplication{}
 	if err := s.validateRecovery(c, e, rng); err != nil {
 		return r, err
 	}
-	if !stat.canRaise() && stat != StatHP && stat != StatHit {
+	if !stat.canRaise() && stat != StatHP && stat != StatMP && stat != StatHit {
 		return r, ErrUnsupportedEffect
 	}
 	target, err := s.ResolveEnemyTarget(c.TargetContext, e, rng)
@@ -248,7 +252,7 @@ func (s *LifetimeState) ApplyStatDown(c *EffectContext, e TargetEffect, stat Bat
 		return r, err
 	}
 	c.StatDownCalls++
-	if t.BaseStats.Defense > 999 || ((stat == StatHP || stat == StatAttack) && t.HP > 999) || hasItem(t.ItemDefinitionIDs, "item-159") || (stat == StatHit && hasItem(t.ItemDefinitionIDs, "item-197")) {
+	if t.BaseStats.Defense > 999 || ((stat == StatHP || stat == StatAttack) && t.HP > 999) || hasItem(t.ItemDefinitionIDs, "item-159") || (stat == StatHit && hasItem(t.ItemDefinitionIDs, "item-197")) || (stat == StatMP && hasAbility(t.Abilities, "curse")) {
 		return r, nil
 	}
 	value := t.currentStat(stat)
@@ -257,6 +261,9 @@ func (s *LifetimeState) ApplyStatDown(c *EffectContext, e TargetEffect, stat Bat
 		return r, nil
 	}
 	r.Amount = int(float64(*value) * v * a.Tension)
+	if stat == StatMP && float64(r.Amount) > 150*a.Tension {
+		r.Amount = int(rng.Float64()*50 + 100*a.Tension)
+	}
 	a.Tension = 1
 	before := *value
 	*value -= r.Amount
@@ -276,7 +283,7 @@ func (s *LifetimeState) ApplyPartyStat(c *EffectContext, coefficient float64, ca
 		return nil, err
 	}
 	if down {
-		if !stat.canRaise() && stat != StatHP && stat != StatHit {
+		if !stat.canRaise() && stat != StatHP && stat != StatMP && stat != StatHit {
 			return nil, ErrUnsupportedEffect
 		}
 	} else {

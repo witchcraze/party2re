@@ -5,7 +5,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-// RegisterOrdinaryTools binds 27 whole tool bodies and six shared inspection
+// RegisterOrdinaryTools binds whole tool bodies and six shared inspection
 // producers. Full job tables and durable instance discovery remain consumer-owned.
 func (d *BattleDefinitions) RegisterOrdinaryTools(c *corebattle.OrdinaryToolContext) {
 	if d.Invocations.Entries == nil {

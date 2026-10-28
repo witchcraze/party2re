@@ -24,8 +24,8 @@ import (
 	"github.com/witchcraze/party2re/internal/party"
 )
 
-// Script the crawl outcome, but obtain consumption from real combat using the
-// SQL-built participants' exact item bindings (including automatic revival).
+// Script the crawl outcome and bind owned SQL instances to native tool
+// consumption intents. Automatic revival still runs through the batch engine.
 type consumptionFloorEngine struct {
 	corebattle.Engine
 	t           *testing.T
@@ -54,29 +54,27 @@ func (e *consumptionFloorEngine) ResolvePartyBattle(req corebattle.PartyBattleRe
 			index = 1
 		}
 		inst := e.items[ally.ID][index]
-		binding := slices.IndexFunc(ally.ActionItems, func(it corebattle.ActionItem) bool { return it.InstanceID == inst.ID })
-		if binding < 0 {
-			e.t.Fatalf("floor %d: %s is not carrying instance %s", e.calls, ally.ID, inst.ID)
+		if !slices.Contains(ally.ItemDefinitionIDs, inst.DefinitionID) {
+			e.t.Fatalf("floor %d: %s is not carrying %s", e.calls, ally.ID, inst.DefinitionID)
 		}
-		actor := ally
-		actor.HP, actor.MaxHP, actor.Attack, actor.Defense, actor.Agility = 20, 100, 1000, 0, 1000
-		actor.ActionItems = []corebattle.ActionItem{ally.ActionItems[binding]}
-		enemy := corebattle.MustNewParticipant("enemy", 5, 2, 0)
-		used, err := e.Engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
-			Allies: []corebattle.Participant{actor}, Enemies: []corebattle.Participant{enemy}, RNG: random.NewDeterministic(1),
-		})
-		if err != nil {
+		toolActor := corebattle.LifetimeActor{Participant: ally, Tension: 1, Hit: 95}
+		toolActor.MP, toolActor.MaxMP = 0, 100
+		state := corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{toolActor}}
+		tool := corebattle.OrdinaryToolContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{
+			TargetContext: corebattle.TargetContext{ActorID: ally.ID, PartyIDs: []string{ally.ID}},
+		}}, Arguments: []string{ally.ID}}
+		if err := state.ApplyOrdinaryTool(&tool, "tool-12", random.NewDeterministic(1)); err != nil {
 			return res, err
 		}
-		want := []corebattle.ConsumedItem{{ID: inst.DefinitionID, InstanceID: inst.ID, Quantity: 1}}
-		if !reflect.DeepEqual(used.ConsumedItems[ally.ID], want) {
-			e.t.Fatalf("floor %d: actual item use = %+v, want %+v", e.calls, used.ConsumedItems, want)
+		if len(tool.Results) != 1 || !tool.Results[0].Consume || state.Actors[0].MP == 0 || state.Actors[0].HP != ally.HP {
+			e.t.Fatalf("floor %d: native MP tool = %+v, actor=%+v", e.calls, tool.Results, state.Actors[0])
 		}
-		res.ConsumedItems[ally.ID] = used.ConsumedItems[ally.ID]
+		res.ConsumedItems[ally.ID] = []corebattle.ConsumedItem{{ID: inst.DefinitionID, InstanceID: inst.ID, Quantity: 1}}
 		if e.calls == 1 {
-			actor = ally
+			actor := ally
 			actor.HP, actor.MaxHP, actor.Attack, actor.Defense, actor.Agility = 1, 100, 1000, 0, 1
 			actor.ActionItems = nil
+			enemy := corebattle.MustNewParticipant("enemy", 5, 2, 0)
 			enemy.Agility = 1000
 			revived, err := e.Engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
 				Allies: []corebattle.Participant{actor}, Enemies: []corebattle.Participant{enemy}, RNG: random.NewDeterministic(1),
@@ -196,8 +194,8 @@ func TestAdventureConsumptionSQLIntegration(t *testing.T) {
 						t.Fatal(err)
 					}
 					originals = append(originals, c)
-					// Retained batch tools in separate stacks expose definition-only
-					// or wrong-owner debits; HP tools require explicit callbacks.
+					// MP tools in separate stacks expose definition-only or wrong-owner
+					// debits. Their native callbacks produce consumption intents.
 					items[c.ID] = []coreitem.Instance{
 						{ID: id.New(), DefinitionID: "item-012", Quantity: 3},
 						{ID: id.New(), DefinitionID: "item-012", Quantity: 4},
