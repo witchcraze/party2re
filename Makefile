@@ -1,6 +1,8 @@
 .PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress bench smoke db-migrate db-reset up down setup-hooks arch-lint lock-lint run
 
 PORT ?= 8080
+TEST_TIMEOUT ?= $(or $(PARTY2_TEST_TIMEOUT),$(if $(findstring -timeout,$(GOFLAGS)),,30m))
+TIMEOUT_ARG := $(if $(TEST_TIMEOUT),-timeout=$(TEST_TIMEOUT))
 
 all: check
 
@@ -47,15 +49,15 @@ db-reset:
 
 test:
 	@echo "Running unit tests (skips integration tests without DB)..."
-	@go test -count=1 ./...
+	@go test $(TIMEOUT_ARG) -count=1 ./...
 
 test-integration:
 	@echo "Running integration tests against local container DB..."
-	@PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:3306)/?parseTime=true" PARTY2_VALKEY_ADDR="127.0.0.1:6379" go test -count=1 ./...
+	@PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:3306)/?parseTime=true" PARTY2_VALKEY_ADDR="127.0.0.1:6379" go test $(TIMEOUT_ARG) -count=1 ./...
 
 test-docker:
 	@echo "Running tests in Docker..."
-	@docker compose run --rm app go test -count=1 ./...
+	@docker compose run --rm app go test $(TIMEOUT_ARG) -count=1 ./...
 
 test-stress:
 	@echo "Running high-concurrency stress test..."
@@ -69,12 +71,12 @@ smoke:
 	@docker build -f Dockerfile -t party2re:smoke .
 
 check verify:
-	@./scripts/verify.sh
+	@TEST_TIMEOUT="$(TEST_TIMEOUT)" ./scripts/verify.sh
 
 check-clean:
 	@rm -f .cache/verify_tree_stamp
 	@./scripts/reset_db.sh
-	@FORCE_VERIFY=1 ./scripts/verify.sh
+	@FORCE_VERIFY=1 TEST_TIMEOUT="$(TEST_TIMEOUT)" ./scripts/verify.sh
 
 setup-hooks:
 	@echo "Configuring Git hooks path..."

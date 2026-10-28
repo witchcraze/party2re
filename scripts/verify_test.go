@@ -107,6 +107,10 @@ exit "${DOCKER_EXIT:-0}"
 		"PATH=" + binDir + ":" + os.Getenv("PATH"),
 		"DOCKER_RECORD=" + dockerRecord,
 		"GO_RECORD=" + goRecord,
+		"FORCE_VERIFY=0",
+		"TEST_TIMEOUT=",
+		"PARTY2_TEST_TIMEOUT=",
+		"GOFLAGS=",
 	}
 
 	return &verifyFixture{
@@ -316,5 +320,70 @@ func TestPrePush_PropagatesFailureOnChangedTree(t *testing.T) {
 	}
 	if strings.Contains(out, "All checks passed. Proceeding with push.") {
 		t.Fatalf("pre-push reported success despite failure:\n%s", out)
+	}
+}
+
+func TestVerify_TimeoutConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		extraEnv    []string
+		wantTimeout string
+	}{
+		{
+			name:        "default 30m timeout",
+			wantTimeout: "-timeout=30m",
+		},
+		{
+			name:        "override via TEST_TIMEOUT",
+			extraEnv:    []string{"TEST_TIMEOUT=45m"},
+			wantTimeout: "-timeout=45m",
+		},
+		{
+			name:        "override via PARTY2_TEST_TIMEOUT",
+			extraEnv:    []string{"PARTY2_TEST_TIMEOUT=1h"},
+			wantTimeout: "-timeout=1h",
+		},
+		{
+			name:        "preserve GOFLAGS with -timeout",
+			extraEnv:    []string{"GOFLAGS=-timeout=20m"},
+			wantTimeout: "",
+		},
+		{
+			name:        "preserve unrelated GOFLAGS with default timeout",
+			extraEnv:    []string{"GOFLAGS=-p=2"},
+			wantTimeout: "-timeout=30m",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fix := setupVerifyFixture(t, false)
+			env := append(fix.env, tc.extraEnv...)
+			out, code := runCmd(t, fix.root, env, "bash", "./scripts/verify.sh")
+			if code != 0 {
+				t.Fatalf("verify failed with code %d:\n%s", code, out)
+			}
+			goLog, err := os.ReadFile(fix.goRecord)
+			if err != nil {
+				t.Fatalf("could not read go record: %v", err)
+			}
+			var fullSuiteCall string
+			for _, line := range strings.Split(string(goLog), "\n") {
+				if strings.HasPrefix(line, "go test") && strings.Contains(line, "./...") {
+					fullSuiteCall = line
+					break
+				}
+			}
+			if fullSuiteCall == "" {
+				t.Fatalf("full suite test call not found in go record:\n%s", string(goLog))
+			}
+			if tc.wantTimeout == "" {
+				if strings.Contains(fullSuiteCall, "-timeout=") {
+					t.Fatalf("expected no -timeout flag when GOFLAGS contains -timeout, got: %s", fullSuiteCall)
+				}
+			} else {
+				if !strings.Contains(fullSuiteCall, tc.wantTimeout) {
+					t.Fatalf("expected %s in full suite test call, got: %s", tc.wantTimeout, fullSuiteCall)
+				}
+			}
+		})
 	}
 }
