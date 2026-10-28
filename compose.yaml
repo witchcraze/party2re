@@ -8,6 +8,9 @@ services:
       PARTY2_TEST_DB_ADMIN_DSN: root:root@tcp(mariadb:3306)/?parseTime=true
       PARTY2_VALKEY_ADDR: valkey:6379
       PARTY2_MAX_PLAYERS: "999"
+      GOFLAGS: ${GOFLAGS:-}
+      TEST_TIMEOUT: ${TEST_TIMEOUT:-}
+      PARTY2_TEST_TIMEOUT: ${PARTY2_TEST_TIMEOUT:-}
     depends_on:
       mariadb:
         condition: service_healthy
@@ -19,7 +22,7 @@ services:
       - .:/workspace
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
-    command: ["go", "test", "./..."]
+    command: ["go", "test", "-timeout=30m", "./..."]
 
   mariadb:
     image: mariadb:latest

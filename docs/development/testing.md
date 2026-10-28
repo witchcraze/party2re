@@ -96,6 +96,13 @@ pools against the server's total connection limit when increasing them.
 For local resource pressure, `GOFLAGS=-p=2 make check` limits concurrent package
 builds and test binaries using Go's standard flag. It preserves each concurrency
 test's worker count and assertions without changing temporary-directory settings.
+All full-suite test entrypoints (`make test`, `make test-integration`, `make test-docker`,
+and `make check`) execute with an explicit default package-wide
+deadline of 30 minutes (`-timeout=30m`), replacing Go's implicit 10-minute timeout.
+Callers can override the package budget using `TEST_TIMEOUT=<duration>` (e.g.
+`make test TEST_TIMEOUT=45m` or `TEST_TIMEOUT=45m make check`) or standard Go flags
+(`GOFLAGS="-timeout=<duration>"`). Unrelated Go flags in `GOFLAGS` (such as `GOFLAGS=-p=2`
+or `-v`) are preserved and forwarded.
 
 ## 4. Container Roles
 
@@ -331,6 +338,15 @@ gaps, not test counts/coverage percentages as proof of complete battle support.
 
 ### 5.4 Execution Budgets and Stop Detection
 
+Repository full-suite test entrypoints (`make check`, `make test`, `make test-integration`,
+`make test-docker`, CI) enforce an explicit default package-wide deadline of 30
+minutes (`-timeout=30m`), replacing Go's implicit 10-minute timeout. This aggregate
+budget is a package-level dead-man limit for complete package execution across heavy
+setup fixtures and numerous subtests (such as candidate generation in Guild tests);
+it does not relax individual test timeouts. Callers can override the package budget
+via `TEST_TIMEOUT=<duration>` or `GOFLAGS="-timeout=<duration>"`. Unrelated `GOFLAGS`
+(such as `GOFLAGS=-p=2`) remain effective.
+
 A DB integration test's context covers fixture preparation and business operations;
 normally allow 60 seconds so package concurrency and `-race` have headroom.
 Character/guild creation consumes that budget even when a fixture helper uses its
@@ -372,7 +388,8 @@ compares latency/allocations; the default +30% regression threshold exits with c
 
 The [CI workflow](../../.github/workflows/ci.yml) runs formatting, OpenAPI sync
 validation, vet and tests with atomic coverage in the Compose development
-container, then builds the production image. It does not currently run the race
+container using the default 30-minute package timeout (`-timeout="${TEST_TIMEOUT:-30m}"`),
+then builds the production image. It does not currently run the race
 detector or exercise the built production image. MariaDB initializes from migrations
 on first volume creation; the GitHub-hosted runner is disposable per job. Tests
 inside a job still follow the database ownership/isolation rules above.

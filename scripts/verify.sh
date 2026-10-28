@@ -77,14 +77,32 @@ fi
 echo "==> [5/7] Ensuring database migrations are applied..."
 "${ROOT_DIR}/scripts/migrate.sh"
 
+resolve_timeout_arg() {
+    local timeout="${TEST_TIMEOUT:-}"
+    if [ -n "$timeout" ]; then
+        echo "-timeout=$timeout"
+        return
+    fi
+    if [ -n "${PARTY2_TEST_TIMEOUT:-}" ]; then
+        echo "-timeout=$PARTY2_TEST_TIMEOUT"
+        return
+    fi
+    if [[ "${GOFLAGS:-}" =~ -timeout(=|[[:space:]]+) ]]; then
+        echo ""
+        return
+    fi
+    echo "-timeout=30m"
+}
+TIMEOUT_ARG=$(resolve_timeout_arg)
+
 echo "==> [6/7] Running full test suite..."
 if command -v go >/dev/null 2>&1; then
     PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" \
     PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:3306)/?parseTime=true" \
     PARTY2_VALKEY_ADDR="127.0.0.1:6379" \
-    go test -count=1 ./...
+    go test ${TIMEOUT_ARG} -count=1 ./...
 else
-    docker compose run --rm app go test -count=1 ./...
+    docker compose run --rm app go test ${TIMEOUT_ARG} -count=1 ./...
 fi
 
 echo "==> [7/7] Running smoke image build..."
