@@ -127,6 +127,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			if err != nil {
 				return err
 			}
+			session.LeaderID = leaderCharID
 			if p.Mode != "" {
 				if err := session.SetMode(p.Mode); err != nil {
 					return err
@@ -134,11 +135,14 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			}
 
 			if s.blessingProvider != nil {
-				for _, c := range participatingChars {
-					if b, err := s.blessingProvider.GetActiveBlessing(ctx, c.ID); err == nil {
+				actorID := session.LeaderID
+				if actorID == "" && len(participatingChars) > 0 {
+					actorID = participatingChars[0].ID
+				}
+				if actorID != "" {
+					if b, err := s.blessingProvider.GetActiveBlessing(ctx, actorID); err == nil {
 						if adventure.IsTreasureBlessing(b) {
 							session.HasTreasureBlessing = true
-							break
 						}
 					}
 				}

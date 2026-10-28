@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -160,6 +161,12 @@ func (r *mockPartyRepository) GetMembers(_ context.Context, partyID string) ([]M
 	for _, m := range mMap {
 		list = append(list, m)
 	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].IsLeader != list[j].IsLeader {
+			return list[i].IsLeader
+		}
+		return list[i].JoinedAt.Before(list[j].JoinedAt)
+	})
 	return list, nil
 }
 

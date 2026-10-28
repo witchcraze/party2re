@@ -514,15 +514,15 @@ $$\text{Index} = \text{BaseIndex} + \text{MerchantBonus} + \text{TreasureHunterB
    - Standard Stages: $\text{BaseIndex} = P - 1$ (where $P$ is total party members). With $D$ dead members, $\text{Index} = P - 1 - D = A - 1$. The inclusive loop $0 .. \text{Index}$ produces $A$ (surviving members) chests when no job/item bonuses apply.
    - Multiplier Stages (Stage 17 幻の秘境, Stage 20 天空城, Stage 21 カオスフィールド): $\text{BaseIndex} = 3 \times P$. With $D$ dead members, $\text{Index} = 3P - D$. The inclusive loop $0 .. \text{Index}$ produces $3P - D + 1$ chests ($3A + 2D + 1$; e.g., $N=2$ with 2 alive yields $2 \times 3 + 1 = 7$ chests).
 2. **Acting Player (操作主体) Bonus Scope**:
-   Job and accessory bonuses are evaluated strictly for the session leader / acting player (matching legacy `%m` in `vs_monster.cgi`), never aggregated across arbitrary party members:
+   Job, accessory, and chapel blessing bonuses are evaluated strictly for the session leader / acting player (matching legacy `%m` in `vs_monster.cgi` and `_npc_action.cgi:501`), never aggregated across arbitrary party members:
    - **Merchant Job Bonus** (`job-07` / 商人): +1 treasure chest.
    - **Treasure Hunter Job Bonus** (`job-78` / トレジャーハンター): +1 to +2 treasure chests ($1 + \text{rand}(2)$).
    - **Gambler / Pirate Job Bonus** (`job-81` / 海賊): $+\text{rand}(3) - \text{rand}(2)$ treasure chests. If the leader holds Lucky Pendant (`item-191`), the index cannot drop below $P - 1$.
    - **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント / 海賊ハット): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest. Checked strictly on the equipped accessory slot (`$m{ite}`), not unequipped inventory items.
+   - **Chapel Treasure Blessing Bonus** (`DROP` / `4` / `treasure_wish` / `宝箱がほしい`): $1/5$ chance ($\text{rand}(5) == 0$) of +1 treasure chest (`_npc_action.cgi:501`: `$m{wish} eq '4'`), evaluated strictly for the session leader once when spawning chests in the treasure room. Non-leader member blessings do not apply.
 3. **Legacy Falsy Index Fallback**:
    In legacy `_npc_action.cgi:499` (`my $count = shift || $#partys;`), if the index passed from `vs_monster.cgi` is `0` (Perl falsy, e.g., a 2-player party whose Pirate roll resulted in $1 - 1 = 0$), it falls back to $P - 1$ before evaluating the Chapel Blessing and dead member penalty.
-4. **Chapel Treasure Blessing Bonus** (`DROP` / `4` / `treasure_wish` / `宝箱がほしい`): $1/5$ chance ($\text{rand}(5) == 0$) of +1 treasure chest (`_npc_action.cgi:501`), evaluated once when spawning chests in the treasure room.
-5. **Lower Bound**: If surviving party members $\le 0$, 0 chests are spawned. If the final index $< 0$, 0 chests are spawned; otherwise, $\text{Index} + 1$ chests are spawned.
+4. **Lower Bound**: If surviving party members $\le 0$, 0 chests are spawned. If the final index $< 0$, 0 chests are spawned; otherwise, $\text{Index} + 1$ chests are spawned.
 
 ### Treasure Box Loot Pool Distribution & Weekday Orbs
 Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons`, `treasure_armors`, `treasure_items`) per `_npc_action.cgi:540-550`:

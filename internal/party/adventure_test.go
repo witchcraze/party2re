@@ -1038,6 +1038,98 @@ func TestPartyAdventure_TreasureBlessing_ChestGenerationAndNoSettlementDuplicati
 	}
 }
 
+func TestPartyAdventure_TreasureBlessing_ActorScope(t *testing.T) {
+	tests := []struct {
+		name        string
+		leaderBless string
+		memberBless string
+		wantChests  int
+	}{
+		{
+			name:        "none",
+			leaderBless: "",
+			memberBless: "",
+			wantChests:  2,
+		},
+		{
+			name:        "leader_only",
+			leaderBless: "宝箱がほしい",
+			memberBless: "",
+			wantChests:  3,
+		},
+		{
+			name:        "member_only",
+			leaderBless: "",
+			memberBless: "宝箱がほしい",
+			wantChests:  2,
+		},
+		{
+			name:        "both",
+			leaderBless: "宝箱がほしい",
+			memberBless: "宝箱がほしい",
+			wantChests:  3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			leader := corecharacter.Character{
+				ID:       "lead-" + tt.name,
+				Name:     "Leader",
+				Level:    10,
+				JobLevel: 5,
+				Stats:    corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+			}
+			member := corecharacter.Character{
+				ID:       "mem-" + tt.name,
+				Name:     "Member",
+				Level:    10,
+				JobLevel: 5,
+				Stats:    corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+			}
+
+			blessings := make(map[string]string)
+			if tt.leaderBless != "" {
+				blessings[leader.ID] = tt.leaderBless
+			}
+			if tt.memberBless != "" {
+				blessings[member.ID] = tt.memberBless
+			}
+			blessingProv := mockPartyBlessingProvider{blessings: blessings}
+
+			svc, partyRepo, charRepo, invRepo, depotRepo := setupPartyAdventureTestService(
+				t,
+				fixedBattleEngine{outcome: corebattle.OutcomeWin},
+				WithBlessingProvider(blessingProv),
+			)
+			svc.rng = func(n int) int { return 0 } // Lucky chest blessing roll
+
+			battleSvc := battle.NewService(
+				battle.WithCharacterRepository(charRepo),
+				battle.WithInventoryRepository(invRepo),
+				battle.WithDepotRepository(depotRepo),
+				battle.WithBlessingProvider(blessingProv),
+				battle.WithRandomSource(fixedPartyBattleRand{val: 0}),
+				battle.WithMaxInventoryCapacity(10),
+			)
+			svc.battleSettler = battleSvc
+
+			partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, member)
+
+			res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+			if err != nil {
+				t.Fatalf("StartPartyAdventure failed: %v", err)
+			}
+
+			if len(res.TreasureBoxes) != tt.wantChests {
+				t.Fatalf("expected %d treasure boxes, got %d", tt.wantChests, len(res.TreasureBoxes))
+			}
+		})
+	}
+}
+
 func TestPartyAdventure_ExitFatigueAndMealReset(t *testing.T) {
 	ctx := context.Background()
 
