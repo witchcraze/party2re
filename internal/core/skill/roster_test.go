@@ -63,6 +63,7 @@ func TestRosterIndirectUnsupportedRejectsBeforeAnyMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Actors[0].Jobs.OldJobID = "job-61"
+	s.Actors[1].HP = 999
 	if _, err := s.ApplyRoster(&c, "job-61-summon", "", random.NewDeterministic(1)); err != nil {
 		t.Fatal(err)
 	}

@@ -73,7 +73,12 @@ func (s *LifetimeState) ValidateRoster(c *RosterContext, id, targetID string, rn
 	if h.RosterIdentity == callingIdentity(87) && (h.SummonForm < 0 || h.SummonForm > 2) {
 		return ErrInvalidParticipant
 	}
-	if job == 87 && h.RosterIdentity == callingIdentity(87) && h.SummonForm < 2 {
+	growing := h.RosterIdentity == callingIdentity(87) && h.SummonForm < 2
+	if command == "special" {
+		form := callingAppearance(h, 87)
+		growing = form >= 0 && form < 2
+	}
+	if job == 87 && growing {
 		if err := validateSummonRequester(c); err != nil {
 			return err
 		}
@@ -128,7 +133,9 @@ func (s *LifetimeState) ValidateRoster(c *RosterContext, id, targetID string, rn
 		return s.validateDoubleTail(c, rng)
 	case "venom":
 		return s.validateVenom(c, helperID, rng)
-	case "grave", "drain-barrage":
+	case "drain-barrage":
+		return s.validateCallingDrain(c, helperID, rng)
+	case "grave":
 		// #1365 status/defeat, #1366 fields, #1337 MP drain.
 		return ErrUnsupportedEffect
 	default:
@@ -319,6 +326,8 @@ func (s *LifetimeState) ApplyRoster(c *RosterContext, id, targetID string, rng r
 		r.Effects = append(r.Effects, hit)
 	case "special":
 		return s.applyCallingSpecial(c, job, helperID, targetID, rng)
+	case "drain-barrage":
+		return s.applyCallingDrain(c, helperID, rng)
 	case "double-tail":
 		return s.applyDoubleTail(c, rng)
 	case "venom":

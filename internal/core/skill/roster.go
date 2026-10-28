@@ -14,7 +14,8 @@ func (d BattleDefinitions) RosterAction(s *corebattle.LifetimeState, c *corebatt
 	if !d.RosterSkills[id] {
 		return corebattle.ErrUnsupportedEffect
 	}
-	return s.ValidateRoster(c, id, targetID, rng)
+	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{targetID}}
+	return s.ValidateInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: id}}, rng)
 }
 
 // RosterInvocation connects the existing indirect executor to the same native
@@ -23,6 +24,12 @@ func (d BattleDefinitions) RosterAction(s *corebattle.LifetimeState, c *corebatt
 // without its transition projection the enclosing continuation stays rejected.
 func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
+		Delegates: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) []corebattle.CallbackInvocation {
+			if id == "job-80-special" && s.CallingRandomReachable(frame.TargetContext) {
+				return []corebattle.CallbackInvocation{{Kind: "random"}}
+			}
+			return nil
+		},
 		Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
 			if c == nil || frame.AfterEffects {
 				return corebattle.ErrUnsupportedEffect
@@ -33,7 +40,10 @@ func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id stri
 			if len(frame.Arguments) > 0 {
 				target = frame.Arguments[0]
 			}
-			return d.RosterAction(s, &child, id, target, random.Default())
+			if !d.RosterSkills[id] {
+				return corebattle.ErrUnsupportedEffect
+			}
+			return s.ValidateRoster(&child, id, target, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {
 			if c == nil || !d.RosterSkills[id] {
@@ -60,6 +70,12 @@ func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id stri
 				frame.Arguments = frame.Arguments[1:]
 			}
 			frame.TargetContext = c.TargetContext
+			if err == nil && result.Delegation.Kind != "" {
+				if frame.Invoke == nil {
+					return corebattle.ErrUnsupportedEffect
+				}
+				return frame.Invoke(result.Delegation)
+			}
 			return err
 		},
 	}

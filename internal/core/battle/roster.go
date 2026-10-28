@@ -14,12 +14,15 @@ import (
 // payload, with weighted appearance positions supplied by the stage owner.
 type RosterContext struct {
 	DamageContext
-	RequesterItemID     string
-	EnemyTeamID         string
-	EnemyPool           []LifetimeActor
-	AppearancePositions []int
-	Hard                bool
-	Status              *RosterStatusCallbacks
+	RequesterItemID                                          string
+	EnemyTeamID                                              string
+	EnemyPool                                                []LifetimeActor
+	AppearancePositions                                      []int
+	Hard                                                     bool
+	Status                                                   *RosterStatusCallbacks
+	Death                                                    *DefeatContext
+	StatusCalls, AreaStatusCalls, DeathCalls, AreaDeathCalls int
+	PartyMPHealCalls                                         int
 }
 
 // RosterStatusCallbacks connects the status owner's fully certified targeted
@@ -36,6 +39,7 @@ type RosterResult struct {
 	TargetConsumed bool
 	Effects        []EffectApplication
 	Hits           []NormalHit
+	Delegation     CallbackInvocation
 }
 
 type HelperPayload struct {
