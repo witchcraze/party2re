@@ -440,6 +440,33 @@ retain separately owned field/arithmetic positions; missing bindings reject the
 enclosing indirect invocation without narrowing its original pool. Operation
 ports are rebuilt after reload; saved results are never replayed as callbacks.
 
+Job84's composure restores hit95 and breath mitigation; its direct breath uses
+base140. The physical strike captures its AT multiplier at table construction:
+×2.5 when the actor's enhanced job84 appearance matches the requester's gender
+and the burn field is active, otherwise ×2. The dance checks its seal before
+selecting an untyped ally, then raises caster tension and a distinct recipient's
+tension, with fallen-target fallback (`_skill.cgi:6672–6709`).
+
+Job85's ritual (also source75.4) sacrifices floor(MaxHP×0.3×[0.9,1.2)) HP,
+leaving1, and sends actual sacrificed HP×0.4+5 through ordinary untyped MP
+recovery. Its area song uses18% instant death. Undo clears status and temporary
+effects on the supplied participant, including enemies/fallen members, or self
+when absent. Raw chaining has60% success and resets tension to1 without shared
+status immunity checks. Chain burst resolves its song target before choosing
+direct base700 for a chained recipient or100 otherwise, then resolves damage
+again (`_skill.cgi:6744–6797`).
+
+Job86's book-power reads the **current** held-book classification: direct magic
+base MaxMP×0.2 without a book, ×0.4 with an ordinary book, ×0.75 with a forbidden
+book. Forbidden recoil uses20% of raw power after the damage helper even on
+accepted no-effect; it does not depend on a returned damage tuple
+(`_skill.cgi:6859–6866`). The asset owner supplies explicit none/ordinary/forbidden
+facts per actor; absent classifications remain unsupported. Save the captured
+burn variant and operation input with continuation facts, rebuild function ports
+after reload, and resume the next callback without replaying completed effects.
+Full tables retain separately owned field/book-asset positions; their missing
+bindings reject indirect invocation before any effect or cost.
+
 Specification evidence and per-entry provenance use `party2/lib/` at revision
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item, gem, and job references are
 provenance identifiers, not authorization to reuse distinctive display names.
