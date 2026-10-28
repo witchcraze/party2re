@@ -315,7 +315,7 @@ func TestBuildParticipant(t *testing.T) {
 		t.Errorf("abilities missing: touki=%v, dokuro=%v, cursed=%v, pharaoh=%v (got: %v)", hasTouki, hasDokuro, hasCursed, hasPharaoh, part.Abilities)
 	}
 
-	// 3. Action items validation (Category 1: 薬草 & 祈りの指輪)
+	// 3. HP tools require explicit callbacks; the batch ring stays available.
 	foundHerb := false
 	foundRing := false
 	for _, act := range part.ActionItems {
@@ -329,8 +329,8 @@ func TestBuildParticipant(t *testing.T) {
 			}
 		}
 	}
-	if !foundHerb || !foundRing {
-		t.Errorf("expected action items 薬草 and 祈りの指輪, got: %+v", part.ActionItems)
+	if foundHerb || !foundRing {
+		t.Errorf("expected only the retained batch ring, got: %+v", part.ActionItems)
 	}
 
 	// 4. Skills & Custom Skills validation

@@ -305,6 +305,34 @@ Native admission is enforced across these boundaries:
   Their entire reachable closure must be certified; substituting a supported-only draw pool
   is prohibited.
 
+Ordinary held tools use `OrdinaryToolEntries`, `RegisterOrdinaryTools` and the
+same `InvocationAction` gate as submission. Category1 tools retain the distinct
+`CategoryTool` helper category: HP tools use shared healing modifiers and caps;
+damage tools supply their fixed base power to shared damage rather than adding
+actor attack. Scalar batch adaptation omits these HP tools and the physical
+reduction tool. Omitted held-tool selectors default to self; ambient-cursor
+bodies instead use the verified request cursor. Temporary assignments retain
+each body's living guard, stat-helper return and order. Full reset reapplies
+equipment to every ordered member before refilling maxima, including fallen
+members (`ff97fc5:_data.cgi:623–1340,1527–1535,1641–1675,1879–1889`;
+`_skill.cgi:dougu:758–764`; `_battle.cgi:reset_status_all:1411–1431`).
+
+Inspection callbacks share structured content, flavor-index, resource/base-stat,
+valuation-band and first-match reward-search facts. The encounter owner freezes
+treasure predicates, reward definitions/kinds and prices in `OrdinaryToolInput`;
+returned facts reveal only the information selected by the body and never grant
+loot. Tool151 inspects at most ten ordered enemies. Player inspection producers
+retain supplied-member versus all-member fallback, including fallen members;
+job78 checks treasure before nonparty reward search and fallback. Valuation lower
+bounds are1000/5000/10000/15000/20000; stat inspection reports current HP/MP and
+base AT/DF/AG (`_skill.cgi:1306–1323,1471–1499,1818–1824,6018–6114,6480–6499`).
+Tool213 uses frozen persistent requester MaxHP with strict comparisons, not the
+temporary actor's MaxHP. Accepted bodies produce a consumption intent even on
+no-effect; missing enemies produce `ErrNoBattleTarget` without consumption.
+Consumers own durable instance binding, charges, receipt publication and replay
+of saved results without callback re-execution. Rebuild function ports after
+loading state and frozen input; complete job-table assembly remains separate.
+
 Base attack and guard callbacks (`internal/core/battle/base_guard.go`) compose
 the existing effect owners, preserving ordered job0–3 tables and all three
 independent job0 attack positions (`_skill.cgi:1002–1183` at
