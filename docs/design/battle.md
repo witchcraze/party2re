@@ -665,6 +665,12 @@ actor. A missing entry/variant or unresolved helper rejects the whole operation
 before costs or draws. An unusable gem86 last entry and job73's MP0 special case
 remain handled no-effect without demanding skipped callback context.
 
+Conditional `Delegates` edges describe alternative calls before any intrinsic
+effect. Their pure guards are evaluated against the current frame; admission
+keeps that frame when traversing cycles, and execution permits only the declared
+calls. Ordered `Children` still require admission after earlier effects. Neither
+contract samples a branch or substitutes a smaller random pool.
+
 A callback may supply a pure `Project` transition when its complete resulting
 state and caller context are deterministic. Admission applies it to a private
 copy, revalidates each later slot against those facts, and stops after projected
@@ -1653,9 +1659,34 @@ target; absent-tuple writes and unrepresented redirect transitions remain reject
 when the returned target differs, writes poison directly above the999 MaxHP/baseDF
 threshold, otherwise chooses deadly poison/paralysis and invokes its separately
 certified75% status helper, then checks growth. Its status port must admit both
-choices before any hit. Status/death, MP drain, revival, grave-field and general-random descendants
-remain whole-entry gates under #1365/#1337/#1338/#1366/#1357. No scalar damage
-substitution certifies those branches. Item110 remains rejected. The registry's
+choices before any hit. Special commands61/62/63/64/66/67/71/80/87 and62's
+extended drain barrage compose the native damage, status/death, HP/MP recovery,
+stat and possession owners. The named helper's presence is checked before
+liveness; a fallen named record blocks the appearance substitute. The summoner
+remains the effect actor, including its category modifiers, while source-selected
+helper AT/AG supply power. Possession64 temporarily changes the actor to the
+resolved enemy for one ordinary attack helper, preserving the original arrays.
+Appearance-dependent branches67/80 and growth87 read current native appearance
+facts, so an intervening transformation does not reuse an old summon form.
+
+Special61/67 retain ordered area damage then additional status;62 returns actual
+damage power as helper HP healing or requested MP debit as summoner MP healing.
+Its extended command draws2–4 independent random-enemy hits, returning half each
+successful hit's power to a random party target, and checks summoner death before
+each hit. Special80's archer appearance draws a1/7 ordered per-enemy attack with
+20% MP return, otherwise area damage. Other appearances draw1/6 party HP/MP
+recovery followed by direct30% fallen-member revival, otherwise full general
+random. That random branch delegates before any intrinsic effect, sharing the
+original arguments and invocation cycle admission; the registry admits every
+reachable original descendant without narrowing tables. `RosterResult.Delegation`
+is executed by `RosterInvocation`, not replayed from stored facts. Unavailable
+descendants reject the whole registered action before mutation or RNG; archer
+and missing/fallen-helper guards do not require the random pool. Special87 checks
+growth after its attack/buff-and-status branch even if damage killed the summoner.
+Evidence: `_skill.cgi:4290–4306,4384–4402,4429–4440,4491–4505,4636–4656,4862–4883,4982–5001,5397–5411,6384–6419,6958–6982`.
+
+Revival and grave-field entries retain their separate owners. No scalar damage
+substitution certifies missing descendants. Item110 remains rejected. The registry's
 `RosterAction` and `RosterInvocation` use the same admission; an arbitrary earlier
 indirect callback without a represented transition projection still rejects the
 enclosing continuation before any slot executes or costs are paid. Roster

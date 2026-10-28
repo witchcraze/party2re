@@ -24,9 +24,7 @@ func (s *LifetimeState) validateCallingSpecial(c *RosterContext, job int, helper
 		}
 	}
 	if job != 59 && job != 60 && job != 65 {
-		// Death/status callbacks (#1365), MP drain (#1337), enemy possession
-		// and full random closure (#1357) are not generic damage substitutes.
-		return ErrUnsupportedEffect
+		return s.validateCallingBody(c, job, helperID, targetID, rng)
 	}
 	coefficients := [2]float64{1.5, 1.2}
 	if job == 60 {
@@ -48,6 +46,9 @@ func (s *LifetimeState) validateCallingSpecial(c *RosterContext, job int, helper
 }
 
 func (s *LifetimeState) applyCallingSpecial(c *RosterContext, job int, helperID, targetID string, rng random.Generator) (RosterResult, error) {
+	if job != 59 && job != 60 && job != 65 && job != 68 && job != 69 {
+		return s.applyCallingBody(c, job, helperID, targetID, rng)
+	}
 	r := RosterResult{HelperID: helperID, TargetConsumed: true}
 	h := s.actor(helperID)
 	e := rosterEffect(targetID, 0, CategoryPhysical, false)

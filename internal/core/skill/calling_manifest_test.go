@@ -110,7 +110,7 @@ func TestCallingManifestMetadataAndIntrinsicResults(t *testing.T) {
 			})
 		}
 	}
-	if count != 78 {
+	if count != 88 {
 		t.Fatal("manifest positions", count)
 	}
 }
@@ -132,6 +132,7 @@ func addCallingManifestHelper(s *corebattle.LifetimeState, c *corebattle.RosterC
 	s.Actors = append(s.Actors, corebattle.LifetimeActor{Participant: corebattle.Participant{
 		ID: "helper", TeamID: "party", HP: 100, MaxHP: 100, MP: 10, MaxMP: 10, Attack: 100, Defense: 100, Agility: 100,
 		BaseStats: corebattle.BattleBaseStats{Attack: 100, Defense: 100, Agility: 100}, Gear: &corebattle.BattleGearStats{},
+		Icon: fmt.Sprintf("assets/images/placeholders/battle/helpers.svg#calling-%d-0", job),
 	}, RosterIdentity: fmt.Sprintf("calling-%d", job), Tension: 1, Hit: 95})
 	c.PartyIDs = append(c.PartyIDs, "helper")
 }
@@ -152,7 +153,9 @@ func checkCallingIntrinsic(t *testing.T, s *corebattle.LifetimeState, c *corebat
 	case "attack":
 		wantDamage = 67
 	case "special":
-		wantDamage = map[int]int{59: 67, 60: 76, 65: 67, 68: 135, 69: 135}[job]
+		wantDamage = map[int]int{59: 67, 60: 76, 62: 90, 65: 67, 68: 135, 69: 135, 71: 63, 80: 63, 87: 90}[job]
+	case "drain-barrage":
+		wantDamage = 108
 	case "defend":
 		if job == 87 {
 			if h.SummonForm != 1 || h.HP != 270 || h.Temporary != "" {

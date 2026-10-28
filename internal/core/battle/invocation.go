@@ -49,8 +49,11 @@ type CallbackTable struct {
 type CallbackDefinition struct {
 	Invocation CallbackInvocation
 	Children   []CallbackInvocation
-	Validate   func(*LifetimeState, *CallbackContext) error
-	Execute    func(*LifetimeState, *CallbackContext, random.Generator) error
+	// Delegates declares alternative calls reached before any intrinsic effect.
+	// It is pure; conditional recursion retains the current admission frame.
+	Delegates func(*LifetimeState, *CallbackContext) []CallbackInvocation
+	Validate  func(*LifetimeState, *CallbackContext) error
+	Execute   func(*LifetimeState, *CallbackContext, random.Generator) error
 	// Project supplies the complete deterministic transition on an isolated
 	// copy, without external Apply hooks or RNG. False leaves input unchanged
 	// and means unknown; later callbacks must admit arbitrary prior effects.
@@ -258,9 +261,13 @@ func (s *LifetimeState) executeCallback(c *CallbackContext, d CallbackCatalog, e
 	if def.Invocation.Kind != "" {
 		return s.invokeCallback(c, d, def.Invocation, rng)
 	}
+	delegates := []CallbackInvocation(nil)
+	if def.Delegates != nil {
+		delegates = def.Delegates(s, c)
+	}
 	invoke := c.Invoke
 	c.Invoke = func(op CallbackInvocation) error {
-		if !slices.Contains(def.Children, op) {
+		if !slices.Contains(def.Children, op) && !slices.Contains(delegates, op) {
 			return ErrUnsupportedEffect
 		}
 		return s.invokeCallback(c, d, op, rng)

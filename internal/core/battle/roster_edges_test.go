@@ -193,6 +193,10 @@ func TestRosterAdmissionKeepsStateCountersAndRNGUnchanged(t *testing.T) {
 		if id == "job-87-venom" {
 			s.actor("enemy").MaxHP = 999
 		}
+		// Every supported body still rejects a missing reached damage/status
+		// prerequisite; unsupported identities remain rejected independently.
+		s.actor("enemy").HP, s.actor("enemy").MaxHP = 999, 999
+		s.actor("enemy").Gear = nil
 		before, _ := json.Marshal(s)
 		context := c
 		if _, err := s.ApplyRoster(&c, id, "enemy", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {

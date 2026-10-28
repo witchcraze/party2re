@@ -3,7 +3,7 @@ package skill
 import corebattle "github.com/witchcraze/party2re/internal/core/battle"
 
 // RegisterCallingJobs contributes complete ordered calling tables, retaining
-// unimplemented positions for their owners. Only the 78 certified roster bodies
+// unimplemented positions for their owners. Only the 88 certified roster bodies
 // are bound here; missing descendants still reject through the shared gate.
 func (d *BattleDefinitions) RegisterCallingJobs(c *corebattle.RosterContext) {
 	if d.RosterSkills == nil {
@@ -19,7 +19,7 @@ func (d *BattleDefinitions) RegisterCallingJobs(c *corebattle.RosterContext) {
 		entries := corebattle.RosterEntries(job)
 		d.Invocations.JobTables[job] = corebattle.CallbackTable{Variants: [][]corebattle.CallbackEntry{entries}}
 		for _, entry := range entries {
-			if entry.Name == "special" && job != 59 && job != 60 && job != 65 && job != 68 && job != 69 || entry.Name == "grave" || entry.Name == "drain-barrage" || entry.Name == "revive" {
+			if entry.Name == "grave" || entry.Name == "revive" {
 				continue
 			}
 			d.RosterSkills[entry.ID] = true

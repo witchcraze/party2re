@@ -11,7 +11,7 @@ import (
 
 func TestCallingRegistrationPreservesCompleteTablesAndOtherOwners(t *testing.T) {
 	_, c, d := rosterRegistryFixture()
-	d.Invocations.Entries["job-61-special"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "random"}}
+	d.Invocations.Entries["job-64-grave"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "random"}}
 	d.RegisterCallingJobs(&c)
 	count := 0
 	for _, job := range []int{59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 71, 80, 87} {
@@ -20,8 +20,7 @@ func TestCallingRegistrationPreservesCompleteTablesAndOtherOwners(t *testing.T) 
 			t.Fatal(job, "changed source order or metadata")
 		}
 		for _, e := range entries {
-			registered := e.Name != "special" || job == 59 || job == 60 || job == 65 || job == 68 || job == 69
-			registered = registered && e.Name != "grave" && e.Name != "drain-barrage" && e.Name != "revive"
+			registered := e.Name != "grave" && e.Name != "revive"
 			if d.RosterSkills[e.ID] != registered {
 				t.Fatal(e.ID, "incorrect body certification")
 			}
@@ -34,7 +33,7 @@ func TestCallingRegistrationPreservesCompleteTablesAndOtherOwners(t *testing.T) 
 			}
 		}
 	}
-	if count != 78 || d.Invocations.Entries["job-61-special"].Invocation.Kind != "random" {
+	if count != 88 || d.Invocations.Entries["job-64-grave"].Invocation.Kind != "random" {
 		t.Fatal(count, "overwrote another owner's definition")
 	}
 }

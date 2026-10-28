@@ -85,6 +85,13 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 				return err
 			}
 		}
+		if def.Delegates != nil {
+			for _, child := range def.Delegates(p.s, &c) {
+				if err := p.visit(child, afterEffects); err != nil {
+					return err
+				}
+			}
+		}
 		return nil
 	case "random":
 		for job := 1; job <= 87; job++ {
