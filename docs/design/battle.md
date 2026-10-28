@@ -732,6 +732,37 @@ changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
 
+#### Machine and familiar callbacks
+
+Evidence: `_skill.cgi:6246–6254,6297–6302,6475,6515–6532,6555–6593`
+at revision `ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterMachineFamiliar` binds eleven intrinsic bodies and contributes full
+ordered job79/81/82 tables, reusing the appearance-dependent transformation
+tables. Time, inspection, wallet, generated and form callbacks retain their
+separate owners; an absent binding still rejects the full indirect pool.
+
+Job79 drains25% current MP and passes the **requested** debit to magic MP
+recovery, strikes with physical AG×2.2, or deals direct physical220 followed
+by one self tension increase and another only if the returned target is fallen.
+A miss, one-hit defense or unresolved target skips that tension tail. Job81
+strikes with physical AT×1.2, or chooses AT×3 versus20 with equal probability.
+Its song visits living allies in order, raising base AT and DF20% separately,
+then independently attempting song healing150 with25% probability per ally.
+Each helper resolves its target again; earlier stat/equipment tails and consumed
+tension affect later helpers. Song has no category-seal rejection.
+
+Job82 temporarily sets AT to floor(current AT×1.2), invokes the ordinary attack
+helper once, then restores saved AT even after defeat/reset. Its tea resolves a
+magic ally, heals150, then separately cures that first resolved ally's current
+status; it does not substitute the healing helper's returned target. Tuning
+uniformly chooses base AT/DF/AG+18%. Arrows draw3–4 physical AT×0.9 hits, read
+current AT per hit and resolve a fresh absent target each time, stopping when
+the actor falls or a hit returns no target. The cannon is single direct
+breath170. Listed charges, random MP restoration and durable receipts stay
+with the enclosing consumer. Admission checks descendants before effects or
+draws; unknown prior transitions retain whole-action rejection. Save operation
+facts and frozen command input, rebuilding ports after reload without replay.
+
 #### Guardian and restoration callbacks
 
 Evidence: `_skill.cgi:1873–1986` at revision
