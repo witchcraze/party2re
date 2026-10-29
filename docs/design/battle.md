@@ -983,6 +983,47 @@ resulting facts and frozen next input, rebuild ports after reload, and never
 replay a committed callback. Adventure production integration remains with its
 consumer owners above.
 
+#### Treatment and chance callbacks
+
+`RegisterTreatmentChance` contributes complete ordered source43/45/46 tables
+and twenty intrinsic bodies; full revival43.6 retains its existing owner.
+Evidence is `_skill.cgi:3186–3206,3249–3307,3317–3413` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`. Treatment cures party poison,
+paralysis or sleep, assigns targeted regeneration, resolves an untyped ally
+before a fresh magic cure of that recipient's captured current status, or heals
+at base400. Accuracy sets95; self armor raises baseDF by50% before its raw
+magic-mitigation tail. Mana dance recovers the returned18% MP stat debit.
+The weakening song reduces AT then resolves DF reduction at40%, assigning a
+native frog appearance to the first returned recipient. The restoration dance
+raises each ordered ally's tension before comparing that ally's current HP/MP:
+HP≤MP selects heal100; otherwise MP recovery draws a continuous base in[10,40).
+
+Three independent five-way symbols select death90 for triple4, party healing
+200/400 for triples0/2, non-direct area300/500 for triples1/3, or direct area
+`7×sum` on a mismatch. Both dice bodies consume all three draws but use the
+first die in both hundreds and units. Recoil dice halve/truncate that value and
+use the first die again in recoil; weighted dice restrict only the first die
+to1..3. Roulette reuses the raw source31.1 body: fallen selections fall back to
+self and current HP/current DF must both be≤999. Coin instead tests current HP
+and **base** DF: death60 when both are≤999, otherwise a fresh dodge draw skips
+only above7/10. High HP selects direct `min(1800,floor(MaxHP/2))` damage;
+remaining high-defense targets and the self branch lose floor(currentHP/2),
+with minimum HP1. The coin loop continues after caster death.
+
+Admission checks descendants before resources or RNG and preserves ordered
+damage/reset/revival/reward alternatives through the existing native owners.
+Coin hit projection retains fallen/living and HP999 classes, independent reset
+outcomes, one-hit defense consumption, equipment activation and interception.
+Temporary revival preserves both HP extremes across999 rather than collapsing
+all living outcomes to the lowest HP. The coin's damage and death branches share
+the existing native defeat context, including its pure reward/field projections;
+no additional consumer-supplied damage projection is required.
+Consumers rebuild existing ports after reload and
+retain frozen input/counters without replaying completed callbacks. Unknown
+preceding callbacks retain conservative admission. Production adventure wiring
+remains with the consumer. Source bodies and the projection contract live in
+[`treatment_chance.go`](../../internal/core/battle/treatment_chance.go).
+
 #### Treatment, light and mischief callbacks
 
 Treatment and light use the shared recovery, proportional-stat and status

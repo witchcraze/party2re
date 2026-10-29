@@ -39,6 +39,12 @@ func (s *LifetimeState) statusTargetCandidates(c *DamageContext, e TargetEffect)
 // exclusive hits would invent deaths; dropping survivors loses later lethal hits.
 // followed also projects the last reward/field tail before an enclosing effect.
 func (s *LifetimeState) projectAreaDeath(c *StatusContext, e TargetEffect, chance float64, bypass, followed bool, rng random.Generator) ([]LifetimeState, error) {
+	return s.projectDeathTargets(c, e, chance, bypass, followed, c.EnemyIDs, rng)
+}
+
+// An enclosing mixed loop can project one death helper with the full target
+// context intact, then continue with a different kind of effect.
+func (s *LifetimeState) projectDeathTargets(c *StatusContext, e TargetEffect, chance float64, bypass, followed bool, ids []string, rng random.Generator) ([]LifetimeState, error) {
 	p := s.defeatCopy()
 	converted, _, err := p.actor(c.ActorID).ConvertEnemyCategory(c.TargetContext, e)
 	if err != nil {
@@ -48,7 +54,7 @@ func (s *LifetimeState) projectAreaDeath(c *StatusContext, e TargetEffect, chanc
 		p.actor(c.ActorID).Status = ""
 	}
 	states := []LifetimeState{p}
-	for index, id := range c.EnemyIDs {
+	for index, id := range ids {
 		e.TargetID = id
 		var next []LifetimeState
 		for _, state := range states {
@@ -78,7 +84,7 @@ func (s *LifetimeState) projectAreaDeath(c *StatusContext, e TargetEffect, chanc
 				}
 				child := *c.Defeat
 				child.TargetContext = c.TargetContext
-				continuations, err := p.projectDefeatContinuation(&child, t.ID, rng, map[string]bool{}, followed || index+1 < len(c.EnemyIDs))
+				continuations, err := p.projectDefeatContinuation(&child, t.ID, rng, map[string]bool{}, followed || index+1 < len(ids))
 				if err != nil {
 					return nil, err
 				}
