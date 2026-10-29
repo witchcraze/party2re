@@ -73,11 +73,17 @@ func (s *LifetimeState) ValidateDamage(c *DamageContext, e TargetEffect, rng ran
 	if len(c.EnemyIDs) == 0 || converted.Payload.Number == 0 {
 		return nil
 	}
+	return s.validateDamageRecipients(c, s.damageCandidates(c, converted))
+}
+
+// Compound owners can supply the target owner's projected alternatives after
+// earlier effects; execution still resolves its target through ApplyDamage.
+func (s *LifetimeState) validateDamageRecipients(c *DamageContext, candidates []TargetEffect) error {
 	if err := c.End.Validate(); err != nil {
 		return err
 	}
 	a := s.actor(c.ActorID)
-	for _, candidate := range s.damageCandidates(c, converted) {
+	for _, candidate := range candidates {
 		if candidate.Payload.Number == 0 {
 			continue
 		}

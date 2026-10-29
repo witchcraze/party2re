@@ -1020,6 +1020,46 @@ retargeting or a pre-hit reset retains its descendant requirements.
 Full service/receipt integration remains with
 the normal-adventure consumer; saved committed results are never replayed.
 
+#### Ritual and group-dance callbacks
+
+Evidence: `_skill.cgi:5730–5917` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterRitualDance` binds eleven intrinsic bodies and contributes complete
+ordered job75/76 tables, retaining the revival owner's75.5/76.3 registrations.
+Group dance's listed MP is12 times the party size captured when constructing the
+table. Save that size with frozen input and reuse it when rebuilding callbacks
+after reload, even when the current roster has changed.
+
+Temporary piercing strips the resolved target's temporary before removing
+`HP - floor(HP × 0.8)`, capped at5000 and leaving at least1 HP. Without a
+temporary it has no HP effect. Status transfer clears the resolved ally's status
+and assigns it to any member, including that same ally or a fallen member.
+The life ritual sacrifices `floor(MaxHP × 0.3 × (0.9 + 0.3u))`, leaving at
+least1 HP, then passes40% of actual HP spent plus5 to the existing MP recovery
+helper. Life drain passes150–350 base magic power to direct damage and heals
+self using120% of the returned damage, including overkill; an absent returned
+target skips healing. Cure-or-protection performs a second cure helper when a
+status exists, otherwise it randomly assigns physical immunity or reduction.
+
+Group dance visits living allies in party order, temporarily making each the
+effect actor while preserving requester, outer command and side arrays. With
+an absent or unknown target, temporarily set that ally's tension to1, use an
+absent enemy target, and restore its tension afterward. With any known target,
+the loop shadows that argument with each ally's own identity and retains its
+tension. Each ally has a1/4 direct branch: base AT for an absent target or
+0.8×AT for a supplied one. The ordinary branch uses truncated1.2×AT or AT,
+respectively. All use the dance category and existing target/damage rules.
+Restore the original actor after each helper, including descendant errors.
+
+Admission includes both damage branches and later helpers after consumed
+defenses, category cures, item195 activation and possible fallen/revived
+participants. A covering member's defeat/reset can expose the original target
+or the next covering member; admit those recipients before the first hit.
+Unprojected preceding callbacks retain the shared `AfterEffects`
+gate. Hooks are rebuilt from saved facts; committed effects are never replayed.
+Normal-adventure service wiring and receipt/retry verification remain with the
+consumer owners.
+
 #### Arithmetic selectors and digit reversal
 
 Evidence: `_skill.cgi:2653–2713,5450–5581` at revision
