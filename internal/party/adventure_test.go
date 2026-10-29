@@ -1691,3 +1691,163 @@ func TestPartyAdventure_MidCrawlFallenAlly(t *testing.T) {
 		t.Errorf("expected fallen member HP=1, got %d", updatedMem3.Stats.HP)
 	}
 }
+
+type countingPartyBattleEngine struct {
+	fixedBattleEngine
+	calls int
+}
+
+func (e *countingPartyBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	e.calls++
+	return e.fixedBattleEngine.ResolvePartyBattle(req)
+}
+
+type mutablePartyBlessingProvider struct {
+	blessings map[string]string
+	err       error
+}
+
+func (m *mutablePartyBlessingProvider) GetActiveBlessing(_ context.Context, characterID string) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	if m.blessings == nil {
+		return "", nil
+	}
+	return m.blessings[characterID], nil
+}
+
+func TestPartyAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
+	ctx := context.Background()
+
+	leader := corecharacter.Character{
+		ID:       "lead-fail",
+		Name:     "Leader",
+		Level:    10,
+		JobLevel: 5,
+		Stats:    corecharacter.Stats{HP: 100, MaxHP: 100, MP: 30, MaxMP: 30, Attack: 50, Defense: 30},
+	}
+	member := corecharacter.Character{
+		ID:       "mem-fail",
+		Name:     "Member",
+		Level:    10,
+		JobLevel: 5,
+		Stats:    corecharacter.Stats{HP: 100, MaxHP: 100, MP: 30, MaxMP: 30, Attack: 50, Defense: 30},
+	}
+
+	blessingProv := &mutablePartyBlessingProvider{}
+	battleEngine := &countingPartyBattleEngine{
+		fixedBattleEngine: fixedBattleEngine{outcome: corebattle.OutcomeWin},
+	}
+
+	svc, partyRepo, charRepo, invRepo, depotRepo := setupPartyAdventureTestService(
+		t,
+		battleEngine,
+		WithBlessingProvider(blessingProv),
+	)
+	svc.rng = func(n int) int { return 0 } // Lucky chest blessing roll
+
+	battleSvc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithDepotRepository(depotRepo),
+		battle.WithBlessingProvider(blessingProv),
+		battle.WithRandomSource(fixedPartyBattleRand{val: 0}),
+		battle.WithMaxInventoryCapacity(10),
+	)
+	svc.battleSettler = battleSvc
+
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, member)
+
+	// 1. Storage failure: provider returns error
+	injectedErr := errors.New("blessing storage unavailable")
+	blessingProv.err = injectedErr
+	battleEngine.calls = 0
+
+	_, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if !errors.Is(err, injectedErr) {
+		t.Fatalf("expected error wrapping %v, got %v", injectedErr, err)
+	}
+	if battleEngine.calls != 0 {
+		t.Fatalf("expected 0 combat calls on blessing read failure, got %d", battleEngine.calls)
+	}
+
+	// Verify compensatory restoration: party is StatusRecruiting
+	p, err := partyRepo.GetParty(ctx, partyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Status != StatusRecruiting {
+		t.Fatalf("expected party status %s after error, got %s", StatusRecruiting, p.Status)
+	}
+
+	// Verify member ready states remain true
+	members, err := partyRepo.GetMembers(ctx, partyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range members {
+		if !m.ReadyState {
+			t.Fatalf("expected member %s ready state to remain true, got false", m.CharacterID)
+		}
+	}
+
+	// Verify no adventure logs written
+	if len(partyRepo.logs) != 0 {
+		t.Fatalf("expected 0 adventure logs on failure, got %d", len(partyRepo.logs))
+	}
+
+	// Verify characters unmutated
+	savedLeader, _ := charRepo.FindByID(ctx, leader.ID)
+	if savedLeader.Stats.HP != leader.Stats.HP || savedLeader.Money != leader.Money {
+		t.Fatalf("leader character mutated: %+v vs %+v", savedLeader, leader)
+	}
+
+	// 2. Recovery: clearing the injected read failure permits one subsequent successful crawl (absent blessing: 2 chests)
+	blessingProv.err = nil
+	blessingProv.blessings = nil
+	battleEngine.calls = 0
+
+	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("expected success after clearing blessing error, got: %v", err)
+	}
+	if battleEngine.calls == 0 {
+		t.Fatal("expected combat execution on recovery")
+	}
+	if len(res.TreasureBoxes) != 2 {
+		t.Fatalf("expected 2 treasure chests for absent blessing (2 members), got %d", len(res.TreasureBoxes))
+	}
+	if len(partyRepo.logs) != 1 {
+		t.Fatalf("expected exactly 1 adventure log after recovery, got %d", len(partyRepo.logs))
+	}
+
+	// Verify member ready states are now reset to false on success
+	membersAfter, err := partyRepo.GetMembers(ctx, partyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range membersAfter {
+		if m.ReadyState {
+			t.Fatalf("expected member %s ready state reset to false after success, got true", m.CharacterID)
+		}
+	}
+
+	// 3. Active blessing on leader: yields 3 chests (2 base + 1 blessing bonus)
+	for _, m := range membersAfter {
+		_, err = svc.SetReady(ctx, partyID, m.CharacterID, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	blessingProv.blessings = map[string]string{leader.ID: "4"}
+	battleEngine.calls = 0
+
+	resActive, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("expected success with active blessing, got: %v", err)
+	}
+	if len(resActive.TreasureBoxes) != 3 {
+		t.Fatalf("expected 3 chests for active blessing (2 base + 1 bonus), got %d", len(resActive.TreasureBoxes))
+	}
+}

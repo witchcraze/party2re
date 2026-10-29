@@ -315,23 +315,25 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}
 	session.nowFunc = s.now
 
-	if stage.ID == "stage-26" && s.timer != nil {
-		for _, c := range characters {
-			_ = s.timer.SetLock(ctx, timer.CategoryDungeonOnce, c.ID, 7*24*time.Hour)
-		}
-	}
-
 	if s.blessingProvider != nil {
 		actorID := session.LeaderID
 		if actorID == "" && len(characters) > 0 {
 			actorID = characters[0].ID
 		}
 		if actorID != "" {
-			if b, err := s.blessingProvider.GetActiveBlessing(ctx, actorID); err == nil {
-				if IsTreasureBlessing(b) {
-					session.HasTreasureBlessing = true
-				}
+			b, err := s.blessingProvider.GetActiveBlessing(ctx, actorID)
+			if err != nil {
+				return DungeonCrawlResult{}, fmt.Errorf("get active blessing: %w", err)
 			}
+			if IsTreasureBlessing(b) {
+				session.HasTreasureBlessing = true
+			}
+		}
+	}
+
+	if stage.ID == "stage-26" && s.timer != nil {
+		for _, c := range characters {
+			_ = s.timer.SetLock(ctx, timer.CategoryDungeonOnce, c.ID, 7*24*time.Hour)
 		}
 	}
 
