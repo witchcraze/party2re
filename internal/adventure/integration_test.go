@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
@@ -549,6 +550,23 @@ func TestAdventurePostAdventureHook_TavernDelivery_ZeroFundsLifecycle(t *testing
 	}
 }
 
+type settlementBattleEngine struct {
+	corebattle.Engine
+	consumeOnce map[string][]corebattle.ConsumedItem
+}
+
+func (e *settlementBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	res, err := e.Engine.ResolvePartyBattle(req)
+	if err != nil {
+		return res, err
+	}
+	if len(e.consumeOnce) > 0 {
+		res.ConsumedItems = e.consumeOnce
+		e.consumeOnce = nil
+	}
+	return res, nil
+}
+
 func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -607,12 +625,15 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	deterministicRng := func(n int) int { return 0 }
+	battleEngine := &settlementBattleEngine{}
+
 	battleAdapter := battle.NewService(
 		battle.WithCharacterRepository(charRepo),
 		battle.WithInventoryRepository(invRepo),
 		battle.WithEquipmentRepository(equipRepo),
 		battle.WithDepotRepository(depotRepo),
-		battle.WithBattleEngine(corebattle.Engine{}),
+		battle.WithBattleEngine(battleEngine),
 		battle.WithTransactionProvider(txProvider),
 	)
 
@@ -632,7 +653,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		invRepo,
 		stages,
 		monsters,
-		corebattle.Engine{},
+		battleEngine,
 		nil,
 		nil,
 		clock,
@@ -648,6 +669,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	crawlRes, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
 		StageID:      adventure.StarterAdventure,
+		Rng:          deterministicRng,
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl failed: %v", err)
@@ -687,6 +709,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	crawlRes2, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
 		StageID:      adventure.StarterAdventure,
+		Rng:          deterministicRng,
 	})
 	if err != nil {
 		t.Fatalf("Second ExecuteCrawl failed: %v", err)
@@ -731,6 +754,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	crawlRes3, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{weakling.ID},
 		StageID:      adventure.StarterAdventure,
+		Rng:          deterministicRng,
 	})
 	if err != nil {
 		t.Fatalf("Third ExecuteCrawl failed: %v", err)
@@ -749,6 +773,89 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	expectedDefeatTired := adventure.CalculateExitFatigue(crawlRes3.Round, crawlRes3.Mode)
 	if savedWeakling.Tired != expectedDefeatTired {
 		t.Errorf("expected defeated hero Tired=%d (Round %d) in MariaDB, got %d", expectedDefeatTired, crawlRes3.Round, savedWeakling.Tired)
+	}
+
+	// 4. Consumption frees inventory hand: Character starts with 1 item in inventory, consumes it in combat,
+	// and Floor 11 treasure is delivered to inventory (freed hand) rather than depot.
+	consumerChar, err := characterService.Create(ctx, player.ID, "ConsHero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumerChar.Stats.HP = 500
+	consumerChar.Stats.MaxHP = 500
+	consumerChar.Stats.MP = 100
+	consumerChar.Stats.MaxMP = 100
+	consumerChar.Stats.Attack = 200
+	consumerChar.Stats.Defense = 100
+	consumerChar.Stats.Agility = 100
+	if err := charRepo.Update(ctx, consumerChar); err != nil {
+		t.Fatal(err)
+	}
+
+	consumedHerb, err := coreitem.NewInstance("item-001", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumerInv, err := invRepo.FindByCharacterID(ctx, consumerChar.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID for consumer hero failed: %v", err)
+	}
+	if err := consumerInv.Add(consumedHerb); err != nil {
+		t.Fatalf("consumerInv.Add failed: %v", err)
+	}
+	if err := invRepo.Save(ctx, consumerInv); err != nil {
+		t.Fatalf("invRepo.Save failed: %v", err)
+	}
+
+	// Arm the battle engine to report consumption of the held herb on combat resolution.
+	battleEngine.consumeOnce = map[string][]corebattle.ConsumedItem{
+		consumerChar.ID: {{
+			ID:         consumedHerb.DefinitionID,
+			InstanceID: consumedHerb.ID,
+			Quantity:   1,
+		}},
+	}
+
+	crawlRes4, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{consumerChar.ID},
+		StageID:      adventure.StarterAdventure,
+		Rng:          deterministicRng,
+	})
+	if err != nil {
+		t.Fatalf("Fourth ExecuteCrawl failed: %v", err)
+	}
+	if !crawlRes4.StageCleared {
+		t.Fatalf("expected stage cleared for consumer hero, got outcome: %v", crawlRes4.Outcome)
+	}
+	if len(crawlRes4.TreasureBoxes) == 0 {
+		t.Fatal("expected Floor 11 treasure boxes on fourth crawl")
+	}
+	if crawlRes4.TreasureBoxes[0].DeliveredTo != "inventory" {
+		t.Errorf("expected box delivered to inventory after consumption freed hand, got %s", crawlRes4.TreasureBoxes[0].DeliveredTo)
+	}
+
+	// Verify inventory in MariaDB: consumed item is debited, newly earned treasure is stored
+	consumerInvAfter, err := invRepo.FindByCharacterID(ctx, consumerChar.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID after consumption crawl failed: %v", err)
+	}
+	if len(consumerInvAfter.Items) != 1 {
+		t.Fatalf("expected exactly 1 item in consumer hero DB inventory, got %d", len(consumerInvAfter.Items))
+	}
+	if consumerInvAfter.Items[0].ID == consumedHerb.ID {
+		t.Errorf("expected consumed item %s to be debited from DB inventory", consumedHerb.ID)
+	}
+	if consumerInvAfter.Items[0].DefinitionID != crawlRes4.TreasureBoxes[0].ItemID {
+		t.Errorf("expected delivered treasure %s in DB inventory, got %s", crawlRes4.TreasureBoxes[0].ItemID, consumerInvAfter.Items[0].DefinitionID)
+	}
+
+	// Verify depot in MariaDB: remains empty because consumption kept inventory below capacity
+	consumerDepot, err := depotRepo.FindByCharacterID(ctx, consumerChar.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID for consumer depot failed: %v", err)
+	}
+	if len(consumerDepot.Items) != 0 {
+		t.Errorf("expected 0 items in consumer DB depot, got %d", len(consumerDepot.Items))
 	}
 }
 
