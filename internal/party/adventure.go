@@ -140,10 +140,12 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 					actorID = participatingChars[0].ID
 				}
 				if actorID != "" {
-					if b, err := s.blessingProvider.GetActiveBlessing(ctx, actorID); err == nil {
-						if adventure.IsTreasureBlessing(b) {
-							session.HasTreasureBlessing = true
-						}
+					b, err := s.blessingProvider.GetActiveBlessing(ctx, actorID)
+					if err != nil {
+						return fmt.Errorf("get active blessing: %w", err)
+					}
+					if adventure.IsTreasureBlessing(b) {
+						session.HasTreasureBlessing = true
 					}
 				}
 			}

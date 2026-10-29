@@ -2,6 +2,7 @@ package adventure_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/timer"
 )
 
 type mockPostBattleSettler struct {
@@ -873,4 +875,170 @@ func TestAdventure_ExitFatigue_NormalAndCalm_SettlerAndFallback(t *testing.T) {
 			t.Errorf("p2 Tired = %d, want 100 (80 + 34 clamped to 100)", got)
 		}
 	})
+}
+
+type mockCountingPartyBattleResolver struct {
+	calls   int
+	outcome corebattle.Outcome
+}
+
+func (m *mockCountingPartyBattleResolver) Resolve(request corebattle.Request) (corebattle.Result, error) {
+	m.calls++
+	return corebattle.Result{Outcome: corebattle.OutcomeWin}, nil
+}
+
+func (m *mockCountingPartyBattleResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	m.calls++
+	outcome := m.outcome
+	if outcome == "" {
+		outcome = corebattle.OutcomeWin
+	}
+	remHP := make(map[string]int)
+	remMP := make(map[string]int)
+	for _, a := range req.Allies {
+		remHP[a.ID] = a.HP
+		remMP[a.ID] = a.MP
+	}
+	return corebattle.PartyBattleResult{
+		Outcome:     outcome,
+		Turns:       1,
+		RemainingHP: remHP,
+		RemainingMP: remMP,
+	}, nil
+}
+
+type mutableBlessingProvider struct {
+	blessings map[string]string
+	err       error
+}
+
+func (m *mutableBlessingProvider) GetActiveBlessing(_ context.Context, charID string) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	if m.blessings == nil {
+		return "", nil
+	}
+	return m.blessings[charID], nil
+}
+
+func TestAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
+	ctx := context.Background()
+	char, err := corecharacter.New("BlesSolo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 80
+	char.JobLevel = 50
+	char.Stats = corecharacter.Stats{HP: 100, MaxHP: 100, MP: 30, MaxMP: 30, Attack: 50, Defense: 30}
+	initialChar := char
+
+	charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
+	invRepo := &memoryInvRepo{invs: make(map[string]coreinventory.Inventory)}
+	advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
+	clock := &fixedAdvClock{now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)}
+	stages, _ := adventure.InitialStageCatalog()
+	monsters, _ := adventure.InitialMonsterCatalog()
+
+	battleResolver := &mockCountingPartyBattleResolver{}
+	blessingProv := &mutableBlessingProvider{}
+
+	battleSvc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithBlessingProvider(blessingProv),
+		battle.WithRandomSource(fixedBattleRand{val: 0}),
+		battle.WithMaxInventoryCapacity(10),
+	)
+
+	svc, err := adventure.NewServiceWithCatalogs(
+		advRepo, charRepo, nil, stages, monsters, battleResolver, nil, nil, clock,
+		adventure.WithPostBattleSettler(battleSvc),
+		adventure.WithBlessingProvider(blessingProv),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	timerSvc := timer.NewService(nil)
+	svc.SetTimerService(timerSvc)
+
+	req := adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-26",
+		Rng:          func(n int) int { return 0 },
+	}
+
+	// 1. Storage failure: error should propagate before battle execution and settlement
+	injectedErr := errors.New("blessing storage unavailable")
+	blessingProv.err = injectedErr
+	battleResolver.calls = 0
+
+	_, err = svc.ExecuteCrawl(ctx, req)
+	if !errors.Is(err, injectedErr) {
+		t.Fatalf("expected error wrapping %v, got %v", injectedErr, err)
+	}
+	if battleResolver.calls != 0 {
+		t.Fatalf("expected 0 battle calls on blessing read failure, got %d", battleResolver.calls)
+	}
+	// Verify stage-26 daily lock was NOT acquired on failure
+	locked, err := timerSvc.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if locked {
+		t.Fatalf("expected stage-26 lock NOT set on blessing failure")
+	}
+	savedChar, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedChar.Stats.HP != initialChar.Stats.HP || savedChar.Money != initialChar.Money || savedChar.Experience != initialChar.Experience {
+		t.Fatalf("character mutated on read failure: %+v vs %+v", savedChar, initialChar)
+	}
+	advList, _, err := advRepo.ListByCharacterID(ctx, char.ID, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(advList) != 0 {
+		t.Fatalf("expected 0 adventure logs on failure, got %d", len(advList))
+	}
+
+	// 2. Recovery: clearing the injected read failure permits a successful crawl (absent blessing: 1 chest)
+	blessingProv.err = nil
+	blessingProv.blessings = nil
+	battleResolver.calls = 0
+
+	res, err := svc.ExecuteCrawl(ctx, req)
+	if err != nil {
+		t.Fatalf("expected successful crawl after clearing error, got: %v", err)
+	}
+	if battleResolver.calls == 0 {
+		t.Fatal("expected battle calls on successful crawl")
+	}
+	if len(res.TreasureBoxes) != 1 {
+		t.Fatalf("expected 1 chest for absent blessing, got %d", len(res.TreasureBoxes))
+	}
+	// Now stage-26 daily lock was set
+	lockedAfter, err := timerSvc.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID)
+	if err != nil || !lockedAfter {
+		t.Fatalf("expected stage-26 lock set after successful crawl")
+	}
+
+	// 3. Active blessing on normal stage: yields 2 chests (1 base + 1 blessing bonus)
+	reqNormal := adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-00",
+		Rng:          func(n int) int { return 0 },
+	}
+	blessingProv.blessings = map[string]string{char.ID: "4"}
+	battleResolver.calls = 0
+
+	resActive, err := svc.ExecuteCrawl(ctx, reqNormal)
+	if err != nil {
+		t.Fatalf("expected successful crawl with active blessing, got: %v", err)
+	}
+	if len(resActive.TreasureBoxes) != 2 {
+		t.Fatalf("expected 2 chests for active blessing, got %d", len(resActive.TreasureBoxes))
+	}
 }
