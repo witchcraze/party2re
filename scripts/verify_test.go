@@ -2,6 +2,7 @@ package scripts_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -124,6 +125,20 @@ exit "${DOCKER_EXIT:-0}"
 
 func runCmd(t *testing.T, dir string, env []string, name string, args ...string) (string, int) {
 	t.Helper()
+	lookupPath := os.Getenv("PATH")
+	for _, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			lookupPath = strings.TrimPrefix(e, "PATH=")
+			break
+		}
+	}
+	for _, p := range filepath.SplitList(lookupPath) {
+		candidate := filepath.Join(p, name)
+		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			name = candidate
+			break
+		}
+	}
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), env...)
@@ -382,6 +397,317 @@ func TestVerify_TimeoutConfiguration(t *testing.T) {
 			} else {
 				if !strings.Contains(fullSuiteCall, tc.wantTimeout) {
 					t.Fatalf("expected %s in full suite test call, got: %s", tc.wantTimeout, fullSuiteCall)
+				}
+			}
+		})
+	}
+}
+
+func extractCIShellScript(t *testing.T, ciPath string) string {
+	t.Helper()
+	content, err := os.ReadFile(ciPath)
+	if err != nil {
+		t.Fatalf("could not read ci.yml: %v", err)
+	}
+	s := string(content)
+	stepIdx := strings.Index(s, "Build and run tests with coverage")
+	if stepIdx == -1 {
+		t.Fatalf("could not find 'Build and run tests with coverage' in %s", ciPath)
+	}
+	s = s[stepIdx:]
+	idx := strings.Index(s, "sh -c \\\n")
+	if idx == -1 {
+		idx = strings.Index(s, "sh -c \\")
+	}
+	if idx == -1 {
+		t.Fatalf("could not find 'sh -c \\' in %s", ciPath)
+	}
+	rest := s[idx:]
+	startQuote := strings.Index(rest, "'")
+	if startQuote == -1 {
+		t.Fatalf("could not find opening quote after sh -c in %s", ciPath)
+	}
+	endQuote := strings.Index(rest[startQuote+1:], "'")
+	if endQuote == -1 {
+		t.Fatalf("could not find closing quote after sh -c in %s", ciPath)
+	}
+	return rest[startQuote+1 : startQuote+1+endQuote]
+}
+
+func extractComposeAppCommand(t *testing.T, composePath string) []string {
+	t.Helper()
+	content, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatalf("could not read compose.yaml: %v", err)
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "command:") {
+			rawJSON := strings.TrimSpace(strings.TrimPrefix(trimmed, "command:"))
+			var cmd []string
+			if err := json.Unmarshal([]byte(rawJSON), &cmd); err != nil {
+				t.Fatalf("failed to parse compose command as JSON array: %v", err)
+			}
+			return cmd
+		}
+	}
+	t.Fatalf("command not found in %s", composePath)
+	return nil
+}
+
+func extractDockerfileCMD(t *testing.T, dockerfilePath string) []string {
+	t.Helper()
+	content, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		t.Fatalf("could not read Dockerfile: %v", err)
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "CMD ") {
+			rawJSON := strings.TrimSpace(strings.TrimPrefix(trimmed, "CMD "))
+			var cmd []string
+			if err := json.Unmarshal([]byte(rawJSON), &cmd); err != nil {
+				t.Fatalf("failed to parse CMD as JSON array: %v", err)
+			}
+			return cmd
+		}
+	}
+	t.Fatalf("CMD not found in %s", dockerfilePath)
+	return nil
+}
+
+func TestCIWorkflow_CoverageTimeoutConfiguration(t *testing.T) {
+	script := extractCIShellScript(t, filepath.Join("..", ".github", "workflows", "ci.yml"))
+
+	for _, tc := range []struct {
+		name        string
+		extraEnv    []string
+		wantTimeout string
+	}{
+		{
+			name:        "default 30m timeout",
+			wantTimeout: "-timeout=30m",
+		},
+		{
+			name:        "override via TEST_TIMEOUT",
+			extraEnv:    []string{"TEST_TIMEOUT=45m"},
+			wantTimeout: "-timeout=45m",
+		},
+		{
+			name:        "override via PARTY2_TEST_TIMEOUT",
+			extraEnv:    []string{"PARTY2_TEST_TIMEOUT=1h"},
+			wantTimeout: "-timeout=1h",
+		},
+		{
+			name:        "preserve GOFLAGS with -timeout",
+			extraEnv:    []string{"GOFLAGS=-timeout=20m"},
+			wantTimeout: "",
+		},
+		{
+			name:        "preserve GOFLAGS with -test.timeout",
+			extraEnv:    []string{"GOFLAGS=-test.timeout=20m"},
+			wantTimeout: "",
+		},
+		{
+			name:        "preserve unrelated GOFLAGS with default timeout",
+			extraEnv:    []string{"GOFLAGS=-p=2"},
+			wantTimeout: "-timeout=30m",
+		},
+		{
+			name:        "explicit TEST_TIMEOUT takes precedence over GOFLAGS",
+			extraEnv:    []string{"GOFLAGS=-timeout=20m", "TEST_TIMEOUT=45m"},
+			wantTimeout: "-timeout=45m",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fix := setupVerifyFixture(t, false)
+			env := append(fix.env, tc.extraEnv...)
+			out, code := runCmd(t, fix.root, env, "sh", "-c", script)
+			if code != 0 {
+				t.Fatalf("CI script failed with code %d:\n%s", code, out)
+			}
+			goLog, err := os.ReadFile(fix.goRecord)
+			if err != nil {
+				t.Fatalf("could not read go record: %v", err)
+			}
+			var testCall string
+			for _, line := range strings.Split(string(goLog), "\n") {
+				if strings.HasPrefix(line, "go test") && strings.Contains(line, "./...") {
+					testCall = line
+					break
+				}
+			}
+			if testCall == "" {
+				t.Fatalf("go test call not found in go record:\n%s", string(goLog))
+			}
+			if !strings.Contains(testCall, "-coverprofile=") {
+				t.Fatalf("expected coverage flag in go test call, got: %s", testCall)
+			}
+			if tc.wantTimeout == "" {
+				if strings.Contains(testCall, "-timeout=") {
+					t.Fatalf("expected no -timeout flag when GOFLAGS contains timeout override, got: %s", testCall)
+				}
+			} else {
+				if !strings.Contains(testCall, tc.wantTimeout) {
+					t.Fatalf("expected %s in test call, got: %s", tc.wantTimeout, testCall)
+				}
+			}
+		})
+	}
+}
+
+func TestCompose_AppCommandTimeoutConfiguration(t *testing.T) {
+	rawCmd := extractComposeAppCommand(t, filepath.Join("..", "compose.yaml"))
+	cmdArgs := make([]string, len(rawCmd))
+	for i, arg := range rawCmd {
+		cmdArgs[i] = strings.ReplaceAll(arg, "$$", "$")
+	}
+
+	for _, tc := range []struct {
+		name        string
+		extraEnv    []string
+		wantTimeout string
+	}{
+		{
+			name:        "default 30m timeout",
+			wantTimeout: "-timeout=30m",
+		},
+		{
+			name:        "override via TEST_TIMEOUT",
+			extraEnv:    []string{"TEST_TIMEOUT=45m"},
+			wantTimeout: "-timeout=45m",
+		},
+		{
+			name:        "override via PARTY2_TEST_TIMEOUT",
+			extraEnv:    []string{"PARTY2_TEST_TIMEOUT=1h"},
+			wantTimeout: "-timeout=1h",
+		},
+		{
+			name:        "preserve GOFLAGS with -timeout",
+			extraEnv:    []string{"GOFLAGS=-timeout=20m"},
+			wantTimeout: "",
+		},
+		{
+			name:        "preserve GOFLAGS with -test.timeout",
+			extraEnv:    []string{"GOFLAGS=-test.timeout=20m"},
+			wantTimeout: "",
+		},
+		{
+			name:        "preserve unrelated GOFLAGS with default timeout",
+			extraEnv:    []string{"GOFLAGS=-p=2"},
+			wantTimeout: "-timeout=30m",
+		},
+		{
+			name:        "explicit TEST_TIMEOUT takes precedence over GOFLAGS",
+			extraEnv:    []string{"GOFLAGS=-timeout=20m", "TEST_TIMEOUT=45m"},
+			wantTimeout: "-timeout=45m",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fix := setupVerifyFixture(t, false)
+			env := append(fix.env, tc.extraEnv...)
+			out, code := runCmd(t, fix.root, env, cmdArgs[0], cmdArgs[1:]...)
+			if code != 0 {
+				t.Fatalf("compose app command failed with code %d:\n%s", code, out)
+			}
+			goLog, err := os.ReadFile(fix.goRecord)
+			if err != nil {
+				t.Fatalf("could not read go record: %v", err)
+			}
+			var testCall string
+			for _, line := range strings.Split(string(goLog), "\n") {
+				if strings.HasPrefix(line, "go test") && strings.Contains(line, "./...") {
+					testCall = line
+					break
+				}
+			}
+			if testCall == "" {
+				t.Fatalf("go test call not found in go record:\n%s", string(goLog))
+			}
+			if tc.wantTimeout == "" {
+				if strings.Contains(testCall, "-timeout=") {
+					t.Fatalf("expected no -timeout flag when GOFLAGS contains timeout override, got: %s", testCall)
+				}
+			} else {
+				if !strings.Contains(testCall, tc.wantTimeout) {
+					t.Fatalf("expected %s in test call, got: %s", tc.wantTimeout, testCall)
+				}
+			}
+		})
+	}
+}
+
+func TestDockerfileDev_CMDTimeoutConfiguration(t *testing.T) {
+	cmdArgs := extractDockerfileCMD(t, filepath.Join("..", "Dockerfile.dev"))
+
+	for _, tc := range []struct {
+		name        string
+		extraEnv    []string
+		wantTimeout string
+	}{
+		{
+			name:        "default 30m timeout",
+			wantTimeout: "-timeout=30m",
+		},
+		{
+			name:        "override via TEST_TIMEOUT",
+			extraEnv:    []string{"TEST_TIMEOUT=45m"},
+			wantTimeout: "-timeout=45m",
+		},
+		{
+			name:        "override via PARTY2_TEST_TIMEOUT",
+			extraEnv:    []string{"PARTY2_TEST_TIMEOUT=1h"},
+			wantTimeout: "-timeout=1h",
+		},
+		{
+			name:        "preserve GOFLAGS with -timeout",
+			extraEnv:    []string{"GOFLAGS=-timeout=20m"},
+			wantTimeout: "",
+		},
+		{
+			name:        "preserve GOFLAGS with -test.timeout",
+			extraEnv:    []string{"GOFLAGS=-test.timeout=20m"},
+			wantTimeout: "",
+		},
+		{
+			name:        "preserve unrelated GOFLAGS with default timeout",
+			extraEnv:    []string{"GOFLAGS=-p=2"},
+			wantTimeout: "-timeout=30m",
+		},
+		{
+			name:        "explicit TEST_TIMEOUT takes precedence over GOFLAGS",
+			extraEnv:    []string{"GOFLAGS=-timeout=20m", "TEST_TIMEOUT=45m"},
+			wantTimeout: "-timeout=45m",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fix := setupVerifyFixture(t, false)
+			env := append(fix.env, tc.extraEnv...)
+			out, code := runCmd(t, fix.root, env, cmdArgs[0], cmdArgs[1:]...)
+			if code != 0 {
+				t.Fatalf("Dockerfile.dev CMD failed with code %d:\n%s", code, out)
+			}
+			goLog, err := os.ReadFile(fix.goRecord)
+			if err != nil {
+				t.Fatalf("could not read go record: %v", err)
+			}
+			var testCall string
+			for _, line := range strings.Split(string(goLog), "\n") {
+				if strings.HasPrefix(line, "go test") && strings.Contains(line, "./...") {
+					testCall = line
+					break
+				}
+			}
+			if testCall == "" {
+				t.Fatalf("go test call not found in go record:\n%s", string(goLog))
+			}
+			if tc.wantTimeout == "" {
+				if strings.Contains(testCall, "-timeout=") {
+					t.Fatalf("expected no -timeout flag when GOFLAGS contains timeout override, got: %s", testCall)
+				}
+			} else {
+				if !strings.Contains(testCall, tc.wantTimeout) {
+					t.Fatalf("expected %s in test call, got: %s", tc.wantTimeout, testCall)
 				}
 			}
 		})

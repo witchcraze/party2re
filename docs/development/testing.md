@@ -106,7 +106,7 @@ or `-v`) are preserved and forwarded.
 
 ## 4. Container Roles
 
-- **`Dockerfile.dev` & `compose.yaml`**: Development and integration test environment. Spawns MariaDB and Valkey alongside Go test runner with bind-mounted source and BuildKit cache mounts.
+- **`Dockerfile.dev` & `compose.yaml`**: Development and integration test environment. Spawns MariaDB and Valkey alongside Go test runner with bind-mounted source and BuildKit cache mounts. The default test command executes with the 30-minute default package timeout, honoring explicit `TEST_TIMEOUT` and standard `GOFLAGS="-timeout=..."` overrides with the same precedence as `Makefile` and `scripts/verify.sh`.
 - **`Dockerfile`**: Production distribution image. Multi-stage build compiling a statically linked, stripped binary (`CGO_ENABLED=0`) on `golang:1.26.7-trixie` running on distroless `gcr.io/distroless/static-debian13:nonroot` with CA certificates only.
 
 ---
@@ -388,9 +388,9 @@ compares latency/allocations; the default +30% regression threshold exits with c
 
 The [CI workflow](../../.github/workflows/ci.yml) runs formatting, OpenAPI sync
 validation, vet and tests with atomic coverage in the Compose development
-container using the default 30-minute package timeout (`-timeout="${TEST_TIMEOUT:-30m}"`),
-then builds the production image. It does not currently run the race
-detector or exercise the built production image. MariaDB initializes from migrations
+container using the default 30-minute package timeout while honoring `TEST_TIMEOUT`
+and `GOFLAGS="-timeout=..."` overrides, then builds the production image. It does not
+currently run the race detector or exercise the built production image. MariaDB initializes from migrations
 on first volume creation; the GitHub-hosted runner is disposable per job. Tests
 inside a job still follow the database ownership/isolation rules above.
 

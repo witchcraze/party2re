@@ -30,7 +30,11 @@ jobs:
       - name: Build and run tests with coverage
         run: |
           docker compose run --name party2re_ci_app --rm=false app sh -c \
-            'go test -timeout="${TEST_TIMEOUT:-30m}" ./... -coverprofile=/tmp/coverage.out -covermode=atomic \
+            'timeout_arg="-timeout=30m"; \
+             case " ${GOFLAGS:-} " in *\ -timeout=*|*\ -test.timeout=*) timeout_arg="" ;; esac; \
+             if [ -n "${TEST_TIMEOUT:-}" ]; then timeout_arg="-timeout=${TEST_TIMEOUT}"; \
+             elif [ -n "${PARTY2_TEST_TIMEOUT:-}" ]; then timeout_arg="-timeout=${PARTY2_TEST_TIMEOUT}"; fi; \
+             go test ${timeout_arg} ./... -coverprofile=/tmp/coverage.out -covermode=atomic \
              && go tool cover -func=/tmp/coverage.out > /tmp/coverage.txt \
              && cat /tmp/coverage.txt'
           docker cp party2re_ci_app:/tmp/coverage.out coverage.out || true
