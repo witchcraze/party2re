@@ -1,6 +1,10 @@
 package battle
 
-import "github.com/witchcraze/party2re/internal/core/random"
+import (
+	"math"
+
+	"github.com/witchcraze/party2re/internal/core/random"
+)
 
 // ValidateMachineFamiliar checks complete descendants on private facts, before
 // argument consumption, costs, committed RNG or external effect hooks.
@@ -39,16 +43,15 @@ func (s *LifetimeState) ValidateMachineFamiliar(c *MachineFamiliarContext, id st
 		if err := p.ValidateDamage(&child.DamageContext, e, rng); err != nil {
 			return err
 		}
-		returned, err := p.crownHitCanReturn(&DuelCrownContext{DamageContext: child.DamageContext}, e)
-		if err != nil || !returned {
+		calls, err := p.machineFamiliarTensionCalls(child.DamageContext, e)
+		if err != nil || calls == 0 {
 			return err
 		}
-		// A returned hit consumes tension unless149 retains it. Two calls
-		// include the lethal tail and each call's optional145 recursion.
+		// A returned hit consumes tension unless149 retains it.
 		if !hasItem(a.ItemDefinitionIDs, "item-149") {
 			a.Tension = 1
 		}
-		_, err = p.gemTensionCeiling(&child.EffectContext, a, 2)
+		_, err = p.gemTensionCeiling(&child.EffectContext, a, calls)
 		return err
 	case "job-81-entry-4":
 		admission := statUpAdmission{mayReplace: make(map[string]float64)}
@@ -115,4 +118,49 @@ func (s *LifetimeState) ValidateMachineFamiliar(c *MachineFamiliarContext, id st
 		return ErrUnsupportedEffect
 	}
 	return nil
+}
+
+func (s *LifetimeState) machineFamiliarTensionCalls(c DamageContext, e TargetEffect) (int, error) {
+	a := s.actor(c.ActorID)
+	converted, _, err := a.ConvertEnemyCategory(c.TargetContext, e)
+	if err != nil || len(c.EnemyIDs) == 0 {
+		return 0, err
+	}
+	c.DamageCalls++
+	calls := 0
+	for _, candidate := range s.damageCandidates(&c, converted) {
+		t := s.actor(candidate.TargetID)
+		if t.HP <= 0 {
+			t = a
+		}
+		if candidate.Payload.Number == 0 || t.Temporary == TemporaryOneHitDefense || !damageHasPower(a, t, candidate) {
+			continue
+		}
+		calls = 1
+		// shortcut: reset hooks and random modifiers retain the lethal tail;
+		// use their outcome bounds if nonlethal admission needs to cover them.
+		if a.Extended == ExtendedPurification || hasAbility(a.Abilities, "seal_kuu") ||
+			hasItem(a.ItemDefinitionIDs, "item-192") && t.Temporary != "" ||
+			hasItem(t.ItemDefinitionIDs, "item-190") || hasItem(a.ItemDefinitionIDs, "weapon-34") || hasItem(a.ItemDefinitionIDs, "weapon-35") ||
+			hasItem(a.ItemDefinitionIDs, "weapon-37") || hasItem(a.ItemDefinitionIDs, "weapon-63") {
+			return 2, nil
+		}
+		power := s.modifyDamage(&c, t, candidate.Payload.Number, candidate.Category, true, false, nil)
+		if !hasItem(a.ItemDefinitionIDs, "item-149") {
+			power *= a.Tension
+		}
+		minus := toolDefense(t)
+		if candidate.Category == CategoryPhysical && hasItem(t.ItemDefinitionIDs, "item-162") && hasItem(a.ItemDefinitionIDs, "item-181") {
+			minus = (float64(int(float64(t.Defense)*.5))*1.5 + float64(t.Gear.ArmorDefense)) * .3
+		}
+		if hasItem(a.ItemDefinitionIDs, "item-187") {
+			minus -= float64(t.Defense-t.BaseStats.Defense) * .3
+		}
+		direct := candidate.Category != CategoryPhysical || !hasItem(t.ItemDefinitionIDs, "item-162")
+		maximum := max(2, rollDamage(power, minus, direct, t.BaseStats.Defense, resetBoundary(math.Nextafter(1, 0))))
+		if t.HP <= maximum {
+			return 2, nil
+		}
+	}
+	return calls, nil
 }
