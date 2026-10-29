@@ -7,4 +7,4 @@ RUN go mod download
 
 COPY . .
 
-CMD ["go", "test", "-timeout=30m", "./..."]
+CMD ["sh", "-c", "timeout_arg=\"-timeout=30m\"; case \" ${GOFLAGS:-} \" in *' -timeout='*|*' -test.timeout='*) timeout_arg=\"\" ;; esac; if [ -n \"${TEST_TIMEOUT:-}\" ]; then timeout_arg=\"-timeout=${TEST_TIMEOUT}\"; elif [ -n \"${PARTY2_TEST_TIMEOUT:-}\" ]; then timeout_arg=\"-timeout=${PARTY2_TEST_TIMEOUT}\"; fi; exec go test ${timeout_arg} \"$@\"", "--", "./..."]
