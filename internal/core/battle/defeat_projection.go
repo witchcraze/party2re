@@ -56,10 +56,6 @@ func (s *LifetimeState) projectDefeatReset(c *DefeatContext, id string) ([]Lifet
 			p := s.defeatCopy()
 			child := c.EquipmentResetContext
 			reset := func(id string) error {
-				t := p.actor(id)
-				if branch == "temporary" && t.HP > 0 {
-					t.HP = max(1, int(float64(t.MaxHP)*.1))
-				}
 				return p.ApplyEquipmentReset(&child, id, resetBoundary(value))
 			}
 			auto := AutomaticRevivalContext{TargetContext: c.TargetContext, Reset: reset}
@@ -89,21 +85,15 @@ func (s *LifetimeState) projectDefeatReset(c *DefeatContext, id string) ([]Lifet
 			break
 		}
 	}
-	attack, defense, hp := states[0].actor(id).Attack, states[0].actor(id).Defense, math.MaxInt
+	attack, defense := states[0].actor(id).Attack, states[0].actor(id).Defense
 	for i := range states {
 		t := states[i].actor(id)
 		attack, defense = max(attack, t.Attack), min(defense, t.Defense)
-		if t.HP > 0 {
-			hp = min(hp, t.HP)
-		}
 	}
 	var bounded []LifetimeState
 	for i := range states {
 		t := states[i].actor(id)
 		t.Attack, t.Defense = attack, defense
-		if t.HP > 0 {
-			t.HP = hp
-		}
 		bounded = appendDefeatState(bounded, states[i])
 	}
 	return bounded, branch != "", nil
