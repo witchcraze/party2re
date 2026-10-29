@@ -38,7 +38,7 @@ func TestRevivalRegistrationConcreteProducersAndMetadata(t *testing.T) {
 			t.Fatal(entry)
 		}
 	}
-	if jobs != 19 || len(seen) != 27 {
+	if jobs != 20 || len(seen) != 28 {
 		t.Fatal(jobs, len(seen))
 	}
 	for _, tc := range []struct {
@@ -51,6 +51,7 @@ func TestRevivalRegistrationConcreteProducersAndMetadata(t *testing.T) {
 		{"job-17-entry-6", 160, 80, false}, {"job-18-entry-4", 70, 27, false}, {"job-18-entry-6", 120, 80, false},
 		{"job-32-entry-4", 100, 40, false}, {"job-33-entry-6", 160, 80, false}, {"job-39-entry-5", 50, 20, false},
 		{"job-43-entry-6", 150, 70, false}, {"job-50-entry-6", 145, 1, false}, {"job-51-entry-5", 130, 30, false},
+		{"job-57-entry-4", 80, 20, false},
 		{"job-66-revive", 150, 0, true}, {"job-70-entry-3", 200, 27, false}, {"job-75-entry-5", 120, 0, false}, {"job-76-entry-3", 90, 1, false},
 	} {
 		var got corebattle.CallbackEntry

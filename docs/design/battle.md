@@ -983,6 +983,36 @@ resulting facts and frozen next input, rebuild ports after reload, and never
 replay a committed callback. Adventure production integration remains with its
 consumer owners above.
 
+#### Treatment, light and mischief callbacks
+
+Treatment and light use the shared recovery, proportional-stat and status
+owners (`_skill.cgi:3572–3686,3815–3934,6137–6143` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`). Defense treatment raises base
+defense by40%, then assigns breath mitigation even at the stat cap or under
+binding; a helper returning no target cannot support that unguarded tail.
+Party accuracy restores95 even for fallen allies. Light chooses confusion or
+sleep separately per enemy, attempts10% instant death before its70-power area
+hit, or converts5% of returned MaxMP×0.7 damage through ordinary MP recovery.
+
+Mischief selects from all members, including fallen members: accuracy halves
+with truncation, while direct magic seal resets tension to1. Group taunt skips
+self and fallen members before its independent1/2 checks. An explicit member
+in targeted taunt bypasses enemy resolution. Mana arrows recover the returned
+15% MP debit, including any amount beyond the actual clamped loss. Physical
+arrows resolve their7% accuracy loss or55% sleep only after a returned hit on a
+living recipient. Half revival reuses the existing50%/half-MaxHP body without
+resetting recipient status or temporary effects. Survival reduces current
+defense by its truncated20% before untyped healing200.
+
+Complete tables retain separately owned resource, revival, random and asset
+positions; missing bodies reject enclosing indirect admission. Operation facts
+and frozen input survive reload, while function ports are rebuilt. Only the
+unconditional party-accuracy assignment projects exactly across callback
+boundaries; other prior outcomes retain conservative admission. Concrete
+bindings and entry vectors live in
+[`treatment_mischief.go`](../../internal/core/skill/treatment_mischief.go) and
+its focused tests; production adventure wiring remains with the consumer.
+
 #### Possession, control and climax callbacks
 
 Evidence: `_skill.cgi:3723–3754,3943–4024,5293–5345` and

@@ -19,6 +19,7 @@ func RevivalEntries() []CallbackEntry {
 		{ID: "job-43-entry-6", Name: "完全蘇生", RequiredSP: 150, MPCost: 70},
 		{ID: "job-50-entry-6", Name: "献命全快", RequiredSP: 145, MPCost: 1},
 		{ID: "job-51-entry-5", Name: "希望の光", RequiredSP: 130, MPCost: 30},
+		{ID: "job-57-entry-4", Name: "半蘇生", RequiredSP: 80, MPCost: 20},
 		{ID: "job-66-revive", Name: "従者の蘇生", RequiredSP: 150, Extended: true},
 		{ID: "job-70-entry-3", Name: "蘇生の声", RequiredSP: 200, MPCost: 27},
 		{ID: "job-75-entry-5", Name: "魔力転生", RequiredSP: 120},
@@ -43,7 +44,7 @@ func revivalSpec(id string) (revivalBody, bool) {
 	b := revivalBody{mode: "single", fraction: 1, chance: 1}
 	switch id {
 	case "tool-6", "book-196", "gem-64", "job-17-entry-6", "job-18-entry-6", "job-33-entry-6", "job-43-entry-6":
-	case "book-173", "job-5-entry-7", "job-39-entry-5":
+	case "book-173", "job-5-entry-7", "job-39-entry-5", "job-57-entry-4":
 		b.fraction, b.chance = .5, .5
 	case "gem-63":
 		b.fraction = .5
