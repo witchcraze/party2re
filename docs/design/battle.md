@@ -796,6 +796,39 @@ with the enclosing consumer. Admission checks descendants before effects or
 draws; unknown prior transitions retain whole-action rejection. Save operation
 facts and frozen command input, rebuilding ports after reload without replay.
 
+#### Song, dance and returned-damage recovery callbacks
+
+Evidence: `_skill.cgi:1710–1759,2036–2069` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterSongDanceDrain` binds nineteen intrinsic bodies and contributes complete
+ordered job13/14/20 tables. Sacrifice14.4 retains `RegisterRevivals` ownership;
+an absent body or descendant rejects the entire original random pool.
+
+Job13 uses song for enemy MP reduction25%, party healing30, party sleep cure,
+party base-DF40% up, area sleep50% and party base-AT60% up. Song has no category
+seal. Job14 uses dance for self base-AG40% up, single MP reduction40%, party
+healing140 and2–4 nondirect AT×0.8 hits. Each hit resolves a fresh absent target,
+reads current AT and stops if the caster has fallen; earlier hits can consume
+tension or defenses. Its area AT×0.8 hit uses physical category. The deflection
+stance directly replaces the caster's temporary without a seal/living guard.
+
+Job20 uses dance immobilization85%, breath area sleep35%, dance area
+confusion60% and dance area instant death17%. Its two nondirect physical hits
+use AT×0.9/AT×1.7, then recover self MP/HP using truncated10%/50% of **returned
+damage**, including overkill, through an independent physical recovery helper.
+An absent returned target skips recovery. Its inline party magic mitigation
+visits only living members, with no magic-seal check, unlike guardian17.2.
+Shared party helpers retain fallen-recipient redirection to the caster;
+they do not revive fallen members. Helper counters, target resources, incidental
+effects and return guards remain with the existing effect owners.
+
+Admission validates descendants before costs, effects or committed RNG. Only
+the two exact inline temporary writes project across callback boundaries;
+unknown prior outcomes retain whole-action rejection. Consumers save battle and
+operation facts plus frozen command input, then rebuild ports/registrations
+after reload without replaying committed callbacks. Production Adventure
+wiring and durable retry handling remain with the consumer.
+
 #### Guardian and restoration callbacks
 
 Evidence: `_skill.cgi:1873–1986` at revision
