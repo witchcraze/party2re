@@ -99,6 +99,16 @@
           "$ref": "#/components/responses/Error",
           "description": "Unsupported Media Type"
         },
+        "422": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Stage is not currently available"
+        },
         "500": {
           "$ref": "#/components/responses/Error",
           "description": "Internal Server Error"
@@ -311,6 +321,16 @@
         "415": {
           "$ref": "#/components/responses/Error",
           "description": "Unsupported Media Type"
+        },
+        "422": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Stage is not currently available"
         },
         "500": {
           "$ref": "#/components/responses/Error",
@@ -736,7 +756,7 @@
               }
             }
           },
-          "description": "A member is already enrolled in another activity"
+          "description": "Stage is not currently available or member is already enrolled in another activity"
         },
         "500": {
           "$ref": "#/components/responses/Error",

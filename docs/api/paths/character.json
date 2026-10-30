@@ -131,7 +131,7 @@
               }
             }
           },
-          "description": "Adventure service rejections: ADVENTURE_STAGE_NOT_FOUND, ADVENTURE_UNCONSCIOUS, ADVENTURE_EXHAUSTED, ADVENTURE_DAILY_LIMIT. Rescue rejects empty/blank reason with RESCUE_INVALID_REASON. Preserves the mapped code and refreshes when possible; current catalog exclusion instead returns 409 ACTION_UNAVAILABLE. Inactive Challenge runs use CHALLENGE_NOT_ACTIVE."
+          "description": "Adventure service rejections: ADVENTURE_STAGE_NOT_FOUND, ADVENTURE_STAGE_NOT_AVAILABLE, ADVENTURE_UNCONSCIOUS, ADVENTURE_EXHAUSTED, ADVENTURE_DAILY_LIMIT. Rescue rejects empty/blank reason with RESCUE_INVALID_REASON. Preserves the mapped code and refreshes when possible; current catalog exclusion instead returns 409 ACTION_UNAVAILABLE. Inactive Challenge runs use CHALLENGE_NOT_ACTIVE."
         },
         "500": {
           "content": {

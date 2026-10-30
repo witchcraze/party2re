@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/pagination"
@@ -95,6 +96,8 @@ func (h *Handler) handleCreateParty(w http.ResponseWriter, r *http.Request) {
 		detail, err := h.parties.CreateParty(r.Context(), char.ID, req.CreatePartyRequest)
 		if err != nil {
 			switch {
+			case errors.Is(err, adventure.ErrStageNotAvailable):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			case errors.Is(err, party.ErrInvalidPartyName),
 				errors.Is(err, party.ErrInvalidMaxMembers),
 				errors.Is(err, party.ErrAlreadyInParty),
@@ -159,6 +162,8 @@ func (h *Handler) handleJoinParty(w http.ResponseWriter, r *http.Request) {
 		detail, err := h.parties.JoinParty(r.Context(), partyID, char.ID, req.Password)
 		if err != nil {
 			switch {
+			case errors.Is(err, adventure.ErrStageNotAvailable):
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			case errors.Is(err, party.ErrPartyNotRecruiting),
 				errors.Is(err, party.ErrPartyFull),
 				errors.Is(err, party.ErrInvalidPassword),
@@ -329,7 +334,8 @@ func (h *Handler) handleStartPartyAdventure(w http.ResponseWriter, r *http.Reque
 		result, err := h.parties.StartPartyAdventure(r.Context(), partyID, char.ID)
 		if err != nil {
 			switch {
-			case errors.Is(err, party.ErrMemberBusy):
+			case errors.Is(err, adventure.ErrStageNotAvailable),
+				errors.Is(err, party.ErrMemberBusy):
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			case errors.Is(err, party.ErrNotPartyLeader),
 				errors.Is(err, party.ErrPartyNotRecruiting),

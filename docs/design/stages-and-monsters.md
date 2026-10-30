@@ -46,20 +46,29 @@ This document describes the stage hierarchy, monster encounters, and clean-room 
 26. **神秘の森 / 四季のダンジョン** (`stage-26`): seasonal dungeon with Spring, Summer, Autumn, and Winter variants. Once-daily challenge lock (`CategoryDungeonOnce`).
 27. **ハロウィンタウン** (`stage-27`): festival town of tricks and treats.
 
-### Legacy admission and current differences
+### Legacy admission and stage requirements
 
-Legacy `lib/quest.cgi:474–548` validates normal party-stage access with
-`stage <= job_lv + 2`, subject to `exclude_job_lv_stage`; optional `need_join`
-adds user-selected conditions. The selection UI has extra stage gates (22 at
-JobLevel 6, 24 at 50), winter-only 23/25 (25 at JobLevel 10), once-per-sleep
-26, and Halloween-only 27 (`get_limited_stages`). UI availability and the
-server creation guard are separate paths and must both be reconstructed.
+In legacy `party2/lib/quest.cgi` (`ff97fc549932a146cc945d7edf71b44c868a840e`),
+the selection UI (`sub tsukuru` / `get_limited_stages`) and the server-side creation
+guard (`check_create_quest` / `exclude_job_lv_stage`) contained minor divergences:
+Stage 22 had an extra UI requirement (JobLevel 6) but was excluded on the server;
+Stages 23 and 25 had winter seasonal UI conditions omitted from the server guard;
+Stage 27 showed for JobLevel 0 in October in the UI, but was inadvertently omitted from
+`exclude_job_lv_stage` on the server.
+In party2re, the intended selection UI rules are adopted as the canonical specification:
+- Normal stages 0–14: Stage 0–2 require JobLevel 0; stages 3–14 require `JobLevel >= stage - 2`.
+- Extra stage gates: Stage 22 requires JobLevel 6, Stage 24 requires JobLevel 50.
+- Seasonal limited stages (`get_limited_stages`):
+  - Stage 23 (プニプニ雪原): Winter only (December, January, February in JST), JobLevel 0.
+  - Stage 25 (氷の彫刻館): Winter only (December, January, February in JST), JobLevel 10.
+  - Stage 26 (神秘の森 / 四季のダンジョン): Once per sleep/day (`CategoryDungeonOnce`), JobLevel 0.
+  - Stage 27 (ハロウィンタウン): Halloween only (October in JST), JobLevel 0.
 
-Current `StageCatalog.CanAccessStage` additionally requires Character.Level
-to meet `min_level`, uses a different `RequiredJobLevel` mapping, and does not
-evaluate seasonal availability. These are known implementation differences,
-not new canonical game rules. The catalog names above identify stages; they
-do not establish fabricated Level 3–90 entrance requirements.
+`StageCatalog.CanAccessStage` and `AvailableStages` (and their time-aware variants
+`CanAccessStageAt` / `AvailableStagesAt`) enforce these job level thresholds and seasonal
+windows in JST, ensuring observation and solo/party admission are identical across party creation,
+joining, and adventure start.
+`Character.Level` additionally checks against `min_level` as configured in the catalog.
 
 ### 2. Monsters (`monsters.json`)
 Each monster definition specifies:

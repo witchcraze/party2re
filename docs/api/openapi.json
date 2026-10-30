@@ -15880,7 +15880,7 @@
                 }
               }
             },
-            "description": "Adventure service rejections: ADVENTURE_STAGE_NOT_FOUND, ADVENTURE_UNCONSCIOUS, ADVENTURE_EXHAUSTED, ADVENTURE_DAILY_LIMIT. Rescue rejects empty/blank reason with RESCUE_INVALID_REASON. Preserves the mapped code and refreshes when possible; current catalog exclusion instead returns 409 ACTION_UNAVAILABLE. Inactive Challenge runs use CHALLENGE_NOT_ACTIVE."
+            "description": "Adventure service rejections: ADVENTURE_STAGE_NOT_FOUND, ADVENTURE_STAGE_NOT_AVAILABLE, ADVENTURE_UNCONSCIOUS, ADVENTURE_EXHAUSTED, ADVENTURE_DAILY_LIMIT. Rescue rejects empty/blank reason with RESCUE_INVALID_REASON. Preserves the mapped code and refreshes when possible; current catalog exclusion instead returns 409 ACTION_UNAVAILABLE. Inactive Challenge runs use CHALLENGE_NOT_ACTIVE."
           },
           "500": {
             "content": {
@@ -37822,6 +37822,16 @@
             "$ref": "#/components/responses/Error",
             "description": "Unsupported Media Type"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stage is not currently available"
+          },
           "500": {
             "$ref": "#/components/responses/Error",
             "description": "Internal Server Error"
@@ -38034,6 +38044,16 @@
           "415": {
             "$ref": "#/components/responses/Error",
             "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stage is not currently available"
           },
           "500": {
             "$ref": "#/components/responses/Error",
@@ -38459,7 +38479,7 @@
                 }
               }
             },
-            "description": "A member is already enrolled in another activity"
+            "description": "Stage is not currently available or member is already enrolled in another activity"
           },
           "500": {
             "$ref": "#/components/responses/Error",

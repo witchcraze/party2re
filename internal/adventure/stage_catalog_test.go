@@ -1,7 +1,10 @@
 package adventure_test
 
 import (
+	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -103,11 +106,23 @@ func TestRequiredJobLevel_LegacyParity(t *testing.T) {
 	}{
 		{"stage-00", 0},
 		{"stage-01", 0},
-		{"stage-02", 1},
-		{"stage-03", 2},
-		{"stage-04", 3},
-		{"stage-14", 13},
+		{"stage-02", 0},
+		{"stage-03", 1},
+		{"stage-04", 2},
+		{"stage-05", 3},
+		{"stage-06", 4},
+		{"stage-07", 5},
+		{"stage-08", 6},
+		{"stage-09", 7},
+		{"stage-10", 8},
+		{"stage-11", 9},
+		{"stage-12", 10},
+		{"stage-13", 11},
+		{"stage-14", 12},
+		{"stage-15", 14},
+		{"stage-21", 14},
 		{"stage-22", 6},  // legacy stage 22: ワイルドアピアリー
+		{"stage-23", 0},  // legacy stage 23: プニプニ雪原
 		{"stage-24", 50}, // legacy stage 24: 白亜の宮殿
 		{"stage-25", 10}, // legacy stage 25: 氷の彫刻館
 		{"stage-26", 0},  // legacy stage 26: 神秘の森 / 四季
@@ -141,29 +156,34 @@ func TestCanAccessStage(t *testing.T) {
 		t.Errorf("novice should access stage-00, got: %v", err)
 	}
 
-	// stage-02: minLevel 5, jobLevel 1 -> Level fails first
+	// stage-02: minLevel 5, jobLevel 0 -> Level fails first (level 1 < 5)
 	if err := cat.CanAccessStage(novice, "stage-02"); err != adventure.ErrLevelRequirementNotMet {
 		t.Errorf("expected ErrLevelRequirementNotMet, got: %v", err)
 	}
 
-	// Lv 20, JobLevel 0 -> JobLevel fails on stage-02 (requires jobLevel 1)
+	// Lv 20, JobLevel 0 -> OK for stage-02 (stage-02 requires jobLevel 0)
 	experiencedNovice := corecharacter.Character{
 		ID:       "c-2",
 		Level:    20,
 		JobLevel: 0,
 	}
-	if err := cat.CanAccessStage(experiencedNovice, "stage-02"); err != adventure.ErrJobLevelRequirementNotMet {
-		t.Errorf("expected ErrJobLevelRequirementNotMet, got: %v", err)
+	if err := cat.CanAccessStage(experiencedNovice, "stage-02"); err != nil {
+		t.Errorf("expected experiencedNovice to access stage-02, got: %v", err)
 	}
 
-	// Lv 20, JobLevel 1 -> OK for stage-02
+	// Lv 20, JobLevel 0 -> JobLevel fails on stage-03 (requires jobLevel 1)
+	if err := cat.CanAccessStage(experiencedNovice, "stage-03"); err != adventure.ErrJobLevelRequirementNotMet {
+		t.Errorf("expected ErrJobLevelRequirementNotMet for stage-03, got: %v", err)
+	}
+
+	// Lv 20, JobLevel 1 -> OK for stage-03
 	reincarnated := corecharacter.Character{
 		ID:       "c-3",
 		Level:    20,
 		JobLevel: 1,
 	}
-	if err := cat.CanAccessStage(reincarnated, "stage-02"); err != nil {
-		t.Errorf("reincarnated should access stage-02, got: %v", err)
+	if err := cat.CanAccessStage(reincarnated, "stage-03"); err != nil {
+		t.Errorf("reincarnated should access stage-03, got: %v", err)
 	}
 }
 
@@ -243,6 +263,199 @@ func TestInitialStageCatalogValid(t *testing.T) {
 			if _, err := monsterCat.FindByID(monsterID); err != nil {
 				t.Errorf("stage %s references unknown monster %s: %v", s.ID, monsterID, err)
 			}
+		}
+	}
+}
+
+func TestRequiredJobLevel_Stage2To14Boundaries(t *testing.T) {
+	cat, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog() error = %v", err)
+	}
+
+	// For normal stages 2 to 14, RequiredJobLevel = stageNum - 2.
+	// For each stage, test JobLevel before (req-1), at (req), and after (req+1).
+	for stageNum := 2; stageNum <= 14; stageNum++ {
+		stageID := fmt.Sprintf("stage-%02d", stageNum)
+		req := stageNum - 2
+
+		t.Run(fmt.Sprintf("%s_req_%d", stageID, req), func(t *testing.T) {
+			// Character level 99 ensures MinLevel requirement is always satisfied.
+			if req > 0 {
+				before := corecharacter.Character{ID: "char-before", Level: 99, JobLevel: req - 1}
+				if err := cat.CanAccessStage(before, stageID); !errors.Is(err, adventure.ErrJobLevelRequirementNotMet) {
+					t.Errorf("[%s] JobLevel %d (before %d): expected ErrJobLevelRequirementNotMet, got %v", stageID, req-1, req, err)
+				}
+			}
+
+			at := corecharacter.Character{ID: "char-at", Level: 99, JobLevel: req}
+			if err := cat.CanAccessStage(at, stageID); err != nil {
+				t.Errorf("[%s] JobLevel %d (exact match): expected nil, got %v", stageID, req, err)
+			}
+
+			after := corecharacter.Character{ID: "char-after", Level: 99, JobLevel: req + 1}
+			if err := cat.CanAccessStage(after, stageID); err != nil {
+				t.Errorf("[%s] JobLevel %d (after %d): expected nil, got %v", stageID, req+1, req, err)
+			}
+		})
+	}
+
+	// Also verify special stages 22, 24, 25 boundaries.
+	specialCases := []struct {
+		stageID string
+		req     int
+	}{
+		{"stage-22", 6},
+		{"stage-24", 50},
+	}
+	for _, sc := range specialCases {
+		t.Run(fmt.Sprintf("%s_special_req_%d", sc.stageID, sc.req), func(t *testing.T) {
+			before := corecharacter.Character{ID: "char-before", Level: 99, JobLevel: sc.req - 1}
+			if err := cat.CanAccessStage(before, sc.stageID); !errors.Is(err, adventure.ErrJobLevelRequirementNotMet) {
+				t.Errorf("[%s] JobLevel %d: expected ErrJobLevelRequirementNotMet, got %v", sc.stageID, sc.req-1, err)
+			}
+
+			at := corecharacter.Character{ID: "char-at", Level: 99, JobLevel: sc.req}
+			if err := cat.CanAccessStage(at, sc.stageID); err != nil {
+				t.Errorf("[%s] JobLevel %d: expected nil, got %v", sc.stageID, sc.req, err)
+			}
+
+			after := corecharacter.Character{ID: "char-after", Level: 99, JobLevel: sc.req + 1}
+			if err := cat.CanAccessStage(after, sc.stageID); err != nil {
+				t.Errorf("[%s] JobLevel %d: expected nil, got %v", sc.stageID, sc.req+1, err)
+			}
+		})
+	}
+}
+
+func TestCanAccessStage_SeasonalCalendarBoundaries(t *testing.T) {
+	cat, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog() error = %v", err)
+	}
+
+	jst := time.FixedZone("JST", 9*60*60)
+	// Character with high level and job level satisfies level/joblevel for all seasonal stages.
+	qualifiedChar := corecharacter.Character{ID: "c-qual", Level: 99, JobLevel: 50}
+
+	t.Run("WinterStages_Stage23_And_Stage25", func(t *testing.T) {
+		winterStages := []string{"stage-23", "stage-25"}
+		tests := []struct {
+			name        string
+			t           time.Time
+			wantAllowed bool
+		}{
+			{"Nov 30 23:59:59 JST (autumn, just before winter)", time.Date(2026, 11, 30, 23, 59, 59, 0, jst), false},
+			{"Dec 01 00:00:00 JST (winter start boundary)", time.Date(2026, 12, 1, 0, 0, 0, 0, jst), true},
+			{"Dec 31 23:59:59 JST (mid winter)", time.Date(2026, 12, 31, 23, 59, 59, 0, jst), true},
+			{"Jan 15 12:00:00 JST (mid winter)", time.Date(2027, 1, 15, 12, 0, 0, 0, jst), true},
+			{"Feb 28 23:59:59 JST (winter end boundary, common year)", time.Date(2027, 2, 28, 23, 59, 59, 0, jst), true},
+			{"Mar 01 00:00:00 JST (spring, just after winter)", time.Date(2027, 3, 1, 0, 0, 0, 0, jst), false},
+			{"Feb 29 23:59:59 JST (winter end boundary, leap year 2028)", time.Date(2028, 2, 29, 23, 59, 59, 0, jst), true},
+			{"Mar 01 00:00:00 JST (leap year spring start)", time.Date(2028, 3, 1, 0, 0, 0, 0, jst), false},
+			{"UTC equivalence boundary: 2026-11-30 14:59:59 UTC = 23:59:59 JST (autumn)", time.Date(2026, 11, 30, 14, 59, 59, 0, time.UTC), false},
+			{"UTC equivalence boundary: 2026-11-30 15:00:00 UTC = 2026-12-01 00:00:00 JST (winter)", time.Date(2026, 11, 30, 15, 0, 0, 0, time.UTC), true},
+		}
+
+		for _, stID := range winterStages {
+			for _, tt := range tests {
+				t.Run(fmt.Sprintf("%s/%s", stID, tt.name), func(t *testing.T) {
+					err := cat.CanAccessStageAt(qualifiedChar, stID, tt.t)
+					if tt.wantAllowed {
+						if err != nil {
+							t.Errorf("expected access allowed for %s at %v, got %v", stID, tt.t, err)
+						}
+					} else {
+						if !errors.Is(err, adventure.ErrStageNotAvailable) {
+							t.Errorf("expected ErrStageNotAvailable for %s at %v, got %v", stID, tt.t, err)
+						}
+					}
+				})
+			}
+		}
+	})
+
+	t.Run("HalloweenStage_Stage27", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			t           time.Time
+			wantAllowed bool
+		}{
+			{"Sep 30 23:59:59 JST (just before October)", time.Date(2026, 9, 30, 23, 59, 59, 0, jst), false},
+			{"Oct 01 00:00:00 JST (Halloween start boundary)", time.Date(2026, 10, 1, 0, 0, 0, 0, jst), true},
+			{"Oct 15 12:00:00 JST (mid Halloween)", time.Date(2026, 10, 15, 12, 0, 0, 0, jst), true},
+			{"Oct 31 23:59:59 JST (Halloween end boundary)", time.Date(2026, 10, 31, 23, 59, 59, 0, jst), true},
+			{"Nov 01 00:00:00 JST (just after Halloween)", time.Date(2026, 11, 1, 0, 0, 0, 0, jst), false},
+			{"UTC equivalence boundary: 2026-09-30 14:59:59 UTC = 23:59:59 JST (September)", time.Date(2026, 9, 30, 14, 59, 59, 0, time.UTC), false},
+			{"UTC equivalence boundary: 2026-09-30 15:00:00 UTC = 2026-10-01 00:00:00 JST (October)", time.Date(2026, 9, 30, 15, 0, 0, 0, time.UTC), true},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				err := cat.CanAccessStageAt(qualifiedChar, "stage-27", tt.t)
+				if tt.wantAllowed {
+					if err != nil {
+						t.Errorf("expected access allowed for stage-27 at %v, got %v", tt.t, err)
+					}
+				} else {
+					if !errors.Is(err, adventure.ErrStageNotAvailable) {
+						t.Errorf("expected ErrStageNotAvailable for stage-27 at %v, got %v", tt.t, err)
+					}
+				}
+			})
+		}
+	})
+}
+
+func TestAvailableStages_ParityWithCanAccessStage(t *testing.T) {
+	cat, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog() error = %v", err)
+	}
+
+	jst := time.FixedZone("JST", 9*60*60)
+	characters := []corecharacter.Character{
+		{ID: "novice-1", Level: 1, JobLevel: 0},
+		{ID: "novice-20", Level: 20, JobLevel: 0},
+		{ID: "reincarnated-1", Level: 20, JobLevel: 1},
+		{ID: "advanced-5", Level: 80, JobLevel: 5},
+		{ID: "expert-12", Level: 99, JobLevel: 12},
+		{ID: "master-50", Level: 99, JobLevel: 50},
+	}
+
+	times := []struct {
+		name string
+		t    time.Time
+	}{
+		{"winter-dec", time.Date(2026, 12, 15, 12, 0, 0, 0, jst)},
+		{"winter-jan", time.Date(2027, 1, 15, 12, 0, 0, 0, jst)},
+		{"spring-apr", time.Date(2027, 4, 15, 12, 0, 0, 0, jst)},
+		{"summer-jul", time.Date(2027, 7, 15, 12, 0, 0, 0, jst)},
+		{"autumn-oct-halloween", time.Date(2026, 10, 15, 12, 0, 0, 0, jst)},
+		{"autumn-nov", time.Date(2026, 11, 15, 12, 0, 0, 0, jst)},
+	}
+
+	for _, c := range characters {
+		for _, tm := range times {
+			t.Run(fmt.Sprintf("%s_%s", c.ID, tm.name), func(t *testing.T) {
+				available := cat.AvailableStagesAt(c, tm.t)
+				availMap := make(map[string]bool, len(available))
+				for _, st := range available {
+					availMap[st.ID] = true
+				}
+
+				for _, st := range cat.Stages() {
+					err := cat.CanAccessStageAt(c, st.ID, tm.t)
+					isAvailable := availMap[st.ID]
+
+					if err == nil && !isAvailable {
+						t.Errorf("stage %s should be in AvailableStages (CanAccessStageAt succeeded)", st.ID)
+					}
+					if err != nil && isAvailable {
+						t.Errorf("stage %s should NOT be in AvailableStages (CanAccessStageAt failed: %v)", st.ID, err)
+					}
+				}
+			})
 		}
 	}
 }
