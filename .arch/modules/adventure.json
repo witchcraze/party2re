@@ -53,7 +53,7 @@
           "table": "inventory_items",
           "tier": 3,
           "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
-          "note": "Lock inventories and deliver Floor 11 treasure drops"
+          "note": "Lock inventories, consume master keys, and deliver Floor 11 treasure drops"
         },
         {
           "table": "character_depots / depot_items",

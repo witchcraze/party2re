@@ -13,8 +13,7 @@ import (
 // Legacy item IDs with special adventure interactions.
 const (
 	ItemLuckyPendant = "item-191" // ラッキーペンダント (1/3 chance +1 treasure box)
-	//lint:ignore unused legacy item ID for master key interaction
-	ItemMasterKey = "item-215" // マスターキー (allows opening multiple treasure boxes)
+	ItemMasterKey    = "item-215" // マスターキー (allows opening multiple treasure boxes)
 )
 
 var defaultBoxNames = []string{

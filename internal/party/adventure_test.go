@@ -2060,3 +2060,102 @@ func TestStartPartyAdventure_SeasonalExpiryRejection(t *testing.T) {
 		t.Errorf("expected win outcome, got %s", res.Outcome)
 	}
 }
+
+type mockPartyParticipantBuilderWithItems struct {
+	items map[string][]string
+}
+
+func (m *mockPartyParticipantBuilderWithItems) BuildParticipant(_ context.Context, charID string) (corebattle.Participant, error) {
+	p := corebattle.MustNewParticipant(charID, 50000, 10000, 10000)
+	p.ItemDefinitionIDs = m.items[charID]
+	return p, nil
+}
+
+type capturingPartyBattleSettler struct {
+	lastReq battle.ApplyPostBattleRequest
+}
+
+func (c *capturingPartyBattleSettler) ApplyPostBattleResult(_ context.Context, req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+	c.lastReq = req
+	return battle.ApplyPostBattleResponse{}, nil
+}
+
+func TestStartPartyAdventure_Floor11Treasure_ConsumesMasterKeyForExtraBox(t *testing.T) {
+	ctx := context.Background()
+
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	partyRepo := newMockPartyRepository()
+	charRepo := newMockCharacterRepository()
+	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
+	depotRepo := newMockDepotRepo()
+	monsters, _ := adventure.InitialMonsterCatalog()
+
+	leader := corecharacter.Character{
+		ID:       "lead-party-key",
+		Name:     "LeadKey",
+		Level:    99,
+		JobLevel: 50,
+		Stats: corecharacter.Stats{
+			HP:    50000,
+			MaxHP: 50000,
+		},
+	}
+	charRepo.chars[leader.ID] = leader
+
+	pBuilder := &mockPartyParticipantBuilderWithItems{
+		items: map[string][]string{
+			leader.ID: {adventure.ItemMasterKey},
+		},
+	}
+	settler := &capturingPartyBattleSettler{}
+
+	svc, err := NewService(
+		partyRepo,
+		charRepo,
+		invRepo,
+		stages,
+		monsters,
+		fixedBattleEngine{outcome: corebattle.OutcomeWin},
+		WithDepotRepository(depotRepo),
+		WithParticipantBuilder(pBuilder),
+		WithPostBattleSettler(settler),
+		WithRNG(func(int) int { return 0 }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Name:       "KeyParty",
+		StageID:    "stage-17",
+		MaxMembers: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	partyID := pDetail.Party.ID
+
+	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
+		t.Fatalf("SetReady failed: %v", err)
+	}
+
+	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+	if res.Outcome != "win" {
+		t.Fatalf("expected win outcome, got %s", res.Outcome)
+	}
+
+	drops := settler.lastReq.RecipientDrops[leader.ID]
+	if len(drops) != 2 {
+		t.Fatalf("expected 2 recipient drops, got %d: %v", len(drops), drops)
+	}
+	consumed := settler.lastReq.BattleResult.ConsumedItems[leader.ID]
+	if len(consumed) != 1 || consumed[0].ID != adventure.ItemMasterKey || consumed[0].Quantity != 1 {
+		t.Fatalf("expected 1 consumed master key, got: %v", consumed)
+	}
+}

@@ -169,8 +169,17 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			// Floor 11 (Treasure Room) if stage cleared
 			if session.StageCleared {
 				_, _ = session.AdvanceFloor(s.stages, s.monsters, s.battleEngine)
+				// Initial pass: each surviving participant opens their base allowance of 1 box
 				for _, c := range participatingChars {
 					_, _ = session.ExamineTreasure(c.ID)
+				}
+				// Additional pass: participants holding master keys can open remaining unopened boxes
+				for _, c := range participatingChars {
+					for {
+						if _, err := session.ExamineTreasure(c.ID); err != nil {
+							break
+						}
+					}
 				}
 			}
 

@@ -551,8 +551,13 @@ Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons
 - Automatically cleared when the adventurer awakens from sleep at Home (`internal/home.Service.Wake`).
 
 ### Treasure Chest Examination (`ExamineTreasure`) & Post-Battle Settlement
-- Each surviving party member may examine and claim treasure chests on Floor 11.
-- Master Key (`item-215` / マスターキー) allows adventurers to open additional chests.
+- Each surviving party member may examine and claim treasure chests on Floor 11 (`_npc_action.cgi:6-56 shiraberu`).
+- **Inspection Allowance & Master Key**:
+  - Each surviving participant has a base inspection allowance of 1 treasure chest (`1人1箱`).
+  - To open additional chests beyond the 1-chest allowance, the participant must possess Master Key (`item-215` / マスターキー / `ItemMasterKey`).
+  - Each additional chest opened consumes 1 Master Key, recorded in `ConsumedItems` and deducted from inventory during post-battle settlement.
+  - Rejection conditions: non-participants (`ErrNotParticipant`), unconscious characters (`ErrUnconsciousCharacter`), exceeding allowance without a Master Key (`ErrTreasureLimitReached`), or no remaining unopened chests (`ErrNoUnopenedTreasure`) are rejected.
+  - Automatic solo/party crawl loops first grant each surviving member their 1 base chest, then open remaining unopened chests for participants holding Master Keys.
 - Post-battle settlement delegates to `battle.Service.ApplyPostBattleResult` (`PostBattleSettler`), enforcing atomic single-transaction persistence obeying the global lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`):
   - Obtained treasure items are added to the character's inventory (`coreinventory.Inventory`).
   - When the inventory is full, items automatically route to the character's depot (`_npc_action.cgi:60-80`).

@@ -2,6 +2,7 @@ package adventure_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -1012,5 +1013,102 @@ func TestCrawlSession_Stage17TwoPlayersInclusiveCount(t *testing.T) {
 	advanceToFloor11(t, sess3)
 	if len(sess3.TreasureBoxes) != 8 {
 		t.Errorf("stage 17 with 2 alive players and merchant leader: len(TreasureBoxes) = %d, want 8", len(sess3.TreasureBoxes))
+	}
+}
+
+func TestCrawlSession_ExamineTreasure_AllowanceAndMasterKey(t *testing.T) {
+	stages, _ := setupTestCatalogs(t)
+	stage1, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+
+	chars := []corecharacter.Character{
+		{ID: "char-1", Name: "Hero 1", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+		{ID: "char-2", Name: "Hero 2", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+		{ID: "char-dead", Name: "Dead Hero", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+	}
+	p1 := corebattle.MustNewParticipant("char-1", 100, 10, 10)
+	p1.ItemDefinitionIDs = []string{adventure.ItemMasterKey} // char-1 has 1 master key
+	p2 := corebattle.MustNewParticipant("char-2", 100, 10, 10)
+	// char-2 has no keys
+	pDead := corebattle.MustNewParticipant("char-dead", 100, 10, 10)
+	pDead.HP = 0 // unconscious
+
+	sess, err := adventure.NewCrawlSessionWithParticipants(stage1, chars, []corebattle.Participant{p1, p2, pDead}, func(n int) int { return 0 })
+	if err != nil {
+		t.Fatalf("NewCrawlSessionWithParticipants: %v", err)
+	}
+
+	// Cannot examine before Floor 11
+	if _, err := sess.ExamineTreasure("char-1"); !errors.Is(err, adventure.ErrInvalidFloorAction) {
+		t.Fatalf("expected ErrInvalidFloorAction on floor %d, got %v", sess.CurrentFloor, err)
+	}
+
+	sess.CurrentFloor = adventure.TreasureRoomFloor
+	sess.TreasureBoxes = []adventure.TreasureBox{
+		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
+		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
+		{ID: "box-3", Name: "Chest 3", ItemID: "item-003"},
+	}
+
+	// 1. Non-participant rejected (未参加actor拒否)
+	if _, err := sess.ExamineTreasure("char-outside"); !errors.Is(err, adventure.ErrNotParticipant) {
+		t.Fatalf("expected ErrNotParticipant for outside character, got %v", err)
+	}
+
+	// 2. Dead character rejected (死亡者不可)
+	if _, err := sess.ExamineTreasure("char-dead"); !errors.Is(err, adventure.ErrUnconsciousCharacter) {
+		t.Fatalf("expected ErrUnconsciousCharacter for dead character, got %v", err)
+	}
+
+	// 3. char-1 opens 1st box (base allowance)
+	box1, err := sess.ExamineTreasure("char-1")
+	if err != nil {
+		t.Fatalf("char-1 1st box error: %v", err)
+	}
+	if box1.OpenedBy != "char-1" {
+		t.Errorf("box1 opened by %s, want char-1", box1.OpenedBy)
+	}
+	if len(sess.ConsumedItems["char-1"]) != 0 {
+		t.Errorf("char-1 consumed items on base box = %v, want empty", sess.ConsumedItems["char-1"])
+	}
+
+	// 4. char-2 opens 1st box (別actor可)
+	box2, err := sess.ExamineTreasure("char-2")
+	if err != nil {
+		t.Fatalf("char-2 1st box error: %v", err)
+	}
+	if box2.OpenedBy != "char-2" {
+		t.Errorf("box2 opened by %s, want char-2", box2.OpenedBy)
+	}
+
+	// 5. char-2 tries to open 2nd box without key -> rejected (同一actor2回拒否)
+	if _, err := sess.ExamineTreasure("char-2"); !errors.Is(err, adventure.ErrTreasureLimitReached) {
+		t.Fatalf("expected ErrTreasureLimitReached for char-2 2nd box, got %v", err)
+	}
+
+	// 6. char-1 opens 2nd box with key -> succeeds (key所持で追加1回/1消費)
+	box3, err := sess.ExamineTreasure("char-1")
+	if err != nil {
+		t.Fatalf("char-1 2nd box with key error: %v", err)
+	}
+	if box3.OpenedBy != "char-1" {
+		t.Errorf("box3 opened by %s, want char-1", box3.OpenedBy)
+	}
+	consumed := sess.ConsumedItems["char-1"]
+	if len(consumed) != 1 || consumed[0].ID != adventure.ItemMasterKey || consumed[0].Quantity != 1 {
+		t.Fatalf("char-1 consumed items = %v, want 1 master key", consumed)
+	}
+
+	// 7. char-1 tries to open again -> rejected (no unopened boxes remaining)
+	if _, err := sess.ExamineTreasure("char-1"); !errors.Is(err, adventure.ErrNoUnopenedTreasure) {
+		t.Fatalf("expected ErrNoUnopenedTreasure when no boxes left, got %v", err)
+	}
+
+	// 8. Add a 4th box; char-1 tries to open -> rejected (ErrTreasureLimitReached because key was spent)
+	sess.TreasureBoxes = append(sess.TreasureBoxes, adventure.TreasureBox{ID: "box-4", Name: "Chest 4", ItemID: "item-004"})
+	if _, err := sess.ExamineTreasure("char-1"); !errors.Is(err, adventure.ErrTreasureLimitReached) {
+		t.Fatalf("expected ErrTreasureLimitReached for char-1 after key exhausted, got %v", err)
 	}
 }
