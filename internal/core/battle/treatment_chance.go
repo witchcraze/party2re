@@ -200,7 +200,7 @@ func (s *LifetimeState) ApplyTreatmentChance(c *TreatmentChanceContext, id strin
 				continue
 			case t.HP > 999:
 				power := min(1800, t.MaxHP/2)
-				damage := s.coinDamageContext(c, rng)
+				damage := s.nativeDamageContext(c.DamageContext, c.Status.Defeat, rng)
 				reset, defeat := c.Reset, c.Defeat
 				c.Reset, c.Defeat = damage.Reset, damage.Defeat
 				_, err := s.ApplyDamage(&c.DamageContext, dualAgilityEffect(target, float64(power), CategoryUntyped, true), rng)
@@ -214,25 +214,4 @@ func (s *LifetimeState) ApplyTreatmentChance(c *TreatmentChanceContext, id strin
 		}
 	}
 	return nil
-}
-
-// Coin damage and its admission share the same native reset/defeat owner.
-func (s *LifetimeState) coinDamageContext(c *TreatmentChanceContext, rng random.Generator) DamageContext {
-	damage := c.DamageContext
-	damage.Reset = func(target string) error {
-		if c.Status.Defeat == nil {
-			return ErrUnsupportedEffect
-		}
-		c.Status.Defeat.TargetContext = c.TargetContext
-		return s.ApplyEquipmentReset(&c.Status.Defeat.EquipmentResetContext, target, rng)
-	}
-	damage.Defeat = func(target string) error {
-		if c.Status.Defeat == nil {
-			return ErrUnsupportedEffect
-		}
-		c.Status.Defeat.TargetContext = c.TargetContext
-		_, err := s.ApplyDefeat(c.Status.Defeat, target, rng)
-		return err
-	}
-	return damage
 }

@@ -414,6 +414,39 @@ consumer; delegated extended invocation charges after the body. Consumers rebuil
 operation ports after reload and retain frozen input and prior helper facts
 without replaying completed callbacks.
 
+Advanced-magic callbacks compose the existing target, stat, damage, healing and
+native defeat owners (`internal/core/battle/advanced_magic.go`,
+`_skill.cgi:1767–1864,1993–2029`). Job15's base30 direct magic hit sets the
+additional-effect flag, then attempts deadly poison80 only for a returned,
+living recipient; the status helper resolves again. MP theft uses20% of current
+MP, or25% for job19, then restores the returned requested debit through ordinary
+MP healing, including its floors, caps and exclusions. Health drain draws one
+continuous base in [50,150), then heals using returned damage rather than raw
+power or actual HP loss. Its extended attack passes base500×(tension+5)/6 to the
+damage helper before the shared tension multiplier.
+
+Job16 uses single healing60/180, targeted temporary reflection/revival/mitigation
+and direct magic180. Revival protection is not fallen-target resurrection: it
+retains ordinary ally fallback. Its extended body writes physical immunity to
+the resolved target before party healing300, including when a temporary cleared
+the symbolic payload. The source has no target-success early return. A possible
+failed magic-seal check would write an unrepresented empty record, so that whole
+entry rejects before RNG or writes rather than becoming a successful no-effect.
+
+Job19's extended callback draws four through six hits, checking caster survival
+before each. Each hit first resolves a fresh untyped target; current HP≤999 and
+base defense≤999 select magic instant-death20, otherwise a fresh continuous
+direct magic base in [400,600). The selected child resolves its target again.
+Admission preserves earlier damage crossing999, consumed defenses, helper MP
+recovery, native revival/reset and reward/field transitions before validating
+later hits (`internal/core/battle/advanced_magic_admission.go`). Ordered job tables
+retain separately owned inspection16.1 and quarter-revival16.6; registration
+does not overwrite their bindings. Listed costs belong to the invoking consumer;
+random/tool restoration and delegated extended debits use the shared invocation
+boundary. Consumers retain frozen input and operation facts across reload and
+rebuild ports without replaying completed bodies. Arbitrary mixed callbacks
+without a certified prior transition remain gated by the shared invocation owner.
+
 Time and mixed-magic callbacks compose the shared target, stat, damage, healing
 and fully admitted defeat operations (`internal/core/battle/time_mixed_magic.go`).
 Job29's repeated magic draws two or three hits at base50, or four through six at

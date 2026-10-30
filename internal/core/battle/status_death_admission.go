@@ -1,6 +1,10 @@
 package battle
 
-import "github.com/witchcraze/party2re/internal/core/random"
+import (
+	"math"
+
+	"github.com/witchcraze/party2re/internal/core/random"
+)
 
 // Keep helper recovery attached to its original recipient across one-pass
 // temporary and field redirects; the redirected target does not absorb again.
@@ -14,10 +18,14 @@ func (s *LifetimeState) statusTargetCandidates(c *DamageContext, e TargetEffect)
 			effects = s.temporaryTargetCandidates(c.TargetContext, e, []string{id}, nil)
 			if s.actor(id).Temporary == TemporaryAbsorbMagic && e.Category == CategoryMagic {
 				recoveries = nil
+				draws := []float64{0, math.Nextafter(1, 0)}
 				for i := 0; i < 20; i++ {
+					draws = append(draws, (float64(i)+.5)/20)
+				}
+				for _, draw := range draws {
 					incoming := e
 					incoming.TargetID = id
-					r, err := s.ResolveTemporary(c.TargetContext, incoming, resetBoundary((float64(i)+.5)/20))
+					r, err := s.ResolveTemporary(c.TargetContext, incoming, resetBoundary(draw))
 					if err != nil {
 						return nil, err
 					}
