@@ -10,43 +10,13 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 // VictoryHook is called when a party multiplayer co-op adventure concludes with a victory.
 type VictoryHook func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error
-
-type Option func(*Service)
-
-func WithTransactionProvider(txProvider TransactionProvider) Option {
-	return func(s *Service) {
-		s.txProvider = txProvider
-	}
-}
-
-func WithNewsPublisher(news NewsPublisher) Option {
-	return func(s *Service) {
-		s.news = news
-	}
-}
-
-func WithVictoryHook(hook VictoryHook) Option {
-	return func(s *Service) {
-		s.victoryHook = hook
-	}
-}
-
-// ParticipantBuilder constructs a Participant from a character ID.
-type ParticipantBuilder interface {
-	BuildParticipant(ctx context.Context, characterID string) (battle.Participant, error)
-}
-
-func WithParticipantBuilder(builder ParticipantBuilder) Option {
-	return func(s *Service) {
-		s.participantBuilder = builder
-	}
-}
 
 type Service struct {
 	activityCheck      func(context.Context, string) error
@@ -64,6 +34,7 @@ type Service struct {
 	battleSettler      PostBattleSettler
 	depotRepo          DepotRepository
 	blessingProvider   BlessingProvider
+	timer              TimerService
 	rng                func(n int) int
 }
 
@@ -194,6 +165,15 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 		}
 		if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
 			return err
+		}
+		if stage.ID == "stage-26" && s.timer != nil {
+			locked, err := s.timer.IsLocked(txCtx, timer.CategoryDungeonOnce, leaderChar.ID)
+			if err != nil {
+				return err
+			}
+			if locked {
+				return fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, leaderChar.Name)
+			}
 		}
 		if req.NeedJoin != "" {
 			if err := ValidateNeedJoin(req.NeedJoin, leaderChar); err != nil {

@@ -269,14 +269,12 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}
 
 	if stage.ID == "stage-26" && s.timer != nil {
-		for _, c := range characters {
-			locked, err := s.timer.IsLocked(ctx, timer.CategoryDungeonOnce, c.ID)
-			if err != nil {
-				return DungeonCrawlResult{}, err
-			}
-			if locked {
-				return DungeonCrawlResult{}, fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, c.Name)
-			}
+		locked, err := s.timer.IsLocked(ctx, timer.CategoryDungeonOnce, characters[0].ID)
+		if err != nil {
+			return DungeonCrawlResult{}, err
+		}
+		if locked {
+			return DungeonCrawlResult{}, fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, characters[0].Name)
 		}
 	}
 
@@ -336,8 +334,12 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}
 
 	if stage.ID == "stage-26" && s.timer != nil {
-		for _, c := range characters {
-			_ = s.timer.SetLock(ctx, timer.CategoryDungeonOnce, c.ID, 7*24*time.Hour)
+		ok, err := s.timer.TryLock(ctx, timer.CategoryDungeonOnce, characters[0].ID, 0)
+		if err != nil {
+			return DungeonCrawlResult{}, err
+		}
+		if !ok {
+			return DungeonCrawlResult{}, fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, characters[0].Name)
 		}
 	}
 

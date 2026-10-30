@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/challenge"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
@@ -212,4 +213,150 @@ func TestCombatAdmissionProduction(t *testing.T) {
 			t.Fatalf("admission changed assets: %+v", after)
 		}
 	}
+}
+
+func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("requires MariaDB and Valkey")
+	}
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+	client, err := vk.NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	core, err := newCoreServices(db, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	econ, err := newEconServices(db, core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	combat, err := newCmbtServices(db, core, soc, econ, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char1, err := database.CreateTestCharacterWithFunds(ctx, db, "S26L_"+id.New()[:8], 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char1.Level = 99
+	char1.Stats.HP = 9999
+	char1.Stats.MaxHP = 9999
+	char1.Stats.Attack = 9999
+	char1.Stats.Defense = 9999
+	_ = core.charRepo.Update(ctx, char1)
+
+	char2, err := database.CreateTestCharacterWithFunds(ctx, db, "S26M_"+id.New()[:8], 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char2.Level = 99
+	char2.Stats.HP = 9999
+	char2.Stats.MaxHP = 9999
+	char2.Stats.Attack = 9999
+	char2.Stats.Defense = 9999
+	_ = core.charRepo.Update(ctx, char2)
+
+	// Clean up any lingering dungeon_once lock
+	t.Cleanup(func() {
+		_ = soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char1.ID)
+		_ = soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char2.ID)
+	})
+
+	// 1. Leader creates party on stage-26
+	partyDetail, err := combat.party.CreateParty(ctx, char1.ID, party.CreatePartyRequest{
+		Name:       "Stage26Party",
+		StageID:    "stage-26",
+		MaxMembers: 2,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+
+	// Member joins and readies
+	if _, err := combat.party.JoinParty(ctx, partyDetail.Party.ID, char2.ID, ""); err != nil {
+		t.Fatalf("JoinParty failed: %v", err)
+	}
+	if _, err := combat.party.SetReady(ctx, partyDetail.Party.ID, char2.ID, true); err != nil {
+		t.Fatalf("SetReady failed: %v", err)
+	}
+
+	// Leader starts adventure
+	res, err := combat.party.StartPartyAdventure(ctx, partyDetail.Party.ID, char1.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure on stage-26 failed: %v", err)
+	}
+	if res.Outcome != "win" {
+		t.Fatalf("expected win outcome, got: %s", res.Outcome)
+	}
+
+	// Leader must be locked in production Valkey
+	locked, err := soc.timer.IsLocked(ctx, timer.CategoryDungeonOnce, char1.ID)
+	if err != nil || !locked {
+		t.Fatalf("expected leader to have dungeon_once lock in production Valkey: %v, err=%v", locked, err)
+	}
+
+	// Member must NOT be locked
+	memberLocked, err := soc.timer.IsLocked(ctx, timer.CategoryDungeonOnce, char2.ID)
+	if err != nil || memberLocked {
+		t.Fatalf("expected member to NOT have dungeon_once lock: %v, err=%v", memberLocked, err)
+	}
+
+	// 2. Leader disbands party and attempts to re-create stage-26 party -> rejected with ErrDailyOnceAlreadyUsed
+	if err := combat.party.DisbandParty(ctx, partyDetail.Party.ID, char1.ID); err != nil {
+		t.Fatalf("DisbandParty failed: %v", err)
+	}
+	_, err = combat.party.CreateParty(ctx, char1.ID, party.CreatePartyRequest{
+		Name:    "RetryStage26",
+		StageID: "stage-26",
+	})
+	if !errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+		t.Fatalf("expected ErrDailyOnceAlreadyUsed on re-create by leader, got: %v", err)
+	}
+
+	// Solo crawl by leader on stage-26 must also be rejected
+	_, err = combat.adv.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char1.ID},
+		StageID:      "stage-26",
+	})
+	if !errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+		t.Fatalf("expected ErrDailyOnceAlreadyUsed on solo crawl by leader, got: %v", err)
+	}
+
+	// Member CAN create a party on stage-26
+	memberParty, err := combat.party.CreateParty(ctx, char2.ID, party.CreatePartyRequest{
+		Name:    "MemberStage26",
+		StageID: "stage-26",
+	})
+	if err != nil {
+		t.Fatalf("member should be allowed to create stage-26 party: %v", err)
+	}
+	_ = combat.party.DisbandParty(ctx, memberParty.Party.ID, char2.ID)
+
+	// 3. Releasing lock (wake reset) allows leader entry again
+	if err := soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char1.ID); err != nil {
+		t.Fatalf("ReleaseLock failed: %v", err)
+	}
+	p2, err := combat.party.CreateParty(ctx, char1.ID, party.CreatePartyRequest{
+		Name:    "AfterWakeParty",
+		StageID: "stage-26",
+	})
+	if err != nil {
+		t.Fatalf("leader should be allowed to create stage-26 party after wake: %v", err)
+	}
+	_ = combat.party.DisbandParty(ctx, p2.Party.ID, char1.ID)
 }

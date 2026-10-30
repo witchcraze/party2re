@@ -96,7 +96,8 @@ func (h *Handler) handleCreateParty(w http.ResponseWriter, r *http.Request) {
 		detail, err := h.parties.CreateParty(r.Context(), char.ID, req.CreatePartyRequest)
 		if err != nil {
 			switch {
-			case errors.Is(err, adventure.ErrStageNotAvailable):
+			case errors.Is(err, adventure.ErrStageNotAvailable),
+				errors.Is(err, party.ErrDailyOnceAlreadyUsed):
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			case errors.Is(err, party.ErrInvalidPartyName),
 				errors.Is(err, party.ErrInvalidMaxMembers),
@@ -162,7 +163,8 @@ func (h *Handler) handleJoinParty(w http.ResponseWriter, r *http.Request) {
 		detail, err := h.parties.JoinParty(r.Context(), partyID, char.ID, req.Password)
 		if err != nil {
 			switch {
-			case errors.Is(err, adventure.ErrStageNotAvailable):
+			case errors.Is(err, adventure.ErrStageNotAvailable),
+				errors.Is(err, party.ErrDailyOnceAlreadyUsed):
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			case errors.Is(err, party.ErrPartyNotRecruiting),
 				errors.Is(err, party.ErrPartyFull),

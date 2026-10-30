@@ -48,6 +48,7 @@ var (
 	ErrCharacterExhausted     = errors.New("character is exhausted (tired >= 100) and must rest")
 	ErrNeedJoinNotMet         = errors.New("character does not meet party join condition")
 	ErrStageNotFound          = errors.New("adventure stage not found")
+	ErrDailyOnceAlreadyUsed   = adventure.ErrDailyOnceAlreadyUsed
 	ErrForbidden              = errors.New("forbidden: character does not belong to player")
 	ErrUnsupportedMode        = errors.New("adventure mode is unsupported")
 	ErrInvalidMode            = errors.New("invalid adventure mode")

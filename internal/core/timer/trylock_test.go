@@ -326,3 +326,56 @@ func TestValkeyTimer_SetLockWithClaim(t *testing.T) {
 		t.Fatalf("SetLock denied claim err = %v, want ErrClaimLost", err)
 	}
 }
+
+func TestMemoryTimer_TryLockNoExpiry(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+
+	// TryLock with duration <= 0 acquires persistent lock without TTL
+	ok, err := svc.TryLock(ctx, CategoryDungeonOnce, "c1", 0)
+	if err != nil || !ok {
+		t.Fatalf("first TryLock = %v, %v; want true", ok, err)
+	}
+
+	// Contended TryLock must fail
+	ok, err = svc.TryLock(ctx, CategoryDungeonOnce, "c1", 0)
+	if err != nil || ok {
+		t.Fatalf("second TryLock = %v, %v; want false", ok, err)
+	}
+
+	// IsLocked remains true indefinitely
+	locked, err := svc.IsLocked(ctx, CategoryDungeonOnce, "c1")
+	if err != nil || !locked {
+		t.Fatalf("IsLocked = %v, %v; want true", locked, err)
+	}
+
+	// Release clears the lock
+	if err := svc.ReleaseLock(ctx, CategoryDungeonOnce, "c1"); err != nil {
+		t.Fatalf("ReleaseLock: %v", err)
+	}
+
+	locked, err = svc.IsLocked(ctx, CategoryDungeonOnce, "c1")
+	if err != nil || locked {
+		t.Fatalf("IsLocked after release = %v, %v; want false", locked, err)
+	}
+}
+
+func TestValkeyTimer_TryLockNoExpiry(t *testing.T) {
+	ctx := context.Background()
+	var lastCmd []string
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		lastCmd = cmd.Commands()
+		return valkeytest.MakeOKResult()
+	}))
+
+	svc := NewService(client)
+	ok, err := svc.TryLock(ctx, CategoryDungeonOnce, "c1", 0)
+	if err != nil || !ok {
+		t.Fatalf("TryLock with 0 duration: %v, %v; want true", ok, err)
+	}
+
+	// Must be SET key value NX without EX
+	if len(lastCmd) != 4 || lastCmd[0] != "SET" || lastCmd[1] != PrefixTimer+CategoryDungeonOnce+":c1" || lastCmd[2] != "1" || lastCmd[3] != "NX" {
+		t.Fatalf("expected SET key 1 NX without EX, got: %v", lastCmd)
+	}
+}

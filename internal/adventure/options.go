@@ -83,6 +83,7 @@ func WithBlessingProvider(provider BlessingProvider) Option {
 type TimerService interface {
 	IsLocked(ctx context.Context, category, targetID string) (bool, error)
 	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+	TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error)
 }
 
 // WithTimerService configures the TimerService.

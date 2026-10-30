@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -92,6 +93,15 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
 				return err
 			}
+			if stage.ID == "stage-26" && s.timer != nil {
+				locked, err := s.timer.IsLocked(txCtx, timer.CategoryDungeonOnce, leaderChar.ID)
+				if err != nil {
+					return err
+				}
+				if locked {
+					return fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, leaderChar.Name)
+				}
+			}
 
 			// Transition party status to in_progress in Valkey
 			p.Status = StatusInProgress
@@ -104,6 +114,10 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 					p.Status = StatusRecruiting
 					//lint:ignore error-swallow compensatory rollback in defer
 					_ = s.repo.UpdateParty(txCtx, p)
+					if stage.ID == "stage-26" && s.timer != nil {
+						//lint:ignore error-swallow compensatory unlock on aborted transaction
+						_ = s.timer.ReleaseLock(txCtx, timer.CategoryDungeonOnce, leaderChar.ID)
+					}
 				}
 			}()
 
@@ -151,6 +165,16 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 					if adventure.IsTreasureBlessing(b) {
 						session.HasTreasureBlessing = true
 					}
+				}
+			}
+
+			if stage.ID == "stage-26" && s.timer != nil {
+				ok, err := s.timer.TryLock(txCtx, timer.CategoryDungeonOnce, leaderChar.ID, 0)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, leaderChar.Name)
 				}
 			}
 
@@ -267,31 +291,9 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 	return result, nil
 }
 
-// PostAdventureHook is invoked for each party member after a party adventure successfully completes and commits.
-type PostAdventureHook func(ctx context.Context, characterID string) error
-
-// WithPostAdventureHook configures the PostAdventureHook for the service.
-func WithPostAdventureHook(hook PostAdventureHook) Option {
-	return func(s *Service) {
-		s.postAdventureHook = hook
-	}
-}
-
 // SetPostAdventureHook sets the PostAdventureHook on an existing service.
 func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
 	s.postAdventureHook = hook
-}
-
-// BlessingProvider queries active chapel blessings for a character.
-type BlessingProvider interface {
-	GetActiveBlessing(ctx context.Context, characterID string) (string, error)
-}
-
-// WithBlessingProvider configures the BlessingProvider for the service.
-func WithBlessingProvider(provider BlessingProvider) Option {
-	return func(s *Service) {
-		s.blessingProvider = provider
-	}
 }
 
 // SetBlessingProvider sets the BlessingProvider on an existing service.
@@ -299,9 +301,7 @@ func (s *Service) SetBlessingProvider(provider BlessingProvider) {
 	s.blessingProvider = provider
 }
 
-// WithRNG configures a custom RNG function for adventure crawl execution.
-func WithRNG(rng func(n int) int) Option {
-	return func(s *Service) {
-		s.rng = rng
-	}
+// SetTimerService sets the TimerService on an existing service.
+func (s *Service) SetTimerService(timer TimerService) {
+	s.timer = timer
 }

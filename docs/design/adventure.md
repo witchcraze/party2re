@@ -544,11 +544,14 @@ Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons
   - Saturday: 土のオーブ (`item-065`).
 
 ### Once-Daily Challenge Lock (`CategoryDungeonOnce` / `$m{once}`)
-- Certain limited dungeons can only be challenged once per day (until the character sleeps at Home):
-  - Stage 26: 神秘の森 / 四季のダンジョン
+- Certain limited dungeons can only be challenged once per day (until the character sleeps and wakes at Home):
+  - Stage 26: 神秘の森 / 四季のダンジョン (`stage-26`)
   - Dungeon 16: 機軍要塞
-- Enforced via Valkey `TimerService` (`timer.CategoryDungeonOnce = "dungeon_once"`).
-- Automatically cleared when the adventurer awakens from sleep at Home (`internal/home.Service.Wake`).
+- **Admission & Consumption Rules**:
+  - Enforced via Valkey/ephemeral `TimerService` (`timer.CategoryDungeonOnce = "dungeon_once"`).
+  - Shared across solo crawl admission (`adventure.Service.ExecuteCrawl`) and party admission (`party.Service.CreateParty` and `StartPartyAdventure`).
+  - Quota is consumed only for the creator/starter (the solo explorer or the party leader). Non-leader party participants do not have their once-lock consumed and are not blocked from creating/leading their own runs.
+  - Locks persist without arbitrary TTL expiration (duration = 0) and are cleared exclusively upon awakening from sleep at Home (`internal/home.Service.Wake` via `ResetDungeonOnceWithClaim`).
 
 ### Treasure Chest Examination (`ExamineTreasure`) & Post-Battle Settlement
 - Each surviving party member may examine and claim treasure chests on Floor 11 (`_npc_action.cgi:6-56 shiraberu`).
