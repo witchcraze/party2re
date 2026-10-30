@@ -83,6 +83,16 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 				}
 			}
 
+			// 4. Resolve stage and verify stage access eligibility (including seasonal restrictions)
+			stage, err := s.stages.FindByID(p.StageID)
+			if err != nil {
+				return ErrStageNotFound
+			}
+			leaderChar := charMap[leaderCharID]
+			if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
+				return err
+			}
+
 			// Transition party status to in_progress in Valkey
 			p.Status = StatusInProgress
 			if err := s.repo.UpdateParty(txCtx, p); err != nil {
@@ -96,12 +106,6 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 					_ = s.repo.UpdateParty(txCtx, p)
 				}
 			}()
-
-			// 4. Resolve stage
-			stage, err := s.stages.FindByID(p.StageID)
-			if err != nil {
-				return ErrStageNotFound
-			}
 
 			// 5. Build participating characters in party member order
 			participatingChars := make([]corecharacter.Character, len(members))

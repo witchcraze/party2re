@@ -188,6 +188,14 @@ func parseStageNum(stageID string) (int, bool) {
 
 // IsStageInSeason reports whether a seasonal stage is currently in season at time t in JST.
 // Non-seasonal stages always return true.
+//
+// Legacy discrepancy note (party2/lib/quest.cgi @ ff97fc549932a146cc945d7edf71b44c868a840e):
+// In original Party2 CGI, seasonal conditions (is_winter / is_halloween) were checked exclusively
+// when populating the stage selection UI (sub tsukuru / get_limited_stages:1213-1222), while the
+// server-side creation handler (check_create_quest:474-568) omitted seasonal verification.
+// Consequently, direct requests could historically initiate off-season adventures.
+// In party2re, the intended selection UI rules are adopted as the unified canonical standard
+// across observation (AvailableStages) and admission (CanAccessStage / StartPartyAdventure).
 func IsStageInSeason(stageID string, t time.Time) bool {
 	num, ok := parseStageNum(stageID)
 	if !ok {
@@ -246,7 +254,23 @@ func (c *StageCatalog) Stages() []Stage {
 }
 
 // RequiredJobLevel returns the required job level (reincarnation count / 転職回数)
-// to challenge a stage, in 1:1 parity with legacy quest.cgi.
+// to challenge a stage.
+//
+// Legacy discrepancy note (party2/lib/quest.cgi @ ff97fc549932a146cc945d7edf71b44c868a840e):
+// Original Party2 CGI contained divergences between UI stage display and server admission:
+//   - Normal stages 0–14: sub tsukuru:220-223 and check_create_quest:527-528 align at stage <= job_lv + 2
+//     (stages 0–2 require JobLevel 0, stages 3–14 require JobLevel >= stage - 2).
+//   - Stage 22: sub tsukuru:208 (@ex_stage) requires JobLevel 6, but check_create_quest bypassed the check
+//     via exclude_job_lv_stage:1265-1274.
+//   - Stage 23: get_limited_stages:1215 requires JobLevel 0 in winter, and was also in exclude_job_lv_stage.
+//   - Stage 24: sub tsukuru:208 (@ex_stage) requires JobLevel 50, passing server check when >= 50.
+//   - Stage 25: get_limited_stages:1216 requires JobLevel 10 in winter, but check_create_quest bypassed the check
+//     via exclude_job_lv_stage.
+//   - Stage 27: get_limited_stages:1218 requires JobLevel 0 in October, but check_create_quest omitted 27 from
+//     exclude_job_lv_stage, inadvertently demanding JobLevel >= 25 (27 > job_lv + 2).
+//
+// Following Issue #1194, party2re adopts the intended selection UI thresholds as the canonical access
+// rules for both observation (AvailableStages) and execution admission (CanAccessStage).
 func RequiredJobLevel(stageID string) int {
 	num, ok := parseStageNum(stageID)
 	if !ok {

@@ -1947,3 +1947,116 @@ func TestPartyAdmission_MatchesStageCatalogAndAvailableStages(t *testing.T) {
 		})
 	}
 }
+
+func TestStartPartyAdventure_SeasonalExpiryRejection(t *testing.T) {
+	ctx := context.Background()
+	jst := time.FixedZone("JST", 9*60*60)
+
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	partyRepo := newMockPartyRepository()
+	charRepo := newMockCharacterRepository()
+	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
+	depotRepo := newMockDepotRepo()
+	monsters, _ := adventure.InitialMonsterCatalog()
+
+	currentTime := time.Date(2026, 10, 31, 23, 59, 59, 0, jst)
+	stages.SetNowFunc(func() time.Time { return currentTime })
+
+	svc, err := NewService(
+		partyRepo,
+		charRepo,
+		invRepo,
+		stages,
+		monsters,
+		fixedBattleEngine{outcome: corebattle.OutcomeWin},
+		WithDepotRepository(depotRepo),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Create a party on Halloween night for stage-27 (valid at 23:59:59 JST)
+	leader := corecharacter.Character{
+		ID:       "leader-halloween",
+		Name:     "HalloweenLeader",
+		Level:    99,
+		JobLevel: 10,
+		Stats: corecharacter.Stats{
+			HP:    100,
+			MaxHP: 100,
+		},
+	}
+	charRepo.chars[leader.ID] = leader
+
+	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Name:       "HalloweenParty",
+		StageID:    "stage-27",
+		MaxMembers: 2,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed on Halloween night: %v", err)
+	}
+	partyID := pDetail.Party.ID
+
+	// Ready leader
+	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
+		t.Fatalf("SetReady failed for leader: %v", err)
+	}
+
+	// Add member and ready member
+	member := corecharacter.Character{
+		ID:       "member-halloween",
+		Name:     "HalloweenMember",
+		Level:    99,
+		JobLevel: 10,
+		Stats: corecharacter.Stats{
+			HP:    100,
+			MaxHP: 100,
+		},
+	}
+	charRepo.chars[member.ID] = member
+
+	if _, err := svc.JoinParty(ctx, partyID, member.ID, ""); err != nil {
+		t.Fatalf("JoinParty failed on Halloween night: %v", err)
+	}
+	if _, err := svc.SetReady(ctx, partyID, member.ID, true); err != nil {
+		t.Fatalf("SetReady failed for member: %v", err)
+	}
+
+	// 2. Advance time 1 second to Nov 01, 00:00:00 JST (Halloween has ended!)
+	currentTime = time.Date(2026, 11, 1, 0, 0, 0, 0, jst)
+
+	// 3. Attempt to start the party adventure: MUST fail with ErrStageNotAvailable
+	_, startErr := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if !errors.Is(startErr, adventure.ErrStageNotAvailable) {
+		t.Fatalf("expected ErrStageNotAvailable after season expiry, got %v", startErr)
+	}
+
+	// 4. Verify party status in repository was not corrupted and remains StatusRecruiting
+	partyAfter, err := partyRepo.GetParty(ctx, partyID)
+	if err != nil {
+		t.Fatalf("failed to get party after rejection: %v", err)
+	}
+	if partyAfter.Status != StatusRecruiting {
+		t.Errorf("party status = %s, want %s (StatusRecruiting)", partyAfter.Status, StatusRecruiting)
+	}
+
+	// 5. Verify character HP/stats were not modified by combat
+	leaderAfter := charRepo.chars[leader.ID]
+	if leaderAfter.Stats.HP != 100 {
+		t.Errorf("leader HP was modified: %d, want 100", leaderAfter.Stats.HP)
+	}
+
+	// 6. Reset time back to Halloween (Oct 31, 23:59:59 JST) and verify start succeeds
+	currentTime = time.Date(2026, 10, 31, 23, 59, 59, 0, jst)
+	res, startOkErr := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if startOkErr != nil {
+		t.Fatalf("expected StartPartyAdventure to succeed during season, got: %v", startOkErr)
+	}
+	if res.Outcome != "win" {
+		t.Errorf("expected win outcome, got %s", res.Outcome)
+	}
+}

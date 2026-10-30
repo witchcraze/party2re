@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
@@ -285,5 +286,82 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("DELETE /parties/party-1 returned %d, want 200", w.Code)
+	}
+}
+
+func TestPartyHTTPHandlers_SeasonalStageNotAvailable(t *testing.T) {
+	playerSvc := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			return coreplayer.Player{ID: "player-1", Username: "player1"}, nil
+		},
+	}
+	charSvc := &stubCharacterServiceExtended{
+		getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return corecharacter.Character{
+				ID:       id,
+				PlayerID: "player-1",
+				Name:     "Hero",
+				Level:    99,
+				Stats:    corecharacter.Stats{HP: 50, MaxHP: 50},
+			}, nil
+		},
+	}
+
+	partySvc := &stubPartyService{
+		err: adventure.ErrStageNotAvailable,
+	}
+
+	handler, err := apihttp.NewHandler(
+		playerSvc,
+		charSvc,
+		&stubAdventureService{},
+		&stubShopService{},
+		apihttp.WithParty(partySvc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	router := handler.Router()
+
+	// 1. POST /parties -> 422
+	body, _ := json.Marshal(map[string]any{
+		"character_id": "c1",
+		"name":         "SeasonalParty",
+		"stage_id":     "stage-23",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/parties", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /parties with ErrStageNotAvailable returned %d, want 422", w.Code)
+	}
+
+	// 2. POST /parties/p1/join -> 422
+	body, _ = json.Marshal(map[string]any{
+		"character_id": "c1",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/parties/p1/join", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /parties/p1/join with ErrStageNotAvailable returned %d, want 422", w.Code)
+	}
+
+	// 3. POST /parties/p1/start -> 422
+	body, _ = json.Marshal(map[string]any{
+		"character_id": "c1",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/parties/p1/start", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /parties/p1/start with ErrStageNotAvailable returned %d, want 422", w.Code)
 	}
 }
