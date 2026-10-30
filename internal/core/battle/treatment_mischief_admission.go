@@ -105,10 +105,12 @@ func (s *LifetimeState) ValidateTreatmentMischief(c *TreatmentMischiefContext, i
 			}
 		}
 		for _, target := range targets {
+			q := p.callbackCopy()
 			if target == "" {
 				target = child.ActorID
+				q.actor(target).Status = ""
 			}
-			if _, err := p.gemTensionCeiling(&child.EffectContext, p.actor(target), 1); err != nil {
+			if _, err := q.gemTensionCeiling(&child.EffectContext, q.actor(target), 1); err != nil {
 				return err
 			}
 		}

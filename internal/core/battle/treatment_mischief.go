@@ -178,7 +178,9 @@ func (s *LifetimeState) ApplyTreatmentMischief(c *TreatmentMischiefContext, id s
 			}
 		}
 		if target == "" {
-			target = c.ActorID
+			// Binding is checked before the source's absent-target fallback.
+			c.TensionCalls++
+			return s.statTensionAfterBinding(&c.EffectContext, s.actor(c.ActorID), false, rng)
 		}
 		return s.statTension(&c.EffectContext, s.actor(target), false, rng)
 	case "job-56-entry-1":
