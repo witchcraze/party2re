@@ -875,6 +875,42 @@ save resulting lifetime facts, operation counters and frozen input, then rebuild
 ports/registrations without replaying committed callbacks. Production Adventure
 composition and receipts remain with the consuming service.
 
+#### Recoil and dark-state callbacks
+
+Evidence: `_skill.cgi:2074–2187,3018–3069` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+Job21's physical strikes use current DF×1.6 with7% returned-damage recoil,
+AT×2 followed by an unconditional double-vulnerability stance, or AT×1.6 with5%
+recoil. Deflection is an unguarded self write; the roar attempts area physical
+immobilization60%. Its raw strike chooses the complete party25%/enemy75% roster,
+replaces a fallen choice with the caster, and deals
+`floor((AT×3−targetDF×0.4)×(0.9+0.3u)×tension)`, with a minimum roll of1..2.
+It resets caster tension before immediate native defeat, bypassing generic
+damage modifiers, target hooks, counters and deferred darkness debit. Frenzy
+invokes tension twice before assigning confusion and five turns of frenzy.
+
+Job22's AT×1.5/AT×2.5 physical hits recoil10%/20% of positive returned damage
+when **post-hit caster HP>999**, otherwise of current caster HP. The accuracy
+strike marks additional effect, hits at AT×1.2, then lowers the returned living
+target's hit by10%. Its wave attempts area magic confusion50%. Job22 and job38
+each sacrifice `floor(currentDF×0.5)` before untyped base-AT100% up, even when the
+buff has no effect. The two callback positions remain distinct.
+
+Job38's direct magic wound drain uses `(MaxHP−HP)×0.5+5` and heals the caster by
+returned damage. Its other drain resolves a magic target, captures
+`min(300,floor(currentTargetHP×0.5))`, deals direct magic damage through a fresh
+target resolution, and heals by that captured request rather than returned
+damage. MP drain uses magic MP20% down followed by magic recovery of the requested
+debit. Each helper retains its own guards, redirects, resource effects and
+counters. Magic immunity has a caster magic-seal check; area sleep uses breath35%.
+
+`RegisterRecoilDarkState` supplies these intrinsic bindings and ordered tables;
+the separately owned extended darkness field retains its position and binding.
+Missing descendants reject before costs, effects or committed RNG. Exact stances
+can project into a later callback; unknown prior outcomes retain whole-action
+gating. Consumers save resulting facts, operation counters and frozen input,
+then rebuild ports and registrations without replaying committed callbacks.
+
 #### Counter and reset callbacks
 
 Evidence: `_skill.cgi:2871–3013` at revision
