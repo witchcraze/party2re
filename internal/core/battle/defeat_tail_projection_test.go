@@ -33,13 +33,13 @@ func TestAreaFinalStrikeProjectsExternalFortressBeforeLaterDamage(t *testing.T) 
 			},
 		}
 		if projection {
-			c.Defeat.Fortress.Project = func(p *LifetimeState, _ TargetContext, id string) error {
+			c.Defeat.Fortress.Project = func(p *LifetimeState, _ TargetContext, id string) ([]LifetimeState, error) {
 				for i := range p.Actors {
 					if p.Actors[i].HP > 0 && p.Actors[i].TeamID == p.actor(id).TeamID {
 						p.Actors[i].HP = min(p.Actors[i].HP, p.Actors[i].MaxHP)
 					}
 				}
-				return nil
+				return []LifetimeState{*p}, nil
 			}
 		}
 		levelBefore, sealsBefore := *c.Defeat.RequesterLevel, *c.Defeat.Seals
@@ -62,11 +62,14 @@ func TestOrderedDefeatUsesPureOwnerProjectionWithoutExecutingIt(t *testing.T) {
 	c.Defeat.Fortress = &DefeatRewards{
 		Validate: func(*LifetimeState, TargetContext, string) error { return nil },
 		Apply:    func(*LifetimeState, TargetContext, string) error { applyCalls++; return nil },
-		Project:  func(*LifetimeState, TargetContext, string) error { projectCalls++; return nil },
+		Project: func(p *LifetimeState, _ TargetContext, _ string) ([]LifetimeState, error) {
+			projectCalls++
+			return []LifetimeState{*p}, nil
+		},
 	}
-	c.Defeat.Rewards.Project = func(p *LifetimeState, _ TargetContext, _ string) error {
+	c.Defeat.Rewards.Project = func(p *LifetimeState, _ TargetContext, _ string) ([]LifetimeState, error) {
 		p.actor("self").HP = 1000
-		return nil
+		return []LifetimeState{*p}, nil
 	}
 	c.Defeat.Rewards.Apply = func(p *LifetimeState, _ TargetContext, _ string) error {
 		applyCalls++

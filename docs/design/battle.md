@@ -1719,8 +1719,10 @@ once. Alternative recipients and surviving/defeated outcomes keep separate
 continuations, including equipment reset, revival/consumption and inheritance.
 Validation uses private state and finite reset boundaries without consuming the
 caller's RNG or changing its operation context. Owners whose reward/field hooks
-change combat scalars supply a pure continuation projection; ordinary rewards
-are combat-neutral when no projection is supplied. A reached fortress hook must
+change combat scalars supply pure alternative continuations; ordinary rewards
+are combat-neutral when no projection is supplied. Random healing retains each
+recipient's independent lower/upper HP bounds and HP999/1000 classes, so both
+subsequent survival and defeat paths remain admitted. A reached fortress hook must
 supply this projection before a later area invocation, otherwise the entire
 entry is rejected. Validation never executes external settlement callbacks.
 A reachable recursive212 closure
@@ -1764,8 +1766,8 @@ effects; callers retain the source-specific position and eligibility of this
 boundary. `ApplyIncenseHealing` runs at the eligible player incense boundary
 before the existing counter tick, using the first holder's equipment and
 temporarily setting its tension to1. `FortressDefeat` supplies the defeat owner's
-load-snapshot hook and a pure conservative continuation projection, including
-tool-heal caps that can lower living HP already above MaxHP. It does not certify
+load-snapshot hook and pure conservative continuations for tool healing and caps
+that can lower living HP already above MaxHP. It does not certify
 an ordinary-run fortress producer. These operations do not introduce a global
 round/end-turn hook or change the batch engine's elemental fields.
 

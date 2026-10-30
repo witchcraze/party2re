@@ -100,9 +100,9 @@ func TestNamedFieldFortressPureProjectionAndToolCap(t *testing.T) {
 	s.actor("ally").HP, s.actor("ally").MaxHP = 1, 100
 	s.actor("fallen").HP, s.actor("fallen").MaxHP = 0, 100
 	field := FortressDefeat(&targetRNG{t: t, draws: []float64{0, 0}})
-	copy := s.callbackCopy()
-	if err := field.Project(&copy, c.TargetContext, "fallen"); err != nil || copy.actor("self").HP != 100 || copy.actor("ally").HP != 1 || s.actor("self").HP != 5000 {
-		t.Fatal(err, s, copy)
+	states, err := field.Project(&s, c.TargetContext, "fallen")
+	if err != nil || len(states) != 2 || states[0].actor("self").HP != 100 || states[0].actor("ally").HP != 19 || states[1].actor("ally").HP != 25 || s.actor("self").HP != 5000 || s.actor("ally").HP != 1 {
+		t.Fatal(err, s, states)
 	}
 	if err := field.Apply(&s, c.TargetContext, "fallen"); err != nil || s.actor("self").HP != 100 || s.actor("ally").HP != 19 || s.actor("fallen").HP != 0 {
 		t.Fatal(err, s)

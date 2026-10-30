@@ -1,6 +1,7 @@
 package battle
 
 import (
+	"math"
 	"slices"
 
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -168,17 +169,36 @@ func FortressDefeat(rng random.Generator) *DefeatRewards {
 			}
 			return nil
 		},
-		Project: func(s *LifetimeState, c TargetContext, id string) error {
+		Project: func(s *LifetimeState, c TargetContext, id string) ([]LifetimeState, error) {
 			if err := validate(s, c, id); err != nil {
-				return err
+				return nil, err
 			}
+			power := float64(s.actor(id).MaxHP) * .2
+			minimum := int(power * .9)
+			maximum := int(power * (.9 + .3*math.Nextafter(1, 0)))
+			states := []LifetimeState{s.callbackCopy()}
 			for _, target := range side(c, id) {
-				a := s.actor(target)
-				if a.HP > 0 {
-					a.HP = min(a.HP, a.MaxHP)
+				if s.actor(target).HP <= 0 {
+					continue
 				}
+				var next []LifetimeState
+				for _, state := range states {
+					a := state.actor(target)
+					low, high := min(a.MaxHP, a.HP+minimum), min(a.MaxHP, a.HP+maximum)
+					// Independent tool rolls can straddle both survival and the
+					// HP999 immunity boundary; a cap can also lower over-MaxHP.
+					for _, hp := range []int{low, high, 999, 1000} {
+						if hp < low || hp > high {
+							continue
+						}
+						p := state.callbackCopy()
+						p.actor(target).HP = hp
+						next = appendDefeatState(next, p)
+					}
+				}
+				states = next
 			}
-			return nil
+			return states, nil
 		},
 	}
 }
