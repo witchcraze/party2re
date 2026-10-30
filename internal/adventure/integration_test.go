@@ -15,12 +15,21 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
 
 type fixedClock struct{ now time.Time }
 
 func (c *fixedClock) Now() time.Time { return c.now }
+
+type failingSaveDepotRepo struct {
+	depot.Repository
+}
+
+func (r *failingSaveDepotRepo) Save(ctx context.Context, dep depot.Depot) error {
+	return errors.New("simulated delivery persistence error")
+}
 
 func TestAdventure_ImmediateDungeonCrawlIntegration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
@@ -1326,27 +1335,88 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 	}
 
 	// 4. Test atomic rollback in real DB:
-	// If settlement fails (e.g. attempting to consume non-existent item or transaction aborts),
-	// nothing is committed to MariaDB
-	invBeforeFail := invAfterSettle.Clone()
-	failingReq := battle.ApplyPostBattleRequest{
-		CharacterIDs: []string{char.ID},
-		BattleResult: corebattle.PartyBattleResult{
-			Outcome: corebattle.OutcomeWin,
-			ConsumedItems: map[string][]corebattle.ConsumedItem{
-				char.ID: {{ID: "non-existent-item", Quantity: 99}},
-			},
-		},
-	}
-	if _, err := battleAdapter.ApplyPostBattleResult(ctx, failingReq); err == nil {
-		t.Fatalf("expected error from non-existent item consumption")
-	}
-	invAfterFail, err := invRepo.FindByCharacterID(ctx, char.ID)
+	// Verify that if reward delivery fails AFTER key consumption succeeds,
+	// the entire transaction rolls back and neither key consumption nor reward delivery is committed.
+	// Step 1: Re-seed inventory with a stack of 2 ItemTreasurePocket in MariaDB.
+	resetPocket, err := coreitem.NewInstance(adventure.ItemTreasurePocket, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(invAfterFail.Items) != len(invBeforeFail.Items) {
-		t.Fatalf("expected inventory items unchanged after rollback, got %d items, want %d",
-			len(invAfterFail.Items), len(invBeforeFail.Items))
+	invReset, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invReset.Items = []coreitem.Instance{resetPocket}
+	if err := invRepo.Save(ctx, invReset); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "DELETE FROM depot_items WHERE character_id = ?", char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure a battle adapter where reward delivery persistence fails in depot.
+	failingDepot := &failingSaveDepotRepo{Repository: depotRepo}
+	failingBattleAdapter := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithDepotRepository(failingDepot),
+		battle.WithBattleEngine(battleEngine),
+		battle.WithTransactionProvider(txProvider),
+	)
+
+	// Step 2 & 3: Include key consumption (1 ItemTreasurePocket) and treasure reward delivery
+	// ("item-001") in the same settlement request.
+	// Because char inventory already holds 1 item (ItemTreasurePocket, remaining quantity 1)
+	// and max inventory capacity is 1, the reward drop overflows to depot delivery.
+	// Key consumption succeeds first, but depot delivery fails when persisting the reward.
+	failingSettleReq := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{char.ID},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			Turns:       1,
+			RemainingHP: map[string]int{char.ID: 100},
+			RemainingMP: map[string]int{char.ID: 50},
+			ConsumedItems: map[string][]corebattle.ConsumedItem{
+				char.ID: {{ID: adventure.ItemTreasurePocket, Quantity: 1}},
+			},
+		},
+		RecipientDrops: map[string][]string{
+			char.ID: {"item-001"},
+		},
+	}
+	if _, err := failingBattleAdapter.ApplyPostBattleResult(ctx, failingSettleReq); err == nil {
+		t.Fatalf("expected error from reward delivery persistence failure, got nil")
+	}
+
+	// Step 4: Verify transaction rolled back completely in MariaDB:
+	// - ItemTreasurePocket quantity MUST remain at 2 (the consumed key was restored).
+	// - Reward drop "item-001" MUST NOT exist in inventory.
+	// - No depot items were created.
+	invAfterRollback, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pocketAfterRollback *coreitem.Instance
+	for i := range invAfterRollback.Items {
+		if invAfterRollback.Items[i].DefinitionID == adventure.ItemTreasurePocket {
+			pocketAfterRollback = &invAfterRollback.Items[i]
+			break
+		}
+	}
+	if pocketAfterRollback == nil || pocketAfterRollback.Quantity != 2 {
+		t.Fatalf("expected ItemTreasurePocket quantity 2 in DB after rollback, got: %+v", pocketAfterRollback)
+	}
+	for _, it := range invAfterRollback.Items {
+		if it.DefinitionID == "item-001" {
+			t.Fatalf("reward item-001 was committed to inventory despite delivery failure")
+		}
+	}
+	var depotItemCount int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM depot_items WHERE character_id = ?", char.ID).Scan(&depotItemCount); err != nil {
+		t.Fatal(err)
+	}
+	if depotItemCount != 0 {
+		t.Fatalf("expected 0 depot items after rollback, got %d", depotItemCount)
 	}
 }
