@@ -3,7 +3,7 @@ package battle
 // NPCJobEntries retains source positions, including duplicate-name weights.
 // The NPC selector binds names to the last eligible entry; it must not dedupe
 // this list or treat it as the full NPC catalog. Evidence: _skill.cgi:7043–7189,
-// 7215–7412,8077–8121; _npc_action.cgi:177–224,313–322.
+// 7215–7412,7802–7886,8077–8121; _npc_action.cgi:177–224,313–322.
 func NPCJobEntries(job int) []CallbackEntry {
 	switch job {
 	case 88, 90, 91, 92, 93, 94:
@@ -42,6 +42,15 @@ func NPCJobEntries(job int) []CallbackEntry {
 			{ID: "npc-job-98-position-8", Name: "dark-breath-wave", MPCost: 80},
 			{ID: "npc-job-98-position-9", Name: "meteor-flurry", MPCost: 99},
 			{ID: "npc-job-98-position-10", Name: "great-magic-wave", MPCost: 99},
+		}
+	case 402:
+		return []CallbackEntry{
+			{ID: "npc-job-402-position-0", Name: "triple-magic", MPCost: 71},
+			{ID: "npc-job-402-position-1", Name: "binding-blessing", MPCost: 78},
+			{ID: "npc-job-402-position-2", Name: "sealing-cross", MPCost: 64},
+			{ID: "npc-job-402-position-3", Name: "swift-flurry", RequiredSP: 100, MPCost: 50},
+			{ID: "npc-job-402-position-4", Name: "barrier-break", RequiredSP: 100, MPCost: 55},
+			{ID: "npc-job-402-position-5", Name: "shared-mana-strike", RequiredSP: 100, MPCost: 80},
 		}
 	case 403:
 		return []CallbackEntry{

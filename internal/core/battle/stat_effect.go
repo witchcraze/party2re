@@ -10,6 +10,7 @@ const (
 	StatAgility BattleStat = "agility"
 	StatHP      BattleStat = "hp"
 	StatMP      BattleStat = "mp"
+	StatCMP     BattleStat = "cmp"
 	StatHit     BattleStat = "hit"
 )
 
@@ -27,6 +28,8 @@ func (a *LifetimeActor) currentStat(k BattleStat) *int {
 		return &a.HP
 	case StatMP:
 		return &a.MP
+	case StatCMP:
+		return &a.CMP
 	case StatHit:
 		return &a.Hit
 	}
@@ -45,6 +48,8 @@ func (a LifetimeActor) baseStat(k BattleStat) int {
 		return a.MaxHP
 	case StatMP:
 		return a.MaxMP
+	case StatCMP:
+		return a.MaxCMP
 	}
 	return 0 // Original mhit is absent; hit has its independent floor50.
 }
@@ -232,7 +237,7 @@ func (s *LifetimeState) ApplyStatDown(c *EffectContext, e TargetEffect, stat Bat
 	if err := s.validateRecovery(c, e, rng); err != nil {
 		return r, err
 	}
-	if !stat.canRaise() && stat != StatHP && stat != StatMP && stat != StatHit {
+	if !stat.canRaise() && stat != StatHP && stat != StatMP && stat != StatCMP && stat != StatHit {
 		return r, ErrUnsupportedEffect
 	}
 	target, err := s.ResolveEnemyTarget(c.TargetContext, e, rng)
@@ -267,7 +272,7 @@ func (s *LifetimeState) ApplyStatDown(c *EffectContext, e TargetEffect, stat Bat
 	a.Tension = 1
 	before := *value
 	*value -= r.Amount
-	if float64(*value) < floor {
+	if stat != StatCMP && float64(*value) < floor {
 		*value = int(floor)
 	}
 	if stat == StatHit {
@@ -283,7 +288,7 @@ func (s *LifetimeState) ApplyPartyStat(c *EffectContext, coefficient float64, ca
 		return nil, err
 	}
 	if down {
-		if !stat.canRaise() && stat != StatHP && stat != StatMP && stat != StatHit {
+		if !stat.canRaise() && stat != StatHP && stat != StatMP && stat != StatCMP && stat != StatHit {
 			return nil, ErrUnsupportedEffect
 		}
 	} else {
