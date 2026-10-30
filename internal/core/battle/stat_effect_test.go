@@ -173,7 +173,7 @@ func TestStatModifiersAndTargetReflection(t *testing.T) {
 	}
 	// Unknown/native flat kinds are not certified here.
 	before := reloadLifetime(t, s)
-	_, err = s.ApplyStatDown(&c, TargetEffect{TargetID: "enemy", Payload: CallbackPayload{Number: .25}}, BattleStat("cmp"), &targetRNG{t: t})
+	_, err = s.ApplyStatDown(&c, TargetEffect{TargetID: "enemy", Payload: CallbackPayload{Number: .25}}, BattleStat("unknown"), &targetRNG{t: t})
 	if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
 		t.Fatal(err, s)
 	}

@@ -2264,6 +2264,41 @@ consumer resumes after completed callbacks rather than reexecuting them. This
 registration does not supply NPC selection, ordinary charging, SQL or Gateway
 integration.
 
+Ordinary job402 retains six ordered positions at `_skill.cgi:7802–7886` at
+`ff97fc549932a146cc945d7edf71b44c868a840e`. Its first callback makes exactly
+three direct magic110 hits, consuming a separate argument per hit. The blessing
+calls party AT/DF/AG+50% in that order, then unconditionally immobilizes the
+caster. The cross deals direct magic DF×0.6 and nondirect physical AT×1.2 through
+separate target arguments; after both hits, independent1/2 draws directly seal
+each returned living recipient only if its status is empty. These are direct
+status writes, without ordinary status immunity or a further target lookup.
+
+The speed flurry first resolves an untyped enemy and clamps the truncated
+AG difference divided by35 to1..9. It makes that value plus one nondirect
+physical AT×0.4 hits, adding a direct physical AT hit at9. Triple magic, cross
+and speed flurry continue after caster death and reread current stats for later
+hits. Barrier break clears every enemy's temporary before resolving its target,
+then deals direct untyped area damage using that target's DF×0.8+5; an absent
+target contributes zero DF. The shared area helper retains its living-caster
+guard and ordered decay.
+
+The final callback debits5MP from each other party record with at least5MP,
+including fallen allies, adding200 power each. Nondirect untyped damage uses
+current (AT+DF+AG)×0.6 plus that sum, followed by an independent untyped CMP20%
+reduction targeting the damage helper's returned recipient. CMP reduction stops
+at or below20% of MaxCMP but deliberately skips the final floor clamp. Charge0
+and need-charge6 are written to the first returned recipient even if reduction
+redirects or has no effect. Without a damage tuple, reduction still resolves an
+absent target afresh; empty-record charge writes address no participant.
+
+`RegisterNPCJob402` binds all six generic identities to shared discovery and
+whole-body admission. Native damage/defeat projections preserve earlier resource,
+defense, revival and reset facts before later descendants, without external Apply
+hooks or committed draws. Save resulting lifetime facts, operation counters and
+frozen input, then rebuild ports after reload without replaying completed bodies.
+Ordinary SP/MP gates, stage24 initialization, NPC tails and durable receipts remain
+consumer responsibilities; this registration does not enable Adventure wiring.
+
 Job403 composes the existing target, damage, stat and equipment-reset owners
 (`_skill.cgi:8077–8121` at `ff97fc549932a146cc945d7edf71b44c868a840e`). Its
 ordered callbacks are direct untyped area AT×0.6; untyped self DF+50% followed
