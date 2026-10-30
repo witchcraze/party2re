@@ -10,7 +10,6 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -93,15 +92,6 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
 				return err
 			}
-			if stage.ID == "stage-26" && s.timer != nil {
-				locked, err := s.timer.IsLocked(txCtx, timer.CategoryDungeonOnce, leaderChar.ID)
-				if err != nil {
-					return err
-				}
-				if locked {
-					return fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, leaderChar.Name)
-				}
-			}
 
 			// Transition party status to in_progress in Valkey
 			p.Status = StatusInProgress
@@ -114,10 +104,6 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 					p.Status = StatusRecruiting
 					//lint:ignore error-swallow compensatory rollback in defer
 					_ = s.repo.UpdateParty(txCtx, p)
-					if stage.ID == "stage-26" && s.timer != nil {
-						//lint:ignore error-swallow compensatory unlock on aborted transaction
-						_ = s.timer.ReleaseLock(txCtx, timer.CategoryDungeonOnce, leaderChar.ID)
-					}
 				}
 			}()
 
@@ -165,16 +151,6 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 					if adventure.IsTreasureBlessing(b) {
 						session.HasTreasureBlessing = true
 					}
-				}
-			}
-
-			if stage.ID == "stage-26" && s.timer != nil {
-				ok, err := s.timer.TryLock(txCtx, timer.CategoryDungeonOnce, leaderChar.ID, 0)
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, leaderChar.Name)
 				}
 			}
 

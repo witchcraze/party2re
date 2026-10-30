@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -287,6 +289,12 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 		t.Fatalf("CreateParty failed: %v", err)
 	}
 
+	// Leader must be locked in production Valkey immediately after CreateParty (lib/quest.cgi:596-600 $m{once}=1)
+	lockedImmediate, err := soc.timer.IsLocked(ctx, timer.CategoryDungeonOnce, char1.ID)
+	if err != nil || !lockedImmediate {
+		t.Fatalf("expected leader to have dungeon_once lock immediately after CreateParty: %v, err=%v", lockedImmediate, err)
+	}
+
 	// Member joins and readies
 	if _, err := combat.party.JoinParty(ctx, partyDetail.Party.ID, char2.ID, ""); err != nil {
 		t.Fatalf("JoinParty failed: %v", err)
@@ -359,4 +367,127 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 		t.Fatalf("leader should be allowed to create stage-26 party after wake: %v", err)
 	}
 	_ = combat.party.DisbandParty(ctx, p2.Party.ID, char1.ID)
+}
+
+func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("requires MariaDB and Valkey")
+	}
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+	client, err := vk.NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	core, err := newCoreServices(db, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	econ, err := newEconServices(db, core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	combat, err := newCmbtServices(db, core, soc, econ, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := database.CreateTestCharacterWithFunds(ctx, db, "S26R_"+id.New()[:8], 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 99
+	char.Stats.HP = 9999
+	char.Stats.MaxHP = 9999
+	char.Stats.Attack = 9999
+	char.Stats.Defense = 9999
+	_ = core.charRepo.Update(ctx, char)
+
+	t.Cleanup(func() {
+		_ = soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char.ID)
+		_ = core.charRepo.Delete(ctx, char.ID)
+		_ = core.playerRepo.Delete(ctx, char.PlayerID)
+	})
+
+	const attempts = 6
+	var successCount int32
+	var rejectedCount int32
+	var otherCount int32
+	var createdPartyID string
+	var partyMu sync.Mutex
+	var wg sync.WaitGroup
+	startBarrier := make(chan struct{})
+
+	for i := 0; i < attempts/2; i++ {
+		wg.Add(1)
+		pName := "RaceP_" + id.New()[:6]
+		go func() {
+			defer wg.Done()
+			<-startBarrier
+			pDetail, err := combat.party.CreateParty(ctx, char.ID, party.CreatePartyRequest{
+				Name:    pName,
+				StageID: "stage-26",
+			})
+			if err == nil {
+				atomic.AddInt32(&successCount, 1)
+				partyMu.Lock()
+				createdPartyID = pDetail.Party.ID
+				partyMu.Unlock()
+			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+				atomic.AddInt32(&rejectedCount, 1)
+			} else {
+				atomic.AddInt32(&otherCount, 1)
+			}
+		}()
+	}
+
+	for i := 0; i < attempts/2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-startBarrier
+			_, err := combat.adv.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+				CharacterIDs: []string{char.ID},
+				StageID:      "stage-26",
+			})
+			if err == nil {
+				atomic.AddInt32(&successCount, 1)
+			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+				atomic.AddInt32(&rejectedCount, 1)
+			} else {
+				atomic.AddInt32(&otherCount, 1)
+			}
+		}()
+	}
+
+	close(startBarrier)
+	wg.Wait()
+
+	if createdPartyID != "" {
+		_ = combat.party.DisbandParty(ctx, createdPartyID, char.ID)
+	}
+
+	if successCount != 1 {
+		t.Fatalf("expected exactly 1 success across solo and party, got %d (rejected=%d, other=%d)",
+			successCount, rejectedCount, otherCount)
+	}
+	if rejectedCount != attempts-1 {
+		t.Fatalf("expected %d rejections, got %d (other=%d)", attempts-1, rejectedCount, otherCount)
+	}
+
+	locked, err := soc.timer.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID)
+	if err != nil || !locked {
+		t.Fatalf("expected character to be locked in Valkey, got %v", locked)
+	}
 }

@@ -796,6 +796,13 @@ func (m *errTimerService) TryLock(ctx context.Context, category, targetID string
 	return m.Service.TryLock(ctx, category, targetID, duration)
 }
 
+func (m *errTimerService) TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error) {
+	if m.tryLockErr != nil {
+		return false, m.tryLockErr
+	}
+	return m.Service.TryLockWithToken(ctx, category, targetID, token, duration)
+}
+
 func (m *errTimerService) IsLocked(ctx context.Context, category, targetID string) (bool, error) {
 	if m.isLockedErr != nil {
 		return false, m.isLockedErr

@@ -14,6 +14,8 @@ type Option func(*Service)
 type TimerService interface {
 	IsLocked(ctx context.Context, category, targetID string) (bool, error)
 	TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error)
+	TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error)
+	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
 	ReleaseLock(ctx context.Context, category, targetID string) error
 }
 

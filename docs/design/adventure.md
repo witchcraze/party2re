@@ -549,7 +549,9 @@ Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons
   - Dungeon 16: 機軍要塞
 - **Admission & Consumption Rules**:
   - Enforced via Valkey/ephemeral `TimerService` (`timer.CategoryDungeonOnce = "dungeon_once"`).
-  - Shared across solo crawl admission (`adventure.Service.ExecuteCrawl`) and party admission (`party.Service.CreateParty` and `StartPartyAdventure`).
+  - Shared across solo crawl admission (`adventure.Service.ExecuteCrawl`) and party creation (`party.Service.CreateParty`).
+  - Quota is consumed immediately upon party creation (matching `party2/lib/quest.cgi:594-599` `$m{once}=1`) or upon initiating solo crawl. If creation/crawl fails before transaction commit, acquired locks are compensated via token-bound release (`ReleaseLockWithToken`).
+  - Once a party is created, disbanding or adventure start failure does not restore the creator's once-per-wake quota (quota remains consumed).
   - Quota is consumed only for the creator/starter (the solo explorer or the party leader). Non-leader party participants do not have their once-lock consumed and are not blocked from creating/leading their own runs.
   - Locks persist without arbitrary TTL expiration (duration = 0) and are cleared exclusively upon awakening from sleep at Home (`internal/home.Service.Wake` via `ResetDungeonOnceWithClaim`).
 

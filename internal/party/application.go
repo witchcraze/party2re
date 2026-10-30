@@ -145,6 +145,18 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 
 	var createdParty Party
 	var createdMember Member
+	var lockToken string
+	var lockAcquired bool
+	var committed bool
+
+	defer func() {
+		if !committed && lockAcquired && s.timer != nil {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			//lint:ignore error-swallow compensatory unlock on aborted transaction
+			_, _ = s.timer.ReleaseLockWithToken(cleanupCtx, timer.CategoryDungeonOnce, leaderCharID, lockToken)
+		}
+	}()
 
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
 		// Check if leader already belongs to an active party
@@ -167,13 +179,15 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			return err
 		}
 		if stage.ID == "stage-26" && s.timer != nil {
-			locked, err := s.timer.IsLocked(txCtx, timer.CategoryDungeonOnce, leaderChar.ID)
+			lockToken = id.New()
+			acquired, err := s.timer.TryLockWithToken(txCtx, timer.CategoryDungeonOnce, leaderChar.ID, lockToken, 0)
 			if err != nil {
 				return err
 			}
-			if locked {
+			if !acquired {
 				return fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, leaderChar.Name)
 			}
+			lockAcquired = true
 		}
 		if req.NeedJoin != "" {
 			if err := ValidateNeedJoin(req.NeedJoin, leaderChar); err != nil {
@@ -223,6 +237,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 	if err != nil {
 		return PartyDetail{}, err
 	}
+	committed = true
 
 	if s.news != nil {
 		_ = s.news.PublishNews(

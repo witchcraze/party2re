@@ -21,6 +21,7 @@ type mockPartyRepository struct {
 	memberParty          map[string]string            // characterID -> partyID
 	logs                 []PartyAdventureLog
 	saveLogErr           error
+	savePartyErr         error
 	updatePartyErr       error
 	updatePartyCallCount int
 	failUpdatePartyOn    int // if non-zero, fail on this N-th call
@@ -69,6 +70,9 @@ func (r *mockPartyRepository) WithPartyAdventureLock(ctx context.Context, partyI
 }
 
 func (r *mockPartyRepository) SaveParty(_ context.Context, p Party) error {
+	if r.savePartyErr != nil {
+		return r.savePartyErr
+	}
 	r.parties[p.ID] = p
 	return nil
 }

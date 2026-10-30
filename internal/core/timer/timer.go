@@ -180,7 +180,7 @@ func (s *service) SetLock(ctx context.Context, category, targetID string, durati
 		s.memMu.Lock()
 		defer s.memMu.Unlock()
 		exp, exists := s.memory[claimK]
-		if !exists || time.Now().After(exp.expiresAt) || exp.value != claim.token {
+		if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != claim.token {
 			return ErrClaimLost
 		}
 		s.memory[k] = memTimerEntry{expiresAt: time.Now().Add(duration), value: "1"}
@@ -287,7 +287,7 @@ func (s *service) RenewLock(ctx context.Context, category, targetID, token strin
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[k]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != token {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != token {
 		return false, nil
 	}
 	s.memory[k] = memTimerEntry{expiresAt: time.Now().Add(duration), value: token}
@@ -393,7 +393,7 @@ func (s *service) ReleaseLockWithToken(ctx context.Context, category, targetID, 
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[k]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != token {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != token {
 		return false, nil
 	}
 	delete(s.memory, k)
@@ -432,7 +432,7 @@ func (s *service) ReleaseLockWithClaim(ctx context.Context, category, targetID, 
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[claimK]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != claimToken {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != claimToken {
 		return false, nil
 	}
 	delete(s.memory, targetK)
@@ -475,7 +475,7 @@ func (s *service) ExecuteWithClaim(ctx context.Context, category, targetID, toke
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[k]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != token {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != token {
 		return false, nil
 	}
 	if fn != nil {
