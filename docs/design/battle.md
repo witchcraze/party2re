@@ -191,6 +191,32 @@ pass, resets members with current equipment, reapplies living holders' revival
 temporary effect, and clears temporary/anti fields while retaining the default.
 Equipment formulas and automatic revival stay with their separate native owners.
 
+Player equipment producers use `PlayerTailContext` and the same
+`ValidatePlayerTail` gate for execution and `BattleDefinitions.PlayerTailAction`
+discovery. These passive identities are separate from submitted commands and
+random/job tables. The consumer captures item210's fallen party records before
+the action; its recovery runs after revival even when the combat tail is skipped.
+Item189 belongs to the living normal-action block: its chance draw precedes the
+suppression check. The other equipment producers require the eligible player
+combat tail; living-only equipment effects precede CMP and extended effects.
+Item194 resets through the current equipment owner, resolves half the stat-sum
+difference through untyped direct damage or healing, then restores the captured
+tension/status/temporary/hit fields. It retains reset stats and extended state.
+Items202/198 use the optional temporary hook of tool recovery and can restore
+zero; they do not use spell recovery's tension or MP exclusions.
+
+CMP's producer supplies recharge amount/next threshold to `Completion`, using
+the requester's level capped at99. The consumer copies final damage-helper facts
+and `End` into that completion, then calls `CompleteOperation` once to apply CMP,
+extended counters, incense/bans and end processing. Frenzy's dedicated random
+member tool hit and crown's probabilistic tool heal run before that completion;
+frenzy expiry clamps attack to999 even for a fallen actor. Other owners remain
+interleaved at their source positions; per-producer admission does not certify an
+entire enclosing operation after arbitrary prior callbacks. The enclosing owner
+must preflight every reachable continuation before cost/RNG/mutation. Save the
+frozen input and resulting facts with the consumer's receipt, rebuild runtime
+ports on reload, and return the saved receipt on retry without callback execution.
+
 Operation-local `EndProcessing` captures the first qualifying darkness debit
 (floor of half the damage, capped500). It filters that debit against immediate
 risk invocation facts once before flushing, skips fallen actors and leaves living

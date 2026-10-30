@@ -32,8 +32,22 @@ func (s *LifetimeState) projectDamageReset(defeat *DefeatContext, target TargetC
 	}
 	reset := defeat.EquipmentResetContext
 	reset.TargetContext = target
-	if err := s.ValidateEquipmentReset(&reset, id, rng); err != nil {
+	states, _, err := s.projectEquipmentReset(reset, id, rng)
+	if err != nil {
 		return nil, err
+	}
+	for i := range states {
+		states[i].actor(id).Tension = s.actor(id).Tension
+		if keepStatus {
+			states[i].actor(id).Status = s.actor(id).Status
+		}
+	}
+	return states, nil
+}
+
+func (s *LifetimeState) projectEquipmentReset(reset EquipmentResetContext, id string, rng random.Generator) ([]LifetimeState, TargetCursor, error) {
+	if err := s.ValidateEquipmentReset(&reset, id, rng); err != nil {
+		return nil, reset.Cursor, err
 	}
 	values := []float64{0}
 	switch s.actor(id).Gear.AccessoryID {
@@ -46,26 +60,23 @@ func (s *LifetimeState) projectDamageReset(defeat *DefeatContext, target TargetC
 		values = []float64{0, .5, math.Nextafter(1, 0)}
 	}
 	var states []LifetimeState
+	cursor := reset.Cursor
 	for _, value := range values {
 		for mask := range 16 {
 			p, child := s.callbackCopy(), reset
-			status, tension := p.actor(id).Status, p.actor(id).Tension
 			draw := &damageResetDraws{bits: mask}
 			if len(values) > 1 {
 				v := value
 				draw.first = &v
 			}
 			if err := p.ApplyEquipmentReset(&child, id, draw); err != nil {
-				return nil, err
+				return nil, cursor, err
 			}
-			p.actor(id).Tension = tension
-			if keepStatus {
-				p.actor(id).Status = status
-			}
+			cursor = child.Cursor
 			states = appendDefeatState(states, p)
 		}
 	}
-	return states, nil
+	return states, cursor, nil
 }
 
 // Interception is a nonlethal direct tool hit: it consumes the actor's one-hit

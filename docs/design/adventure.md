@@ -437,6 +437,11 @@ target independently. Reward and fortress callbacks remain their owners' work;
 helper registration alone does not connect an Adventure command or admit mixed
 custom slots. Item110 and unrepresented recursive descendants remain rejected.
 
+Player equipment recovery, CMP generation and extended-effect bodies use
+[Battle's operation-tail contract](battle.md#explicit-action-resumption-requirements).
+Capture fallen-party input before callbacks, retain source-specific player/NPC
+and normal-action/combat-tail guards, and finish the operation counters once.
+
 Revival and sacrifice use [Battle's ordered revival contract](battle.md#resources-revival-and-roster-changes).
 Ordinary fallen-self discovery requires the66.6 entry and its living designated
 helper; direct callback admission is not ordinary role/learning admission.
