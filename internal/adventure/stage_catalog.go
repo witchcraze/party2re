@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -16,7 +17,10 @@ var (
 	ErrStageNotFound             = errors.New("stage definition not found")
 	ErrLevelRequirementNotMet    = errors.New("character level requirement not met for stage")
 	ErrJobLevelRequirementNotMet = errors.New("character job level requirement not met for stage")
+	ErrStageNotAvailable         = errors.New("stage is not currently available")
 )
+
+var jstZone = time.FixedZone("JST", 9*60*60)
 
 // SeasonalStageData defines monster encounters and loot pools for a seasonal variant of Stage 26.
 type SeasonalStageData struct {
@@ -137,7 +141,8 @@ func NewStageWithBosses(id, name string, minLevel int, monsterIDs []string, boss
 }
 
 type StageCatalog struct {
-	stages map[string]Stage
+	stages  map[string]Stage
+	nowFunc func() time.Time
 }
 
 func NewStageCatalog(stages []Stage) (*StageCatalog, error) {
@@ -154,6 +159,53 @@ func NewStageCatalog(stages []Stage) (*StageCatalog, error) {
 		catalog.stages[s.ID] = s
 	}
 	return catalog, nil
+}
+
+func (c *StageCatalog) now() time.Time {
+	if c != nil && c.nowFunc != nil {
+		return c.nowFunc()
+	}
+	return time.Now()
+}
+
+// SetNowFunc configures a custom time source for catalog access checks.
+func (c *StageCatalog) SetNowFunc(fn func() time.Time) {
+	if c != nil {
+		c.nowFunc = fn
+	}
+}
+
+func parseStageNum(stageID string) (int, bool) {
+	var num int
+	if _, err := fmt.Sscanf(stageID, "stage-%d", &num); err == nil {
+		return num, true
+	}
+	if _, err := fmt.Sscanf(stageID, "%d", &num); err == nil {
+		return num, true
+	}
+	return 0, false
+}
+
+// IsStageInSeason reports whether a seasonal stage is currently in season at time t in JST.
+// Non-seasonal stages always return true.
+func IsStageInSeason(stageID string, t time.Time) bool {
+	num, ok := parseStageNum(stageID)
+	if !ok {
+		return true
+	}
+	inJST := t.In(jstZone)
+	month := inJST.Month()
+
+	switch num {
+	case 23, 25:
+		// Winter only: December, January, February (lib/quest.cgi:1215-1216, 1310-1315 is_winter)
+		return month == time.December || month == time.January || month == time.February
+	case 27:
+		// Halloween only: October (lib/quest.cgi:1218, 1317-1322 is_halloween)
+		return month == time.October
+	default:
+		return true
+	}
 }
 
 func (c *StageCatalog) FindByID(id string) (Stage, error) {
@@ -196,13 +248,17 @@ func (c *StageCatalog) Stages() []Stage {
 // RequiredJobLevel returns the required job level (reincarnation count / 転職回数)
 // to challenge a stage, in 1:1 parity with legacy quest.cgi.
 func RequiredJobLevel(stageID string) int {
-	var num int
-	_, _ = fmt.Sscanf(stageID, "stage-%d", &num)
+	num, ok := parseStageNum(stageID)
+	if !ok {
+		return 0
+	}
 	switch num {
 	case 0, 1:
 		return 0
 	case 22:
 		return 6
+	case 23:
+		return 0
 	case 24:
 		return 50
 	case 25:
@@ -211,7 +267,7 @@ func RequiredJobLevel(stageID string) int {
 		return 0
 	default:
 		if num >= 2 && num <= 14 {
-			return num - 1
+			return num - 2
 		}
 		if num > 14 {
 			return 14
@@ -220,11 +276,19 @@ func RequiredJobLevel(stageID string) int {
 	}
 }
 
-// CanAccessStage checks whether a character meets level and job-level criteria for a stage.
+// CanAccessStage checks whether a character meets level, job-level, and seasonal criteria for a stage at current time.
 func (c *StageCatalog) CanAccessStage(char corecharacter.Character, stageID string) error {
+	return c.CanAccessStageAt(char, stageID, c.now())
+}
+
+// CanAccessStageAt checks whether a character meets level, job-level, and seasonal criteria for a stage at the given time.
+func (c *StageCatalog) CanAccessStageAt(char corecharacter.Character, stageID string, t time.Time) error {
 	st, err := c.FindByID(stageID)
 	if err != nil {
 		return ErrStageNotFound
+	}
+	if !IsStageInSeason(st.ID, t) {
+		return ErrStageNotAvailable
 	}
 	if char.Level < st.MinLevel {
 		return ErrLevelRequirementNotMet
@@ -233,6 +297,23 @@ func (c *StageCatalog) CanAccessStage(char corecharacter.Character, stageID stri
 		return ErrJobLevelRequirementNotMet
 	}
 	return nil
+}
+
+// AvailableStages returns all stages accessible by the character at current time, sorted by ID.
+func (c *StageCatalog) AvailableStages(char corecharacter.Character) []Stage {
+	return c.AvailableStagesAt(char, c.now())
+}
+
+// AvailableStagesAt returns all stages accessible by the character at time t, sorted by ID.
+func (c *StageCatalog) AvailableStagesAt(char corecharacter.Character, t time.Time) []Stage {
+	all := c.Stages()
+	available := make([]Stage, 0, len(all))
+	for _, st := range all {
+		if err := c.CanAccessStageAt(char, st.ID, t); err == nil {
+			available = append(available, st)
+		}
+	}
+	return available
 }
 
 //go:embed data/stages.json

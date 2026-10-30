@@ -583,7 +583,7 @@ Multiplayer co-op quest rooms allow up to 4 adventurers to form an expedition lo
   - Validated on both room creation (leader must qualify) and member join (`ErrNeedJoinConditionFailed`).
 - **Stage Access Gates (`$job_lv[$stage]`)**:
   - Each stage specifies a `RequiredJobLevel` based on the character's total job changes (`JobLevel`).
-  - Novice stages require JobLevel 0, while advanced stages require up to JobLevel 7.
+  - Novice stages (0–2) require JobLevel 0, normal stages 3–14 require `JobLevel >= stage - 2`, and special stages require up to JobLevel 50 (stage 22: 6, stage 24: 50, stage 25: 10), with seasonal availability enforced in JST for winter (stages 23 and 25 in Dec–Feb) and Halloween (stage 27 in Oct).
 - **Mode Settings (`mode`)**:
   - `normal` (Default; empty string defaults to `normal`): Standard dungeon crawl mode.
   - Unimplemented modes (`calm`, `try`, `hard`): Explicitly rejected on party creation (`ErrUnsupportedMode`) to prevent running crawls with incomplete reward/unlock rules until milestone unlocks and full reward scaling are reconciled. Unrecognized mode strings return `ErrInvalidMode`.

@@ -697,3 +697,65 @@ func TestExecuteCrawl_DailyOnceLock(t *testing.T) {
 		t.Fatalf("ExecuteCrawl after lock release failed: %v", err)
 	}
 }
+
+func TestSoloAdmission_MatchesStageCatalogAndAvailableStages(t *testing.T) {
+	service, clock, _, characters := newTestService(t)
+	cat := service.stages
+	jst := time.FixedZone("JST", 9*60*60)
+
+	testCases := []struct {
+		name     string
+		level    int
+		jobLevel int
+		time     time.Time
+		stageID  string
+	}{
+		// Stage 2 with JobLevel 0 (reproduction condition 1)
+		{"stage-02 with JobLevel 0", 20, 0, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-02"},
+		// Stage 3 requires JobLevel 1
+		{"stage-03 with JobLevel 0 (rejected)", 20, 0, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-03"},
+		{"stage-03 with JobLevel 1 (accepted)", 20, 1, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-03"},
+		// Winter stage 23 (reproduction condition 2)
+		{"stage-23 outside winter (rejected)", 99, 10, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-23"},
+		{"stage-23 in winter (accepted)", 99, 10, time.Date(2026, 12, 15, 12, 0, 0, 0, jst), "stage-23"},
+		// Winter stage 25 requires JobLevel 10
+		{"stage-25 in winter with JobLevel 9 (rejected)", 99, 9, time.Date(2026, 12, 15, 12, 0, 0, 0, jst), "stage-25"},
+		{"stage-25 in winter with JobLevel 10 (accepted)", 99, 10, time.Date(2026, 12, 15, 12, 0, 0, 0, jst), "stage-25"},
+		// Halloween stage 27
+		{"stage-27 outside halloween (rejected)", 99, 0, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-27"},
+		{"stage-27 in halloween (accepted)", 99, 0, time.Date(2026, 10, 15, 12, 0, 0, 0, jst), "stage-27"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			characters.value.Level = tc.level
+			characters.value.JobLevel = tc.jobLevel
+			clock.now = tc.time
+
+			available := cat.AvailableStagesAt(characters.value, tc.time)
+			isAvailable := false
+			for _, st := range available {
+				if st.ID == tc.stageID {
+					isAvailable = true
+					break
+				}
+			}
+
+			accessErr := cat.CanAccessStageAt(characters.value, tc.stageID, tc.time)
+			if (accessErr == nil) != isAvailable {
+				t.Fatalf("AvailableStages and CanAccessStageAt mismatch: available=%v, accessErr=%v", isAvailable, accessErr)
+			}
+
+			_, startErr := service.StartStage(context.Background(), characters.value.ID, tc.stageID)
+			if isAvailable {
+				if startErr != nil {
+					t.Fatalf("StartStage unexpectedly failed for available stage %s: %v", tc.stageID, startErr)
+				}
+			} else {
+				if !errors.Is(startErr, accessErr) {
+					t.Fatalf("StartStage error %v does not match expected access error %v", startErr, accessErr)
+				}
+			}
+		})
+	}
+}

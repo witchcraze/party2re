@@ -27,6 +27,8 @@ func adventureActionRejection(err error) (int, ErrorDetail) {
 	switch {
 	case errors.Is(err, adventure.ErrStageNotFound):
 		return http.StatusUnprocessableEntity, ErrorDetail{Code: "ADVENTURE_STAGE_NOT_FOUND", Message: "Adventure stage not found."}
+	case errors.Is(err, adventure.ErrStageNotAvailable):
+		return http.StatusUnprocessableEntity, ErrorDetail{Code: "ADVENTURE_STAGE_NOT_AVAILABLE", Message: "Adventure stage is not currently available."}
 	case errors.Is(err, adventure.ErrLevelRequirementNotMet):
 		return http.StatusForbidden, ErrorDetail{Code: "ADVENTURE_LEVEL_REQUIRED", Message: "Adventure level requirement not met."}
 	case errors.Is(err, adventure.ErrJobLevelRequirementNotMet):

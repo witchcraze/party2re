@@ -125,6 +125,10 @@ func (s *Service) SetTimerService(timer TimerService) {
 	s.timer = timer
 }
 
+func (s *Service) SetNowFunc(nowFunc func() time.Time) {
+	s.nowFunc = nowFunc
+}
+
 func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler any, logger Logger) (*Service, error) {
 	stages, err := InitialStageCatalog()
 	if err != nil {
@@ -210,7 +214,7 @@ func (s *Service) StartStage(ctx context.Context, characterID string, stageID st
 	}
 
 	if s.stages != nil {
-		if err := s.stages.CanAccessStage(char, stageID); err != nil {
+		if err := s.stages.CanAccessStageAt(char, stageID, s.now()); err != nil {
 			return Adventure{}, err
 		}
 	}
@@ -260,7 +264,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		return DungeonCrawlResult{}, ErrStageNotFound
 	}
 
-	if err := s.stages.CanAccessStage(characters[0], stage.ID); err != nil {
+	if err := s.stages.CanAccessStageAt(characters[0], stage.ID, s.now()); err != nil {
 		return DungeonCrawlResult{}, err
 	}
 

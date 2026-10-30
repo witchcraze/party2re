@@ -292,7 +292,16 @@ func TestAdventureGatewayServiceRejectionsAndUnknownFailure(t *testing.T) {
 	}{
 		{"stage", "missing-stage", "ADVENTURE_STAGE_NOT_FOUND", 422, nil},
 		{"level", "stage-02", "ADVENTURE_LEVEL_REQUIRED", 403, nil},
-		{"job level", "stage-02", "ADVENTURE_JOB_LEVEL_REQUIRED", 403, func(f *adventureGatewayFixture) { f.char.Level = 20 }},
+		{"job level", "stage-03", "ADVENTURE_JOB_LEVEL_REQUIRED", 403, func(f *adventureGatewayFixture) { f.char.Level = 20 }},
+		{"seasonal stage", "stage-23", "ADVENTURE_STAGE_NOT_AVAILABLE", 422, func(f *adventureGatewayFixture) {
+			f.char.Level, f.char.JobLevel = 99, 10
+			f.beforeStart = func() {
+				// July is out of winter season.
+				f.service.SetNowFunc(func() time.Time {
+					return time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+				})
+			}
+		}},
 		{"dead after preflight", "stage-00", "ADVENTURE_UNCONSCIOUS", 422, func(f *adventureGatewayFixture) { f.beforeStart = func() { f.char.Stats.HP = 0 } }},
 		{"exhausted after preflight", "stage-00", "ADVENTURE_EXHAUSTED", 422, func(f *adventureGatewayFixture) { f.beforeStart = func() { f.char.Tired = 100 } }},
 		{"daily entry", "stage-26", "ADVENTURE_DAILY_LIMIT", 422, func(f *adventureGatewayFixture) {
