@@ -23,26 +23,28 @@ func appendDamageContinuation(states []damageContinuation, s LifetimeState, c Da
 	return append(states, damageContinuation{State: s, Context: c, TargetID: target})
 }
 
-// Project direct untyped/magic damage and native tails without external Apply
+// Project callback damage and native tails without external Apply
 // hooks. upper is the raw interval ceiling before target and shared modifiers.
-func (s *LifetimeState) projectDirectDamage(c *DamageContext, defeat *DefeatContext, e TargetEffect, upper float64, followed bool, rng random.Generator) ([]damageContinuation, error) {
+func (s *LifetimeState) projectCallbackDamage(c *DamageContext, defeat *DefeatContext, e TargetEffect, upper float64, followed bool, rng random.Generator) ([]damageContinuation, error) {
 	damage := s.nativeDamageContext(*c, defeat, rng)
 	if err := s.ValidateDamage(&damage, e, rng); err != nil {
 		return nil, err
 	}
-	converted, _, err := s.actor(c.ActorID).ConvertEnemyCategory(c.TargetContext, e)
+	converted, debit, err := s.actor(c.ActorID).ConvertEnemyCategory(c.TargetContext, e)
 	if err != nil {
 		return nil, err
 	}
-	if converted.Category != CategoryUntyped && converted.Category != CategoryMagic {
+	if converted.Category != CategoryUntyped && converted.Category != CategoryMagic && converted.Category != CategoryPhysical {
 		return nil, ErrUnsupportedEffect
 	}
+	projected := s.callbackCopy()
+	projected.actor(c.ActorID).MP = max(0, projected.actor(c.ActorID).MP-debit)
 	if len(c.EnemyIDs) == 0 || converted.Payload.Number == 0 {
-		return []damageContinuation{{State: s.callbackCopy(), Context: *c}}, nil
+		return []damageContinuation{{State: projected, Context: *c}}, nil
 	}
-	actorStates := []LifetimeState{s.callbackCopy()}
+	actorStates := []LifetimeState{projected}
 	if c.Item195Activated && s.actor(c.ActorID).Status == "" {
-		p := s.callbackCopy()
+		p := projected.callbackCopy()
 		p.actor(c.ActorID).Status = StatusConfusion
 		actorStates = append(actorStates, p)
 	}
@@ -90,7 +92,12 @@ func (s *LifetimeState) projectDirectDamage(c *DamageContext, defeat *DefeatCont
 				results = appendDamageContinuation(results, p, child, "")
 				continue
 			}
-			low, high := p.directPowerBounds(&child, t, candidate.TargetEffect, candidate.Payload.Number*upper/e.Payload.Number)
+			if candidate.Category == CategoryPhysical && !child.GuaranteedHit && t.Status != StatusKinju && t.Status != StatusSabaku && !hasItem(p.actor(c.ActorID).ItemDefinitionIDs, "weapon-63") {
+				miss := p.callbackCopy()
+				miss.actor(c.ActorID).Tension = 1
+				results = appendDamageContinuation(results, miss, child, "")
+			}
+			low, high := p.callbackPowerBounds(&child, t, candidate.TargetEffect, candidate.Payload.Number*upper/e.Payload.Number)
 			if low == 0 {
 				results = appendDamageContinuation(results, p.callbackCopy(), child, "")
 			}
@@ -105,7 +112,7 @@ func (s *LifetimeState) projectDirectDamage(c *DamageContext, defeat *DefeatCont
 				}
 			}
 			for _, ready := range beforeHit {
-				states, err := ready.projectDirectHit(defeat, child, candidate.TargetEffect, low, high, followed, rng)
+				states, err := ready.projectCallbackHit(defeat, child, candidate.TargetEffect, low, high, followed, rng)
 				if err != nil {
 					return nil, err
 				}
@@ -118,9 +125,9 @@ func (s *LifetimeState) projectDirectDamage(c *DamageContext, defeat *DefeatCont
 	return results, nil
 }
 
-// Four optional modifier draws affect direct magic. Retain143/144's interior
+// Four optional modifier draws affect these callbacks. Retain143/144's interior
 // threshold extrema as well as interval endpoints and boost/reduction branches.
-func (s *LifetimeState) directPowerBounds(c *DamageContext, t *LifetimeActor, e TargetEffect, upper float64) (float64, float64) {
+func (s *LifetimeState) callbackPowerBounds(c *DamageContext, t *LifetimeActor, e TargetEffect, upper float64) (float64, float64) {
 	a := s.actor(c.ActorID)
 	items := a.ItemDefinitionIDs
 	areaBoost := hasItem(items, "item-144") && c.AreaDamageCalls > 0
@@ -144,7 +151,8 @@ func (s *LifetimeState) directPowerBounds(c *DamageContext, t *LifetimeActor, e 
 		for mask := range 16 {
 			bits := mask
 			draw := func() float64 { v := float64(bits&1) * math.Nextafter(1, 0); bits >>= 1; return v }
-			power := s.modifyDamage(c, t, value, e.Category, true, false, draw)
+			direct, normal := damageFlags(e)
+			power := s.modifyDamage(c, t, value, e.Category, direct, normal, draw)
 			low, high = min(low, power), max(high, power)
 		}
 	}
@@ -172,20 +180,41 @@ func damageSurvivorHPs(hp, minimum, maximum int) []int {
 	return values
 }
 
-func (s *LifetimeState) projectDirectHit(defeat *DefeatContext, damage DamageContext, e TargetEffect, low, high float64, followed bool, rng random.Generator) ([]damageContinuation, error) {
+func (s *LifetimeState) projectCallbackHit(defeat *DefeatContext, damage DamageContext, e TargetEffect, low, high float64, followed bool, rng random.Generator) ([]damageContinuation, error) {
 	a, t := s.actor(damage.ActorID), s.actor(e.TargetID)
+	direct, _ := damageFlags(e)
+	flags := []bool{direct}
+	if e.Category == CategoryPhysical {
+		if a.Extended == ExtendedFlame && !direct && low <= float64(a.Attack) {
+			if high <= float64(a.Attack) {
+				flags = []bool{true}
+			} else {
+				flags = append(flags, true)
+			}
+		}
+		if hasItem(t.ItemDefinitionIDs, "item-162") {
+			flags = []bool{false}
+		}
+	}
 	if !hasItem(a.ItemDefinitionIDs, "item-149") {
 		low, high = low*a.Tension, high*a.Tension
 		a.Tension = 1
 	}
 	minus := toolDefense(t)
+	if e.Category == CategoryPhysical && hasItem(t.ItemDefinitionIDs, "item-162") && hasItem(a.ItemDefinitionIDs, "item-181") {
+		minus = (float64(int(float64(t.Defense)*.5))*1.5 + float64(t.Gear.ArmorDefense)) * .3
+	}
 	if hasItem(a.ItemDefinitionIDs, "item-187") {
 		minus -= float64(t.Defense-t.BaseStats.Defense) * .3
 	}
-	minimum := rollDamage(low, minus, true, t.BaseStats.Defense, resetBoundary(0))
-	maximum := rollDamage(high, minus, true, t.BaseStats.Defense, resetBoundary(math.Nextafter(1, 0)))
-	if low*.9 < 1 || t.BaseStats.Defense > 999 && (low*.5-minus)*.9 < 1 {
-		minimum, maximum = 1, max(2, maximum)
+	minimum, maximum := int(^uint(0)>>1), 0
+	for _, flag := range flags {
+		lo := rollDamage(low, minus, flag, t.BaseStats.Defense, resetBoundary(0))
+		hi := rollDamage(high, minus, flag, t.BaseStats.Defense, resetBoundary(math.Nextafter(1, 0)))
+		if low*.9 < 1 || (!flag || t.BaseStats.Defense > 999) && (low*.5-minus)*.9 < 1 {
+			lo, hi = 1, max(2, hi)
+		}
+		minimum, maximum = min(minimum, lo), max(maximum, hi)
 	}
 	damage.Item185Activated = damage.Item185Activated || hasItem(t.ItemDefinitionIDs, "item-185")
 	damage.Item195Activated = damage.Item195Activated || hasItem(t.ItemDefinitionIDs, "item-195")
@@ -193,8 +222,10 @@ func (s *LifetimeState) projectDirectHit(defeat *DefeatContext, damage DamageCon
 	for _, hp := range damageSurvivorHPs(t.HP, minimum, maximum) {
 		p := s.callbackCopy()
 		p.actor(t.ID).HP = hp
-		// Direct untyped/magic hits skip physical162 defense growth and can reach interception.
-		if t.Extended == ExtendedInterception && t.ID != a.ID {
+		if e.Category == CategoryPhysical && hasItem(t.ItemDefinitionIDs, "item-162") {
+			p.actor(t.ID).Defense = min(int(float64(t.BaseStats.Defense)*2.5), t.Defense+int(float64(t.BaseStats.Defense)*.2))
+			states = appendDefeatState(states, p)
+		} else if t.Extended == ExtendedInterception && t.ID != a.ID {
 			nextStates, err := p.projectDamageInterception(&damage, t.ID, rng)
 			if err != nil {
 				return nil, err

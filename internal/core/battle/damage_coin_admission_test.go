@@ -22,7 +22,7 @@ func TestCoinNativeProjectionHPClassesAndRevival(t *testing.T) {
 		}
 		before := s.callbackCopy()
 		c.Status.Defeat.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { t.Fatal("reward Apply in admission"); return nil }
-		states, err := s.projectDirectDamage(&c.DamageContext, c.Status.Defeat, dualAgilityEffect("enemy", 1800, CategoryUntyped, true), 1800, true, &targetRNG{t: t})
+		states, err := s.projectCallbackDamage(&c.DamageContext, c.Status.Defeat, dualAgilityEffect("enemy", 1800, CategoryUntyped, true), 1800, true, &targetRNG{t: t})
 		if err != nil || !reflect.DeepEqual(s, before) || c.DamageCalls != 0 {
 			t.Fatal(err, s, states)
 		}
@@ -47,14 +47,14 @@ func TestCoinNativeProjectionConsumesDefenseAndKeepsActivationAlternatives(t *te
 	s, c := coinProjectionFixture()
 	s.actor("enemy").Temporary = TemporaryOneHitDefense
 	s.actor("enemy").ItemDefinitionIDs = []string{"item-195"}
-	states, err := s.projectDirectDamage(&c.DamageContext, c.Status.Defeat, dualAgilityEffect("enemy", 1800, CategoryUntyped, true), 1800, true, &targetRNG{t: t})
+	states, err := s.projectCallbackDamage(&c.DamageContext, c.Status.Defeat, dualAgilityEffect("enemy", 1800, CategoryUntyped, true), 1800, true, &targetRNG{t: t})
 	if err != nil || len(states) != 1 || states[0].State.actor("enemy").HP != 1100 || states[0].State.actor("enemy").Temporary != "" || states[0].Context.Item195Activated {
 		t.Fatal(err, states)
 	}
 	// A following hit can now activate195, then later resolution can confuse.
 	child := c
 	child.DamageContext = states[0].Context
-	next, err := states[0].State.projectDirectDamage(&child.DamageContext, child.Status.Defeat, dualAgilityEffect("enemy", 100, CategoryUntyped, true), 100, true, &targetRNG{t: t})
+	next, err := states[0].State.projectCallbackDamage(&child.DamageContext, child.Status.Defeat, dualAgilityEffect("enemy", 100, CategoryUntyped, true), 100, true, &targetRNG{t: t})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestCoinPowerBoundsIncludeInterior144Peak(t *testing.T) {
 	s.actor("enemy").Temporary = TemporaryDouble
 	c.AreaDamageCalls = 1
 	e := dualAgilityEffect("enemy", 190, CategoryUntyped, true)
-	low, high := s.directPowerBounds(&c.DamageContext, s.actor("enemy"), e, e.Payload.Number)
+	low, high := s.callbackPowerBounds(&c.DamageContext, s.actor("enemy"), e, e.Payload.Number)
 	if low != 300 || high != 390 {
 		t.Fatal(low, high)
 	}

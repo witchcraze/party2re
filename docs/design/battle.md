@@ -796,6 +796,39 @@ with the enclosing consumer. Admission checks descendants before effects or
 draws; unknown prior transitions retain whole-action rejection. Save operation
 facts and frozen command input, rebuilding ports after reload without replay.
 
+#### Ranged and returned-living-target callbacks
+
+Evidence: `_skill.cgi:1603–1664,3132–3179,3778–3806` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`.
+`RegisterRanged` contributes complete ordered job11/42/54 tables, including
+job11's SP0 extension and its final bow extension. Listed costs belong to the
+enclosing invocation; indirect calls retain their original cost rules.
+
+Job11 uses physical AG×1.4 single/area attacks, immobilization80%, accuracy
+reset95 and MP reduction15% followed by self MP recovery of the returned debit.
+The shared MP cap and floors apply independently to reduction and recovery.
+Its AT×1.2 attack then reduces hit7%; AT×1.1 then attempts sleep55%. Its flurry
+draws3–4 physical AT×0.85 hits. Bow charge sets the extended effect for10 turns
+and invokes one tension increase, including the existing requester/equipment rules.
+
+Job42 uses magic confusion80% and magic seal90%, and untyped self base-AG100%
+up. Physical AT×1.1/AT×1.2 attacks then attempt deadly poison70%/paralysis35%.
+Collapse first resolves a magic enemy: MaxHP or baseDF>999 skips the draw;
+otherwise a2/3 success attempts current-HP75% reduction and directly writes
+deadly poison to the first resolved target even if reduction has no effect or
+redirects. Its AT×1.7 attack then attempts physical instant death30%; the final
+extension is direct untyped AG×1.7 damage.
+
+Job54 uses physical immobilization80%, direct physical AT×0.6, accuracy reset95,
+direct physical AT×0.5 then immobilization30%, direct physical area180 and3–4
+direct physical AT×0.7 hits. Both flurries read current AT and choose a fresh
+absent target per hit, stopping when the caster falls. Accuracy writes have no
+living/category guard. Attack tails require a returned living recipient and
+resolve that recipient again, preserving reflection, defeat/revival and item
+activation before the next helper. Admission uses the shared damage/defeat
+projection for these ordered tails, before mutation or random draws. Persist
+resulting facts and frozen input, rebuilding ports after reload without replay.
+
 #### Song, dance and returned-damage recovery callbacks
 
 Evidence: `_skill.cgi:1710–1759,2036–2069` at revision
