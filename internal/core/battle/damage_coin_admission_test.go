@@ -22,7 +22,7 @@ func TestCoinNativeProjectionHPClassesAndRevival(t *testing.T) {
 		}
 		before := s.callbackCopy()
 		c.Status.Defeat.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { t.Fatal("reward Apply in admission"); return nil }
-		states, err := s.projectCoinDamage(&c, dualAgilityEffect("enemy", 1800, CategoryUntyped, true), true, &targetRNG{t: t})
+		states, err := s.projectDirectDamage(&c.DamageContext, c.Status.Defeat, dualAgilityEffect("enemy", 1800, CategoryUntyped, true), 1800, true, &targetRNG{t: t})
 		if err != nil || !reflect.DeepEqual(s, before) || c.DamageCalls != 0 {
 			t.Fatal(err, s, states)
 		}
@@ -38,7 +38,7 @@ func TestCoinNativeProjectionHPClassesAndRevival(t *testing.T) {
 		}
 	}
 	// A roll range crossing both death and999 keeps the living interior too.
-	if got := coinSurvivorHPs(2000, 900, 2100); !reflect.DeepEqual(got, []int{1, 1100, 999, 1000}) {
+	if got := damageSurvivorHPs(2000, 900, 2100); !reflect.DeepEqual(got, []int{1, 1100, 999, 1000}) {
 		t.Fatal(got)
 	}
 }
@@ -47,14 +47,14 @@ func TestCoinNativeProjectionConsumesDefenseAndKeepsActivationAlternatives(t *te
 	s, c := coinProjectionFixture()
 	s.actor("enemy").Temporary = TemporaryOneHitDefense
 	s.actor("enemy").ItemDefinitionIDs = []string{"item-195"}
-	states, err := s.projectCoinDamage(&c, dualAgilityEffect("enemy", 1800, CategoryUntyped, true), true, &targetRNG{t: t})
+	states, err := s.projectDirectDamage(&c.DamageContext, c.Status.Defeat, dualAgilityEffect("enemy", 1800, CategoryUntyped, true), 1800, true, &targetRNG{t: t})
 	if err != nil || len(states) != 1 || states[0].State.actor("enemy").HP != 1100 || states[0].State.actor("enemy").Temporary != "" || states[0].Context.Item195Activated {
 		t.Fatal(err, states)
 	}
 	// A following hit can now activate195, then later resolution can confuse.
 	child := c
 	child.DamageContext = states[0].Context
-	next, err := states[0].State.projectCoinDamage(&child, dualAgilityEffect("enemy", 100, CategoryUntyped, true), true, &targetRNG{t: t})
+	next, err := states[0].State.projectDirectDamage(&child.DamageContext, child.Status.Defeat, dualAgilityEffect("enemy", 100, CategoryUntyped, true), 100, true, &targetRNG{t: t})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestCoinPowerBoundsIncludeInterior144Peak(t *testing.T) {
 	s.actor("enemy").Temporary = TemporaryDouble
 	c.AreaDamageCalls = 1
 	e := dualAgilityEffect("enemy", 190, CategoryUntyped, true)
-	low, high := s.coinPowerBounds(&c.DamageContext, s.actor("enemy"), e)
+	low, high := s.directPowerBounds(&c.DamageContext, s.actor("enemy"), e, e.Payload.Number)
 	if low != 300 || high != 390 {
 		t.Fatal(low, high)
 	}
@@ -95,7 +95,7 @@ func TestCoinResetProjectsIndependentStatsAndResourceOutcomes(t *testing.T) {
 		target.Gear.AccessoryID = accessory
 		target.BaseStats = BattleBaseStats{Attack: 100, Defense: 100, Agility: 100}
 		target.HP, target.MP = 990, 0
-		states, err := s.projectCoinReset(&c, "enemy", true, &targetRNG{t: t})
+		states, err := s.projectDamageReset(c.Status.Defeat, c.TargetContext, "enemy", true, &targetRNG{t: t})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -128,7 +128,7 @@ func TestCoinInterceptionIsNonlethalAndConsumesOneHitDefense(t *testing.T) {
 		if defense {
 			s.actor("self").Temporary = TemporaryOneHitDefense
 		}
-		states, err := s.projectCoinInterception(&c.DamageContext, "enemy", &targetRNG{t: t})
+		states, err := s.projectDamageInterception(&c.DamageContext, "enemy", &targetRNG{t: t})
 		if err != nil || len(states) != 1 || states[0].actor("self").HP != 1 || states[0].actor("self").Temporary != "" || states[0].actor("enemy").Extended != "" {
 			t.Fatal(defense, err, states)
 		}

@@ -189,7 +189,7 @@ func (s *LifetimeState) validateChanceCoin(c *TreatmentChanceContext, index int,
 	p, child := s.callbackCopy(), *c
 	if t.HP > 999 {
 		e := dualAgilityEffect(target, float64(min(1800, t.MaxHP/2)), CategoryUntyped, true)
-		states, err := p.projectCoinDamage(&child, e, index+1 < len(c.EnemyIDs), rng)
+		states, err := p.projectDirectDamage(&child.DamageContext, child.Status.Defeat, e, e.Payload.Number, index+1 < len(c.EnemyIDs), rng)
 		if err != nil {
 			return err
 		}
