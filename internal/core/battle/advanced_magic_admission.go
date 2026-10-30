@@ -39,7 +39,7 @@ func (s *LifetimeState) ValidateAdvancedMagic(c *AdvancedMagicContext, id string
 	case "job-15-entry-0":
 		child.AdditionalEffect = true
 		e := dualAgilityEffect(child.shift(), 30, CategoryMagic, true)
-		states, err := p.projectDirectDamage(&child.DamageContext, child.Status.Defeat, e, 30, true, rng)
+		states, err := p.projectCallbackDamage(&child.DamageContext, child.Status.Defeat, e, 30, true, rng)
 		if err != nil {
 			return err
 		}
@@ -159,7 +159,7 @@ func (s *LifetimeState) validateAdvancedMagicLoop(c *AdvancedMagicContext, rng r
 					}
 				} else {
 					e := dualAgilityEffect(t.ID, 400, CategoryMagic, true)
-					continuations, err := p.projectDirectDamage(&child.DamageContext, child.Status.Defeat, e, 600, hit < 5, rng)
+					continuations, err := p.projectCallbackDamage(&child.DamageContext, child.Status.Defeat, e, 600, hit < 5, rng)
 					if err != nil {
 						return err
 					}
