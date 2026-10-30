@@ -355,6 +355,27 @@ costs, state mutation or RNG. Exact unconditional stance writes project into
 later admission; unknown effects retain the conservative gate. Saved state and
 frozen input resume with rebuilt ports, without replaying completed callbacks.
 
+Scouting and incidental-state callbacks compose the existing effect owners
+(`internal/core/battle/incidental_jobs.go`; `_skill.cgi:1290–1536` at
+`ff97fc549932a146cc945d7edf71b44c868a840e`). The job7 defense charge uses
+DF×1.6 and immediate recoil from 7% of returned damage. Mana transfer resolves
+its ally before debiting min(100, floor(currentMP/2)), then invokes ordinary
+MP recovery, including target redirection and incidental absorption. Job8's
+sleep precedes its half-MaxHP heal. Raw random status assignments and jokes
+include fallen members; jokes draw one of seven presentation indices before
+independent nonself 2/3 status rolls. Target taunts check binding before an
+unresolved target falls back to self; enemy calm resets fallen enemies too.
+Job9's armor break clears temporary and
+tension, restores baseDF, then invokes physical DF−10%. Its drain temporarily
+sets hit100 when caster AG≥target AG and limits targetDF to targetAG; both saved
+values are restored after damage/reset/defeat, before healing returned damage.
+Whole ordered tables preserve separately owned wallet, inspection and sacrifice
+positions. Unknown descendants reject before costs or RNG. Exact enemy calm
+projects into later admission; other transitions retain conservative admission.
+Operation facts and frozen inputs survive reload with rebuilt ports and no
+replay of completed callbacks; ordinary costs and production adoption remain
+with the invoking consumer.
+
 Martial callbacks compose the shared damage, status, healing, stat and lifetime
 owners (`internal/core/battle/martial.go`; `_skill.cgi:1190–1226,2237–2265,2296–2334`
 at `ff97fc549932a146cc945d7edf71b44c868a840e`). Job4 preserves extended SP0
