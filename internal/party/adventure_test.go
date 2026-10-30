@@ -2080,7 +2080,7 @@ func (c *capturingPartyBattleSettler) ApplyPostBattleResult(_ context.Context, r
 	return battle.ApplyPostBattleResponse{}, nil
 }
 
-func TestStartPartyAdventure_Floor11Treasure_ConsumesMasterKeyForExtraBox(t *testing.T) {
+func TestStartPartyAdventure_Floor11Treasure_AutoCrawlDoesNotConsumeMasterKeyWithoutIntent(t *testing.T) {
 	ctx := context.Background()
 
 	stages, err := adventure.InitialStageCatalog()
@@ -2107,7 +2107,7 @@ func TestStartPartyAdventure_Floor11Treasure_ConsumesMasterKeyForExtraBox(t *tes
 
 	pBuilder := &mockPartyParticipantBuilderWithItems{
 		items: map[string][]string{
-			leader.ID: {adventure.ItemMasterKey},
+			leader.ID: {adventure.ItemTreasurePocket},
 		},
 	}
 	settler := &capturingPartyBattleSettler{}
@@ -2151,11 +2151,11 @@ func TestStartPartyAdventure_Floor11Treasure_ConsumesMasterKeyForExtraBox(t *tes
 	}
 
 	drops := settler.lastReq.RecipientDrops[leader.ID]
-	if len(drops) != 2 {
-		t.Fatalf("expected 2 recipient drops, got %d: %v", len(drops), drops)
+	if len(drops) != 1 {
+		t.Fatalf("expected 1 recipient drop from base allowance, got %d: %v", len(drops), drops)
 	}
 	consumed := settler.lastReq.BattleResult.ConsumedItems[leader.ID]
-	if len(consumed) != 1 || consumed[0].ID != adventure.ItemMasterKey || consumed[0].Quantity != 1 {
-		t.Fatalf("expected 1 consumed master key, got: %v", consumed)
+	if len(consumed) != 0 {
+		t.Fatalf("expected 0 consumed keys in automatic party crawl, got: %v", consumed)
 	}
 }

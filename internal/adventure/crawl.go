@@ -366,7 +366,7 @@ func (s *CrawlSession) AdvanceFloor(
 
 // ExamineTreasure opens a treasure box on Floor 11 (@しらべる).
 // Each surviving participant has a base allowance of 1 box.
-// Opening additional boxes requires and consumes 1 Master Key (ItemMasterKey = "item-215").
+// Opening additional boxes requires and consumes 1 Treasure Pocket (ItemTreasurePocket = "item-215").
 func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error) {
 	if s.CurrentFloor != TreasureRoomFloor {
 		return nil, ErrInvalidFloorAction
@@ -403,12 +403,12 @@ func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error)
 
 	inspected := s.InspectedBoxes[characterID]
 	if inspected >= 1 {
-		keyIdx := slices.Index(actor.ItemDefinitionIDs, ItemMasterKey)
+		keyIdx := slices.Index(actor.ItemDefinitionIDs, ItemTreasurePocket)
 		if keyIdx < 0 {
 			return nil, ErrTreasureLimitReached
 		}
 		actor.ItemDefinitionIDs = slices.Delete(actor.ItemDefinitionIDs, keyIdx, keyIdx+1)
-		s.addConsumedItem(characterID, corebattle.ConsumedItem{ID: ItemMasterKey, Quantity: 1})
+		s.addConsumedItem(characterID, corebattle.ConsumedItem{ID: ItemTreasurePocket, Quantity: 1})
 	}
 
 	s.InspectedBoxes[characterID]++

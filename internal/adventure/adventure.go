@@ -355,17 +355,10 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	// If boss was defeated, advance to Floor 11 (Treasure Room) and open boxes
 	if session.StageCleared {
 		_, _ = session.AdvanceFloor(s.stages, s.monsters, pbr)
-		// Initial pass: each surviving participant opens their base allowance of 1 box
+		// Only open base allowance (1 box per surviving participant).
+		// Additional chest opening using ItemTreasurePocket requires explicit player choice (#948/#1330).
 		for _, c := range characters {
 			_, _ = session.ExamineTreasure(c.ID)
-		}
-		// Additional pass: participants holding master keys can open remaining unopened boxes
-		for _, c := range characters {
-			for {
-				if _, err := session.ExamineTreasure(c.ID); err != nil {
-					break
-				}
-			}
 		}
 	}
 

@@ -1112,3 +1112,61 @@ func TestCrawlSession_ExamineTreasure_AllowanceAndMasterKey(t *testing.T) {
 		t.Fatalf("expected ErrTreasureLimitReached for char-1 after key exhausted, got %v", err)
 	}
 }
+
+func TestCrawlSession_ExamineTreasure_StackedTreasurePocket(t *testing.T) {
+	stages, _ := setupTestCatalogs(t)
+	stage1, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+
+	chars := []corecharacter.Character{
+		{ID: "char-stack", Name: "StackHero", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+	}
+	// Participant with stacked quantity 2 of ItemTreasurePocket
+	p := corebattle.MustNewParticipant("char-stack", 100, 10, 10)
+	p.ItemDefinitionIDs = []string{adventure.ItemTreasurePocket, adventure.ItemTreasurePocket}
+
+	sess, err := adventure.NewCrawlSessionWithParticipants(stage1, chars, []corebattle.Participant{p}, func(n int) int { return 0 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess.CurrentFloor = adventure.TreasureRoomFloor
+	sess.TreasureBoxes = []adventure.TreasureBox{
+		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
+		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
+		{ID: "box-3", Name: "Chest 3", ItemID: "item-003"},
+		{ID: "box-4", Name: "Chest 4", ItemID: "item-004"},
+	}
+
+	// 1st box: base allowance (0 consumed)
+	if _, err := sess.ExamineTreasure("char-stack"); err != nil {
+		t.Fatalf("1st box: %v", err)
+	}
+	if len(sess.ConsumedItems["char-stack"]) != 0 {
+		t.Fatalf("base box should not consume items: %v", sess.ConsumedItems["char-stack"])
+	}
+
+	// 2nd box: consumes 1st key
+	if _, err := sess.ExamineTreasure("char-stack"); err != nil {
+		t.Fatalf("2nd box: %v", err)
+	}
+	consumed := sess.ConsumedItems["char-stack"]
+	if len(consumed) != 1 || consumed[0].Quantity != 1 {
+		t.Fatalf("expected 1 consumed key, got: %v", consumed)
+	}
+
+	// 3rd box: consumes 2nd key (stack quantity now exhausted)
+	if _, err := sess.ExamineTreasure("char-stack"); err != nil {
+		t.Fatalf("3rd box: %v", err)
+	}
+	consumed = sess.ConsumedItems["char-stack"]
+	if len(consumed) != 1 || consumed[0].Quantity != 2 {
+		t.Fatalf("expected 2 consumed keys, got: %v", consumed)
+	}
+
+	// 4th box: rejected (quantity 2 exhausted)
+	if _, err := sess.ExamineTreasure("char-stack"); !errors.Is(err, adventure.ErrTreasureLimitReached) {
+		t.Fatalf("expected ErrTreasureLimitReached after 2 keys exhausted, got: %v", err)
+	}
+}

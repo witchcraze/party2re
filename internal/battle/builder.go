@@ -162,7 +162,13 @@ func BuildParticipantFromDataWithRNG(
 
 	// Scan inventory items
 	for _, inst := range inv.Items {
-		itemDefIDs = append(itemDefIDs, inst.DefinitionID)
+		qty := inst.Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		for q := 0; q < qty; q++ {
+			itemDefIDs = append(itemDefIDs, inst.DefinitionID)
+		}
 		switch inst.DefinitionID {
 		case ItemToukiShield:
 			hasToukiShield = true
@@ -171,7 +177,6 @@ func BuildParticipantFromDataWithRNG(
 		case ItemCursedTalisman:
 			hasCursedTalisman = true
 		}
-
 	}
 
 	// Bind passive abilities

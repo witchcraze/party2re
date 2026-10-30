@@ -12,8 +12,9 @@ import (
 
 // Legacy item IDs with special adventure interactions.
 const (
-	ItemLuckyPendant = "item-191" // ラッキーペンダント (1/3 chance +1 treasure box)
-	ItemMasterKey    = "item-215" // マスターキー (allows opening multiple treasure boxes)
+	ItemLuckyPendant   = "item-191"         // ラッキーペンダント (1/3 chance +1 treasure box)
+	ItemTreasurePocket = "item-215"         // トレジャーポケット (allows opening additional treasure boxes; _data.cgi:1913)
+	ItemMasterKey      = ItemTreasurePocket // alias for backward compatibility with earlier tickets and drafts
 )
 
 var defaultBoxNames = []string{
