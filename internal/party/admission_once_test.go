@@ -259,7 +259,7 @@ func TestPartyAdmission_ConcurrentSoloCrawlAndPartyCreation(t *testing.T) {
 			})
 			if err == nil {
 				successCount.Add(1)
-			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) || errors.Is(err, ErrAlreadyInParty) {
 				rejectedCount.Add(1)
 			} else {
 				otherCount.Add(1)

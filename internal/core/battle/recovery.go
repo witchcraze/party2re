@@ -131,6 +131,16 @@ func (s *LifetimeState) ApplyPartyHealing(c *EffectContext, power float64, categ
 // payload after cover. Unknown temporaries have no hook and retain both values.
 // There is no post-hook living guard, category check, tension or overflow.
 func (s *LifetimeState) ApplyToolHealing(c TargetContext, targetID string, power float64, useTemporary bool, rng random.Generator) (EffectApplication, error) {
+	return s.applyToolRecovery(c, targetID, power, useTemporary, false, rng)
+}
+
+// ApplyToolMPHealing shares the item helper's temporary tuple and rounding,
+// without spell MP exclusions, tension, counters or a positive recovery floor.
+func (s *LifetimeState) ApplyToolMPHealing(c TargetContext, targetID string, power float64, useTemporary bool, rng random.Generator) (EffectApplication, error) {
+	return s.applyToolRecovery(c, targetID, power, useTemporary, true, rng)
+}
+
+func (s *LifetimeState) applyToolRecovery(c TargetContext, targetID string, power float64, useTemporary, mp bool, rng random.Generator) (EffectApplication, error) {
 	e := TargetEffect{TargetID: targetID, Payload: CallbackPayload{Number: power}}
 	r := EffectApplication{}
 	if err := s.validateRecovery(&EffectContext{TargetContext: c}, e, rng); err != nil {
@@ -180,8 +190,12 @@ func (s *LifetimeState) ApplyToolHealing(c TargetContext, targetID string, power
 	r.TargetResolution = TargetResolution{TargetEffect: TargetEffect{TargetID: targetID, Payload: CallbackPayload{Number: power}}, Resolved: true}
 	r.Returned = true
 	r.Amount = int(power * (.9 + rng.Float64()*.3))
-	before := t.HP
-	t.HP = min(t.MaxHP, t.HP+r.Amount)
-	r.Delta, r.Applied = t.HP-before, t.HP != before
+	resource, maximum := &t.HP, t.MaxHP
+	if mp {
+		resource, maximum = &t.MP, t.MaxMP
+	}
+	before := *resource
+	*resource = min(maximum, *resource+r.Amount)
+	r.Delta, r.Applied = *resource-before, *resource != before
 	return r, nil
 }

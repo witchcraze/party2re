@@ -90,6 +90,9 @@ func (a *LifetimeActor) FinishExtended(f LifetimeTail) bool {
 	}
 	// War-god checks expiry even when no damage helper ran.
 	if (tick || (!f.NPC && a.Extended == ExtendedWarGod)) && a.ExtendedTurns <= 0 {
+		if a.Extended == ExtendedFrenzy {
+			a.Attack = min(999, a.Attack)
+		}
 		a.Extended = ""
 		return true
 	}
