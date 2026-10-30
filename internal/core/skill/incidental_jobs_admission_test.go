@@ -55,7 +55,7 @@ func TestIncidentalJobMissingDescendantsRejectBeforeReset(t *testing.T) {
 				s.Actors[1].HP, s.Actors[1].Gear = 1, nil
 			case "damage":
 				id = "job-7-entry-5"
-				s.Fields.Default = "cosmic"
+				c.ToolCategory.Source = "unknown"
 			case "later-status":
 				id = "job-9-entry-7"
 				s.Actors[0].Status = corebattle.StatusPhysicalSeal

@@ -60,7 +60,7 @@ func TestBaseGuardMissingDescendantsRejectWholeAction(t *testing.T) {
 				c.Defeat = nil
 			case "damage":
 				id = "job-1-entry-5"
-				s.Fields.Default = "cosmic"
+				c.ToolCategory.Source = "unknown"
 			case "status":
 				id = "job-2-entry-2"
 				c.Status = nil

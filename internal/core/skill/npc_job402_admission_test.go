@@ -30,7 +30,7 @@ func TestNPC402AdmissionRejectsBeforeAnyMutation(t *testing.T) {
 				c.EnemyIDs = append(c.EnemyIDs, "other")
 				args[1] = "other"
 			case "later-hit":
-				s.Fields.Default, s.Actors[1].Temporary = "cosmic", corebattle.TemporaryOneHitDefense
+				c.ToolCategory.Source, s.Actors[1].Temporary = "unknown", corebattle.TemporaryOneHitDefense
 			case "requester":
 				s.Actors[0].ItemDefinitionIDs = []string{"item-205"}
 			case "agility-hook":
@@ -42,7 +42,7 @@ func TestNPC402AdmissionRejectsBeforeAnyMutation(t *testing.T) {
 				s.Actors[1].HP = 1
 				c.Death = nil
 			case "cleared-defense":
-				s.Actors[1].Temporary, s.Fields.Default = corebattle.TemporaryOneHitDefense, "cosmic"
+				s.Actors[1].Temporary, c.ToolCategory.Source = corebattle.TemporaryOneHitDefense, "unknown"
 			case "shared-mana":
 				s.Actors[2].MP, s.Actors[1].HP = 5, 1
 				c.Death = nil

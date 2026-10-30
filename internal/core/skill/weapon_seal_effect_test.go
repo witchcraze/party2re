@@ -78,7 +78,7 @@ func TestWeaponSealNoEffectAndUnsupportedTails(t *testing.T) {
 		reject bool
 	}{
 		{"missing defeat", func(_ *corebattle.LifetimeState, c *corebattle.DamageContext) { c.Defeat = nil }, true},
-		{"unsupported field", func(s *corebattle.LifetimeState, _ *corebattle.DamageContext) { s.Fields.Default = "cosmic" }, true},
+		{"unsupported tool provenance", func(_ *corebattle.LifetimeState, c *corebattle.DamageContext) { c.ToolCategory.Source = "unknown" }, true},
 		{"missing reset", func(s *corebattle.LifetimeState, _ *corebattle.DamageContext) {
 			s.Actors[0].Extended = corebattle.ExtendedPurification
 		}, true},

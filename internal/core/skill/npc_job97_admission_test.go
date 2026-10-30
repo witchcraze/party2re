@@ -33,7 +33,7 @@ func TestNPC97WholeEntryRejectionIsInert(t *testing.T) {
 			case "missing-requester":
 				s.Actors[0].Tension = 3
 			case "later-hit":
-				s.Actors[1].Temporary, s.Fields.Default = corebattle.TemporaryOneHitDefense, "cosmic"
+				s.Actors[1].Temporary, c.ToolCategory.Source = corebattle.TemporaryOneHitDefense, "unknown"
 			case "later-status":
 				// Numeric magic is nullified by item166. The status tail still
 				// requires the living target's gear, despite no damage descendant.

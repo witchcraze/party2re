@@ -14,7 +14,7 @@ func TestMartialWholeActionAdmissionIsInert(t *testing.T) {
 		for _, rejected := range []bool{false, true} {
 			s, c, d := martialFixture()
 			if rejected {
-				s.Fields.Default = "cosmic"
+				c.ToolCategory.Source = "unknown"
 			}
 			s.Actors[1].Temporary = corebattle.TemporaryOneHitDefense
 			c.Reset = func(string) error { t.Fatal("admission ran reset"); return nil }

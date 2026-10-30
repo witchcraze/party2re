@@ -27,10 +27,10 @@ func TestNPCOrderedWholeEntryAdmissionIsInert(t *testing.T) {
 			case "requester-tail":
 				s.Actors[0].ItemDefinitionIDs = []string{"item-205"}
 			case "later-hit", "reset-removes-defense":
-				s.Actors[1].Temporary, s.Fields.Default = corebattle.TemporaryOneHitDefense, "cosmic"
+				s.Actors[1].Temporary, c.ToolCategory.Source = corebattle.TemporaryOneHitDefense, "unknown"
 			case "restored-tension":
 				s.Actors[0].Attack, s.Actors[0].Tension = 2, 5
-				s.Actors[0].ItemDefinitionIDs, s.Fields.Default = []string{"item-166"}, "cosmic"
+				s.Actors[0].ItemDefinitionIDs, c.ToolCategory.Source = []string{"item-166"}, "unknown"
 			case "fallen-ally-reset":
 				s.Actors[2].Gear = nil
 			case "item110":

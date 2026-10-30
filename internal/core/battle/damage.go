@@ -83,6 +83,7 @@ func (s *LifetimeState) validateDamageRecipients(c *DamageContext, candidates []
 		return err
 	}
 	a := s.actor(c.ActorID)
+	cosmicTail := false
 	for _, candidate := range candidates {
 		if candidate.Payload.Number == 0 {
 			continue
@@ -97,11 +98,9 @@ func (s *LifetimeState) validateDamageRecipients(c *DamageContext, candidates []
 		if !damageHasPower(a, t, candidate) {
 			continue
 		}
+		cosmicTail = cosmicTail || candidate.Category == CategoryMagic
 		if err := c.ToolCategory.validate(); err != nil {
 			return err
-		}
-		if s.Fields.Current() == "cosmic" || s.Fields.Current() == "antlion" {
-			return ErrUnsupportedEffect
 		}
 		if c.Defeat == nil || t.Gear == nil || a.Gear == nil || a.Agility < 0 || t.Agility < 0 {
 			return ErrUnsupportedEffect
@@ -110,7 +109,14 @@ func (s *LifetimeState) validateDamageRecipients(c *DamageContext, candidates []
 			return ErrUnsupportedEffect
 		}
 	}
-
+	if cosmicTail && s.Fields.Current() == "cosmic" && c.DamageCalls > 0 && c.AreaDamageCalls == 0 {
+		// The second magic helper independently resolves an unspecified enemy.
+		for _, candidate := range s.damageCandidates(c, controlEffect("", 1, CategoryMagic)) {
+			if s.actor(candidate.TargetID).Gear == nil || c.Defeat == nil {
+				return ErrUnsupportedEffect
+			}
+		}
+	}
 	return nil
 }
 
@@ -154,6 +160,7 @@ func (s *LifetimeState) ApplyDamage(c *DamageContext, e TargetEffect, rng random
 	if v == 0 {
 		return r, nil
 	}
+	fieldPower := v
 	if a.Extended == ExtendedPurification {
 		status, tension := t.Status, t.Tension
 		if err := c.Reset(t.ID); err != nil {
@@ -212,6 +219,10 @@ func (s *LifetimeState) ApplyDamage(c *DamageContext, e TargetEffect, rng random
 		if t.ExtendedTurns <= 0 {
 			t.Extended = ""
 		}
+	}
+	a, t = s.actor(c.ActorID), s.actor(r.TargetID)
+	if err := s.applyNamedDamageTail(c, target.Category, fieldPower, rng); err != nil {
+		return r, err
 	}
 	a, t = s.actor(c.ActorID), s.actor(r.TargetID)
 	if s.Fields.Current() == "darkness" && a.HP > 0 {

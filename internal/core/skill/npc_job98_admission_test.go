@@ -41,7 +41,7 @@ func TestNPC98WholeEntryRejectionIsInert(t *testing.T) {
 			case "missing-defeat":
 				c.Defeat = nil
 			case "later-hit":
-				s.Actors[1].Temporary, s.Fields.Default = corebattle.TemporaryOneHitDefense, "cosmic"
+				s.Actors[1].Temporary, c.ToolCategory.Source = corebattle.TemporaryOneHitDefense, "unknown"
 				if row.pos == 7 {
 					// First breath can be blocked, then confusion can revisit that
 					// original target after the unconditional vulnerability write.

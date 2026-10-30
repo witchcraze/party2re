@@ -15,6 +15,9 @@ type CallbackContext struct {
 	TargetContext
 	Arguments    []string
 	AfterEffects bool
+	// Damage supplies an enclosing intrinsic operation's counters and hit facts.
+	// Definitions that accept it write back only during execution.
+	Damage *DamageContext
 	// ArithmeticDivisor is shared by nested callbacks in this operation only.
 	ArithmeticDivisor int
 	// Invoke executes a declared child in the current argument/actor frame. It

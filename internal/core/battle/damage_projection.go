@@ -34,7 +34,7 @@ func (s *LifetimeState) projectCallbackDamage(c *DamageContext, defeat *DefeatCo
 	if err != nil {
 		return nil, err
 	}
-	if converted.Category != CategoryUntyped && converted.Category != CategoryMagic && converted.Category != CategoryPhysical {
+	if converted.Category != CategoryUntyped && converted.Category != CategoryMagic && converted.Category != CategoryPhysical && converted.Category != CategoryBreath {
 		return nil, ErrUnsupportedEffect
 	}
 	projected := s.callbackCopy()
@@ -181,6 +181,7 @@ func damageSurvivorHPs(hp, minimum, maximum int) []int {
 }
 
 func (s *LifetimeState) projectCallbackHit(defeat *DefeatContext, damage DamageContext, e TargetEffect, low, high float64, followed bool, rng random.Generator) ([]damageContinuation, error) {
+	fieldLow, fieldHigh := low, high
 	a, t := s.actor(damage.ActorID), s.actor(e.TargetID)
 	direct, _ := damageFlags(e)
 	flags := []bool{direct}
@@ -258,14 +259,20 @@ func (s *LifetimeState) projectCallbackHit(defeat *DefeatContext, damage DamageC
 	}
 	var results []damageContinuation
 	for _, state := range states {
-		results = appendDamageContinuation(results, state, damage, t.ID)
-		if state.actor(t.ID).HP > 0 && hasAbility(state.actor(damage.ActorID).Abilities, "seal_kuu") {
-			next, err := state.projectDamageReset(defeat, damage.TargetContext, t.ID, false, rng)
-			if err != nil {
-				return nil, err
-			}
-			for _, reset := range next {
-				results = appendDamageContinuation(results, reset, damage, t.ID)
+		tails, err := state.projectNamedDamageTail(damage, defeat, e.Category, fieldLow, fieldHigh, followed, rng)
+		if err != nil {
+			return nil, err
+		}
+		for _, tail := range tails {
+			results = appendDamageContinuation(results, tail, damage, t.ID)
+			if tail.actor(t.ID).HP > 0 && hasAbility(tail.actor(damage.ActorID).Abilities, "seal_kuu") {
+				next, err := tail.projectDamageReset(defeat, damage.TargetContext, t.ID, false, rng)
+				if err != nil {
+					return nil, err
+				}
+				for _, reset := range next {
+					results = appendDamageContinuation(results, reset, damage, t.ID)
+				}
 			}
 		}
 	}
