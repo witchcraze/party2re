@@ -17,7 +17,7 @@ func TestNPCStatusRejectsBeforeMutation(t *testing.T) {
 		failure  string
 	}{
 		{88, 0, "target-gear"}, {88, 1, "actor-gear"}, {88, 2, "missing-confused-context"},
-		{90, 0, "later-symbol"}, {90, 1, "cosmic"}, {90, 2, "target-gear"},
+		{90, 0, "later-symbol"}, {90, 1, "tool-provenance"}, {90, 2, "target-gear"},
 		{91, 0, "later-symbol"}, {91, 1, "later-symbol"}, {91, 2, "target-gear"},
 		{92, 0, "target-gear"}, {92, 1, "later-symbol"}, {92, 2, "target-gear"},
 		{93, 0, "defeat"}, {93, 1, "defeat"}, {93, 2, "defeat"}, {93, 3, "symbol-conversion"},
@@ -37,8 +37,8 @@ func TestNPCStatusRejectsBeforeMutation(t *testing.T) {
 				args = nil
 			case "later-symbol":
 				s.Actors[0].Abilities = []string{"seal_kotowari"}
-			case "cosmic":
-				s.Fields.Default = "cosmic"
+			case "tool-provenance":
+				c.ToolCategory.Source = "unknown"
 			case "defeat":
 				c.Death = nil
 			case "symbol-conversion":

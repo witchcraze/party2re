@@ -109,9 +109,10 @@ func TestNormalAttackDetachedTargetAdmission(t *testing.T) {
 		return s, c, helper59, detached
 	}
 
-	t.Run("unsupported field on detached target rejects before draws", func(t *testing.T) {
+	t.Run("unsupported tool provenance on detached target rejects before draws", func(t *testing.T) {
 		s, c, _, detached := setup(t)
 		s.Fields.Default = "cosmic"
+		c.ToolCategory.Source = "unknown"
 		before, _ := json.Marshal(s)
 		beforeParty := append([]string(nil), c.PartyIDs...)
 		beforeEnemy := append([]string(nil), c.EnemyIDs...)
@@ -136,6 +137,7 @@ func TestNormalAttackDetachedTargetAdmission(t *testing.T) {
 		for _, kind := range []string{"single", "seal10", "item147"} {
 			s, c, helper59, detached := setup(t)
 			s.Fields.Default = "cosmic"
+			c.ToolCategory.Source = "unknown"
 			s.actor(detached).Temporary = TemporaryOneHitDefense
 			switch kind {
 			case "seal10":

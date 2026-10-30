@@ -14,7 +14,9 @@ type DefeatRewards struct {
 	// Project describes combat scalar changes on a validation copy, without
 	// external effects/RNG. Nil means combat-neutral rewards; ordered fortress
 	// continuations require an explicit projection from their field owner.
-	Project func(*LifetimeState, TargetContext, string) error
+	// Return every conservative continuation, including healing's independent
+	// lower/upper HP bounds. A single lower bound can hide surviving paths.
+	Project func(*LifetimeState, TargetContext, string) ([]LifetimeState, error)
 }
 
 type DefeatContext struct {

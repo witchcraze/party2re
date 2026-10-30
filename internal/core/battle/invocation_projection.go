@@ -11,6 +11,21 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 	c.PhantomEnemyIDs = slices.Clone(c.PhantomEnemyIDs)
 	c.Arguments = slices.Clone(c.Arguments)
 	c.Invoke = nil
+	if c.Damage != nil {
+		damage := *c.Damage
+		damage.PartyIDs = slices.Clone(damage.PartyIDs)
+		damage.EnemyIDs = slices.Clone(damage.EnemyIDs)
+		damage.PhantomEnemyIDs = slices.Clone(damage.PhantomEnemyIDs)
+		if damage.RequesterLevel != nil {
+			level := *damage.RequesterLevel
+			damage.RequesterLevel = &level
+		}
+		if damage.End.DarknessDebit != nil {
+			debit := *damage.End.DarknessDebit
+			damage.End.DarknessDebit = &debit
+		}
+		c.Damage = &damage
+	}
 	return c
 }
 

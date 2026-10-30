@@ -1515,7 +1515,10 @@ intrinsic agility guard requires no skipped cursor/damage context. These are
 formula certifications with explicit prerequisites, not batch DTO or outer
 catalog certification. Fully admitted reset/defeat operations remain supplied
 by their existing owners; absence rejects reachable work before draws. Cosmic
-and antlion damage descendants remain gated for the named-field owner. Admission
+and antlion tails use the current named field without the field-exercise anti
+guard. Cosmic's extra direct tool hit independently resolves an enemy after the
+second single magic invocation; area invocations exclude it. Antlion's two
+independent rolls affect a surviving actor. Admission
 follows ordered area targets or each repeated selection up to the producer's
 maximum hit count. Only defenses reachable in earlier invocations are projected
 as consumed; fully blocked attacks need no skipped damage-tail context. Confusion,
@@ -1716,8 +1719,10 @@ once. Alternative recipients and surviving/defeated outcomes keep separate
 continuations, including equipment reset, revival/consumption and inheritance.
 Validation uses private state and finite reset boundaries without consuming the
 caller's RNG or changing its operation context. Owners whose reward/field hooks
-change combat scalars supply a pure continuation projection; ordinary rewards
-are combat-neutral when no projection is supplied. A reached fortress hook must
+change combat scalars supply pure alternative continuations; ordinary rewards
+are combat-neutral when no projection is supplied. Random healing retains each
+recipient's independent lower/upper HP bounds and HP999/1000 classes, so both
+subsequent survival and defeat paths remain admitted. A reached fortress hook must
 supply this projection before a later area invocation, otherwise the entire
 entry is rejected. Validation never executes external settlement callbacks.
 A reachable recursive212 closure
@@ -1739,6 +1744,32 @@ have no effect. Cosmic distinguishes repeated single hits from area count;
 antlion draws immobilization and defense reduction independently. Sanctuary,
 seal, den, phantom and fortress require certified producers as well as consumers.
 Snow has no evidenced shared numeric modifier; stage23's declared default is EX-only.
+
+`NamedFieldEntries` and `skill.BattleDefinitions.RegisterNamedFields` bind the
+eight concrete player producers/composites at22.5,29.7,53.6,55.7,56.3,64.6,84.4
+and86.1. Registration contributes bodies while full ordered job tables retain
+their existing owners. Darkness restores enemy base stats and raises actor AT
+only on creation; its optional submitted continuation uses the last discovered
+name binding, original target and shared operation facts, without another listed
+MP charge. A matching custom name excludes that continuation. Missing bindings
+or descendants reject the enclosing command. Cosmic restores MP and records
+first use per side for response suppression. Grave possession retains the
+original rosters while the chosen enemy makes two normal helper calls. Burn
+resets all members before nonlethal ally loss, area breath, appearance and
+tension. Library creation lasts11–16 operations (`_skill.cgi:6820–6827` at
+`ff97fc549932a146cc945d7edf71b44c868a840e`); the earlier reconciliation's7 is
+not the producer's duration.
+
+`ApplyNamedFieldTail` runs before field duration ticks, using the pre-operation
+field name and named-helper snapshot. It composes burn, grave and player library
+effects; callers retain the source-specific position and eligibility of this
+boundary. `ApplyIncenseHealing` runs at the eligible player incense boundary
+before the existing counter tick, using the first holder's equipment and
+temporarily setting its tension to1. `FortressDefeat` supplies the defeat owner's
+load-snapshot hook and pure conservative continuations for tool healing and caps
+that can lower living HP already above MaxHP. It does not certify
+an ordinary-run fortress producer. These operations do not introduce a global
+round/end-turn hook or change the batch engine's elemental fields.
 
 Immediate recoil and deferred darkness debit are different operations. `_risk`
 counts, rounds value+1, and item160 can turn it into recovery/cure/AT; `__risk`

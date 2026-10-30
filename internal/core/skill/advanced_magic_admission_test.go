@@ -68,10 +68,10 @@ func TestAdvancedMagicLoopProjectsRewardsBeforeLaterBranch(t *testing.T) {
 		t.Fatal("Apply in admission")
 		return nil
 	}
-	c.Status.Defeat.Rewards.Project = func(p *corebattle.LifetimeState, _ corebattle.TargetContext, _ string) error {
+	c.Status.Defeat.Rewards.Project = func(p *corebattle.LifetimeState, _ corebattle.TargetContext, _ string) ([]corebattle.LifetimeState, error) {
 		p.Actors[1].HP = 2000
-		p.Fields.Default = "cosmic"
-		return nil
+		p.Actors[1].Gear = nil
+		return []corebattle.LifetimeState{*p}, nil
 	}
 	assertAdvancedMagicRejected(t, &s, c, d, "job-19-entry-8")
 }

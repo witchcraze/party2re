@@ -86,7 +86,10 @@ func TestTreatmentChanceCoinProjectsEarlierDefeatBeforeLaterBranch(t *testing.T)
 			}
 			return nil
 		}
-		c.Status.Defeat.Rewards.Project = project
+		c.Status.Defeat.Rewards.Project = func(p *corebattle.LifetimeState, c corebattle.TargetContext, id string) ([]corebattle.LifetimeState, error) {
+			err := project(p, c, id)
+			return []corebattle.LifetimeState{*p}, err
+		}
 		c.Status.Defeat.Rewards.Apply = project
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext}
 		_, err := d.InvocationAction(&s, &f, []string{"job-46-entry-5"}, noArithmeticDraws{t})
@@ -127,7 +130,11 @@ func TestTreatmentChanceCoinNativeDamageContinuation(t *testing.T) {
 			}
 			return nil
 		}
-		c.Status.Defeat.Rewards.Project, c.Status.Defeat.Rewards.Apply = project, project
+		c.Status.Defeat.Rewards.Project = func(p *corebattle.LifetimeState, c corebattle.TargetContext, id string) ([]corebattle.LifetimeState, error) {
+			err := project(p, c, id)
+			return []corebattle.LifetimeState{*p}, err
+		}
+		c.Status.Defeat.Rewards.Apply = project
 		if mode == "missing" {
 			c.Status.Defeat = nil
 		}

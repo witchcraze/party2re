@@ -29,7 +29,7 @@ func TestRitualDanceRegistrationAndWholeActionRejection(t *testing.T) {
 	}
 	for _, id := range []string{"job-76-entry-2", "job-76-entry-5"} {
 		s, c, d := ritualDanceFixture()
-		s.Fields.Default = "cosmic"
+		c.ToolCategory.Source = "unknown"
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
 		c.Defeat = func(string) error { t.Fatal("preflight ran external hook"); return nil }
 		before, err := json.Marshal(s)
@@ -125,7 +125,7 @@ func TestRitualDanceGroupOrderedAdmissionAndActorRestoration(t *testing.T) {
 	// The first ally consumes defense; a later ally needs the complete tail.
 	s, c, d := ritualDanceFixture()
 	s.Actors[2].HP, s.Actors[2].Attack = 100, 100
-	s.Actors[1].Temporary, s.Fields.Default = corebattle.TemporaryOneHitDefense, "cosmic"
+	s.Actors[1].Temporary, c.ToolCategory.Source = corebattle.TemporaryOneHitDefense, "unknown"
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext}
 	if _, err := d.InvocationAction(&s, &f, []string{"job-76-entry-5"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[1].Temporary != corebattle.TemporaryOneHitDefense || c.ActorID != "self" {
 		t.Fatal(err, s, c)

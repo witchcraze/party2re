@@ -159,9 +159,14 @@ func (s *LifetimeState) projectDefeatContinuation(c *DefeatContext, id string, r
 		for _, continuation := range continuations {
 			continuation.applyDefeatInheritance(c, id)
 			if ordered {
-				if err := continuation.projectDefeatTail(c, id); err != nil {
+				tails, err := continuation.projectDefeatTail(c, id)
+				if err != nil {
 					return nil, err
 				}
+				for _, tail := range tails {
+					results = appendDefeatState(results, tail)
+				}
+				continue
 			}
 			results = appendDefeatState(results, continuation)
 		}
@@ -169,22 +174,42 @@ func (s *LifetimeState) projectDefeatContinuation(c *DefeatContext, id string, r
 	return results, nil
 }
 
-func (s *LifetimeState) projectDefeatTail(c *DefeatContext, id string) error {
+func (s *LifetimeState) projectDefeatTail(c *DefeatContext, id string) ([]LifetimeState, error) {
 	if s.actor(c.ActorID).NPC || id == c.ActorID {
-		return nil
+		return []LifetimeState{*s}, nil
 	}
+	states := []LifetimeState{*s}
 	if c.Rewards.Project != nil {
-		if err := c.Rewards.Project(s, c.TargetContext, id); err != nil {
-			return err
+		var err error
+		states, err = c.Rewards.Project(s, c.TargetContext, id)
+		if err != nil {
+			return nil, err
+		}
+		if len(states) == 0 {
+			return nil, ErrUnsupportedEffect
 		}
 	}
-	if c.FieldAtLoad == "fortress" && s.Fields.AntiTurns == 0 {
-		if c.Fortress == nil || c.Fortress.Project == nil {
-			return ErrUnsupportedEffect
+	var results []LifetimeState
+	for _, state := range states {
+		if c.FieldAtLoad == "fortress" && state.Fields.AntiTurns == 0 {
+			if c.Fortress == nil || c.Fortress.Project == nil {
+				return nil, ErrUnsupportedEffect
+			}
+			tails, err := c.Fortress.Project(&state, c.TargetContext, id)
+			if err != nil {
+				return nil, err
+			}
+			if len(tails) == 0 {
+				return nil, ErrUnsupportedEffect
+			}
+			for _, tail := range tails {
+				results = appendDefeatState(results, tail)
+			}
+		} else {
+			results = appendDefeatState(results, state)
 		}
-		return c.Fortress.Project(s, c.TargetContext, id)
 	}
-	return nil
+	return results, nil
 }
 
 func (s *LifetimeState) validateDefeatRewards(c *DefeatContext, id string) error {

@@ -31,6 +31,9 @@ func recoilDarkStateInvocation(c *corebattle.RecoilDarkStateContext, id string) 
 			return corebattle.RecoilDarkStateContext{}, corebattle.ErrUnsupportedEffect
 		}
 		child := *c
+		if f.Damage != nil {
+			child.DamageContext = *f.Damage
+		}
 		child.TargetContext, child.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 		return child, nil
 	}
@@ -56,8 +59,15 @@ func recoilDarkStateInvocation(c *corebattle.RecoilDarkStateContext, id string) 
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
-			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
-			err := s.ApplyRecoilDarkState(c, id, rng)
+			child, err := context(f)
+			if err != nil {
+				return err
+			}
+			*c = child
+			err = s.ApplyRecoilDarkState(c, id, rng)
+			if f.Damage != nil {
+				*f.Damage = c.DamageContext
+			}
 			f.TargetContext, f.Arguments = c.TargetContext, c.Arguments
 			return err
 		},

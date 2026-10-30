@@ -13,7 +13,10 @@ import (
 func TestDualAgilityWholeActionAdmissionIsInert(t *testing.T) {
 	for _, id := range []string{"job-77-entry-0", "job-77-entry-2", "job-77-entry-3", "job-77-entry-4", "job-77-entry-4-temporary", "job-83-entry-3"} {
 		s, c, d := dualAgilityFixture()
-		s.Fields.Default = "cosmic"
+		c.ToolCategory.Source = "unknown"
+		// Job77 establishes its own valid tool category; a later unshielded
+		// recipient still needs complete gear, after the first defense expires.
+		s.Actors[0].Gear = nil
 		s.Actors[1].Temporary = corebattle.TemporaryOneHitDefense
 		c.Reset = func(string) error { t.Fatal("validation ran reset"); return nil }
 		c.Defeat = func(string) error { t.Fatal("validation ran defeat"); return nil }
@@ -41,7 +44,7 @@ func TestDualAgilityWholeActionAdmissionIsInert(t *testing.T) {
 	// followup must be admitted before the defense is consumed.
 	for _, extra := range []bool{false, true} {
 		s, c, d := dualAgilityFixture()
-		s.Fields.Default = "cosmic"
+		c.ToolCategory.Source = "unknown"
 		s.Actors[1].Temporary = corebattle.TemporaryOneHitDefense
 		if extra {
 			s.Actors[0].ItemDefinitionIDs = []string{"item-147"}
