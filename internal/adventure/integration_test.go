@@ -12,14 +12,24 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
 
 type fixedClock struct{ now time.Time }
 
 func (c *fixedClock) Now() time.Time { return c.now }
+
+type failingSaveDepotRepo struct {
+	depot.Repository
+}
+
+func (r *failingSaveDepotRepo) Save(ctx context.Context, dep depot.Depot) error {
+	return errors.New("simulated delivery persistence error")
+}
 
 func TestAdventure_ImmediateDungeonCrawlIntegration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
@@ -1115,5 +1125,298 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 	}
 	if chronAfterCommit.TotalAdventures != 1 || chronAfterCommit.TotalVictories != 1 || !adv.IsCleared {
 		t.Fatalf("expected committed chronicle and cleared adventure, got chron=%+v adv=%+v", chronAfterCommit, adv)
+	}
+}
+
+func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	characterService, err := character.NewService(charRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equipRepo, err := database.NewEquipmentRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advRepo, err := database.NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := characterService.Create(ctx, player.ID, "TrsHero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Stats.HP = 500
+	char.Stats.MaxHP = 500
+	char.Stats.MP = 100
+	char.Stats.MaxMP = 100
+	char.Stats.Attack = 200
+	char.Stats.Defense = 100
+	char.Stats.Agility = 100
+	if err := charRepo.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add stack of 2 ItemTreasurePocket to character's inventory in real DB
+	pocketInst, err := coreitem.NewInstance(adventure.ItemTreasurePocket, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		inv, _ = coreinventory.New(char.ID)
+	}
+	inv.Items = append(inv.Items, pocketInst)
+	if err := invRepo.Save(ctx, inv); err != nil {
+		t.Fatal(err)
+	}
+
+	battleEngine := &settlementBattleEngine{}
+	battleAdapter := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithDepotRepository(depotRepo),
+		battle.WithBattleEngine(battleEngine),
+		battle.WithTransactionProvider(txProvider),
+	)
+
+	// 1. Verify BuildParticipant expands stack quantity (Quantity 2 -> 2 ItemTreasurePocket entries)
+	part, err := battleAdapter.BuildParticipant(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("BuildParticipant failed: %v", err)
+	}
+	var pocketCount int
+	for _, id := range part.ItemDefinitionIDs {
+		if id == adventure.ItemTreasurePocket {
+			pocketCount++
+		}
+	}
+	if pocketCount != 2 {
+		t.Fatalf("expected 2 ItemTreasurePocket in ItemDefinitionIDs for stack quantity 2, got %d", pocketCount)
+	}
+
+	stages, _ := adventure.InitialStageCatalog()
+	monsters, _ := adventure.InitialMonsterCatalog()
+	clock := &fixedClock{now: time.Date(2026, 9, 16, 15, 0, 0, 0, time.UTC)}
+
+	advService, err := adventure.NewServiceWithCatalogs(
+		advRepo,
+		charRepo,
+		invRepo,
+		stages,
+		monsters,
+		battleEngine,
+		nil,
+		nil,
+		clock,
+		adventure.WithParticipantBuilder(battleAdapter),
+		adventure.WithPostBattleSettler(battleAdapter),
+		adventure.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Verify automatic crawl does NOT consume ItemTreasurePocket
+	crawlRes, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      adventure.StarterAdventure,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl failed: %v", err)
+	}
+	if len(crawlRes.ConsumedItems[char.ID]) != 0 {
+		t.Fatalf("expected 0 consumed items during auto-crawl, got: %v", crawlRes.ConsumedItems[char.ID])
+	}
+	// Verify MariaDB inventory still has quantity 2
+	invAfterAuto, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pocketInDB *coreitem.Instance
+	for i := range invAfterAuto.Items {
+		if invAfterAuto.Items[i].DefinitionID == adventure.ItemTreasurePocket {
+			pocketInDB = &invAfterAuto.Items[i]
+			break
+		}
+	}
+	if pocketInDB == nil || pocketInDB.Quantity != 2 {
+		t.Fatalf("expected ItemTreasurePocket quantity 2 in DB after auto crawl, got: %+v", pocketInDB)
+	}
+
+	// 3. Verify manual/explicit Floor 11 inspection consumes keys from real DB
+	stage17, _ := stages.FindByID("stage-17")
+	sess, err := adventure.NewCrawlSessionWithParticipants(stage17, []corecharacter.Character{char}, []corebattle.Participant{part}, func(int) int { return 0 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess.CurrentFloor = adventure.TreasureRoomFloor
+	sess.StageCleared = true
+	sess.TreasureBoxes = []adventure.TreasureBox{
+		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
+		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
+		{ID: "box-3", Name: "Chest 3", ItemID: "item-003"},
+	}
+	// 1st box: base allowance
+	if _, err := sess.ExamineTreasure(char.ID); err != nil {
+		t.Fatalf("box 1: %v", err)
+	}
+	// 2nd box: consumes 1st key
+	if _, err := sess.ExamineTreasure(char.ID); err != nil {
+		t.Fatalf("box 2: %v", err)
+	}
+	// 3rd box: consumes 2nd key
+	if _, err := sess.ExamineTreasure(char.ID); err != nil {
+		t.Fatalf("box 3: %v", err)
+	}
+	// 4th box attempt: rejected
+	sess.TreasureBoxes = append(sess.TreasureBoxes, adventure.TreasureBox{ID: "box-4", Name: "Chest 4", ItemID: "item-004"})
+	if _, err := sess.ExamineTreasure(char.ID); !errors.Is(err, adventure.ErrTreasureLimitReached) {
+		t.Fatalf("box 4 should be rejected with ErrTreasureLimitReached, got %v", err)
+	}
+
+	// Apply settlement to real DB
+	sessRes := sess.Result()
+	settleReq := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{char.ID},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:       sessRes.Outcome,
+			Turns:         1,
+			RemainingHP:   sessRes.ParticipantHPs,
+			RemainingMP:   sessRes.ParticipantMPs,
+			ConsumedItems: sessRes.ConsumedItems,
+		},
+		RecipientDrops: map[string][]string{
+			char.ID: {"item-001", "item-002", "item-003"},
+		},
+	}
+	if _, err := battleAdapter.ApplyPostBattleResult(ctx, settleReq); err != nil {
+		t.Fatalf("settlement failed: %v", err)
+	}
+	// In real DB, the stack of 2 ItemTreasurePocket must be consumed (quantity drops from 2 to 0)
+	invAfterSettle, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range invAfterSettle.Items {
+		if it.DefinitionID == adventure.ItemTreasurePocket {
+			t.Fatalf("expected ItemTreasurePocket to be completely consumed from DB, still found: %+v", it)
+		}
+	}
+
+	// 4. Test atomic rollback in real DB:
+	// Verify that if reward delivery fails AFTER key consumption succeeds,
+	// the entire transaction rolls back and neither key consumption nor reward delivery is committed.
+	// Step 1: Re-seed inventory with a stack of 2 ItemTreasurePocket in MariaDB.
+	resetPocket, err := coreitem.NewInstance(adventure.ItemTreasurePocket, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invReset, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invReset.Items = []coreitem.Instance{resetPocket}
+	if err := invRepo.Save(ctx, invReset); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "DELETE FROM depot_items WHERE character_id = ?", char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure a battle adapter where reward delivery persistence fails in depot.
+	failingDepot := &failingSaveDepotRepo{Repository: depotRepo}
+	failingBattleAdapter := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithDepotRepository(failingDepot),
+		battle.WithBattleEngine(battleEngine),
+		battle.WithTransactionProvider(txProvider),
+	)
+
+	// Step 2 & 3: Include key consumption (1 ItemTreasurePocket) and treasure reward delivery
+	// ("item-001") in the same settlement request.
+	// Because char inventory already holds 1 item (ItemTreasurePocket, remaining quantity 1)
+	// and max inventory capacity is 1, the reward drop overflows to depot delivery.
+	// Key consumption succeeds first, but depot delivery fails when persisting the reward.
+	failingSettleReq := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{char.ID},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			Turns:       1,
+			RemainingHP: map[string]int{char.ID: 100},
+			RemainingMP: map[string]int{char.ID: 50},
+			ConsumedItems: map[string][]corebattle.ConsumedItem{
+				char.ID: {{ID: adventure.ItemTreasurePocket, Quantity: 1}},
+			},
+		},
+		RecipientDrops: map[string][]string{
+			char.ID: {"item-001"},
+		},
+	}
+	if _, err := failingBattleAdapter.ApplyPostBattleResult(ctx, failingSettleReq); err == nil {
+		t.Fatalf("expected error from reward delivery persistence failure, got nil")
+	}
+
+	// Step 4: Verify transaction rolled back completely in MariaDB:
+	// - ItemTreasurePocket quantity MUST remain at 2 (the consumed key was restored).
+	// - Reward drop "item-001" MUST NOT exist in inventory.
+	// - No depot items were created.
+	invAfterRollback, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pocketAfterRollback *coreitem.Instance
+	for i := range invAfterRollback.Items {
+		if invAfterRollback.Items[i].DefinitionID == adventure.ItemTreasurePocket {
+			pocketAfterRollback = &invAfterRollback.Items[i]
+			break
+		}
+	}
+	if pocketAfterRollback == nil || pocketAfterRollback.Quantity != 2 {
+		t.Fatalf("expected ItemTreasurePocket quantity 2 in DB after rollback, got: %+v", pocketAfterRollback)
+	}
+	for _, it := range invAfterRollback.Items {
+		if it.DefinitionID == "item-001" {
+			t.Fatalf("reward item-001 was committed to inventory despite delivery failure")
+		}
+	}
+	var depotItemCount int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM depot_items WHERE character_id = ?", char.ID).Scan(&depotItemCount); err != nil {
+		t.Fatal(err)
+	}
+	if depotItemCount != 0 {
+		t.Fatalf("expected 0 depot items after rollback, got %d", depotItemCount)
 	}
 }

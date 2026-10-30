@@ -16,16 +16,23 @@ import (
 
 // Legacy item IDs with passive or active combat mechanics.
 const (
-	ItemToukiShield       = "item-161" // 闘気の盾 (UsageCategory 3, revive)
-	ItemDokuroAmulet      = "item-193" // ドクロのお守り (UsageCategory 3, revive)
-	ItemCursedTalisman    = "item-260" // 転生の呪魂符 (UsageCategory 3, cursed revive)
-	ItemPrayerRing        = "item-012" // 祈りの指輪 (UsageCategory 1, accessory + in-battle MP heal)
-	ItemSkillOrb          = "item-157" // スキルの宝珠 (UsageCategory 3, 25% SP bonus on level-up)
-	ItemExAmulet          = "item-158" // エクスアミュレット / 神秘のアミュレット (UsageCategory 3, Excalibur awakening)
-	ItemAwakeningRuby     = "item-240" // 覚醒の紅玉 (UsageCategory 3, Excalibur awakening + stat mod)
-	ItemAwakeningSapphire = "item-241" // 覚醒の蒼玉 (UsageCategory 3, Excalibur awakening + stat mod)
-	ItemAwakeningEmerald  = "item-242" // 覚醒の翠玉 (UsageCategory 3, Excalibur awakening + stat mod)
+	ItemToukiShield       = "item-161"         // 闘気の盾 (UsageCategory 3, revive)
+	ItemDokuroAmulet      = "item-193"         // ドクロのお守り (UsageCategory 3, revive)
+	ItemCursedTalisman    = "item-260"         // 転生の呪魂符 (UsageCategory 3, cursed revive)
+	ItemPrayerRing        = "item-012"         // 祈りの指輪 (UsageCategory 1, accessory + in-battle MP heal)
+	ItemSkillOrb          = "item-157"         // スキルの宝珠 (UsageCategory 3, 25% SP bonus on level-up)
+	ItemExAmulet          = "item-158"         // エクスアミュレット / 神秘のアミュレット (UsageCategory 3, Excalibur awakening)
+	ItemAwakeningRuby     = "item-240"         // 覚醒の紅玉 (UsageCategory 3, Excalibur awakening + stat mod)
+	ItemAwakeningSapphire = "item-241"         // 覚醒の蒼玉 (UsageCategory 3, Excalibur awakening + stat mod)
+	ItemAwakeningEmerald  = "item-242"         // 覚醒の翠玉 (UsageCategory 3, Excalibur awakening + stat mod)
+	ItemTreasurePocket    = "item-215"         // トレジャーポケット (Floor 11 treasure chest inspection; _data.cgi:1913)
+	ItemMasterKey         = ItemTreasurePocket // alias for backward compatibility
 )
+
+// MaxTreasurePocketParticipantAllowance defines the upper bound of ItemTreasurePocket entries
+// expanded into Participant.ItemDefinitionIDs to prevent unbounded memory allocation from
+// arbitrary inventory stack sizes. Floor 11 treasure chests cannot exceed ~20 in any mode.
+const MaxTreasurePocketParticipantAllowance = 64
 
 // BuildParticipant loads a character and their inventory/equipment to construct a battle Participant.
 func (s *Service) BuildParticipant(ctx context.Context, characterID string) (corebattle.Participant, error) {
@@ -160,9 +167,28 @@ func BuildParticipantFromDataWithRNG(
 		}
 	}
 
-	// Scan inventory items
+	// Scan inventory items.
+	// Only ItemTreasurePocket (item-215) expands by quantity to track Floor 11 treasure chest
+	// inspection allowance without unbounded allocation (capped at MaxTreasurePocketParticipantAllowance).
+	// All other inventory items append their definition ID exactly once for passive/trigger checks.
+	pocketCount := 0
 	for _, inst := range inv.Items {
-		itemDefIDs = append(itemDefIDs, inst.DefinitionID)
+		if inst.DefinitionID == ItemTreasurePocket {
+			qty := inst.Quantity
+			if qty < 1 {
+				qty = 1
+			}
+			remaining := MaxTreasurePocketParticipantAllowance - pocketCount
+			if qty > remaining {
+				qty = remaining
+			}
+			for q := 0; q < qty; q++ {
+				itemDefIDs = append(itemDefIDs, inst.DefinitionID)
+			}
+			pocketCount += qty
+		} else {
+			itemDefIDs = append(itemDefIDs, inst.DefinitionID)
+		}
 		switch inst.DefinitionID {
 		case ItemToukiShield:
 			hasToukiShield = true
@@ -171,7 +197,6 @@ func BuildParticipantFromDataWithRNG(
 		case ItemCursedTalisman:
 			hasCursedTalisman = true
 		}
-
 	}
 
 	// Bind passive abilities

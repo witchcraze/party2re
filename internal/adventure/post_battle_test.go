@@ -1042,3 +1042,204 @@ func TestAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
 		t.Fatalf("expected 2 chests for active blessing, got %d", len(resActive.TreasureBoxes))
 	}
 }
+
+type mockParticipantBuilderWithItems struct {
+	items map[string][]string
+}
+
+func (m *mockParticipantBuilderWithItems) BuildParticipant(_ context.Context, charID string) (corebattle.Participant, error) {
+	p := corebattle.MustNewParticipant(charID, 50000, 10000, 10000)
+	p.ItemDefinitionIDs = m.items[charID]
+	return p, nil
+}
+
+func TestAdventure_Floor11Treasure_AutoCrawlDoesNotConsumeMasterKeyWithoutIntent(t *testing.T) {
+	char, err := corecharacter.New("KeySeek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 50
+	char.JobLevel = 50
+	char.Stats = corecharacter.Stats{HP: 50000, MaxHP: 50000, MP: 1000, MaxMP: 1000, Attack: 10000, Defense: 10000}
+
+	var capturedReq battle.ApplyPostBattleRequest
+	settlerCalled := false
+	settler := &mockPostBattleSettler{
+		respFn: func(req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+			settlerCalled = true
+			capturedReq = req
+			invDrops := make(map[string][]coreitem.Instance)
+			for cID, drops := range req.RecipientDrops {
+				for _, drop := range drops {
+					inst, _ := coreitem.NewInstance(drop, 1)
+					invDrops[cID] = append(invDrops[cID], inst)
+				}
+			}
+			return battle.ApplyPostBattleResponse{
+				InventoryDrops: invDrops,
+			}, nil
+		},
+	}
+
+	charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
+	advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
+	clock := &fixedAdvClock{now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)}
+	stages, _ := adventure.InitialStageCatalog()
+	monsters, _ := adventure.InitialMonsterCatalog()
+
+	mockBuilder := &mockParticipantBuilderWithItems{
+		items: map[string][]string{
+			char.ID: {adventure.ItemTreasurePocket},
+		},
+	}
+
+	svc, err := adventure.NewServiceWithCatalogs(
+		advRepo,
+		charRepo,
+		nil,
+		stages,
+		monsters,
+		corebattle.Engine{},
+		nil,
+		nil,
+		clock,
+		adventure.WithPostBattleSettler(settler),
+		adventure.WithParticipantBuilder(mockBuilder),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Stage-17 spawns 4 boxes for 1 player (1*3 + 1 = 4)
+	crawlRes, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-17",
+		Rng:          func(n int) int { return 0 },
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl failed: %v", err)
+	}
+
+	if !settlerCalled {
+		t.Fatal("expected PostBattleSettler to be called")
+	}
+	if !crawlRes.StageCleared {
+		t.Fatal("expected stage-17 to be cleared")
+	}
+	// 4 treasure boxes were spawned on Floor 11 (1*3 + 1)
+	if len(crawlRes.TreasureBoxes) != 4 {
+		t.Fatalf("expected 4 treasure boxes on stage-17, got %d", len(crawlRes.TreasureBoxes))
+	}
+	// Automatic crawl MUST only open 1 base allowance box without consuming player's keys
+	drops := capturedReq.RecipientDrops[char.ID]
+	if len(drops) != 1 {
+		t.Fatalf("expected 1 recipient drop from base allowance, got %d: %v", len(drops), drops)
+	}
+	consumed := capturedReq.BattleResult.ConsumedItems[char.ID]
+	if len(consumed) != 0 {
+		t.Fatalf("expected 0 consumed keys in automatic crawl, got: %v", consumed)
+	}
+}
+
+func TestAdventure_Floor11Treasure_ExplicitInspectionConsumesStackQuantity(t *testing.T) {
+	char, err := corecharacter.New("ExpSeek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 50
+	char.JobLevel = 50
+	char.Stats = corecharacter.Stats{HP: 50000, MaxHP: 50000, MP: 1000, MaxMP: 1000, Attack: 10000, Defense: 10000}
+
+	p := corebattle.MustNewParticipant(char.ID, 50000, 10000, 10000)
+	// Participant with stacked quantity 2 of ItemTreasurePocket
+	p.ItemDefinitionIDs = []string{adventure.ItemTreasurePocket, adventure.ItemTreasurePocket}
+
+	stages, _ := adventure.InitialStageCatalog()
+	stage17, _ := stages.FindByID("stage-17")
+
+	sess, err := adventure.NewCrawlSessionWithParticipants(stage17, []corecharacter.Character{char}, []corebattle.Participant{p}, func(n int) int { return 0 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess.CurrentFloor = adventure.TreasureRoomFloor
+	sess.StageCleared = true
+	sess.TreasureBoxes = []adventure.TreasureBox{
+		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
+		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
+		{ID: "box-3", Name: "Chest 3", ItemID: "item-003"},
+		{ID: "box-4", Name: "Chest 4", ItemID: "item-004"},
+	}
+
+	// 1st box: base allowance
+	if _, err := sess.ExamineTreasure(char.ID); err != nil {
+		t.Fatalf("box 1: %v", err)
+	}
+	// 2nd box: consumes 1st key
+	if _, err := sess.ExamineTreasure(char.ID); err != nil {
+		t.Fatalf("box 2: %v", err)
+	}
+	// 3rd box: consumes 2nd key
+	if _, err := sess.ExamineTreasure(char.ID); err != nil {
+		t.Fatalf("box 3: %v", err)
+	}
+	// 4th box: rejected (stack exhausted)
+	if _, err := sess.ExamineTreasure(char.ID); !errors.Is(err, adventure.ErrTreasureLimitReached) {
+		t.Fatalf("box 4 should be rejected with ErrTreasureLimitReached, got %v", err)
+	}
+
+	result := sess.Result()
+	if len(result.ConsumedItems[char.ID]) != 1 || result.ConsumedItems[char.ID][0].Quantity != 2 {
+		t.Fatalf("expected 2 consumed keys, got: %v", result.ConsumedItems[char.ID])
+	}
+}
+
+func TestAdventure_Floor11Treasure_DeliveryFailureRollback(t *testing.T) {
+	char, err := corecharacter.New("FailDlvr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 50
+	char.JobLevel = 50
+	char.Stats = corecharacter.Stats{HP: 500, MaxHP: 500, MP: 100, MaxMP: 100, Attack: 150, Defense: 100}
+
+	settlerErr := errors.New("simulated delivery settlement failure")
+	settler := &mockPostBattleSettler{
+		respFn: func(req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+			return battle.ApplyPostBattleResponse{}, settlerErr
+		},
+	}
+
+	charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
+	advRepo := &memoryAdvRepo{adventures: make(map[string]adventure.Adventure)}
+	clock := &fixedAdvClock{now: time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)}
+	stages, _ := adventure.InitialStageCatalog()
+	monsters, _ := adventure.InitialMonsterCatalog()
+
+	svc, err := adventure.NewServiceWithCatalogs(
+		advRepo,
+		charRepo,
+		nil,
+		stages,
+		monsters,
+		corebattle.Engine{},
+		nil,
+		nil,
+		clock,
+		adventure.WithPostBattleSettler(settler),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-01",
+	})
+	if !errors.Is(err, settlerErr) {
+		t.Fatalf("expected error %v, got: %v", settlerErr, err)
+	}
+
+	if len(advRepo.adventures) != 0 {
+		t.Fatalf("expected 0 adventures persisted on delivery rollback, got %d", len(advRepo.adventures))
+	}
+}

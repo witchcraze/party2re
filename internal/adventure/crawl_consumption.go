@@ -57,6 +57,8 @@ func removeHeldItem(p *corebattle.Participant, e corebattle.ConsumedItem) {
 	}
 	if e.ID == battle.ItemDokuroAmulet {
 		p.Abilities = slices.DeleteFunc(p.Abilities, func(a string) bool { return a == "dokuro_amulet" })
+	}
+	for n := 0; n < e.Quantity; n++ {
 		if idx := slices.Index(p.ItemDefinitionIDs, e.ID); idx >= 0 {
 			p.ItemDefinitionIDs = slices.Delete(p.ItemDefinitionIDs, idx, idx+1)
 		}
