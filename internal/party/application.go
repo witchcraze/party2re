@@ -10,43 +10,13 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 // VictoryHook is called when a party multiplayer co-op adventure concludes with a victory.
 type VictoryHook func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error
-
-type Option func(*Service)
-
-func WithTransactionProvider(txProvider TransactionProvider) Option {
-	return func(s *Service) {
-		s.txProvider = txProvider
-	}
-}
-
-func WithNewsPublisher(news NewsPublisher) Option {
-	return func(s *Service) {
-		s.news = news
-	}
-}
-
-func WithVictoryHook(hook VictoryHook) Option {
-	return func(s *Service) {
-		s.victoryHook = hook
-	}
-}
-
-// ParticipantBuilder constructs a Participant from a character ID.
-type ParticipantBuilder interface {
-	BuildParticipant(ctx context.Context, characterID string) (battle.Participant, error)
-}
-
-func WithParticipantBuilder(builder ParticipantBuilder) Option {
-	return func(s *Service) {
-		s.participantBuilder = builder
-	}
-}
 
 type Service struct {
 	activityCheck      func(context.Context, string) error
@@ -64,6 +34,7 @@ type Service struct {
 	battleSettler      PostBattleSettler
 	depotRepo          DepotRepository
 	blessingProvider   BlessingProvider
+	timer              TimerService
 	rng                func(n int) int
 }
 
@@ -174,6 +145,18 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 
 	var createdParty Party
 	var createdMember Member
+	var lockToken string
+	var lockAcquired bool
+	var committed bool
+
+	defer func() {
+		if !committed && lockAcquired && s.timer != nil {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			//lint:ignore error-swallow compensatory unlock on aborted transaction
+			_, _ = s.timer.ReleaseLockWithToken(cleanupCtx, timer.CategoryDungeonOnce, leaderCharID, lockToken)
+		}
+	}()
 
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
 		// Check if leader already belongs to an active party
@@ -194,6 +177,17 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 		}
 		if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
 			return err
+		}
+		if stage.ID == "stage-26" && s.timer != nil {
+			lockToken = id.New()
+			acquired, err := s.timer.TryLockWithToken(txCtx, timer.CategoryDungeonOnce, leaderChar.ID, lockToken, 0)
+			if err != nil {
+				return err
+			}
+			if !acquired {
+				return fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, leaderChar.Name)
+			}
+			lockAcquired = true
 		}
 		if req.NeedJoin != "" {
 			if err := ValidateNeedJoin(req.NeedJoin, leaderChar); err != nil {
@@ -243,6 +237,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 	if err != nil {
 		return PartyDetail{}, err
 	}
+	committed = true
 
 	if s.news != nil {
 		_ = s.news.PublishNews(

@@ -180,13 +180,17 @@ func (s *service) SetLock(ctx context.Context, category, targetID string, durati
 		s.memMu.Lock()
 		defer s.memMu.Unlock()
 		exp, exists := s.memory[claimK]
-		if !exists || time.Now().After(exp.expiresAt) || exp.value != claim.token {
+		if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != claim.token {
 			return ErrClaimLost
 		}
 		s.memory[k] = memTimerEntry{expiresAt: time.Now().Add(duration), value: "1"}
 		return nil
 	}
 	if s.client != nil {
+		if duration <= 0 {
+			cmd := s.client.B().Set().Key(k).Value("1").Build()
+			return s.client.Do(ctx, cmd).Error()
+		}
 		secs := int64(duration.Seconds())
 		if secs < 1 {
 			secs = 1
@@ -196,7 +200,11 @@ func (s *service) SetLock(ctx context.Context, category, targetID string, durati
 	}
 
 	s.memMu.Lock()
-	s.memory[k] = memTimerEntry{expiresAt: time.Now().Add(duration), value: "1"}
+	var exp time.Time
+	if duration > 0 {
+		exp = time.Now().Add(duration)
+	}
+	s.memory[k] = memTimerEntry{expiresAt: exp, value: "1"}
 	s.memMu.Unlock()
 	return nil
 }
@@ -215,11 +223,16 @@ func (s *service) TryLockWithToken(ctx context.Context, category, targetID, toke
 		return false, err
 	}
 	if s.client != nil {
-		secs := int64(duration.Seconds())
-		if secs < 1 {
-			secs = 1
+		var cmd valkey.Completed
+		if duration <= 0 {
+			cmd = s.client.B().Set().Key(k).Value(token).Nx().Build()
+		} else {
+			secs := int64(duration.Seconds())
+			if secs < 1 {
+				secs = 1
+			}
+			cmd = s.client.B().Set().Key(k).Value(token).Nx().ExSeconds(secs).Build()
 		}
-		cmd := s.client.B().Set().Key(k).Value(token).Nx().ExSeconds(secs).Build()
 		err := s.client.Do(ctx, cmd).Error()
 		if valkey.IsValkeyNil(err) {
 			return false, nil
@@ -232,10 +245,14 @@ func (s *service) TryLockWithToken(ctx context.Context, category, targetID, toke
 
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
-	if exp, exists := s.memory[k]; exists && time.Now().Before(exp.expiresAt) {
+	if exp, exists := s.memory[k]; exists && (exp.expiresAt.IsZero() || time.Now().Before(exp.expiresAt)) {
 		return false, nil
 	}
-	s.memory[k] = memTimerEntry{expiresAt: time.Now().Add(duration), value: token}
+	var exp time.Time
+	if duration > 0 {
+		exp = time.Now().Add(duration)
+	}
+	s.memory[k] = memTimerEntry{expiresAt: exp, value: token}
 	return true, nil
 }
 
@@ -270,7 +287,7 @@ func (s *service) RenewLock(ctx context.Context, category, targetID, token strin
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[k]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != token {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != token {
 		return false, nil
 	}
 	s.memory[k] = memTimerEntry{expiresAt: time.Now().Add(duration), value: token}
@@ -294,7 +311,10 @@ func (s *service) IsLocked(ctx context.Context, category, targetID string) (bool
 	s.memMu.RLock()
 	exp, exists := s.memory[k]
 	s.memMu.RUnlock()
-	if !exists || time.Now().After(exp.expiresAt) {
+	if !exists {
+		return false, nil
+	}
+	if !exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt) {
 		return false, nil
 	}
 	return true, nil
@@ -320,7 +340,7 @@ func (s *service) GetRemainingLock(ctx context.Context, category, targetID strin
 	s.memMu.RLock()
 	exp, exists := s.memory[k]
 	s.memMu.RUnlock()
-	if !exists {
+	if !exists || exp.expiresAt.IsZero() {
 		return 0, nil
 	}
 	remaining := exp.expiresAt.Sub(time.Now())
@@ -373,7 +393,7 @@ func (s *service) ReleaseLockWithToken(ctx context.Context, category, targetID, 
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[k]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != token {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != token {
 		return false, nil
 	}
 	delete(s.memory, k)
@@ -412,7 +432,7 @@ func (s *service) ReleaseLockWithClaim(ctx context.Context, category, targetID, 
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[claimK]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != claimToken {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != claimToken {
 		return false, nil
 	}
 	delete(s.memory, targetK)
@@ -455,7 +475,7 @@ func (s *service) ExecuteWithClaim(ctx context.Context, category, targetID, toke
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[k]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != token {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != token {
 		return false, nil
 	}
 	if fn != nil {

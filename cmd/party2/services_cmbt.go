@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
@@ -47,6 +48,15 @@ func (c customSkillGemCatalog) FindGemByID(id string) (customskill.GemDefinition
 	}, true
 }
 
+type productionRandomSource struct{}
+
+func (productionRandomSource) Intn(max int) (int, error) {
+	if max <= 0 {
+		return 0, nil
+	}
+	return random.Intn(max), nil
+}
+
 func newCmbtServices(
 	db *sql.DB,
 	core *coreServices,
@@ -72,6 +82,7 @@ func newCmbtServices(
 		battle.WithJobHistoryRepository(core.charJobRepo),
 		battle.WithTransactionProvider(core.txProvider),
 		battle.WithTransactionRunner(core.economy),
+		battle.WithRandomSource(productionRandomSource{}),
 	)
 
 	var pvpRoomRepo pvp.RoomRepository
@@ -226,6 +237,7 @@ func newCmbtServices(
 		party.WithParticipantBuilder(battleAdapter),
 		party.WithPostBattleSettler(battleAdapter),
 		party.WithDepotRepository(econ.depotRepo),
+		party.WithTimerService(soc.timer),
 	)
 	if err != nil {
 		return nil, err
@@ -244,6 +256,7 @@ func newCmbtServices(
 		adventure.WithParticipantBuilder(battleAdapter),
 		adventure.WithPostBattleSettler(battleAdapter),
 		adventure.WithTransactionProvider(core.txProvider),
+		adventure.WithTimerService(soc.timer),
 	)
 	if err != nil {
 		return nil, err

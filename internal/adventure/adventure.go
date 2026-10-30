@@ -268,16 +268,29 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		return DungeonCrawlResult{}, err
 	}
 
-	if stage.ID == "stage-26" && s.timer != nil {
-		for _, c := range characters {
-			locked, err := s.timer.IsLocked(ctx, timer.CategoryDungeonOnce, c.ID)
-			if err != nil {
-				return DungeonCrawlResult{}, err
-			}
-			if locked {
-				return DungeonCrawlResult{}, fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, c.Name)
-			}
+	var lockToken string
+	var lockAcquired bool
+	var committed bool
+
+	defer func() {
+		if !committed && lockAcquired && s.timer != nil && len(characters) > 0 {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			//lint:ignore error-swallow compensatory unlock on aborted crawl
+			_, _ = s.timer.ReleaseLockWithToken(cleanupCtx, timer.CategoryDungeonOnce, characters[0].ID, lockToken)
 		}
+	}()
+
+	if stage.ID == "stage-26" && s.timer != nil && len(characters) > 0 {
+		lockToken = id.New()
+		ok, err := s.timer.TryLockWithToken(ctx, timer.CategoryDungeonOnce, characters[0].ID, lockToken, 0)
+		if err != nil {
+			return DungeonCrawlResult{}, err
+		}
+		if !ok {
+			return DungeonCrawlResult{}, fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, characters[0].Name)
+		}
+		lockAcquired = true
 	}
 
 	rng := req.Rng
@@ -332,12 +345,6 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 			if IsTreasureBlessing(b) {
 				session.HasTreasureBlessing = true
 			}
-		}
-	}
-
-	if stage.ID == "stage-26" && s.timer != nil {
-		for _, c := range characters {
-			_ = s.timer.SetLock(ctx, timer.CategoryDungeonOnce, c.ID, 7*24*time.Hour)
 		}
 	}
 
@@ -446,6 +453,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}); err != nil {
 		return DungeonCrawlResult{}, err
 	}
+	committed = true
 
 	for _, c := range characters {
 		if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {

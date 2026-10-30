@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -82,12 +83,19 @@ func (r *repositoryStub) GetAggregatedStats(_ context.Context, characterID strin
 type characterRepositoryStub struct {
 	mu        sync.Mutex
 	value     corecharacter.Character
+	chars     map[string]corecharacter.Character
 	updateErr error
 }
 
 func (r *characterRepositoryStub) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if len(r.chars) > 0 {
+		if c, ok := r.chars[id]; ok {
+			return c, nil
+		}
+		return corecharacter.Character{}, corecharacter.ErrNotFound
+	}
 	if r.value.ID == "" || r.value.ID != id {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
@@ -695,6 +703,207 @@ func TestExecuteCrawl_DailyOnceLock(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl after lock release failed: %v", err)
+	}
+}
+
+func TestExecuteCrawl_DailyOnceLock_ParticipantOnlyNotLocked(t *testing.T) {
+	char1, err := corecharacter.New("LeadChar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char1.Level = 99
+	char1.Stats.HP = 1000
+	char1.Stats.MaxHP = 1000
+	char1.Stats.Attack = 1000
+	char1.Stats.Defense = 500
+
+	char2, err := corecharacter.New("MembChar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char2.Level = 99
+	char2.Stats.HP = 1000
+	char2.Stats.MaxHP = 1000
+	char2.Stats.Attack = 1000
+	char2.Stats.Defense = 500
+
+	charsMap := map[string]corecharacter.Character{
+		char1.ID: char1,
+		char2.ID: char2,
+	}
+
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{
+		value: char1,
+		chars: charsMap,
+	}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+	service, err := NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, corebattle.Engine{}, nil, nopLogger{}, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	timerSvc := timer.NewService(nil)
+	service.SetTimerService(timerSvc)
+
+	// Crawl with char1 as leader and char2 as member
+	_, err = service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{char1.ID, char2.ID},
+		StageID:      "stage-26",
+	})
+	if err != nil {
+		t.Fatalf("multi-character crawl on stage-26 failed: %v", err)
+	}
+
+	// Leader must have once lock acquired
+	leaderLocked, err := timerSvc.IsLocked(context.Background(), timer.CategoryDungeonOnce, char1.ID)
+	if err != nil || !leaderLocked {
+		t.Errorf("expected leader to be locked, got %v (err=%v)", leaderLocked, err)
+	}
+
+	// Member must NOT have once lock acquired
+	memberLocked, err := timerSvc.IsLocked(context.Background(), timer.CategoryDungeonOnce, char2.ID)
+	if err != nil || memberLocked {
+		t.Errorf("expected member NOT to be locked, got %v (err=%v)", memberLocked, err)
+	}
+
+	// Member can subsequently run stage-26 as leader
+	res2, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{char2.ID},
+		StageID:      "stage-26",
+	})
+	if err != nil {
+		t.Fatalf("member should be allowed to crawl stage-26 as leader: %v", err)
+	}
+	if !res2.StageCleared {
+		t.Errorf("expected stage-26 to be cleared by member")
+	}
+}
+
+type errTimerService struct {
+	timer.Service
+	tryLockErr  error
+	isLockedErr error
+}
+
+func (m *errTimerService) TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error) {
+	if m.tryLockErr != nil {
+		return false, m.tryLockErr
+	}
+	return m.Service.TryLock(ctx, category, targetID, duration)
+}
+
+func (m *errTimerService) TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error) {
+	if m.tryLockErr != nil {
+		return false, m.tryLockErr
+	}
+	return m.Service.TryLockWithToken(ctx, category, targetID, token, duration)
+}
+
+func (m *errTimerService) IsLocked(ctx context.Context, category, targetID string) (bool, error) {
+	if m.isLockedErr != nil {
+		return false, m.isLockedErr
+	}
+	return m.Service.IsLocked(ctx, category, targetID)
+}
+
+func TestExecuteCrawl_DailyOnceLock_StorageFailurePropagates(t *testing.T) {
+	char, err := corecharacter.New("FailChar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 99
+	char.Stats.HP = 1000
+	char.Stats.MaxHP = 1000
+	char.Stats.Attack = 1000
+	char.Stats.Defense = 500
+
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: char}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+	service, err := NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, corebattle.Engine{}, nil, nopLogger{}, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	simulatedErr := errors.New("valkey connection dropped")
+	mockTimer := &errTimerService{
+		Service:    timer.NewService(nil),
+		tryLockErr: simulatedErr,
+	}
+	service.SetTimerService(mockTimer)
+
+	_, err = service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-26",
+	})
+	if !errors.Is(err, simulatedErr) {
+		t.Fatalf("expected storage error %v, got %v", simulatedErr, err)
+	}
+}
+
+func TestExecuteCrawl_DailyOnceLock_ConcurrentSingleConsumption(t *testing.T) {
+	char, err := corecharacter.New("ConcChar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 99
+	char.Stats.HP = 1000
+	char.Stats.MaxHP = 1000
+	char.Stats.Attack = 1000
+	char.Stats.Defense = 500
+
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: char}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+	service, err := NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, corebattle.Engine{}, nil, nopLogger{}, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	timerSvc := timer.NewService(nil)
+	service.SetTimerService(timerSvc)
+
+	const concurrency = 10
+	var successCount atomic.Int32
+	var rejectedCount atomic.Int32
+	var wg sync.WaitGroup
+	startBarrier := make(chan struct{})
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-startBarrier
+			_, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+				CharacterIDs: []string{char.ID},
+				StageID:      "stage-26",
+			})
+			if err == nil {
+				successCount.Add(1)
+			} else if errors.Is(err, ErrDailyOnceAlreadyUsed) {
+				rejectedCount.Add(1)
+			}
+		}()
+	}
+
+	close(startBarrier)
+	wg.Wait()
+
+	if successCount.Load() != 1 {
+		t.Fatalf("expected exactly 1 successful crawl, got %d", successCount.Load())
+	}
+	if rejectedCount.Load() != concurrency-1 {
+		t.Fatalf("expected %d rejections with ErrDailyOnceAlreadyUsed, got %d", concurrency-1, rejectedCount.Load())
 	}
 }
 

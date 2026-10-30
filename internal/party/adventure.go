@@ -267,31 +267,9 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 	return result, nil
 }
 
-// PostAdventureHook is invoked for each party member after a party adventure successfully completes and commits.
-type PostAdventureHook func(ctx context.Context, characterID string) error
-
-// WithPostAdventureHook configures the PostAdventureHook for the service.
-func WithPostAdventureHook(hook PostAdventureHook) Option {
-	return func(s *Service) {
-		s.postAdventureHook = hook
-	}
-}
-
 // SetPostAdventureHook sets the PostAdventureHook on an existing service.
 func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
 	s.postAdventureHook = hook
-}
-
-// BlessingProvider queries active chapel blessings for a character.
-type BlessingProvider interface {
-	GetActiveBlessing(ctx context.Context, characterID string) (string, error)
-}
-
-// WithBlessingProvider configures the BlessingProvider for the service.
-func WithBlessingProvider(provider BlessingProvider) Option {
-	return func(s *Service) {
-		s.blessingProvider = provider
-	}
 }
 
 // SetBlessingProvider sets the BlessingProvider on an existing service.
@@ -299,9 +277,7 @@ func (s *Service) SetBlessingProvider(provider BlessingProvider) {
 	s.blessingProvider = provider
 }
 
-// WithRNG configures a custom RNG function for adventure crawl execution.
-func WithRNG(rng func(n int) int) Option {
-	return func(s *Service) {
-		s.rng = rng
-	}
+// SetTimerService sets the TimerService on an existing service.
+func (s *Service) SetTimerService(timer TimerService) {
+	s.timer = timer
 }
