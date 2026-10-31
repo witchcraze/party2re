@@ -2,7 +2,10 @@ package database
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -345,5 +348,72 @@ func TestAdventureRepository_CoopAndSeasonalClears(t *testing.T) {
 	}
 	if !foundSpring || !foundSummer {
 		t.Errorf("expected both spring and summer distinct stats, got %+v", stats.StageStats)
+	}
+
+	// 6. Verify party run identity parity between live crawl and backfill:
+	// Both use sha256("party:" + logID + ":" + characterID) and must not double-count in MariaDB
+	logID := "party-log-db-test"
+	hash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", logID, character.ID)))
+	partyAdvID := hex.EncodeToString(hash[:16])
+
+	livePartyAdv := adventure.Adventure{
+		ID:               partyAdvID,
+		CharacterID:      character.ID,
+		Type:             "stage-02",
+		StageID:          "stage-02",
+		StartedAt:        now.Add(2 * time.Hour),
+		FloorsCleared:    10,
+		IsCleared:        true,
+		PartySize:        3,
+		ExperienceReward: 120, // settled reward
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			Turns:    8,
+			Reward: corebattle.Reward{
+				Experience: 120,
+				Currency:   80,
+			},
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, livePartyAdv); err != nil {
+		t.Fatalf("Save livePartyAdv: %v", err)
+	}
+
+	// Simulate Backfill on the same logID: exact same ID
+	backfillAdv := adventure.Adventure{
+		ID:               partyAdvID,
+		CharacterID:      character.ID,
+		Type:             "stage-02",
+		StageID:          "stage-02",
+		StartedAt:        now.Add(2 * time.Hour),
+		FloorsCleared:    10,
+		IsCleared:        true,
+		PartySize:        3,
+		ExperienceReward: 120,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			Turns:    8,
+			Reward: corebattle.Reward{
+				Experience: 120,
+				Currency:   80,
+			},
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, backfillAdv); err != nil {
+		t.Fatalf("Save backfillAdv: %v", err)
+	}
+
+	// Verify in DB that only 1 record exists for partyAdvID and total victories increased by exactly 1
+	statsAfter, err := repo.GetAggregatedStats(ctx, character.ID)
+	if err != nil {
+		t.Fatalf("GetAggregatedStats after party run: %v", err)
+	}
+	// Spring(1) + Summer(1) + Party(1) = 3 victories
+	if statsAfter.TotalVictories != 3 {
+		t.Errorf("TotalVictories after backfill on live run = %d, want 3 (double counted!)", statsAfter.TotalVictories)
 	}
 }

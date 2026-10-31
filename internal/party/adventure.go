@@ -230,13 +230,27 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			// 8.1 Persist individual adventure records for all members in shared adventure repository
 			if s.advRepo != nil {
 				now := time.Now().UTC()
+				rewardSummaryMap := make(map[string]MemberRewardSummary, len(rewardSummaries))
+				for _, r := range rewardSummaries {
+					rewardSummaryMap[r.CharacterID] = r
+				}
+
 				for _, m := range members {
-					advIDHash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", session.ID, m.CharacterID)))
+					advIDHash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", advLog.ID, m.CharacterID)))
 					advID := hex.EncodeToString(advIDHash[:16])
 
 					winnerID := ""
 					if crawlResult.Outcome == battle.OutcomeWin {
 						winnerID = m.CharacterID
+					}
+
+					gainedEXP := crawlResult.TotalEXP
+					gainedGold := crawlResult.TotalGold
+					gainedCrystals := crawlResult.TotalCrystals
+					if r, ok := rewardSummaryMap[m.CharacterID]; ok {
+						gainedEXP = r.GainedEXP
+						gainedGold = r.GainedGold
+						gainedCrystals = r.GainedCrystals
 					}
 
 					adv := adventure.Adventure{
@@ -250,16 +264,16 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 						FloorsCleared:    crawlResult.FloorsCleared,
 						IsCleared:        crawlResult.StageCleared,
 						PartySize:        len(members),
-						ExperienceReward: crawlResult.TotalEXP,
+						ExperienceReward: gainedEXP,
 						Resolved:         true,
 						BattleResult: battle.Result{
 							Outcome:  crawlResult.Outcome,
 							WinnerID: winnerID,
 							Turns:    crawlResult.TotalTurns,
 							Reward: battle.Reward{
-								Experience: crawlResult.TotalEXP,
-								Currency:   crawlResult.TotalGold,
-								Crystals:   crawlResult.TotalCrystals,
+								Experience: gainedEXP,
+								Currency:   gainedGold,
+								Crystals:   gainedCrystals,
 							},
 						},
 					}

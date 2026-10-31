@@ -16,11 +16,27 @@ type AdventureLogReader interface {
 	GetAdventureLogsByPartyID(ctx context.Context, partyID string) ([]PartyAdventureLog, error)
 }
 
+// AdventureFinder provides read lookup to verify if an adventure record already exists.
+type AdventureFinder interface {
+	FindByID(ctx context.Context, id string) (adventure.Adventure, error)
+}
+
 // BackfillPartyAdventureLogs backfills past party_adventure_logs into individual character adventures.
-// For normal stages, character IDs are reconstructed from details_json (allies_survived + allies_fallen)
-// and saved with is_cleared = (outcome == "WIN" / battle.OutcomeWin).
-// For stage-26, past party logs lack runtime seasonal variant metadata, so they are saved with
-// seasonal_sub_id = 0 (unclassified season).
+//
+// Run Identity Parity:
+// Uses deterministic adventure ID "party:<log.ID>:<cID>", matching live party crawl recording in
+// StartPartyAdventure. If a run has already been recorded by live crawl or a previous backfill pass,
+// existing records and their settled rewards are preserved without double-counting.
+//
+// Participant Reconstruction Constraints:
+// Historical logs only store details_json from the final floor encounter (Floor 10 boss or defeat floor).
+// Participants are reconstructed from AlliesSurvived + AlliesFallen. Participants who fell on earlier
+// floors (Floors 1..9) and were absent from the final battle cannot be reconstructed from historical logs.
+// Speculative participant guessing is avoided to preserve data integrity.
+//
+// Stage 26 Seasonal Variant:
+// Past party logs lack persisted seasonal variant metadata, so Stage 26 records are saved with
+// seasonal_sub_id = 0 (unclassified).
 func BackfillPartyAdventureLogs(
 	ctx context.Context,
 	logRepo AdventureLogReader,
@@ -34,6 +50,8 @@ func BackfillPartyAdventureLogs(
 	if err != nil {
 		return 0, err
 	}
+
+	finder, _ := advRepo.(AdventureFinder)
 
 	backfilled := 0
 	for _, log := range logs {
@@ -58,8 +76,15 @@ func BackfillPartyAdventureLogs(
 		outcome := battle.Outcome(log.Outcome)
 
 		for _, cID := range charIDs {
-			advIDHash := sha256.Sum256([]byte(fmt.Sprintf("party-backfill:%s:%s", log.ID, cID)))
+			advIDHash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", log.ID, cID)))
 			advID := hex.EncodeToString(advIDHash[:16])
+
+			if finder != nil {
+				if existing, err := finder.FindByID(ctx, advID); err == nil && existing.ID != "" {
+					// Already recorded (live crawl or previous backfill pass); preserve existing record and settled rewards
+					continue
+				}
+			}
 
 			winnerID := ""
 			if outcome == battle.OutcomeWin {
