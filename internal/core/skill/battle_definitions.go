@@ -19,6 +19,7 @@ type BattleDefinitions struct {
 	StatusSkills         map[string]bool
 	TransformationSkills map[string]bool
 	PlayerTails          map[string]bool
+	EquipmentTails       map[string]bool
 	Invocations          corebattle.CallbackCatalog
 }
 
