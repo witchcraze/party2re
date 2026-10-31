@@ -2457,10 +2457,12 @@ those gates are met.
     - If the attacker possesses Diamond Ring (`item-144`), damage decay is completely negated (`decayMult = 1.0`).
 
 ### 4. 1v1 Combat Resolution (`Resolve`)
-Deterministic 1v1 duel resolution utilizing the canonical damage formula:
-- Alternating attacks between `first` and `second`.
-- Damage computed via `CalculateDamage(attacker.Attack, defender.Defense, rng, false)`.
-- Terminates upon knockout or simultaneous knockout (`OutcomeDraw`).
+Deterministic 1v1 combat resolution reusing the unified `ResolvePartyBattle` rules:
+- Participants (`[first, second]`) are automatically partitioned into distinct opposing teams (`allies` vs `enemies`), handling custom, single, or conflicting incoming `TeamID`s safely.
+- Reuses agility turn ordering, job skills (MP), custom skills (CMP), items, status ailments, defending, and revival triggers.
+- Terminates upon knockout, simultaneous defeat, or round limit (100 turns).
+- Returns `corebattle.Result` containing outcome, winner/loser, turn count, reward, remaining HP/MP/CMP/status, consumed items, and turn logs.
+- Eliminates the legacy alternating-attack defect where a lethal first-strike knockout was followed by an unexecuted counterattack damage evaluation that forced a draw.
 
 ### Legacy Defeat Synergies
 

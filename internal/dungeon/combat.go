@@ -33,17 +33,12 @@ func (s *Service) resolveMonsterCombat(
 	monsterPart.Name = monster.Name
 	monsterPart.Agility = monster.Agility
 
-	var battleRNG corerandom.Generator
-	if gen, ok := s.rng.(corerandom.Generator); ok {
-		battleRNG = gen
-	}
-
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
 			playerPart,
 			monsterPart,
 		},
-		RNG: battleRNG,
+		RNG: adaptRandomSource(s.rng),
 	}
 
 	battleRes, err := s.battleEngine.Resolve(req)
@@ -52,12 +47,25 @@ func (s *Service) resolveMonsterCombat(
 	}
 
 	if battleRes.Outcome == corebattle.OutcomeWin && battleRes.WinnerID == char.ID {
+		hpDelta := 0
+		if remHP, ok := battleRes.RemainingHP[char.ID]; ok {
+			hpDelta = remHP - exp.CurrentHP
+		} else if len(battleRes.Logs) > 0 {
+			lastLog := battleRes.Logs[len(battleRes.Logs)-1]
+			if remHP, ok := lastLog.RemainingHP[char.ID]; ok {
+				hpDelta = remHP - exp.CurrentHP
+			}
+		}
+
+		memberHPDeltas := map[string]int{char.ID: hpDelta}
+
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
-			HPDelta:              0,
+			HPDelta:              hpDelta,
+			MemberHPDeltas:       memberHPDeltas,
 			TurnsDelta:           -1,
 			ExpDelta:             monster.ExpReward,
 			GoldDelta:            monster.GoldReward,
@@ -122,17 +130,12 @@ func (s *Service) resolveBossCombat(
 	bossPart.Name = bossMonster.Name
 	bossPart.Agility = bossMonster.Agility
 
-	var battleRNG corerandom.Generator
-	if gen, ok := s.rng.(corerandom.Generator); ok {
-		battleRNG = gen
-	}
-
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
 			playerPart,
 			bossPart,
 		},
-		RNG: battleRNG,
+		RNG: adaptRandomSource(s.rng),
 	}
 
 	battleRes, err := s.battleEngine.Resolve(req)
@@ -141,12 +144,25 @@ func (s *Service) resolveBossCombat(
 	}
 
 	if battleRes.Outcome == corebattle.OutcomeWin && battleRes.WinnerID == char.ID {
+		hpDelta := 0
+		if remHP, ok := battleRes.RemainingHP[char.ID]; ok {
+			hpDelta = remHP - exp.CurrentHP
+		} else if len(battleRes.Logs) > 0 {
+			lastLog := battleRes.Logs[len(battleRes.Logs)-1]
+			if remHP, ok := lastLog.RemainingHP[char.ID]; ok {
+				hpDelta = remHP - exp.CurrentHP
+			}
+		}
+
+		memberHPDeltas := map[string]int{char.ID: hpDelta}
+
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
-			HPDelta:              0,
+			HPDelta:              hpDelta,
+			MemberHPDeltas:       memberHPDeltas,
 			TurnsDelta:           -1,
 			ExpDelta:             bossMonster.ExpReward,
 			GoldDelta:            bossMonster.GoldReward,
@@ -195,4 +211,30 @@ func buildFallbackParticipantWithHP(char corecharacter.Character, currentHP int)
 	p.MaxMP = char.Stats.MaxMP
 	p.Agility = char.Stats.Agility
 	return p
+}
+
+type randomSourceAdapter struct {
+	src RandomSource
+}
+
+func (a randomSourceAdapter) Intn(n int) int {
+	return a.src.Intn(n)
+}
+
+func (a randomSourceAdapter) IntN(n int) int {
+	return a.src.Intn(n)
+}
+
+func (a randomSourceAdapter) Float64() float64 {
+	return a.src.Float64()
+}
+
+func adaptRandomSource(src RandomSource) corerandom.Generator {
+	if src == nil {
+		return nil
+	}
+	if gen, ok := src.(corerandom.Generator); ok {
+		return gen
+	}
+	return randomSourceAdapter{src: src}
 }

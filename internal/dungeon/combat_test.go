@@ -225,3 +225,202 @@ func TestDungeonSolo_ParticipantWithSkillsUsesSkills(t *testing.T) {
 		t.Fatalf("expected skill 'ファイアボール' to be executed in combat logs, logs: %+v", res.BattleResult.Logs)
 	}
 }
+
+type minimalRandomSource struct {
+	intnCalls    int
+	float64Calls int
+}
+
+func (m *minimalRandomSource) Intn(n int) int {
+	m.intnCalls++
+	return 0
+}
+
+func (m *minimalRandomSource) Float64() float64 {
+	m.float64Calls++
+	return 0.5
+}
+
+func TestDungeonSolo_CustomRNGWithoutIntN(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockDungeonRepo()
+
+	char := corecharacter.Character{
+		ID:    "hero-rng",
+		Name:  "RNG Hero",
+		Level: 10,
+		Stats: corecharacter.Stats{
+			HP:      100,
+			MaxHP:   100,
+			Attack:  50,
+			Defense: 10,
+			Agility: 20,
+		},
+	}
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
+
+	customDungeon := dungeon.Dungeon{
+		ID:               "dungeon-rng-test",
+		MinLevel:         1,
+		MaxTurnsPerFloor: 10,
+		Floors: []dungeon.Floor{
+			{
+				FloorNumber: 1,
+				Width:       2,
+				Height:      1,
+				StartX:      0,
+				StartY:      0,
+				Grid:        []string{"S0"},
+				Monsters: []dungeon.DungeonMonster{
+					{
+						ID:         "target-monster",
+						Name:       "Target",
+						HP:         20,
+						Attack:     10,
+						Defense:    5,
+						Agility:    5,
+						ExpReward:  10,
+						GoldReward: 10,
+					},
+				},
+			},
+		},
+	}
+
+	customRNG := &minimalRandomSource{}
+
+	service, err := dungeon.NewService(
+		repo,
+		charRepo,
+		corebattle.Engine{},
+		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
+		dungeon.WithRNG(customRNG),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	_, err = service.StartExpedition(ctx, char.ID, customDungeon.ID)
+	if err != nil {
+		t.Fatalf("StartExpedition failed: %v", err)
+	}
+
+	res, err := service.Move(ctx, char.ID, dungeon.DirectionEast)
+	if err != nil {
+		t.Fatalf("Move failed: %v", err)
+	}
+
+	if res.EventType != dungeon.EventBattle {
+		t.Fatalf("expected EventBattle, got %v", res.EventType)
+	}
+
+	// Verify that the custom RNG's Intn or Float64 was indeed called during combat resolution!
+	if customRNG.float64Calls == 0 && customRNG.intnCalls == 0 {
+		t.Fatalf("expected custom RandomSource to be used by battle engine, but calls: Intn=%d, Float64=%d",
+			customRNG.intnCalls, customRNG.float64Calls)
+	}
+}
+
+func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockDungeonRepo()
+
+	char := corecharacter.Character{
+		ID:    "hero-runner",
+		Name:  "Runner Hero",
+		Level: 10,
+		Stats: corecharacter.Stats{
+			HP:      100,
+			MaxHP:   100,
+			Attack:  30,
+			Defense: 0,
+			Agility: 10, // Slower than monsters so monsters get an attack in
+		},
+	}
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
+
+	// A 3-tile path: Start at (0,0), monster at (1,0), monster at (2,0)
+	customDungeon := dungeon.Dungeon{
+		ID:               "dungeon-consecutive",
+		MinLevel:         1,
+		MaxTurnsPerFloor: 10,
+		Floors: []dungeon.Floor{
+			{
+				FloorNumber: 1,
+				Width:       3,
+				Height:      1,
+				StartX:      0,
+				StartY:      0,
+				Grid:        []string{"S00"},
+				Monsters: []dungeon.DungeonMonster{
+					{
+						ID:         "monster-1",
+						Name:       "Wolf",
+						HP:         20,
+						Attack:     30, // Deals ~15 damage
+						Defense:    0,
+						Agility:    30, // Acts first
+						ExpReward:  10,
+						GoldReward: 10,
+					},
+					{
+						ID:         "monster-2",
+						Name:       "Bear",
+						HP:         20,
+						Attack:     40, // Deals ~20 damage
+						Defense:    0,
+						Agility:    30, // Acts first
+						ExpReward:  20,
+						GoldReward: 20,
+					},
+				},
+			},
+		},
+	}
+
+	service, err := dungeon.NewService(
+		repo,
+		charRepo,
+		corebattle.Engine{},
+		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
+		dungeon.WithRNG(random.NewDeterministic(1)),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	exp, err := service.StartExpedition(ctx, char.ID, customDungeon.ID)
+	if err != nil {
+		t.Fatalf("StartExpedition failed: %v", err)
+	}
+	if exp.CurrentHP != 100 {
+		t.Fatalf("expected initial HP 100, got %d", exp.CurrentHP)
+	}
+
+	// Step 1: Move East to (1,0) - encounters monster-2 (1%2 = 1)
+	res1, err := service.Move(ctx, char.ID, dungeon.DirectionEast)
+	if err != nil {
+		t.Fatalf("Move 1 failed: %v", err)
+	}
+	if res1.EventType != dungeon.EventBattle {
+		t.Fatalf("expected EventBattle on step 1, got %v", res1.EventType)
+	}
+	hpAfterBattle1 := res1.Expedition.CurrentHP
+	if hpAfterBattle1 >= 100 || hpAfterBattle1 <= 0 {
+		t.Fatalf("expected reduced HP after battle 1, got %d", hpAfterBattle1)
+	}
+
+	// Step 2: Move East to (2,0) - encounters monster-1 (2%2 = 0)
+	res2, err := service.Move(ctx, char.ID, dungeon.DirectionEast)
+	if err != nil {
+		t.Fatalf("Move 2 failed: %v", err)
+	}
+	if res2.EventType != dungeon.EventBattle {
+		t.Fatalf("expected EventBattle on step 2, got %v", res2.EventType)
+	}
+	hpAfterBattle2 := res2.Expedition.CurrentHP
+	if hpAfterBattle2 >= hpAfterBattle1 || hpAfterBattle2 <= 0 {
+		t.Fatalf("expected HP to further decrease after battle 2 (started with %d), got %d",
+			hpAfterBattle1, hpAfterBattle2)
+	}
+}

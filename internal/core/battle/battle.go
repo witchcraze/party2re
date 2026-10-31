@@ -93,8 +93,13 @@ type Result struct {
 	// Reward is selected from the first participant's perspective.
 	// VictoryReward applies when the first participant wins, DefeatReward when
 	// it loses, and DrawReward for a draw.
-	Reward Reward
-	Logs   []TurnLog `json:"logs,omitempty"`
+	Reward          Reward
+	RemainingHP     map[string]int            `json:"remaining_hp,omitempty"`
+	RemainingMP     map[string]int            `json:"remaining_mp,omitempty"`
+	RemainingCMP    map[string]int            `json:"remaining_cmp,omitempty"`
+	RemainingStatus map[string]string         `json:"remaining_status,omitempty"`
+	ConsumedItems   map[string][]ConsumedItem `json:"consumed_items,omitempty"`
+	Logs            []TurnLog                 `json:"logs,omitempty"`
 }
 
 type Reward struct {
@@ -168,19 +173,27 @@ func (e Engine) Resolve(request Request) (Result, error) {
 		return Result{}, ErrInvalidRequest
 	}
 
-	firstCopy := first
-	secondCopy := second
-	if firstCopy.TeamID == "" && secondCopy.TeamID == "" {
-		firstCopy.TeamID = "allies"
-		secondCopy.TeamID = "enemies"
-	} else if firstCopy.TeamID == secondCopy.TeamID {
-		firstCopy.TeamID = "allies"
-		secondCopy.TeamID = "enemies"
-	} else if firstCopy.TeamID == "" {
-		firstCopy.TeamID = "allies"
-	} else if secondCopy.TeamID == "" {
-		secondCopy.TeamID = "enemies"
+	firstTeam := first.TeamID
+	secondTeam := second.TeamID
+	if firstTeam == "" {
+		firstTeam = "allies"
 	}
+	if secondTeam == "" || secondTeam == firstTeam {
+		if firstTeam == "enemies" {
+			secondTeam = "allies"
+		} else {
+			secondTeam = "enemies"
+		}
+	}
+	if firstTeam == secondTeam {
+		firstTeam = "allies"
+		secondTeam = "enemies"
+	}
+
+	firstCopy := first
+	firstCopy.TeamID = firstTeam
+	secondCopy := second
+	secondCopy.TeamID = secondTeam
 
 	partyRes, err := e.ResolvePartyBattle(PartyBattleRequest{
 		Allies:        []Participant{firstCopy},
@@ -214,12 +227,17 @@ func (e Engine) Resolve(request Request) (Result, error) {
 	}
 
 	return Result{
-		Outcome:  outcome,
-		WinnerID: winnerID,
-		LoserID:  loserID,
-		Turns:    partyRes.Turns,
-		Reward:   partyRes.TotalReward,
-		Logs:     partyRes.Logs,
+		Outcome:         outcome,
+		WinnerID:        winnerID,
+		LoserID:         loserID,
+		Turns:           partyRes.Turns,
+		Reward:          partyRes.TotalReward,
+		RemainingHP:     partyRes.RemainingHP,
+		RemainingMP:     partyRes.RemainingMP,
+		RemainingCMP:    partyRes.RemainingCMP,
+		RemainingStatus: partyRes.RemainingStatus,
+		ConsumedItems:   partyRes.ConsumedItems,
+		Logs:            partyRes.Logs,
 	}, nil
 }
 
