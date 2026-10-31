@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/witchcraze/party2re/internal/battle"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
@@ -196,7 +199,7 @@ func (r *DungeonRepository) DeleteActiveExpedition(ctx context.Context, characte
 }
 
 // FinalizeExpedition claims expedition completion once by history.ID (run ID) inside a SQL transaction.
-// Lock order: Rank 2 (characters FOR UPDATE) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items) -> Rank 5 (character_depots) -> Rank 8 (character_dungeon_records).
+// Lock order: Rank 2 (characters FOR UPDATE in ascending ID order) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items) -> Rank 5 (character_depots) -> Rank 8 (character_dungeon_records).
 // Returns dungeon.ErrExpeditionAlreadyFinished if history.ID has already been settled.
 func (r *DungeonRepository) FinalizeExpedition(
 	ctx context.Context,
@@ -204,6 +207,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 	record dungeon.CharacterDungeonRecord,
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
+	members ...dungeon.ExpeditionMember,
 ) error {
 	charID := history.CharacterID
 	if charID == "" {
@@ -218,18 +222,56 @@ func (r *DungeonRepository) FinalizeExpedition(
 		history.ID = id.New()
 	}
 
+	roster := members
+	if len(roster) == 0 {
+		leaderHP := 100
+		leaderMP := 0
+		if character != nil {
+			leaderHP = character.Stats.HP
+			leaderMP = character.Stats.MP
+		}
+		roster = []dungeon.ExpeditionMember{
+			{
+				CharacterID: charID,
+				CurrentHP:   leaderHP,
+				CurrentMP:   leaderMP,
+			},
+		}
+	} else {
+		hasLeader := false
+		seen := make(map[string]bool, len(roster))
+		for _, m := range roster {
+			if m.CharacterID == "" || seen[m.CharacterID] {
+				return dungeon.ErrForbidden
+			}
+			seen[m.CharacterID] = true
+			if m.CharacterID == charID {
+				hasLeader = true
+			}
+		}
+		if !hasLeader {
+			return dungeon.ErrForbidden
+		}
+	}
+
+	sortedMembers := append([]dungeon.ExpeditionMember(nil), roster...)
+	sort.Slice(sortedMembers, func(i, j int) bool {
+		return sortedMembers[i].CharacterID < sortedMembers[j].CharacterID
+	})
+
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 		now := time.Now().UTC()
 
 		// 1. Lock Character (Rank 2) before dependent inventory/depot or secondary records
 		charRepo := &CharacterRepository{db: r.db}
-		lockedChar, err := charRepo.FindByIDForUpdate(txCtx, charID)
-		if err != nil {
-			if errors.Is(err, corecharacter.ErrNotFound) {
-				return dungeon.ErrCharacterNotFound
+		for _, m := range sortedMembers {
+			if _, err := charRepo.FindByIDForUpdate(txCtx, m.CharacterID); err != nil {
+				if errors.Is(err, corecharacter.ErrNotFound) {
+					return dungeon.ErrCharacterNotFound
+				}
+				return err
 			}
-			return err
 		}
 
 		// 2. Claim expedition finalization durably by run ID and owner
@@ -239,7 +281,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 				exp_reward, gold_reward, items_reward_count, created_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
-		_, err = executor.ExecContext(
+		_, err := executor.ExecContext(
 			txCtx,
 			insertHistoryQuery,
 			history.ID,
@@ -260,44 +302,95 @@ func (r *DungeonRepository) FinalizeExpedition(
 			return err
 		}
 
-		// 3. Apply rewards onto the locked character snapshot and update (Rank 2)
-		if history.ExpReward > 0 {
-			if _, err := progression.ApplyExperience(&lockedChar, history.ExpReward); err != nil {
-				return fmt.Errorf("applying experience: %w", err)
-			}
+		// 3. Apply post-battle vitality (HP, MP) and item consumptions via shared battle adapter
+		ids := make([]string, len(sortedMembers))
+		state := corebattle.PartyBattleResult{
+			Outcome:       corebattle.OutcomeWin,
+			RemainingHP:   make(map[string]int, len(sortedMembers)),
+			RemainingMP:   make(map[string]int, len(sortedMembers)),
+			ConsumedItems: make(map[string][]corebattle.ConsumedItem, len(sortedMembers)),
 		}
-		if history.GoldReward > 0 {
-			if err := lockedChar.AddMoney(history.GoldReward); err != nil {
-				return fmt.Errorf("adding gold: %w", err)
-			}
+		if history.Outcome == dungeon.StatusWipedOut {
+			state.Outcome = corebattle.OutcomeDefeat
 		}
-		if history.MedalsReward > 0 {
-			if err := lockedChar.AddSmallMedals(history.MedalsReward); err != nil {
-				return fmt.Errorf("adding small medals: %w", err)
-			}
-		}
-		if character != nil || history.ExpReward > 0 || history.GoldReward > 0 || history.MedalsReward > 0 {
-			if err := updateCharacter(txCtx, executor, lockedChar); err != nil {
-				return err
-			}
-			if character != nil {
-				*character = lockedChar
+		for i, m := range sortedMembers {
+			ids[i] = m.CharacterID
+			state.RemainingHP[m.CharacterID] = m.CurrentHP
+			state.RemainingMP[m.CharacterID] = m.CurrentMP
+			if len(m.ConsumedItems) > 0 {
+				state.ConsumedItems[m.CharacterID] = m.ConsumedItems
 			}
 		}
 
-		// 4. Deliver reward item instances (Rank 3 Inventory -> Rank 5 Depot)
+		adapter := battle.NewService(
+			battle.WithCharacterRepository(charRepo),
+			battle.WithInventoryRepository(&InventoryRepository{db: r.db}),
+			battle.WithEquipmentRepository(&EquipmentRepository{db: r.db}),
+			battle.WithTransactionProvider(NewTransactionProvider(r.db)),
+		)
+		applied, err := adapter.ApplyPostBattleResult(txCtx, battle.ApplyPostBattleRequest{
+			CharacterIDs: ids,
+			BattleResult: state,
+		})
+		if err != nil {
+			return err
+		}
+
+		// 4. Apply rewards onto updated characters and save (Rank 2)
+		totalMemberRewards := 0
+		for _, m := range sortedMembers {
+			totalMemberRewards += m.AccumulatedExp + m.AccumulatedGold
+		}
+		legacyFallback := totalMemberRewards == 0 && (history.ExpReward > 0 || history.GoldReward > 0)
+
+		for i := range sortedMembers {
+			m := &sortedMembers[i]
+			c := applied.UpdatedCharacters[m.CharacterID]
+			if history.Outcome == dungeon.StatusCleared || history.Outcome == dungeon.StatusEscaped {
+				earnedExp := m.AccumulatedExp
+				earnedGold := m.AccumulatedGold
+				if legacyFallback {
+					earnedExp = history.ExpReward
+					earnedGold = history.GoldReward
+				}
+				if earnedExp > 0 {
+					if _, err := progression.ApplyExperience(&c, earnedExp); err != nil {
+						return fmt.Errorf("applying experience: %w", err)
+					}
+				}
+				if earnedGold > 0 {
+					if err := c.AddMoney(earnedGold); err != nil {
+						return fmt.Errorf("adding gold: %w", err)
+					}
+				}
+			}
+			if m.CharacterID == charID && history.MedalsReward > 0 {
+				if err := c.AddSmallMedals(history.MedalsReward); err != nil {
+					return fmt.Errorf("adding small medals: %w", err)
+				}
+			}
+			if err := updateCharacter(txCtx, executor, c); err != nil {
+				return err
+			}
+			if m.CharacterID == charID && character != nil {
+				*character = c
+			}
+		}
+
+		// 5. Deliver reward item instances (Rank 3 Inventory -> Rank 5 Depot)
 		if len(rewardItems) > 0 {
 			for i := range rewardItems {
 				if rewardItems[i].ID == "" {
 					rewardItems[i].ID = id.New()
 				}
 			}
-			if err := deliverRewardItems(txCtx, r.db, lockedChar, rewardItems); err != nil {
+			leaderChar := applied.UpdatedCharacters[charID]
+			if err := deliverRewardItems(txCtx, r.db, leaderChar, rewardItems); err != nil {
 				return err
 			}
 		}
 
-		// 5. Upsert Character Dungeon Record (Rank 8)
+		// 6. Upsert Character Dungeon Record (Rank 8)
 		upsertRecordQuery := `
 			INSERT INTO character_dungeon_records (
 				character_id, highest_dungeon_cleared, total_expeditions,
@@ -332,7 +425,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 			return err
 		}
 
-		// 6. Delete only this owner's finalized run, preserving any replacement.
+		// 7. Delete only this owner's finalized run, preserving any replacement.
 		if err := r.DeleteActiveExpedition(txCtx, record.CharacterID, history.ID); err != nil {
 			return err
 		}

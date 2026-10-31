@@ -7342,10 +7342,19 @@
       "DungeonExpeditionMember": {
         "additionalProperties": false,
         "properties": {
+          "accumulated_exp": {
+            "type": "integer"
+          },
+          "accumulated_gold": {
+            "type": "integer"
+          },
           "character_id": {
             "type": "string"
           },
           "current_hp": {
+            "type": "integer"
+          },
+          "current_mp": {
             "type": "integer"
           },
           "item_ids": {
@@ -7366,6 +7375,9 @@
           "max_hp": {
             "type": "integer"
           },
+          "max_mp": {
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           }
@@ -7376,7 +7388,9 @@
           "job_id",
           "level",
           "current_hp",
-          "max_hp"
+          "max_hp",
+          "current_mp",
+          "max_mp"
         ],
         "type": "object"
       },

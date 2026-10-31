@@ -75,9 +75,9 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	m.expeditions[exp.CharacterID] = cp
-	for _, member := range exp.Members {
-		if member.CharacterID != exp.CharacterID {
-			m.members[member.CharacterID] = exp.CharacterID
+	for _, member := range cp.Members {
+		if member.CharacterID != cp.CharacterID {
+			m.members[member.CharacterID] = cp.CharacterID
 		}
 	}
 	m.expirations[exp.CharacterID] = time.Now().UTC().Add(m.ttl)
@@ -158,11 +158,50 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		}
 	}
 
+	if len(params.MemberMPDeltas) > 0 {
+		for i := range exp.Members {
+			if delta, ok := params.MemberMPDeltas[exp.Members[i].CharacterID]; ok {
+				exp.Members[i].CurrentMP += delta
+				if exp.Members[i].CurrentMP < 0 {
+					exp.Members[i].CurrentMP = 0
+				}
+				if exp.Members[i].MaxMP > 0 && exp.Members[i].CurrentMP > exp.Members[i].MaxMP {
+					exp.Members[i].CurrentMP = exp.Members[i].MaxMP
+				}
+			}
+		}
+	}
+
+	if len(params.ConsumedItems) > 0 {
+		for i := range exp.Members {
+			if items, ok := params.ConsumedItems[exp.Members[i].CharacterID]; ok && len(items) > 0 {
+				exp.Members[i].ConsumedItems = append(exp.Members[i].ConsumedItems, items...)
+			}
+		}
+	}
+
+	if currentHP < 0 {
+		currentHP = 0
+	}
+
 	finalStatus := StatusExploring
-	if currentHP <= 0 {
+	if len(exp.Members) > 0 {
+		allDead := true
+		for _, m := range exp.Members {
+			if m.CurrentHP > 0 {
+				allDead = false
+				break
+			}
+		}
+		if allDead {
+			currentHP = 0
+			finalStatus = StatusWipedOut
+		}
+	} else if currentHP <= 0 {
 		currentHP = 0
 		finalStatus = StatusWipedOut
-	} else if turnsRemaining <= 0 {
+	}
+	if turnsRemaining <= 0 {
 		turnsRemaining = 0
 		finalStatus = StatusWipedOut
 	}
@@ -193,6 +232,26 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		exp.AccumulatedMedals += params.MedalsDelta
 		if params.RewardItemID != "" {
 			exp.AccumulatedItems = append(exp.AccumulatedItems, params.RewardItemID)
+		}
+
+		if len(params.MemberExpDeltas) > 0 {
+			for i := range exp.Members {
+				if delta, ok := params.MemberExpDeltas[exp.Members[i].CharacterID]; ok && delta > 0 {
+					exp.Members[i].AccumulatedExp += delta
+				}
+			}
+		} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.ExpDelta > 0 {
+			exp.Members[0].AccumulatedExp += params.ExpDelta
+		}
+
+		if len(params.MemberGoldDeltas) > 0 {
+			for i := range exp.Members {
+				if delta, ok := params.MemberGoldDeltas[exp.Members[i].CharacterID]; ok && delta > 0 {
+					exp.Members[i].AccumulatedGold += delta
+				}
+			}
+		} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.GoldDelta > 0 {
+			exp.Members[0].AccumulatedGold += params.GoldDelta
 		}
 	}
 	exp.UpdatedAt = params.Now

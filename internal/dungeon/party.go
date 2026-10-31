@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -15,13 +16,18 @@ var (
 )
 
 type ExpeditionMember struct {
-	CharacterID string   `json:"character_id"`
-	Name        string   `json:"name"`
-	JobID       string   `json:"job_id"`
-	Level       int      `json:"level"`
-	CurrentHP   int      `json:"current_hp"`
-	MaxHP       int      `json:"max_hp"`
-	ItemIDs     []string `json:"item_ids,omitempty"`
+	CharacterID     string                    `json:"character_id"`
+	Name            string                    `json:"name"`
+	JobID           string                    `json:"job_id"`
+	Level           int                       `json:"level"`
+	CurrentHP       int                       `json:"current_hp"`
+	MaxHP           int                       `json:"max_hp"`
+	CurrentMP       int                       `json:"current_mp"`
+	MaxMP           int                       `json:"max_mp"`
+	AccumulatedExp  int                       `json:"accumulated_exp"`
+	AccumulatedGold int                       `json:"accumulated_gold"`
+	ItemIDs         []string                  `json:"item_ids,omitempty"`
+	ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
 }
 
 // StartPartyExpedition begins a 2D dungeon exploration for up to 4 party members.
@@ -104,6 +110,17 @@ func (s *Service) startRoster(
 			currHP = maxHP
 		}
 
+		maxMP := char.Stats.MaxMP
+		if maxMP <= 0 {
+			maxMP = char.Stats.MP
+		}
+		currMP := char.Stats.MP
+		if currMP < 0 {
+			currMP = 0
+		} else if maxMP > 0 && currMP > maxMP {
+			currMP = maxMP
+		}
+
 		if char.ID == leaderCharID || mID == leaderCharID {
 			leaderHP = currHP
 		}
@@ -124,6 +141,8 @@ func (s *Service) startRoster(
 			Level:       char.Level,
 			CurrentHP:   currHP,
 			MaxHP:       maxHP,
+			CurrentMP:   currMP,
+			MaxMP:       maxMP,
 			ItemIDs:     itemIDs,
 		})
 	}

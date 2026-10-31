@@ -22,7 +22,7 @@ type pausedFinalizeRepository struct {
 	resume  chan struct{}
 }
 
-func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, rec dungeon.CharacterDungeonRecord, c *corecharacter.Character, items []coreitem.Instance) error {
+func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, rec dungeon.CharacterDungeonRecord, c *corecharacter.Character, items []coreitem.Instance, members ...dungeon.ExpeditionMember) error {
 	if ctx.Value(staleEscapeKey{}) != nil {
 		close(r.entered)
 		select {
@@ -31,7 +31,7 @@ func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dun
 			return ctx.Err()
 		}
 	}
-	return r.Repository.FinalizeExpedition(ctx, h, rec, c, items)
+	return r.Repository.FinalizeExpedition(ctx, h, rec, c, items, members...)
 }
 
 func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {

@@ -32,11 +32,12 @@ func (e *errorInjectingDungeonRepo) FinalizeExpedition(
 	record dungeon.CharacterDungeonRecord,
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
+	members ...dungeon.ExpeditionMember,
 ) error {
 	if e.errFinalizeExpedition != nil {
 		return e.errFinalizeExpedition
 	}
-	return e.mockDungeonRepo.FinalizeExpedition(ctx, history, record, character, rewardItems)
+	return e.mockDungeonRepo.FinalizeExpedition(ctx, history, record, character, rewardItems, members...)
 }
 
 func customSettlementDungeons() []dungeon.Dungeon {

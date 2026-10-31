@@ -11,6 +11,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	coreprogression "github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/dungeon"
 )
 
@@ -68,6 +69,7 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 	record dungeon.CharacterDungeonRecord,
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
+	members ...dungeon.ExpeditionMember,
 ) error {
 	for _, h := range m.histories[record.CharacterID] {
 		if history.ID != "" && h.ID == history.ID {
@@ -78,6 +80,32 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 	m.histories[record.CharacterID] = append([]dungeon.DungeonExpeditionHistory{history}, m.histories[record.CharacterID]...)
 	if character != nil {
 		m.savedChars[character.ID] = *character
+	}
+	for _, mem := range members {
+		if character != nil && mem.CharacterID == character.ID {
+			continue
+		}
+		c, ok := m.savedChars[mem.CharacterID]
+		if !ok {
+			c = corecharacter.Character{ID: mem.CharacterID}
+		}
+		c.Stats.HP = mem.CurrentHP
+		c.Stats.MP = mem.CurrentMP
+		if history.Outcome == dungeon.StatusCleared || history.Outcome == dungeon.StatusEscaped {
+			earnedExp := mem.AccumulatedExp
+			earnedGold := mem.AccumulatedGold
+			if earnedExp == 0 && earnedGold == 0 && len(members) <= 1 {
+				earnedExp = history.ExpReward
+				earnedGold = history.GoldReward
+			}
+			if earnedExp > 0 {
+				_, _ = coreprogression.ApplyExperience(&c, earnedExp)
+			}
+			if earnedGold > 0 {
+				_ = c.AddMoney(earnedGold)
+			}
+		}
+		m.savedChars[mem.CharacterID] = c
 	}
 	if len(rewardItems) > 0 {
 		m.awardedItems[record.CharacterID] = append(m.awardedItems[record.CharacterID], rewardItems...)
@@ -850,6 +878,9 @@ func TestMove_TileEvents_Comprehensive(t *testing.T) {
 	exp.PosX = 2
 	exp.PosY = 0
 	exp.CurrentHP = 5
+	if len(exp.Members) > 0 {
+		exp.Members[0].CurrentHP = 5
+	}
 	_ = activeStore.SaveActiveExpedition(ctx, *exp)
 	res, err = service.Move(ctx, "hero", dungeon.DirectionEast) // moves to (3, 0) 'X'
 	if err != nil {

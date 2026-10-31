@@ -46,6 +46,13 @@ func (s *Service) handleDungeonClear(
 	exp.AccumulatedGold += dungeon.ClearGoldBonus
 	exp.UpdatedAt = now
 
+	for i := range exp.Members {
+		if exp.Members[i].CurrentHP > 0 {
+			exp.Members[i].AccumulatedExp += dungeon.ClearExpBonus
+			exp.Members[i].AccumulatedGold += dungeon.ClearGoldBonus
+		}
+	}
+
 	// 1. Commit accumulated rewards to character
 	if exp.AccumulatedExp > 0 {
 		if _, err := progression.ApplyExperience(char, exp.AccumulatedExp); err != nil {
@@ -60,6 +67,16 @@ func (s *Service) handleDungeonClear(
 	if err := char.AddSmallMedals(exp.AccumulatedMedals); err != nil {
 		return ExpeditionStepResult{}, fmt.Errorf("adding small medals: %w", err)
 	}
+
+	char.Stats.HP = exp.CurrentHP
+	for _, m := range exp.Members {
+		if m.CharacterID == char.ID {
+			char.Stats.HP = m.CurrentHP
+			char.Stats.MP = m.CurrentMP
+			break
+		}
+	}
+	char.Stats.ClampVitality()
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
@@ -102,7 +119,7 @@ func (s *Service) handleDungeonClear(
 	}
 
 	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
+	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems, exp.Members...); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
 		return ExpeditionStepResult{}, err
 	}
 
@@ -146,6 +163,16 @@ func (s *Service) handleEscape(
 		return ExpeditionStepResult{}, fmt.Errorf("adding small medals: %w", err)
 	}
 
+	char.Stats.HP = exp.CurrentHP
+	for _, m := range exp.Members {
+		if m.CharacterID == char.ID {
+			char.Stats.HP = m.CurrentHP
+			char.Stats.MP = m.CurrentMP
+			break
+		}
+	}
+	char.Stats.ClampVitality()
+
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
 		itemID := id.New()
@@ -182,7 +209,7 @@ func (s *Service) handleEscape(
 	}
 
 	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
+	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems, exp.Members...); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
 		return ExpeditionStepResult{}, err
 	}
 
@@ -235,9 +262,19 @@ func (s *Service) handleWipeout(
 		CreatedAt:        now,
 	}
 
+	char.Stats.HP = exp.CurrentHP
+	for _, m := range exp.Members {
+		if m.CharacterID == char.ID {
+			char.Stats.HP = m.CurrentHP
+			char.Stats.MP = m.CurrentMP
+			break
+		}
+	}
+	char.Stats.ClampVitality()
+
 	// Wiping out forfeits unbanked ledger rewards (0 EXP, 0 Gold, 0 items awarded)
 	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, nil); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
+	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, nil, exp.Members...); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
 		return ExpeditionStepResult{}, err
 	}
 

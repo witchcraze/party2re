@@ -202,9 +202,9 @@
     {
       "module": "dungeon",
       "caller_method": "internal/database/dungeon_repository.go#DungeonRepository.FinalizeExpedition",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_mode": "SELECT ... FOR UPDATE (ascending character IDs via FindByIDForUpdate; shared battle adapter)",
       "lock_order": 2,
-      "purpose": "Lock character row before claiming expedition history by run ID and applying experience, gold, and small medal rewards"
+      "purpose": "Lock all participating expedition member characters in ascending ID order before claiming expedition history by run ID, persisting post-battle vitality/consumed items, and applying rewards"
     }
   ]
 }
