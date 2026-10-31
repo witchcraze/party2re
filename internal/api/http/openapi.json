@@ -10918,6 +10918,9 @@
           "need_join": {
             "type": "string"
           },
+          "season": {
+            "type": "string"
+          },
           "speed": {
             "type": "integer"
           },

@@ -60,6 +60,7 @@ type Party struct {
 	Name              string    `json:"name"`
 	PasswordHash      string    `json:"-"`
 	StageID           string    `json:"stage_id"`
+	Season            string    `json:"season,omitempty"`
 	Mode              string    `json:"mode,omitempty"`
 	Speed             int       `json:"speed"`
 	MaxMembers        int       `json:"max_members"`

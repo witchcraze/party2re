@@ -199,12 +199,18 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 		partyID := id.New()
 		passHash := hashPassword(req.Password)
 
+		chosenSeason := ""
+		if len(stage.Seasons) > 0 {
+			chosenSeason = stage.SelectSeason(s.rng).Season
+		}
+
 		createdParty = Party{
 			ID:                partyID,
 			LeaderCharacterID: leaderChar.ID,
 			Name:              strings.TrimSpace(req.Name),
 			PasswordHash:      passHash,
 			StageID:           stage.ID,
+			Season:            chosenSeason,
 			Mode:              mode,
 			Speed:             speed,
 			MaxMembers:        maxMembers,

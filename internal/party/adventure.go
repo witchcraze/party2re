@@ -88,7 +88,17 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			if err != nil {
 				return ErrStageNotFound
 			}
-			stage = stage.SelectSeason(s.rng)
+			if p.Season != "" {
+				stage = stage.ForSeason(p.Season)
+			} else if len(stage.Seasons) > 0 {
+				// Backward compatibility for existing parties without Season:
+				// Lazily select once and persist on the party.
+				stage = stage.SelectSeason(s.rng)
+				p.Season = stage.Season
+				if err := s.repo.UpdateParty(txCtx, p); err != nil {
+					return err
+				}
+			}
 			leaderChar := charMap[leaderCharID]
 			if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
 				return err
