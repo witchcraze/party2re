@@ -48,6 +48,7 @@ type DungeonCrawlRequest struct {
 	StageID      string
 	Mode         string
 	Rng          func(n int) int
+	RngFloat     func() float64
 }
 
 // DungeonCrawlResult contains the complete summary of a 10-floor dungeon crawl and treasure room.
@@ -105,6 +106,7 @@ type CrawlSession struct {
 	ConsumedItems       map[string][]corebattle.ConsumedItem `json:"consumed_items,omitempty"`
 	HasTreasureBlessing bool                                 `json:"has_treasure_blessing,omitempty"`
 	Rng                 func(n int) int                      `json:"-"`
+	RngFloat            func() float64                       `json:"-"`
 	nowFunc             func() time.Time                     `json:"-"`
 }
 
@@ -228,53 +230,60 @@ func (s *CrawlSession) AdvanceFloor(
 
 	var floorEXP int
 	var floorGold int
+	partyCount := len(s.Participants)
+	if partyCount < 1 {
+		partyCount = 1
+	}
+	partyAdjustment := float64(partyCount-2) * 0.1
+
 	if !isBoss {
-		// Floors 1 to 9: spawn normal monsters
+		// Floors 1 to 9: spawn normal monsters (lib/_npc_action.cgi:635-678 add_monster)
 		normalIDs := stage.GetNormalMonsterIDs()
-		partyCount := len(s.Participants)
-		enemyCount := 1 + s.Rng(int(mathClamp(partyCount, 1, 3)))
+		bound := 2.5 + float64(partyCount)*0.6
+		rCount := s.rngFloat()
+		if rCount < 0 {
+			rCount = 0
+		}
+		if rCount >= 1 {
+			rCount = 0.9999999999999999
+		}
+		enemyCount := int(rCount*bound) + 1
+
 		for i := 0; i < enemyCount; i++ {
+			if len(normalIDs) == 0 {
+				continue
+			}
 			mID := normalIDs[s.Rng(len(normalIDs))]
 			m, err := monsters.FindByID(mID)
 			if err != nil {
 				continue
 			}
-			p := corebattle.MustNewParticipant(
+			p := s.buildMonsterParticipant(
 				fmt.Sprintf("%s-f%d-%d", m.ID, s.CurrentFloor, i+1),
-				m.HP, m.Attack, m.Defense,
+				m,
+				partyAdjustment,
+				false,
 			)
-			p.Name = m.Name
-			p.Agility = m.Agility
-			p.MaxHP = m.HP
-			p.MP = m.MP
-			p.MaxMP = m.MP
-			p.ExperienceReward = m.ExperienceReward
-			p.GoldReward = m.GoldReward
-			floorEXP += m.ExperienceReward
-			floorGold += m.GoldReward
+			floorEXP += p.ExperienceReward
+			floorGold += p.GoldReward
 			enemies = append(enemies, p)
 		}
 	} else {
-		// Floor 10: spawn stage boss(es)
+		// Floor 10: spawn stage boss(es) (lib/_npc_action.cgi:600-634 add_boss)
 		bossIDs := stage.GetBossIDs()
 		for i, bID := range bossIDs {
 			m, err := monsters.FindByID(bID)
 			if err != nil {
 				continue
 			}
-			p := corebattle.MustNewParticipant(
+			p := s.buildMonsterParticipant(
 				fmt.Sprintf("%s-boss-%d", m.ID, i+1),
-				m.HP, m.Attack, m.Defense,
+				m,
+				partyAdjustment,
+				true,
 			)
-			p.Name = m.Name
-			p.Agility = m.Agility
-			p.MaxHP = m.HP
-			p.MP = m.MP
-			p.MaxMP = m.MP
-			p.ExperienceReward = m.ExperienceReward
-			p.GoldReward = m.GoldReward
-			floorEXP += m.ExperienceReward
-			floorGold += m.GoldReward
+			floorEXP += p.ExperienceReward
+			floorGold += p.GoldReward
 			enemies = append(enemies, p)
 		}
 	}
@@ -423,53 +432,4 @@ func (s *CrawlSession) SetStage(stage Stage) {
 	s.Stage = stage
 	s.StageID = stage.ID
 	s.StageName = stage.Name
-}
-
-// Result compiles the final outcome of the dungeon crawl.
-func (s *CrawlSession) Result() DungeonCrawlResult {
-	participantHPs := make(map[string]int, len(s.Participants))
-	participantMPs := make(map[string]int, len(s.Participants))
-	for _, p := range s.Participants {
-		participantHPs[p.ID] = p.HP
-		participantMPs[p.ID] = p.MP
-	}
-
-	outcome := s.Outcome
-	if outcome == "" {
-		if s.StageCleared {
-			outcome = corebattle.OutcomeWin
-		} else {
-			outcome = corebattle.OutcomeDefeat
-		}
-	}
-
-	mode := s.Mode
-	if mode == "" {
-		mode = CrawlModeNormal
-	}
-
-	return DungeonCrawlResult{
-		AdventureIDs:   make(map[string]string),
-		StageID:        s.StageID,
-		StageName:      s.StageName,
-		Season:         s.Stage.Season,
-		SeasonalSubID:  SeasonToSubID(s.Stage.Season),
-		Mode:           mode,
-		Round:          s.Round,
-		ExitFatigue:    CalculateExitFatigue(s.Round, mode),
-		FloorsCleared:  s.FloorsCleared,
-		StageCleared:   s.StageCleared,
-		Outcome:        outcome,
-		TotalTurns:     s.TotalTurns,
-		TotalEXP:       s.TotalEXP,
-		TotalGold:      s.TotalGold,
-		TotalCrystals:  s.TotalCrystals,
-		FloorResults:   s.FloorResults,
-		TreasureBoxes:  s.TreasureBoxes,
-		InspectedBoxes: cloneInspectedBoxes(s.InspectedBoxes),
-		PartySize:      len(s.Characters),
-		ParticipantHPs: participantHPs,
-		ParticipantMPs: participantMPs,
-		ConsumedItems:  cloneConsumedItems(s.ConsumedItems),
-	}
 }

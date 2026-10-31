@@ -22,15 +22,20 @@ type Monster struct {
 	Attack           int      `json:"attack"`
 	Defense          int      `json:"defense"`
 	Agility          int      `json:"agility"`
+	CMP              int      `json:"cmp,omitempty"`
 	ExperienceReward int      `json:"exp_reward"`
 	GoldReward       int      `json:"gold_reward"`
 	DropItemIDs      []string `json:"drop_item_ids,omitempty"`
 }
 
 func NewMonster(id, name string, hp, mp, attack, defense, agility, expReward, goldReward int, dropItemIDs []string) (Monster, error) {
+	return NewMonsterWithCMP(id, name, hp, mp, attack, defense, agility, 0, expReward, goldReward, dropItemIDs)
+}
+
+func NewMonsterWithCMP(id, name string, hp, mp, attack, defense, agility, cmp, expReward, goldReward int, dropItemIDs []string) (Monster, error) {
 	id = strings.TrimSpace(id)
 	name = strings.TrimSpace(name)
-	if id == "" || name == "" || hp <= 0 || mp < 0 || attack < 0 || defense < 0 || agility < 0 || expReward < 0 || goldReward < 0 {
+	if id == "" || name == "" || hp <= 0 || mp < 0 || attack < 0 || defense < 0 || agility < 0 || cmp < 0 || expReward < 0 || goldReward < 0 {
 		return Monster{}, ErrInvalidMonster
 	}
 	return Monster{
@@ -41,6 +46,7 @@ func NewMonster(id, name string, hp, mp, attack, defense, agility, expReward, go
 		Attack:           attack,
 		Defense:          defense,
 		Agility:          agility,
+		CMP:              cmp,
 		ExperienceReward: expReward,
 		GoldReward:       goldReward,
 		DropItemIDs:      dropItemIDs,
@@ -56,7 +62,7 @@ func NewMonsterCatalog(monsters []Monster) (*MonsterCatalog, error) {
 	for _, m := range monsters {
 		m.ID = strings.TrimSpace(m.ID)
 		m.Name = strings.TrimSpace(m.Name)
-		if m.ID == "" || m.Name == "" || m.HP <= 0 || m.MP < 0 || m.Attack < 0 || m.Defense < 0 || m.Agility < 0 || m.ExperienceReward < 0 || m.GoldReward < 0 {
+		if m.ID == "" || m.Name == "" || m.HP <= 0 || m.MP < 0 || m.Attack < 0 || m.Defense < 0 || m.Agility < 0 || m.CMP < 0 || m.ExperienceReward < 0 || m.GoldReward < 0 {
 			return nil, ErrInvalidMonster
 		}
 		if _, exists := catalog.monsters[m.ID]; exists {

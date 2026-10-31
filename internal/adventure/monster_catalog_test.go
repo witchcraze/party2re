@@ -12,8 +12,16 @@ func TestMonsterCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMonster() error = %v", err)
 	}
-	if m.ID != "m-1" || m.Name != "Slime" || m.HP != 10 || m.Attack != 6 {
+	if m.ID != "m-1" || m.Name != "Slime" || m.HP != 10 || m.Attack != 6 || m.CMP != 0 {
 		t.Errorf("NewMonster() = %#v", m)
+	}
+
+	mWithCMP, err := adventure.NewMonsterWithCMP("m-cmp", "Mage Slime", 15, 10, 8, 3, 5, 20, 6, 5, nil)
+	if err != nil {
+		t.Fatalf("NewMonsterWithCMP() error = %v", err)
+	}
+	if mWithCMP.CMP != 20 {
+		t.Errorf("NewMonsterWithCMP() CMP = %d, want 20", mWithCMP.CMP)
 	}
 }
 
@@ -26,6 +34,7 @@ func TestMonsterCreationValidation(t *testing.T) {
 		attack      int
 		defense     int
 		agility     int
+		cmp         int
 		expReward   int
 		goldReward  int
 	}{
@@ -38,13 +47,14 @@ func TestMonsterCreationValidation(t *testing.T) {
 		{name: "negative agility", id: "m-1", monsterName: "Slime", hp: 10, attack: 1, defense: 1, agility: -1},
 		{name: "negative exp", id: "m-1", monsterName: "Slime", hp: 10, attack: 1, defense: 1, agility: 1, expReward: -1},
 		{name: "negative gold", id: "m-1", monsterName: "Slime", hp: 10, attack: 1, defense: 1, agility: 1, goldReward: -1},
+		{name: "negative cmp", id: "m-1", monsterName: "Slime", hp: 10, attack: 1, defense: 1, agility: 1, cmp: -1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := adventure.NewMonster(tt.id, tt.monsterName, tt.hp, 0, tt.attack, tt.defense, tt.agility, tt.expReward, tt.goldReward, nil)
+			_, err := adventure.NewMonsterWithCMP(tt.id, tt.monsterName, tt.hp, 0, tt.attack, tt.defense, tt.agility, tt.cmp, tt.expReward, tt.goldReward, nil)
 			if err == nil {
-				t.Errorf("NewMonster(%s) expected error, got nil", tt.name)
+				t.Errorf("NewMonsterWithCMP(%s) expected error, got nil", tt.name)
 			}
 		})
 	}

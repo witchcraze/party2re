@@ -3,6 +3,7 @@ package adventure_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -1376,4 +1377,411 @@ func TestCrawlSession_SeasonalStagePersistence(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCrawlSession_EncounterCount_PartySizesAndBoundaries(t *testing.T) {
+	m, err := adventure.NewMonster("m-dummy", "Dummy", 10, 0, 5, 2, 2, 1, 1, nil)
+	if err != nil {
+		t.Fatalf("NewMonster: %v", err)
+	}
+	monsters, err := adventure.NewMonsterCatalog([]adventure.Monster{m})
+	if err != nil {
+		t.Fatalf("NewMonsterCatalog: %v", err)
+	}
+	stage, err := adventure.NewStageWithBosses("s-test", "Test Stage", 1, []string{"m-dummy"}, nil)
+	if err != nil {
+		t.Fatalf("NewStageWithBosses: %v", err)
+	}
+	stages, err := adventure.NewStageCatalog([]adventure.Stage{stage})
+	if err != nil {
+		t.Fatalf("NewStageCatalog: %v", err)
+	}
+
+	makeParty := func(n int) []corecharacter.Character {
+		chars := make([]corecharacter.Character, n)
+		for i := 0; i < n; i++ {
+			chars[i] = corecharacter.Character{
+				ID:    fmt.Sprintf("hero-%d", i+1),
+				Name:  fmt.Sprintf("Hero%d", i+1),
+				Stats: corecharacter.Stats{HP: 1000, MaxHP: 1000, Attack: 100, Defense: 100},
+			}
+		}
+		return chars
+	}
+
+	engine := corebattle.Engine{}
+
+	tests := []struct {
+		name      string
+		partySize int
+		roll      float64
+		wantCount int
+	}{
+		// N = 1 (bound = 2.5 + 1*0.6 = 3.1)
+		{name: "N1 lower endpoint (0.0)", partySize: 1, roll: 0.0, wantCount: 1},
+		{name: "N1 boundary 1- just below", partySize: 1, roll: (1.0 / 3.1) - 0.0001, wantCount: 1},
+		{name: "N1 boundary 1+ at boundary", partySize: 1, roll: 1.0 / 3.1, wantCount: 2},
+		{name: "N1 boundary 2- just below", partySize: 1, roll: (2.0 / 3.1) - 0.0001, wantCount: 2},
+		{name: "N1 boundary 2+ at boundary", partySize: 1, roll: 2.0 / 3.1, wantCount: 3},
+		{name: "N1 boundary 3- just below", partySize: 1, roll: (3.0 / 3.1) - 0.0001, wantCount: 3},
+		{name: "N1 boundary 3+ at boundary", partySize: 1, roll: 3.0 / 3.1, wantCount: 4},
+		{name: "N1 upper endpoint (0.999999)", partySize: 1, roll: 0.999999, wantCount: 4},
+
+		// N = 2 (bound = 2.5 + 2*0.6 = 3.7)
+		{name: "N2 lower endpoint (0.0)", partySize: 2, roll: 0.0, wantCount: 1},
+		{name: "N2 boundary 1- just below", partySize: 2, roll: (1.0 / 3.7) - 0.0001, wantCount: 1},
+		{name: "N2 boundary 1+ at boundary", partySize: 2, roll: 1.0 / 3.7, wantCount: 2},
+		{name: "N2 boundary 2- just below", partySize: 2, roll: (2.0 / 3.7) - 0.0001, wantCount: 2},
+		{name: "N2 boundary 2+ at boundary", partySize: 2, roll: 2.0 / 3.7, wantCount: 3},
+		{name: "N2 boundary 3- just below", partySize: 2, roll: (3.0 / 3.7) - 0.0001, wantCount: 3},
+		{name: "N2 boundary 3+ at boundary", partySize: 2, roll: 3.0 / 3.7, wantCount: 4},
+		{name: "N2 upper endpoint (0.999999)", partySize: 2, roll: 0.999999, wantCount: 4},
+
+		// N = 3 (bound = 2.5 + 3*0.6 = 4.3)
+		{name: "N3 lower endpoint (0.0)", partySize: 3, roll: 0.0, wantCount: 1},
+		{name: "N3 boundary 1- just below", partySize: 3, roll: (1.0 / 4.3) - 0.0001, wantCount: 1},
+		{name: "N3 boundary 1+ at boundary", partySize: 3, roll: 1.0 / 4.3, wantCount: 2},
+		{name: "N3 boundary 2- just below", partySize: 3, roll: (2.0 / 4.3) - 0.0001, wantCount: 2},
+		{name: "N3 boundary 2+ at boundary", partySize: 3, roll: 2.0 / 4.3, wantCount: 3},
+		{name: "N3 boundary 3- just below", partySize: 3, roll: (3.0 / 4.3) - 0.0001, wantCount: 3},
+		{name: "N3 boundary 3+ at boundary", partySize: 3, roll: 3.0 / 4.3, wantCount: 4},
+		{name: "N3 boundary 4- just below", partySize: 3, roll: (4.0 / 4.3) - 0.0001, wantCount: 4},
+		{name: "N3 boundary 4+ at boundary", partySize: 3, roll: 4.0 / 4.3, wantCount: 5},
+		{name: "N3 upper endpoint (0.999999)", partySize: 3, roll: 0.999999, wantCount: 5},
+
+		// N = 4 (bound = 2.5 + 4*0.6 = 4.9)
+		{name: "N4 lower endpoint (0.0)", partySize: 4, roll: 0.0, wantCount: 1},
+		{name: "N4 boundary 1- just below", partySize: 4, roll: (1.0 / 4.9) - 0.0001, wantCount: 1},
+		{name: "N4 boundary 1+ at boundary", partySize: 4, roll: 1.0 / 4.9, wantCount: 2},
+		{name: "N4 boundary 2- just below", partySize: 4, roll: (2.0 / 4.9) - 0.0001, wantCount: 2},
+		{name: "N4 boundary 2+ at boundary", partySize: 4, roll: 2.0 / 4.9, wantCount: 3},
+		{name: "N4 boundary 3- just below", partySize: 4, roll: (3.0 / 4.9) - 0.0001, wantCount: 3},
+		{name: "N4 boundary 3+ at boundary", partySize: 4, roll: 3.0 / 4.9, wantCount: 4},
+		{name: "N4 boundary 4- just below", partySize: 4, roll: (4.0 / 4.9) - 0.0001, wantCount: 4},
+		{name: "N4 boundary 4+ at boundary", partySize: 4, roll: 4.0 / 4.9, wantCount: 5},
+		{name: "N4 upper endpoint (0.999999)", partySize: 4, roll: 0.999999, wantCount: 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			party := makeParty(tt.partySize)
+			sess, err := adventure.NewCrawlSession(stage, party, func(n int) int { return 0 })
+			if err != nil {
+				t.Fatalf("NewCrawlSession: %v", err)
+			}
+			sess.RngFloat = func() float64 { return tt.roll }
+
+			res, err := sess.AdvanceFloor(stages, monsters, engine)
+			if err != nil {
+				t.Fatalf("AdvanceFloor: %v", err)
+			}
+			if len(res.Enemies) != tt.wantCount {
+				t.Errorf("got %d enemies, want %d", len(res.Enemies), tt.wantCount)
+			}
+		})
+	}
+}
+
+func TestCrawlSession_StatScaling_PartySizesAndBoundaries(t *testing.T) {
+	// Base monster: HP: 100, MP: 50, Attack: 30, Defense: 20, Agility: 15, CMP: 10, EXP: 40, Gold: 25
+	m, err := adventure.NewMonsterWithCMP("m-scale", "ScaleMon", 100, 50, 30, 20, 15, 10, 40, 25, nil)
+	if err != nil {
+		t.Fatalf("NewMonsterWithCMP: %v", err)
+	}
+	bossM, err := adventure.NewMonsterWithCMP("m-boss", "ScaleBoss", 200, 80, 50, 40, 25, 20, 100, 60, nil)
+	if err != nil {
+		t.Fatalf("NewMonsterWithCMP boss: %v", err)
+	}
+	monsters, err := adventure.NewMonsterCatalog([]adventure.Monster{m, bossM})
+	if err != nil {
+		t.Fatalf("NewMonsterCatalog: %v", err)
+	}
+	stage, err := adventure.NewStageWithBosses("s-scale", "Scale Stage", 1, []string{"m-scale"}, []string{"m-boss"})
+	if err != nil {
+		t.Fatalf("NewStageWithBosses: %v", err)
+	}
+	stages, err := adventure.NewStageCatalog([]adventure.Stage{stage})
+	if err != nil {
+		t.Fatalf("NewStageCatalog: %v", err)
+	}
+
+	makeParty := func(n int) []corecharacter.Character {
+		chars := make([]corecharacter.Character, n)
+		for i := 0; i < n; i++ {
+			chars[i] = corecharacter.Character{
+				ID:    fmt.Sprintf("hero-%d", i+1),
+				Name:  fmt.Sprintf("Hero%d", i+1),
+				Stats: corecharacter.Stats{HP: 10000, MaxHP: 10000, Attack: 1000, Defense: 1000},
+			}
+		}
+		return chars
+	}
+
+	engine := corebattle.Engine{}
+
+	t.Run("N1 solo lower endpoint roll 0.0", func(t *testing.T) {
+		party := makeParty(1)
+		sess, err := adventure.NewCrawlSession(stage, party, func(n int) int { return 0 })
+		if err != nil {
+			t.Fatalf("NewCrawlSession: %v", err)
+		}
+		sess.RngFloat = func() float64 { return 0.0 }
+
+		res, err := sess.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("AdvanceFloor: %v", err)
+		}
+		if len(res.Enemies) != 1 {
+			t.Fatalf("expected 1 enemy, got %d", len(res.Enemies))
+		}
+		e := res.Enemies[0]
+		// Factor: 0.9 + 0.0 - 0.1 = 0.8
+		// HP: 100 * 0.8 = 80
+		// MP: 50 * 0.8 = 40
+		// Attack: 30 * 0.8 = 24
+		// Defense: 20 * 0.8 = 16
+		// Agility: 15 * 0.8 = 12
+		// CMP: 10 * 0.8 = 8
+		if e.HP != 80 || e.MaxHP != 80 {
+			t.Errorf("HP = %d, want 80", e.HP)
+		}
+		if e.MP != 40 || e.MaxMP != 40 {
+			t.Errorf("MP = %d, want 40", e.MP)
+		}
+		if e.Attack != 24 {
+			t.Errorf("Attack = %d, want 24", e.Attack)
+		}
+		if e.Defense != 16 {
+			t.Errorf("Defense = %d, want 16", e.Defense)
+		}
+		if e.Agility != 12 {
+			t.Errorf("Agility = %d, want 12", e.Agility)
+		}
+		if e.CMP != 8 || e.MaxCMP != 8 {
+			t.Errorf("CMP = %d, want 8", e.CMP)
+		}
+	})
+
+	t.Run("N1 solo upper endpoint roll 0.999999", func(t *testing.T) {
+		party := makeParty(1)
+		sess, err := adventure.NewCrawlSession(stage, party, func(n int) int { return 0 })
+		if err != nil {
+			t.Fatalf("NewCrawlSession: %v", err)
+		}
+		sess.RngFloat = func() float64 { return 0.999999 }
+
+		res, err := sess.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("AdvanceFloor: %v", err)
+		}
+		// Bound = 3.1 -> enemyCount = 4
+		if len(res.Enemies) != 4 {
+			t.Fatalf("expected 4 enemies, got %d", len(res.Enemies))
+		}
+		e := res.Enemies[0]
+		// Factor: 0.9 + 0.999999*0.3 - 0.1 = 1.0999997
+		// HP: int(100 * 1.0999997) = 109
+		// MP: int(50 * 1.0999997) = 54
+		// Attack: int(30 * 1.0999997) = 32
+		// Defense: int(20 * 1.0999997) = 21
+		// Agility: int(15 * 1.0999997) = 16
+		// CMP: int(10 * 1.0999997) = 10
+		if e.HP != 109 || e.MaxHP != 109 {
+			t.Errorf("HP = %d, want 109", e.HP)
+		}
+		if e.MP != 54 || e.MaxMP != 54 {
+			t.Errorf("MP = %d, want 54", e.MP)
+		}
+		if e.Attack != 32 {
+			t.Errorf("Attack = %d, want 32", e.Attack)
+		}
+		if e.Defense != 21 {
+			t.Errorf("Defense = %d, want 21", e.Defense)
+		}
+		if e.Agility != 16 {
+			t.Errorf("Agility = %d, want 16", e.Agility)
+		}
+		if e.CMP != 10 || e.MaxCMP != 10 {
+			t.Errorf("CMP = %d, want 10", e.CMP)
+		}
+	})
+
+	t.Run("N4 party lower endpoint roll 0.0", func(t *testing.T) {
+		party := makeParty(4)
+		sess, err := adventure.NewCrawlSession(stage, party, func(n int) int { return 0 })
+		if err != nil {
+			t.Fatalf("NewCrawlSession: %v", err)
+		}
+		sess.RngFloat = func() float64 { return 0.0 }
+
+		res, err := sess.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("AdvanceFloor: %v", err)
+		}
+		if len(res.Enemies) != 1 {
+			t.Fatalf("expected 1 enemy at roll 0.0, got %d", len(res.Enemies))
+		}
+		e := res.Enemies[0]
+		// Factor: 0.9 + 0.0 + (4-2)*0.1 = 1.1
+		// HP: 100 * 1.1 = 110
+		// MP: 50 * 1.1 = 55
+		// Attack: 30 * 1.1 = 33
+		// Defense: 20 * 1.1 = 22
+		// Agility: 15 * 1.1 = 16 (16.5 truncated)
+		// CMP: 10 * 1.1 = 11
+		if e.HP != 110 || e.MaxHP != 110 {
+			t.Errorf("HP = %d, want 110", e.HP)
+		}
+		if e.MP != 55 || e.MaxMP != 55 {
+			t.Errorf("MP = %d, want 55", e.MP)
+		}
+		if e.Attack != 33 {
+			t.Errorf("Attack = %d, want 33", e.Attack)
+		}
+		if e.Defense != 22 {
+			t.Errorf("Defense = %d, want 22", e.Defense)
+		}
+		if e.Agility != 16 {
+			t.Errorf("Agility = %d, want 16", e.Agility)
+		}
+		if e.CMP != 11 || e.MaxCMP != 11 {
+			t.Errorf("CMP = %d, want 11", e.CMP)
+		}
+	})
+
+	t.Run("N4 party upper endpoint roll 0.999999", func(t *testing.T) {
+		party := makeParty(4)
+		sess, err := adventure.NewCrawlSession(stage, party, func(n int) int { return 0 })
+		if err != nil {
+			t.Fatalf("NewCrawlSession: %v", err)
+		}
+		sess.RngFloat = func() float64 { return 0.999999 }
+
+		res, err := sess.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("AdvanceFloor: %v", err)
+		}
+		if len(res.Enemies) != 5 {
+			t.Fatalf("expected 5 enemies, got %d", len(res.Enemies))
+		}
+		e := res.Enemies[0]
+		// Factor: 0.9 + 0.999999*0.3 + 0.2 = 1.3999997
+		// HP: int(100 * 1.3999997) = 139
+		// MP: int(50 * 1.3999997) = 69
+		// Attack: int(30 * 1.3999997) = 41
+		// Defense: int(20 * 1.3999997) = 27
+		// Agility: int(15 * 1.3999997) = 20
+		// CMP: int(10 * 1.3999997) = 13
+		if e.HP != 139 || e.MaxHP != 139 {
+			t.Errorf("HP = %d, want 139", e.HP)
+		}
+		if e.MP != 69 || e.MaxMP != 69 {
+			t.Errorf("MP = %d, want 69", e.MP)
+		}
+		if e.Attack != 41 {
+			t.Errorf("Attack = %d, want 41", e.Attack)
+		}
+		if e.Defense != 27 {
+			t.Errorf("Defense = %d, want 27", e.Defense)
+		}
+		if e.Agility != 20 {
+			t.Errorf("Agility = %d, want 20", e.Agility)
+		}
+		if e.CMP != 13 || e.MaxCMP != 13 {
+			t.Errorf("CMP = %d, want 13", e.CMP)
+		}
+	})
+
+	t.Run("Floor 10 Boss scaling", func(t *testing.T) {
+		party := makeParty(2) // party adjustment = 0.0
+		sess, err := adventure.NewCrawlSession(stage, party, func(n int) int { return 0 })
+		if err != nil {
+			t.Fatalf("NewCrawlSession: %v", err)
+		}
+		sess.CurrentFloor = 10
+		sess.RngFloat = func() float64 { return 0.0 }
+
+		res, err := sess.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("AdvanceFloor boss: %v", err)
+		}
+		if !res.IsBoss || len(res.Enemies) != 1 {
+			t.Fatalf("expected 1 boss, got %d", len(res.Enemies))
+		}
+		b := res.Enemies[0]
+		// Boss: HP: 200, MP: 80, Attack: 50, Defense: 40, Agility: 25, CMP: 20
+		// Factor: 0.9 + 0.0 + 0.0 = 0.9
+		// HP: 200 * 0.9 = 180
+		// MP: 80 * 0.9 = 72
+		// Attack: 50 * 0.9 = 45
+		// Defense: 40 * 0.9 = 36
+		// Agility: 25 * 0.9 = 22
+		// CMP: 20 * 0.9 = 18
+		if b.HP != 180 || b.MaxHP != 180 {
+			t.Errorf("Boss HP = %d, want 180", b.HP)
+		}
+		if b.MP != 72 || b.MaxMP != 72 {
+			t.Errorf("Boss MP = %d, want 72", b.MP)
+		}
+		if b.Attack != 45 {
+			t.Errorf("Boss Attack = %d, want 45", b.Attack)
+		}
+		if b.Defense != 36 {
+			t.Errorf("Boss Defense = %d, want 36", b.Defense)
+		}
+		if b.Agility != 22 {
+			t.Errorf("Boss Agility = %d, want 22", b.Agility)
+		}
+		if b.CMP != 18 || b.MaxCMP != 18 {
+			t.Errorf("Boss CMP = %d, want 18", b.CMP)
+		}
+	})
+
+	t.Run("Hard mode scaling on normal monsters", func(t *testing.T) {
+		party := makeParty(2) // party adjustment = 0.0
+		sess, err := adventure.NewCrawlSession(stage, party, func(n int) int { return 0 })
+		if err != nil {
+			t.Fatalf("NewCrawlSession: %v", err)
+		}
+		_ = sess.SetMode(adventure.CrawlModeHard)
+		sess.RngFloat = func() float64 { return 0.0 }
+
+		res, err := sess.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("AdvanceFloor: %v", err)
+		}
+		e := res.Enemies[0]
+		// Hard mode multiplies base by 1.5:
+		// HP: 100 * 1.5 = 150
+		// MP: 50 * 1.5 = 75
+		// Attack: 30 * 1.5 = 45
+		// Defense: 20 * 1.5 = 30
+		// Agility: 15 * 1.5 = 22
+		// CMP: 10 * 1.5 = 15
+		// Then scaled by factor 0.9:
+		// HP: 150 * 0.9 = 135
+		// MP: 75 * 0.9 = 67
+		// Attack: 45 * 0.9 = 40
+		// Defense: 30 * 0.9 = 27
+		// Agility: 22 * 0.9 = 19
+		// CMP: 15 * 0.9 = 13
+		if e.HP != 135 {
+			t.Errorf("Hard HP = %d, want 135", e.HP)
+		}
+		if e.MP != 67 {
+			t.Errorf("Hard MP = %d, want 67", e.MP)
+		}
+		if e.Attack != 40 {
+			t.Errorf("Hard Attack = %d, want 40", e.Attack)
+		}
+		if e.Defense != 27 {
+			t.Errorf("Hard Defense = %d, want 27", e.Defense)
+		}
+		if e.Agility != 19 {
+			t.Errorf("Hard Agility = %d, want 19", e.Agility)
+		}
+		if e.CMP != 13 {
+			t.Errorf("Hard CMP = %d, want 13", e.CMP)
+		}
+	})
 }
