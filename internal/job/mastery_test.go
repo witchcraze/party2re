@@ -573,3 +573,108 @@ func TestGetJobMastery_PropagatesStorageAndCancellationErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestJobMasteryThresholds_PriestAndMagePreserveLegacyRequirements(t *testing.T) {
+	ctx := context.Background()
+	jobRepo := newMemoryJobRepository()
+	charRepo := newMemoryCharRepository()
+
+	svc, err := job.NewService(
+		jobRepo,
+		job.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatalf("failed to create job service: %v", err)
+	}
+
+	// 1. Priest (job-05) requires SP 100 (_requirements.go legacyMasteryThresholds).
+	// Representative skill heal-30 has RequiredSP: 6; mastery must NOT regress to SP 6.
+	charRepo.data["priest-test"] = corecharacter.Character{
+		ID:    "priest-test",
+		Name:  "PriestTest",
+		JobID: "job-05",
+		SP:    6, // equal to representative skill heal-30 RequiredSP
+	}
+	mastery, err := svc.GetJobMastery(ctx, "priest-test")
+	if err != nil {
+		t.Fatalf("GetJobMastery(priest-test) failed: %v", err)
+	}
+	var priestEntry *job.JobProgress
+	for i := range mastery.Jobs {
+		if mastery.Jobs[i].JobID == "job-05" {
+			priestEntry = &mastery.Jobs[i]
+			break
+		}
+	}
+	if priestEntry == nil {
+		t.Fatal("job-05 not found in GetJobMastery results")
+	}
+	if priestEntry.MasterSP != 100 {
+		t.Fatalf("job-05 MasterSP = %d, want 100 (must not regress to SP 6)", priestEntry.MasterSP)
+	}
+	if priestEntry.Status != job.JobStatusLearning {
+		t.Fatalf("job-05 with SP 6 status = %v, want Learning (mastery is at SP 100)", priestEntry.Status)
+	}
+
+	// Verify CheckAndApplyMastery for priest
+	jobRepo.data["priest-test"] = corejob.CharacterJob{CharacterID: "priest-test", CurrentJobID: "job-05"}
+	applied, err := svc.CheckAndApplyMastery(ctx, "priest-test", 6)
+	if err != nil {
+		t.Fatalf("CheckAndApplyMastery failed: %v", err)
+	}
+	if applied {
+		t.Fatal("CheckAndApplyMastery applied mastery at SP 6, want false (threshold is 100)")
+	}
+
+	// 2. Mage (job-06) requires SP 90 (_requirements.go legacyMasteryThresholds).
+	// Representative skill magic-wave-25 has RequiredSP: 8; mastery must NOT regress to SP 8.
+	charRepo.data["mage-test"] = corecharacter.Character{
+		ID:    "mage-test",
+		Name:  "MageTest",
+		JobID: "job-06",
+		SP:    8, // equal to representative skill magic-wave-25 RequiredSP
+	}
+	mastery, err = svc.GetJobMastery(ctx, "mage-test")
+	if err != nil {
+		t.Fatalf("GetJobMastery(mage-test) failed: %v", err)
+	}
+	var mageEntry *job.JobProgress
+	for i := range mastery.Jobs {
+		if mastery.Jobs[i].JobID == "job-06" {
+			mageEntry = &mastery.Jobs[i]
+			break
+		}
+	}
+	if mageEntry == nil {
+		t.Fatal("job-06 not found in GetJobMastery results")
+	}
+	if mageEntry.MasterSP != 90 {
+		t.Fatalf("job-06 MasterSP = %d, want 90 (must not regress to SP 8)", mageEntry.MasterSP)
+	}
+	if mageEntry.Status != job.JobStatusLearning {
+		t.Fatalf("job-06 with SP 8 status = %v, want Learning (mastery is at SP 90)", mageEntry.Status)
+	}
+
+	// Verify CheckAndApplyMastery for mage
+	jobRepo.data["mage-test"] = corejob.CharacterJob{CharacterID: "mage-test", CurrentJobID: "job-06"}
+	applied, err = svc.CheckAndApplyMastery(ctx, "mage-test", 8)
+	if err != nil {
+		t.Fatalf("CheckAndApplyMastery failed: %v", err)
+	}
+	if applied {
+		t.Fatal("CheckAndApplyMastery applied mastery at SP 8, want false (threshold is 90)")
+	}
+
+	// Verify mastery IS applied at exact thresholds (100 and 90)
+	charRepo.data["priest-test"] = corecharacter.Character{ID: "priest-test", Name: "PriestTest", JobID: "job-05", SP: 100}
+	applied, err = svc.CheckAndApplyMastery(ctx, "priest-test", 100)
+	if err != nil || !applied {
+		t.Fatalf("CheckAndApplyMastery at SP 100 for priest applied=%v, err=%v", applied, err)
+	}
+
+	charRepo.data["mage-test"] = corecharacter.Character{ID: "mage-test", Name: "MageTest", JobID: "job-06", SP: 90}
+	applied, err = svc.CheckAndApplyMastery(ctx, "mage-test", 90)
+	if err != nil || !applied {
+		t.Fatalf("CheckAndApplyMastery at SP 90 for mage applied=%v, err=%v", applied, err)
+	}
+}

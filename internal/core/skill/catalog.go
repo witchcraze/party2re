@@ -102,16 +102,21 @@ func (d *BattleDefinitions) RegisterRepresentativeSkills() {
 		Kind:        corebattle.ActionKindHeal,
 		Power:       30,
 		TargetScope: corebattle.TargetScopeSingleAlly,
+		Category:    string(corebattle.CategoryMagic),
 	}
 	d.JobSkills["job-6-entry-1"] = corebattle.ActionSkill{
 		Kind:        corebattle.ActionKindAttack,
 		Power:       20,
 		TargetScope: corebattle.TargetScopeSingleEnemy,
+		Category:    string(corebattle.CategoryMagic),
+		Direct:      true,
 	}
 	d.JobSkills["job-6-entry-3"] = corebattle.ActionSkill{
 		Kind:        corebattle.ActionKindAttack,
 		Power:       25,
 		TargetScope: corebattle.TargetScopeAllEnemies,
+		Category:    string(corebattle.CategoryMagic),
+		Direct:      true,
 	}
 }
 

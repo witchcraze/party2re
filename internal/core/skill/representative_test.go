@@ -70,6 +70,7 @@ func TestRepresentativeBattleDefinitionsAdmission(t *testing.T) {
 				Power:       30,
 				Kind:        corebattle.ActionKindHeal,
 				TargetScope: corebattle.TargetScopeSingleAlly,
+				Category:    string(corebattle.CategoryMagic),
 			},
 		},
 		{
@@ -81,6 +82,8 @@ func TestRepresentativeBattleDefinitionsAdmission(t *testing.T) {
 				Power:       20,
 				Kind:        corebattle.ActionKindAttack,
 				TargetScope: corebattle.TargetScopeSingleEnemy,
+				Category:    string(corebattle.CategoryMagic),
+				Direct:      true,
 			},
 		},
 		{
@@ -92,6 +95,8 @@ func TestRepresentativeBattleDefinitionsAdmission(t *testing.T) {
 				Power:       25,
 				Kind:        corebattle.ActionKindAttack,
 				TargetScope: corebattle.TargetScopeAllEnemies,
+				Category:    string(corebattle.CategoryMagic),
+				Direct:      true,
 			},
 		},
 	}

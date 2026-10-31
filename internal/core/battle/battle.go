@@ -125,14 +125,15 @@ type PartyBattleResolver interface {
 }
 
 type PartyBattleRequest struct {
-	Allies        []Participant
-	Enemies       []Participant
-	Teams         map[string][]Participant
-	InitialField  *FieldState
-	VictoryReward Reward
-	DefeatReward  Reward
-	DrawReward    Reward
-	RNG           random.Generator
+	Allies         []Participant
+	Enemies        []Participant
+	Teams          map[string][]Participant
+	InitialField   *FieldState
+	InitialTension map[string]float64
+	VictoryReward  Reward
+	DefeatReward   Reward
+	DrawReward     Reward
+	RNG            random.Generator
 }
 
 // ConsumedItem records an item consumed during combat.

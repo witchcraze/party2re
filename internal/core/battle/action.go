@@ -75,6 +75,8 @@ type ActionSkill struct {
 	Element     string `json:"element,omitempty"`   // "fire", "water", etc.
 	BuffStat    string `json:"buff_stat,omitempty"` // "attack", "defense", "agility"
 	Status      string `json:"status,omitempty"`    // "paralyze", "sleep", "poison"
+	Category    string `json:"category,omitempty"`  // "magic", "physical", etc.
+	Direct      bool   `json:"direct,omitempty"`    // direct damage (bypasses defense)
 }
 
 // ActionCustomSkill represents a crafted custom skill blending gems with incantation.

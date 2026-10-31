@@ -46,8 +46,27 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 				}
 			}
 		}
+		isMagic := skill.Category == string(CategoryMagic) || skill.Category == "magic"
+		ten := ctx.getTension(actor.ID)
 		for _, tgt := range healTargets {
-			healAmt := skill.Power
+			var healAmt int
+			if isMagic {
+				v := float64(skill.Power)
+				if hasItem(actor.ItemDefinitionIDs, "item-146") { // ヒーリングストーン (_skill.cgi:9078)
+					v *= 1.8
+				}
+				if hasItem(actor.ItemDefinitionIDs, "item-256") { // item-256 (_skill.cgi:9079)
+					v *= 1.2
+				}
+				v *= ten
+				variance := 1.0
+				if ctx.rng != nil {
+					variance = 0.9 + ctx.rng.Float64()*0.3
+				}
+				healAmt = int(v * variance)
+			} else {
+				healAmt = skill.Power
+			}
 			ctx.hpMap[tgt.ID] += healAmt
 			maxHP := tgt.MaxHP
 			if maxHP <= 0 {
@@ -65,6 +84,41 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 				Message:     fmt.Sprintf("%s の %s！ %s のHPが %d 回復した！", actor.NameOrID(), skill.Name, tgt.NameOrID(), healAmt),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
+
+			// item-256 splash heal to other living party members (_skill.cgi:9118-9130)
+			if isMagic && hasItem(actor.ItemDefinitionIDs, "item-256") {
+				splashAmt := healAmt / 2
+				for _, ally := range allyParty {
+					if ally.ID == tgt.ID || ctx.hpMap[ally.ID] <= 0 {
+						continue
+					}
+					allyMax := ally.MaxHP
+					if allyMax <= 0 {
+						allyMax = ally.HP
+					}
+					capAmt := int(float64(allyMax) * 0.3)
+					actualSplash := splashAmt
+					if actualSplash > capAmt {
+						actualSplash = capAmt
+					}
+					ctx.hpMap[ally.ID] += actualSplash
+					if ctx.hpMap[ally.ID] > allyMax {
+						ctx.hpMap[ally.ID] = allyMax
+					}
+					ctx.logs = append(ctx.logs, TurnLog{
+						Turn:        ctx.turns,
+						ActorID:     actor.ID,
+						ActionName:  skill.Name,
+						TargetID:    ally.ID,
+						HealingDone: actualSplash,
+						Message:     fmt.Sprintf("%s の %s！ %s のHPが %d 回復した！", actor.NameOrID(), skill.Name, ally.NameOrID(), actualSplash),
+						RemainingHP: copyHPMap(ctx.hpMap),
+					})
+				}
+			}
+		}
+		if isMagic {
+			ctx.consumeTension(actor)
 		}
 
 	case ActionKindBuff:
@@ -162,14 +216,37 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 		}
 		decayMult := 1.0
 		hasDiamondRing := hasItem(actor.ItemDefinitionIDs, "item-144")
+		isMagic := skill.Category == string(CategoryMagic) || skill.Category == "magic"
+		ten := ctx.getTension(actor.ID)
+
 		for _, tgt := range targetList {
-			effAtk := float64(actor.Attack+ctx.attackBuff[actor.ID]+skill.Power) * decayMult
-			effDef := tgt.Defense + ctx.defenseBuff[tgt.ID]
-			baseDmg := CalculateDamage(int(effAtk), effDef, ctx.rng, false)
-			ctx.applyDamage(actor, tgt, baseDmg, skill.Element, skill.Name, false, "", false)
+			var baseDmg int
+			if isMagic || skill.Direct {
+				basePower := float64(skill.Power) * decayMult
+				if hasItem(actor.ItemDefinitionIDs, "item-143") && basePower < 300 {
+					basePower *= 2
+				}
+				if hasItem(actor.ItemDefinitionIDs, "item-149") {
+					basePower *= 1.1
+				}
+				if hasItem(actor.ItemDefinitionIDs, "weapon-34") && ctx.rng != nil && ctx.rng.Intn(4) < 1 {
+					basePower *= 1.2
+				}
+				basePower *= ten
+				effDef := tgt.Defense + ctx.defenseBuff[tgt.ID]
+				baseDmg = rollDamage(basePower, float64(effDef)*0.3, true, tgt.Defense, ctx.rng)
+			} else {
+				effAtk := float64(actor.Attack+ctx.attackBuff[actor.ID]+skill.Power) * decayMult
+				effDef := tgt.Defense + ctx.defenseBuff[tgt.ID]
+				baseDmg = CalculateDamage(int(effAtk), effDef, ctx.rng, false)
+			}
+			ctx.applyDamageWithCategory(actor, tgt, baseDmg, skill.Element, skill.Category, skill.Name, false, "", false)
 			if skill.TargetScope == TargetScopeAllEnemies && !hasDiamondRing {
 				decayMult *= 0.85
 			}
+		}
+		if isMagic || skill.Direct {
+			ctx.consumeTension(actor)
 		}
 	}
 	return nil
