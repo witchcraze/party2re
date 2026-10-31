@@ -125,7 +125,7 @@ func (s *service) ResetDailyQuotaWithClaim(ctx context.Context, action, targetID
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[claimK]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != claimToken {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != claimToken {
 		return false, nil
 	}
 	delete(s.memory, quotaK)
@@ -168,7 +168,7 @@ func (s *service) ResetDungeonOnceWithClaim(ctx context.Context, targetID, claim
 	s.memMu.Lock()
 	defer s.memMu.Unlock()
 	exp, exists := s.memory[claimK]
-	if !exists || time.Now().After(exp.expiresAt) || exp.value != claimToken {
+	if !exists || (!exp.expiresAt.IsZero() && time.Now().After(exp.expiresAt)) || exp.value != claimToken {
 		return false, nil
 	}
 	delete(s.memory, lockK)
