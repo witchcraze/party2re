@@ -205,6 +205,36 @@ tension/status/temporary/hit fields. It retains reset stats and extended state.
 Items202/198 use the optional temporary hook of tool recovery and can restore
 zero; they do not use spell recovery's tension or MP exclusions.
 
+Shared player/NPC equipment boundaries use `EquipmentTailContext` and
+`BattleDefinitions.EquipmentTailAction` / `ValidateEquipmentTail`. Capture its
+`EquipmentTailSnapshot` before status/action callbacks:206 remembers an equipped
+holder's nonempty status, while246 remembers any original temporary.164 clears
+the current temporary before its quarter-chance tension call;209's covering-only
+3% tool heal follows. Field burn/grave/library and player field ticks remain
+between these boundaries and206's cleared-status response.206 temporarily sets
+tension1 for its 30% untyped heal and independent half-chance direct attack,
+then restores tension even after defeat. These outer player boundaries require
+no suppression; they do not require enemies, a normal action or a living actor.
+NPC equivalents remain outside the normal-action block, without player guards.
+
+NPC202 requires an empty current temporary and tool-heals3–5% MaxHP; it never
+uses the player's half-HP/4%/temporary-hook formula.208 counts the full ordered
+same-side roster, including fallen members: at3 it invokes exact-status cures
+only for afflicted holders and raises every hit value below95; at4 it makes one
+untyped direct10% AT hit per member with tension temporarily1; at5 it tool-heals
+each member10% MaxHP capped200; at6 it independently attempts tension for every
+member at one-third chance. Repeated hits retain reset/defeat/one-use-defense
+continuations and read current attack each time. A strict survival bound avoids
+enumerating irrelevant HP permutations when no hit can reach those transitions.
+The guardian's presence in that side's roster, even fallen, supplies an actor MP
+tool heal of0.5–3.5% MaxMP.246 uniformly installs one of four category reflections
+only for a living holder without an original temporary. Player guardian requires
+a living actor and precedes208; NPC guardian follows208. Player208/246 require the
+eligible combat tail; player246 follows extended/incense effects. NPC246 precedes
+purification/specter. Consumers keep these positions separate, without adding a
+second turn hook or replaying effects on reload. Source: `_battle.cgi:607–613,
+862–921,984–1038,1097–1134`; `_npc_action.cgi:161–168,366–491`.
+
 CMP's producer supplies recharge amount/next threshold to `Completion`, using
 the requester's level capped at99. The consumer copies final damage-helper facts
 and `End` into that completion, then calls `CompleteOperation` once to apply CMP,
