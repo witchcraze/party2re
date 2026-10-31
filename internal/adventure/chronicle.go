@@ -22,6 +22,8 @@ type Milestone struct {
 // StageStatData holds raw count data for a specific stage from the repository.
 type StageStatData struct {
 	StageID       string `json:"stage_id"`
+	SeasonalSubID int    `json:"seasonal_sub_id,omitempty"`
+	Season        string `json:"season,omitempty"`
 	TotalAttempts int    `json:"total_attempts"`
 	ClearCount    int    `json:"clear_count"`
 }
@@ -42,6 +44,8 @@ type AggregatedStats struct {
 type StageClearStat struct {
 	StageID       string `json:"stage_id"`
 	StageName     string `json:"stage_name"`
+	SeasonalSubID int    `json:"seasonal_sub_id,omitempty"`
+	Season        string `json:"season,omitempty"`
 	ClearCount    int    `json:"clear_count"`
 	TotalAttempts int    `json:"total_attempts"`
 }
@@ -67,6 +71,8 @@ type AdventureHistoryEntry struct {
 	CharacterID        string             `json:"character_id"`
 	StageID            string             `json:"stage_id"`
 	StageName          string             `json:"stage_name"`
+	SeasonalSubID      int                `json:"seasonal_sub_id,omitempty"`
+	Season             string             `json:"season,omitempty"`
 	MonsterID          string             `json:"monster_id"`
 	MonsterName        string             `json:"monster_name"`
 	StartedAt          time.Time          `json:"started_at"`
@@ -223,11 +229,22 @@ func (s *Service) buildHistoryEntry(adv Adventure) AdventureHistoryEntry {
 		}
 	}
 
+	season := adv.Season
+	subID := adv.SeasonalSubID
+	if subID == 0 && season != "" {
+		subID = SeasonToSubID(season)
+	}
+	if season == "" && subID != 0 {
+		season = SubIDToSeason(subID)
+	}
+
 	return AdventureHistoryEntry{
 		ID:                 adv.ID,
 		CharacterID:        adv.CharacterID,
 		StageID:            stageID,
 		StageName:          stageName,
+		SeasonalSubID:      subID,
+		Season:             season,
 		MonsterID:          monsterID,
 		MonsterName:        monsterName,
 		StartedAt:          adv.StartedAt,
@@ -271,9 +288,19 @@ func (s *Service) GetChronicle(ctx context.Context, characterID string) (Adventu
 				stageName = st.Name
 			}
 		}
+		season := ss.Season
+		subID := ss.SeasonalSubID
+		if subID == 0 && season != "" {
+			subID = SeasonToSubID(season)
+		}
+		if season == "" && subID != 0 {
+			season = SubIDToSeason(subID)
+		}
 		stages = append(stages, StageClearStat{
 			StageID:       ss.StageID,
 			StageName:     stageName,
+			SeasonalSubID: subID,
+			Season:        season,
 			ClearCount:    ss.ClearCount,
 			TotalAttempts: ss.TotalAttempts,
 		})

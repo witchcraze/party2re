@@ -55,6 +55,8 @@ type DungeonCrawlResult struct {
 	AdventureIDs   map[string]string                     `json:"adventure_ids"` // characterID -> adventureID
 	StageID        string                                `json:"stage_id"`
 	StageName      string                                `json:"stage_name"`
+	Season         string                                `json:"season,omitempty"`
+	SeasonalSubID  int                                   `json:"seasonal_sub_id,omitempty"`
 	Mode           string                                `json:"mode,omitempty"`
 	Round          int                                   `json:"round"`
 	ExitFatigue    int                                   `json:"exit_fatigue"`
@@ -166,20 +168,6 @@ func NewCrawlSessionWithParticipants(
 		Participants: parts,
 		Rng:          rng,
 	}, nil
-}
-
-func buildFallbackParticipant(c corecharacter.Character) corebattle.Participant {
-	hp := c.Stats.HP
-	if hp <= 0 && c.Stats.MaxHP > 0 {
-		hp = c.Stats.MaxHP
-	}
-	p := corebattle.MustNewParticipant(c.ID, hp, c.Stats.Attack, c.Stats.Defense)
-	p.Name = c.Name
-	p.MaxHP = c.Stats.MaxHP
-	p.MP = c.Stats.MP
-	p.MaxMP = c.Stats.MaxMP
-	p.Agility = c.Stats.Agility
-	return p
 }
 
 // StageFinder provides stage lookup for crawl advancement.
@@ -429,6 +417,14 @@ func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error)
 	return targetBox, nil
 }
 
+// SetStage updates the session's current stage coordinates without modifying StageCleared or recording achievements.
+// Per #1345/#1353, coordinate assignment does not clear or set the boss victory flag (docs/design/adventure.md#combat-travel-and-encounter-replacement).
+func (s *CrawlSession) SetStage(stage Stage) {
+	s.Stage = stage
+	s.StageID = stage.ID
+	s.StageName = stage.Name
+}
+
 // Result compiles the final outcome of the dungeon crawl.
 func (s *CrawlSession) Result() DungeonCrawlResult {
 	participantHPs := make(map[string]int, len(s.Participants))
@@ -456,6 +452,8 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		AdventureIDs:   make(map[string]string),
 		StageID:        s.StageID,
 		StageName:      s.StageName,
+		Season:         s.Stage.Season,
+		SeasonalSubID:  SeasonToSubID(s.Stage.Season),
 		Mode:           mode,
 		Round:          s.Round,
 		ExitFatigue:    CalculateExitFatigue(s.Round, mode),
@@ -474,25 +472,4 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		ParticipantMPs: participantMPs,
 		ConsumedItems:  cloneConsumedItems(s.ConsumedItems),
 	}
-}
-
-func cloneInspectedBoxes(m map[string]int) map[string]int {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(map[string]int, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
-}
-
-func mathClamp(val, min, max int) int {
-	if val < min {
-		return min
-	}
-	if val > max {
-		return max
-	}
-	return val
 }

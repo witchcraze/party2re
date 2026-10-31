@@ -1,0 +1,135 @@
+package party
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/witchcraze/party2re/internal/adventure"
+	"github.com/witchcraze/party2re/internal/core/battle"
+)
+
+// AdventureLogReader retrieves party adventure logs for backfill.
+type AdventureLogReader interface {
+	GetAdventureLogsByPartyID(ctx context.Context, partyID string) ([]PartyAdventureLog, error)
+}
+
+// BackfillPartyAdventureLogs backfills past party_adventure_logs into individual character adventures.
+//
+// Run Identity Parity:
+// Uses deterministic adventure ID "party:<log.ID>:<cID>", matching live party crawl recording in
+// StartPartyAdventure. If a run has already been recorded by live crawl or a previous backfill pass,
+// existing records and their settled rewards are preserved without double-counting.
+//
+// Existing Record Protection:
+// advRepo.FindByID is checked prior to writing. If the record already exists, it is skipped.
+// If FindByID encounters an unexpected storage error, execution aborts immediately to prevent
+// overwriting existing records with estimated values.
+//
+// Participant Reconstruction Constraints:
+// Historical logs only store details_json from the final floor encounter (Floor 10 boss or defeat floor).
+// Participants are reconstructed from AlliesSurvived + AlliesFallen. Participants who fell on earlier
+// floors (Floors 1..9) and were absent from the final battle cannot be reconstructed from historical logs.
+// Speculative participant guessing is avoided to preserve data integrity.
+//
+// Reward and Progress Constraints:
+// Historical party logs do not store per-member settled earnings (individual blessings, mode reward
+// suppression, or level caps) or the exact floor reached on defeat. To conform to the contract that
+// Chronicle reward statistics reflect actual settled earnings, backfilled records set reward EXP and
+// currency to 0, and set FloorsCleared to 10 for verified clears and 0 for unrecorded defeat floors,
+// focusing strictly on stage completion counts, victory/defeat tallies, and attempt history.
+//
+// Stage 26 Seasonal Variant:
+// Past party logs lack persisted seasonal variant metadata, so Stage 26 records are saved with
+// seasonal_sub_id = 0 (unclassified).
+func BackfillPartyAdventureLogs(
+	ctx context.Context,
+	logRepo AdventureLogReader,
+	advRepo AdventureRepository,
+	partyID string,
+) (int, error) {
+	if logRepo == nil || advRepo == nil {
+		return 0, nil
+	}
+	logs, err := logRepo.GetAdventureLogsByPartyID(ctx, partyID)
+	if err != nil {
+		return 0, err
+	}
+
+	backfilled := 0
+	for _, log := range logs {
+		if log.DetailsJSON == "" {
+			continue
+		}
+		var battleRes battle.PartyBattleResult
+		if err := json.Unmarshal([]byte(log.DetailsJSON), &battleRes); err != nil {
+			continue
+		}
+
+		charIDs := make([]string, 0, len(battleRes.AlliesSurvived)+len(battleRes.AlliesFallen))
+		seen := make(map[string]bool)
+		for _, id := range append(battleRes.AlliesSurvived, battleRes.AlliesFallen...) {
+			if id != "" && !seen[id] {
+				seen[id] = true
+				charIDs = append(charIDs, id)
+			}
+		}
+
+		isCleared := log.Outcome == string(battle.OutcomeWin)
+		outcome := battle.Outcome(log.Outcome)
+
+		floorsCleared := 0
+		if isCleared {
+			floorsCleared = 10
+		}
+
+		for _, cID := range charIDs {
+			advIDHash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", log.ID, cID)))
+			advID := hex.EncodeToString(advIDHash[:16])
+
+			existing, err := advRepo.FindByID(ctx, advID)
+			if err == nil && existing.ID != "" {
+				// Already recorded (live crawl or previous backfill pass); preserve existing record and settled rewards
+				continue
+			}
+			if err != nil && !errors.Is(err, adventure.ErrNotFound) {
+				return backfilled, fmt.Errorf("check existing adventure %s: %w", advID, err)
+			}
+
+			winnerID := ""
+			if outcome == battle.OutcomeWin {
+				winnerID = cID
+			}
+
+			adv := adventure.Adventure{
+				ID:               advID,
+				CharacterID:      cID,
+				Type:             log.StageID,
+				StageID:          log.StageID,
+				StartedAt:        log.CreatedAt,
+				FloorsCleared:    floorsCleared,
+				IsCleared:        isCleared,
+				PartySize:        len(charIDs),
+				ExperienceReward: 0,
+				Resolved:         true,
+				BattleResult: battle.Result{
+					Outcome:  outcome,
+					WinnerID: winnerID,
+					Turns:    log.Turns,
+					Reward: battle.Reward{
+						Experience: 0,
+						Currency:   0,
+					},
+				},
+			}
+			if err := advRepo.Save(ctx, adv); err != nil {
+				return backfilled, fmt.Errorf("backfill adventure record for %s: %w", cID, err)
+			}
+			backfilled++
+		}
+	}
+	return backfilled, nil
+}

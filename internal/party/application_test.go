@@ -236,6 +236,16 @@ func (r *mockPartyRepository) SaveAdventureLog(_ context.Context, log PartyAdven
 	return nil
 }
 
+func (r *mockPartyRepository) GetAdventureLogsByPartyID(_ context.Context, partyID string) ([]PartyAdventureLog, error) {
+	var result []PartyAdventureLog
+	for _, l := range r.logs {
+		if l.PartyID == partyID {
+			result = append(result, l)
+		}
+	}
+	return result, nil
+}
+
 type mockCharacterRepository struct {
 	chars     map[string]corecharacter.Character
 	updateErr error

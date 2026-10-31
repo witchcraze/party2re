@@ -2,6 +2,8 @@ package party
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -223,6 +225,62 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			}
 			if err := s.repo.SaveAdventureLog(txCtx, advLog); err != nil {
 				return fmt.Errorf("save party adventure log: %w", err)
+			}
+
+			// 8.1 Persist individual adventure records for all members in shared adventure repository
+			if s.advRepo != nil {
+				now := time.Now().UTC()
+				rewardSummaryMap := make(map[string]MemberRewardSummary, len(rewardSummaries))
+				for _, r := range rewardSummaries {
+					rewardSummaryMap[r.CharacterID] = r
+				}
+
+				for _, m := range members {
+					advIDHash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", advLog.ID, m.CharacterID)))
+					advID := hex.EncodeToString(advIDHash[:16])
+
+					winnerID := ""
+					if crawlResult.Outcome == battle.OutcomeWin {
+						winnerID = m.CharacterID
+					}
+
+					gainedEXP := crawlResult.TotalEXP
+					gainedGold := crawlResult.TotalGold
+					gainedCrystals := crawlResult.TotalCrystals
+					if r, ok := rewardSummaryMap[m.CharacterID]; ok {
+						gainedEXP = r.GainedEXP
+						gainedGold = r.GainedGold
+						gainedCrystals = r.GainedCrystals
+					}
+
+					adv := adventure.Adventure{
+						ID:               advID,
+						CharacterID:      m.CharacterID,
+						Type:             stage.ID,
+						StageID:          stage.ID,
+						Season:           stage.Season,
+						SeasonalSubID:    adventure.SeasonToSubID(stage.Season),
+						StartedAt:        now,
+						FloorsCleared:    crawlResult.FloorsCleared,
+						IsCleared:        crawlResult.StageCleared,
+						PartySize:        len(members),
+						ExperienceReward: gainedEXP,
+						Resolved:         true,
+						BattleResult: battle.Result{
+							Outcome:  crawlResult.Outcome,
+							WinnerID: winnerID,
+							Turns:    crawlResult.TotalTurns,
+							Reward: battle.Reward{
+								Experience: gainedEXP,
+								Currency:   gainedGold,
+								Crystals:   gainedCrystals,
+							},
+						},
+					}
+					if err := s.advRepo.Save(txCtx, adv); err != nil {
+						return fmt.Errorf("save party member adventure record: %w", err)
+					}
+				}
 			}
 
 			// 9. Reset party status & ready states for members

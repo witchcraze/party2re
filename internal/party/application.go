@@ -23,6 +23,7 @@ type Service struct {
 	repo               Repository
 	charRepo           CharacterRepository
 	invRepo            InventoryRepository
+	advRepo            AdventureRepository
 	stages             StageProvider
 	monsters           MonsterProvider
 	battleEngine       BattleEngine

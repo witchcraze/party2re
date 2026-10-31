@@ -637,8 +637,16 @@ Retrieves chronological records of previous expeditions with catalog-enriched st
 
 ### Statistical Aggregation (`GET /characters/{id}/adventure-chronicle`)
 Aggregates overall statistics and per-stage completion records:
-- **Overall Stats**: `total_adventures`, `total_victories`, `total_defeats`, `total_draws`, `win_rate` (rounded to 4 decimals), `total_turns`, `total_exp_earned`, `total_gold_earned`.
-- **Stage Breakdown**: `stage_id`, `stage_name`, `clear_count`, `total_attempts`.
+- **Overall Stats**: `total_adventures`, `total_victories`, `total_defeats`, `total_draws`, `win_rate` (rounded to 4 decimals), `total_turns`, `total_exp_earned`, `total_gold_earned`. Rewards (`total_exp_earned`, `total_gold_earned`) reflect settled earnings per member (`MemberRewardSummary.GainedEXP` / `GainedGold`, 0 for Try Mode) rather than unadjusted raw crawl totals.
+- **Stage Breakdown**: `stage_id`, `stage_name`, `seasonal_sub_id`, `season`, `clear_count`, `total_attempts`.
+- **Seasonal Sub-Identity**: Stage 26 (神秘の森 / 四季のダンジョン, `vs_monster.cgi:111-120`, `adventure_record.cgi:49-86`) tracks and aggregates clears separately by seasonal variant (`seasonal_sub_id`: 1=spring, 2=summer, 3=autumn, 4=winter; 0 for normal stages) rather than collapsing into a single stage count.
+- **Unified Solo & Party Clear Source**: Completed multiplayer party crawls (`internal/party`) and solo crawls (`internal/adventure`) persist individual participant records into the shared `adventures` repository within their transactional units, ensuring unified chronicle counts (`solo1 + party1 = 2`). Deterministic run identifiers (`party:<party_adventure_log.id>:<character_id>`) ensure retrying the same run updates rather than duplicates clear counts (`same run retry = 1`).
+- **Backfill Feasibility and Constraints from Historical Logs**: Historical `party_adventure_logs` can be backfilled into `adventures` using participant IDs from `details_json` (`AlliesSurvived` + `AlliesFallen`).
+  - *Participant recoverability constraint*: Historical logs only record the final floor's battle result in `details_json`. Participants who fell on earlier floors (Floors 1..9) and were absent from the final encounter cannot be reconstructed from historical logs; speculative guessing is avoided to prevent data corruption.
+  - *Seasonal sub-identity constraint*: Historical party logs lack runtime seasonal variant metadata, so past Stage 26 records are backfilled as unclassified (`seasonal_sub_id=0`).
+  - *Reward and progress constraints*: Historical party logs do not record per-member post-battle settled earnings (individual blessings, Try Mode suppression, level caps) or defeat floor numbers. To preserve the integrity of Chronicle's settled earnings statistics (`total_exp_earned`, `total_gold_earned`), backfilled records set reward EXP/Gold to 0, and record `floors_cleared = 10` for wins and `0` for unrecorded defeat floors, focusing on restoring accurate stage completion counts and attempt history.
+  - *Double-counting and data protection*: Backfill shares the canonical `party:<log.id>:<character_id>` deterministic identifier with live runs. `advRepo.FindByID` is verified before saving; existing records are skipped (preserving live settled rewards), and lookup errors abort execution to prevent accidental overwrites.
+- **Combat Travel vs. Clear Flag Contract**: Per #1345/#1353, coordinate-changing tools (tools 66–71, 104, 184, 107) do not modify `is_clear`; boss defeat sets `is_clear`, which is retained across coordinate changes and consumed when Floor 11 treasure room runs for the destination stage coordinates, with travel itself recording no duplicate achievements.
 - **Milestone Tiers** (Unlocks based on total cleared stage counts per `adventure_record.cgi` / `vs_monster.cgi`):
 
 | Milestone Key | Display Name | Clear Count Threshold | Description |
@@ -664,9 +672,9 @@ Party2 features three distinct exploration and dungeon crawl modes with speciali
 
 ---
 
-## 7. Storage & Database Schema (Migration 073)
+## 7. Storage & Database Schema (Migration 073, 109)
 
-The `adventures` table schema reflects immediate crawl resolution, completely purging legacy timer columns:
+The `adventures` table schema reflects immediate crawl resolution and seasonal sub-identity tracking:
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
@@ -678,6 +686,8 @@ The `adventures` table schema reflects immediate crawl resolution, completely pu
 | `started_at` | DATETIME | NOT NULL | Crawl execution timestamp |
 | `floors_cleared` | INT | NOT NULL DEFAULT 0 | Number of floors cleared (0–10) |
 | `is_cleared` | BOOLEAN | NOT NULL DEFAULT FALSE | True if Floor 10 boss was defeated |
+| `seasonal_sub_id`| INT | NOT NULL DEFAULT 0 | Seasonal sub identity (0: normal, 1: spring, 2: summer, 3: autumn, 4: winter) |
+| `season` | VARCHAR(32) | NOT NULL DEFAULT '' | Seasonal variant name (`spring`, `summer`, `autumn`, `winter`) |
 | `party_size` | INT | NOT NULL DEFAULT 1 | Total party size (1–4) |
 | `experience_reward`| INT | NOT NULL DEFAULT 0 | Total EXP awarded |
 | `outcome` | VARCHAR(32) | NOT NULL DEFAULT '' | Battle outcome (`WIN` or `DEFEAT`) |
@@ -687,4 +697,4 @@ The `adventures` table schema reflects immediate crawl resolution, completely pu
 | `updated_at` | DATETIME | NOT NULL | Record update timestamp |
 
 > [!NOTE]
-> Fictional columns `available_at` and `claimed`, along with index `idx_adventures_character_claimed`, were permanently dropped in migration `073_purge_adventure_timer.sql`. Index `idx_adventures_character_started (character_id, started_at DESC)` supports efficient paginated history queries.
+> Fictional columns `available_at` and `claimed`, along with index `idx_adventures_character_claimed`, were permanently dropped in migration `073_purge_adventure_timer.sql`. Migration `109_adventure_seasonal_sub_identity.sql` added `seasonal_sub_id` and `season` along with composite index `idx_adventures_character_stage_season (character_id, resolved, adventure_type, seasonal_sub_id)` to preserve four-seasons sub-identities and unify solo/party clear counting in chronicles.
