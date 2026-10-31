@@ -129,41 +129,6 @@ if has_members then
             end
         end
     end
-
-    if member_exp_deltas_str ~= '' and member_exp_deltas_str ~= '{}' then
-        local ok, decoded_exp = pcall(cjson.decode, member_exp_deltas_str)
-        if ok and type(decoded_exp) == 'table' then
-            for _, m in ipairs(members) do
-                local cid = m['character_id']
-                if cid and decoded_exp[cid] then
-                    local delta = tonumber(decoded_exp[cid]) or 0
-                    if delta > 0 then
-                        m['accumulated_exp'] = (tonumber(m['accumulated_exp']) or 0) + delta
-                    end
-                end
-            end
-        end
-    elseif #members == 1 and exp_delta > 0 then
-        members[1]['accumulated_exp'] = (tonumber(members[1]['accumulated_exp']) or 0) + exp_delta
-    end
-
-    if member_gold_deltas_str ~= '' and member_gold_deltas_str ~= '{}' then
-        local ok, decoded_gold = pcall(cjson.decode, member_gold_deltas_str)
-        if ok and type(decoded_gold) == 'table' then
-            for _, m in ipairs(members) do
-                local cid = m['character_id']
-                if cid and decoded_gold[cid] then
-                    local delta = tonumber(decoded_gold[cid]) or 0
-                    if delta > 0 then
-                        m['accumulated_gold'] = (tonumber(m['accumulated_gold']) or 0) + delta
-                    end
-                end
-            end
-        end
-    elseif #members == 1 and gold_delta > 0 then
-        members[1]['accumulated_gold'] = (tonumber(members[1]['accumulated_gold']) or 0) + gold_delta
-    end
-    members_str = cjson.encode(members)
 end
 
 if current_hp < 0 then
@@ -220,6 +185,46 @@ end
 local new_events_str = '[]'
 if #consumed_events > 0 then
     new_events_str = cjson.encode(consumed_events)
+end
+
+-- Apply member rewards only if event was consumed (one-time event idempotency)
+if has_members and event_consumed == 1 then
+    if member_exp_deltas_str ~= '' and member_exp_deltas_str ~= '{}' then
+        local ok, decoded_exp = pcall(cjson.decode, member_exp_deltas_str)
+        if ok and type(decoded_exp) == 'table' then
+            for _, m in ipairs(members) do
+                local cid = m['character_id']
+                if cid and decoded_exp[cid] then
+                    local delta = tonumber(decoded_exp[cid]) or 0
+                    if delta > 0 then
+                        m['accumulated_exp'] = (tonumber(m['accumulated_exp']) or 0) + delta
+                    end
+                end
+            end
+        end
+    elseif #members == 1 and exp_delta > 0 then
+        members[1]['accumulated_exp'] = (tonumber(members[1]['accumulated_exp']) or 0) + exp_delta
+    end
+
+    if member_gold_deltas_str ~= '' and member_gold_deltas_str ~= '{}' then
+        local ok, decoded_gold = pcall(cjson.decode, member_gold_deltas_str)
+        if ok and type(decoded_gold) == 'table' then
+            for _, m in ipairs(members) do
+                local cid = m['character_id']
+                if cid and decoded_gold[cid] then
+                    local delta = tonumber(decoded_gold[cid]) or 0
+                    if delta > 0 then
+                        m['accumulated_gold'] = (tonumber(m['accumulated_gold']) or 0) + delta
+                    end
+                end
+            end
+        end
+    elseif #members == 1 and gold_delta > 0 then
+        members[1]['accumulated_gold'] = (tonumber(members[1]['accumulated_gold']) or 0) + gold_delta
+    end
+end
+if has_members then
+    members_str = cjson.encode(members)
 end
 
 -- 6. Update state hash

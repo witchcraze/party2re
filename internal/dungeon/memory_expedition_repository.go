@@ -180,26 +180,6 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		}
 	}
 
-	if len(params.MemberExpDeltas) > 0 {
-		for i := range exp.Members {
-			if delta, ok := params.MemberExpDeltas[exp.Members[i].CharacterID]; ok && delta > 0 {
-				exp.Members[i].AccumulatedExp += delta
-			}
-		}
-	} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.ExpDelta > 0 {
-		exp.Members[0].AccumulatedExp += params.ExpDelta
-	}
-
-	if len(params.MemberGoldDeltas) > 0 {
-		for i := range exp.Members {
-			if delta, ok := params.MemberGoldDeltas[exp.Members[i].CharacterID]; ok && delta > 0 {
-				exp.Members[i].AccumulatedGold += delta
-			}
-		}
-	} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.GoldDelta > 0 {
-		exp.Members[0].AccumulatedGold += params.GoldDelta
-	}
-
 	if currentHP < 0 {
 		currentHP = 0
 	}
@@ -252,6 +232,26 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		exp.AccumulatedMedals += params.MedalsDelta
 		if params.RewardItemID != "" {
 			exp.AccumulatedItems = append(exp.AccumulatedItems, params.RewardItemID)
+		}
+
+		if len(params.MemberExpDeltas) > 0 {
+			for i := range exp.Members {
+				if delta, ok := params.MemberExpDeltas[exp.Members[i].CharacterID]; ok && delta > 0 {
+					exp.Members[i].AccumulatedExp += delta
+				}
+			}
+		} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.ExpDelta > 0 {
+			exp.Members[0].AccumulatedExp += params.ExpDelta
+		}
+
+		if len(params.MemberGoldDeltas) > 0 {
+			for i := range exp.Members {
+				if delta, ok := params.MemberGoldDeltas[exp.Members[i].CharacterID]; ok && delta > 0 {
+					exp.Members[i].AccumulatedGold += delta
+				}
+			}
+		} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.GoldDelta > 0 {
+			exp.Members[0].AccumulatedGold += params.GoldDelta
 		}
 	}
 	exp.UpdatedAt = params.Now
