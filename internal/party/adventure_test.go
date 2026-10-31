@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2157,5 +2159,416 @@ func TestStartPartyAdventure_Floor11Treasure_AutoCrawlDoesNotConsumeMasterKeyWit
 	consumed := settler.lastReq.BattleResult.ConsumedItems[leader.ID]
 	if len(consumed) != 0 {
 		t.Fatalf("expected 0 consumed keys in automatic party crawl, got: %v", consumed)
+	}
+}
+
+type trackingBattleEngine struct {
+	mu           sync.Mutex
+	floorEnemies [][]corebattle.Participant
+}
+
+func (e *trackingBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	e.mu.Lock()
+	e.floorEnemies = append(e.floorEnemies, req.Enemies)
+	e.mu.Unlock()
+	return corebattle.PartyBattleResult{
+		Outcome: corebattle.OutcomeWin,
+	}, nil
+}
+
+func TestPartyAdventure_SeasonalStagePersistence(t *testing.T) {
+	ctx := context.Background()
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog: %v", err)
+	}
+	stage26, err := stages.FindByID("stage-26")
+	if err != nil {
+		t.Fatalf("FindByID(stage-26): %v", err)
+	}
+
+	seasons := []struct {
+		seasonIndex int
+		seasonName  string
+	}{
+		{0, "spring"},
+		{1, "summer"},
+		{2, "autumn"},
+		{3, "winter"},
+	}
+
+	for _, sc := range seasons {
+		t.Run(sc.seasonName, func(t *testing.T) {
+			expectedStage := stage26.ForSeason(sc.seasonName)
+			wantBossIDs := expectedStage.GetBossIDs()
+			wantNormalIDs := expectedStage.GetNormalMonsterIDs()
+
+			tracker := &trackingBattleEngine{}
+			svc, _, charRepo, _, _ := setupPartyAdventureTestService(t, tracker, WithRNG(func(n int) int {
+				if n == 4 {
+					return sc.seasonIndex
+				}
+				return 0
+			}))
+
+			leader := corecharacter.Character{
+				ID:       fmt.Sprintf("leader-%s", sc.seasonName),
+				Name:     "Hero",
+				Level:    90,
+				JobLevel: 5,
+				Stats: corecharacter.Stats{
+					HP:      50000,
+					MaxHP:   50000,
+					MP:      1000,
+					MaxMP:   1000,
+					Attack:  10000,
+					Defense: 10000,
+				},
+			}
+			charRepo.chars[leader.ID] = leader
+
+			pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+				Name:       fmt.Sprintf("SeasonParty-%s", sc.seasonName),
+				StageID:    "stage-26",
+				MaxMembers: 1,
+			})
+			if err != nil {
+				t.Fatalf("CreateParty failed: %v", err)
+			}
+			if pDetail.Party.Season != sc.seasonName {
+				t.Fatalf("CreateParty season = %s, want %s", pDetail.Party.Season, sc.seasonName)
+			}
+			partyID := pDetail.Party.ID
+			if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
+				t.Fatalf("SetReady failed: %v", err)
+			}
+
+			res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+			if err != nil {
+				t.Fatalf("StartPartyAdventure failed: %v", err)
+			}
+			if res.Outcome != "win" {
+				t.Fatalf("expected win outcome, got %s", res.Outcome)
+			}
+
+			// Verify battle encounters
+			if len(tracker.floorEnemies) < 10 {
+				t.Fatalf("expected at least 10 floor battles, got %d", len(tracker.floorEnemies))
+			}
+
+			// Floor 1 (Normal monsters)
+			floor1Enemies := tracker.floorEnemies[0]
+			if len(floor1Enemies) == 0 {
+				t.Fatalf("floor 1 has no enemies")
+			}
+			enemyID := floor1Enemies[0].ID
+			matched := false
+			for _, mID := range wantNormalIDs {
+				if len(enemyID) >= len(mID) && enemyID[:len(mID)] == mID {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				t.Errorf("season %s floor 1 enemy %s not in expected normal monsters %v", sc.seasonName, enemyID, wantNormalIDs)
+			}
+
+			// Floor 10 (Boss)
+			floor10Enemies := tracker.floorEnemies[9]
+			if len(floor10Enemies) == 0 {
+				t.Fatalf("boss floor 10 has no enemies")
+			}
+			bossID := floor10Enemies[0].ID
+			bossMatched := false
+			for _, bID := range wantBossIDs {
+				if len(bossID) >= len(bID) && bossID[:len(bID)] == bID {
+					bossMatched = true
+					break
+				}
+			}
+			if !bossMatched {
+				t.Errorf("season %s boss %s not in expected boss IDs %v", sc.seasonName, bossID, wantBossIDs)
+			}
+
+			// Floor 11 (Treasure room)
+			if len(res.TreasureBoxes) == 0 {
+				t.Fatalf("season %s generated no treasure boxes", sc.seasonName)
+			}
+			for _, box := range res.TreasureBoxes {
+				itemMatched := slices.Contains(expectedStage.TreasureWeapons, box.ItemID) ||
+					slices.Contains(expectedStage.TreasureArmors, box.ItemID) ||
+					slices.Contains(expectedStage.TreasureItems, box.ItemID)
+				if !itemMatched {
+					t.Errorf("season %s treasure box item %s not in seasonal treasure pools", sc.seasonName, box.ItemID)
+				}
+			}
+		})
+	}
+}
+
+func TestParty_Stage26SeasonLifecycleAcrossAdventuresAndDisbandment(t *testing.T) {
+	ctx := context.Background()
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog: %v", err)
+	}
+	stage26, err := stages.FindByID("stage-26")
+	if err != nil {
+		t.Fatalf("FindByID(stage-26): %v", err)
+	}
+
+	currentRngVal := 1 // summer (1)
+	tracker := &trackingBattleEngine{}
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(t, tracker, WithRNG(func(n int) int {
+		if n == 4 {
+			return currentRngVal
+		}
+		return 0
+	}))
+
+	leader := corecharacter.Character{
+		ID:       "leader-lifecycle",
+		Name:     "Hero",
+		Level:    90,
+		JobLevel: 5,
+		Stats: corecharacter.Stats{
+			HP:      50000,
+			MaxHP:   50000,
+			MP:      1000,
+			MaxMP:   1000,
+			Attack:  10000,
+			Defense: 10000,
+		},
+	}
+	charRepo.chars[leader.ID] = leader
+
+	// 1. Create party with RNG pointing to Summer (index 1)
+	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Name:       "SummerParty",
+		StageID:    "stage-26",
+		MaxMembers: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	if pDetail.Party.Season != "summer" {
+		t.Fatalf("expected party season 'summer', got '%s'", pDetail.Party.Season)
+	}
+	partyID := pDetail.Party.ID
+
+	// Verify persistence in repo holds Season
+	persisted, err := partyRepo.GetParty(ctx, partyID)
+	if err != nil {
+		t.Fatalf("GetParty failed: %v", err)
+	}
+	if persisted.Season != "summer" {
+		t.Fatalf("persisted party season = '%s', want 'summer'", persisted.Season)
+	}
+
+	// 2. First Adventure: Run crawl. Should encounter Summer boss and enemies.
+	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
+		t.Fatalf("SetReady 1 failed: %v", err)
+	}
+	res1, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure 1 failed: %v", err)
+	}
+	if res1.Outcome != "win" {
+		t.Fatalf("expected win, got %s", res1.Outcome)
+	}
+
+	summerStage := stage26.ForSeason("summer")
+	wantSummerBoss := summerStage.GetBossIDs()[0]
+	if len(tracker.floorEnemies) < 10 {
+		t.Fatalf("expected at least 10 floor battles, got %d", len(tracker.floorEnemies))
+	}
+	boss1ID := tracker.floorEnemies[9][0].ID
+	if len(boss1ID) < len(wantSummerBoss) || boss1ID[:len(wantSummerBoss)] != wantSummerBoss {
+		t.Fatalf("1st adventure boss = %s, want summer boss %s", boss1ID, wantSummerBoss)
+	}
+
+	// 3. Second Adventure on SAME party:
+	// Change RNG to Autumn (index 2). The existing party MUST still use Summer!
+	currentRngVal = 2 // autumn
+	tracker.mu.Lock()
+	tracker.floorEnemies = nil // reset tracker
+	tracker.mu.Unlock()
+
+	// Party status reset to recruiting after adventure conclusion
+	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
+		t.Fatalf("SetReady 2 failed: %v", err)
+	}
+	res2, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure 2 failed: %v", err)
+	}
+	if res2.Outcome != "win" {
+		t.Fatalf("expected win, got %s", res2.Outcome)
+	}
+
+	// Verify second adventure still encountered Summer boss, NOT Autumn!
+	if len(tracker.floorEnemies) < 10 {
+		t.Fatalf("expected at least 10 floor battles, got %d", len(tracker.floorEnemies))
+	}
+	boss2ID := tracker.floorEnemies[9][0].ID
+	if len(boss2ID) < len(wantSummerBoss) || boss2ID[:len(wantSummerBoss)] != wantSummerBoss {
+		t.Fatalf("2nd adventure boss = %s, want preserved summer boss %s (did not switch to autumn)", boss2ID, wantSummerBoss)
+	}
+
+	// 4. Disband party
+	if err := svc.DisbandParty(ctx, partyID, leader.ID); err != nil {
+		t.Fatalf("DisbandParty failed: %v", err)
+	}
+
+	// 5. Create NEW party with RNG still pointing to Autumn (index 2)
+	// A newly created party MUST roll and receive Autumn!
+	pDetail2, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Name:       "AutumnParty",
+		StageID:    "stage-26",
+		MaxMembers: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty 2 failed: %v", err)
+	}
+	if pDetail2.Party.Season != "autumn" {
+		t.Fatalf("expected new party season 'autumn', got '%s'", pDetail2.Party.Season)
+	}
+	party2ID := pDetail2.Party.ID
+
+	tracker.mu.Lock()
+	tracker.floorEnemies = nil
+	tracker.mu.Unlock()
+
+	if _, err := svc.SetReady(ctx, party2ID, leader.ID, true); err != nil {
+		t.Fatalf("SetReady 3 failed: %v", err)
+	}
+	res3, err := svc.StartPartyAdventure(ctx, party2ID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure 3 failed: %v", err)
+	}
+	if res3.Outcome != "win" {
+		t.Fatalf("expected win, got %s", res3.Outcome)
+	}
+
+	autumnStage := stage26.ForSeason("autumn")
+	wantAutumnBoss := autumnStage.GetBossIDs()[0]
+	boss3ID := tracker.floorEnemies[9][0].ID
+	if len(boss3ID) < len(wantAutumnBoss) || boss3ID[:len(wantAutumnBoss)] != wantAutumnBoss {
+		t.Fatalf("new party adventure boss = %s, want autumn boss %s", boss3ID, wantAutumnBoss)
+	}
+}
+
+func TestParty_Stage26BackwardCompatibilityForPartiesWithoutSeason(t *testing.T) {
+	ctx := context.Background()
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog: %v", err)
+	}
+	stage26, err := stages.FindByID("stage-26")
+	if err != nil {
+		t.Fatalf("FindByID(stage-26): %v", err)
+	}
+
+	currentRngVal := 3 // winter (3)
+	tracker := &trackingBattleEngine{}
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(t, tracker, WithRNG(func(n int) int {
+		if n == 4 {
+			return currentRngVal
+		}
+		return 0
+	}))
+
+	leader := corecharacter.Character{
+		ID:       "leader-legacy",
+		Name:     "Hero",
+		Level:    90,
+		JobLevel: 5,
+		Stats: corecharacter.Stats{
+			HP:      50000,
+			MaxHP:   50000,
+			MP:      1000,
+			MaxMP:   1000,
+			Attack:  10000,
+			Defense: 10000,
+		},
+	}
+	charRepo.chars[leader.ID] = leader
+
+	// Simulate an existing party in repository that was created before Season field existed (Season == "")
+	partyID := "legacy-party-without-season"
+	now := time.Now().UTC()
+	legacyParty := Party{
+		ID:                partyID,
+		LeaderCharacterID: leader.ID,
+		Name:              "LegacyParty",
+		StageID:           "stage-26",
+		Season:            "", // intentionally empty
+		Speed:             DefaultSpeed,
+		MaxMembers:        1,
+		Status:            StatusRecruiting,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	if err := partyRepo.SaveParty(ctx, legacyParty); err != nil {
+		t.Fatalf("SaveParty failed: %v", err)
+	}
+	// Add leader member
+	member := Member{
+		PartyID:       partyID,
+		CharacterID:   leader.ID,
+		CharacterName: leader.Name,
+		IsLeader:      true,
+		ReadyState:    true,
+		JoinedAt:      now,
+	}
+	if err := partyRepo.AddMember(ctx, member); err != nil {
+		t.Fatalf("AddMember failed: %v", err)
+	}
+
+	// Execute adventure on legacy party
+	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed on legacy party: %v", err)
+	}
+	if res.Outcome != "win" {
+		t.Fatalf("expected win, got %s", res.Outcome)
+	}
+
+	// Verify that the party lazily selected Winter (index 3) and persisted it
+	persisted, err := partyRepo.GetParty(ctx, partyID)
+	if err != nil {
+		t.Fatalf("GetParty failed: %v", err)
+	}
+	if persisted.Season != "winter" {
+		t.Fatalf("expected legacy party to lazily acquire and persist 'winter', got '%s'", persisted.Season)
+	}
+
+	// Verify Winter boss was encountered
+	winterStage := stage26.ForSeason("winter")
+	wantWinterBoss := winterStage.GetBossIDs()[0]
+	bossID := tracker.floorEnemies[9][0].ID
+	if len(bossID) < len(wantWinterBoss) || bossID[:len(wantWinterBoss)] != wantWinterBoss {
+		t.Fatalf("legacy party boss = %s, want winter boss %s", bossID, wantWinterBoss)
+	}
+
+	// Subsequent adventure on this legacy party must retain Winter even if RNG changes
+	currentRngVal = 0 // spring
+	tracker.mu.Lock()
+	tracker.floorEnemies = nil
+	tracker.mu.Unlock()
+
+	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
+		t.Fatalf("SetReady failed: %v", err)
+	}
+	res2, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure 2 failed: %v", err)
+	}
+	if res2.Outcome != "win" {
+		t.Fatalf("expected win, got %s", res2.Outcome)
+	}
+	boss2ID := tracker.floorEnemies[9][0].ID
+	if len(boss2ID) < len(wantWinterBoss) || boss2ID[:len(wantWinterBoss)] != wantWinterBoss {
+		t.Fatalf("subsequent adventure boss = %s, want retained winter boss %s", boss2ID, wantWinterBoss)
 	}
 }

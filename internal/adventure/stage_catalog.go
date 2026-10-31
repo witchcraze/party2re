@@ -10,6 +10,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 var (
@@ -43,6 +44,7 @@ type Stage struct {
 	TreasureArmors  []string            `json:"treasure_armors,omitempty"`
 	TreasureItems   []string            `json:"treasure_items,omitempty"`
 	Seasons         []SeasonalStageData `json:"seasons,omitempty"`
+	Season          string              `json:"season,omitempty"`
 }
 
 // ForSeason returns a copy of the Stage configured for the given seasonal variant.
@@ -50,6 +52,7 @@ func (s Stage) ForSeason(season string) Stage {
 	for _, sd := range s.Seasons {
 		if strings.EqualFold(sd.Season, season) {
 			cp := s
+			cp.Season = sd.Season
 			cp.MonsterIDs = sd.MonsterIDs
 			cp.BossIDs = sd.BossIDs
 			cp.TreasureWeapons = sd.TreasureWeapons
@@ -59,6 +62,20 @@ func (s Stage) ForSeason(season string) Stage {
 		}
 	}
 	return s
+}
+
+// SelectSeason returns a copy of the Stage configured for the given seasonal variant,
+// or chooses a random season if unselected and seasons are defined.
+// If the stage has no seasonal variants or a season is already selected, it returns the stage unchanged.
+func (s Stage) SelectSeason(rng func(n int) int) Stage {
+	if len(s.Seasons) == 0 || s.Season != "" {
+		return s
+	}
+	if rng == nil {
+		rng = random.Intn
+	}
+	chosenSeason := s.Seasons[rng(len(s.Seasons))].Season
+	return s.ForSeason(chosenSeason)
 }
 
 // GetBossIDs returns the stage boss IDs (for Floor 10).

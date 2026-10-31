@@ -139,6 +139,8 @@ func NewCrawlSessionWithParticipants(
 		rng = random.Intn
 	}
 
+	stage = stage.SelectSeason(rng)
+
 	charIDs := make([]string, len(characters))
 	parts := make([]corebattle.Participant, len(characters))
 	for i, c := range characters {
@@ -219,9 +221,18 @@ func (s *CrawlSession) AdvanceFloor(
 		return res, nil
 	}
 
-	stage, err := stages.FindByID(s.StageID)
-	if err != nil {
-		return DungeonFloorResult{}, err
+	stage := s.Stage
+	if stage.ID == "" {
+		if stages == nil {
+			return DungeonFloorResult{}, ErrStageNotFound
+		}
+		var err error
+		stage, err = stages.FindByID(s.StageID)
+		if err != nil {
+			return DungeonFloorResult{}, err
+		}
+		stage = stage.SelectSeason(s.Rng)
+		s.Stage = stage
 	}
 
 	isBoss := s.CurrentFloor == BossFloor
