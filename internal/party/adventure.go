@@ -88,6 +88,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			if err != nil {
 				return ErrStageNotFound
 			}
+			stage = stage.SelectSeason(s.rng)
 			leaderChar := charMap[leaderCharID]
 			if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
 				return err

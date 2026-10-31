@@ -1267,3 +1267,113 @@ func TestCrawlSession_ExamineTreasure_DoesNotMutateCallerItemDefinitionIDs(t *te
 		t.Fatalf("no-key input items mutated: %v", noKeyItems)
 	}
 }
+
+func TestCrawlSession_SeasonalStagePersistence(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage26, err := stages.FindByID("stage-26")
+	if err != nil {
+		t.Fatalf("FindByID(stage-26): %v", err)
+	}
+
+	chars := []corecharacter.Character{
+		{ID: "c1", Name: "Hero", Level: 90, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000, Attack: 10000, Defense: 10000}},
+	}
+	engine := corebattle.Engine{}
+
+	seasons := []struct {
+		seasonIndex int
+		seasonName  string
+	}{
+		{0, "spring"},
+		{1, "summer"},
+		{2, "autumn"},
+		{3, "winter"},
+	}
+
+	for _, sc := range seasons {
+		t.Run(sc.seasonName, func(t *testing.T) {
+			expectedStage := stage26.ForSeason(sc.seasonName)
+			wantBossIDs := expectedStage.GetBossIDs()
+			wantNormalIDs := expectedStage.GetNormalMonsterIDs()
+
+			// rng returns season index on initial selection, then 0 for monster/treasure rolls
+			sess, err := adventure.NewCrawlSession(stage26, chars, func(n int) int {
+				if n == 4 {
+					return sc.seasonIndex
+				}
+				return 0
+			})
+			if err != nil {
+				t.Fatalf("NewCrawlSession: %v", err)
+			}
+
+			// Advance Floor 1 (Normal monsters)
+			floor1Res, err := sess.AdvanceFloor(stages, monsters, engine)
+			if err != nil {
+				t.Fatalf("floor 1 advance: %v", err)
+			}
+			if len(floor1Res.Enemies) == 0 {
+				t.Fatalf("floor 1 has no enemies")
+			}
+			// Check that floor 1 enemy is from the seasonal normal monsters list
+			enemyID := floor1Res.Enemies[0].ID
+			matched := false
+			for _, mID := range wantNormalIDs {
+				if len(enemyID) >= len(mID) && enemyID[:len(mID)] == mID {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				t.Errorf("season %s floor 1 enemy %s not in expected normal monsters %v", sc.seasonName, enemyID, wantNormalIDs)
+			}
+
+			// Advance through floors 2 to 9
+			for f := 2; f <= 9; f++ {
+				if _, err := sess.AdvanceFloor(stages, monsters, engine); err != nil {
+					t.Fatalf("floor %d advance: %v", f, err)
+				}
+			}
+
+			// Floor 10 (Boss)
+			bossRes, err := sess.AdvanceFloor(stages, monsters, engine)
+			if err != nil {
+				t.Fatalf("floor 10 advance: %v", err)
+			}
+			if len(bossRes.Enemies) == 0 {
+				t.Fatalf("boss floor has no enemies")
+			}
+			bossID := bossRes.Enemies[0].ID
+			bossMatched := false
+			for _, bID := range wantBossIDs {
+				if len(bossID) >= len(bID) && bossID[:len(bID)] == bID {
+					bossMatched = true
+					break
+				}
+			}
+			if !bossMatched {
+				t.Errorf("season %s boss = %s, want one of %v", sc.seasonName, bossID, wantBossIDs)
+			}
+
+			// Floor 11 (Treasure room)
+			treasureRes, err := sess.AdvanceFloor(stages, monsters, engine)
+			if err != nil {
+				t.Fatalf("floor 11 advance: %v", err)
+			}
+			if !treasureRes.IsTreasureRoom {
+				t.Fatalf("floor 11 must be treasure room")
+			}
+			if len(sess.TreasureBoxes) == 0 {
+				t.Fatalf("season %s generated no treasure boxes", sc.seasonName)
+			}
+			for _, box := range sess.TreasureBoxes {
+				itemMatched := slices.Contains(expectedStage.TreasureWeapons, box.ItemID) ||
+					slices.Contains(expectedStage.TreasureArmors, box.ItemID) ||
+					slices.Contains(expectedStage.TreasureItems, box.ItemID)
+				if !itemMatched {
+					t.Errorf("season %s treasure box item %s not in seasonal treasure pools", sc.seasonName, box.ItemID)
+				}
+			}
+		})
+	}
+}

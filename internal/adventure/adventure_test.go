@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -963,6 +964,110 @@ func TestSoloAdmission_MatchesStageCatalogAndAvailableStages(t *testing.T) {
 			} else {
 				if !errors.Is(startErr, accessErr) {
 					t.Fatalf("StartStage error %v does not match expected access error %v", startErr, accessErr)
+				}
+			}
+		})
+	}
+}
+
+func TestExecuteCrawl_SeasonalStagePersistence(t *testing.T) {
+	service, _, _, characters := newTestService(t)
+	characters.value.Level = 90
+	characters.value.Stats.HP = 50000
+	characters.value.Stats.MaxHP = 50000
+	characters.value.Stats.Attack = 10000
+	characters.value.Stats.Defense = 10000
+
+	cat, err := InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog: %v", err)
+	}
+	stage26, err := cat.FindByID("stage-26")
+	if err != nil {
+		t.Fatalf("FindByID(stage-26): %v", err)
+	}
+
+	seasons := []struct {
+		seasonIndex int
+		seasonName  string
+	}{
+		{0, "spring"},
+		{1, "summer"},
+		{2, "autumn"},
+		{3, "winter"},
+	}
+
+	for _, sc := range seasons {
+		t.Run(sc.seasonName, func(t *testing.T) {
+			characters.value.Tired = 0
+			expectedStage := stage26.ForSeason(sc.seasonName)
+			wantBossIDs := expectedStage.GetBossIDs()
+			wantNormalIDs := expectedStage.GetNormalMonsterIDs()
+
+			res, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+				CharacterIDs: []string{characters.value.ID},
+				StageID:      "stage-26",
+				Rng: func(n int) int {
+					if n == 4 {
+						return sc.seasonIndex
+					}
+					return 0
+				},
+			})
+			if err != nil {
+				t.Fatalf("ExecuteCrawl failed: %v", err)
+			}
+			if !res.StageCleared {
+				t.Fatalf("stage-26 not cleared")
+			}
+
+			// Floor 1 (Normal monsters)
+			if len(res.FloorResults) < 10 {
+				t.Fatalf("expected at least 10 floor results, got %d", len(res.FloorResults))
+			}
+			floor1Enemies := res.FloorResults[0].Enemies
+			if len(floor1Enemies) == 0 {
+				t.Fatalf("floor 1 has no enemies")
+			}
+			enemyID := floor1Enemies[0].ID
+			matched := false
+			for _, mID := range wantNormalIDs {
+				if len(enemyID) >= len(mID) && enemyID[:len(mID)] == mID {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				t.Errorf("season %s floor 1 enemy %s not in expected normal monsters %v", sc.seasonName, enemyID, wantNormalIDs)
+			}
+
+			// Floor 10 (Boss)
+			floor10Enemies := res.FloorResults[9].Enemies
+			if len(floor10Enemies) == 0 {
+				t.Fatalf("boss floor 10 has no enemies")
+			}
+			bossID := floor10Enemies[0].ID
+			bossMatched := false
+			for _, bID := range wantBossIDs {
+				if len(bossID) >= len(bID) && bossID[:len(bID)] == bID {
+					bossMatched = true
+					break
+				}
+			}
+			if !bossMatched {
+				t.Errorf("season %s boss %s not in expected boss IDs %v", sc.seasonName, bossID, wantBossIDs)
+			}
+
+			// Floor 11 (Treasure room)
+			if len(res.TreasureBoxes) == 0 {
+				t.Fatalf("season %s generated no treasure boxes", sc.seasonName)
+			}
+			for _, box := range res.TreasureBoxes {
+				itemMatched := slices.Contains(expectedStage.TreasureWeapons, box.ItemID) ||
+					slices.Contains(expectedStage.TreasureArmors, box.ItemID) ||
+					slices.Contains(expectedStage.TreasureItems, box.ItemID)
+				if !itemMatched {
+					t.Errorf("season %s treasure box item %s not in seasonal treasure pools", sc.seasonName, box.ItemID)
 				}
 			}
 		})

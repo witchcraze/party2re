@@ -298,11 +298,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		rng = random.Intn
 	}
 
-	if len(stage.Seasons) > 0 {
-		seasonNames := []string{"spring", "summer", "autumn", "winter"}
-		chosenSeason := seasonNames[rng(len(seasonNames))]
-		stage = stage.ForSeason(chosenSeason)
-	}
+	stage = stage.SelectSeason(rng)
 
 	var pbr corebattle.PartyBattleResolver = corebattle.Engine{}
 	if r, ok := s.battle.(partyBattleResolver); ok {

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2157,5 +2159,146 @@ func TestStartPartyAdventure_Floor11Treasure_AutoCrawlDoesNotConsumeMasterKeyWit
 	consumed := settler.lastReq.BattleResult.ConsumedItems[leader.ID]
 	if len(consumed) != 0 {
 		t.Fatalf("expected 0 consumed keys in automatic party crawl, got: %v", consumed)
+	}
+}
+
+type trackingBattleEngine struct {
+	mu           sync.Mutex
+	floorEnemies [][]corebattle.Participant
+}
+
+func (e *trackingBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	e.mu.Lock()
+	e.floorEnemies = append(e.floorEnemies, req.Enemies)
+	e.mu.Unlock()
+	return corebattle.PartyBattleResult{
+		Outcome: corebattle.OutcomeWin,
+	}, nil
+}
+
+func TestPartyAdventure_SeasonalStagePersistence(t *testing.T) {
+	ctx := context.Background()
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog: %v", err)
+	}
+	stage26, err := stages.FindByID("stage-26")
+	if err != nil {
+		t.Fatalf("FindByID(stage-26): %v", err)
+	}
+
+	seasons := []struct {
+		seasonIndex int
+		seasonName  string
+	}{
+		{0, "spring"},
+		{1, "summer"},
+		{2, "autumn"},
+		{3, "winter"},
+	}
+
+	for _, sc := range seasons {
+		t.Run(sc.seasonName, func(t *testing.T) {
+			expectedStage := stage26.ForSeason(sc.seasonName)
+			wantBossIDs := expectedStage.GetBossIDs()
+			wantNormalIDs := expectedStage.GetNormalMonsterIDs()
+
+			tracker := &trackingBattleEngine{}
+			svc, _, charRepo, _, _ := setupPartyAdventureTestService(t, tracker, WithRNG(func(n int) int {
+				if n == 4 {
+					return sc.seasonIndex
+				}
+				return 0
+			}))
+
+			leader := corecharacter.Character{
+				ID:       fmt.Sprintf("leader-%s", sc.seasonName),
+				Name:     "Hero",
+				Level:    90,
+				JobLevel: 5,
+				Stats: corecharacter.Stats{
+					HP:      50000,
+					MaxHP:   50000,
+					MP:      1000,
+					MaxMP:   1000,
+					Attack:  10000,
+					Defense: 10000,
+				},
+			}
+			charRepo.chars[leader.ID] = leader
+
+			pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+				Name:       fmt.Sprintf("SeasonParty-%s", sc.seasonName),
+				StageID:    "stage-26",
+				MaxMembers: 1,
+			})
+			if err != nil {
+				t.Fatalf("CreateParty failed: %v", err)
+			}
+			partyID := pDetail.Party.ID
+			if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
+				t.Fatalf("SetReady failed: %v", err)
+			}
+
+			res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+			if err != nil {
+				t.Fatalf("StartPartyAdventure failed: %v", err)
+			}
+			if res.Outcome != "win" {
+				t.Fatalf("expected win outcome, got %s", res.Outcome)
+			}
+
+			// Verify battle encounters
+			if len(tracker.floorEnemies) < 10 {
+				t.Fatalf("expected at least 10 floor battles, got %d", len(tracker.floorEnemies))
+			}
+
+			// Floor 1 (Normal monsters)
+			floor1Enemies := tracker.floorEnemies[0]
+			if len(floor1Enemies) == 0 {
+				t.Fatalf("floor 1 has no enemies")
+			}
+			enemyID := floor1Enemies[0].ID
+			matched := false
+			for _, mID := range wantNormalIDs {
+				if len(enemyID) >= len(mID) && enemyID[:len(mID)] == mID {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				t.Errorf("season %s floor 1 enemy %s not in expected normal monsters %v", sc.seasonName, enemyID, wantNormalIDs)
+			}
+
+			// Floor 10 (Boss)
+			floor10Enemies := tracker.floorEnemies[9]
+			if len(floor10Enemies) == 0 {
+				t.Fatalf("boss floor 10 has no enemies")
+			}
+			bossID := floor10Enemies[0].ID
+			bossMatched := false
+			for _, bID := range wantBossIDs {
+				if len(bossID) >= len(bID) && bossID[:len(bID)] == bID {
+					bossMatched = true
+					break
+				}
+			}
+			if !bossMatched {
+				t.Errorf("season %s boss %s not in expected boss IDs %v", sc.seasonName, bossID, wantBossIDs)
+			}
+
+			// Floor 11 (Treasure room)
+			if len(res.TreasureBoxes) == 0 {
+				t.Fatalf("season %s generated no treasure boxes", sc.seasonName)
+			}
+			for _, box := range res.TreasureBoxes {
+				itemMatched := slices.Contains(expectedStage.TreasureWeapons, box.ItemID) ||
+					slices.Contains(expectedStage.TreasureArmors, box.ItemID) ||
+					slices.Contains(expectedStage.TreasureItems, box.ItemID)
+				if !itemMatched {
+					t.Errorf("season %s treasure box item %s not in seasonal treasure pools", sc.seasonName, box.ItemID)
+				}
+			}
+		})
 	}
 }

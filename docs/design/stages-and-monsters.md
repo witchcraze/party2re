@@ -14,7 +14,7 @@ This document describes the stage hierarchy, monster encounters, and clean-room 
 - **Boss IDs (`boss_ids`)**: Designated Floor 10 boss encounters.
 - **Treasure Pools (`treasure_weapons`, `treasure_armors`, `treasure_items`)**: Authentic drop tables from legacy `@treasures`.
 - **Dungeon Crawl Structure**: Floors 1–9 contain stage encounters, Floor 10 the stage boss, and Floor 11 the Treasure Room (`vs_monster.cgi`, `add_treasure`). Current Go resolves the whole crawl on start; this omits the original player-command progression and is a defect tracked by [#1323](https://github.com/witchcraze/party2re/issues/1323). The [Adventure interaction contract](adventure.md#original-interaction-contract-and-reconstruction-target) owns restoration of explicit combat, advance, inspection and exit. The fictional one-hour expedition timer remains removed.
-- **Seasonal Stage Variants**: Stage 26 (`四季のダンジョン` / `神秘の森`) supports 4 seasonal variants (`spring`, `summer`, `autumn`, `winter`) selected randomly upon crawl execution, configuring season-specific monster rosters, bosses, and treasure drop pools.
+- **Seasonal Stage Variants**: Stage 26 (`四季のダンジョン` / `神秘の森`) supports 4 seasonal variants (`spring`, `summer`, `autumn`, `winter`) selected randomly upon crawl execution (in both solo and party crawls) and preserved throughout the crawl session, configuring consistent season-specific monster rosters (floors 1–9), boss encounters (floor 10), and treasure drop pools (floor 11).
 
 ### Standard Adventure Stages (00–27)
 0. **プニプニ平原** (`stage-00`): introductory meadow.
