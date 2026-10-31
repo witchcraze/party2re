@@ -37,7 +37,7 @@ A participant in combat possesses combat attributes:
 - `AntiFieldTurn`: Turns remaining for anti-field suppression (negates elemental affinity multipliers).
 
 ### Battle Request & Reward Model
-- `Participants`: For 1v1 combat, ordered pair `[first, second]`.
+- `Participants`: For 1v1 combat, ordered pair `[first, second]`. Single-participant encounters resolve through the unified `ResolvePartyBattle` rules, ensuring skills, MP/CMP, items, status ailments, and revival are applied, with first-strike lethal defeats resolving as victory rather than phantom-counterattack draws.
 - `Allies` & `Enemies`: For standard 2-side party combat, ally group (up to 4) and enemy group (1..N).
 - `Teams`: For multi-faction battles (PvP Colosseum with 2..8 players / up to 9 colors, GvG with multiple guilds), `map[string][]Participant` keyed by team/faction ID.
 - `VictoryReward`, `DefeatReward`, `DrawReward`: Rewards containing `Experience`, `Currency`, `ItemDefinitionID`, `ItemQuantity`, and `SmallMedals`.
@@ -2457,10 +2457,12 @@ those gates are met.
     - If the attacker possesses Diamond Ring (`item-144`), damage decay is completely negated (`decayMult = 1.0`).
 
 ### 4. 1v1 Combat Resolution (`Resolve`)
-Deterministic 1v1 duel resolution utilizing the canonical damage formula:
-- Alternating attacks between `first` and `second`.
-- Damage computed via `CalculateDamage(attacker.Attack, defender.Defense, rng, false)`.
-- Terminates upon knockout or simultaneous knockout (`OutcomeDraw`).
+Deterministic 1v1 combat resolution reusing the unified `ResolvePartyBattle` rules:
+- Participants (`[first, second]`) are automatically partitioned into distinct opposing teams (`allies` vs `enemies`), handling custom, single, or conflicting incoming `TeamID`s safely.
+- Reuses agility turn ordering, job skills (MP), custom skills (CMP), items, status ailments, defending, and revival triggers.
+- Terminates upon knockout, simultaneous defeat, or round limit (100 turns).
+- Returns `corebattle.Result` containing outcome, winner/loser, turn count, reward, remaining HP/MP/CMP/status, consumed items, and turn logs.
+- Eliminates the legacy alternating-attack defect where a lethal first-strike knockout was followed by an unexecuted counterattack damage evaluation that forced a draw.
 
 ### Legacy Defeat Synergies
 

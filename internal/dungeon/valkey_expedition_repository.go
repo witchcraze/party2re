@@ -266,6 +266,8 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	sKey := r.stateKey(characterID)
 	rKey := r.rewardsKey(characterID)
 
+	memberHPDeltasJSON := EncodeMemberHPDeltas(params.MemberHPDeltas)
+
 	res := r.stepScript.Exec(ctx, r.client, []string{sKey, rKey}, []string{
 		params.ExpectedExpeditionID,
 		strconv.Itoa(params.NewFloor),
@@ -280,6 +282,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		params.Now.Format(time.RFC3339Nano),
 		strconv.FormatInt(int64(r.ttl.Seconds()), 10),
 		params.EventKey,
+		memberHPDeltasJSON,
 	})
 
 	if err := res.Error(); err != nil {

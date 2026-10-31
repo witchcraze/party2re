@@ -14,6 +14,7 @@ local reward_item = ARGV[10]
 local now_timestamp = ARGV[11]
 local ttl_seconds = tonumber(ARGV[12]) or 7200
 local event_key = ARGV[13] or ''
+local member_hp_deltas_str = ARGV[14] or '{}'
 
 -- 1. Check existence of active expedition state key
 if redis.call('EXISTS', state_key) == 0 then
@@ -38,6 +39,58 @@ local turns_remaining = tonumber(redis.call('HGET', state_key, 'turns_remaining'
 
 current_hp = current_hp + hp_delta
 turns_remaining = turns_remaining + turns_delta
+
+local members_str = redis.call('HGET', state_key, 'members') or '[]'
+local members = {}
+local has_members = false
+if members_str ~= '' and members_str ~= '[]' then
+    local ok, decoded = pcall(cjson.decode, members_str)
+    if ok and type(decoded) == 'table' then
+        members = decoded
+        has_members = true
+    end
+end
+
+if has_members then
+    local deltas = {}
+    local has_deltas = false
+    if member_hp_deltas_str ~= '' and member_hp_deltas_str ~= '{}' then
+        local ok, decoded_deltas = pcall(cjson.decode, member_hp_deltas_str)
+        if ok and type(decoded_deltas) == 'table' then
+            deltas = decoded_deltas
+            has_deltas = true
+        end
+    end
+
+    if has_deltas then
+        local all_dead = true
+        for _, m in ipairs(members) do
+            local cid = m['character_id']
+            if cid and deltas[cid] then
+                local delta = tonumber(deltas[cid]) or 0
+                local m_hp = (tonumber(m['current_hp']) or 0) + delta
+                if m_hp < 0 then
+                    m_hp = 0
+                end
+                m['current_hp'] = m_hp
+            end
+            if (tonumber(m['current_hp']) or 0) > 0 then
+                all_dead = false
+            end
+        end
+        if #members > 0 and all_dead then
+            current_hp = 0
+        end
+        members_str = cjson.encode(members)
+    elseif #members == 1 and hp_delta ~= 0 then
+        local m_hp = (tonumber(members[1]['current_hp']) or 0) + hp_delta
+        if m_hp < 0 then
+            m_hp = 0
+        end
+        members[1]['current_hp'] = m_hp
+        members_str = cjson.encode(members)
+    end
+end
 
 local final_status = 'exploring'
 if current_hp <= 0 then
@@ -85,7 +138,8 @@ redis.call('HMSET', state_key,
     'turns_remaining', tostring(turns_remaining),
     'status', final_status,
     'consumed_events', new_events_str,
-    'updated_at', now_timestamp
+    'updated_at', now_timestamp,
+    'members', members_str
 )
 
 -- 7. Update rewards hash
@@ -142,7 +196,7 @@ return {
     started_at,
     redis.call('HGET', state_key, 'party_id') or '',
     redis.call('HGET', state_key, 'party_name') or '',
-    redis.call('HGET', state_key, 'members') or '[]',
+    members_str,
     new_events_str,
     tostring(event_consumed)
 }

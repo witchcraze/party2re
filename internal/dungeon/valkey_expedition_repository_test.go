@@ -13,6 +13,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	corerandom "github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
@@ -690,5 +691,295 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	}
 	if floor2Out.Expedition.AccumulatedGold != 300 || floor2Out.Expedition.AccumulatedMedals != 2 || len(floor2Out.Expedition.AccumulatedItems) != 2 {
 		t.Fatalf("expected cumulative rewards after floor 2 treasure, got %+v", floor2Out.Expedition)
+	}
+}
+
+func TestValkeyExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t *testing.T) {
+	client := openTestValkey(t)
+	charID := "hero-valkey-parity"
+	expID := "exp-valkey-parity-1"
+	cleanupDungeonValkey(t, client, charID)
+	defer cleanupDungeonValkey(t, client, charID)
+
+	repo, err := dungeon.NewValkeyExpeditionRepository(client)
+	if err != nil {
+		t.Fatalf("NewValkeyExpeditionRepository failed: %v", err)
+	}
+
+	ctx := context.Background()
+	exp := sampleExpedition(expID, charID, "dungeon-01")
+	exp.Members = []dungeon.ExpeditionMember{
+		{
+			CharacterID: charID,
+			Name:        "Parity Hero",
+			Level:       10,
+			CurrentHP:   100,
+			MaxHP:       100,
+		},
+	}
+	if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+		t.Fatalf("SaveActiveExpedition failed: %v", err)
+	}
+
+	// 1. Step with explicit MemberHPDeltas (e.g. from combat)
+	stepParams := dungeon.StepParams{
+		ExpectedExpeditionID: expID,
+		NewFloor:             1,
+		NewX:                 1,
+		NewY:                 0,
+		HPDelta:              -25,
+		MemberHPDeltas:       map[string]int{charID: -25},
+		TurnsDelta:           -1,
+		Now:                  time.Now().UTC(),
+	}
+	outcome, err := repo.Step(ctx, charID, stepParams)
+	if err != nil {
+		t.Fatalf("Step 1 failed: %v", err)
+	}
+	if outcome.Expedition.CurrentHP != 75 {
+		t.Errorf("expected CurrentHP 75, got %d", outcome.Expedition.CurrentHP)
+	}
+	if len(outcome.Expedition.Members) != 1 || outcome.Expedition.Members[0].CurrentHP != 75 {
+		t.Errorf("expected Members[0].CurrentHP 75, got %+v", outcome.Expedition.Members)
+	}
+
+	// Verify persistence in Valkey via GetActiveExpedition
+	reloaded, err := repo.GetActiveExpedition(ctx, charID)
+	if err != nil || reloaded == nil {
+		t.Fatalf("GetActiveExpedition failed: %v", err)
+	}
+	if reloaded.CurrentHP != 75 {
+		t.Errorf("expected reloaded CurrentHP 75, got %d", reloaded.CurrentHP)
+	}
+	if len(reloaded.Members) != 1 || reloaded.Members[0].CurrentHP != 75 {
+		t.Errorf("expected reloaded Members[0].CurrentHP 75, got %+v", reloaded.Members)
+	}
+
+	// 2. Solo step without MemberHPDeltas (should keep leader CurrentHP synchronized)
+	stepParams2 := dungeon.StepParams{
+		ExpectedExpeditionID: expID,
+		NewFloor:             1,
+		NewX:                 2,
+		NewY:                 0,
+		HPDelta:              -15,
+		TurnsDelta:           -1,
+		Now:                  time.Now().UTC(),
+	}
+	outcome2, err := repo.Step(ctx, charID, stepParams2)
+	if err != nil {
+		t.Fatalf("Step 2 failed: %v", err)
+	}
+	if outcome2.Expedition.CurrentHP != 60 {
+		t.Errorf("expected CurrentHP 60, got %d", outcome2.Expedition.CurrentHP)
+	}
+	if len(outcome2.Expedition.Members) != 1 || outcome2.Expedition.Members[0].CurrentHP != 60 {
+		t.Errorf("expected Members[0].CurrentHP 60, got %+v", outcome2.Expedition.Members)
+	}
+
+	reloaded2, err := repo.GetActiveExpedition(ctx, charID)
+	if err != nil || reloaded2 == nil {
+		t.Fatalf("GetActiveExpedition 2 failed: %v", err)
+	}
+	if reloaded2.CurrentHP != 60 || reloaded2.Members[0].CurrentHP != 60 {
+		t.Errorf("expected reloaded2 CurrentHP 60 and Members[0].CurrentHP 60, got current=%d member=%d",
+			reloaded2.CurrentHP, reloaded2.Members[0].CurrentHP)
+	}
+}
+
+func TestMemoryExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t *testing.T) {
+	charID := "hero-memory-parity"
+	expID := "exp-memory-parity-1"
+
+	repo := dungeon.NewMemoryExpeditionRepository()
+	ctx := context.Background()
+
+	exp := sampleExpedition(expID, charID, "dungeon-01")
+	exp.Members = []dungeon.ExpeditionMember{
+		{
+			CharacterID: charID,
+			Name:        "Parity Hero",
+			Level:       10,
+			CurrentHP:   100,
+			MaxHP:       100,
+		},
+	}
+	if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+		t.Fatalf("SaveActiveExpedition failed: %v", err)
+	}
+
+	// 1. Explicit MemberHPDeltas
+	outcome, err := repo.Step(ctx, charID, dungeon.StepParams{
+		ExpectedExpeditionID: expID,
+		NewFloor:             1,
+		NewX:                 1,
+		NewY:                 0,
+		HPDelta:              -25,
+		MemberHPDeltas:       map[string]int{charID: -25},
+		TurnsDelta:           -1,
+		Now:                  time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("Step 1 failed: %v", err)
+	}
+	if outcome.Expedition.CurrentHP != 75 || outcome.Expedition.Members[0].CurrentHP != 75 {
+		t.Errorf("expected CurrentHP 75 and Members[0].CurrentHP 75, got current=%d member=%d",
+			outcome.Expedition.CurrentHP, outcome.Expedition.Members[0].CurrentHP)
+	}
+
+	// 2. Solo step without MemberHPDeltas
+	outcome2, err := repo.Step(ctx, charID, dungeon.StepParams{
+		ExpectedExpeditionID: expID,
+		NewFloor:             1,
+		NewX:                 2,
+		NewY:                 0,
+		HPDelta:              -15,
+		TurnsDelta:           -1,
+		Now:                  time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("Step 2 failed: %v", err)
+	}
+	if outcome2.Expedition.CurrentHP != 60 || outcome2.Expedition.Members[0].CurrentHP != 60 {
+		t.Errorf("expected CurrentHP 60 and Members[0].CurrentHP 60, got current=%d member=%d",
+			outcome2.Expedition.CurrentHP, outcome2.Expedition.Members[0].CurrentHP)
+	}
+}
+
+func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t *testing.T) {
+	client := openTestValkey(t)
+	charID := "hero-valkey-combat"
+	cleanupDungeonValkey(t, client, charID)
+	defer cleanupDungeonValkey(t, client, charID)
+
+	valkeyStore, err := dungeon.NewValkeyExpeditionRepository(client)
+	if err != nil {
+		t.Fatalf("NewValkeyExpeditionRepository failed: %v", err)
+	}
+
+	ctx := context.Background()
+	char := corecharacter.Character{
+		ID:    charID,
+		Name:  "Valkey Combat Hero",
+		Level: 10,
+		Stats: corecharacter.Stats{
+			HP:      100,
+			MaxHP:   100,
+			Attack:  30,
+			Defense: 0,
+			Agility: 10, // Slower than monsters
+		},
+	}
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{charID: char}}
+	repo := newMockDungeonRepo()
+
+	customDungeon := dungeon.Dungeon{
+		ID:               "dungeon-valkey-combat",
+		MinLevel:         1,
+		MaxTurnsPerFloor: 10,
+		Floors: []dungeon.Floor{
+			{
+				FloorNumber: 1,
+				Width:       3,
+				Height:      1,
+				StartX:      0,
+				StartY:      0,
+				Grid:        []string{"S00"},
+				Monsters: []dungeon.DungeonMonster{
+					{
+						ID:         "monster-v1",
+						Name:       "Wolf",
+						HP:         20,
+						Attack:     30,
+						Defense:    0,
+						Agility:    30,
+						ExpReward:  10,
+						GoldReward: 10,
+					},
+					{
+						ID:         "monster-v2",
+						Name:       "Bear",
+						HP:         20,
+						Attack:     40,
+						Defense:    0,
+						Agility:    30,
+						ExpReward:  20,
+						GoldReward: 20,
+					},
+				},
+			},
+		},
+	}
+
+	service, err := dungeon.NewService(
+		repo,
+		charRepo,
+		corebattle.Engine{},
+		dungeon.WithActiveExpeditionStore(valkeyStore),
+		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
+		dungeon.WithRNG(corerandom.NewDeterministic(1)),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	exp, err := service.StartExpedition(ctx, charID, customDungeon.ID)
+	if err != nil {
+		t.Fatalf("StartExpedition failed: %v", err)
+	}
+	if exp.CurrentHP != 100 || len(exp.Members) != 1 || exp.Members[0].CurrentHP != 100 {
+		t.Fatalf("initial expedition state invalid: CurrentHP=%d, Members=%+v", exp.CurrentHP, exp.Members)
+	}
+
+	// Move 1: Combat with monster-2
+	res1, err := service.Move(ctx, charID, dungeon.DirectionEast)
+	if err != nil {
+		t.Fatalf("Move 1 failed: %v", err)
+	}
+	if res1.EventType != dungeon.EventBattle {
+		t.Fatalf("expected EventBattle, got %v", res1.EventType)
+	}
+	hpAfter1 := res1.Expedition.CurrentHP
+	if hpAfter1 >= 100 || hpAfter1 <= 0 {
+		t.Fatalf("expected damaged HP after battle 1, got %d", hpAfter1)
+	}
+	if res1.Expedition.Members[0].CurrentHP != hpAfter1 {
+		t.Fatalf("Members[0].CurrentHP (%d) does not match CurrentHP (%d) in StepResult",
+			res1.Expedition.Members[0].CurrentHP, hpAfter1)
+	}
+
+	// Verify that reloading from Valkey also has matching HP
+	reloaded1, err := valkeyStore.GetActiveExpedition(ctx, charID)
+	if err != nil || reloaded1 == nil {
+		t.Fatalf("GetActiveExpedition after battle 1 failed: %v", err)
+	}
+	if reloaded1.CurrentHP != hpAfter1 || reloaded1.Members[0].CurrentHP != hpAfter1 {
+		t.Fatalf("Valkey persisted state mismatch after battle 1: CurrentHP=%d, Members[0].CurrentHP=%d (expected %d)",
+			reloaded1.CurrentHP, reloaded1.Members[0].CurrentHP, hpAfter1)
+	}
+
+	// Move 2: Next monster
+	res2, err := service.Move(ctx, charID, dungeon.DirectionEast)
+	if err != nil {
+		t.Fatalf("Move 2 failed: %v", err)
+	}
+	if res2.EventType != dungeon.EventBattle {
+		t.Fatalf("expected EventBattle, got %v", res2.EventType)
+	}
+	hpAfter2 := res2.Expedition.CurrentHP
+	if hpAfter2 >= hpAfter1 || hpAfter2 <= 0 {
+		t.Fatalf("expected further reduced HP after battle 2, got %d (was %d)", hpAfter2, hpAfter1)
+	}
+	if res2.Expedition.Members[0].CurrentHP != hpAfter2 {
+		t.Fatalf("Members[0].CurrentHP (%d) does not match CurrentHP (%d) after battle 2",
+			res2.Expedition.Members[0].CurrentHP, hpAfter2)
+	}
+
+	reloaded2, err := valkeyStore.GetActiveExpedition(ctx, charID)
+	if err != nil || reloaded2 == nil {
+		t.Fatalf("GetActiveExpedition after battle 2 failed: %v", err)
+	}
+	if reloaded2.CurrentHP != hpAfter2 || reloaded2.Members[0].CurrentHP != hpAfter2 {
+		t.Fatalf("Valkey persisted state mismatch after battle 2: CurrentHP=%d, Members[0].CurrentHP=%d (expected %d)",
+			reloaded2.CurrentHP, reloaded2.Members[0].CurrentHP, hpAfter2)
 	}
 }
