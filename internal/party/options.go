@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
 )
 
@@ -85,5 +86,17 @@ func WithBlessingProvider(provider BlessingProvider) Option {
 func WithRNG(rng func(n int) int) Option {
 	return func(s *Service) {
 		s.rng = rng
+	}
+}
+
+// AdventureRepository persists adventure records for party members upon crawl completion.
+type AdventureRepository interface {
+	Save(ctx context.Context, value adventure.Adventure) error
+}
+
+// WithAdventureRepository configures the AdventureRepository for recording member clears and chronicle stats.
+func WithAdventureRepository(repo AdventureRepository) Option {
+	return func(s *Service) {
+		s.advRepo = repo
 	}
 }

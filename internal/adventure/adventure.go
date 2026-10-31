@@ -2,6 +2,8 @@ package adventure
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -46,6 +48,8 @@ type Adventure struct {
 	CharacterID      string
 	Type             string
 	StageID          string
+	Season           string
+	SeasonalSubID    int
 	MonsterID        string
 	StartedAt        time.Time
 	FloorsCleared    int
@@ -374,14 +378,22 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 
 		// Persist adventure record for each participating character
 		for _, c := range characters {
-			advID := id.New()
+			advIDHash := sha256.Sum256([]byte(fmt.Sprintf("solo:%s:%s", session.ID, c.ID)))
+			advID := hex.EncodeToString(advIDHash[:16])
 			result.AdventureIDs[c.ID] = advID
+
+			winnerID := ""
+			if result.Outcome == corebattle.OutcomeWin {
+				winnerID = c.ID
+			}
 
 			adv := Adventure{
 				ID:               advID,
 				CharacterID:      c.ID,
-				Type:             stage.ID,
-				StageID:          stage.ID,
+				Type:             session.StageID,
+				StageID:          session.StageID,
+				Season:           session.Stage.Season,
+				SeasonalSubID:    SeasonToSubID(session.Stage.Season),
 				StartedAt:        now,
 				FloorsCleared:    result.FloorsCleared,
 				IsCleared:        result.StageCleared,
@@ -390,7 +402,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 				Resolved:         true,
 				BattleResult: corebattle.Result{
 					Outcome:  result.Outcome,
-					WinnerID: characters[0].ID,
+					WinnerID: winnerID,
 					Turns:    result.TotalTurns,
 					Reward: corebattle.Reward{
 						Experience: result.TotalEXP,

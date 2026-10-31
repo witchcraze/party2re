@@ -220,3 +220,130 @@ func TestAdventureRepositoryListByCharacterIDAndAggregatedStats(t *testing.T) {
 		}
 	}
 }
+
+func TestAdventureRepository_CoopAndSeasonalClears(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	character, err := CreateTestCharacter(ctx, db, "Seasonal Chronicle Hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repo, err := NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+
+	// 1. Stage 26 Spring clear
+	advSpring := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-26",
+		StageID:          "stage-26",
+		Season:           "spring",
+		SeasonalSubID:    1,
+		StartedAt:        now,
+		FloorsCleared:    10,
+		IsCleared:        true,
+		PartySize:        2,
+		ExperienceReward: 50,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			Turns:    5,
+			Reward: corebattle.Reward{
+				Experience: 50,
+				Currency:   30,
+			},
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, advSpring); err != nil {
+		t.Fatalf("Save advSpring: %v", err)
+	}
+
+	// 2. Stage 26 Summer clear
+	advSummer := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-26",
+		StageID:          "stage-26",
+		Season:           "summer",
+		SeasonalSubID:    2,
+		StartedAt:        now.Add(1 * time.Hour),
+		FloorsCleared:    10,
+		IsCleared:        true,
+		PartySize:        1,
+		ExperienceReward: 60,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			Turns:    6,
+			Reward: corebattle.Reward{
+				Experience: 60,
+				Currency:   40,
+			},
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, advSummer); err != nil {
+		t.Fatalf("Save advSummer: %v", err)
+	}
+
+	// 3. Retry saving advSummer (same run ID) - must be idempotent
+	if err := repo.Save(ctx, advSummer); err != nil {
+		t.Fatalf("Retry Save advSummer: %v", err)
+	}
+
+	// 4. Verify FindByID retrieves Season and SeasonalSubID
+	gotSpring, err := repo.FindByID(ctx, advSpring.ID)
+	if err != nil {
+		t.Fatalf("FindByID(advSpring): %v", err)
+	}
+	if gotSpring.Season != "spring" || gotSpring.SeasonalSubID != 1 {
+		t.Errorf("FindByID spring got season=%s subID=%d, want spring and 1", gotSpring.Season, gotSpring.SeasonalSubID)
+	}
+
+	// 5. Verify GetAggregatedStats separates the seasons instead of collapsing them
+	stats, err := repo.GetAggregatedStats(ctx, character.ID)
+	if err != nil {
+		t.Fatalf("GetAggregatedStats: %v", err)
+	}
+	if stats.TotalVictories != 2 {
+		t.Errorf("TotalVictories = %d, want 2 (retry should not duplicate)", stats.TotalVictories)
+	}
+	if len(stats.StageStats) != 2 {
+		t.Fatalf("expected 2 distinct seasonal stage stats, got %d: %+v", len(stats.StageStats), stats.StageStats)
+	}
+
+	foundSpring := false
+	foundSummer := false
+	for _, ss := range stats.StageStats {
+		if ss.StageID == "stage-26" && ss.SeasonalSubID == 1 && ss.Season == "spring" {
+			foundSpring = true
+			if ss.ClearCount != 1 || ss.TotalAttempts != 1 {
+				t.Errorf("spring stats unexpected: %+v", ss)
+			}
+		}
+		if ss.StageID == "stage-26" && ss.SeasonalSubID == 2 && ss.Season == "summer" {
+			foundSummer = true
+			if ss.ClearCount != 1 || ss.TotalAttempts != 1 {
+				t.Errorf("summer stats unexpected: %+v", ss)
+			}
+		}
+	}
+	if !foundSpring || !foundSummer {
+		t.Errorf("expected both spring and summer distinct stats, got %+v", stats.StageStats)
+	}
+}

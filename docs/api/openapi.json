@@ -426,6 +426,12 @@
           "reward_item_quantity": {
             "type": "integer"
           },
+          "season": {
+            "type": "string"
+          },
+          "seasonal_sub_id": {
+            "type": "integer"
+          },
           "stage_id": {
             "type": "string"
           },
@@ -533,6 +539,12 @@
         "additionalProperties": false,
         "properties": {
           "clear_count": {
+            "type": "integer"
+          },
+          "season": {
+            "type": "string"
+          },
+          "seasonal_sub_id": {
             "type": "integer"
           },
           "stage_id": {

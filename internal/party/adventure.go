@@ -2,6 +2,8 @@ package party
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -223,6 +225,48 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			}
 			if err := s.repo.SaveAdventureLog(txCtx, advLog); err != nil {
 				return fmt.Errorf("save party adventure log: %w", err)
+			}
+
+			// 8.1 Persist individual adventure records for all members in shared adventure repository
+			if s.advRepo != nil {
+				now := time.Now().UTC()
+				for _, m := range members {
+					advIDHash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", session.ID, m.CharacterID)))
+					advID := hex.EncodeToString(advIDHash[:16])
+
+					winnerID := ""
+					if crawlResult.Outcome == battle.OutcomeWin {
+						winnerID = m.CharacterID
+					}
+
+					adv := adventure.Adventure{
+						ID:               advID,
+						CharacterID:      m.CharacterID,
+						Type:             stage.ID,
+						StageID:          stage.ID,
+						Season:           stage.Season,
+						SeasonalSubID:    adventure.SeasonToSubID(stage.Season),
+						StartedAt:        now,
+						FloorsCleared:    crawlResult.FloorsCleared,
+						IsCleared:        crawlResult.StageCleared,
+						PartySize:        len(members),
+						ExperienceReward: crawlResult.TotalEXP,
+						Resolved:         true,
+						BattleResult: battle.Result{
+							Outcome:  crawlResult.Outcome,
+							WinnerID: winnerID,
+							Turns:    crawlResult.TotalTurns,
+							Reward: battle.Reward{
+								Experience: crawlResult.TotalEXP,
+								Currency:   crawlResult.TotalGold,
+								Crystals:   crawlResult.TotalCrystals,
+							},
+						},
+					}
+					if err := s.advRepo.Save(txCtx, adv); err != nil {
+						return fmt.Errorf("save party member adventure record: %w", err)
+					}
+				}
 			}
 
 			// 9. Reset party status & ready states for members
