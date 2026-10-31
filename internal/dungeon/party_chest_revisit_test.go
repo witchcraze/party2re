@@ -270,7 +270,22 @@ func TestPartyChest_RevisitChest_RealMariaDBFinalization(t *testing.T) {
 	}
 }
 
-func TestPartyCombat_OutcomeDraw_SubsequentMoveInAnotherDirection(t *testing.T) {
+// TestPartyCombat_OutcomeDraw_BypassingEnemyToNonCombatTile_CurrentLimitation
+// reproduces the parity gap where an unresolved 100-turn draw allows the party to bypass
+// an undefeated monster by moving to an adjacent non-combat tile (treasure chest 'T').
+//
+// In original Party2 (lib/vs_dungeon.cgi:77):
+//
+//	if (@enemys > 0 && $event ne '宝') {
+//	    $mes .= "※敵を全て倒すまで、先に進むことはできません";
+//	    return;
+//	}
+//
+// Under the current synchronous 1-step auto-battle engine without persistent in-combat state,
+// a draw keeps the party at (0, 0). The party is then able to move South onto (0, 1) (chest 'T'),
+// bypassing the undefeated monster at (1, 0). This test documents this current engine limitation
+// and verifies that state and resources remain consistent, without asserting that the bypass is authentic parity.
+func TestPartyCombat_OutcomeDraw_BypassingEnemyToNonCombatTile_CurrentLimitation(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockDungeonRepo()
 
@@ -278,12 +293,15 @@ func TestPartyCombat_OutcomeDraw_SubsequentMoveInAnotherDirection(t *testing.T) 
 	cAlly := createTestChar("ally-draw-sub", 10, 100, 50, 30)
 	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{cLead.ID: cLead, cAlly.ID: cAlly}}
 
+	// Map:
+	// (0, 0) Start 'S', (1, 0) Path '0' (Tough monster: Draw)
+	// (0, 1) Chest 'T' (Non-combat tile), (1, 1) Path '0'
 	customDungeon := dungeon.Dungeon{
 		ID: "dg-draw-branch", MinLevel: 1, MaxTurnsPerFloor: 25,
 		Floors: []dungeon.Floor{
 			{
 				FloorNumber: 1, Width: 2, Height: 2, StartX: 0, StartY: 0,
-				Grid: []string{"S0", "00"},
+				Grid: []string{"S0", "T0"},
 				Monsters: []dungeon.DungeonMonster{
 					{ID: "mon-stalemate", Name: "Stone Wall Golem", HP: 500, Attack: 5, ExpReward: 100},
 				},
@@ -291,20 +309,13 @@ func TestPartyCombat_OutcomeDraw_SubsequentMoveInAnotherDirection(t *testing.T) 
 		},
 	}
 
-	battleCount := 0
 	engine := &customPartyBattleEngine{
 		resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
-			battleCount++
-			if battleCount == 1 {
-				return corebattle.PartyBattleResult{
-					Outcome: corebattle.OutcomeDraw, Turns: 100,
-					RemainingHP: map[string]int{"lead-draw-sub": 90, "ally-draw-sub": 90},
-					RemainingMP: map[string]int{"lead-draw-sub": 10, "ally-draw-sub": 10},
-				}, nil
-			}
+			// Fight 1 (moving East onto (1,0)): Draw, party takes 10 damage
 			return corebattle.PartyBattleResult{
-				Outcome: corebattle.OutcomeWin, WinnerSide: "allies", Turns: 3,
-				RemainingHP: map[string]int{"lead-draw-sub": 85, "ally-draw-sub": 85},
+				Outcome: corebattle.OutcomeDraw, Turns: 100,
+				RemainingHP: map[string]int{"lead-draw-sub": 90, "ally-draw-sub": 90},
+				RemainingMP: map[string]int{"lead-draw-sub": 10, "ally-draw-sub": 10},
 			}, nil
 		},
 	}
@@ -330,18 +341,26 @@ func TestPartyCombat_OutcomeDraw_SubsequentMoveInAnotherDirection(t *testing.T) 
 	if err != nil || res.BattleResult == nil || res.BattleResult.Outcome != corebattle.OutcomeDraw {
 		t.Fatalf("Draw fight failed: %+v, err=%v", res, err)
 	}
+	// Party does not enter (1, 0); remains at (0, 0)
 	if res.Expedition.PosX != 0 || res.Expedition.PosY != 0 || res.Expedition.TurnsRemaining != initialTurns-1 {
 		t.Fatalf("expected pos (0,0) and turns-1, got (%d,%d) turns=%d",
 			res.Expedition.PosX, res.Expedition.PosY, res.Expedition.TurnsRemaining)
 	}
 
-	// 2. Move in another direction: South to (0, 1)
+	// 2. Move in another direction to a non-combat tile: South to (0, 1) Chest 'T'
+	// Reproduction: under current engine, this succeeds and reaches the chest, demonstrating
+	// the bypass of the undefeated enemy at (1, 0).
 	res2, err := svc.Move(ctx, cLead.ID, dungeon.DirectionSouth)
-	if err != nil || res2.BattleResult == nil || res2.BattleResult.Outcome != corebattle.OutcomeWin {
-		t.Fatalf("Subsequent move South failed: %+v, err=%v", res2, err)
+	if err != nil {
+		t.Fatalf("Move South failed: %v", err)
 	}
-	if res2.Expedition.PosX != 0 || res2.Expedition.PosY != 1 || res2.Expedition.TurnsRemaining != initialTurns-2 {
-		t.Fatalf("expected pos (0,1) and turns-2, got (%d,%d) turns=%d",
-			res2.Expedition.PosX, res2.Expedition.PosY, res2.Expedition.TurnsRemaining)
+	if res2.Expedition.PosX != 0 || res2.Expedition.PosY != 1 {
+		t.Fatalf("expected pos (0,1), got (%d,%d)", res2.Expedition.PosX, res2.Expedition.PosY)
+	}
+	if res2.EventType != dungeon.EventTreasure {
+		t.Fatalf("expected EventTreasure, got %v", res2.EventType)
+	}
+	if res2.Expedition.TurnsRemaining != initialTurns-2 {
+		t.Fatalf("expected turns-2 (%d), got %d", initialTurns-2, res2.Expedition.TurnsRemaining)
 	}
 }
