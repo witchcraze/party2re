@@ -3,6 +3,7 @@ package adventure_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -1168,5 +1169,101 @@ func TestCrawlSession_ExamineTreasure_StackedTreasurePocket(t *testing.T) {
 	// 4th box: rejected (quantity 2 exhausted)
 	if _, err := sess.ExamineTreasure("char-stack"); !errors.Is(err, adventure.ErrTreasureLimitReached) {
 		t.Fatalf("expected ErrTreasureLimitReached after 2 keys exhausted, got: %v", err)
+	}
+}
+
+func TestCrawlSession_ExamineTreasure_DoesNotMutateCallerItemDefinitionIDs(t *testing.T) {
+	stages, _ := setupTestCatalogs(t)
+	stage1, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+
+	chars := []corecharacter.Character{
+		{ID: "char-1", Name: "Hero", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+	}
+	origItems := []string{adventure.ItemTreasurePocket, "item-161"}
+	p := corebattle.MustNewParticipant("char-1", 100, 10, 10)
+	p.ItemDefinitionIDs = origItems
+
+	sess1, err := adventure.NewCrawlSessionWithParticipants(stage1, chars, []corebattle.Participant{p}, func(n int) int { return 0 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess1.CurrentFloor = adventure.TreasureRoomFloor
+	sess1.TreasureBoxes = []adventure.TreasureBox{
+		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
+		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
+	}
+
+	// 1st box: free allowance
+	if _, err := sess1.ExamineTreasure("char-1"); err != nil {
+		t.Fatalf("1st box: %v", err)
+	}
+	if !slices.Equal(origItems, []string{adventure.ItemTreasurePocket, "item-161"}) {
+		t.Fatalf("input items mutated after free box: %v", origItems)
+	}
+
+	// 2nd box: additional opening consuming ItemTreasurePocket
+	box2, err := sess1.ExamineTreasure("char-1")
+	if err != nil {
+		t.Fatalf("2nd box: %v", err)
+	}
+	if box2.OpenedBy != "char-1" {
+		t.Errorf("box2 opened by %s, want char-1", box2.OpenedBy)
+	}
+
+	// Verify caller's slice was not mutated by slices.Delete
+	if !slices.Equal(origItems, []string{adventure.ItemTreasurePocket, "item-161"}) {
+		t.Fatalf("input items mutated after additional opening: %v, want [%s, item-161]", origItems, adventure.ItemTreasurePocket)
+	}
+	if !slices.Equal(p.ItemDefinitionIDs, []string{adventure.ItemTreasurePocket, "item-161"}) {
+		t.Fatalf("participant ItemDefinitionIDs mutated: %v", p.ItemDefinitionIDs)
+	}
+
+	// Verify executing session's own state
+	consumed := sess1.ConsumedItems["char-1"]
+	if len(consumed) != 1 || consumed[0].ID != adventure.ItemTreasurePocket || consumed[0].Quantity != 1 {
+		t.Fatalf("expected 1 consumed ItemTreasurePocket, got: %v", consumed)
+	}
+
+	// Another session created from the same input participant can open 2 boxes
+	sess2, err := adventure.NewCrawlSessionWithParticipants(stage1, chars, []corebattle.Participant{p}, func(n int) int { return 0 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess2.CurrentFloor = adventure.TreasureRoomFloor
+	sess2.TreasureBoxes = []adventure.TreasureBox{
+		{ID: "box-a", Name: "Chest A", ItemID: "item-001"},
+		{ID: "box-b", Name: "Chest B", ItemID: "item-002"},
+	}
+	if _, err := sess2.ExamineTreasure("char-1"); err != nil {
+		t.Fatalf("sess2 1st box: %v", err)
+	}
+	if _, err := sess2.ExamineTreasure("char-1"); err != nil {
+		t.Fatalf("sess2 2nd box with key: %v", err)
+	}
+
+	// Verify rejection without keys preserves input
+	pNoKey := corebattle.MustNewParticipant("char-1", 100, 10, 10)
+	noKeyItems := []string{"item-161"}
+	pNoKey.ItemDefinitionIDs = noKeyItems
+	sess3, err := adventure.NewCrawlSessionWithParticipants(stage1, chars, []corebattle.Participant{pNoKey}, func(n int) int { return 0 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess3.CurrentFloor = adventure.TreasureRoomFloor
+	sess3.TreasureBoxes = []adventure.TreasureBox{
+		{ID: "box-x", Name: "Chest X", ItemID: "item-001"},
+		{ID: "box-y", Name: "Chest Y", ItemID: "item-002"},
+	}
+	if _, err := sess3.ExamineTreasure("char-1"); err != nil {
+		t.Fatalf("sess3 1st box: %v", err)
+	}
+	if _, err := sess3.ExamineTreasure("char-1"); !errors.Is(err, adventure.ErrTreasureLimitReached) {
+		t.Fatalf("expected ErrTreasureLimitReached, got: %v", err)
+	}
+	if !slices.Equal(noKeyItems, []string{"item-161"}) {
+		t.Fatalf("no-key input items mutated: %v", noKeyItems)
 	}
 }

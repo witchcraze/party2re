@@ -407,6 +407,7 @@ func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error)
 		if keyIdx < 0 {
 			return nil, ErrTreasureLimitReached
 		}
+		actor.ItemDefinitionIDs = slices.Clone(actor.ItemDefinitionIDs)
 		actor.ItemDefinitionIDs = slices.Delete(actor.ItemDefinitionIDs, keyIdx, keyIdx+1)
 		s.addConsumedItem(characterID, corebattle.ConsumedItem{ID: ItemTreasurePocket, Quantity: 1})
 	}
