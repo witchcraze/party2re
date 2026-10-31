@@ -1104,6 +1104,12 @@ func TestPartyService_StartPartyAdventure_VictoryHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateParty 2 failed: %v", err)
 	}
+	_, _ = svc.JoinParty(context.Background(), detail2.Party.ID, m1.ID, "")
+	_, _ = svc.SetReady(context.Background(), detail2.Party.ID, m1.ID, true)
+	leader.Stats.HP = leader.Stats.MaxHP
+	m1.Stats.HP = m1.Stats.MaxHP
+	charRepo.chars[leader.ID] = leader
+	charRepo.chars[m1.ID] = m1
 	res2, err := svc.StartPartyAdventure(context.Background(), detail2.Party.ID, leader.ID)
 	if err != nil {
 		t.Fatalf("StartPartyAdventure failed when hook returned error: %v", err)

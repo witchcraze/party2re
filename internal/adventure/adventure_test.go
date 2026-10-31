@@ -1073,3 +1073,30 @@ func TestExecuteCrawl_SeasonalStagePersistence(t *testing.T) {
 		})
 	}
 }
+
+func TestDungeonCrawlRequest_RngFloatPassthrough(t *testing.T) {
+	service, _, _, characters := newTestService(t)
+	characters.value.Tired = 0
+	characters.value.Level = 99
+	characters.value.Stats.HP = 99999
+	characters.value.Stats.MaxHP = 99999
+	characters.value.Stats.Attack = 99999
+	characters.value.Stats.Defense = 99999
+
+	res, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{characters.value.ID},
+		StageID:      "stage-01",
+		Rng:          func(n int) int { return 0 },
+		RngFloat:     func() float64 { return 0.999999 },
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl: %v", err)
+	}
+	if len(res.FloorResults) == 0 {
+		t.Fatalf("expected floor results")
+	}
+	// With roll 0.999999 on solo N=1 (bound=3.1), enemyCount should be 4
+	if len(res.FloorResults[0].Enemies) != 4 {
+		t.Errorf("expected 4 enemies on floor 1, got %d", len(res.FloorResults[0].Enemies))
+	}
+}

@@ -325,6 +325,9 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	if err != nil {
 		return DungeonCrawlResult{}, err
 	}
+	if req.RngFloat != nil {
+		session.RngFloat = req.RngFloat
+	}
 	if req.Mode != "" {
 		if err := session.SetMode(req.Mode); err != nil {
 			return DungeonCrawlResult{}, err

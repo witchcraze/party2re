@@ -493,13 +493,15 @@ Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and
 ```
 
 ### Floors 1 to 9: Stage Monsters
-- Spawns 1 to 3 enemies chosen from the stage's normal monster roster (`stage.GetNormalMonsterIDs()`).
+- Encounter count follows authentic Party2 CGI rules (`lib/_npc_action.cgi:636 add_monster`): $c = \text{int}(\text{rand}(2.5 + N \times 0.6))$, iterating $0..c$ to spawn $c + 1$ enemies (1–4 enemies for solo $N=1$, 1–5 enemies for 4-player party $N=4$) from the stage's normal monster roster (`stage.GetNormalMonsterIDs()`).
 - Normal monsters exclude designated stage bosses.
+- Monster stat scaling: Each monster's stats (`HP`, `MP`, `Attack`, `Defense`, `Agility`, `CMP`) scale according to party size and random variance: $\text{stat} = \text{int}(\text{base} \times (0.9 + \text{rand}(0.3) + (N - 2) \times 0.1) \times s)$ (`lib/_npc_action.cgi:657`), where $s = 1.0$ (or $1.5$ in Hard mode, `lib/_npc_action.cgi:649-653`).
 - Multi-participant turn combat is resolved using `corebattle.PartyBattleResolver`.
 - On victory: allies advance to the next floor with their remaining HP and MP preserved across floors. Total EXP, Gold, and monster Crystal drops (`TotalCrystals`, 刻印晶) accumulate.
 
 ### Floor 10: Stage Boss Battle
 - Spawns the stage boss (`stage.GetBossIDs()`). If boss IDs are not explicitly configured, the final monster in the stage's monster list is designated as the stage boss.
+- Boss stats scale using the same party size and variance formula: $\text{stat} = \text{int}(\text{base} \times (0.9 + \text{rand}(0.3) + (N - 2) \times 0.1))$ (`lib/_npc_action.cgi:612 add_boss`).
 - On defeat of the boss: the stage is marked as cleared (`is_cleared = true`), and the party gains access to Floor 11.
 
 ### Early Defeat Handling
