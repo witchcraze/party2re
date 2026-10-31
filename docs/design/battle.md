@@ -37,7 +37,7 @@ A participant in combat possesses combat attributes:
 - `AntiFieldTurn`: Turns remaining for anti-field suppression (negates elemental affinity multipliers).
 
 ### Battle Request & Reward Model
-- `Participants`: For 1v1 combat, ordered pair `[first, second]`.
+- `Participants`: For 1v1 combat, ordered pair `[first, second]`. Single-participant encounters resolve through the unified `ResolvePartyBattle` rules, ensuring skills, MP/CMP, items, status ailments, and revival are applied, with first-strike lethal defeats resolving as victory rather than phantom-counterattack draws.
 - `Allies` & `Enemies`: For standard 2-side party combat, ally group (up to 4) and enemy group (1..N).
 - `Teams`: For multi-faction battles (PvP Colosseum with 2..8 players / up to 9 colors, GvG with multiple guilds), `map[string][]Participant` keyed by team/faction ID.
 - `VictoryReward`, `DefeatReward`, `DrawReward`: Rewards containing `Experience`, `Currency`, `ItemDefinitionID`, `ItemQuantity`, and `SmallMedals`.

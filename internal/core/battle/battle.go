@@ -2,7 +2,6 @@ package battle
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -160,82 +159,68 @@ type PartyBattleResult struct {
 
 type Engine struct{}
 
-func (Engine) Resolve(request Request) (Result, error) {
+func (e Engine) Resolve(request Request) (Result, error) {
 	if len(request.Participants) != 2 {
 		return Result{}, ErrInvalidRequest
 	}
 	first, second := request.Participants[0], request.Participants[1]
-	if err := validateParticipant(first); err != nil {
-		return Result{}, err
-	}
-	if err := validateParticipant(second); err != nil {
-		return Result{}, err
-	}
 	if first.ID == second.ID {
 		return Result{}, ErrInvalidRequest
 	}
-	for _, reward := range []Reward{request.VictoryReward, request.DefeatReward, request.DrawReward} {
-		if err := validateReward(reward); err != nil {
-			return Result{}, err
-		}
+
+	firstCopy := first
+	secondCopy := second
+	if firstCopy.TeamID == "" && secondCopy.TeamID == "" {
+		firstCopy.TeamID = "allies"
+		secondCopy.TeamID = "enemies"
+	} else if firstCopy.TeamID == secondCopy.TeamID {
+		firstCopy.TeamID = "allies"
+		secondCopy.TeamID = "enemies"
+	} else if firstCopy.TeamID == "" {
+		firstCopy.TeamID = "allies"
+	} else if secondCopy.TeamID == "" {
+		secondCopy.TeamID = "enemies"
 	}
 
-	firstHP, secondHP := first.HP, second.HP
-	turns := 0
-	var logs []TurnLog
-	rng := request.RNG
-	if rng == nil {
-		rng = random.Default()
+	partyRes, err := e.ResolvePartyBattle(PartyBattleRequest{
+		Allies:        []Participant{firstCopy},
+		Enemies:       []Participant{secondCopy},
+		VictoryReward: request.VictoryReward,
+		DefeatReward:  request.DefeatReward,
+		DrawReward:    request.DrawReward,
+		RNG:           request.RNG,
+	})
+	if err != nil {
+		return Result{}, err
 	}
-	for firstHP > 0 && secondHP > 0 {
-		turns++
-		dmg1 := CalculateDamage(first.Attack, second.Defense, rng, false)
-		secondHP -= dmg1
-		if secondHP < 0 {
-			secondHP = 0
-		}
-		logs = append(logs, TurnLog{
-			Turn:        turns,
-			ActorID:     first.ID,
-			ActionName:  "こうげき",
-			TargetID:    second.ID,
-			DamageDealt: dmg1,
-			Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", first.ID, second.ID, dmg1),
-			RemainingHP: map[string]int{
-				first.ID:  firstHP,
-				second.ID: secondHP,
-			},
-		})
 
-		if secondHP <= 0 {
-			if firstHP-CalculateDamage(second.Attack, first.Defense, rng, false) <= 0 {
-				return Result{Outcome: OutcomeDraw, Turns: turns, Reward: request.DrawReward, Logs: logs}, nil
-			}
-			return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward, Logs: logs}, nil
-		}
+	var outcome Outcome
+	var winnerID string
+	var loserID string
 
-		dmg2 := CalculateDamage(second.Attack, first.Defense, rng, false)
-		firstHP -= dmg2
-		if firstHP < 0 {
-			firstHP = 0
-		}
-		logs = append(logs, TurnLog{
-			Turn:        turns,
-			ActorID:     second.ID,
-			ActionName:  "こうげき",
-			TargetID:    first.ID,
-			DamageDealt: dmg2,
-			Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", second.ID, first.ID, dmg2),
-			RemainingHP: map[string]int{
-				first.ID:  firstHP,
-				second.ID: secondHP,
-			},
-		})
+	switch partyRes.Outcome {
+	case OutcomeWin:
+		outcome = OutcomeWin
+		winnerID = first.ID
+		loserID = second.ID
+	case OutcomeDefeat:
+		outcome = OutcomeWin
+		winnerID = second.ID
+		loserID = first.ID
+	default:
+		outcome = OutcomeDraw
+		winnerID = ""
+		loserID = ""
 	}
-	if firstHP <= 0 {
-		return Result{Outcome: OutcomeWin, WinnerID: second.ID, LoserID: first.ID, Turns: turns, Reward: request.DefeatReward, Logs: logs}, nil
-	}
-	return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward, Logs: logs}, nil
+
+	return Result{
+		Outcome:  outcome,
+		WinnerID: winnerID,
+		LoserID:  loserID,
+		Turns:    partyRes.Turns,
+		Reward:   partyRes.TotalReward,
+		Logs:     partyRes.Logs,
+	}, nil
 }
 
 func validateParticipant(value Participant) error {

@@ -34,17 +34,21 @@ func TestEngineResolvesDeterministicWinner(t *testing.T) {
 	}
 }
 
-func TestEngineReturnsDrawWhenBothParticipantsFall(t *testing.T) {
-	result, err := (Engine{}).Resolve(Request{Participants: []Participant{
-		{ID: "first", HP: 5, Attack: 5, Defense: 0},
-		{ID: "second", HP: 5, Attack: 5, Defense: 0},
-	}, DrawReward: Reward{Currency: 1}})
+func TestEngineResolvesFirstStrikeLethalAsWinNotDraw(t *testing.T) {
+	result, err := (Engine{}).Resolve(Request{
+		Participants: []Participant{
+			{ID: "first", HP: 10, Attack: 50, Defense: 0, Agility: 20},
+			{ID: "second", HP: 10, Attack: 50, Defense: 0, Agility: 10},
+		},
+		VictoryReward: Reward{Currency: 1},
+		RNG:           random.NewDeterministic(1),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != OutcomeDraw || result.WinnerID != "" || result.LoserID != "" ||
+	if result.Outcome != OutcomeWin || result.WinnerID != "first" || result.LoserID != "second" ||
 		result.Reward.Currency != 1 {
-		t.Fatalf("Resolve() = %#v, want draw", result)
+		t.Fatalf("Resolve() = %#v, want first win", result)
 	}
 }
 
@@ -102,8 +106,8 @@ func TestEngineResolvesMinimumDamage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != OutcomeWin || result.WinnerID != "weak" || result.Turns != 2 {
-		t.Fatalf("Resolve() = %#v, want weak to win in 2 turns with minimum damage 1", result)
+	if result.Outcome != OutcomeWin || result.WinnerID != "weak" || result.Turns != 3 {
+		t.Fatalf("Resolve() = %#v, want weak to win in 3 turns with minimum damage", result)
 	}
 }
 

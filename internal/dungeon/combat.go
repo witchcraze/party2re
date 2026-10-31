@@ -7,6 +7,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	corerandom "github.com/witchcraze/party2re/internal/core/random"
 )
 
 func (s *Service) resolveMonsterCombat(
@@ -28,11 +29,21 @@ func (s *Service) resolveMonsterCombat(
 		playerPart = buildFallbackParticipantWithHP(*char, exp.CurrentHP)
 	}
 
+	monsterPart := corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense)
+	monsterPart.Name = monster.Name
+	monsterPart.Agility = monster.Agility
+
+	var battleRNG corerandom.Generator
+	if gen, ok := s.rng.(corerandom.Generator); ok {
+		battleRNG = gen
+	}
+
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
 			playerPart,
-			corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense),
+			monsterPart,
 		},
+		RNG: battleRNG,
 	}
 
 	battleRes, err := s.battleEngine.Resolve(req)
@@ -107,11 +118,21 @@ func (s *Service) resolveBossCombat(
 		playerPart = buildFallbackParticipantWithHP(*char, exp.CurrentHP)
 	}
 
+	bossPart := corebattle.MustNewParticipant(bossMonster.ID, bossMonster.HP, bossMonster.Attack, bossMonster.Defense)
+	bossPart.Name = bossMonster.Name
+	bossPart.Agility = bossMonster.Agility
+
+	var battleRNG corerandom.Generator
+	if gen, ok := s.rng.(corerandom.Generator); ok {
+		battleRNG = gen
+	}
+
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
 			playerPart,
-			corebattle.MustNewParticipant(bossMonster.ID, bossMonster.HP, bossMonster.Attack, bossMonster.Defense),
+			bossPart,
 		},
+		RNG: battleRNG,
 	}
 
 	battleRes, err := s.battleEngine.Resolve(req)
