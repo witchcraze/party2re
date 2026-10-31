@@ -13,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
+	coreskill "github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
@@ -83,6 +84,8 @@ func newCmbtServices(
 		battle.WithTransactionProvider(core.txProvider),
 		battle.WithTransactionRunner(core.economy),
 		battle.WithRandomSource(productionRandomSource{}),
+		battle.WithSkillProvider(core.skillCatalog),
+		battle.WithBattleDefinitions(coreskill.ProductionBattleDefinitions()),
 	)
 
 	var pvpRoomRepo pvp.RoomRepository

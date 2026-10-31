@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
+	coreskill "github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -29,6 +30,7 @@ type coreServices struct {
 	dbMaintRepo        *database.MaintenanceRepository
 	itemCatalog        *coreitem.Catalog
 	jobCatalog         *corejob.Catalog
+	skillCatalog       *coreskill.Catalog
 	charService        *character.Service
 	playerService      *player.Service
 	economy            *economy.Service
@@ -91,6 +93,7 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 		dbMaintRepo:        dbMaintRepo,
 		itemCatalog:        itemCatalog,
 		jobCatalog:         jobCatalog,
+		skillCatalog:       coreskill.InitialCatalog(),
 		economy:            economyService,
 	}, nil
 }

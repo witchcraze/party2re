@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	ErrInvalidDefinition = errors.New("skill definition is invalid")
-	ErrUnavailable       = errors.New("skill is unavailable")
-	ErrInsufficientMP    = errors.New("insufficient MP")
+	ErrInvalidDefinition  = errors.New("skill definition is invalid")
+	ErrUnavailable        = errors.New("skill is unavailable")
+	ErrInsufficientMP     = errors.New("insufficient MP")
+	ErrDefinitionNotFound = errors.New("skill definition not found")
 )
 
 type Definition struct {
@@ -41,18 +42,30 @@ type UseRequest struct {
 	RequiredItemID string
 }
 
+// IsUnlocked returns true if the skill is unlocked for the character by current
+// job SP or previous job SP. Previous-job SP is never substituted by current SP.
+func (d Definition) IsUnlocked(char corecharacter.Character) bool {
+	if len(d.RequiredJobIDs) == 0 {
+		return char.SP >= d.RequiredSP
+	}
+	if char.JobID != "" && slices.Contains(d.RequiredJobIDs, char.JobID) && char.SP >= d.RequiredSP {
+		return true
+	}
+	if char.OldJobID != "" && slices.Contains(d.RequiredJobIDs, char.OldJobID) && char.OldSP >= d.RequiredSP {
+		return true
+	}
+	return false
+}
+
 func (d Definition) CanUse(request UseRequest) error {
 	if request.Character == nil {
 		return ErrUnavailable
 	}
-	if request.Character.SP < d.RequiredSP || request.Character.Stats.MP < d.MPCost {
-		if request.Character.Stats.MP < d.MPCost {
-			return ErrInsufficientMP
-		}
+	if !d.IsUnlocked(*request.Character) {
 		return ErrUnavailable
 	}
-	if len(d.RequiredJobIDs) > 0 && !slices.Contains(d.RequiredJobIDs, request.Character.JobID) {
-		return ErrUnavailable
+	if request.Character.Stats.MP < d.MPCost {
+		return ErrInsufficientMP
 	}
 	if request.RequiredItemID != "" && (request.HasItem == nil || !request.HasItem(request.RequiredItemID)) {
 		return ErrUnavailable

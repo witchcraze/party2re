@@ -175,6 +175,7 @@ func newMiscServices(
 		job.WithEconomy(core.economy),
 		job.WithFutureMemoryRepository(futureMemoryRepo),
 		job.WithGuildPointAwarder(soc.guild),
+		job.WithSkillProvider(core.skillCatalog),
 		job.WithNewsPublisher(job.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			if soc.notification != nil {
 				_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)

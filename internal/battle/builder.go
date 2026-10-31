@@ -76,8 +76,13 @@ func (s *Service) buildParticipantFromCharacter(ctx context.Context, char corech
 	}
 
 	var skills []skill.Definition
-	if s.skillProvider != nil && char.JobID != "" {
-		skills = s.skillProvider.SkillsForJob(char.JobID)
+	if s.skillProvider != nil {
+		if char.JobID != "" {
+			skills = append(skills, s.skillProvider.SkillsForJob(char.JobID)...)
+		}
+		if char.OldJobID != "" && char.OldJobID != char.JobID {
+			skills = append(skills, s.skillProvider.SkillsForJob(char.OldJobID)...)
+		}
 	}
 
 	var cs *customskill.CustomSkill
@@ -232,9 +237,14 @@ func BuildParticipantFromDataWithRNG(
 		builder.WithAbilities(abilities...)
 	}
 
-	// Bind job skills unlocked by SP threshold
+	// Bind job skills unlocked by SP threshold (current and previous job)
+	seenSkills := make(map[string]bool)
 	for _, sk := range skills {
-		if char.SP >= sk.RequiredSP {
+		if seenSkills[sk.ID] {
+			continue
+		}
+		if sk.IsUnlocked(char) {
+			seenSkills[sk.ID] = true
 			if action, err := native.JobAction(sk); err == nil {
 				builder.WithSkills(action)
 			}
