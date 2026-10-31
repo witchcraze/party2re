@@ -7342,6 +7342,12 @@
       "DungeonExpeditionMember": {
         "additionalProperties": false,
         "properties": {
+          "accumulated_exp": {
+            "type": "integer"
+          },
+          "accumulated_gold": {
+            "type": "integer"
+          },
           "character_id": {
             "type": "string"
           },

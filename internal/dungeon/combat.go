@@ -192,6 +192,21 @@ func (s *Service) resolveMonsterCombat(
 	}
 
 	if won {
+		memberExpDeltas := make(map[string]int, len(exp.Members))
+		memberGoldDeltas := make(map[string]int, len(exp.Members))
+		for _, m := range exp.Members {
+			if remHP, ok := battleRes.RemainingHP[m.CharacterID]; ok && remHP > 0 {
+				memberExpDeltas[m.CharacterID] = monster.ExpReward
+				memberGoldDeltas[m.CharacterID] = monster.GoldReward
+			}
+		}
+		leaderExpDelta := memberExpDeltas[char.ID]
+		leaderGoldDelta := memberGoldDeltas[char.ID]
+		if len(exp.Members) <= 1 && leaderHPDelta+exp.CurrentHP > 0 {
+			leaderExpDelta = monster.ExpReward
+			leaderGoldDelta = monster.GoldReward
+		}
+
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
 			NewFloor:             exp.CurrentFloor,
@@ -200,10 +215,12 @@ func (s *Service) resolveMonsterCombat(
 			HPDelta:              leaderHPDelta,
 			MemberHPDeltas:       memberHPDeltas,
 			MemberMPDeltas:       memberMPDeltas,
+			MemberExpDeltas:      memberExpDeltas,
+			MemberGoldDeltas:     memberGoldDeltas,
 			ConsumedItems:        consumedItems,
 			TurnsDelta:           -1,
-			ExpDelta:             monster.ExpReward,
-			GoldDelta:            monster.GoldReward,
+			ExpDelta:             leaderExpDelta,
+			GoldDelta:            leaderGoldDelta,
 			MedalsDelta:          0,
 			RewardItemID:         monster.DropItemID,
 			Now:                  time.Now().UTC(),
@@ -219,10 +236,49 @@ func (s *Service) resolveMonsterCombat(
 			Expedition:   stepRes.Expedition,
 			EventType:    eventType,
 			BattleResult: &battleRes,
-			ExpEarned:    monster.ExpReward,
-			GoldFound:    monster.GoldReward,
+			ExpEarned:    leaderExpDelta,
+			GoldFound:    leaderGoldDelta,
 			ItemFound:    monster.DropItemID,
 			Message:      fmt.Sprintf("%s との戦闘に勝利した！ (EXP: +%d, G: +%d)", monster.Name, monster.ExpReward, monster.GoldReward),
+		}, nil
+	}
+
+	allDead := true
+	if len(exp.Members) > 0 {
+		for _, m := range exp.Members {
+			if remHP, ok := battleRes.RemainingHP[m.CharacterID]; ok && remHP > 0 {
+				allDead = false
+				break
+			}
+		}
+	} else {
+		allDead = (exp.CurrentHP+leaderHPDelta <= 0)
+	}
+
+	if battleRes.Outcome == corebattle.OutcomeDraw && !allDead {
+		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewFloor:             exp.CurrentFloor,
+			NewX:                 exp.PosX,
+			NewY:                 exp.PosY,
+			HPDelta:              leaderHPDelta,
+			MemberHPDeltas:       memberHPDeltas,
+			MemberMPDeltas:       memberMPDeltas,
+			ConsumedItems:        consumedItems,
+			TurnsDelta:           -1,
+			Now:                  time.Now().UTC(),
+		})
+		if err != nil {
+			return ExpeditionStepResult{}, err
+		}
+		if stepRes.Status == StatusWipedOut {
+			return s.handleWipeout(ctx, &stepRes.Expedition, char, fmt.Sprintf("%s との戦いが長引き、行動限界に達してしまった…", monster.Name))
+		}
+		return ExpeditionStepResult{
+			Expedition:   stepRes.Expedition,
+			EventType:    eventType,
+			BattleResult: &battleRes,
+			Message:      fmt.Sprintf("%s との戦いは時間切れで決着がつかなかった… (引き分け)", monster.Name),
 		}, nil
 	}
 
@@ -253,12 +309,27 @@ func (s *Service) resolveBossCombat(
 	bossMonster DungeonMonster,
 	newX, newY int,
 ) (ExpeditionStepResult, error) {
-	_, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, bossMonster)
+	battleRes, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, bossMonster)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
 
 	if won {
+		memberExpDeltas := make(map[string]int, len(exp.Members))
+		memberGoldDeltas := make(map[string]int, len(exp.Members))
+		for _, m := range exp.Members {
+			if remHP, ok := battleRes.RemainingHP[m.CharacterID]; ok && remHP > 0 {
+				memberExpDeltas[m.CharacterID] = bossMonster.ExpReward
+				memberGoldDeltas[m.CharacterID] = bossMonster.GoldReward
+			}
+		}
+		leaderExpDelta := memberExpDeltas[char.ID]
+		leaderGoldDelta := memberGoldDeltas[char.ID]
+		if len(exp.Members) <= 1 && leaderHPDelta+exp.CurrentHP > 0 {
+			leaderExpDelta = bossMonster.ExpReward
+			leaderGoldDelta = bossMonster.GoldReward
+		}
+
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
 			NewFloor:             exp.CurrentFloor,
@@ -267,10 +338,12 @@ func (s *Service) resolveBossCombat(
 			HPDelta:              leaderHPDelta,
 			MemberHPDeltas:       memberHPDeltas,
 			MemberMPDeltas:       memberMPDeltas,
+			MemberExpDeltas:      memberExpDeltas,
+			MemberGoldDeltas:     memberGoldDeltas,
 			ConsumedItems:        consumedItems,
 			TurnsDelta:           -1,
-			ExpDelta:             bossMonster.ExpReward,
-			GoldDelta:            bossMonster.GoldReward,
+			ExpDelta:             leaderExpDelta,
+			GoldDelta:            leaderGoldDelta,
 			MedalsDelta:          0,
 			RewardItemID:         bossMonster.DropItemID,
 			Now:                  time.Now().UTC(),
@@ -283,6 +356,45 @@ func (s *Service) resolveBossCombat(
 			_ = s.monsterDefeatedHook(ctx, char.ID, 1)
 		}
 		return s.handleDungeonClear(ctx, &stepRes.Expedition, char, dungeon)
+	}
+
+	allDead := true
+	if len(exp.Members) > 0 {
+		for _, m := range exp.Members {
+			if remHP, ok := battleRes.RemainingHP[m.CharacterID]; ok && remHP > 0 {
+				allDead = false
+				break
+			}
+		}
+	} else {
+		allDead = (exp.CurrentHP+leaderHPDelta <= 0)
+	}
+
+	if battleRes.Outcome == corebattle.OutcomeDraw && !allDead {
+		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewFloor:             exp.CurrentFloor,
+			NewX:                 exp.PosX,
+			NewY:                 exp.PosY,
+			HPDelta:              leaderHPDelta,
+			MemberHPDeltas:       memberHPDeltas,
+			MemberMPDeltas:       memberMPDeltas,
+			ConsumedItems:        consumedItems,
+			TurnsDelta:           -1,
+			Now:                  time.Now().UTC(),
+		})
+		if err != nil {
+			return ExpeditionStepResult{}, err
+		}
+		if stepRes.Status == StatusWipedOut {
+			return s.handleWipeout(ctx, &stepRes.Expedition, char, fmt.Sprintf("フロアボス %s との戦いが長引き、行動限界に達してしまった…", bossMonster.Name))
+		}
+		return ExpeditionStepResult{
+			Expedition:   stepRes.Expedition,
+			EventType:    EventBoss,
+			BattleResult: &battleRes,
+			Message:      fmt.Sprintf("フロアボス %s との戦いは時間切れで決着がつかなかった… (引き分け)", bossMonster.Name),
+		}, nil
 	}
 
 	// Defeat by Boss

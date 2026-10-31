@@ -269,6 +269,8 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	memberHPDeltasJSON := EncodeMemberHPDeltas(params.MemberHPDeltas)
 	memberMPDeltasJSON := EncodeMemberHPDeltas(params.MemberMPDeltas)
 	consumedItemsJSON := EncodeConsumedItems(params.ConsumedItems)
+	memberExpDeltasJSON := EncodeMemberHPDeltas(params.MemberExpDeltas)
+	memberGoldDeltasJSON := EncodeMemberHPDeltas(params.MemberGoldDeltas)
 
 	res := r.stepScript.Exec(ctx, r.client, []string{sKey, rKey}, []string{
 		params.ExpectedExpeditionID,
@@ -287,6 +289,8 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		memberHPDeltasJSON,
 		memberMPDeltasJSON,
 		consumedItemsJSON,
+		memberExpDeltasJSON,
+		memberGoldDeltasJSON,
 	})
 
 	if err := res.Error(); err != nil {

@@ -337,17 +337,29 @@ func (r *DungeonRepository) FinalizeExpedition(
 		}
 
 		// 4. Apply rewards onto updated characters and save (Rank 2)
+		totalMemberRewards := 0
+		for _, m := range sortedMembers {
+			totalMemberRewards += m.AccumulatedExp + m.AccumulatedGold
+		}
+		legacyFallback := totalMemberRewards == 0 && (history.ExpReward > 0 || history.GoldReward > 0)
+
 		for i := range sortedMembers {
 			m := &sortedMembers[i]
 			c := applied.UpdatedCharacters[m.CharacterID]
 			if history.Outcome == dungeon.StatusCleared || history.Outcome == dungeon.StatusEscaped {
-				if history.ExpReward > 0 {
-					if _, err := progression.ApplyExperience(&c, history.ExpReward); err != nil {
+				earnedExp := m.AccumulatedExp
+				earnedGold := m.AccumulatedGold
+				if legacyFallback {
+					earnedExp = history.ExpReward
+					earnedGold = history.GoldReward
+				}
+				if earnedExp > 0 {
+					if _, err := progression.ApplyExperience(&c, earnedExp); err != nil {
 						return fmt.Errorf("applying experience: %w", err)
 					}
 				}
-				if history.GoldReward > 0 {
-					if err := c.AddMoney(history.GoldReward); err != nil {
+				if earnedGold > 0 {
+					if err := c.AddMoney(earnedGold); err != nil {
 						return fmt.Errorf("adding gold: %w", err)
 					}
 				}

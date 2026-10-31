@@ -87,26 +87,30 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	}
 
 	// Expedition members:
-	// Leader fell in combat: CurrentHP = 0, CurrentMP = 15
-	// Ally survived: CurrentHP = 75, CurrentMP = 22
+	// Leader fell in combat after earning 100 EXP and 150 Gold: CurrentHP = 0, CurrentMP = 15
+	// Ally survived earning 250 EXP and 400 Gold: CurrentHP = 75, CurrentMP = 22
 	members := []dungeon.ExpeditionMember{
 		{
-			CharacterID: c1.ID,
-			Name:        c1.Name,
-			Level:       c1.Level,
-			CurrentHP:   0,
-			MaxHP:       150,
-			CurrentMP:   15,
-			MaxMP:       50,
+			CharacterID:     c1.ID,
+			Name:            c1.Name,
+			Level:           c1.Level,
+			CurrentHP:       0,
+			MaxHP:           150,
+			CurrentMP:       15,
+			MaxMP:           50,
+			AccumulatedExp:  100,
+			AccumulatedGold: 150,
 		},
 		{
-			CharacterID: c2.ID,
-			Name:        c2.Name,
-			Level:       c2.Level,
-			CurrentHP:   75,
-			MaxHP:       120,
-			CurrentMP:   22,
-			MaxMP:       40,
+			CharacterID:     c2.ID,
+			Name:            c2.Name,
+			Level:           c2.Level,
+			CurrentHP:       75,
+			MaxHP:           120,
+			CurrentMP:       22,
+			MaxMP:           40,
+			AccumulatedExp:  250,
+			AccumulatedGold: 400,
 		},
 	}
 
@@ -151,14 +155,14 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	if reloadedLead.Stats.MP != 15 {
 		t.Errorf("expected leader MP 15, got %d", reloadedLead.Stats.MP)
 	}
-	if reloadedLead.Money != 1400 {
-		t.Errorf("expected leader wallet 1400 (1000 + 400), got %d", reloadedLead.Money)
+	if reloadedLead.Money != 1150 {
+		t.Errorf("expected leader wallet 1150 (1000 + 150), got %d", reloadedLead.Money)
 	}
 	if reloadedLead.SmallMedals != 3 {
 		t.Errorf("expected leader small medals 3, got %d", reloadedLead.SmallMedals)
 	}
-	if reloadedLead.Experience < 250 {
-		t.Errorf("expected leader EXP to increase by at least 250, got %d", reloadedLead.Experience)
+	if reloadedLead.Experience < 100 {
+		t.Errorf("expected leader EXP to increase by at least 100, got %d", reloadedLead.Experience)
 	}
 
 	// Ally check:
@@ -241,8 +245,8 @@ func TestDungeonRepository_FinalizeExpedition_PreservesConcurrentWalletUpdates(t
 	}
 
 	members := []dungeon.ExpeditionMember{
-		{CharacterID: c1.ID, CurrentHP: 100, MaxHP: 100},
-		{CharacterID: c2.ID, CurrentHP: 80, MaxHP: 80},
+		{CharacterID: c1.ID, CurrentHP: 100, MaxHP: 100, AccumulatedGold: 500},
+		{CharacterID: c2.ID, CurrentHP: 80, MaxHP: 80, AccumulatedGold: 500},
 	}
 
 	// FinalizeExpedition with 500 GoldReward

@@ -169,6 +169,8 @@ type StepParams struct {
 	HPDelta              int
 	MemberHPDeltas       map[string]int
 	MemberMPDeltas       map[string]int
+	MemberExpDeltas      map[string]int
+	MemberGoldDeltas     map[string]int
 	ConsumedItems        map[string][]corebattle.ConsumedItem
 	TurnsDelta           int
 	ExpDelta             int

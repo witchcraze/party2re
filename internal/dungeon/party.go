@@ -16,16 +16,18 @@ var (
 )
 
 type ExpeditionMember struct {
-	CharacterID   string                    `json:"character_id"`
-	Name          string                    `json:"name"`
-	JobID         string                    `json:"job_id"`
-	Level         int                       `json:"level"`
-	CurrentHP     int                       `json:"current_hp"`
-	MaxHP         int                       `json:"max_hp"`
-	CurrentMP     int                       `json:"current_mp"`
-	MaxMP         int                       `json:"max_mp"`
-	ItemIDs       []string                  `json:"item_ids,omitempty"`
-	ConsumedItems []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	CharacterID     string                    `json:"character_id"`
+	Name            string                    `json:"name"`
+	JobID           string                    `json:"job_id"`
+	Level           int                       `json:"level"`
+	CurrentHP       int                       `json:"current_hp"`
+	MaxHP           int                       `json:"max_hp"`
+	CurrentMP       int                       `json:"current_mp"`
+	MaxMP           int                       `json:"max_mp"`
+	AccumulatedExp  int                       `json:"accumulated_exp"`
+	AccumulatedGold int                       `json:"accumulated_gold"`
+	ItemIDs         []string                  `json:"item_ids,omitempty"`
+	ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
 }
 
 // StartPartyExpedition begins a 2D dungeon exploration for up to 4 party members.

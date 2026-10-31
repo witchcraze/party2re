@@ -92,11 +92,17 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 		c.Stats.HP = mem.CurrentHP
 		c.Stats.MP = mem.CurrentMP
 		if history.Outcome == dungeon.StatusCleared || history.Outcome == dungeon.StatusEscaped {
-			if history.ExpReward > 0 {
-				_, _ = coreprogression.ApplyExperience(&c, history.ExpReward)
+			earnedExp := mem.AccumulatedExp
+			earnedGold := mem.AccumulatedGold
+			if earnedExp == 0 && earnedGold == 0 && len(members) <= 1 {
+				earnedExp = history.ExpReward
+				earnedGold = history.GoldReward
 			}
-			if history.GoldReward > 0 {
-				_ = c.AddMoney(history.GoldReward)
+			if earnedExp > 0 {
+				_, _ = coreprogression.ApplyExperience(&c, earnedExp)
+			}
+			if earnedGold > 0 {
+				_ = c.AddMoney(earnedGold)
 			}
 		}
 		m.savedChars[mem.CharacterID] = c

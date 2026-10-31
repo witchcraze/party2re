@@ -160,12 +160,20 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		medalsFound := 1 * chestsCount
 		eventKey := fmt.Sprintf("T:%d:%d:%d", exp.CurrentFloor, newX, newY)
 
+		memberGoldDeltas := make(map[string]int, len(exp.Members))
+		for _, m := range exp.Members {
+			if m.CurrentHP > 0 {
+				memberGoldDeltas[m.CharacterID] = goldFound
+			}
+		}
+
 		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
 			ExpectedExpeditionID: exp.ID,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
 			HPDelta:              0,
+			MemberGoldDeltas:     memberGoldDeltas,
 			TurnsDelta:           -1,
 			ExpDelta:             0,
 			GoldDelta:            goldFound,

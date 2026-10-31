@@ -444,10 +444,12 @@ func TestPartySettlement_EscapeWithFallenLeader(t *testing.T) {
 		t.Fatalf("StartPartyExpedition failed: %v", err)
 	}
 
-	// Manually set leader to 0 HP and ally to 40 HP
+	// Manually set leader to 0 HP and ally to 40 HP with earned rewards
 	exp.CurrentHP = 0
 	exp.Members[0].CurrentHP = 0
 	exp.Members[1].CurrentHP = 40
+	exp.Members[1].AccumulatedExp = 200
+	exp.Members[1].AccumulatedGold = 500
 	exp.AccumulatedExp = 200
 	exp.AccumulatedGold = 500
 	_ = activeStore.SaveActiveExpedition(ctx, *exp)

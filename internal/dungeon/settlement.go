@@ -46,6 +46,13 @@ func (s *Service) handleDungeonClear(
 	exp.AccumulatedGold += dungeon.ClearGoldBonus
 	exp.UpdatedAt = now
 
+	for i := range exp.Members {
+		if exp.Members[i].CurrentHP > 0 {
+			exp.Members[i].AccumulatedExp += dungeon.ClearExpBonus
+			exp.Members[i].AccumulatedGold += dungeon.ClearGoldBonus
+		}
+	}
+
 	// 1. Commit accumulated rewards to character
 	if exp.AccumulatedExp > 0 {
 		if _, err := progression.ApplyExperience(char, exp.AccumulatedExp); err != nil {
