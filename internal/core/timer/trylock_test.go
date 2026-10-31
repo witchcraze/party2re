@@ -552,127 +552,149 @@ func TestValkeyTimer_PersistentDurationSemantics_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("valkey.NewClient: %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(client.Close)
 
 	ctx := context.Background()
 	svc := NewService(client)
 
-	// Test 1: RenewLock with 0 duration removes TTL and makes lock persistent (TTL == -1)
-	targetID := "integ-renew-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	wakingKey := PrefixTimer + CategoryWaking + ":" + targetID
-	token := "tok-persist-1"
+	var wakingKey string
+	t.Run("RenewLock", func(t *testing.T) {
+		targetID := "integ-renew-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		wakingKey = PrefixTimer + CategoryWaking + ":" + targetID
+		token := "tok-persist-1"
 
-	_ = client.Do(ctx, client.B().Del().Key(wakingKey).Build())
-	t.Cleanup(func() {
-		_ = client.Do(ctx, client.B().Del().Key(wakingKey).Build())
+		t.Cleanup(func() {
+			if err := client.Do(ctx, client.B().Del().Key(wakingKey).Build()).Error(); err != nil && !valkey.IsValkeyNil(err) {
+				t.Errorf("cleanup %s: %v", wakingKey, err)
+			}
+		})
+
+		ok, err := svc.TryLockWithToken(ctx, CategoryWaking, targetID, token, 30*time.Second)
+		if err != nil || !ok {
+			t.Fatalf("TryLockWithToken: %v, %v", ok, err)
+		}
+
+		// Verify it initially has a positive TTL
+		ttl, err := client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
+		if err != nil || ttl <= 0 {
+			t.Fatalf("initial TTL = %v, %v; want > 0", ttl, err)
+		}
+
+		// Renew with 0 duration
+		renewed, err := svc.RenewLock(ctx, CategoryWaking, targetID, token, 0)
+		if err != nil || !renewed {
+			t.Fatalf("RenewLock 0 duration: %v, %v", renewed, err)
+		}
+
+		// Valkey TTL must now be -1 (persistent, no expiration)
+		ttl, err = client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
+		if err != nil || ttl != -1 {
+			t.Fatalf("TTL after 0 duration renew = %v, %v; want -1", ttl, err)
+		}
+
+		locked, err := svc.IsLocked(ctx, CategoryWaking, targetID)
+		if err != nil || !locked {
+			t.Fatalf("IsLocked = %v, %v; want true", locked, err)
+		}
+
+		// Mismatched token does not renew and does not change TTL
+		renewed, err = svc.RenewLock(ctx, CategoryWaking, targetID, "wrong-token", 10*time.Second)
+		if err != nil || renewed {
+			t.Fatalf("RenewLock wrong token = %v, %v; want false", renewed, err)
+		}
+		ttl, err = client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
+		if err != nil || ttl != -1 {
+			t.Fatalf("TTL after rejected renew = %v, %v; want -1", ttl, err)
+		}
+
+		// Renew back to positive TTL works
+		renewed, err = svc.RenewLock(ctx, CategoryWaking, targetID, token, 60*time.Second)
+		if err != nil || !renewed {
+			t.Fatalf("RenewLock positive duration: %v, %v", renewed, err)
+		}
+		ttl, err = client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
+		if err != nil || ttl <= 0 {
+			t.Fatalf("TTL after positive renew = %v, %v; want > 0", ttl, err)
+		}
+
+		// Renew with negative duration also makes lock persistent
+		renewed, err = svc.RenewLock(ctx, CategoryWaking, targetID, token, -5*time.Second)
+		if err != nil || !renewed {
+			t.Fatalf("RenewLock negative duration: %v, %v", renewed, err)
+		}
+		ttl, err = client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
+		if err != nil || ttl != -1 {
+			t.Fatalf("TTL after negative renew = %v, %v; want -1", ttl, err)
+		}
 	})
 
-	ok, err := svc.TryLockWithToken(ctx, CategoryWaking, targetID, token, 30*time.Second)
-	if err != nil || !ok {
-		t.Fatalf("TryLockWithToken: %v, %v", ok, err)
+	// Subtest cleanup has completed; verify key is deleted while client remains open
+	if wakingKey != "" {
+		count, err := client.Do(ctx, client.B().Exists().Key(wakingKey).Build()).AsInt64()
+		if err != nil || count != 0 {
+			t.Fatalf("expected %s to be deleted after subtest, exists = %d, err = %v", wakingKey, count, err)
+		}
 	}
 
-	// Verify it initially has a positive TTL
-	ttl, err := client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
-	if err != nil || ttl <= 0 {
-		t.Fatalf("initial TTL = %v, %v; want > 0", ttl, err)
-	}
+	var claimKey, targetKey string
+	t.Run("SetLockWithClaim", func(t *testing.T) {
+		claimTargetID := "integ-claim-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		claimKey = PrefixTimer + CategoryWaking + ":" + claimTargetID
+		targetKey = PrefixTimer + CategoryDungeonOnce + ":" + claimTargetID
+		claimToken := "tok-claim-1"
 
-	// Renew with 0 duration
-	renewed, err := svc.RenewLock(ctx, CategoryWaking, targetID, token, 0)
-	if err != nil || !renewed {
-		t.Fatalf("RenewLock 0 duration: %v, %v", renewed, err)
-	}
+		t.Cleanup(func() {
+			if err := client.Do(ctx, client.B().Del().Key(claimKey, targetKey).Build()).Error(); err != nil && !valkey.IsValkeyNil(err) {
+				t.Errorf("cleanup %s, %s: %v", claimKey, targetKey, err)
+			}
+		})
 
-	// Valkey TTL must now be -1 (persistent, no expiration)
-	ttl, err = client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
-	if err != nil || ttl != -1 {
-		t.Fatalf("TTL after 0 duration renew = %v, %v; want -1", ttl, err)
-	}
+		ok, err := svc.TryLockWithToken(ctx, CategoryWaking, claimTargetID, claimToken, 30*time.Second)
+		if err != nil || !ok {
+			t.Fatalf("TryLockWithToken claim: %v, %v", ok, err)
+		}
 
-	locked, err := svc.IsLocked(ctx, CategoryWaking, targetID)
-	if err != nil || !locked {
-		t.Fatalf("IsLocked = %v, %v; want true", locked, err)
-	}
+		claimCtx := WithClaim(ctx, CategoryWaking, claimToken)
+		if err := svc.SetLock(claimCtx, CategoryDungeonOnce, claimTargetID, 0); err != nil {
+			t.Fatalf("SetLock with claim and 0 duration: %v", err)
+		}
 
-	// Mismatched token does not renew and does not change TTL
-	renewed, err = svc.RenewLock(ctx, CategoryWaking, targetID, "wrong-token", 10*time.Second)
-	if err != nil || renewed {
-		t.Fatalf("RenewLock wrong token = %v, %v; want false", renewed, err)
-	}
-	ttl, err = client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
-	if err != nil || ttl != -1 {
-		t.Fatalf("TTL after rejected renew = %v, %v; want -1", ttl, err)
-	}
+		// Target key must have TTL == -1 (persistent)
+		ttl, err := client.Do(ctx, client.B().Ttl().Key(targetKey).Build()).AsInt64()
+		if err != nil || ttl != -1 {
+			t.Fatalf("target key TTL = %v, %v; want -1", ttl, err)
+		}
 
-	// Renew back to positive TTL works
-	renewed, err = svc.RenewLock(ctx, CategoryWaking, targetID, token, 60*time.Second)
-	if err != nil || !renewed {
-		t.Fatalf("RenewLock positive duration: %v, %v", renewed, err)
-	}
-	ttl, err = client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
-	if err != nil || ttl <= 0 {
-		t.Fatalf("TTL after positive renew = %v, %v; want > 0", ttl, err)
-	}
+		locked, err := svc.IsLocked(ctx, CategoryDungeonOnce, claimTargetID)
+		if err != nil || !locked {
+			t.Fatalf("IsLocked target key = %v, %v; want true", locked, err)
+		}
 
-	// Renew with negative duration also makes lock persistent
-	renewed, err = svc.RenewLock(ctx, CategoryWaking, targetID, token, -5*time.Second)
-	if err != nil || !renewed {
-		t.Fatalf("RenewLock negative duration: %v, %v", renewed, err)
-	}
-	ttl, err = client.Do(ctx, client.B().Ttl().Key(wakingKey).Build()).AsInt64()
-	if err != nil || ttl != -1 {
-		t.Fatalf("TTL after negative renew = %v, %v; want -1", ttl, err)
-	}
+		// SetLock with claim and negative duration also creates/maintains persistent lock
+		if err := svc.SetLock(claimCtx, CategoryDungeonOnce, claimTargetID, -10*time.Second); err != nil {
+			t.Fatalf("SetLock with claim and negative duration: %v", err)
+		}
+		ttl, err = client.Do(ctx, client.B().Ttl().Key(targetKey).Build()).AsInt64()
+		if err != nil || ttl != -1 {
+			t.Fatalf("target key TTL after negative SetLock = %v, %v; want -1", ttl, err)
+		}
 
-	// Test 2: SetLock with claim and 0 duration creates persistent lock (TTL == -1)
-	claimTargetID := "integ-claim-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	claimKey := PrefixTimer + CategoryWaking + ":" + claimTargetID
-	targetKey := PrefixTimer + CategoryDungeonOnce + ":" + claimTargetID
-	claimToken := "tok-claim-1"
-
-	_ = client.Do(ctx, client.B().Del().Key(claimKey, targetKey).Build())
-	t.Cleanup(func() {
-		_ = client.Do(ctx, client.B().Del().Key(claimKey, targetKey).Build())
+		// Wrong claim token fails and preserves lock
+		wrongCtx := WithClaim(ctx, CategoryWaking, "wrong-claim-token")
+		if err := svc.SetLock(wrongCtx, CategoryDungeonOnce, claimTargetID, 10*time.Second); !errors.Is(err, ErrClaimLost) {
+			t.Fatalf("SetLock with wrong claim err = %v; want ErrClaimLost", err)
+		}
+		ttl, err = client.Do(ctx, client.B().Ttl().Key(targetKey).Build()).AsInt64()
+		if err != nil || ttl != -1 {
+			t.Fatalf("target key TTL after rejected SetLock = %v, %v; want -1", ttl, err)
+		}
 	})
 
-	ok, err = svc.TryLockWithToken(ctx, CategoryWaking, claimTargetID, claimToken, 30*time.Second)
-	if err != nil || !ok {
-		t.Fatalf("TryLockWithToken claim: %v, %v", ok, err)
-	}
-
-	claimCtx := WithClaim(ctx, CategoryWaking, claimToken)
-	if err := svc.SetLock(claimCtx, CategoryDungeonOnce, claimTargetID, 0); err != nil {
-		t.Fatalf("SetLock with claim and 0 duration: %v", err)
-	}
-
-	// Target key must have TTL == -1 (persistent)
-	ttl, err = client.Do(ctx, client.B().Ttl().Key(targetKey).Build()).AsInt64()
-	if err != nil || ttl != -1 {
-		t.Fatalf("target key TTL = %v, %v; want -1", ttl, err)
-	}
-
-	locked, err = svc.IsLocked(ctx, CategoryDungeonOnce, claimTargetID)
-	if err != nil || !locked {
-		t.Fatalf("IsLocked target key = %v, %v; want true", locked, err)
-	}
-
-	// SetLock with claim and negative duration also creates/maintains persistent lock
-	if err := svc.SetLock(claimCtx, CategoryDungeonOnce, claimTargetID, -10*time.Second); err != nil {
-		t.Fatalf("SetLock with claim and negative duration: %v", err)
-	}
-	ttl, err = client.Do(ctx, client.B().Ttl().Key(targetKey).Build()).AsInt64()
-	if err != nil || ttl != -1 {
-		t.Fatalf("target key TTL after negative SetLock = %v, %v; want -1", ttl, err)
-	}
-
-	// Wrong claim token fails and preserves lock
-	wrongCtx := WithClaim(ctx, CategoryWaking, "wrong-claim-token")
-	if err := svc.SetLock(wrongCtx, CategoryDungeonOnce, claimTargetID, 10*time.Second); !errors.Is(err, ErrClaimLost) {
-		t.Fatalf("SetLock with wrong claim err = %v; want ErrClaimLost", err)
-	}
-	ttl, err = client.Do(ctx, client.B().Ttl().Key(targetKey).Build()).AsInt64()
-	if err != nil || ttl != -1 {
-		t.Fatalf("target key TTL after rejected SetLock = %v, %v; want -1", ttl, err)
+	// Subtest cleanup has completed; verify keys are deleted while client remains open
+	if claimKey != "" && targetKey != "" {
+		count, err := client.Do(ctx, client.B().Exists().Key(claimKey, targetKey).Build()).AsInt64()
+		if err != nil || count != 0 {
+			t.Fatalf("expected %s and %s to be deleted after subtest, exists = %d, err = %v", claimKey, targetKey, count, err)
+		}
 	}
 }
