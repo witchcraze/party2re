@@ -15,6 +15,8 @@ local now_timestamp = ARGV[11]
 local ttl_seconds = tonumber(ARGV[12]) or 7200
 local event_key = ARGV[13] or ''
 local member_hp_deltas_str = ARGV[14] or '{}'
+local member_mp_deltas_str = ARGV[15] or '{}'
+local consumed_items_str = ARGV[16] or '{}'
 
 -- 1. Check existence of active expedition state key
 if redis.call('EXISTS', state_key) == 0 then
@@ -81,22 +83,77 @@ if has_members then
         if #members > 0 and all_dead then
             current_hp = 0
         end
-        members_str = cjson.encode(members)
     elseif #members == 1 and hp_delta ~= 0 then
         local m_hp = (tonumber(members[1]['current_hp']) or 0) + hp_delta
         if m_hp < 0 then
             m_hp = 0
         end
         members[1]['current_hp'] = m_hp
-        members_str = cjson.encode(members)
     end
+
+    if member_mp_deltas_str ~= '' and member_mp_deltas_str ~= '{}' then
+        local ok, decoded_mp = pcall(cjson.decode, member_mp_deltas_str)
+        if ok and type(decoded_mp) == 'table' then
+            for _, m in ipairs(members) do
+                local cid = m['character_id']
+                if cid and decoded_mp[cid] then
+                    local delta = tonumber(decoded_mp[cid]) or 0
+                    local m_mp = (tonumber(m['current_mp']) or 0) + delta
+                    if m_mp < 0 then
+                        m_mp = 0
+                    end
+                    local max_mp = tonumber(m['max_mp']) or 0
+                    if max_mp > 0 and m_mp > max_mp then
+                        m_mp = max_mp
+                    end
+                    m['current_mp'] = m_mp
+                end
+            end
+        end
+    end
+
+    if consumed_items_str ~= '' and consumed_items_str ~= '{}' then
+        local ok, decoded_items = pcall(cjson.decode, consumed_items_str)
+        if ok and type(decoded_items) == 'table' then
+            for _, m in ipairs(members) do
+                local cid = m['character_id']
+                if cid and decoded_items[cid] and type(decoded_items[cid]) == 'table' then
+                    local existing = m['consumed_items'] or {}
+                    for _, item in ipairs(decoded_items[cid]) do
+                        table.insert(existing, item)
+                    end
+                    m['consumed_items'] = existing
+                end
+            end
+        end
+    end
+    members_str = cjson.encode(members)
+end
+
+if current_hp < 0 then
+    current_hp = 0
 end
 
 local final_status = 'exploring'
-if current_hp <= 0 then
-    current_hp = 0
-    final_status = 'wiped_out'
-elseif turns_remaining <= 0 then
+if has_members and #members > 0 then
+    local all_dead = true
+    for _, m in ipairs(members) do
+        if (tonumber(m['current_hp']) or 0) > 0 then
+            all_dead = false
+            break
+        end
+    end
+    if all_dead then
+        current_hp = 0
+        final_status = 'wiped_out'
+    end
+else
+    if current_hp <= 0 then
+        current_hp = 0
+        final_status = 'wiped_out'
+    end
+end
+if turns_remaining <= 0 then
     turns_remaining = 0
     final_status = 'wiped_out'
 end

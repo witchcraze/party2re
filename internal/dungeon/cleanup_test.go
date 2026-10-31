@@ -117,8 +117,8 @@ type replacingFinalizeRepository struct {
 	replace func()
 }
 
-func (r *replacingFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, rec dungeon.CharacterDungeonRecord, c *corecharacter.Character, items []coreitem.Instance) error {
-	err := r.mockDungeonRepo.FinalizeExpedition(ctx, h, rec, c, items)
+func (r *replacingFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, rec dungeon.CharacterDungeonRecord, c *corecharacter.Character, items []coreitem.Instance, members ...dungeon.ExpeditionMember) error {
+	err := r.mockDungeonRepo.FinalizeExpedition(ctx, h, rec, c, items, members...)
 	r.replace()
 	return err
 }

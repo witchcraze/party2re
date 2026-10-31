@@ -11772,6 +11772,9 @@
           "current_hp": {
             "type": "integer"
           },
+          "current_mp": {
+            "type": "integer"
+          },
           "item_ids": {
             "items": {
               "type": "string"
@@ -11790,6 +11793,9 @@
           "max_hp": {
             "type": "integer"
           },
+          "max_mp": {
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           }
@@ -11800,7 +11806,9 @@
           "job_id",
           "level",
           "current_hp",
-          "max_hp"
+          "max_hp",
+          "current_mp",
+          "max_mp"
         ],
         "type": "object",
         "additionalProperties": false

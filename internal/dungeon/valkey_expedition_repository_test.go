@@ -476,11 +476,12 @@ func (m *failFinalizeMockDungeonRepo) FinalizeExpedition(
 	record dungeon.CharacterDungeonRecord,
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
+	members ...dungeon.ExpeditionMember,
 ) error {
 	if m.failFinalize {
 		return errors.New("simulated MariaDB commit failure")
 	}
-	return m.mockDungeonRepo.FinalizeExpedition(ctx, history, record, character, rewardItems)
+	return m.mockDungeonRepo.FinalizeExpedition(ctx, history, record, character, rewardItems, members...)
 }
 
 func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {

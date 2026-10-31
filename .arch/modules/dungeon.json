@@ -13,7 +13,7 @@
       "source_ref": "internal/database/dungeon_repository.go#DungeonRepository.FinalizeExpedition",
       "transaction_type": "RunInTx",
       "lock_sequence": [
-        {"table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE", "note": "Lock the current owner snapshot before claiming the run and applying rewards."},
+        {"table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE", "note": "Lock all participating expedition member characters in ascending ID order before claiming the run and applying rewards."},
         {"table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE via reward delivery", "note": "Only when delivering reward items."},
         {"table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE via reward delivery", "note": "Conditional overflow delivery."}
       ],

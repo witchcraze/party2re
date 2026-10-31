@@ -168,6 +168,8 @@ type StepParams struct {
 	NewY                 int
 	HPDelta              int
 	MemberHPDeltas       map[string]int
+	MemberMPDeltas       map[string]int
+	ConsumedItems        map[string][]corebattle.ConsumedItem
 	TurnsDelta           int
 	ExpDelta             int
 	GoldDelta            int
@@ -204,6 +206,7 @@ type Repository interface {
 		record CharacterDungeonRecord,
 		character *corecharacter.Character,
 		rewardItems []coreitem.Instance,
+		members ...ExpeditionMember,
 	) error
 	GetHistory(ctx context.Context, characterID string, limit int) ([]DungeonExpeditionHistory, error)
 }
@@ -243,9 +246,10 @@ func (defaultRandomSource) Float64() float64 {
 	return float64(val&(1<<53-1)) / float64(1<<53)
 }
 
-// ParticipantBuilder constructs a Participant from character ID with current HP.
+// ParticipantBuilder constructs a Participant from character ID with current HP or full state.
 type ParticipantBuilder interface {
 	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+	BuildParticipantWithState(ctx context.Context, characterID string, hp int, mp *int, consumed []corebattle.ConsumedItem) (corebattle.Participant, error)
 }
 
 type Service struct {
@@ -435,6 +439,17 @@ func EncodeMemberHPDeltas(deltas map[string]int) string {
 		return "{}"
 	}
 	b, err := json.Marshal(deltas)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+func EncodeConsumedItems(items map[string][]corebattle.ConsumedItem) string {
+	if len(items) == 0 {
+		return "{}"
+	}
+	b, err := json.Marshal(items)
 	if err != nil {
 		return "{}"
 	}

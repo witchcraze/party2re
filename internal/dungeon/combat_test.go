@@ -21,6 +21,17 @@ func (b *customParticipantBuilder) BuildParticipantWithCurrentHP(ctx context.Con
 	return corebattle.Participant{ID: charID, HP: currentHP, MaxHP: currentHP}, nil
 }
 
+func (b *customParticipantBuilder) BuildParticipantWithState(ctx context.Context, charID string, hp int, mp *int, consumed []corebattle.ConsumedItem) (corebattle.Participant, error) {
+	p, err := b.BuildParticipantWithCurrentHP(ctx, charID, hp)
+	if err != nil {
+		return corebattle.Participant{}, err
+	}
+	if mp != nil {
+		p.MP = *mp
+	}
+	return p, nil
+}
+
 func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockDungeonRepo()

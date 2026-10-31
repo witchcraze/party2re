@@ -341,7 +341,7 @@ func (d *integrationDungeonRepo) GetRecord(_ context.Context, charID string) (du
 	return dungeon.CharacterDungeonRecord{CharacterID: charID}, nil
 }
 
-func (d *integrationDungeonRepo) FinalizeExpedition(_ context.Context, _ dungeon.DungeonExpeditionHistory, _ dungeon.CharacterDungeonRecord, _ *corecharacter.Character, _ []coreitem.Instance) error {
+func (d *integrationDungeonRepo) FinalizeExpedition(_ context.Context, _ dungeon.DungeonExpeditionHistory, _ dungeon.CharacterDungeonRecord, _ *corecharacter.Character, _ []coreitem.Instance, _ ...dungeon.ExpeditionMember) error {
 	return nil
 }
 
