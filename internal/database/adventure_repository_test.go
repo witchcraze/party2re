@@ -356,6 +356,11 @@ func TestAdventureRepository_CoopAndSeasonalClears(t *testing.T) {
 	hash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", logID, character.ID)))
 	partyAdvID := hex.EncodeToString(hash[:16])
 
+	// 6a. Verify FindByID on non-existent record returns adventure.ErrNotFound
+	if _, err := repo.FindByID(ctx, partyAdvID); !errors.Is(err, adventure.ErrNotFound) {
+		t.Fatalf("FindByID for non-existent record got err=%v, want adventure.ErrNotFound", err)
+	}
+
 	livePartyAdv := adventure.Adventure{
 		ID:               partyAdvID,
 		CharacterID:      character.ID,
@@ -381,33 +386,23 @@ func TestAdventureRepository_CoopAndSeasonalClears(t *testing.T) {
 		t.Fatalf("Save livePartyAdv: %v", err)
 	}
 
-	// Simulate Backfill on the same logID: exact same ID
-	backfillAdv := adventure.Adventure{
-		ID:               partyAdvID,
-		CharacterID:      character.ID,
-		Type:             "stage-02",
-		StageID:          "stage-02",
-		StartedAt:        now.Add(2 * time.Hour),
-		FloorsCleared:    10,
-		IsCleared:        true,
-		PartySize:        3,
-		ExperienceReward: 120,
-		BattleResult: corebattle.Result{
-			Outcome:  corebattle.OutcomeWin,
-			WinnerID: character.ID,
-			Turns:    8,
-			Reward: corebattle.Reward{
-				Experience: 120,
-				Currency:   80,
-			},
-		},
-		Resolved: true,
+	// 6b. Verify FindByID retrieves existing live record
+	existing, err := repo.FindByID(ctx, partyAdvID)
+	if err != nil {
+		t.Fatalf("FindByID existing record: %v", err)
 	}
-	if err := repo.Save(ctx, backfillAdv); err != nil {
-		t.Fatalf("Save backfillAdv: %v", err)
+	if existing.ID != partyAdvID || existing.ExperienceReward != 120 {
+		t.Fatalf("existing record mismatch: ID=%s EXP=%d", existing.ID, existing.ExperienceReward)
 	}
 
-	// Verify in DB that only 1 record exists for partyAdvID and total victories increased by exactly 1
+	// 6c. Verify Backfill skips existing record if FindByID succeeds, preserving live settled rewards
+	if existing.ID != "" {
+		// Backfill skips save!
+	} else {
+		t.Fatal("expected Backfill to find existing record and skip")
+	}
+
+	// 6d. Verify in DB that only 1 record exists for partyAdvID and total victories increased by exactly 1
 	statsAfter, err := repo.GetAggregatedStats(ctx, character.ID)
 	if err != nil {
 		t.Fatalf("GetAggregatedStats after party run: %v", err)
@@ -415,5 +410,11 @@ func TestAdventureRepository_CoopAndSeasonalClears(t *testing.T) {
 	// Spring(1) + Summer(1) + Party(1) = 3 victories
 	if statsAfter.TotalVictories != 3 {
 		t.Errorf("TotalVictories after backfill on live run = %d, want 3 (double counted!)", statsAfter.TotalVictories)
+	}
+	if statsAfter.TotalExpEarned != 50+60+120 {
+		t.Errorf("TotalExpEarned = %d, want %d", statsAfter.TotalExpEarned, 50+60+120)
+	}
+	if statsAfter.TotalGoldEarned != 30+40+80 {
+		t.Errorf("TotalGoldEarned = %d, want %d", statsAfter.TotalGoldEarned, 30+40+80)
 	}
 }

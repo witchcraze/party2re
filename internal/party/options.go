@@ -89,9 +89,10 @@ func WithRNG(rng func(n int) int) Option {
 	}
 }
 
-// AdventureRepository persists adventure records for party members upon crawl completion.
+// AdventureRepository persists and retrieves adventure records for party members.
 type AdventureRepository interface {
 	Save(ctx context.Context, value adventure.Adventure) error
+	FindByID(ctx context.Context, id string) (adventure.Adventure, error)
 }
 
 // WithAdventureRepository configures the AdventureRepository for recording member clears and chronicle stats.

@@ -2,8 +2,11 @@ package party
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,9 +16,12 @@ import (
 )
 
 type memoryAdventureRepoForPartyTest struct {
-	records []adventure.Adventure
-	saved   map[string]adventure.Adventure
-	saveErr error
+	records       []adventure.Adventure
+	saved         map[string]adventure.Adventure
+	saveErr       error
+	findErr       error
+	findByIDCalls int
+	saveCalls     int
 }
 
 func newMemoryAdventureRepoForPartyTest() *memoryAdventureRepoForPartyTest {
@@ -25,6 +31,7 @@ func newMemoryAdventureRepoForPartyTest() *memoryAdventureRepoForPartyTest {
 }
 
 func (m *memoryAdventureRepoForPartyTest) Save(_ context.Context, adv adventure.Adventure) error {
+	m.saveCalls++
 	if m.saveErr != nil {
 		return m.saveErr
 	}
@@ -34,10 +41,14 @@ func (m *memoryAdventureRepoForPartyTest) Save(_ context.Context, adv adventure.
 }
 
 func (m *memoryAdventureRepoForPartyTest) FindByID(_ context.Context, id string) (adventure.Adventure, error) {
+	m.findByIDCalls++
+	if m.findErr != nil {
+		return adventure.Adventure{}, m.findErr
+	}
 	if a, ok := m.saved[id]; ok {
 		return a, nil
 	}
-	return adventure.Adventure{}, errors.New("not found")
+	return adventure.Adventure{}, adventure.ErrNotFound
 }
 
 func (m *memoryAdventureRepoForPartyTest) ClearCountForCharacterAndStage(characterID, stageID string, seasonalSubID int) int {
@@ -307,6 +318,57 @@ func TestParty_BackfillPastAdventureLogs(t *testing.T) {
 	if clearedAAfter != 1 {
 		t.Errorf("char-a stage-02 clears after re-backfill = %d, want 1", clearedAAfter)
 	}
+
+	// Verify that backfilled records set reward_experience = 0 (settled reward constraint) and FloorsCleared = 10 for win
+	hashA := sha256.Sum256([]byte("party:past-log-1:char-a"))
+	advID_A := hex.EncodeToString(hashA[:16])
+	advA, ok := advRepo.saved[advID_A]
+	if !ok {
+		t.Fatalf("expected record for %s to exist", advID_A)
+	}
+	if advA.ExperienceReward != 0 {
+		t.Errorf("backfilled ExperienceReward = %d, want 0 (settled reward constraint)", advA.ExperienceReward)
+	}
+	if advA.BattleResult.Reward.Experience != 0 || advA.BattleResult.Reward.Currency != 0 {
+		t.Errorf("backfilled Reward = %+v, want 0/0", advA.BattleResult.Reward)
+	}
+	if advA.FloorsCleared != 10 {
+		t.Errorf("backfilled FloorsCleared for win = %d, want 10", advA.FloorsCleared)
+	}
+
+	// Verify defeat past log: FloorsCleared = 0, IsCleared = false, ExperienceReward = 0
+	pastDefeatLog := PartyAdventureLog{
+		ID:          "past-log-defeat",
+		PartyID:     "party-past-defeat",
+		StageID:     "stage-02",
+		Outcome:     string(corebattle.OutcomeDefeat),
+		Turns:       3,
+		TotalEXP:    50,
+		TotalGold:   25,
+		DetailsJSON: string(detailsJSON),
+		CreatedAt:   time.Now().UTC().Add(-12 * time.Hour),
+	}
+	if err := partyRepo.SaveAdventureLog(ctx, pastDefeatLog); err != nil {
+		t.Fatalf("SaveAdventureLog defeat: %v", err)
+	}
+	backfilledDefeat, err := BackfillPartyAdventureLogs(ctx, partyRepo, advRepo, "party-past-defeat")
+	if err != nil {
+		t.Fatalf("Backfill defeat: %v", err)
+	}
+	if backfilledDefeat != 2 {
+		t.Errorf("backfilledDefeat count = %d, want 2", backfilledDefeat)
+	}
+	hashDefeatA := sha256.Sum256([]byte("party:past-log-defeat:char-a"))
+	advDefeatA := advRepo.saved[hex.EncodeToString(hashDefeatA[:16])]
+	if advDefeatA.FloorsCleared != 0 {
+		t.Errorf("backfilled FloorsCleared for defeat = %d, want 0 (unrecorded defeat floor)", advDefeatA.FloorsCleared)
+	}
+	if advDefeatA.IsCleared != false {
+		t.Errorf("backfilled IsCleared for defeat = %v, want false", advDefeatA.IsCleared)
+	}
+	if advDefeatA.ExperienceReward != 0 {
+		t.Errorf("backfilled ExperienceReward for defeat = %d, want 0", advDefeatA.ExperienceReward)
+	}
 }
 
 func TestParty_Stage26SeasonalClear(t *testing.T) {
@@ -388,7 +450,7 @@ func TestParty_Stage26SeasonalClear(t *testing.T) {
 }
 
 func TestParty_BackfillDuplicatePreventionWithLiveRun(t *testing.T) {
-	// Requirements check: "通常記録とBackfillによる二重計上防止"
+	// Requirements check: "通常記録とBackfillによる二重計上防止の実経路検証"
 	ctx := context.Background()
 	advRepo := newMemoryAdventureRepoForPartyTest()
 
@@ -405,7 +467,23 @@ func TestParty_BackfillDuplicatePreventionWithLiveRun(t *testing.T) {
 		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
 	}
 
-	svc, parties, chars, _, _ := setupPartyAdventureTestService(t, nil, WithAdventureRepository(advRepo))
+	// Use engine that explicitly populates AlliesSurvived and rewards
+	engine := battleEngineFunc(func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+		survived := make([]string, len(req.Allies))
+		remHP := make(map[string]int, len(req.Allies))
+		for i, a := range req.Allies {
+			survived[i] = a.ID
+			remHP[a.ID] = 100
+		}
+		return corebattle.PartyBattleResult{
+			Outcome:        corebattle.OutcomeWin,
+			AlliesSurvived: survived,
+			RemainingHP:    remHP,
+			TotalReward:    corebattle.Reward{Experience: 100, Currency: 50},
+		}, nil
+	})
+
+	svc, parties, chars, _, _ := setupPartyAdventureTestService(t, engine, WithAdventureRepository(advRepo))
 	partyID := createReadyParty(ctx, t, svc, parties, chars, leader, member)
 
 	// 1. Live party crawl runs and records to advRepo
@@ -417,36 +495,59 @@ func TestParty_BackfillDuplicatePreventionWithLiveRun(t *testing.T) {
 		t.Fatalf("expected win, got %v", res.Outcome)
 	}
 
-	// Verify live records exist
-	clearedLeader := advRepo.ClearCountForCharacterAndStage(leader.ID, "stage-01", 0)
-	if clearedLeader != 1 {
-		t.Fatalf("leader clears before backfill = %d, want 1", clearedLeader)
+	// Verify live records exist and details_json in party_adventure_logs actually contains both participants
+	partyRepo, ok := svc.repo.(AdventureLogReader)
+	if !ok {
+		t.Fatalf("svc.repo does not implement AdventureLogReader")
 	}
-	clearedMember := advRepo.ClearCountForCharacterAndStage(member.ID, "stage-01", 0)
-	if clearedMember != 1 {
-		t.Fatalf("member clears before backfill = %d, want 1", clearedMember)
+	logs, err := partyRepo.GetAdventureLogsByPartyID(ctx, partyID)
+	if err != nil || len(logs) == 0 {
+		t.Fatalf("expected party adventure log to exist, err: %v", err)
 	}
+	var logBattleRes corebattle.PartyBattleResult
+	if err := json.Unmarshal([]byte(logs[0].DetailsJSON), &logBattleRes); err != nil {
+		t.Fatalf("unmarshal details_json: %v", err)
+	}
+	if len(logBattleRes.AlliesSurvived) != 2 {
+		t.Fatalf("expected details_json to contain 2 survivors, got %v", logBattleRes.AlliesSurvived)
+	}
+
+	// Verify ID parity between live record and expected deterministic hash
+	leaderHash := sha256.Sum256([]byte(fmt.Sprintf("party:%s:%s", logs[0].ID, leader.ID)))
+	expectedLeaderAdvID := hex.EncodeToString(leaderHash[:16])
+	liveLeaderAdv, ok := advRepo.saved[expectedLeaderAdvID]
+	if !ok {
+		t.Fatalf("expected live run to record leader with ID %s", expectedLeaderAdvID)
+	}
+	if liveLeaderAdv.ExperienceReward != 1000 || liveLeaderAdv.BattleResult.Reward.Currency != 500 {
+		t.Fatalf("expected live settled rewards EXP=1000 Gold=500, got EXP=%d Gold=%d", liveLeaderAdv.ExperienceReward, liveLeaderAdv.BattleResult.Reward.Currency)
+	}
+
 	initialRecordCount := len(advRepo.saved)
 	if initialRecordCount != 2 {
 		t.Fatalf("advRepo saved records = %d, want 2", initialRecordCount)
 	}
 
-	// 2. Run backfill on the same party ID (party_adventure_logs generated by the live run)
-	partyRepo, ok := svc.repo.(AdventureLogReader)
-	if !ok {
-		t.Fatalf("svc.repo does not implement AdventureLogReader")
-	}
+	// 2. Run backfill on the same party ID:
+	// Verify FindByID is actually invoked for both participants and skips them
+	advRepo.findByIDCalls = 0
+	advRepo.saveCalls = 0
 
 	backfilled, err := BackfillPartyAdventureLogs(ctx, partyRepo, advRepo, partyID)
 	if err != nil {
 		t.Fatalf("BackfillPartyAdventureLogs: %v", err)
 	}
-	// Existing live records were skipped, so backfilled is 0
 	if backfilled != 0 {
 		t.Errorf("backfilled count = %d, want 0 (live records skipped)", backfilled)
 	}
+	if advRepo.findByIDCalls != 2 {
+		t.Errorf("expected FindByID to be called for 2 participants, called %d times", advRepo.findByIDCalls)
+	}
+	if advRepo.saveCalls != 0 {
+		t.Errorf("expected Save NOT to be called when records exist, called %d times", advRepo.saveCalls)
+	}
 
-	// Clear count must remain exactly 1 (no double-counting)
+	// Verify clear count remains exactly 1 and settled rewards were not overwritten
 	clearedLeaderAfter := advRepo.ClearCountForCharacterAndStage(leader.ID, "stage-01", 0)
 	if clearedLeaderAfter != 1 {
 		t.Errorf("leader clears after backfill = %d, want 1 (double counted!)", clearedLeaderAfter)
@@ -457,6 +558,71 @@ func TestParty_BackfillDuplicatePreventionWithLiveRun(t *testing.T) {
 	}
 	if len(advRepo.saved) != initialRecordCount {
 		t.Errorf("advRepo saved records grew from %d to %d (duplicate entries!)", initialRecordCount, len(advRepo.saved))
+	}
+	leaderAdvAfter := advRepo.saved[expectedLeaderAdvID]
+	if leaderAdvAfter.ExperienceReward != 1000 || leaderAdvAfter.BattleResult.Reward.Currency != 500 {
+		t.Errorf("settled rewards overwritten! EXP=%d Gold=%d, want 1000/500", leaderAdvAfter.ExperienceReward, leaderAdvAfter.BattleResult.Reward.Currency)
+	}
+
+	// 3. Re-run backfill: idempotent, zero duplicate writes
+	advRepo.findByIDCalls = 0
+	backfilled2, err := BackfillPartyAdventureLogs(ctx, partyRepo, advRepo, partyID)
+	if err != nil {
+		t.Fatalf("second Backfill: %v", err)
+	}
+	if backfilled2 != 0 {
+		t.Errorf("second backfill count = %d, want 0", backfilled2)
+	}
+	if advRepo.findByIDCalls != 2 {
+		t.Errorf("expected FindByID to be called on second pass, called %d times", advRepo.findByIDCalls)
+	}
+}
+
+func TestParty_BackfillFindByIDErrorPropagated(t *testing.T) {
+	// Requirements check: "存在確認失敗時にエラーが伝播され既存レコードが保護されること"
+	ctx := context.Background()
+	advRepo := newMemoryAdventureRepoForPartyTest()
+	partyRepo := newMockPartyRepository()
+
+	battleRes := corebattle.PartyBattleResult{
+		Outcome:        corebattle.OutcomeWin,
+		AlliesSurvived: []string{"char-err-test"},
+	}
+	detailsJSON, _ := json.Marshal(battleRes)
+	pastLog := PartyAdventureLog{
+		ID:          "past-log-err",
+		PartyID:     "party-err",
+		StageID:     "stage-01",
+		Outcome:     string(corebattle.OutcomeWin),
+		DetailsJSON: string(detailsJSON),
+		CreatedAt:   time.Now().UTC(),
+	}
+	_ = partyRepo.SaveAdventureLog(ctx, pastLog)
+
+	// Pre-seed an existing adventure record
+	existingAdv := adventure.Adventure{
+		ID:               "pre-existing",
+		CharacterID:      "char-err-test",
+		ExperienceReward: 500,
+	}
+	_ = advRepo.Save(ctx, existingAdv)
+	initialSaveCalls := advRepo.saveCalls
+
+	// Inject DB failure into FindByID
+	injectedErr := errors.New("database connection broken")
+	advRepo.findErr = injectedErr
+
+	_, err := BackfillPartyAdventureLogs(ctx, partyRepo, advRepo, "party-err")
+	if err == nil {
+		t.Fatalf("expected error from BackfillPartyAdventureLogs, got nil")
+	}
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("expected injected error %v, got %v", injectedErr, err)
+	}
+
+	// Verify Save was not called during failure, protecting existing state
+	if advRepo.saveCalls != initialSaveCalls {
+		t.Errorf("advRepo.Save was called %d times during FindByID failure, want 0 additional calls", advRepo.saveCalls-initialSaveCalls)
 	}
 }
 
