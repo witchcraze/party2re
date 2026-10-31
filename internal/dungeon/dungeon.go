@@ -430,6 +430,17 @@ func EncodeMembers(members []ExpeditionMember) string {
 	return string(b)
 }
 
+func EncodeMemberHPDeltas(deltas map[string]int) string {
+	if len(deltas) == 0 {
+		return "{}"
+	}
+	b, err := json.Marshal(deltas)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
 func DecodeMembers(data string) []ExpeditionMember {
 	var members []ExpeditionMember
 	_ = json.Unmarshal([]byte(data), &members)

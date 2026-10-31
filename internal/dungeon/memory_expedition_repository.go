@@ -151,6 +151,11 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		if len(exp.Members) > 0 && allDead {
 			currentHP = 0
 		}
+	} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.HPDelta != 0 {
+		exp.Members[0].CurrentHP += params.HPDelta
+		if exp.Members[0].CurrentHP < 0 {
+			exp.Members[0].CurrentHP = 0
+		}
 	}
 
 	finalStatus := StatusExploring

@@ -98,6 +98,7 @@ func (s *Service) resolveMonsterCombat(
 		NewX:                 newX,
 		NewY:                 newY,
 		HPDelta:              -exp.CurrentHP,
+		MemberHPDeltas:       map[string]int{char.ID: -exp.CurrentHP},
 		TurnsDelta:           -1,
 		Now:                  time.Now().UTC(),
 	})
@@ -187,6 +188,7 @@ func (s *Service) resolveBossCombat(
 		NewX:                 newX,
 		NewY:                 newY,
 		HPDelta:              -exp.CurrentHP,
+		MemberHPDeltas:       map[string]int{char.ID: -exp.CurrentHP},
 		TurnsDelta:           -1,
 		Now:                  time.Now().UTC(),
 	})
