@@ -52,7 +52,7 @@ func (s *stubAlchemyService) Synthesize(ctx context.Context, characterID string,
 	if s.synthesizeFn != nil {
 		return s.synthesizeFn(ctx, characterID, recipeID)
 	}
-	r, _ := alchemy.NewRecipe(recipeID, "Synthesize", "item-002", 1, []alchemy.Ingredient{{DefinitionID: "item-001", Quantity: 2}})
+	r := alchemy.RecipeView{ID: recipeID, Ingredients: []alchemy.Ingredient{{DefinitionID: "item-001", Quantity: 2}}}
 	now := time.Now()
 	return alchemy.SynthesisResult{
 		Recipe:    r,
@@ -128,6 +128,52 @@ func TestHTTP_GetCharacterAlchemy(t *testing.T) {
 
 	if body.Compendium.TotalRecipes != 114 {
 		t.Errorf("expected 114 total recipes, got %d", body.Compendium.TotalRecipes)
+	}
+}
+
+func TestHTTP_GetCharacterAlchemy_HidesUncraftedProductOnTheWire(t *testing.T) {
+	stub := &stubAlchemyService{
+		getCompendiumFn: func(_ context.Context, _ string) (alchemy.Compendium, error) {
+			return alchemy.Compendium{
+				TotalRecipes: 114,
+				LearnedCount: 2,
+				CraftedCount: 1,
+				Entries: []alchemy.CompendiumEntry{
+					{RecipeID: "recipe-001", Name: "上薬草の合成", ResultItemDefinitionID: "item-002", ResultItemName: "上薬草",
+						Ingredients: []alchemy.Ingredient{{DefinitionID: "item-001", Quantity: 2}}, IsLearned: true, IsCrafted: true},
+					{RecipeID: "recipe-002", Ingredients: []alchemy.Ingredient{{DefinitionID: "item-001", Quantity: 1}}, IsLearned: true},
+				},
+			}, nil
+		},
+	}
+	h, charID := setupAlchemyTestHandler(t, stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/characters/"+charID+"/alchemy", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	rec := httptest.NewRecorder()
+	h.Router().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Compendium struct {
+			Entries []map[string]any `json:"entries"`
+		} `json:"compendium"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if len(body.Compendium.Entries) != 2 {
+		t.Fatalf("entries = %d, want 2", len(body.Compendium.Entries))
+	}
+	for _, key := range []string{"name", "result_item_definition_id", "result_item_name"} {
+		if _, ok := body.Compendium.Entries[0][key]; !ok {
+			t.Errorf("crafted entry must expose %q", key)
+		}
+		if _, ok := body.Compendium.Entries[1][key]; ok {
+			t.Errorf("uncrafted entry must not expose %q", key)
+		}
 	}
 }
 

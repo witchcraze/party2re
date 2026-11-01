@@ -44,7 +44,7 @@ type Synthesis struct {
 }
 
 type SynthesisResult struct {
-	Recipe    Recipe         `json:"recipe"`
+	Recipe    RecipeView     `json:"recipe"`
 	State     SynthesisState `json:"state"`
 	StartedAt time.Time      `json:"started_at"`
 	MaturesAt time.Time      `json:"matures_at"`
@@ -306,7 +306,7 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 		}
 
 		res = SynthesisResult{
-			Recipe:    recipe,
+			Recipe:    viewRecipe(recipe, targetDiscovered.IsCrafted),
 			State:     StateOngoing,
 			StartedAt: now,
 			MaturesAt: maturesAt,

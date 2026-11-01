@@ -9005,6 +9005,7 @@
         "additionalProperties": false
       },
       "AlchemyCompendium": {
+        "description": "Counts cover the whole catalog; entries list only the combinations the character has learned. Product fields of an entry (name, result_item_definition_id, result_item_name) are present only once it has been crafted.",
         "properties": {
           "comp_alc": {
             "type": "boolean"
@@ -9074,9 +9075,6 @@
         },
         "required": [
           "recipe_id",
-          "name",
-          "result_item_definition_id",
-          "result_item_name",
           "ingredients",
           "is_learned",
           "is_crafted"
@@ -9204,6 +9202,38 @@
         "type": "object",
         "additionalProperties": false
       },
+      "AlchemyRecipeView": {
+        "description": "Recipe as observed by the character. name, result_item_definition_id and result_quantity are present only after the character has crafted the recipe once.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/AlchemyIngredient"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "result_item_definition_id": {
+            "type": "string"
+          },
+          "result_quantity": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ingredients"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
       "AlchemySynthesisResult": {
         "properties": {
           "matures_at": {
@@ -9214,7 +9244,7 @@
             "type": "string"
           },
           "recipe": {
-            "$ref": "#/components/schemas/AlchemyRecipe"
+            "$ref": "#/components/schemas/AlchemyRecipeView"
           },
           "started_at": {
             "format": "date-time",

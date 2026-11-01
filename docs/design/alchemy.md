@@ -41,7 +41,7 @@ A recipe consists of:
 ### Recipe Compendium
 - `character_alchemy_recipes` tracks each discovered/learned recipe for a character.
 - `IsCrafted`: Flag set to `true` once the character has successfully claimed a synthesis of that recipe.
-- Uncrafted recipes display result item name as `"？？？"` in the compendium.
+- **Observation projection** (legacy `alchemy.cgi` `＠れしぴ`/`＠れんきん`, `home.cgi` recipe-book use): only learned combinations are published. Unlearned combinations are absent from compendium entries; `total_recipes`, `learned_count`, `crafted_count` and `completion_percentage` still count the whole catalog. Until a recipe has been claimed once, its product is unknown: the entry and the synthesis-start response carry only `recipe_id` and `ingredients`, with the recipe `name` (which names the product), result item and quantity omitted. Claiming publishes them. Hiding is done by omitting data in the projection, never by substituting display text.
 - Learning recipes: Players learn unlearned recipes matching allowed base materials (`LearnRecipe`).
 
 ---
@@ -60,7 +60,7 @@ A recipe consists of:
    - Record synthesis state with `state = ongoing`, `started_at = now`, `matures_at = NextMidnightJST(now)`.
 
 ### 2. Status & Maturity (`GET /characters/{id}/alchemy`)
-- Returns the current synthesis status, active recipe, maturity timestamp, and the complete Recipe Compendium.
+- Returns the current synthesis status, active recipe, maturity timestamp, and the Recipe Compendium observation projection (learned combinations only).
 - If `now >= matures_at`, the state is reported as `completed`.
 
 ### 3. Home Rest Acceleration (`internal/home/sleep.go`)
