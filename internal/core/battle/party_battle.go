@@ -138,6 +138,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		cmpMap:            make(map[string]int),
 		defendingMap:      make(map[string]bool),
 		statusMap:         make(map[string]string),
+		tensionMap:        make(map[string]float64),
 		attackBuff:        make(map[string]int),
 		defenseBuff:       make(map[string]int),
 		agilityBuff:       make(map[string]int),
@@ -158,6 +159,11 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		ctx.defendingMap[p.ID] = p.Defending
 		ctx.statusMap[p.ID] = p.Status
 		ctx.itemsMap[p.ID] = append([]ActionItem(nil), p.ActionItems...)
+		if req.InitialTension != nil && req.InitialTension[p.ID] > 0 {
+			ctx.tensionMap[p.ID] = req.InitialTension[p.ID]
+		} else {
+			ctx.tensionMap[p.ID] = 1.0
+		}
 	}
 
 	if req.InitialField != nil {

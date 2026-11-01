@@ -20,6 +20,7 @@ type battleContext struct {
 	defenseBuff       map[string]int
 	agilityBuff       map[string]int
 	abilitiesMap      map[string][]string
+	tensionMap        map[string]float64
 	itemsMap          map[string][]ActionItem
 	consumedItems     map[string][]ConsumedItem
 	banishedMap       map[string]bool
@@ -42,7 +43,26 @@ func (ctx *battleContext) executeDefend(actor Participant) {
 	})
 }
 
+func (ctx *battleContext) getTension(actorID string) float64 {
+	if ctx.tensionMap != nil {
+		if t, ok := ctx.tensionMap[actorID]; ok && t > 0 {
+			return t
+		}
+	}
+	return 1.0
+}
+
+func (ctx *battleContext) consumeTension(actor Participant) {
+	if ctx.tensionMap != nil && !hasItem(actor.ItemDefinitionIDs, "item-149") {
+		ctx.tensionMap[actor.ID] = 1.0
+	}
+}
+
 func (ctx *battleContext) applyDamage(actor Participant, target Participant, baseDamage int, element string, actionName string, isCustom bool, incantation string, isCritical bool) {
+	ctx.applyDamageWithCategory(actor, target, baseDamage, element, "", actionName, isCustom, incantation, isCritical)
+}
+
+func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Participant, baseDamage int, element string, category string, actionName string, isCustom bool, incantation string, isCritical bool) {
 	mult := ctx.field.DamageMultiplier(element)
 	dmg := int(float64(baseDamage) * mult)
 	if ctx.defendingMap[target.ID] {
@@ -50,7 +70,7 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 	}
 
 	targetAbilities := ctx.abilitiesMap[target.ID]
-	isMagic := (element != "")
+	isMagic := (element != "" || category == "magic" || category == string(CategoryMagic))
 
 	isImmune := false
 	if hasAbility(targetAbilities, "大防御") {

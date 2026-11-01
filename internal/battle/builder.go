@@ -2,6 +2,8 @@ package battle
 
 import (
 	"context"
+	"slices"
+	"sort"
 	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -76,8 +78,13 @@ func (s *Service) buildParticipantFromCharacter(ctx context.Context, char corech
 	}
 
 	var skills []skill.Definition
-	if s.skillProvider != nil && char.JobID != "" {
-		skills = s.skillProvider.SkillsForJob(char.JobID)
+	if s.skillProvider != nil {
+		if char.JobID != "" {
+			skills = append(skills, s.skillProvider.SkillsForJob(char.JobID)...)
+		}
+		if char.OldJobID != "" && char.OldJobID != char.JobID {
+			skills = append(skills, s.skillProvider.SkillsForJob(char.OldJobID)...)
+		}
 	}
 
 	var cs *customskill.CustomSkill
@@ -232,12 +239,29 @@ func BuildParticipantFromDataWithRNG(
 		builder.WithAbilities(abilities...)
 	}
 
-	// Bind job skills unlocked by SP threshold
+	// Bind job skills unlocked by SP threshold (current and previous job)
+	seenSkills := make(map[string]bool)
+	var unlockedSkills []skill.Definition
 	for _, sk := range skills {
-		if char.SP >= sk.RequiredSP {
-			if action, err := native.JobAction(sk); err == nil {
-				builder.WithSkills(action)
-			}
+		if seenSkills[sk.ID] {
+			continue
+		}
+		if sk.IsUnlocked(char) {
+			seenSkills[sk.ID] = true
+			unlockedSkills = append(unlockedSkills, sk)
+		}
+	}
+	sort.SliceStable(unlockedSkills, func(i, j int) bool {
+		iCurrent := slices.Contains(unlockedSkills[i].RequiredJobIDs, char.JobID)
+		jCurrent := slices.Contains(unlockedSkills[j].RequiredJobIDs, char.JobID)
+		if iCurrent != jCurrent {
+			return iCurrent
+		}
+		return unlockedSkills[i].RequiredSP > unlockedSkills[j].RequiredSP
+	})
+	for _, sk := range unlockedSkills {
+		if action, err := native.JobAction(sk); err == nil {
+			builder.WithSkills(action)
 		}
 	}
 
