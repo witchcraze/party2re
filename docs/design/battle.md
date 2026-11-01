@@ -1728,6 +1728,15 @@ An immune or redirected reduction must not turn that possible change into a guar
 An arbitrary preceding callback, or a reachable201 damage tail followed by another
 slot, needs that owner's transition projection and remains rejected here.
 
+For mixed registered invocations, accuracy/tension gems54/67–69/74 supply complete
+alternatives through `ProjectRecoveryStatGemBranches`. Each outcome retains the
+exact tension-call count, category cure, confusion and target/temporary state;
+67 keeps both calls and145's optional player recursion, while161's defense changes
+can affect later cover lookup. A fallen enemy selection by68 leaves tension
+unchanged. The shared callback damage context carries effect counters across
+slots, including when a producer first creates it. Other recovery/stat predecessors
+remain unknown until their complete numeric/resource/tail transitions are supplied.
+
 Complete gem bodies apply helper MP debit/absorption before their effect tails.
 Returned `EffectApplication` facts describe completed writes, including requested
 amount versus actual clamped change; consumers must not apply those resource facts

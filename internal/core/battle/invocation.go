@@ -101,6 +101,7 @@ func (s *LifetimeState) ApplyInvocations(c *CallbackContext, d CallbackCatalog, 
 			return err
 		}
 		c.TargetContext = child.TargetContext
+		c.Damage = child.Damage
 		c.ArithmeticDivisor = child.ArithmeticDivisor
 		if s.actor(c.ActorID).HP <= 0 {
 			break
@@ -260,6 +261,7 @@ func (s *LifetimeState) executeExplicitCallback(c *CallbackContext, d CallbackCa
 	child := explicitCallbackTarget(c)
 	err := s.executeCallback(&child, d, entry, rng)
 	c.TargetContext = child.TargetContext
+	c.Damage = child.Damage
 	c.ArithmeticDivisor = child.ArithmeticDivisor
 	return err
 }
