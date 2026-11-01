@@ -106,10 +106,7 @@ func (s *LifetimeState) ApplyTransformation(c *TransformationContext, id, target
 			r.Applied = true
 		}
 	case "gem-100-appearance":
-		a.Icon = c.MonsterIcons[int(rng.Float64()*108)]
-		if a.Icon == "" {
-			a.Icon = "assets/images/placeholders/battle/monster-default.svg"
-		}
+		a.Icon = monsterAppearance(c.MonsterIcons[int(rng.Float64()*108)])
 		r.Applied = true
 	case "job-82-form":
 		r.Applied = a.switchForm("job-82", "job-300")
@@ -150,6 +147,13 @@ func (s *LifetimeState) ApplyTransformation(c *TransformationContext, id, target
 		a.Icon, r.Applied = c.RequesterIcon, true
 	}
 	return r, nil
+}
+
+func monsterAppearance(icon string) string {
+	if icon == "" {
+		return "assets/images/placeholders/battle/monster-default.svg"
+	}
+	return icon
 }
 
 func (s *LifetimeState) copyParticipant(c *TransformationContext, id, targetID string, rng random.Generator) (TransformationResult, error) {

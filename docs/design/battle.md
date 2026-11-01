@@ -2164,7 +2164,7 @@ substitution certifies missing descendants. Item110 remains rejected. The regist
 indirect callback without a represented transition projection still rejects the
 enclosing continuation before any slot executes or costs are paid. Roster
 projections cover exact dismissal, merge, party revival, non-growing defense and
-already-present or missing/fallen helper no-effects. Random creation, growth,
+already-present or missing/fallen helper no-effects. Calling-helper creation, growth,
 damage and recovery do not claim an exact transition. A revived helper's newly
 reachable descendants must be admitted before the revival executes.
 
@@ -2180,6 +2180,15 @@ payload certification remains #1342; ordinary `Monster` stat DTOs do not supply
 missing job/custom effects. Evidence: `_skill.cgi:9834–9931`;
 `_data.cgi:1197,2170`. These are descendants of existing job/custom/tool commands,
 not new transport actions; #1329/#1330 own service/Gateway integration.
+
+`RegisterSummonAppearanceGems` binds gem82 and gem100 to the existing invocation
+catalog, with outer CMP contributions18 and0. Gem82 projects every reachable
+stage position and all18 suffix choices, including duplicate and size/count
+no-effects. Each alternative retains the complete payload, sequence and ordered
+rosters for later target/helper admission; skipped addition needs no stage pool.
+Payload and branch referents are isolated, including nested gear/history/custom
+facts. External effect hooks and caller RNG never run during projection. Other
+calling creation and unknown preceding effects retain their conservative gates.
 
 `NPCJobEntries` retains job95's two separate SP0/MP50 positions under one
 generic summon name, and job99's SP0/MP0 escape position. `RegisterNPCJobs`
@@ -2253,7 +2262,9 @@ from the original current job. Recorded0SP remains eligible; missing/unknown/cur
 choices are accepted no-effect. A recorded job whose historical SP is unknown
 is unsupported before any draw or mutation, rather than guessed at zero.
 Gem100 changes only appearance, sampling108 positions uniformly; a missing
-native appearance uses the monster placeholder. Store the selected reference
+native appearance uses the monster placeholder. Its registered pure alternatives
+carry each possible icon into later helper/target discovery without changing
+other state or operation counters. Store the selected reference
 once, without rerolling on reload. Native form and fallback images are
 [temporary, replaceable development artwork](../assets/required-images.md#img-005-battle--temporary-transformation-appearances).
 Saved icon references retain identity independently of future rendering URLs;

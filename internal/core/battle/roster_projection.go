@@ -1,5 +1,50 @@
 package battle
 
+import "github.com/witchcraze/party2re/internal/core/random"
+
+// ProjectEnemySummon retains every reachable gem82 payload/suffix outcome.
+// Only intrinsic roster writes run; operation counters and external ports survive.
+func (s *LifetimeState) ProjectEnemySummon(c *RosterContext, frame *CallbackContext) ([]CallbackContinuation, error) {
+	if s == nil || c == nil || frame == nil {
+		return nil, ErrInvalidRequest
+	}
+	child := *c
+	child.TargetContext = frame.TargetContext
+	if err := s.ValidateRoster(&child, "gem-82", "", random.Default()); err != nil {
+		return nil, err
+	}
+	if len(s.Actors) >= 10 || len(frame.EnemyIDs) > 1 {
+		return []CallbackContinuation{{State: s.callbackCopy(), Context: cloneCallbackContext(*frame)}}, nil
+	}
+	positions := child.AppearancePositions
+	if len(positions) == 0 {
+		positions = make([]int, len(child.EnemyPool))
+		for i := range positions {
+			positions[i] = i
+		}
+	}
+	seen := make(map[int]bool)
+	var branches []CallbackContinuation
+	for _, position := range positions {
+		if position < 0 || position >= len(child.EnemyPool) {
+			position = 0
+		}
+		if seen[position] {
+			continue // Repeated weighted positions have identical continuation facts.
+		}
+		seen[position] = true
+		for suffix := range 18 {
+			state, next := s.callbackCopy(), cloneCallbackContext(*frame)
+			roster := child
+			roster.TargetContext = next.TargetContext
+			state.addEnemyAt(&roster, suffix, position)
+			next.TargetContext = roster.TargetContext
+			branches = append(branches, CallbackContinuation{State: state, Context: next})
+		}
+	}
+	return branches, nil
+}
+
 // ProjectRoster applies only exact roster transitions to an admission-owned
 // copy. Random stats, damage, recovery and growth remain unknown; their enclosing
 // continuation must still cover arbitrary prior effects. No operation port runs.
