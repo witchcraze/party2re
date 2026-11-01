@@ -51,10 +51,13 @@ Go currently dispatches generic `T/X/D/B/E` events in `expedition.go`, uses
 Valkey working state/rewards (including `consumed_events` so each `T` tile event
 grants treasure at most once per expedition and subsequent visits resolve as
 normal movement), and finalizes durable records in MariaDB. Unresolved battles
-retain enemy HP/MP/status across requests and block every movement direction.
+retain enemy HP/MP/status, allied ailments, CMP and elemental field duration
+across requests and block every movement direction. Explicitly cured ailments
+and depleted CMP remain cleared/zero on the next batch.
 The leader can resume the shared resolver against that enemy or escape; a new
 encounter is not generated on resume. This remains batch combat, rather than
-legacy per-character action dispatch.
+legacy per-character action dispatch: per-batch tension, stat-buff and action
+scheduling internals are not a full legacy lifetime snapshot.
 That generic event model does not reproduce all legacy map-owned events.
 Its turn-limit wipeout, trap bases, treasure generation, and party scouting
 need comparison with the behavior above; they are implementation differences,

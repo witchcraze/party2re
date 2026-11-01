@@ -217,6 +217,9 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		finalStatus = StatusWipedOut
 	}
 
+	if params.FinishStatus != "" {
+		finalStatus = params.FinishStatus
+	}
 	exp.CurrentFloor = params.NewFloor
 	exp.PosX = params.NewX
 	exp.PosY = params.NewY

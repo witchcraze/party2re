@@ -321,6 +321,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		expectedRevision,
 		strconv.FormatBool(params.Combat),
 		encounterJSON,
+		string(params.FinishStatus),
 	})
 
 	if err := res.Error(); err != nil {

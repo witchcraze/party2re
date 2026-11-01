@@ -169,6 +169,7 @@ type ExpeditionStepResult struct {
 type StepParams struct {
 	ExpectedExpeditionID string
 	ExpectedRevision     *int
+	FinishStatus         ExpeditionStatus
 	Combat               bool
 	Encounter            *ActiveEncounter
 	NewFloor             int

@@ -20,13 +20,16 @@ func (s *Service) Escape(ctx context.Context, characterID string) (ExpeditionSte
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	if exp == nil || exp.Status != StatusExploring {
+	if exp == nil {
 		return ExpeditionStepResult{}, ErrNoActiveExpedition
 	}
 	if exp.CharacterID != characterID {
 		return ExpeditionStepResult{}, ErrForbidden
 	}
 
+	if exp.Status != StatusExploring {
+		return s.resumeSettlement(ctx, exp)
+	}
 	char, err := s.characterRepo.FindByID(ctx, characterID)
 	if err != nil {
 		return ExpeditionStepResult{}, ErrCharacterNotFound
@@ -40,6 +43,9 @@ func (s *Service) handleDungeonClear(
 	char *corecharacter.Character,
 	dungeon Dungeon,
 ) (ExpeditionStepResult, error) {
+	if err := s.freezeExpedition(ctx, exp, StatusCleared); err != nil {
+		return ExpeditionStepResult{}, err
+	}
 	now := time.Now().UTC()
 	exp.Encounter = nil
 	exp.Status = StatusCleared
@@ -147,6 +153,9 @@ func (s *Service) handleEscape(
 	char *corecharacter.Character,
 	msg string,
 ) (ExpeditionStepResult, error) {
+	if err := s.freezeExpedition(ctx, exp, StatusEscaped); err != nil {
+		return ExpeditionStepResult{}, err
+	}
 	now := time.Now().UTC()
 	exp.Encounter = nil
 	exp.Status = StatusEscaped
@@ -238,6 +247,9 @@ func (s *Service) handleWipeout(
 	char *corecharacter.Character,
 	msg string,
 ) (ExpeditionStepResult, error) {
+	if err := s.freezeExpedition(ctx, exp, StatusWipedOut); err != nil {
+		return ExpeditionStepResult{}, err
+	}
 	now := time.Now().UTC()
 	exp.Encounter = nil
 	exp.Status = StatusWipedOut

@@ -7126,6 +7126,13 @@
       "DungeonActiveEncounter": {
         "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter.",
         "properties": {
+          "cmp": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Remaining per-participant CMP, including explicit zero.",
+            "type": "object"
+          },
           "enemies": {
             "items": {
               "additionalProperties": true,
@@ -7168,9 +7175,31 @@
             ],
             "type": "string"
           },
+          "field": {
+            "description": "Remaining elemental field and anti-field duration between battle batches.",
+            "properties": {
+              "anti_field_turn": {
+                "type": "integer"
+              },
+              "element": {
+                "type": "string"
+              },
+              "remaining_turn": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
           "monster": {
             "additionalProperties": true,
             "description": "Dungeon monster definition including encounter rewards.",
+            "type": "object"
+          },
+          "statuses": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Encounter-only participant statuses; an empty string represents a cleared ailment.",
             "type": "object"
           },
           "x": {
@@ -22892,6 +22921,7 @@
     },
     "/characters/{id}/dungeons/escape": {
       "post": {
+        "description": "Freeze the observed expedition revision before SQL settlement; concurrent combat changes reject with 409. A terminal buffer retries its original clear/escape/wipeout outcome, preserving run-ID idempotency and SQL-first cleanup.",
         "operationId": "escapeDungeonExpedition",
         "parameters": [
           {
@@ -22951,7 +22981,7 @@
           },
           "409": {
             "$ref": "#/components/responses/Error",
-            "description": "Conflict"
+            "description": "Expedition changed or another command froze the observed run"
           },
           "422": {
             "$ref": "#/components/responses/Error",
@@ -22985,7 +23015,7 @@
     },
     "/characters/{id}/dungeons/fight": {
       "post": {
-        "description": "Leader-only continuation using the saved enemy HP/MP and existing battle resolver. Returns 409 when no encounter is active or the run changed concurrently.",
+        "description": "Leader-only continuation using saved enemy HP/MP, participant status/CMP and elemental field state through the existing battle resolver. A frozen terminal buffer retries SQL settlement instead of combat. Returns 409 when no encounter is active or a concurrent command changes or freezes the run.",
         "operationId": "fightDungeonEncounter",
         "parameters": [
           {

@@ -15326,6 +15326,35 @@
           },
           "y": {
             "type": "integer"
+          },
+          "statuses": {
+            "type": "object",
+            "description": "Encounter-only participant statuses; an empty string represents a cleared ailment.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "cmp": {
+            "type": "object",
+            "description": "Remaining per-participant CMP, including explicit zero.",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "field": {
+            "type": "object",
+            "description": "Remaining elemental field and anti-field duration between battle batches.",
+            "properties": {
+              "element": {
+                "type": "string"
+              },
+              "remaining_turn": {
+                "type": "integer"
+              },
+              "anti_field_turn": {
+                "type": "integer"
+              }
+            }
           }
         },
         "required": [

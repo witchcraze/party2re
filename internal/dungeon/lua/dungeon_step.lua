@@ -170,6 +170,10 @@ if turns_remaining <= 0 then
     final_status = 'wiped_out'
 end
 
+if ARGV[22] and ARGV[22] ~= '' then
+    final_status = ARGV[22]
+end
+
 -- 5. Check and record event consumption
 local events_str = redis.call('HGET', state_key, 'consumed_events')
 local consumed_events = {}
