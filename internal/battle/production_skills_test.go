@@ -1139,3 +1139,148 @@ func TestBossSkillSelectionRegression(t *testing.T) {
 		t.Fatalf("boss facing 2 enemies: expected Mera (sequential priority), got %s", bossAction)
 	}
 }
+
+// Tension is consumed by the first effective hit of an all-enemies magic skill,
+// so later targets must not inherit it (job-6-entry-3 magic-wave-25, no item-149).
+func TestAllEnemiesMagicConsumesTensionAfterFirstHit(t *testing.T) {
+	ctx := context.Background()
+	detRNG := deterministicBattleRNG{fVal: 1.0 / 3.0}
+	engine := corebattle.Engine{}
+
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+	charRepo.characters["mage-wave"] = corecharacter.Character{
+		ID:    "mage-wave",
+		Name:  "MageWave",
+		JobID: "job-06",
+		SP:    10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 20, Attack: 20, Defense: 50, Agility: 50},
+	}
+	mage, err := svc.BuildParticipant(ctx, "mage-wave")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// firstHits resolves one battle and returns the first magic-wave-25 damage per target.
+	firstHits := func(t *testing.T, actor corebattle.Participant, tension float64, rng deterministicBattleRNG, enemies ...corebattle.Participant) (map[string]int, corebattle.PartyBattleResult) {
+		t.Helper()
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:         []corebattle.Participant{actor},
+			Enemies:        enemies,
+			InitialTension: map[string]float64{actor.ID: tension},
+			RNG:            rng,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		hits := map[string]int{}
+		for _, log := range res.Logs {
+			if log.ActionName != "magic-wave-25" || log.ActorID != actor.ID {
+				continue
+			}
+			if _, seen := hits[log.TargetID]; !seen {
+				hits[log.TargetID] = log.DamageDealt
+			}
+		}
+		return hits, res
+	}
+
+	e1 := corebattle.Participant{ID: "e1", Name: "E1", HP: 1000, MaxHP: 1000, Defense: 0}
+	e2 := corebattle.Participant{ID: "e2", Name: "E2", HP: 1000, MaxHP: 1000, Defense: 0}
+
+	// Power 25 * 2.0 (tension) = 50 on the first hit; tension is then reset,
+	// so the second hit uses the decayed base int(25*0.85)=21 without tension.
+	t.Run("tension 2 is consumed by the first hit", func(t *testing.T) {
+		hits, _ := firstHits(t, mage, 2.0, detRNG, e1, e2)
+		if hits["e1"] != 50 {
+			t.Errorf("first target damage = %d, want 50", hits["e1"])
+		}
+		if hits["e2"] != 21 {
+			t.Errorf("second target damage = %d, want 21 (tension consumed by first hit)", hits["e2"])
+		}
+	})
+
+	t.Run("tension 1 control", func(t *testing.T) {
+		hits, _ := firstHits(t, mage, 1.0, detRNG, e1, e2)
+		if hits["e1"] != 25 || hits["e2"] != 21 {
+			t.Errorf("damage = [%d %d], want [25 21]", hits["e1"], hits["e2"])
+		}
+	})
+
+	// item-149 ignores tension entirely: 25*1.1 = 27, then 25*0.85*1.1 = 23.
+	t.Run("item-149 keeps tension out of the damage formula", func(t *testing.T) {
+		withItem := mage
+		withItem.ItemDefinitionIDs = append([]string{"item-149"}, mage.ItemDefinitionIDs...)
+		hits, _ := firstHits(t, withItem, 2.0, detRNG, e1, e2)
+		if hits["e1"] != 27 || hits["e2"] != 23 {
+			t.Errorf("damage = [%d %d], want [27 23]", hits["e1"], hits["e2"])
+		}
+	})
+
+	// An immune hit is not effective, so it must not consume tension: e2 still gets the 2.0 multiplier.
+	t.Run("immune first target does not consume tension", func(t *testing.T) {
+		immune := corebattle.Participant{ID: "e-m-imm", Name: "Immune", HP: 1000, MaxHP: 1000, Abilities: []string{"魔無効"}}
+		hits, _ := firstHits(t, mage, 2.0, detRNG, immune, e2)
+		if hits["e-m-imm"] != 0 {
+			t.Errorf("immune target damage = %d, want 0", hits["e-m-imm"])
+		}
+		// Decay still applies to the second target: int(25*0.85*2.0)=42.
+		if hits["e2"] != 42 {
+			t.Errorf("second target damage = %d, want 42 (immune hit must not consume tension)", hits["e2"])
+		}
+	})
+
+	// A no-effect hit between effective hits is passed through without touching tension:
+	// e1 consumes it (50), the immune hit deals 0, and e3 gets only the decayed base int(25*0.85*0.85)=18.
+	t.Run("immune hit after consumption leaves later targets decayed", func(t *testing.T) {
+		immune := corebattle.Participant{ID: "e-m-mid", Name: "Immune", HP: 1000, MaxHP: 1000, Abilities: []string{"魔無効"}}
+		e3 := corebattle.Participant{ID: "e3", Name: "E3", HP: 1000, MaxHP: 1000, Defense: 0}
+		hits, _ := firstHits(t, mage, 2.0, detRNG, e1, immune, e3)
+		if hits["e1"] != 50 {
+			t.Errorf("first target damage = %d, want 50", hits["e1"])
+		}
+		if hits["e-m-mid"] != 0 {
+			t.Errorf("immune target damage = %d, want 0", hits["e-m-mid"])
+		}
+		if hits["e3"] != 18 {
+			t.Errorf("third target damage = %d, want 18 (tension consumed by first hit, immune hit must not restore it)", hits["e3"])
+		}
+	})
+
+	// A persistent seal aborts the skill before any hit, so no magic-wave-25 log deals damage.
+	t.Run("seal persists: magic-wave-25 deals no damage", func(t *testing.T) {
+		sealed := mage
+		sealed.Status = corebattle.StatusMagicSeal
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:         []corebattle.Participant{sealed},
+			Enemies:        []corebattle.Participant{e1, e2},
+			InitialTension: map[string]float64{sealed.ID: 2.0},
+			RNG:            deterministicBattleRNG{fVal: 0.50}, // >= 0.25 -> seal persists
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		attempts := 0
+		for _, log := range res.Logs {
+			if log.ActionName != "magic-wave-25" || log.ActorID != sealed.ID {
+				continue
+			}
+			attempts++
+			if log.DamageDealt != 0 {
+				t.Errorf("sealed magic-wave-25 dealt %d damage to %s, want 0", log.DamageDealt, log.TargetID)
+			}
+		}
+		if attempts == 0 {
+			t.Fatal("expected sealed magic-wave-25 attempt in logs")
+		}
+	})
+
+	t.Run("single target keeps tension 2 damage", func(t *testing.T) {
+		hits, _ := firstHits(t, mage, 2.0, detRNG, e1)
+		if hits["e1"] != 50 {
+			t.Errorf("single target damage = %d, want 50", hits["e1"])
+		}
+	})
+}
