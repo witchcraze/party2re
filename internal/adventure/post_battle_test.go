@@ -138,10 +138,11 @@ func TestAdventure_Floor11Treasure_PersistedToInventory(t *testing.T) {
 	settler := &mockPostBattleSettler{
 		respFn: func(req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
 			settlerCalled = true
-			if len(req.RecipientDrops[char.ID]) == 0 {
-				t.Errorf("expected RecipientDrops for %s, got none", char.ID)
+			drops := req.RecipientDrops[char.ID]
+			if len(drops) == 0 {
+				t.Fatalf("expected RecipientDrops for %s, got none (outcome=%v, drops=%v)", char.ID, req.BattleResult.Outcome, req.RecipientDrops)
 			}
-			inst, _ := coreitem.NewInstance(req.RecipientDrops[char.ID][0], 1)
+			inst, _ := coreitem.NewInstance(drops[0], 1)
 			return battle.ApplyPostBattleResponse{
 				InventoryDrops: map[string][]coreitem.Instance{
 					char.ID: {inst},
@@ -150,11 +151,12 @@ func TestAdventure_Floor11Treasure_PersistedToInventory(t *testing.T) {
 		},
 	}
 
-	svc, _ := setupTestAdventureService(t, char, settler)
+	svc, _ := setupTestAdventureServiceWithBattle(t, char, settler, &mockCountingPartyBattleResolver{})
 
 	crawlRes, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
 		StageID:      "stage-01",
+		Rng:          func(n int) int { return 0 },
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl failed: %v", err)
@@ -190,7 +192,11 @@ func TestAdventure_Floor11Treasure_DepotFallbackWhenInventoryFull(t *testing.T) 
 
 	settler := &mockPostBattleSettler{
 		respFn: func(req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
-			inst, _ := coreitem.NewInstance(req.RecipientDrops[char.ID][0], 1)
+			drops := req.RecipientDrops[char.ID]
+			if len(drops) == 0 {
+				t.Fatalf("expected RecipientDrops for %s, got none (outcome=%v, drops=%v)", char.ID, req.BattleResult.Outcome, req.RecipientDrops)
+			}
+			inst, _ := coreitem.NewInstance(drops[0], 1)
 			return battle.ApplyPostBattleResponse{
 				DepotDeliveries: map[string][]coreitem.Instance{
 					char.ID: {inst},
@@ -199,11 +205,12 @@ func TestAdventure_Floor11Treasure_DepotFallbackWhenInventoryFull(t *testing.T) 
 		},
 	}
 
-	svc, _ := setupTestAdventureService(t, char, settler)
+	svc, _ := setupTestAdventureServiceWithBattle(t, char, settler, &mockCountingPartyBattleResolver{})
 
 	crawlRes, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
 		StageID:      "stage-01",
+		Rng:          func(n int) int { return 0 },
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl failed: %v", err)
@@ -230,7 +237,11 @@ func TestAdventure_Floor11Treasure_LostDropsWhenDepotFull(t *testing.T) {
 
 	settler := &mockPostBattleSettler{
 		respFn: func(req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
-			inst, _ := coreitem.NewInstance(req.RecipientDrops[char.ID][0], 1)
+			drops := req.RecipientDrops[char.ID]
+			if len(drops) == 0 {
+				t.Fatalf("expected RecipientDrops for %s, got none (outcome=%v, drops=%v)", char.ID, req.BattleResult.Outcome, req.RecipientDrops)
+			}
+			inst, _ := coreitem.NewInstance(drops[0], 1)
 			return battle.ApplyPostBattleResponse{
 				LostDrops: map[string][]coreitem.Instance{
 					char.ID: {inst},
@@ -239,11 +250,12 @@ func TestAdventure_Floor11Treasure_LostDropsWhenDepotFull(t *testing.T) {
 		},
 	}
 
-	svc, _ := setupTestAdventureService(t, char, settler)
+	svc, _ := setupTestAdventureServiceWithBattle(t, char, settler, &mockCountingPartyBattleResolver{})
 
 	crawlRes, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
 		StageID:      "stage-01",
+		Rng:          func(n int) int { return 0 },
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl failed: %v", err)
