@@ -50,10 +50,12 @@ In alignment with legacy `farm.cgi:38-47`, the Monster Grandpa facility provides
 | **Dialogue** | `はなす` | `GET /monster/dialogue` | Retrieves `@モンジィ` dialogue and tips. |
 | **List & Summary** | `みる` | `GET /characters/{id}/monsters?location=box\|home` | Lists stored monsters/pets with capacity counts. |
 | **Bring to Home** | `つれてく` | `POST /characters/{id}/monsters/{instance_id}/bring-home` | Moves a monster from box to home pets (max 8, unique name check). |
-| **Deposit to Box** | `あずける` | `POST /characters/{id}/monsters/{instance_id}/deposit` | Moves a pet from home back to Grandpa box. |
-| **Rename** | `なづける` | `POST /characters/{id}/monsters/{instance_id}/rename` | Renames a monster instance (max 8 characters, sanitization rules). |
-| **Send Monster** | `おくる` | `POST /characters/{id}/monsters/{instance_id}/send` | Gifts a monster to another player character's box. |
-| **Release** | `わかれる` | `POST /characters/{id}/monsters/{instance_id}/release` | Releases a monster back into the wild. |
+| **Deposit to Box** | `あずける` | `POST /characters/{id}/monsters/{instance_id}/deposit` | Moves a pet from home back to Grandpa box (requires available box capacity). |
+| **Rename** | `なづける` | `POST /characters/{id}/monsters/{instance_id}/rename` | Renames a boxed monster instance (`location=box`, max 8 characters, sanitization rules). |
+| **Send Monster** | `おくる` | `POST /characters/{id}/monsters/{instance_id}/send` | Gifts a boxed monster (`location=box`) to another player character's box. |
+| **Release** | `わかれる` | `POST /characters/{id}/monsters/{instance_id}/release` | Releases a boxed monster (`location=box`) back into the wild. |
+
+In alignment with legacy `lib/farm.cgi:93-98,130-135,225-227,291-296`, `rename`, `send`, and `release` target only monsters stored in the ranch box (`location = "box"`). Home pets (`location = "home"`) must first be deposited into the box via `deposit` (subject to box capacity) before being renamed, gifted, or released; direct `rename`, `send`, or `release` requests on a home pet are rejected with `ErrInvalidLocation` (HTTP `409 Conflict`).
 
 ### 4.1 Sleep and CanWake Action Guards
 

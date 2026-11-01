@@ -357,17 +357,8 @@ func (s *Service) Rename(ctx context.Context, characterID, instanceID, newName s
 		if inst.CharacterID != characterID {
 			return ErrForbidden
 		}
-
-		if inst.Location == LocationHome {
-			homeMonsters, err := s.monsters.ListByCharacterIDAndLocation(txCtx, characterID, LocationHome)
-			if err != nil {
-				return err
-			}
-			for _, m := range homeMonsters {
-				if m.ID != inst.ID && m.CustomName == newName {
-					return ErrDuplicatePetNameAtHome
-				}
-			}
+		if inst.Location != LocationBox {
+			return ErrInvalidLocation
 		}
 
 		inst.CustomName = newName
@@ -436,6 +427,9 @@ func (s *Service) SendMonster(ctx context.Context, senderCharID, recipientCharID
 		if inst.CharacterID != senderCharID {
 			return ErrForbidden
 		}
+		if inst.Location != LocationBox {
+			return ErrInvalidLocation
+		}
 
 		recipientBoxCount, err := s.monsters.CountByLocation(txCtx, recipientCharID, LocationBox)
 		if err != nil {
@@ -469,6 +463,9 @@ func (s *Service) ReleaseMonster(ctx context.Context, characterID, instanceID st
 		}
 		if inst.CharacterID != characterID {
 			return ErrForbidden
+		}
+		if inst.Location != LocationBox {
+			return ErrInvalidLocation
 		}
 
 		return s.monsters.Delete(txCtx, instanceID)

@@ -161,14 +161,15 @@ func (h *Handler) handleRenameMonster(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			switch {
 			case errors.Is(err, monster.ErrInvalidName),
-				errors.Is(err, monster.ErrNameTooLong),
-				errors.Is(err, monster.ErrDuplicatePetNameAtHome):
+				errors.Is(err, monster.ErrNameTooLong):
 				writeError(w, http.StatusBadRequest, err)
 			case errors.Is(err, monster.ErrForbidden):
 				writeError(w, http.StatusForbidden, err)
 			case errors.Is(err, monster.ErrMonsterNotFound),
 				errors.Is(err, monster.ErrCharacterNotFound):
 				writeError(w, http.StatusNotFound, err)
+			case errors.Is(err, monster.ErrInvalidLocation):
+				writeError(w, http.StatusConflict, err)
 			default:
 				writeError(w, http.StatusInternalServerError, err)
 			}
@@ -210,6 +211,8 @@ func (h *Handler) handleSendMonster(w http.ResponseWriter, r *http.Request) {
 				errors.Is(err, monster.ErrMonsterNotFound),
 				errors.Is(err, monster.ErrCharacterNotFound):
 				writeError(w, http.StatusNotFound, err)
+			case errors.Is(err, monster.ErrInvalidLocation):
+				writeError(w, http.StatusConflict, err)
 			default:
 				writeError(w, http.StatusInternalServerError, err)
 			}
@@ -244,6 +247,8 @@ func (h *Handler) handleReleaseMonster(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(err, monster.ErrMonsterNotFound),
 				errors.Is(err, monster.ErrCharacterNotFound):
 				writeError(w, http.StatusNotFound, err)
+			case errors.Is(err, monster.ErrInvalidLocation):
+				writeError(w, http.StatusConflict, err)
 			default:
 				writeError(w, http.StatusInternalServerError, err)
 			}

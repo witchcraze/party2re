@@ -475,6 +475,83 @@ func TestMonsterService_SendAndRelease(t *testing.T) {
 	}
 }
 
+func TestMonsterService_LocationAndOwnershipMatrix(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	monRepo := newMockMonsterRepo()
+	charRepo.characters["c1"] = corecharacter.Character{ID: "c1", Name: "Alice", OverMonster: 0}
+	charRepo.characters["c2"] = corecharacter.Character{ID: "c2", Name: "Bob", OverMonster: 0}
+
+	svc := monster.NewService(charRepo, monRepo, monster.WithTransactionProvider(&mockTxProvider{}))
+
+	// Create a home pet for c1 and fill c1's box to capacity (50) to verify full-box bypass is blocked
+	homePet, err := svc.TameMonster(ctx, "c1", "slime", "家スラ")
+	if err != nil {
+		t.Fatalf("TameMonster homePet failed: %v", err)
+	}
+	if _, err := svc.BringToHome(ctx, "c1", homePet.ID); err != nil {
+		t.Fatalf("BringToHome failed: %v", err)
+	}
+	for i := 0; i < monster.BaseBoxCapacity; i++ {
+		if _, err := svc.TameMonster(ctx, "c1", "slime", fmt.Sprintf("箱%d", i)); err != nil {
+			t.Fatalf("TameMonster box fill %d failed: %v", i, err)
+		}
+	}
+
+	// Verify DepositToBox fails with ErrBoxFull when box is full
+	if _, err := svc.DepositToBox(ctx, "c1", homePet.ID); !errors.Is(err, monster.ErrBoxFull) {
+		t.Fatalf("DepositToBox on full box: got %v, want %v", err, monster.ErrBoxFull)
+	}
+
+	// Create a boxed monster for c2
+	otherBoxMon, err := svc.TameMonster(ctx, "c2", "goblin", "他箱ゴブ")
+	if err != nil {
+		t.Fatalf("TameMonster otherBoxMon failed: %v", err)
+	}
+
+	// 1. Owned LocationHome is rejected with ErrInvalidLocation across Rename, SendMonster, ReleaseMonster
+	if _, err := svc.Rename(ctx, "c1", homePet.ID, "改名不可"); !errors.Is(err, monster.ErrInvalidLocation) {
+		t.Fatalf("Rename on home pet: got %v, want %v", err, monster.ErrInvalidLocation)
+	}
+	if err := svc.SendMonster(ctx, "c1", "c2", homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
+		t.Fatalf("SendMonster on home pet: got %v, want %v", err, monster.ErrInvalidLocation)
+	}
+	if err := svc.ReleaseMonster(ctx, "c1", homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
+		t.Fatalf("ReleaseMonster on home pet: got %v, want %v", err, monster.ErrInvalidLocation)
+	}
+
+	// Verify home pet state was not mutated
+	storedHome, err := monRepo.FindByID(ctx, homePet.ID)
+	if err != nil {
+		t.Fatalf("FindByID homePet failed: %v", err)
+	}
+	if storedHome.CharacterID != "c1" || storedHome.Location != monster.LocationHome || storedHome.CustomName != "家スラ" {
+		t.Fatalf("homePet state mutated after rejected ops: %+v", storedHome)
+	}
+
+	// 2. Unowned monster (both LocationHome and LocationBox) is rejected with ErrForbidden
+	if _, err := svc.Rename(ctx, "c2", homePet.ID, "乗っ取り"); !errors.Is(err, monster.ErrForbidden) {
+		t.Fatalf("Rename unowned home pet: got %v, want %v", err, monster.ErrForbidden)
+	}
+	if _, err := svc.Rename(ctx, "c1", otherBoxMon.ID, "乗っ取り"); !errors.Is(err, monster.ErrForbidden) {
+		t.Fatalf("Rename unowned box monster: got %v, want %v", err, monster.ErrForbidden)
+	}
+	if err := svc.SendMonster(ctx, "c1", "c2", otherBoxMon.ID); !errors.Is(err, monster.ErrForbidden) {
+		t.Fatalf("SendMonster unowned box monster: got %v, want %v", err, monster.ErrForbidden)
+	}
+	if err := svc.ReleaseMonster(ctx, "c1", otherBoxMon.ID); !errors.Is(err, monster.ErrForbidden) {
+		t.Fatalf("ReleaseMonster unowned box monster: got %v, want %v", err, monster.ErrForbidden)
+	}
+
+	storedOther, err := monRepo.FindByID(ctx, otherBoxMon.ID)
+	if err != nil {
+		t.Fatalf("FindByID otherBoxMon failed: %v", err)
+	}
+	if storedOther.CharacterID != "c2" || storedOther.Location != monster.LocationBox || storedOther.CustomName != "他箱ゴブ" {
+		t.Fatalf("otherBoxMon state mutated after rejected ops: %+v", storedOther)
+	}
+}
+
 func TestMonsterService_GetDialogue(t *testing.T) {
 	svc := monster.NewService(newMockCharacterRepo(), newMockMonsterRepo())
 	d := svc.GetDialogue()
