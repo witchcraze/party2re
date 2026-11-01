@@ -84,6 +84,7 @@ func TestEngineResolvesSecondParticipantWinner(t *testing.T) {
 			{ID: "boss", HP: 100, Attack: 50, Defense: 10},
 		},
 		DefeatReward: Reward{Experience: 0, Currency: 0},
+		RNG:          random.NewDeterministic(1),
 	}
 	result, err := (Engine{}).Resolve(request)
 	if err != nil {
@@ -146,6 +147,7 @@ func TestEngineResolvePartyBattle(t *testing.T) {
 			{ID: "goblin", HP: 30, Attack: 10, Defense: 2},
 		},
 		VictoryReward: Reward{Experience: 100, Currency: 50},
+		RNG:           random.NewDeterministic(1),
 	})
 	if err != nil {
 		t.Fatalf("ResolvePartyBattle failed: %v", err)
@@ -175,6 +177,7 @@ func TestEngineResolvePartyBattle(t *testing.T) {
 			{ID: "dragon", HP: 100, Attack: 15, Defense: 5},
 		},
 		VictoryReward: Reward{Experience: 200, Currency: 100},
+		RNG:           random.NewDeterministic(1),
 	})
 	if err != nil {
 		t.Fatalf("ResolvePartyBattle 4-player failed: %v", err)
@@ -192,6 +195,7 @@ func TestEngineResolvePartyBattle(t *testing.T) {
 			{ID: "mega_boss", HP: 1000, Attack: 100, Defense: 50},
 		},
 		DefeatReward: Reward{Experience: 10},
+		RNG:          random.NewDeterministic(1),
 	})
 	if err != nil {
 		t.Fatalf("ResolvePartyBattle defeat failed: %v", err)
@@ -210,6 +214,7 @@ func TestEngineResolvePartyBattle(t *testing.T) {
 			{ID: "mon-1", Name: "Slime", HP: 20, Attack: 5, Defense: 2},
 		},
 		VictoryReward: Reward{Experience: 50, Currency: 25},
+		RNG:           random.NewDeterministic(1),
 	})
 	if err != nil {
 		t.Fatalf("ResolvePartyBattle with duplicate names failed: %v", err)
@@ -244,6 +249,7 @@ func TestPartyBattleDraw(t *testing.T) {
 			{ID: "tank-enemy", HP: 5000, Attack: 1, Defense: 100},
 		},
 		DrawReward: Reward{Experience: 10, Currency: 5},
+		RNG:        random.NewDeterministic(1),
 	})
 	if err != nil {
 		t.Fatalf("ResolvePartyBattle draw failed: %v", err)
@@ -298,6 +304,7 @@ func TestPartyBattleBonusPercent(t *testing.T) {
 			Allies:        allies,
 			Enemies:       []Participant{enemy},
 			VictoryReward: Reward{Experience: 100, Currency: 100},
+			RNG:           random.NewDeterministic(1),
 		})
 		if err != nil {
 			t.Fatalf("allyCount %d failed: %v", tt.allyCount, err)
@@ -354,6 +361,7 @@ func TestPartyBattleBonusPercent_FractionalRounding(t *testing.T) {
 			Allies:        allies,
 			Enemies:       []Participant{enemy},
 			VictoryReward: Reward{Experience: tt.baseExp, Currency: tt.baseGold},
+			RNG:           random.NewDeterministic(1),
 		})
 		if err != nil {
 			t.Fatalf("allyCount %d failed: %v", tt.allyCount, err)
@@ -380,6 +388,7 @@ func TestPartyBattlePartialFallen(t *testing.T) {
 			{ID: "ogre", HP: 100, Attack: 25, Defense: 0},
 		},
 		VictoryReward: Reward{Experience: 100, Currency: 50},
+		RNG:           random.NewDeterministic(1),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -408,6 +417,7 @@ func TestPartyBattleMultipleEnemiesFocusLowestHP(t *testing.T) {
 			{ID: "weak-enemy", HP: 20, Attack: 5, Defense: 0},
 		},
 		VictoryReward: Reward{Experience: 80, Currency: 40},
+		RNG:           random.NewDeterministic(1),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
