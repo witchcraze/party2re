@@ -635,7 +635,7 @@ func TestProductionBattleExecution(t *testing.T) {
 			t.Fatalf("facing 2 enemies with 3 MP: expected fallback to magic-20, got %s", foundLowMPAction)
 		}
 
-		// 3d. Item-144 (ダイヤの指輪): disables 15% decay on multi-target magic
+		// 3d. Item-144 (ダイヤの指輪): 1.3x multiplier for area damage power < 300 and disables 15% decay when initial power <= 300
 		invRepo.inventories["mage-ring"] = coreinventory.Inventory{
 			Items: []item.Instance{{DefinitionID: "item-144"}},
 		}
@@ -663,8 +663,8 @@ func TestProductionBattleExecution(t *testing.T) {
 				}
 			}
 		}
-		if dmgRingE1 != 25 || dmgRingE2 != 25 {
-			t.Errorf("item-144 should prevent decay: dmgE1=%d, dmgE2=%d, want 25 and 25", dmgRingE1, dmgRingE2)
+		if dmgRingE1 != 32 || dmgRingE2 != 32 {
+			t.Errorf("item-144 should apply 1.3x and prevent decay: dmgE1=%d, dmgE2=%d, want 32 and 32", dmgRingE1, dmgRingE2)
 		}
 	})
 
@@ -1281,6 +1281,229 @@ func TestAllEnemiesMagicConsumesTensionAfterFirstHit(t *testing.T) {
 		hits, _ := firstHits(t, mage, 2.0, detRNG, e1)
 		if hits["e1"] != 50 {
 			t.Errorf("single target damage = %d, want 50", hits["e1"])
+		}
+	})
+}
+
+func TestRepresentativeSpellEquipmentAndStatusModifiers(t *testing.T) {
+	ctx := context.Background()
+	detRNG := deterministicBattleRNG{fVal: 1.0 / 3.0} // variance = 0.9 + 0.3*(1/3) = 1.0
+	engine := corebattle.Engine{}
+
+	t.Run("job-6-entry-3 magic-wave-25 item-144 and area decay interaction", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		charRepo.characters["mage"] = corecharacter.Character{
+			ID:    "mage",
+			Name:  "Mage",
+			JobID: "job-06",
+			SP:    8,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 5, Attack: 10, Defense: 10, Agility: 100},
+		}
+		e1 := corebattle.Participant{ID: "e1", Name: "E1", HP: 1000, MaxHP: 1000, Defense: 0, Agility: 0}
+		e2 := corebattle.Participant{ID: "e2", Name: "E2", HP: 1000, MaxHP: 1000, Defense: 0, Agility: 0}
+
+		// Control without item-144: 25 on e1, int(25*0.85)=21 on e2.
+		magePlain, err := svc.BuildParticipant(ctx, "mage")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resPlain, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{magePlain},
+			Enemies: []corebattle.Participant{e1, e2},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resPlain.Logs[0].DamageDealt != 25 || resPlain.Logs[1].DamageDealt != 21 {
+			t.Fatalf("plain magic-wave-25 damage = [%d %d], want [25 21]", resPlain.Logs[0].DamageDealt, resPlain.Logs[1].DamageDealt)
+		}
+
+		// With item-144: 25 < 300 gets 1.3x -> int(32.5) = 32, and initial 25 <= 300 skips 0.85 decay -> 32/32.
+		invRepo.inventories["mage"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-144"}},
+		}
+		mageRing, err := svc.BuildParticipant(ctx, "mage")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resRing, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{mageRing},
+			Enemies: []corebattle.Participant{e1, e2},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resRing.Logs[0].DamageDealt != 32 || resRing.Logs[1].DamageDealt != 32 {
+			t.Fatalf("item-144 magic-wave-25 damage = [%d %d], want [32 32]", resRing.Logs[0].DamageDealt, resRing.Logs[1].DamageDealt)
+		}
+
+		// Single-target magic-20 with item-144: area count is 0, so item-144 does NOT apply 1.3x (stays 20).
+		charRepo.characters["mage-single"] = corecharacter.Character{
+			ID:    "mage-single",
+			Name:  "MageSingle",
+			JobID: "job-06",
+			SP:    1,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 2, Attack: 10, Defense: 10, Agility: 100},
+		}
+		invRepo.inventories["mage-single"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-144"}},
+		}
+		mageSingle, err := svc.BuildParticipant(ctx, "mage-single")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resSingle, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{mageSingle},
+			Enemies: []corebattle.Participant{e1},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resSingle.Logs[0].ActionName != "magic-20" || resSingle.Logs[0].DamageDealt != 20 {
+			t.Fatalf("item-144 single-target magic-20 damage = %d (%s), want 20", resSingle.Logs[0].DamageDealt, resSingle.Logs[0].ActionName)
+		}
+
+		// Combination item-143 + item-144 on magic-wave-25:
+		// initial = int(25*2) = 50 (<= 300, no decay); hit = 50 * 1.3 = 65 -> 65/65.
+		invRepo.inventories["mage"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-143"}, {DefinitionID: "item-144"}},
+		}
+		mage143And144, err := svc.BuildParticipant(ctx, "mage")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resBoth, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{mage143And144},
+			Enemies: []corebattle.Participant{e1, e2},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resBoth.Logs[0].DamageDealt != 65 || resBoth.Logs[1].DamageDealt != 65 {
+			t.Fatalf("item-143+item-144 magic-wave-25 damage = [%d %d], want [65 65]", resBoth.Logs[0].DamageDealt, resBoth.Logs[1].DamageDealt)
+		}
+
+		// Boundary check when initial pre-evaluated area power > 300 with item-144:
+		// e.g. power 301 with item-144 -> initial 301 > 300:
+		// target 1 has 301 >= 300 (no 1.3x -> 301), decay 0.85 applies -> target 2 has 301*0.85=255.85 < 300 -> *1.3 = 332.605 -> 332.
+		highWave := mageRing
+		highWave.Skills = []corebattle.ActionSkill{{
+			ID:          "high-wave",
+			Name:        "high-wave",
+			MPCost:      5,
+			Power:       301,
+			Kind:        corebattle.ActionKindAttack,
+			TargetScope: corebattle.TargetScopeAllEnemies,
+			Category:    string(corebattle.CategoryMagic),
+			Direct:      true,
+		}}
+		resHigh, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{highWave},
+			Enemies: []corebattle.Participant{e1, e2},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resHigh.Logs[0].DamageDealt != 301 || resHigh.Logs[1].DamageDealt != 332 {
+			t.Fatalf("power 301 with item-144 damage = [%d %d], want [301 332]", resHigh.Logs[0].DamageDealt, resHigh.Logs[1].DamageDealt)
+		}
+	})
+
+	t.Run("job-5-entry-3 heal-30 virulent poison target attenuation and ordering", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		charRepo.characters["priest"] = corecharacter.Character{
+			ID:    "priest",
+			Name:  "Priest",
+			JobID: "job-05",
+			SP:    6,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 3, Attack: 10, Defense: 10, Agility: 100},
+		}
+		priest, err := svc.BuildParticipant(ctx, "priest")
+		if err != nil {
+			t.Fatal(err)
+		}
+		enemy := corebattle.Participant{ID: "e1", Name: "E1", HP: 1000, MaxHP: 1000, Defense: 0, Agility: 0, Defending: true}
+
+		// Control: ally without status heals 30.
+		allyNormal := corebattle.Participant{ID: "ally", Name: "Ally", HP: 20, MaxHP: 100}
+		resNormal, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{priest, allyNormal},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resNormal.Logs[0].ActionName != "heal-30" || resNormal.Logs[0].HealingDone != 30 {
+			t.Fatalf("normal heal-30 = %d, want 30", resNormal.Logs[0].HealingDone)
+		}
+
+		// Target with StatusVirulentPoison: int(30 * 0.1) = 3.
+		allyPoisoned := corebattle.Participant{
+			ID:     "ally",
+			Name:   "Ally",
+			HP:     20,
+			MaxHP:  100,
+			Status: corebattle.StatusVirulentPoison,
+		}
+		resPoison, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{priest, allyPoisoned},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resPoison.Logs[0].ActionName != "heal-30" || resPoison.Logs[0].HealingDone != 3 {
+			t.Fatalf("virulent_poison heal-30 = %d, want 3", resPoison.Logs[0].HealingDone)
+		}
+
+		// Legacy Japanese status string "劇毒" also attenuates heal to 3.
+		allyLegacyPoison := allyPoisoned
+		allyLegacyPoison.Status = "劇毒"
+		resLegacy, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{priest, allyLegacyPoison},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resLegacy.Logs[0].ActionName != "heal-30" || resLegacy.Logs[0].HealingDone != 3 {
+			t.Fatalf("劇毒 heal-30 = %d, want 3", resLegacy.Logs[0].HealingDone)
+		}
+
+		// Ordering & integer truncation: item-146 (1.8x -> 30*1.8=54) -> virulent_poison int(54*0.1)=5 -> tension 1.5 -> int(5*1.0*1.5)=7
+		// (without int truncation before tension, 5.4*1.5 would be 8).
+		invRepo.inventories["priest"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-146"}},
+		}
+		priestStone, err := svc.BuildParticipant(ctx, "priest")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resStonePoison, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:         []corebattle.Participant{priestStone, allyPoisoned},
+			Enemies:        []corebattle.Participant{enemy},
+			InitialTension: map[string]float64{"priest": 1.5},
+			RNG:            detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resStonePoison.Logs[0].ActionName != "heal-30" || resStonePoison.Logs[0].HealingDone != 7 {
+			t.Fatalf("item-146 + virulent_poison + tension 1.5 heal-30 = %d, want 7 (int(54*0.1)=5 before tension)", resStonePoison.Logs[0].HealingDone)
 		}
 	})
 }
