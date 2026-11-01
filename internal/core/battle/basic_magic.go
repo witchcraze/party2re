@@ -63,6 +63,10 @@ func (s *LifetimeState) basicMagicDamage(c *BasicMagicContext, id string) (base,
 		return 25, 40, true
 	case "job-5-entry-9":
 		return 80, 100, true
+	case "job-6-entry-1":
+		return 20, 0, false
+	case "job-6-entry-3":
+		return 25, 0, true
 	case "job-6-entry-5":
 		return 70, 0, false
 	case "job-6-entry-7":
@@ -98,8 +102,11 @@ func (s *LifetimeState) ApplyBasicMagic(c *BasicMagicContext, id string, rng ran
 		_, err := s.ApplyCure(&child, controlSymbol(c.shift(), StatusDeadlyPoison, CategoryMagic), rng)
 		c.EffectContext, c.CureCalls = child.EffectContext, child.CureCalls
 		return err
-	case "job-5-entry-5", "job-5-entry-8":
+	case "job-5-entry-3", "job-5-entry-5", "job-5-entry-8":
 		power := 90.0
+		if id == "job-5-entry-3" {
+			power = 30
+		}
 		if id == "job-5-entry-8" {
 			power = 999
 		}
