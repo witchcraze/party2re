@@ -78,18 +78,27 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 			var healAmt int
 			if isMagic {
 				v := float64(skill.Power)
-				if hasItem(actor.ItemDefinitionIDs, "item-146") { // ヒーリングストーン (_skill.cgi:9078)
+				if hasItem(actor.ItemDefinitionIDs, "item-146") { // ヒーリングストーン (_skill.cgi:9081)
 					v *= 1.8
 				}
-				if hasItem(actor.ItemDefinitionIDs, "item-256") { // item-256 (_skill.cgi:9079)
+				if hasItem(actor.ItemDefinitionIDs, "item-256") { // item-256 (_skill.cgi:9082)
 					v *= 1.2
 				}
-				v *= ten
+				if st := ctx.statusMap[actor.ID]; st == StatusSabaku || st == "鎖縛" {
+					sabakuMult := 0.7
+					if ctx.rng != nil {
+						sabakuMult += ctx.rng.Float64() * 0.2
+					}
+					v *= sabakuMult
+				}
+				if st := ctx.statusMap[tgt.ID]; st == StatusVirulentPoison || st == "劇毒" {
+					v = float64(int(v * 0.1))
+				}
 				variance := 1.0
 				if ctx.rng != nil {
 					variance = 0.9 + ctx.rng.Float64()*0.3
 				}
-				healAmt = int(v * variance)
+				healAmt = int(v * variance * ten)
 			} else {
 				healAmt = skill.Power
 			}
@@ -247,23 +256,40 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 			}
 		}
 		decayMult := 1.0
+		isArea := skill.TargetScope == TargetScopeAllEnemies
 		hasDiamondRing := hasItem(actor.ItemDefinitionIDs, "item-144")
 		isMagic := skill.Category == string(CategoryMagic) || skill.Category == "magic"
+		has143 := hasItem(actor.ItemDefinitionIDs, "item-143")
 		has149 := hasItem(actor.ItemDefinitionIDs, "item-149")
+
+		evalInitialPower := func(v float64) float64 {
+			if has149 {
+				if skill.Direct {
+					v *= 1.1
+				} else {
+					v *= 1.5
+				}
+			}
+			if has143 && isMagic && v < 300 {
+				v = float64(int(v * 2))
+			}
+			return v
+		}
+		initialPower := evalInitialPower(float64(skill.Power))
 
 		for _, tgt := range targetList {
 			var baseDmg int
 			if isMagic || skill.Direct {
 				ten := ctx.getTension(actor.ID)
-				basePower := float64(skill.Power) * decayMult
-				if hasItem(actor.ItemDefinitionIDs, "item-143") && basePower < 300 {
-					basePower *= 2
+				basePower := evalInitialPower(float64(skill.Power) * decayMult)
+				if st := ctx.statusMap[tgt.ID]; st == StatusKinju || st == "禁呪" {
+					basePower *= 1.25
 				}
-				if has149 {
-					basePower *= 1.1
-				}
-				if hasItem(actor.ItemDefinitionIDs, "weapon-34") && ctx.rng != nil && ctx.rng.Intn(4) < 1 {
+				if hasItem(actor.ItemDefinitionIDs, "weapon-34") && isMagic && ctx.rng != nil && ctx.rng.Intn(4) < 1 {
 					basePower *= 1.2
+				}
+				if hasDiamondRing && isArea && basePower < 300 {
+					basePower *= 1.3
 				}
 				if !has149 {
 					basePower *= ten
@@ -279,7 +305,7 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 			if (isMagic || skill.Direct) && effective {
 				ctx.consumeTension(actor)
 			}
-			if skill.TargetScope == TargetScopeAllEnemies && !hasDiamondRing {
+			if isArea && (!hasDiamondRing || initialPower > 300) {
 				decayMult *= 0.85
 			}
 		}
