@@ -827,6 +827,13 @@ transition retains conservative `AfterEffects` validation; it must not be
 approximated by a sampled outcome. Delegated calling selection uses the projected
 current/previous jobs and preserves its explicit target boundary.
 
+`RegisterNonJobInvocations` binds tool84/85 and gem83/86–92 to those same
+invocation operations. `NonJobInvocationEntries` supplies the outer CMP
+contributions separately from child MP metadata. Registration alone does not
+admit a random pool: missing player, NPC, generated or asset descendants still
+reject the entire command. Tools receive the consumer's defaulted selector;
+custom gems receive its resolved target. No supported-only table is constructed.
+
 Naked nested calls share their remaining arguments; each custom slot starts
 with its own copy of the outer resolved target. Explicit gem86/calling helpers
 pass only that target. Later slots stop after actor death, while accepted roster
@@ -834,9 +841,9 @@ and resource changes survive. The invoking consumer resolves tool/custom
 arguments and owns outer admission/costs and durable transactions. It must
 preflight before those mutations, inject frozen command randomness and commit
 the resulting facts with the receipt; core stores neither callbacks nor RNG
-objects and does not replay committed commands. The default registry certifies
-no production invocation entries; synthetic complete catalogs test this
-mechanism without enabling the original catalog or the SQL consumer.
+objects and does not replay committed commands. The zero-value registry admits
+no entries. Explicit registration and complete descendant admission are both
+required; neither the bindings nor synthetic test ports enable SQL consumers.
 
 The [shared modifier contract](#shared-modifiers-and-callback-outcomes) separates
 callback categories, target resolution and source-context gates. Job81's song
