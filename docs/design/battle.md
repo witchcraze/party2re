@@ -1467,14 +1467,32 @@ MP or certify a resource callback. Phantom-field identities must be supplied by
 the certified roster owner, including its matching-copy existence predicate and
 ordered candidate list; display names never substitute for encounter identities.
 
-`ApplyTemporaryGem` implements the finite source producers34–53
-(`_data.cgi:2122–2141`): unconditional self defense34/37, category-checked
-self/party effects, targeted symbolic effects and paired cover52. Party effects
-skip fallen; applying revival temporary51 still uses ordinary fallen-ally
-fallback, unlike an actual revival payload. Source41/42/45 omit the returned
-target guard and can mutate an empty record after category rejection; their sealed
-variants remain wholly unsupported. Regeneration50, automatic revival51 and
-absorption53 produce state but do not certify their later HP/MP/lifetime consumers.
+`DefenseGemEntries` and `BattleDefinitions.RegisterDefenseGems` bind complete
+native bodies for source34–53 and84/85 (`_data.cgi:2122–2141,2172–2173` at
+`ff97fc549932a146cc945d7edf71b44c868a840e`). `ApplyDefenseGems` composes the existing
+`ApplyTemporaryGem` producers: unconditional self defense34/37, magic-checked
+self/party effects, symbolic ally effects and distinct-other-ally paired cover52.
+Party writes skip fallen members; single helpers retain their own fallback,
+confusion and one-pass temporary redirection, with incidental MP absorption
+applied before the incoming effect. Revival protection51 uses ordinary fallen-ally
+fallback rather than resurrection. Source41/42/45 omit the returned-target guard
+and may write an unrepresented empty record after magic-seal rejection, so those
+whole entries remain rejected in that context. Source53 checks the caster's magic
+seal before assigning self absorption. Awakening84 writes self extended state for
+eight turns;85 uses the untyped ally helper without an added return/living guard.
+
+Discovery and execution share admission for up to three occupied defense slots,
+including repeated entries and the custom missing-target fallback to caster.
+Admission follows possible seal cures, confusion and target/temporary transitions
+before mutation, costs or committed RNG. Each slot receives the same frozen outer
+target, and later slots observe earlier writes. Deterministic transitions support
+the existing invocation projection; uncertain preceding mixed callbacks remain
+gated until their owner supplies complete transitions. CMP contributions are
+metadata, charged only by the consumer after admission. Resulting state, target
+MP facts and frozen input survive reload; closures are rebuilt and committed
+callbacks never replayed. Regeneration, revival, modifiers and expiry retain their
+shared consumers. SQL/service/Gateway adoption remains separate; native callback
+registration alone does not enable production adventure commands.
 
 Explicit HP recovery uses `ApplyHealing`/`ApplyPartyHealing`; proportional
 AT/DF/AG changes use `ApplyStatUp`/`ApplyStatDown`/`ApplyPartyStat` (down also
