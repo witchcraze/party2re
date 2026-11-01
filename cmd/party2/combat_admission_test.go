@@ -438,6 +438,9 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-startBarrier
+			// Retry transient DB deadlocks or lock wait timeouts so concurrent workers can observe
+			// the committed winner's admission state. If unresolvable, it is treated as an unexpected failure
+			// rather than masked as a normal admission rejection.
 			var pDetail party.PartyDetail
 			var err error
 			for retry := 0; retry < 3; retry++ {
@@ -455,12 +458,16 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 				partyMu.Lock()
 				createdPartyIDs = append(createdPartyIDs, pDetail.Party.ID)
 				partyMu.Unlock()
-			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) || errors.Is(err, party.ErrAlreadyInParty) || database.IsDeadlockError(err) {
+			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) || errors.Is(err, party.ErrAlreadyInParty) {
+				// Valid admission rejections:
+				// - ErrDailyOnceAlreadyUsed: Valkey daily-once lock already acquired by winner
+				// - ErrAlreadyInParty: Winning CreateParty committed first, so leader is already assigned to active party
 				atomic.AddInt32(&rejectedCount, 1)
 			} else {
-				t.Logf("unexpected party create error: %v", err)
+				isDeadlock := database.IsDeadlockError(err)
+				t.Logf("unexpected party create error (deadlock/timeout=%v): %v", isDeadlock, err)
 				errMu.Lock()
-				capturedErrors = append(capturedErrors, fmt.Errorf("create party: %w", err))
+				capturedErrors = append(capturedErrors, fmt.Errorf("create party (deadlock/timeout=%v): %w", isDeadlock, err))
 				errMu.Unlock()
 				atomic.AddInt32(&otherCount, 1)
 			}
@@ -472,6 +479,7 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-startBarrier
+			// Retry transient DB deadlocks or lock wait timeouts during concurrent crawl admission.
 			var err error
 			for retry := 0; retry < 3; retry++ {
 				_, err = combat.adv.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
@@ -485,12 +493,14 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 			}
 			if err == nil {
 				atomic.AddInt32(&successCount, 1)
-			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) || errors.Is(err, party.ErrAlreadyInParty) || database.IsDeadlockError(err) {
+			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) || errors.Is(err, party.ErrAlreadyInParty) {
+				// Valid admission rejection for daily-once stage crawl.
 				atomic.AddInt32(&rejectedCount, 1)
 			} else {
-				t.Logf("unexpected execute crawl error: %v", err)
+				isDeadlock := database.IsDeadlockError(err)
+				t.Logf("unexpected execute crawl error (deadlock/timeout=%v): %v", isDeadlock, err)
 				errMu.Lock()
-				capturedErrors = append(capturedErrors, fmt.Errorf("execute crawl: %w", err))
+				capturedErrors = append(capturedErrors, fmt.Errorf("execute crawl (deadlock/timeout=%v): %w", isDeadlock, err))
 				errMu.Unlock()
 				atomic.AddInt32(&otherCount, 1)
 			}
