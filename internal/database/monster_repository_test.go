@@ -11,6 +11,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/god"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/monster"
 )
@@ -516,4 +517,160 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 		t.Logf("LastSlotCapacityRace completed: %d contenders, 1 accepted, %d rejected with ErrRecipientBoxFull in %v",
 			res.TotalOps, rejectedFull.Load(), res.Duration)
 	})
+}
+
+type failingDeleteCompanionStore struct {
+	monster.HomeCompanionStore
+	err error
+}
+
+func (f *failingDeleteCompanionStore) DeleteHomeCompanion(_ context.Context, _ string) error {
+	return f.err
+}
+
+func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	db, charRepo, monRepo, _ := openMonsterTestDB(t)
+	homeMemberRepo, err := NewHomeMemberRepository(db)
+	if err != nil {
+		t.Fatalf("NewHomeMemberRepository: %v", err)
+	}
+
+	c1, err := CreateTestCharacter(ctx, db, "GodMon1")
+	if err != nil {
+		t.Fatalf("CreateTestCharacter c1: %v", err)
+	}
+	c2, err := CreateTestCharacter(ctx, db, "GodMon2")
+	if err != nil {
+		t.Fatalf("CreateTestCharacter c2: %v", err)
+	}
+	registerCharacterCleanup(t, db, c1.ID, c2.ID)
+
+	txProvider := NewTransactionProvider(db)
+	svc := monster.NewService(
+		charRepo,
+		monRepo,
+		monster.WithTransactionProvider(txProvider),
+		monster.WithHomeCompanionStore(homeMemberRepo),
+	)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	ortegaID := id.New()
+	if err := homeMemberRepo.AddMember(ctx, god.HomeMember{
+		ID:          ortegaID,
+		CharacterID: c1.ID,
+		IsNPC:       true,
+		Name:        "オルテガ",
+		Icon:        "chr/029.gif",
+		Color:       "#ffffff",
+		CreatedAt:   now,
+	}); err != nil {
+		t.Fatalf("AddMember ortega: %v", err)
+	}
+	nonNPCID := id.New()
+	if err := homeMemberRepo.AddMember(ctx, god.HomeMember{
+		ID:          nonNPCID,
+		CharacterID: c1.ID,
+		IsNPC:       false,
+		Name:        "同居人",
+		Icon:        "chr/001.gif",
+		Color:       "#ffffff",
+		CreatedAt:   now,
+	}); err != nil {
+		t.Fatalf("AddMember nonNPC: %v", err)
+	}
+
+	// 1. Only is_npc=true members are counted as Home pets or depositable
+	summary, err := svc.GetSummary(ctx, c1.ID, "")
+	if err != nil {
+		t.Fatalf("GetSummary: %v", err)
+	}
+	if summary.HomeCount != 1 || len(summary.Monsters) != 1 || summary.Monsters[0].ID != ortegaID {
+		t.Fatalf("expected only ortega in summary, got %+v", summary)
+	}
+	if _, err := svc.DepositToBox(ctx, c1.ID, nonNPCID); !errors.Is(err, monster.ErrMonsterNotFound) {
+		t.Fatalf("DepositToBox non-NPC member: got %v, want %v", err, monster.ErrMonsterNotFound)
+	}
+	if _, err := svc.DepositToBox(ctx, c2.ID, ortegaID); !errors.Is(err, monster.ErrForbidden) {
+		t.Fatalf("DepositToBox unowned ortega: got %v, want %v", err, monster.ErrForbidden)
+	}
+
+	// 2. Duplicate name collision with Ortega in home_members
+	dupBox, err := svc.TameMonster(ctx, c1.ID, "slime", "オルテガ")
+	if err != nil {
+		t.Fatalf("TameMonster dupBox: %v", err)
+	}
+	if _, err := svc.BringToHome(ctx, c1.ID, dupBox.ID); !errors.Is(err, monster.ErrDuplicatePetNameAtHome) {
+		t.Fatalf("BringToHome colliding with Ortega: got %v, want %v", err, monster.ErrDuplicatePetNameAtHome)
+	}
+
+	// 3. Mixed capacity: 1 God companion + 7 character_monsters = 8 -> 9th rejected with ErrHomeFull
+	for i := 1; i <= 7; i++ {
+		m, err := svc.TameMonster(ctx, c1.ID, "slime", fmt.Sprintf("家ペット%d", i))
+		if err != nil {
+			t.Fatalf("TameMonster %d: %v", i, err)
+		}
+		if _, err := svc.BringToHome(ctx, c1.ID, m.ID); err != nil {
+			t.Fatalf("BringToHome %d: %v", i, err)
+		}
+	}
+	ninthPet, err := svc.TameMonster(ctx, c1.ID, "slime", "家ペット8")
+	if err != nil {
+		t.Fatalf("TameMonster ninthPet: %v", err)
+	}
+	if _, err := svc.BringToHome(ctx, c1.ID, ninthPet.ID); !errors.Is(err, monster.ErrHomeFull) {
+		t.Fatalf("BringToHome 9th pet: got %v, want %v", err, monster.ErrHomeFull)
+	}
+
+	// 4. Mid-transaction storage error after character_monsters.Save rolls back both stores
+	simulatedErr := errors.New("simulated home_members delete failure")
+	failingSvc := monster.NewService(
+		charRepo,
+		monRepo,
+		monster.WithTransactionProvider(txProvider),
+		monster.WithHomeCompanionStore(&failingDeleteCompanionStore{
+			HomeCompanionStore: homeMemberRepo,
+			err:                simulatedErr,
+		}),
+	)
+	if _, err := failingSvc.DepositToBox(ctx, c1.ID, ortegaID); !errors.Is(err, simulatedErr) {
+		t.Fatalf("DepositToBox with failing delete: got %v, want %v", err, simulatedErr)
+	}
+	if _, err := monRepo.FindByID(ctx, ortegaID); !errors.Is(err, monster.ErrMonsterNotFound) {
+		t.Fatalf("expected character_monsters insert to roll back, got err=%v", err)
+	}
+	companionsAfterRollback, err := homeMemberRepo.ListHomeCompanions(ctx, c1.ID)
+	if err != nil {
+		t.Fatalf("ListHomeCompanions: %v", err)
+	}
+	if len(companionsAfterRollback) != 1 || companionsAfterRollback[0].ID != ortegaID {
+		t.Fatalf("expected ortega still in home_members after rollback, got %+v", companionsAfterRollback)
+	}
+
+	// 5. Successful DepositToBox moves Ortega from home_members to character_monsters (location=box),
+	// and BringToHome brings Ortega back to location=home preserving ID, icon, and custom name.
+	deposited, err := svc.DepositToBox(ctx, c1.ID, ortegaID)
+	if err != nil {
+		t.Fatalf("DepositToBox ortega: %v", err)
+	}
+	if deposited.ID != ortegaID || deposited.CharacterID != c1.ID || deposited.MonsterID != "chr/029.gif" || deposited.CustomName != "オルテガ" || deposited.Location != monster.LocationBox {
+		t.Fatalf("unexpected deposited ortega: %+v", deposited)
+	}
+	companionsAfterDeposit, err := homeMemberRepo.ListHomeCompanions(ctx, c1.ID)
+	if err != nil {
+		t.Fatalf("ListHomeCompanions after deposit: %v", err)
+	}
+	if len(companionsAfterDeposit) != 0 {
+		t.Fatalf("expected 0 companions in home_members after deposit, got %+v", companionsAfterDeposit)
+	}
+
+	broughtHome, err := svc.BringToHome(ctx, c1.ID, ortegaID)
+	if err != nil {
+		t.Fatalf("BringToHome ortega: %v", err)
+	}
+	if broughtHome.ID != ortegaID || broughtHome.CharacterID != c1.ID || broughtHome.MonsterID != "chr/029.gif" || broughtHome.CustomName != "オルテガ" || broughtHome.Location != monster.LocationHome {
+		t.Fatalf("unexpected broughtHome ortega: %+v", broughtHome)
+	}
 }

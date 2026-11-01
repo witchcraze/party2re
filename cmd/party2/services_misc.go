@@ -114,10 +114,15 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
+	homeMemberRepo, err := database.NewHomeMemberRepository(db)
+	if err != nil {
+		return nil, err
+	}
 	monsterService := monster.NewService(
 		core.charRepo,
 		monsterRepo,
 		monster.WithTransactionProvider(core.txProvider),
+		monster.WithHomeCompanionStore(homeMemberRepo),
 	)
 
 	helperRepo, err := database.NewHelperRepository(db)
@@ -312,11 +317,6 @@ func newMiscServices(
 			return b.ActiveBlessing == chapel.BlessingCasino, nil
 		})),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	homeMemberRepo, err := database.NewHomeMemberRepository(db)
 	if err != nil {
 		return nil, err
 	}

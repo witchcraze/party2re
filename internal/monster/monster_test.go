@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/monster"
@@ -116,6 +117,50 @@ type mockTxProvider struct{}
 
 func (tp *mockTxProvider) RunInTx(ctx context.Context, fn func(txCtx context.Context) error) error {
 	return fn(ctx)
+}
+
+type mockHomeCompanionStore struct {
+	mu         sync.Mutex
+	companions map[string]monster.HomeCompanion
+	deleteErr  error
+}
+
+func newMockHomeCompanionStore() *mockHomeCompanionStore {
+	return &mockHomeCompanionStore{
+		companions: make(map[string]monster.HomeCompanion),
+	}
+}
+
+func (s *mockHomeCompanionStore) ListHomeCompanions(_ context.Context, characterID string) ([]monster.HomeCompanion, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var res []monster.HomeCompanion
+	for _, c := range s.companions {
+		if c.CharacterID == characterID {
+			res = append(res, c)
+		}
+	}
+	return res, nil
+}
+
+func (s *mockHomeCompanionStore) FindHomeCompanionForUpdate(_ context.Context, id string) (monster.HomeCompanion, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.companions[id]
+	if !ok {
+		return monster.HomeCompanion{}, monster.ErrMonsterNotFound
+	}
+	return c, nil
+}
+
+func (s *mockHomeCompanionStore) DeleteHomeCompanion(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.deleteErr != nil {
+		return s.deleteErr
+	}
+	delete(s.companions, id)
+	return nil
 }
 
 func TestValidateMonsterName(t *testing.T) {
@@ -568,5 +613,139 @@ func TestMonsterService_GetDialogue(t *testing.T) {
 	}
 	if !foundCapacityPhrase {
 		t.Errorf("expected dialogue phrase explaining 100+ reclass and 350 max capacity, got: %+v", d.Phrases)
+	}
+}
+
+func TestMonsterService_GodHomeCompanions(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	monRepo := newMockMonsterRepo()
+	compStore := newMockHomeCompanionStore()
+	charRepo.characters["c1"] = corecharacter.Character{ID: "c1", Name: "Alice", OverMonster: 0}
+	charRepo.characters["c2"] = corecharacter.Character{ID: "c2", Name: "Bob", OverMonster: 0}
+
+	svc := monster.NewService(
+		charRepo,
+		monRepo,
+		monster.WithTransactionProvider(&mockTxProvider{}),
+		monster.WithHomeCompanionStore(compStore),
+	)
+
+	createdAt := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	compStore.companions["comp-ortega"] = monster.HomeCompanion{
+		ID:          "comp-ortega",
+		CharacterID: "c1",
+		MonsterID:   "chr/029.gif",
+		CustomName:  "オルテガ",
+		CreatedAt:   createdAt,
+	}
+	compStore.companions["comp-cat"] = monster.HomeCompanion{
+		ID:          "comp-cat",
+		CharacterID: "c1",
+		MonsterID:   "mon/211.gif",
+		CustomName:  "白猫",
+		CreatedAt:   createdAt,
+	}
+
+	// 1. GetSummary reflects God companions in HomeCount and Monsters
+	summaryAll, err := svc.GetSummary(ctx, "c1", "")
+	if err != nil {
+		t.Fatalf("GetSummary all failed: %v", err)
+	}
+	if summaryAll.HomeCount != 2 || summaryAll.BoxCount != 0 || len(summaryAll.Monsters) != 2 {
+		t.Fatalf("unexpected GetSummary all: %+v", summaryAll)
+	}
+	summaryHome, err := svc.GetSummary(ctx, "c1", monster.LocationHome)
+	if err != nil {
+		t.Fatalf("GetSummary home failed: %v", err)
+	}
+	if summaryHome.HomeCount != 2 || len(summaryHome.Monsters) != 2 {
+		t.Fatalf("unexpected GetSummary home: %+v", summaryHome)
+	}
+	summaryBox, err := svc.GetSummary(ctx, "c1", monster.LocationBox)
+	if err != nil {
+		t.Fatalf("GetSummary box failed: %v", err)
+	}
+	if summaryBox.HomeCount != 2 || len(summaryBox.Monsters) != 0 {
+		t.Fatalf("unexpected GetSummary box: %+v", summaryBox)
+	}
+
+	// 2. Duplicate name collision against God companion at home is rejected
+	dupMon, err := svc.TameMonster(ctx, "c1", "slime", "オルテガ")
+	if err != nil {
+		t.Fatalf("TameMonster dupMon failed: %v", err)
+	}
+	if _, err := svc.BringToHome(ctx, "c1", dupMon.ID); !errors.Is(err, monster.ErrDuplicatePetNameAtHome) {
+		t.Fatalf("BringToHome colliding with God companion name: got %v, want %v", err, monster.ErrDuplicatePetNameAtHome)
+	}
+
+	// 3. Mixed capacity enforcement: 2 God companions + 6 character_monsters = 8 total -> 9th rejected with ErrHomeFull
+	for i := 1; i <= 6; i++ {
+		m, err := svc.TameMonster(ctx, "c1", "slime", fmt.Sprintf("ペット%d", i))
+		if err != nil {
+			t.Fatalf("TameMonster %d failed: %v", i, err)
+		}
+		if _, err := svc.BringToHome(ctx, "c1", m.ID); err != nil {
+			t.Fatalf("BringToHome %d failed: %v", i, err)
+		}
+	}
+	extraMon, err := svc.TameMonster(ctx, "c1", "slime", "ペット7")
+	if err != nil {
+		t.Fatalf("TameMonster extraMon failed: %v", err)
+	}
+	if _, err := svc.BringToHome(ctx, "c1", extraMon.ID); !errors.Is(err, monster.ErrHomeFull) {
+		t.Fatalf("BringToHome 9th combined pet: got %v, want %v", err, monster.ErrHomeFull)
+	}
+
+	// 4. Unowned God companion deposit is rejected with ErrForbidden
+	if _, err := svc.DepositToBox(ctx, "c2", "comp-ortega"); !errors.Is(err, monster.ErrForbidden) {
+		t.Fatalf("DepositToBox unowned God companion: got %v, want %v", err, monster.ErrForbidden)
+	}
+
+	// 5. Full box blocks depositing a God companion without deleting it from home_members
+	// Currently c1 has 2 monsters in box (dupMon, extraMon); add 48 more to reach 50
+	var tempBoxIDs []string
+	for i := 1; i <= 48; i++ {
+		m, err := svc.TameMonster(ctx, "c1", "slime", fmt.Sprintf("箱満%d", i))
+		if err != nil {
+			t.Fatalf("TameMonster fill %d failed: %v", i, err)
+		}
+		tempBoxIDs = append(tempBoxIDs, m.ID)
+	}
+	if _, err := svc.DepositToBox(ctx, "c1", "comp-ortega"); !errors.Is(err, monster.ErrBoxFull) {
+		t.Fatalf("DepositToBox God companion on full box: got %v, want %v", err, monster.ErrBoxFull)
+	}
+	if _, ok := compStore.companions["comp-ortega"]; !ok {
+		t.Fatalf("comp-ortega was removed from HomeCompanionStore despite ErrBoxFull")
+	}
+	if _, err := monRepo.FindByID(ctx, "comp-ortega"); !errors.Is(err, monster.ErrMonsterNotFound) {
+		t.Fatalf("comp-ortega should not exist in character_monsters after ErrBoxFull, got %v", err)
+	}
+
+	// Free one box slot
+	if err := svc.ReleaseMonster(ctx, "c1", tempBoxIDs[0]); err != nil {
+		t.Fatalf("ReleaseMonster failed: %v", err)
+	}
+
+	// 6. DepositToBox moves God companion from HomeCompanionStore to character_monsters (location=box),
+	// preserving ID, CharacterID, MonsterID (icon), CustomName, and CreatedAt.
+	deposited, err := svc.DepositToBox(ctx, "c1", "comp-ortega")
+	if err != nil {
+		t.Fatalf("DepositToBox comp-ortega failed: %v", err)
+	}
+	if deposited.ID != "comp-ortega" || deposited.CharacterID != "c1" || deposited.MonsterID != "chr/029.gif" || deposited.CustomName != "オルテガ" || deposited.Location != monster.LocationBox || !deposited.CreatedAt.Equal(createdAt) {
+		t.Fatalf("unexpected deposited companion: %+v", deposited)
+	}
+	if _, ok := compStore.companions["comp-ortega"]; ok {
+		t.Fatalf("comp-ortega still present in HomeCompanionStore after DepositToBox")
+	}
+
+	// 7. BringToHome brings the deposited God companion back to home, preserving identity, icon, and ownership
+	broughtBack, err := svc.BringToHome(ctx, "c1", "comp-ortega")
+	if err != nil {
+		t.Fatalf("BringToHome comp-ortega failed: %v", err)
+	}
+	if broughtBack.ID != "comp-ortega" || broughtBack.CharacterID != "c1" || broughtBack.MonsterID != "chr/029.gif" || broughtBack.CustomName != "オルテガ" || broughtBack.Location != monster.LocationHome {
+		t.Fatalf("unexpected broughtBack companion: %+v", broughtBack)
 	}
 }

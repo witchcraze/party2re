@@ -130,7 +130,8 @@ Asynchronous direct messaging between characters:
 
 The resident home companion/pet pool aggregates both monster pets brought home from the ranch (`internal/monster.LocationHome`) and Heaven Wish NPC companions (Ortega, Cat, Maid) stored in `home_members` (`HomePetReader` adapter):
 - **Resident Companion Pool (`ListHomePets`)**:
-  - Queries ranch monster pets at home plus Heaven Wish companions stored in `home_members`, returning unified `HomePet` entries exposed in `HomeView.ResidentPets`.
+  - Queries ranch monster pets at home (`character_monsters` with `location = "home"`) plus Heaven Wish NPC companions stored in `home_members` (`is_npc = true`), returning unified `HomePet` entries exposed in `HomeView.ResidentPets`.
+  - Both stores participate in Monster Grandpa ranch operations (`DepositToBox`, `BringToHome`, duplicate-name checks, and the 8-pet Home capacity limit; see [Monster Design](monster.md)). Depositing a `home_members` companion into the ranch box transitions it into `character_monsters` (`location = "box"`), and bringing it back sets `location = "home"` while preserving its ID, name, and icon.
 - **Resident Companion Requirement & Character Guard**:
   - `TalkToCompanion` and `ListCompanionPhrases` validate character existence upfront, returning `ErrCharacterNotFound` (HTTP `404 Not Found`) if the character ID does not exist.
   - If a character exists but has 0 pets or companions residing at Home (`ListHomePets`), talking or teaching phrases is rejected with `ErrNoPetsAtHome` (HTTP `422 Unprocessable Entity`), matching legacy CGI behavior ("教える相手がいません" / "しかし、誰もいなかった…").
