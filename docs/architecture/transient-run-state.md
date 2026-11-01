@@ -327,8 +327,9 @@ member, awards small medals to the expedition leader, delivers reward items to i
 expedition `members` payloads that omit `current_mp` distinguish missing MP from explicit
 `"current_mp": 0` (`ExpeditionMember.HasCurrentMP()`): combat participant construction
 passes `nil` MP to `BuildParticipantWithState` so stored character MP is used and updated
-into the run buffer on combat completion, and non-combat settlement resolves/omits missing
-member MP so stored character MP is preserved while explicit `0` MP is committed as `0`.
+into the run buffer on combat completion, and non-combat settlement omits missing member MP
+from `RemainingMP` so `ApplyPostBattleResult` preserves the `SELECT ... FOR UPDATE` locked
+character's stored MP while explicit `0` MP is committed as `0`.
 If required member or run state cannot be read, settlement aborts before freezing or
 deleting the active run. Duplicate run-ID
 claims map to `ErrExpeditionAlreadyFinished`, which `internal/dungeon` treats as idempotent

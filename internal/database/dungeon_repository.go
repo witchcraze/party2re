@@ -228,19 +228,13 @@ func (r *DungeonRepository) FinalizeExpedition(
 	roster := members
 	if len(roster) == 0 {
 		leaderHP := 100
-		leaderMP := 0
-		leaderMaxMP := 0
 		if character != nil {
 			leaderHP = character.Stats.HP
-			leaderMP = character.Stats.MP
-			leaderMaxMP = character.Stats.MaxMP
 		}
 		roster = []dungeon.ExpeditionMember{
 			{
 				CharacterID: charID,
 				CurrentHP:   leaderHP,
-				CurrentMP:   leaderMP,
-				MaxMP:       leaderMaxMP,
 			},
 		}
 	} else {

@@ -35,7 +35,7 @@ type ExpeditionMember struct {
 
 // HasCurrentMP reports whether the member carries an explicit MP snapshot rather than a pre-MP legacy payload.
 func (m ExpeditionMember) HasCurrentMP() bool {
-	return m.mpKnown || m.CurrentMP > 0 || m.MaxMP > 0
+	return m.mpKnown || m.CurrentMP > 0
 }
 
 type rawExpeditionMember struct {
@@ -97,8 +97,10 @@ func EncodeMembers(members []ExpeditionMember) string {
 		}
 		if m.HasCurrentMP() {
 			currMP := m.CurrentMP
-			maxMP := m.MaxMP
 			entry.CurrentMP = &currMP
+		}
+		if m.HasCurrentMP() || m.MaxMP > 0 {
+			maxMP := m.MaxMP
 			entry.MaxMP = &maxMP
 		}
 		raw[i] = entry

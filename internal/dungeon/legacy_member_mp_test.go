@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/id"
@@ -48,6 +49,27 @@ func (r *mpSpendingResolver) ResolvePartyBattle(req corebattle.PartyBattleReques
 		RemainingHP: remHP,
 		RemainingMP: remMP,
 	}, nil
+}
+
+type preFinalizeHookRepo struct {
+	dungeon.Repository
+	beforeFinalize func(ctx context.Context) error
+}
+
+func (r *preFinalizeHookRepo) FinalizeExpedition(
+	ctx context.Context,
+	history dungeon.DungeonExpeditionHistory,
+	record dungeon.CharacterDungeonRecord,
+	character *corecharacter.Character,
+	rewardItems []coreitem.Instance,
+	members ...dungeon.ExpeditionMember,
+) error {
+	if r.beforeFinalize != nil {
+		if err := r.beforeFinalize(ctx); err != nil {
+			return err
+		}
+	}
+	return r.Repository.FinalizeExpedition(ctx, history, record, character, rewardItems, members...)
 }
 
 type failingFindCharRepo struct {
@@ -114,6 +136,16 @@ func TestDungeonMemberMP_EncodeDecodeContract(t *testing.T) {
 	reencodedZero := dungeon.EncodeMembers(zeroMembers)
 	if !strings.Contains(reencodedZero, `"current_mp":0`) {
 		t.Fatalf("expected re-encoded explicit 0 MP member to retain current_mp:0, got %s", reencodedZero)
+	}
+
+	maxMPOnlyJSON := `[{"character_id":"char-1","name":"MP audit","current_hp":40,"max_hp":100,"max_mp":50}]`
+	maxMPOnlyMembers := dungeon.DecodeMembers(maxMPOnlyJSON)
+	if len(maxMPOnlyMembers) != 1 || maxMPOnlyMembers[0].HasCurrentMP() || maxMPOnlyMembers[0].MaxMP != 50 {
+		t.Fatalf("expected max_mp-only member without current_mp to report HasCurrentMP() == false and MaxMP == 50, got %+v", maxMPOnlyMembers)
+	}
+	reencodedMaxMPOnly := dungeon.EncodeMembers(maxMPOnlyMembers)
+	if strings.Contains(reencodedMaxMPOnly, "current_mp") || !strings.Contains(reencodedMaxMPOnly, `"max_mp":50`) {
+		t.Fatalf("expected re-encoded max_mp-only member to omit current_mp and keep max_mp:50, got %s", reencodedMaxMPOnly)
 	}
 }
 
@@ -570,17 +602,36 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 		}
 	})
 
-	t.Run("read_failure_preserves_db_mp_and_active_expedition", func(t *testing.T) {
-		lead, ally := setupFixture(t, 50, 50, 35, 40)
-		injectedErr := errors.New("simulated character repository read outage")
-		flakyCharRepo := &failingFindCharRepo{
-			inner:   charRepo,
-			failIDs: map[string]error{},
+	t.Run("concurrent_mp_update_before_finalize_lock_is_preserved_for_legacy_members", func(t *testing.T) {
+		lead, ally := setupFixture(t, 30, 50, 20, 40)
+		battleSvc := battle.NewService(battle.WithCharacterRepository(charRepo))
+		attempt := 0
+		transientErr := errors.New("transient SQL contention before lock")
+		hookRepo := &preFinalizeHookRepo{
+			Repository: dungeonRepo,
+			beforeFinalize: func(ctx context.Context) error {
+				attempt++
+				if attempt == 1 {
+					// Simulate concurrent MP recovery (e.g. Tavern meal/delivery) after Escape read leader MP=30
+					// and before FinalizeExpedition's SELECT ... FOR UPDATE, followed by a transient failure.
+					if _, err := db.ExecContext(ctx, "UPDATE characters SET mp = 48 WHERE id = ?", lead.ID); err != nil {
+						return err
+					}
+					if _, err := db.ExecContext(ctx, "UPDATE characters SET mp = 39 WHERE id = ?", ally.ID); err != nil {
+						return err
+					}
+					return transientErr
+				}
+				// On retry (resumeSettlement), simulate another concurrent MP update before SELECT ... FOR UPDATE.
+				if _, err := db.ExecContext(ctx, "UPDATE characters SET mp = 49 WHERE id = ?", lead.ID); err != nil {
+					return err
+				}
+				return nil
+			},
 		}
-		battleSvc := battle.NewService(battle.WithCharacterRepository(flakyCharRepo))
 		svc, err := dungeon.NewService(
-			dungeonRepo,
-			flakyCharRepo,
+			hookRepo,
+			charRepo,
 			corebattle.Engine{},
 			dungeon.WithActiveExpeditionStore(store),
 			dungeon.WithParticipantBuilder(battleSvc),
@@ -589,7 +640,86 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		exp, err := svc.StartExpedition(ctx, lead.ID, "dungeon-01")
+		if _, err := svc.StartExpedition(ctx, lead.ID, "dungeon-01"); err != nil {
+			t.Fatal(err)
+		}
+		legacyMembersJSON := fmt.Sprintf(
+			`[{"character_id":%q,"name":"MP audit","current_hp":40,"max_hp":100},{"character_id":%q,"name":"Ally audit","current_hp":55,"max_hp":90}]`,
+			lead.ID, ally.ID,
+		)
+		sKey := "party2:dungeon:{char:" + lead.ID + "}:state"
+		if err := valkeyClient.Do(ctx, valkeyClient.B().Hset().Key(sKey).FieldValue().
+			FieldValue("current_hp", "40").
+			FieldValue("members", legacyMembersJSON).
+			Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
+
+		// First Escape freezes the expedition and fails in beforeFinalize after concurrent DB MP updates.
+		if _, err := svc.Escape(ctx, lead.ID); !errors.Is(err, transientErr) {
+			t.Fatalf("expected transient error %v, got %v", transientErr, err)
+		}
+		// Second Escape resumes settlement and must preserve the latest locked DB MP (49 and 39), never stale 30/48 or 0.
+		if _, err := svc.Escape(ctx, lead.ID); err != nil {
+			t.Fatalf("retry Escape failed: %v", err)
+		}
+
+		reloadedLead, err := charRepo.FindByID(ctx, lead.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reloadedAlly, err := charRepo.FindByID(ctx, ally.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloadedLead.Stats.HP != 40 || reloadedLead.Stats.MP != 49 {
+			t.Errorf("expected leader HP=40 MP=49 (locked DB value), got HP=%d MP=%d", reloadedLead.Stats.HP, reloadedLead.Stats.MP)
+		}
+		if reloadedAlly.Stats.HP != 55 || reloadedAlly.Stats.MP != 39 {
+			t.Errorf("expected ally HP=55 MP=39 (locked DB value), got HP=%d MP=%d", reloadedAlly.Stats.HP, reloadedAlly.Stats.MP)
+		}
+	})
+
+	t.Run("read_failure_preserves_db_mp_and_active_expedition", func(t *testing.T) {
+		lead, ally := setupFixture(t, 50, 50, 35, 40)
+		injectedErr := errors.New("simulated character repository read outage")
+		flakyCharRepo := &failingFindCharRepo{
+			inner:   charRepo,
+			failIDs: map[string]error{},
+		}
+		battleSvc := battle.NewService(battle.WithCharacterRepository(flakyCharRepo))
+		combatDungeon := dungeon.Dungeon{
+			ID:               "dg-read-fail-mp",
+			Name:             "Read Fail MP Dungeon",
+			MinLevel:         1,
+			MaxTurnsPerFloor: 20,
+			Floors: []dungeon.Floor{
+				{
+					FloorNumber: 1,
+					Width:       3,
+					Height:      1,
+					StartX:      0,
+					StartY:      0,
+					Grid:        []string{"S0D"},
+					Monsters: []dungeon.DungeonMonster{
+						{ID: "slime", Name: "Slime", HP: 10, Attack: 1, Defense: 1, Agility: 1, ExpReward: 10, GoldReward: 10},
+					},
+				},
+			},
+		}
+		svc, err := dungeon.NewService(
+			dungeonRepo,
+			flakyCharRepo,
+			corebattle.Engine{},
+			dungeon.WithCustomDungeons([]dungeon.Dungeon{combatDungeon}),
+			dungeon.WithActiveExpeditionStore(store),
+			dungeon.WithParticipantBuilder(battleSvc),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		exp, err := svc.StartExpedition(ctx, lead.ID, combatDungeon.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -605,12 +735,19 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Inject read failure on ally when resolving missing MP before Escape
+		// 1. Inject read failure on ally during combat participant build (Move)
 		flakyCharRepo.failIDs[ally.ID] = injectedErr
-		_, err = svc.Escape(ctx, lead.ID)
-		if !errors.Is(err, injectedErr) {
-			t.Fatalf("expected injected read error %v, got %v", injectedErr, err)
+		if _, err := svc.Move(ctx, lead.ID, dungeon.DirectionEast); !errors.Is(err, injectedErr) {
+			t.Fatalf("expected Move to fail with %v, got %v", injectedErr, err)
 		}
+
+		// 2. Inject read failure on leader during Escape before freeze
+		flakyCharRepo.failIDs[lead.ID] = injectedErr
+		if _, err := svc.Escape(ctx, lead.ID); !errors.Is(err, injectedErr) {
+			t.Fatalf("expected Escape to fail with %v, got %v", injectedErr, err)
+		}
+		delete(flakyCharRepo.failIDs, lead.ID)
+		delete(flakyCharRepo.failIDs, ally.ID)
 
 		// Active expedition must remain Exploring in Valkey, and DB characters must remain untouched
 		stillActive, err := store.GetActiveExpedition(ctx, lead.ID)

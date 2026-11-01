@@ -46,14 +46,9 @@ func (s *Service) handleDungeonClear(
 	char *corecharacter.Character,
 	dungeon Dungeon,
 ) (ExpeditionStepResult, error) {
-	resolvedMPs, err := s.resolveMissingMemberMPs(ctx, exp, char)
-	if err != nil {
-		return ExpeditionStepResult{}, err
-	}
 	if err := s.freezeExpedition(ctx, exp, StatusCleared); err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	applyResolvedMemberMPs(exp, resolvedMPs)
 	now := time.Now().UTC()
 	exp.Encounter = nil
 	exp.Status = StatusCleared
@@ -163,14 +158,9 @@ func (s *Service) handleEscape(
 	char *corecharacter.Character,
 	msg string,
 ) (ExpeditionStepResult, error) {
-	resolvedMPs, err := s.resolveMissingMemberMPs(ctx, exp, char)
-	if err != nil {
-		return ExpeditionStepResult{}, err
-	}
 	if err := s.freezeExpedition(ctx, exp, StatusEscaped); err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	applyResolvedMemberMPs(exp, resolvedMPs)
 	now := time.Now().UTC()
 	exp.Encounter = nil
 	exp.Status = StatusEscaped
@@ -264,14 +254,9 @@ func (s *Service) handleWipeout(
 	char *corecharacter.Character,
 	msg string,
 ) (ExpeditionStepResult, error) {
-	resolvedMPs, err := s.resolveMissingMemberMPs(ctx, exp, char)
-	if err != nil {
-		return ExpeditionStepResult{}, err
-	}
 	if err := s.freezeExpedition(ctx, exp, StatusWipedOut); err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	applyResolvedMemberMPs(exp, resolvedMPs)
 	now := time.Now().UTC()
 	exp.Encounter = nil
 	exp.Status = StatusWipedOut
