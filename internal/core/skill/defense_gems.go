@@ -56,8 +56,8 @@ func (d BattleDefinitions) DefenseGemAction(s *corebattle.LifetimeState, c coreb
 }
 
 // DefenseGemInvocation freezes one to three slots with the same outer target.
-// Unknown preceding callbacks need their own transition projection; no body
-// may certify an arbitrary changed actor/roster through AfterEffects.
+// Certified alternatives flow into later slots; unknown preceding callbacks
+// still require their own complete transition projection.
 func (d BattleDefinitions) DefenseGemInvocation(ids []string) corebattle.CallbackDefinition {
 	ids = slices.Clone(ids)
 	bind := func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) ([]int, string, error) {
@@ -99,6 +99,23 @@ func (d BattleDefinitions) DefenseGemInvocation(ids []string) corebattle.Callbac
 				consume(f, sources)
 			}
 			return known, err
+		},
+		ProjectBranches: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
+			sources, target, err := bind(s, f, random.Default())
+			if err != nil {
+				return nil, err
+			}
+			states, err := s.ProjectDefenseGemBranches(sources, f.TargetContext, target)
+			if err != nil {
+				return nil, err
+			}
+			var branches []corebattle.CallbackContinuation
+			for _, state := range states {
+				child := *f
+				consume(&child, sources)
+				branches = append(branches, corebattle.CallbackContinuation{State: state, Context: child})
+			}
+			return branches, nil
 		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			sources, target, err := bind(s, f, rng)

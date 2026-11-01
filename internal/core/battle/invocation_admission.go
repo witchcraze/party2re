@@ -15,23 +15,42 @@ func (s *LifetimeState) ValidateInvocations(c *CallbackContext, d CallbackCatalo
 	state := s.callbackCopy()
 	context := cloneCallbackContext(*c)
 	p := callbackAdmission{s: &state, c: &context, d: d}
-	known := true
+	return p.sequence(ops, c.Arguments, true)
+}
+
+func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments []string, known bool) error {
 	for i, op := range ops {
 		// Visits depend on the projected state, not just entry identity.
 		p.seen = map[callbackVisit]bool{}
-		p.c.Arguments = append([]string(nil), c.Arguments...)
+		p.c.Arguments = append([]string(nil), arguments...)
 		if err := p.visit(op, !known); err != nil {
 			return err
 		}
 		if known && i+1 < len(ops) {
-			var err error
-			known, err = p.project(op)
+			branches, err := p.project(op)
 			if err != nil {
 				return err
 			}
-			if known && p.s.actor(p.c.ActorID).HP <= 0 {
-				return nil
+			if len(branches) == 0 {
+				known = false
+				continue
 			}
+			for _, branch := range branches {
+				state := branch.State.callbackCopy()
+				context := cloneCallbackContext(branch.Context)
+				actor := state.actor(context.ActorID)
+				if actor == nil {
+					return ErrInvalidParticipant
+				}
+				if actor.HP <= 0 {
+					continue
+				}
+				child := callbackAdmission{s: &state, c: &context, d: p.d}
+				if err := child.sequence(ops[i+1:], arguments, true); err != nil {
+					return err
+				}
+			}
+			return nil
 		}
 	}
 	return nil

@@ -66,55 +66,62 @@ func (s LifetimeState) callbackCopy() LifetimeState {
 	return s
 }
 
-// Project only a declared exact transition. Unknown random/delegated outcomes
-// retain the existing conservative AfterEffects admission, with no pool changes.
-func (p *callbackAdmission) project(op CallbackInvocation) (bool, error) {
-	return p.projectAfter(op, make(map[CallbackInvocation]bool))
+// Unknown projections cannot leak tentative writes into conservative admission.
+func (p *callbackAdmission) project(op CallbackInvocation) ([]CallbackContinuation, error) {
+	state := p.s.callbackCopy()
+	context := cloneCallbackContext(*p.c)
+	copy := *p
+	copy.s, copy.c = &state, &context
+	return copy.projectAfter(op, make(map[CallbackInvocation]bool))
 }
 
-func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[CallbackInvocation]bool) (bool, error) {
+func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[CallbackInvocation]bool) ([]CallbackContinuation, error) {
 	if seen[op] {
-		return false, nil
+		return nil, nil
 	}
 	seen[op] = true
 	if op.Kind == "entry" {
 		if op.GeneratedChildID != "" {
 			if op.GeneratedChildMP > p.s.actor(p.c.ActorID).MP {
-				return true, nil
+				return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil
 			}
 			return p.projectAfter(CallbackInvocation{Kind: "entry", EntryID: op.GeneratedChildID}, seen)
 		}
 		def := p.d.Entries[op.EntryID]
+		if def.ProjectBranches != nil {
+			return def.ProjectBranches(p.s, p.c)
+		}
 		if def.Project != nil {
-			return def.Project(p.s, p.c)
+			known, err := def.Project(p.s, p.c)
+			if err != nil || !known {
+				return nil, err
+			}
+			return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil
 		}
 		if def.Invocation.Kind != "" {
 			return p.projectAfter(def.Invocation, seen)
 		}
-		return false, nil
+		return nil, nil
 	}
 	name, calling := callingCommand(op.Kind)
 	if !calling {
-		return false, nil
+		return nil, nil
 	}
 	job := callingJob(p.s.actor(p.c.ActorID).Jobs)
 	if job == 0 {
-		return true, nil
+		return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil
 	}
 	entries, err := p.s.callbackTable(p.c, p.d, job)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	for _, entry := range entries {
 		if callingMatch(entry.CallbackEntry, name) {
 			child := explicitCallbackTarget(p.c)
 			copy := *p
 			copy.c = &child
-			known, err := copy.projectAfter(CallbackInvocation{Kind: "entry", EntryID: entry.ID}, seen)
-			p.c.TargetContext = child.TargetContext
-			p.c.ArithmeticDivisor = child.ArithmeticDivisor
-			return known, err
+			return copy.projectAfter(CallbackInvocation{Kind: "entry", EntryID: entry.ID}, seen)
 		}
 	}
-	return true, nil
+	return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil
 }

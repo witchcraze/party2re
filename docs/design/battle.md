@@ -820,12 +820,17 @@ calls. Ordered `Children` still require admission after earlier effects. Neither
 contract samples a branch or substitutes a smaller random pool.
 
 A callback may supply a pure `Project` transition when its complete resulting
-state and caller context are deterministic. Admission applies it to a private
-copy, revalidates each later slot against those facts, and stops after projected
-actor death. No execution hook or caller RNG runs during projection. An unknown
-transition retains conservative `AfterEffects` validation; it must not be
-approximated by a sampled outcome. Delegated calling selection uses the projected
-current/previous jobs and preserves its explicit target boundary.
+state and caller context are deterministic, or `ProjectBranches` for alternative
+complete `CallbackContinuation` outcomes. The latter takes precedence when both
+are supplied. An accepted no-effect path is an unchanged continuation; an empty
+result means unknown. Admission isolates each state/context, validates remaining
+slots separately for every living outcome, and stops only the branch whose actor
+died. Alternative targets are never accumulated as simultaneous effects. No
+execution hook or caller RNG runs during projection. Unknown transitions discard
+tentative writes and retain conservative `AfterEffects` validation; they must not
+be approximated by sampled outcomes. Delegated calling selection uses projected
+current/previous jobs and preserves its explicit target boundary. These are
+admission facts, not a serialized executor or a committed-command replay mechanism.
 
 `RegisterNonJobInvocations` binds tool84/85 and gem83/86–92 to those same
 invocation operations. `NonJobInvocationEntries` supplies the outer CMP
@@ -1485,10 +1490,12 @@ Discovery and execution share admission for up to three occupied defense slots,
 including repeated entries and the custom missing-target fallback to caster.
 Admission follows possible seal cures, confusion and target/temporary transitions
 before mutation, costs or committed RNG. Each slot receives the same frozen outer
-target, and later slots observe earlier writes. Deterministic transitions support
-the existing invocation projection; uncertain preceding mixed callbacks remain
-gated until their owner supplies complete transitions. CMP contributions are
-metadata, charged only by the consumer after admission. Resulting state, target
+target, and later slots observe earlier writes. `ProjectDefenseGemBranches`
+supplies complete seal/confusion/target alternatives to registered invocations;
+`ProjectDefenseGems` retains the single-outcome contract. Reachable random MP
+absorption remains an unknown predecessor until its complete resource transition
+is supplied. Other uncertain preceding mixed callbacks likewise remain gated.
+CMP contributions are metadata, charged only by the consumer after admission. Resulting state, target
 MP facts and frozen input survive reload; closures are rebuilt and committed
 callbacks never replayed. Regeneration, revival, modifiers and expiry retain their
 shared consumers. SQL/service/Gateway adoption remains separate; native callback

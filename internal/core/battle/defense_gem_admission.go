@@ -92,34 +92,50 @@ func (s LifetimeState) defenseGemTransitions(e DefenseGemEntry, c TargetContext,
 // Uncertain target, seal or absorption paths retain conservative invocation
 // admission; a finite multi-slot body is still validated together above.
 func (s *LifetimeState) ProjectDefenseGems(ids []int, c TargetContext, targetID string) (bool, error) {
-	if err := s.ValidateDefenseGems(ids, c, targetID, random.Default()); err != nil {
+	states, err := s.ProjectDefenseGemBranches(ids, c, targetID)
+	if err != nil || len(states) != 1 {
 		return false, err
+	}
+	*s = states[0]
+	return true, nil
+}
+
+// ProjectDefenseGemBranches retains alternative complete predecessor states.
+// Empty means unknown: random MP absorption needs its resource owner's complete
+// continuation before later callbacks can rely on these transitions.
+func (s *LifetimeState) ProjectDefenseGemBranches(ids []int, c TargetContext, targetID string) ([]LifetimeState, error) {
+	if err := s.ValidateDefenseGems(ids, c, targetID, random.Default()); err != nil {
+		return nil, err
 	}
 	if c.Custom && s.actor(targetID) == nil {
 		targetID = c.ActorID
 	}
-	p := s.callbackCopy()
-	for _, id := range ids {
+	states := []LifetimeState{s.callbackCopy()}
+	for i, id := range ids {
 		e, err := defenseGemEntry(id)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
-		if e.TargetScope == TargetScopeSingleAlly && e.Category == CategoryMagic {
-			for _, initial := range p.partyInitialTargetIDs(c, e.target(targetID)) {
-				if p.actor(initial).Temporary == TemporaryAbsorbMagic {
-					return false, nil
+		var next []LifetimeState
+		for _, state := range states {
+			if i > 0 && state.actor(c.ActorID).HP <= 0 {
+				next = append(next, state)
+				continue
+			}
+			if e.TargetScope == TargetScopeSingleAlly && e.Category == CategoryMagic {
+				for _, initial := range state.partyInitialTargetIDs(c, e.target(targetID)) {
+					if state.actor(initial).Temporary == TemporaryAbsorbMagic {
+						return nil, nil
+					}
 				}
 			}
+			children, err := state.defenseGemTransitions(e, c, targetID, random.Default())
+			if err != nil {
+				return nil, err
+			}
+			next = append(next, children...)
 		}
-		states, err := p.defenseGemTransitions(e, c, targetID, random.Default())
-		if err != nil || len(states) != 1 {
-			return false, err
-		}
-		p = states[0]
-		if p.actor(c.ActorID).HP <= 0 {
-			break
-		}
+		states = next
 	}
-	*s = p
-	return true, nil
+	return states, nil
 }
