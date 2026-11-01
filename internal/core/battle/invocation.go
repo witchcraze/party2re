@@ -296,6 +296,9 @@ func explicitCallbackTarget(c *CallbackContext) CallbackContext {
 }
 
 func callbackJob(id string) int {
+	if id == "starter" {
+		return 0
+	}
 	job, err := strconv.Atoi(strings.TrimPrefix(id, "job-"))
 	if err != nil {
 		return -1
