@@ -1,10 +1,6 @@
 package battle
 
-import (
-	"slices"
-
-	"github.com/witchcraze/party2re/internal/core/random"
-)
+import "github.com/witchcraze/party2re/internal/core/random"
 
 func (s *LifetimeState) validateEnemySummon(c *RosterContext, id string) error {
 	if len(s.Actors) >= 10 || id == "gem-82" && len(c.EnemyIDs) > 1 {
@@ -51,17 +47,21 @@ func (s *LifetimeState) summonEnemy(c *RosterContext, id string, rng random.Gene
 	} else {
 		position = int(rng.Float64() * float64(len(c.EnemyPool)))
 	}
+	return s.addEnemyAt(c, suffix, position), nil
+}
+
+func (s *LifetimeState) addEnemyAt(c *RosterContext, suffix, position int) RosterResult {
 	if position < 0 || position >= len(c.EnemyPool) {
 		position = 0
 	}
-	a := c.EnemyPool[position]
+	a := cloneCallbackActor(c.EnemyPool[position])
 	identity := func(n int) string { return "enemy-" + a.ID + "-" + string(rune('I'+n)) }
 	key := identity(suffix)
 	if s.rosterIdentity(key) != nil {
 		key = identity((suffix + 17) % 18)
 	}
 	if s.rosterIdentity(key) != nil {
-		return r, nil
+		return RosterResult{}
 	}
 	hard := func(v int) int {
 		if c.Hard {
@@ -101,22 +101,11 @@ func (s *LifetimeState) summonEnemy(c *RosterContext, id string, rng random.Gene
 	if a.Tension == 0 {
 		a.Tension = 1
 	}
-	// Payload definitions are immutable; the live incarnation owns its slices.
-	a.Abilities = slices.Clone(a.Abilities)
-	a.ItemDefinitionIDs = slices.Clone(a.ItemDefinitionIDs)
-	a.Skills = slices.Clone(a.Skills)
-	a.ActionItems = slices.Clone(a.ActionItems)
-	a.CustomSkills = slices.Clone(a.CustomSkills)
-	for i := range a.CustomSkills {
-		a.CustomSkills[i].Gems = slices.Clone(a.CustomSkills[i].Gems)
-	}
-	gear := *a.Gear
-	a.Gear = &gear
 	s.Actors = append(s.Actors, a)
 	if a.TeamID == s.actor(c.ActorID).TeamID {
 		c.PartyIDs = append(c.PartyIDs, a.ID)
 	} else {
 		c.EnemyIDs = append(c.EnemyIDs, a.ID)
 	}
-	return RosterResult{Applied: true, HelperID: a.ID}, nil
+	return RosterResult{Applied: true, HelperID: a.ID}
 }

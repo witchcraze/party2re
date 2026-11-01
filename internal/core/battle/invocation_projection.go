@@ -37,33 +37,38 @@ func (s LifetimeState) callbackCopy() LifetimeState {
 		s.SkillHistory[id] = maps.Clone(history)
 	}
 	for i := range s.Actors {
-		a := &s.Actors[i]
-		a.Abilities = slices.Clone(a.Abilities)
-		a.ItemDefinitionIDs = slices.Clone(a.ItemDefinitionIDs)
-		a.ConsumedItems = slices.Clone(a.ConsumedItems)
-		a.Skills = slices.Clone(a.Skills)
-		a.ActionItems = slices.Clone(a.ActionItems)
-		a.CustomSkills = slices.Clone(a.CustomSkills)
-		for j := range a.CustomSkills {
-			a.CustomSkills[j].Gems = slices.Clone(a.CustomSkills[j].Gems)
-		}
-		a.JobHistory = maps.Clone(a.JobHistory)
-		for id, sp := range a.JobHistory {
-			if sp != nil {
-				value := *sp
-				a.JobHistory[id] = &value
-			}
-		}
-		if a.Gear != nil {
-			gear := *a.Gear
-			a.Gear = &gear
-			if gear.WeaponAttack != nil {
-				value := *gear.WeaponAttack
-				a.Gear.WeaponAttack = &value
-			}
-		}
+		s.Actors[i] = cloneCallbackActor(s.Actors[i])
 	}
 	return s
+}
+
+func cloneCallbackActor(actor LifetimeActor) LifetimeActor {
+	a := &actor
+	a.Abilities = slices.Clone(a.Abilities)
+	a.ItemDefinitionIDs = slices.Clone(a.ItemDefinitionIDs)
+	a.ConsumedItems = slices.Clone(a.ConsumedItems)
+	a.Skills = slices.Clone(a.Skills)
+	a.ActionItems = slices.Clone(a.ActionItems)
+	a.CustomSkills = slices.Clone(a.CustomSkills)
+	for j := range a.CustomSkills {
+		a.CustomSkills[j].Gems = slices.Clone(a.CustomSkills[j].Gems)
+	}
+	a.JobHistory = maps.Clone(a.JobHistory)
+	for id, sp := range a.JobHistory {
+		if sp != nil {
+			value := *sp
+			a.JobHistory[id] = &value
+		}
+	}
+	if a.Gear != nil {
+		gear := *a.Gear
+		a.Gear = &gear
+		if gear.WeaponAttack != nil {
+			value := *gear.WeaponAttack
+			a.Gear.WeaponAttack = &value
+		}
+	}
+	return actor
 }
 
 // Unknown projections cannot leak tentative writes into conservative admission.
