@@ -306,7 +306,7 @@ func (r *AdventureRepository) GetAggregatedStats(ctx context.Context, characterI
 		SELECT
 			COUNT(*),
 			COALESCE(SUM(CASE WHEN (outcome = 'win' AND winner_id = ?) OR is_cleared = TRUE THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN (outcome = 'win' AND winner_id != ? AND is_cleared = FALSE) OR (outcome = 'loss') THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN (outcome = 'win' AND winner_id != ? AND is_cleared = FALSE) OR outcome IN ('defeat', 'loss') THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN outcome = 'draw' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(battle_turns), 0),
 			COALESCE(SUM(reward_experience), 0),

@@ -418,3 +418,237 @@ func TestAdventureRepository_CoopAndSeasonalClears(t *testing.T) {
 		t.Errorf("TotalGoldEarned = %d, want %d", statsAfter.TotalGoldEarned, 30+40+80)
 	}
 }
+
+func TestAdventureRepository_AggregatedStatsDefeatOutcomes(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	character, err := CreateTestCharacter(ctx, db, "Defeat Aggregate Hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repo, err := NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
+
+	// 1. Save resolved solo victory: winner_id = character.ID, is_cleared = true
+	advWin := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-01",
+		StageID:          "stage-01",
+		StartedAt:        now,
+		FloorsCleared:    5,
+		IsCleared:        true,
+		PartySize:        1,
+		ExperienceReward: 10,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			Turns:    3,
+			Reward: corebattle.Reward{
+				Experience: 10,
+				Currency:   5,
+			},
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, advWin); err != nil {
+		t.Fatalf("Save advWin: %v", err)
+	}
+
+	// Verify baseline after win: total=1, win=1, defeat=0, draw=0
+	stats1, err := repo.GetAggregatedStats(ctx, character.ID)
+	if err != nil {
+		t.Fatalf("GetAggregatedStats after win: %v", err)
+	}
+	if stats1.TotalAdventures != 1 || stats1.TotalVictories != 1 || stats1.TotalDefeats != 0 || stats1.TotalDraws != 0 {
+		t.Fatalf("unexpected stats after win: %+v", stats1)
+	}
+
+	// 2. Save resolved coop party defeat: canonical OutcomeDefeat, is_cleared = false, party_size = 2
+	advPartyDefeat := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-01",
+		StageID:          "stage-01",
+		StartedAt:        now.Add(1 * time.Hour),
+		FloorsCleared:    2,
+		IsCleared:        false,
+		PartySize:        2,
+		ExperienceReward: 2,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeDefeat,
+			WinnerID: "",
+			Turns:    4,
+			Reward: corebattle.Reward{
+				Experience: 2,
+				Currency:   1,
+			},
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, advPartyDefeat); err != nil {
+		t.Fatalf("Save advPartyDefeat: %v", err)
+	}
+
+	// Verify contrast: total=2, win=1, defeat=1, draw=0
+	stats2, err := repo.GetAggregatedStats(ctx, character.ID)
+	if err != nil {
+		t.Fatalf("GetAggregatedStats after party defeat: %v", err)
+	}
+	if stats2.TotalAdventures != 2 || stats2.TotalVictories != 1 || stats2.TotalDefeats != 1 || stats2.TotalDraws != 0 {
+		t.Fatalf("unexpected stats after party defeat: TotalAdventures=%d, TotalVictories=%d, TotalDefeats=%d, TotalDraws=%d",
+			stats2.TotalAdventures, stats2.TotalVictories, stats2.TotalDefeats, stats2.TotalDraws)
+	}
+
+	// 3. Save resolved solo defeat: canonical OutcomeDefeat, is_cleared = false, party_size = 1
+	advSoloDefeat := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-02",
+		StageID:          "stage-02",
+		StartedAt:        now.Add(2 * time.Hour),
+		FloorsCleared:    3,
+		IsCleared:        false,
+		PartySize:        1,
+		ExperienceReward: 0,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeDefeat,
+			WinnerID: "",
+			Turns:    5,
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, advSoloDefeat); err != nil {
+		t.Fatalf("Save advSoloDefeat: %v", err)
+	}
+
+	// 4. Save legacy 1-on-1 defeat representation: outcome=OutcomeWin, winner_id=monster, is_cleared=false
+	advLegacy1v1Defeat := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-02",
+		StageID:          "stage-02",
+		StartedAt:        now.Add(3 * time.Hour),
+		FloorsCleared:    1,
+		IsCleared:        false,
+		PartySize:        1,
+		ExperienceReward: 0,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: "mon-boss-99",
+			Turns:    6,
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, advLegacy1v1Defeat); err != nil {
+		t.Fatalf("Save advLegacy1v1Defeat: %v", err)
+	}
+
+	// 5. Save legacy compatibility record with outcome="loss"
+	advLegacyLoss := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-03",
+		StageID:          "stage-03",
+		StartedAt:        now.Add(4 * time.Hour),
+		FloorsCleared:    0,
+		IsCleared:        false,
+		PartySize:        1,
+		ExperienceReward: 0,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.Outcome("loss"),
+			WinnerID: "",
+			Turns:    2,
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, advLegacyLoss); err != nil {
+		t.Fatalf("Save advLegacyLoss: %v", err)
+	}
+
+	// 6. Save draw record: canonical OutcomeDraw
+	advDraw := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-03",
+		StageID:          "stage-03",
+		StartedAt:        now.Add(5 * time.Hour),
+		FloorsCleared:    2,
+		IsCleared:        false,
+		PartySize:        1,
+		ExperienceReward: 5,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeDraw,
+			WinnerID: "",
+			Turns:    10,
+			Reward: corebattle.Reward{
+				Experience: 5,
+				Currency:   2,
+			},
+		},
+		Resolved: true,
+	}
+	if err := repo.Save(ctx, advDraw); err != nil {
+		t.Fatalf("Save advDraw: %v", err)
+	}
+
+	// Final verification of all aggregated totals:
+	finalStats, err := repo.GetAggregatedStats(ctx, character.ID)
+	if err != nil {
+		t.Fatalf("GetAggregatedStats final: %v", err)
+	}
+
+	if finalStats.TotalAdventures != 6 {
+		t.Errorf("TotalAdventures = %d, want 6", finalStats.TotalAdventures)
+	}
+	if finalStats.TotalVictories != 1 {
+		t.Errorf("TotalVictories = %d, want 1", finalStats.TotalVictories)
+	}
+	if finalStats.TotalDefeats != 4 {
+		t.Errorf("TotalDefeats = %d, want 4", finalStats.TotalDefeats)
+	}
+	if finalStats.TotalDraws != 1 {
+		t.Errorf("TotalDraws = %d, want 1", finalStats.TotalDraws)
+	}
+	if finalStats.TotalTurns != 3+4+5+6+2+10 {
+		t.Errorf("TotalTurns = %d, want %d", finalStats.TotalTurns, 3+4+5+6+2+10)
+	}
+	if finalStats.TotalExpEarned != 10+2+0+0+0+5 {
+		t.Errorf("TotalExpEarned = %d, want %d", finalStats.TotalExpEarned, 10+2+0+0+0+5)
+	}
+	if finalStats.TotalGoldEarned != 5+1+0+0+0+2 {
+		t.Errorf("TotalGoldEarned = %d, want %d", finalStats.TotalGoldEarned, 5+1+0+0+0+2)
+	}
+
+	// Verify stage stats
+	stageClears := make(map[string]int)
+	stageAttempts := make(map[string]int)
+	for _, ss := range finalStats.StageStats {
+		stageClears[ss.StageID] += ss.ClearCount
+		stageAttempts[ss.StageID] += ss.TotalAttempts
+	}
+
+	if stageAttempts["stage-01"] != 2 || stageClears["stage-01"] != 1 {
+		t.Errorf("stage-01 attempts=%d clears=%d, want 2 attempts 1 clear", stageAttempts["stage-01"], stageClears["stage-01"])
+	}
+	if stageAttempts["stage-02"] != 2 || stageClears["stage-02"] != 0 {
+		t.Errorf("stage-02 attempts=%d clears=%d, want 2 attempts 0 clear", stageAttempts["stage-02"], stageClears["stage-02"])
+	}
+	if stageAttempts["stage-03"] != 2 || stageClears["stage-03"] != 0 {
+		t.Errorf("stage-03 attempts=%d clears=%d, want 2 attempts 0 clear", stageAttempts["stage-03"], stageClears["stage-03"])
+	}
+}
