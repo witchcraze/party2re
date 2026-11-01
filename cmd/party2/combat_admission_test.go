@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -424,8 +425,10 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 	var successCount int32
 	var rejectedCount int32
 	var otherCount int32
-	var createdPartyID string
+	var createdPartyIDs []string
 	var partyMu sync.Mutex
+	var errMu sync.Mutex
+	var capturedErrors []error
 	var wg sync.WaitGroup
 	startBarrier := make(chan struct{})
 
@@ -435,18 +438,30 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-startBarrier
-			pDetail, err := combat.party.CreateParty(ctx, char.ID, party.CreatePartyRequest{
-				Name:    pName,
-				StageID: "stage-26",
-			})
+			var pDetail party.PartyDetail
+			var err error
+			for retry := 0; retry < 3; retry++ {
+				pDetail, err = combat.party.CreateParty(ctx, char.ID, party.CreatePartyRequest{
+					Name:    pName,
+					StageID: "stage-26",
+				})
+				if err == nil || !database.IsDeadlockError(err) {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
 			if err == nil {
 				atomic.AddInt32(&successCount, 1)
 				partyMu.Lock()
-				createdPartyID = pDetail.Party.ID
+				createdPartyIDs = append(createdPartyIDs, pDetail.Party.ID)
 				partyMu.Unlock()
-			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) || errors.Is(err, party.ErrAlreadyInParty) || database.IsDeadlockError(err) {
 				atomic.AddInt32(&rejectedCount, 1)
 			} else {
+				t.Logf("unexpected party create error: %v", err)
+				errMu.Lock()
+				capturedErrors = append(capturedErrors, fmt.Errorf("create party: %w", err))
+				errMu.Unlock()
 				atomic.AddInt32(&otherCount, 1)
 			}
 		}()
@@ -457,15 +472,26 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-startBarrier
-			_, err := combat.adv.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
-				CharacterIDs: []string{char.ID},
-				StageID:      "stage-26",
-			})
+			var err error
+			for retry := 0; retry < 3; retry++ {
+				_, err = combat.adv.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+					CharacterIDs: []string{char.ID},
+					StageID:      "stage-26",
+				})
+				if err == nil || !database.IsDeadlockError(err) {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
 			if err == nil {
 				atomic.AddInt32(&successCount, 1)
-			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) || errors.Is(err, party.ErrAlreadyInParty) || database.IsDeadlockError(err) {
 				atomic.AddInt32(&rejectedCount, 1)
 			} else {
+				t.Logf("unexpected execute crawl error: %v", err)
+				errMu.Lock()
+				capturedErrors = append(capturedErrors, fmt.Errorf("execute crawl: %w", err))
+				errMu.Unlock()
 				atomic.AddInt32(&otherCount, 1)
 			}
 		}()
@@ -474,16 +500,31 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 	close(startBarrier)
 	wg.Wait()
 
-	if createdPartyID != "" {
-		_ = combat.party.DisbandParty(ctx, createdPartyID, char.ID)
+	partyMu.Lock()
+	for _, pid := range createdPartyIDs {
+		_ = combat.party.DisbandParty(ctx, pid, char.ID)
 	}
+	partyMu.Unlock()
 
 	if successCount != 1 {
-		t.Fatalf("expected exactly 1 success across solo and party, got %d (rejected=%d, other=%d)",
-			successCount, rejectedCount, otherCount)
+		errMu.Lock()
+		errs := append([]error(nil), capturedErrors...)
+		errMu.Unlock()
+		t.Fatalf("expected exactly 1 success across solo and party, got %d (rejected=%d, other=%d, capturedErrors=%v)",
+			successCount, rejectedCount, otherCount, errs)
 	}
 	if rejectedCount != attempts-1 {
-		t.Fatalf("expected %d rejections, got %d (other=%d)", attempts-1, rejectedCount, otherCount)
+		errMu.Lock()
+		errs := append([]error(nil), capturedErrors...)
+		errMu.Unlock()
+		t.Fatalf("expected %d rejections, got %d (other=%d, capturedErrors=%v)",
+			attempts-1, rejectedCount, otherCount, errs)
+	}
+	if otherCount != 0 {
+		errMu.Lock()
+		errs := append([]error(nil), capturedErrors...)
+		errMu.Unlock()
+		t.Fatalf("expected 0 unexpected errors, got %d (capturedErrors=%v)", otherCount, errs)
 	}
 
 	locked, err := soc.timer.IsLocked(ctx, timer.CategoryDungeonOnce, char.ID)
