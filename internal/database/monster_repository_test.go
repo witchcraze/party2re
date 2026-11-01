@@ -185,13 +185,33 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 	}
 
 	t.Run("SendVsSend", func(t *testing.T) {
-		c1 := createHighCapChar(t, "SvS1")
-		c2 := createHighCapChar(t, "SvS2")
-		c3 := createHighCapChar(t, "SvS3")
-		registerCharacterCleanup(t, db, c1.ID, c2.ID, c3.ID)
+		chars := []corecharacter.Character{
+			createHighCapChar(t, "SvS1"),
+			createHighCapChar(t, "SvS2"),
+			createHighCapChar(t, "SvS3"),
+		}
+		registerCharacterCleanup(t, db, chars[0].ID, chars[1].ID, chars[2].ID)
+
+		// Order characters so c2.ID < c1.ID < c3.ID, ensuring c1->c2 (sender > recipient)
+		// and c1->c3 (sender < recipient) exercise both ID lock ordering directions.
+		if chars[0].ID > chars[1].ID {
+			chars[0], chars[1] = chars[1], chars[0]
+		}
+		if chars[1].ID > chars[2].ID {
+			chars[1], chars[2] = chars[2], chars[1]
+		}
+		if chars[0].ID > chars[1].ID {
+			chars[0], chars[1] = chars[1], chars[0]
+		}
+		c2, c1, c3 := chars[0], chars[1], chars[2]
+
+		totalMonsters := cfg.Workers / 2
+		if totalMonsters < 1 {
+			totalMonsters = 1
+		}
 
 		now := time.Now().UTC()
-		monsters := make([]monster.MonsterInstance, cfg.Workers)
+		monsters := make([]monster.MonsterInstance, totalMonsters)
 		for i := range monsters {
 			inst := monster.MonsterInstance{
 				ID:          id.New(),
@@ -208,20 +228,35 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 			monsters[i] = inst
 		}
 
+		sentToC2 := make([]atomic.Int32, totalMonsters)
+		sentToC3 := make([]atomic.Int32, totalMonsters)
+		var forbiddenCount atomic.Int32
+
 		res := RunConcurrentStressTest(t, cfg, func(workerID, op int) error {
-			instID := monsters[(workerID+op)%len(monsters)].ID
-			var err error
-			switch (workerID + op) % 4 {
-			case 0:
-				err = svc.SendMonster(ctx, c1.ID, c2.ID, instID)
-			case 1:
-				err = svc.SendMonster(ctx, c1.ID, c3.ID, instID)
-			case 2:
-				err = svc.SendMonster(ctx, c2.ID, c3.ID, instID)
-			default:
-				err = svc.SendMonster(ctx, c3.ID, c2.ID, instID)
+			// Pair workers (2k, 2k+1) on the same monster index while alternating target recipients
+			idx := (workerID/2 + op) % totalMonsters
+			instID := monsters[idx].ID
+
+			if (workerID+op)%2 == 0 {
+				err := svc.SendMonster(ctx, c1.ID, c2.ID, instID)
+				if err == nil {
+					sentToC2[idx].Add(1)
+					return nil
+				}
+				if errors.Is(err, monster.ErrForbidden) {
+					forbiddenCount.Add(1)
+					return nil
+				}
+				return err
 			}
-			if err == nil || errors.Is(err, monster.ErrForbidden) {
+
+			err := svc.SendMonster(ctx, c1.ID, c3.ID, instID)
+			if err == nil {
+				sentToC3[idx].Add(1)
+				return nil
+			}
+			if errors.Is(err, monster.ErrForbidden) {
+				forbiddenCount.Add(1)
 				return nil
 			}
 			return err
@@ -230,27 +265,52 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 		if res.Failures != 0 {
 			t.Fatalf("SendVsSend unexpected failures: %+v", res)
 		}
+		if int64(forbiddenCount.Load()) != res.TotalOps-int64(totalMonsters) {
+			t.Fatalf("SendVsSend forbidden rejections = %d, want %d", forbiddenCount.Load(), res.TotalOps-int64(totalMonsters))
+		}
 
-		seen := make(map[string]string, len(monsters))
-		for _, cid := range []string{c1.ID, c2.ID, c3.ID} {
-			list, err := monRepo.ListByCharacterID(ctx, cid)
+		wantC2Count := 0
+		wantC3Count := 0
+		for i, m := range monsters {
+			toC2 := sentToC2[i].Load()
+			toC3 := sentToC3[i].Load()
+			if toC2+toC3 != 1 {
+				t.Fatalf("monster %d (%s) send success count: toC2=%d, toC3=%d, want exactly 1 total", i, m.ID, toC2, toC3)
+			}
+			wantOwner := c2.ID
+			if toC3 == 1 {
+				wantOwner = c3.ID
+				wantC3Count++
+			} else {
+				wantC2Count++
+			}
+
+			stored, err := monRepo.FindByID(ctx, m.ID)
 			if err != nil {
-				t.Fatalf("ListByCharacterID %s: %v", cid, err)
+				t.Fatalf("FindByID monster %s: %v", m.ID, err)
 			}
-			for _, m := range list {
-				if m.Location != monster.LocationBox {
-					t.Fatalf("monster %s location = %s, want box", m.ID, m.Location)
-				}
-				if prevOwner, dup := seen[m.ID]; dup {
-					t.Fatalf("monster %s duplicated across %s and %s", m.ID, prevOwner, cid)
-				}
-				seen[m.ID] = cid
+			if stored.CharacterID != wantOwner || stored.Location != monster.LocationBox {
+				t.Fatalf("monster %s owner/location = (%s, %s), want (%s, box)", m.ID, stored.CharacterID, stored.Location, wantOwner)
 			}
 		}
-		if len(seen) != len(monsters) {
-			t.Fatalf("conserved monsters = %d, want %d", len(seen), len(monsters))
+
+		c1Count, err := monRepo.CountByLocation(ctx, c1.ID, monster.LocationBox)
+		if err != nil {
+			t.Fatalf("CountByLocation c1: %v", err)
 		}
-		t.Logf("SendVsSend completed: %d ops in %v (0 deadlocks)", res.TotalOps, res.Duration)
+		c2Count, err := monRepo.CountByLocation(ctx, c2.ID, monster.LocationBox)
+		if err != nil {
+			t.Fatalf("CountByLocation c2: %v", err)
+		}
+		c3Count, err := monRepo.CountByLocation(ctx, c3.ID, monster.LocationBox)
+		if err != nil {
+			t.Fatalf("CountByLocation c3: %v", err)
+		}
+		if c1Count != 0 || c2Count != wantC2Count || c3Count != wantC3Count {
+			t.Fatalf("final box counts (c1=%d, c2=%d, c3=%d), want (0, %d, %d)", c1Count, c2Count, c3Count, wantC2Count, wantC3Count)
+		}
+		t.Logf("SendVsSend completed: %d ops in %v (sentToC2=%d, sentToC3=%d, forbidden=%d, 0 deadlocks)",
+			res.TotalOps, res.Duration, wantC2Count, wantC3Count, forbiddenCount.Load())
 	})
 
 	t.Run("SendVsRelease", func(t *testing.T) {
