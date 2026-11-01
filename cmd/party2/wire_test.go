@@ -784,23 +784,24 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Store Ortega in home_members (0 farm monsters present)
-	memberID := fmt.Sprintf("hm-o-%d", time.Now().UnixNano()%1000000000000000)
-	member := god.HomeMember{
-		ID:          memberID,
-		CharacterID: c.ID,
-		IsNPC:       true,
-		Name:        "オルテガ",
-		Icon:        "ortega_icon",
-		Color:       "#ffffff",
-		CreatedAt:   time.Now().UTC(),
-	}
-	if err := homeMemberRepo.AddMember(ctx, member); err != nil {
-		t.Fatalf("AddMember failed: %v", err)
-	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM home_members WHERE id = ?", memberID)
+		_, _ = db.ExecContext(ctx, "DELETE FROM home_members WHERE character_id = ?", c.ID)
+		_, _ = db.ExecContext(ctx, "DELETE FROM character_monsters WHERE character_id = ?", c.ID)
+		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id = ?", c.ID)
 	})
+
+	txProvider := database.NewTransactionProvider(db)
+	godSvc, err := god.NewService(
+		charRepo,
+		god.WithTransactionProvider(txProvider),
+		god.WithHomeMemberRepository(homeMemberRepo),
+	)
+	if err != nil {
+		t.Fatalf("god.NewService failed: %v", err)
+	}
+	if _, err := godSvc.GrantWish(ctx, c.ID, god.WishOrtega, god.RealmHeaven); err != nil {
+		t.Fatalf("GrantWish WishOrtega failed: %v", err)
+	}
 
 	adapter := &homePetAdapter{
 		monsterRepo:    monsterRepo,
@@ -816,6 +817,13 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 		t.Fatalf("home.NewService failed: %v", err)
 	}
 
+	monsterSvc := monster.NewService(
+		charRepo,
+		monsterRepo,
+		monster.WithTransactionProvider(txProvider),
+		monster.WithHomeCompanionStore(homeMemberRepo),
+	)
+
 	// 1. Verify GetHomeView exposes Ortega in ResidentPets
 	view, err := homeSvc.GetHomeView(ctx, c.ID, c.ID, c.PlayerID)
 	if err != nil {
@@ -824,7 +832,8 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	if len(view.ResidentPets) != 1 {
 		t.Fatalf("expected 1 resident pet, got %d", len(view.ResidentPets))
 	}
-	if view.ResidentPets[0].CustomName != "オルテガ" || view.ResidentPets[0].MonsterID != "ortega_icon" {
+	memberID := view.ResidentPets[0].ID
+	if view.ResidentPets[0].CustomName != "オルテガ" || view.ResidentPets[0].MonsterID != "chr/029.gif" {
 		t.Errorf("unexpected resident pet: %+v", view.ResidentPets[0])
 	}
 
@@ -850,6 +859,38 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	}
 	if talkRes2.PetName != "オルテガ" || talkRes2.Phrase != phraseText {
 		t.Errorf("expected オルテガ speaking %q, got %+v", phraseText, talkRes2)
+	}
+
+	// 4. Deposit Ortega to ranch box via monster.Service and verify HomeView + ranch summary
+	boxInst, err := monsterSvc.DepositToBox(ctx, c.ID, memberID)
+	if err != nil {
+		t.Fatalf("DepositToBox Ortega failed: %v", err)
+	}
+	if boxInst.ID != memberID || boxInst.CustomName != "オルテガ" || boxInst.MonsterID != "chr/029.gif" || boxInst.Location != monster.LocationBox {
+		t.Fatalf("unexpected deposited Ortega: %+v", boxInst)
+	}
+	viewAfterDeposit, err := homeSvc.GetHomeView(ctx, c.ID, c.ID, c.PlayerID)
+	if err != nil {
+		t.Fatalf("GetHomeView after deposit failed: %v", err)
+	}
+	if len(viewAfterDeposit.ResidentPets) != 0 {
+		t.Fatalf("expected 0 resident pets after deposit, got %+v", viewAfterDeposit.ResidentPets)
+	}
+
+	// 5. Bring Ortega back to Home and verify identity/icon/phrase are preserved in HomeView
+	homeInst, err := monsterSvc.BringToHome(ctx, c.ID, memberID)
+	if err != nil {
+		t.Fatalf("BringToHome Ortega failed: %v", err)
+	}
+	if homeInst.ID != memberID || homeInst.CustomName != "オルテガ" || homeInst.MonsterID != "chr/029.gif" || homeInst.Location != monster.LocationHome {
+		t.Fatalf("unexpected brought-home Ortega: %+v", homeInst)
+	}
+	viewAfterBringBack, err := homeSvc.GetHomeView(ctx, c.ID, c.ID, c.PlayerID)
+	if err != nil {
+		t.Fatalf("GetHomeView after bring back failed: %v", err)
+	}
+	if len(viewAfterBringBack.ResidentPets) != 1 || viewAfterBringBack.ResidentPets[0].ID != memberID || viewAfterBringBack.ResidentPets[0].CustomName != "オルテガ" || viewAfterBringBack.ResidentPets[0].MonsterID != "chr/029.gif" {
+		t.Fatalf("unexpected resident pet after bring back: %+v", viewAfterBringBack.ResidentPets)
 	}
 }
 

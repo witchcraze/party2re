@@ -81,6 +81,7 @@ type TransactionProvider interface {
 type Service struct {
 	characters CharacterRepository
 	monsters   MonsterRepository
+	companions HomeCompanionStore
 	txProvider TransactionProvider
 }
 
@@ -89,6 +90,12 @@ type Option func(*Service)
 func WithTransactionProvider(tp TransactionProvider) Option {
 	return func(s *Service) {
 		s.txProvider = tp
+	}
+}
+
+func WithHomeCompanionStore(store HomeCompanionStore) Option {
+	return func(s *Service) {
+		s.companions = store
 	}
 }
 
@@ -155,6 +162,15 @@ func (s *Service) GetSummary(ctx context.Context, characterID, locationFilter st
 		return MonsterBoxSummary{}, err
 	}
 
+	var companions []HomeCompanion
+	if s.companions != nil {
+		companions, err = s.companions.ListHomeCompanions(ctx, characterID)
+		if err != nil {
+			return MonsterBoxSummary{}, err
+		}
+		homeCount += len(companions)
+	}
+
 	var instances []MonsterInstance
 	if locationFilter != "" {
 		if locationFilter != LocationBox && locationFilter != LocationHome {
@@ -166,6 +182,21 @@ func (s *Service) GetSummary(ctx context.Context, characterID, locationFilter st
 	}
 	if err != nil {
 		return MonsterBoxSummary{}, err
+	}
+
+	if locationFilter == "" || locationFilter == LocationHome {
+		for _, c := range companions {
+			createdAt := c.CreatedAt
+			instances = append(instances, MonsterInstance{
+				ID:          c.ID,
+				CharacterID: c.CharacterID,
+				MonsterID:   c.MonsterID,
+				CustomName:  c.CustomName,
+				Location:    LocationHome,
+				CreatedAt:   createdAt,
+				UpdatedAt:   createdAt,
+			})
+		}
 	}
 
 	return MonsterBoxSummary{
@@ -234,104 +265,6 @@ func (s *Service) TameMonster(ctx context.Context, characterID, monsterID, custo
 		return MonsterInstance{}, err
 	}
 	return created, nil
-}
-
-// BringToHome transfers a monster from Monster Grandpa's box into the player's home as a pet.
-func (s *Service) BringToHome(ctx context.Context, characterID, instanceID string) (MonsterInstance, error) {
-	var updated MonsterInstance
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		_, err := s.characters.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			if errors.Is(err, corecharacter.ErrNotFound) {
-				return ErrCharacterNotFound
-			}
-			return err
-		}
-
-		inst, err := s.monsters.FindByIDForUpdate(txCtx, instanceID)
-		if err != nil {
-			return err
-		}
-		if inst.CharacterID != characterID {
-			return ErrForbidden
-		}
-		if inst.Location == LocationHome {
-			return nil // already at home
-		}
-
-		homeMonsters, err := s.monsters.ListByCharacterIDAndLocation(txCtx, characterID, LocationHome)
-		if err != nil {
-			return err
-		}
-		if len(homeMonsters) >= MaxHomePets {
-			return ErrHomeFull
-		}
-
-		for _, m := range homeMonsters {
-			if m.CustomName == inst.CustomName {
-				return ErrDuplicatePetNameAtHome
-			}
-		}
-
-		inst.Location = LocationHome
-		inst.UpdatedAt = time.Now().UTC()
-		if err := s.monsters.Save(txCtx, inst); err != nil {
-			return err
-		}
-		updated = inst
-		return nil
-	})
-
-	if err != nil {
-		return MonsterInstance{}, err
-	}
-	return updated, nil
-}
-
-// DepositToBox deposits a home pet back to Monster Grandpa storage box.
-func (s *Service) DepositToBox(ctx context.Context, characterID, instanceID string) (MonsterInstance, error) {
-	var updated MonsterInstance
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			if errors.Is(err, corecharacter.ErrNotFound) {
-				return ErrCharacterNotFound
-			}
-			return err
-		}
-
-		inst, err := s.monsters.FindByIDForUpdate(txCtx, instanceID)
-		if err != nil {
-			return err
-		}
-		if inst.CharacterID != characterID {
-			return ErrForbidden
-		}
-		if inst.Location == LocationBox {
-			return nil // already in box
-		}
-
-		boxCount, err := s.monsters.CountByLocation(txCtx, characterID, LocationBox)
-		if err != nil {
-			return err
-		}
-		if boxCount >= BoxCapacityForCharacter(char) {
-			return ErrBoxFull
-		}
-
-		inst.Location = LocationBox
-		inst.UpdatedAt = time.Now().UTC()
-		if err := s.monsters.Save(txCtx, inst); err != nil {
-			return err
-		}
-		updated = inst
-		return nil
-	})
-
-	if err != nil {
-		return MonsterInstance{}, err
-	}
-	return updated, nil
 }
 
 // Rename updates a monster's custom nickname.

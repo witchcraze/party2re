@@ -375,6 +375,9 @@ func (a *homePetAdapter) ListHomePets(ctx context.Context, characterID string) (
 			return nil, err
 		}
 		for _, m := range members {
+			if !m.IsNPC {
+				continue
+			}
 			res = append(res, home.HomePet{
 				ID:         m.ID,
 				CustomName: m.Name,

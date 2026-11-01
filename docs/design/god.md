@@ -53,6 +53,8 @@ The Heaven catalog comprises 18 standard wishes plus 1 conditional level-cap wis
 | `wish_limit_break_level` | もっと強くなりたい | Lv上限を上げる | $\text{Level} \ge 99 \land \lnot\text{OverLevel} \land \lnot\text{JobMemory.IsTemporary()}$ | $\text{OverLevel} = \text{true}$ (raises max level from 99 to 150) |
 | `wish_restore_level_limit` | もとの強さに戻りたい | Lv上限を元に戻す | $\text{OverLevel} = \text{true}$ | $\text{OverLevel} = \text{false}$ (restores level cap to 99) |
 
+NPC companions granted by `wish_ortega`, `wish_cat`, and `wish_secret_maid` are stored in `home_members` (`is_npc = true`), displayed in `HomeView.ResidentPets`, and participate in Monster Grandpa ranch operations (`DepositToBox`, `BringToHome`, duplicate-name checks, and the 8-pet Home capacity limit; see [Monster Design](monster.md)).
+
 ### 3.2 Underworld Wishes (裏天界の願い事)
 
 Each Underworld limit break can be upgraded up to 5 tiers (`0/5` to `5/5`):

@@ -20,13 +20,23 @@
         "RunInTx"
       ],
       "source_ref": "internal/database/tx.go#TransactionProvider"
+    },
+    {
+      "module": "home/companions",
+      "relation_type": "public_service_call",
+      "methods": [
+        "ListHomeCompanions",
+        "FindHomeCompanionForUpdate",
+        "DeleteHomeCompanion"
+      ],
+      "source_ref": "internal/monster/home_transfer.go#HomeCompanionStore"
     }
   ],
   "transaction_flows": [
     {
       "flow": "BringToHome (モンスターを家に連れて行く)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/monster/monster.go#Service.BringToHome",
+      "source_ref": "internal/monster/home_transfer.go#Service.BringToHome",
       "lock_sequence": [
         {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate"},
         {"step": 2, "target": "character_monsters", "method": "MonsterRepository.FindByIDForUpdate"}
@@ -35,10 +45,11 @@
     {
       "flow": "DepositToBox (ペットを預かり所に戻す)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/monster/monster.go#Service.DepositToBox",
+      "source_ref": "internal/monster/home_transfer.go#Service.DepositToBox",
       "lock_sequence": [
         {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate"},
-        {"step": 2, "target": "character_monsters", "method": "MonsterRepository.FindByIDForUpdate"}
+        {"step": 2, "target": "character_monsters", "method": "MonsterRepository.FindByIDForUpdate"},
+        {"step": 3, "target": "home_members", "method": "HomeCompanionStore.FindHomeCompanionForUpdate"}
       ]
     },
     {

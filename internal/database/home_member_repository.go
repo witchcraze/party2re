@@ -8,6 +8,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/god"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/monster"
 )
 
 // HomeMemberRepository manages home members and player home/avatar customizations.
@@ -30,7 +31,7 @@ func (r *HomeMemberRepository) FindByCharacterID(ctx context.Context, characterI
 		SELECT id, character_id, is_npc, name, icon, color, created_at
 		FROM home_members
 		WHERE character_id = ?
-		ORDER BY created_at ASC
+		ORDER BY created_at ASC, id ASC
 	`, characterID)
 	if err != nil {
 		return nil, err
@@ -46,6 +47,85 @@ func (r *HomeMemberRepository) FindByCharacterID(ctx context.Context, characterI
 		members = append(members, m)
 	}
 	return members, rows.Err()
+}
+
+// FindByIDForUpdate retrieves and locks a single home member by ID.
+func (r *HomeMemberRepository) FindByIDForUpdate(ctx context.Context, id string) (god.HomeMember, error) {
+	executor := ExecutorFromContext(ctx, r.db)
+	row := executor.QueryRowContext(ctx, `
+		SELECT id, character_id, is_npc, name, icon, color, created_at
+		FROM home_members
+		WHERE id = ?
+		FOR UPDATE
+	`, id)
+	var m god.HomeMember
+	if err := row.Scan(&m.ID, &m.CharacterID, &m.IsNPC, &m.Name, &m.Icon, &m.Color, &m.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return god.HomeMember{}, monster.ErrMonsterNotFound
+		}
+		return god.HomeMember{}, err
+	}
+	return m, nil
+}
+
+// ListHomeCompanions retrieves all NPC companions for a character from home_members.
+func (r *HomeMemberRepository) ListHomeCompanions(ctx context.Context, characterID string) ([]monster.HomeCompanion, error) {
+	members, err := r.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	var companions []monster.HomeCompanion
+	for _, m := range members {
+		if !m.IsNPC {
+			continue
+		}
+		companions = append(companions, monster.HomeCompanion{
+			ID:          m.ID,
+			CharacterID: m.CharacterID,
+			MonsterID:   m.Icon,
+			CustomName:  m.Name,
+			CreatedAt:   m.CreatedAt,
+		})
+	}
+	return companions, nil
+}
+
+// FindHomeCompanionForUpdate retrieves and locks an NPC companion from home_members.
+func (r *HomeMemberRepository) FindHomeCompanionForUpdate(ctx context.Context, id string) (monster.HomeCompanion, error) {
+	m, err := r.FindByIDForUpdate(ctx, id)
+	if err != nil {
+		return monster.HomeCompanion{}, err
+	}
+	if !m.IsNPC {
+		return monster.HomeCompanion{}, monster.ErrMonsterNotFound
+	}
+	return monster.HomeCompanion{
+		ID:          m.ID,
+		CharacterID: m.CharacterID,
+		MonsterID:   m.Icon,
+		CustomName:  m.Name,
+		CreatedAt:   m.CreatedAt,
+	}, nil
+}
+
+// DeleteHomeCompanion deletes an NPC companion from home_members scoped to its owner character.
+func (r *HomeMemberRepository) DeleteHomeCompanion(ctx context.Context, characterID, id string) error {
+	executor := ExecutorFromContext(ctx, r.db)
+	res, err := executor.ExecContext(ctx, `
+		DELETE FROM home_members
+		WHERE id = ? AND character_id = ? AND is_npc = TRUE
+	`, id, characterID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return monster.ErrMonsterNotFound
+	}
+	return nil
 }
 
 // AddMember adds a new resident or NPC companion to the character's home.

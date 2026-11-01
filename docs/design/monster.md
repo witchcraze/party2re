@@ -36,8 +36,9 @@ The Monster system (`internal/monster`, legacy `farm.cgi` / `monster.cgi`) provi
     - Tier 5: 350 monsters
 
 ### 3.2 Home Pet Capacity (家のペット)
-- **Maximum Pets per Home**: Up to 8 monsters (`MaxHomePets = 8`).
-- **Uniqueness Constraint**: Within a single player home, no two pets may share the exact same `custom_name`. If a duplicate name is brought home, the system rejects the operation and prompts the player to rename the monster (`なづける`).
+- **Resident Pool**: Home pets comprise both tamed monsters at home (`character_monsters` with `location = "home"`) and Heaven Wish NPC companions (`home_members` with `is_npc = true`, such as Ortega, Cat, and Maid).
+- **Maximum Pets per Home**: Up to 8 resident pets/companions combined (`MaxHomePets = 8`).
+- **Uniqueness Constraint**: Within a single player home, no two resident pets/companions across `character_monsters` (`location = "home"`) and `home_members` (`is_npc = true`) may share the exact same `custom_name`. If a duplicate name is brought home, the system rejects the operation (`ErrDuplicatePetNameAtHome`) and prompts the player to rename the monster (`なづける`).
 
 ---
 
@@ -55,7 +56,10 @@ In alignment with legacy `farm.cgi:38-47`, the Monster Grandpa facility provides
 | **Send Monster** | `おくる` | `POST /characters/{id}/monsters/{instance_id}/send` | Gifts a boxed monster (`location=box`) to another player character's box. |
 | **Release** | `わかれる` | `POST /characters/{id}/monsters/{instance_id}/release` | Releases a boxed monster (`location=box`) back into the wild. |
 
-In alignment with legacy `lib/farm.cgi:93-98,130-135,225-227,291-296`, `rename`, `send`, and `release` target only monsters stored in the ranch box (`location = "box"`). Home pets (`location = "home"`) must first be deposited into the box via `deposit` (subject to box capacity) before being renamed, gifted, or released; direct `rename`, `send`, or `release` requests on a home pet are rejected with `ErrInvalidLocation` (HTTP `409 Conflict`).
+In alignment with legacy `lib/farm.cgi:93-98,130-135,155-263,291-296`:
+- `GetSummary` (`みる`) includes Heaven Wish NPC companions (`home_members` with `is_npc = true`) in `HomeCount` and in the returned monster list when `location` is unfiltered or `"home"`.
+- `DepositToBox` (`あずける`) accepts both `character_monsters` (`location = "home"`) and Heaven Wish NPC companions (`home_members` with `is_npc = true`). Depositing a `home_members` companion atomically inserts it into `character_monsters` (`location = "box"`, preserving `ID`, `CharacterID`, `MonsterID`/icon, `CustomName`, and `CreatedAt`) and deletes the `home_members` row within the same transaction (`RunInTx`), subject to `BoxCapacityForCharacter`. Bringing it back via `BringToHome` (`つれてく`) sets `location = "home"` in `character_monsters` while preserving its identity, icon, and ownership.
+- `rename`, `send`, and `release` target only monsters stored in the ranch box (`location = "box"`). Home pets (`location = "home"`) must first be deposited into the box via `deposit` (subject to box capacity) before being renamed, gifted, or released; direct `rename`, `send`, or `release` requests on a home pet are rejected with `ErrInvalidLocation` (HTTP `409 Conflict`).
 
 ### 4.1 Sleep and CanWake Action Guards
 
@@ -81,7 +85,7 @@ Custom monster pet nicknames must satisfy:
 
 All monster mutations run within Unit of Work database transactions (`RunInTx`) with deterministic pessimistic locking:
 - `characters` locked with `FOR UPDATE` (sorted in ascending character ID order during transfers).
-- `character_monsters` rows locked with `FOR UPDATE`.
+- `character_monsters` and `home_members` (`is_npc = true`) rows locked with `FOR UPDATE`.
 - Zero IDOR: All operations verify session authentication and character ownership.
 
 ---
