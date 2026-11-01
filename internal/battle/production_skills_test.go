@@ -67,8 +67,8 @@ func TestProductionSkillWiringAndGates(t *testing.T) {
 			0: nil,
 			1: {"job-6-entry-1"},
 			7: {"job-6-entry-1"},
-			8: {"job-6-entry-1", "job-6-entry-3"},
-			9: {"job-6-entry-1", "job-6-entry-3"},
+			8: {"job-6-entry-3", "job-6-entry-1"},
+			9: {"job-6-entry-3", "job-6-entry-1"},
 		} {
 			charID := "hero-mage"
 			charRepo.characters[charID] = corecharacter.Character{
@@ -190,7 +190,7 @@ func TestProductionSkillWiringAndGates(t *testing.T) {
 		if len(p.Skills) != 3 {
 			t.Fatalf("expected 3 skills, got %d (%v)", len(p.Skills), p.Skills)
 		}
-		wantOrder := []string{"job-6-entry-1", "job-6-entry-3", "job-5-entry-3"}
+		wantOrder := []string{"job-6-entry-3", "job-6-entry-1", "job-5-entry-3"}
 		for i, id := range wantOrder {
 			if p.Skills[i].ID != id {
 				t.Errorf("skill[%d] = %s, want %s", i, p.Skills[i].ID, id)
@@ -546,10 +546,21 @@ func TestProductionBattleExecution(t *testing.T) {
 		engine := corebattle.Engine{}
 		detRNG := deterministicBattleRNG{fVal: 1.0 / 3.0}
 
-		// 3a. Facing 1 enemy: should choose single-target magic-20
+		// 3a. Mage with SP 5 (< 8) only unlocks magic-20 -> executes single-target magic-20 from catalog
 		enemy1 := corebattle.Participant{ID: "e1", HP: 200, MaxHP: 200, Defense: 10, Attack: 0}
+		charRepo.characters["mage-sp5"] = corecharacter.Character{
+			ID:    "mage-sp5",
+			Name:  "MageSP5",
+			JobID: "job-06",
+			SP:    5,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 20, Attack: 20, Defense: 50, Agility: 50},
+		}
+		mageSP5, err := svc.BuildParticipant(ctx, "mage-sp5")
+		if err != nil {
+			t.Fatal(err)
+		}
 		resSingle, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
-			Allies:  []corebattle.Participant{mageFull},
+			Allies:  []corebattle.Participant{mageSP5},
 			Enemies: []corebattle.Participant{enemy1},
 			RNG:     detRNG,
 		})
@@ -558,13 +569,13 @@ func TestProductionBattleExecution(t *testing.T) {
 		}
 		foundAction := ""
 		for _, log := range resSingle.Logs {
-			if log.ActorID == mageFull.ID {
+			if log.ActorID == mageSP5.ID {
 				foundAction = log.ActionName
 				break
 			}
 		}
 		if foundAction != "magic-20" {
-			t.Fatalf("facing 1 enemy: expected action magic-20, got %s", foundAction)
+			t.Fatalf("Mage SP 5: expected action magic-20, got %s", foundAction)
 		}
 
 		// 3b. Facing 2 enemies with MP >= 5: should choose all-enemies magic-wave-25
@@ -706,4 +717,425 @@ func TestProductionBattleExecution(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestMagicSealSkillExecution(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	svc := newTestProductionBattleService(charRepo)
+	engine := corebattle.Engine{}
+
+	charRepo.characters["mage-sealed"] = corecharacter.Character{
+		ID:    "mage-sealed",
+		Name:  "Mage",
+		JobID: "job-06",
+		SP:    5, // unlocks magic-20 only
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 10, Attack: 10, Defense: 10, Agility: 50},
+	}
+	mage, err := svc.BuildParticipant(ctx, "mage-sealed")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	enemy := corebattle.Participant{
+		ID:        "enemy",
+		Name:      "Target",
+		HP:        100,
+		MaxHP:     100,
+		Defense:   10,
+		Defending: true,
+	}
+
+	// 1. Seal persists (RNG float64 = 0.50 >= 0.25)
+	t.Run("seal persists: MP deducted, effect aborted, tension preserved", func(t *testing.T) {
+		mageSealed := mage
+		mageSealed.Status = corebattle.StatusMagicSeal
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:         []corebattle.Participant{mageSealed},
+			Enemies:        []corebattle.Participant{enemy},
+			InitialTension: map[string]float64{mageSealed.ID: 1.5},
+			RNG:            deterministicBattleRNG{fVal: 0.50}, // >= 0.25 -> fails cure
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Find turn 1 log for mage
+		foundSealLog := false
+		for _, log := range res.Logs {
+			if log.ActorID == mageSealed.ID {
+				if log.ActionName == "magic-20" && log.Message == "しかし、Mage は魔法が封じられていた" {
+					foundSealLog = true
+					if log.DamageDealt != 0 {
+						t.Errorf("expected 0 damage when sealed, got %d", log.DamageDealt)
+					}
+					if log.RemainingHP[enemy.ID] != 100 {
+						t.Errorf("enemy HP changed on turn 1 despite magic seal: %d", log.RemainingHP[enemy.ID])
+					}
+					break
+				}
+			}
+		}
+		if !foundSealLog {
+			t.Fatalf("expected seal failure message in logs: %+v", res.Logs)
+		}
+	})
+
+	// 2. Seal cured (RNG float64 = 0.10 < 0.25)
+	t.Run("seal cured: status cleared, cure log emitted, magic executes", func(t *testing.T) {
+		mageSealed := mage
+		mageSealed.Status = corebattle.StatusMagicSeal
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:         []corebattle.Participant{mageSealed},
+			Enemies:        []corebattle.Participant{enemy},
+			InitialTension: map[string]float64{mageSealed.ID: 1.0},
+			RNG:            deterministicBattleRNG{fVal: 0.10}, // < 0.25 -> cures seal
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		foundCureLog := false
+		foundDamageLog := false
+		for _, log := range res.Logs {
+			if log.ActorID == mageSealed.ID {
+				if log.ActionName == "magic-20" && log.Message == "Mage は魔法が使えるようになりました！" {
+					foundCureLog = true
+				}
+				if log.ActionName == "magic-20" && log.DamageDealt > 0 {
+					foundDamageLog = true
+				}
+			}
+		}
+		if !foundCureLog {
+			t.Fatalf("expected seal cure log in logs: %+v", res.Logs)
+		}
+		if !foundDamageLog {
+			t.Fatalf("expected damage log after seal cure in logs: %+v", res.Logs)
+		}
+	})
+
+	// 3. Legacy Japanese status string "魔封" also triggers seal check
+	t.Run("legacy 魔封 status recognized and cured", func(t *testing.T) {
+		mageSealed := mage
+		mageSealed.Status = "魔封"
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{mageSealed},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     deterministicBattleRNG{fVal: 0.10},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		foundCureLog := false
+		for _, log := range res.Logs {
+			if log.ActorID == mage.ID && log.Message == "Mage は魔法が使えるようになりました！" {
+				foundCureLog = true
+				break
+			}
+		}
+		if !foundCureLog {
+			t.Fatalf("expected cure log for 魔封 status: %+v", res.Logs)
+		}
+	})
+}
+
+func TestItem149AndTensionHandling(t *testing.T) {
+	ctx := context.Background()
+	detRNG := deterministicBattleRNG{fVal: 1.0 / 3.0}
+	engine := corebattle.Engine{}
+
+	enemy := corebattle.Participant{
+		ID:        "enemy",
+		Name:      "Target",
+		HP:        1000,
+		MaxHP:     1000,
+		Defense:   0,
+		Defending: false,
+	}
+
+	// 1. Attack with item-149: ignores tension multiplier (base * 1.1) and preserves tension
+	t.Run("attack with item-149: tension ignored and preserved", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		invRepo.inventories["mage-149"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-149"}},
+		}
+		charRepo.characters["mage-149"] = corecharacter.Character{
+			ID:    "mage-149",
+			Name:  "Mage149",
+			JobID: "job-06",
+			SP:    5, // magic-20 (base 20)
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 20, Attack: 10, Defense: 10, Agility: 50},
+		}
+		mage149, err := svc.BuildParticipant(ctx, "mage-149")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:         []corebattle.Participant{mage149},
+			Enemies:        []corebattle.Participant{enemy},
+			InitialTension: map[string]float64{mage149.ID: 2.0},
+			RNG:            detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Base 20 * 1.1 (item-149) = 22 damage. Tension 2.0 is NOT multiplied!
+		for _, log := range res.Logs {
+			if log.ActionName == "magic-20" {
+				if log.DamageDealt != 22 {
+					t.Errorf("expected 22 damage with item-149 (tension 2.0 ignored), got %d", log.DamageDealt)
+				}
+				break
+			}
+		}
+	})
+
+	// 2. Attack without item-149: applies tension multiplier and consumes tension
+	t.Run("attack without item-149: tension applied and consumed", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		charRepo.characters["mage-plain"] = corecharacter.Character{
+			ID:    "mage-plain",
+			Name:  "MagePlain",
+			JobID: "job-06",
+			SP:    5,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 20, Attack: 10, Defense: 10, Agility: 50},
+		}
+		magePlain, err := svc.BuildParticipant(ctx, "mage-plain")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:         []corebattle.Participant{magePlain},
+			Enemies:        []corebattle.Participant{enemy},
+			InitialTension: map[string]float64{magePlain.ID: 2.0},
+			RNG:            detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Base 20 * 2.0 (tension) = 40 damage.
+		for _, log := range res.Logs {
+			if log.ActionName == "magic-20" {
+				if log.DamageDealt != 40 {
+					t.Errorf("expected 40 damage without item-149 (tension applied), got %d", log.DamageDealt)
+				}
+				break
+			}
+		}
+	})
+
+	// 3. Heal with item-149: tension is ALWAYS multiplied and ALWAYS reset to 1.0 (_skill.cgi:9103,9105)
+	t.Run("heal with item-149: tension applied and unconditionally reset to 1.0", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		invRepo.inventories["priest-149"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-149"}},
+		}
+		charRepo.characters["priest-149"] = corecharacter.Character{
+			ID:    "priest-149",
+			Name:  "Priest149",
+			JobID: "job-05",
+			SP:    10, // heal-30
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 20, Attack: 10, Defense: 10, Agility: 50},
+		}
+		priest149, err := svc.BuildParticipant(ctx, "priest-149")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ally := corebattle.Participant{ID: "ally", HP: 10, MaxHP: 100}
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:         []corebattle.Participant{priest149, ally},
+			Enemies:        []corebattle.Participant{enemy},
+			InitialTension: map[string]float64{priest149.ID: 2.0},
+			RNG:            detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Base 30 * 2.0 (tension) = 60 healing
+		for _, log := range res.Logs {
+			if log.ActionName == "heal-30" && log.TargetID == ally.ID {
+				if log.HealingDone != 60 {
+					t.Errorf("expected 60 heal with tension 2.0 and item-149, got %d", log.HealingDone)
+				}
+				break
+			}
+		}
+	})
+}
+
+func TestItem256PrimaryTargetMaxHPCap(t *testing.T) {
+	ctx := context.Background()
+	detRNG := deterministicBattleRNG{fVal: 1.0 / 3.0}
+	engine := corebattle.Engine{}
+
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+	invRepo.inventories["priest-256"] = coreinventory.Inventory{
+		Items: []item.Instance{{DefinitionID: "item-256"}},
+	}
+	charRepo.characters["priest-256"] = corecharacter.Character{
+		ID:    "priest-256",
+		Name:  "Priest256",
+		JobID: "job-05",
+		SP:    10, // heal-30 (base 30 * 1.2 = 36 heal with item-256)
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 20, Attack: 10, Defense: 10, Agility: 50},
+	}
+	priest, err := svc.BuildParticipant(ctx, "priest-256")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	enemy := corebattle.Participant{ID: "e", HP: 1000, MaxHP: 1000, Defense: 0, Defending: true}
+
+	// Case 1: Primary target has low MaxHP (50).
+	// Primary heal = 36. Uncapped splash = 36 / 2 = 18.
+	// Cap = int(primary.MaxHP * 0.3) = int(50 * 0.3) = 15!
+	// Secondary ally has MaxHP = 500, but splash is capped at 15 (primary target's 30% MaxHP).
+	t.Run("splash heal capped by primary target MaxHP * 0.3", func(t *testing.T) {
+		primaryAlly := corebattle.Participant{ID: "primary", HP: 10, MaxHP: 50}
+		secondaryAlly := corebattle.Participant{ID: "secondary", HP: 10, MaxHP: 500}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{priest, primaryAlly, secondaryAlly},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var primaryHeal, secondaryHeal int
+		for _, log := range res.Logs {
+			if log.ActionName == "heal-30" {
+				if log.TargetID == primaryAlly.ID {
+					primaryHeal = log.HealingDone
+				}
+				if log.TargetID == secondaryAlly.ID {
+					secondaryHeal = log.HealingDone
+				}
+			}
+		}
+		if primaryHeal != 36 {
+			t.Errorf("primary heal = %d, want 36", primaryHeal)
+		}
+		if secondaryHeal != 15 {
+			t.Errorf("secondary heal = %d, want 15 (capped at 50 * 0.3)", secondaryHeal)
+		}
+	})
+
+	// Case 2: Primary target has high MaxHP (200).
+	// Cap = int(200 * 0.3) = 60.
+	// Secondary ally receives full 18 splash heal.
+	t.Run("splash heal not capped when primary target MaxHP is high", func(t *testing.T) {
+		primaryAlly := corebattle.Participant{ID: "primary-large", HP: 10, MaxHP: 200}
+		secondaryAlly := corebattle.Participant{ID: "secondary-2", HP: 10, MaxHP: 500}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{priest, primaryAlly, secondaryAlly},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var secondaryHeal int
+		for _, log := range res.Logs {
+			if log.ActionName == "heal-30" && log.TargetID == secondaryAlly.ID {
+				secondaryHeal = log.HealingDone
+			}
+		}
+		if secondaryHeal != 18 {
+			t.Errorf("secondary heal = %d, want 18 (uncapped)", secondaryHeal)
+		}
+	})
+}
+
+func TestBossSkillSelectionRegression(t *testing.T) {
+	// Verify that a boss with single-target and multi-target skills in order
+	// preserves its sequential evaluation against multiple opponents (does NOT jump to area attack).
+	engine := corebattle.Engine{}
+	detRNG := deterministicBattleRNG{fVal: 1.0 / 3.0}
+
+	boss := corebattle.Participant{
+		ID:      "boss-mage",
+		Name:    "BossMage",
+		HP:      1000,
+		MaxHP:   1000,
+		MP:      50,
+		MaxMP:   50,
+		Attack:  50,
+		Defense: 50,
+		Agility: 50,
+		Skills: []corebattle.ActionSkill{
+			{
+				ID:     "dejon",
+				Name:   "デジョン",
+				Kind:   corebattle.ActionKindDejon,
+				MPCost: 0,
+			},
+			{
+				ID:          "mera",
+				Name:        "メラ",
+				Power:       15,
+				MPCost:      2,
+				Kind:        corebattle.ActionKindAttack,
+				TargetScope: corebattle.TargetScopeSingleEnemy,
+				Category:    string(corebattle.CategoryMagic),
+				Direct:      true,
+			},
+			{
+				ID:          "gira",
+				Name:        "ギラ",
+				Power:       20,
+				MPCost:      5,
+				Kind:        corebattle.ActionKindAttack,
+				TargetScope: corebattle.TargetScopeAllEnemies,
+				Category:    string(corebattle.CategoryMagic),
+				Direct:      true,
+			},
+		},
+	}
+
+	ally1 := corebattle.Participant{ID: "ally1", Name: "Ally1", HP: 100, MaxHP: 100, Defense: 10}
+	ally2 := corebattle.Participant{ID: "ally2", Name: "Ally2", HP: 100, MaxHP: 100, Defense: 10}
+
+	res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+		Allies:  []corebattle.Participant{boss},
+		Enemies: []corebattle.Participant{ally1, ally2},
+		RNG:     detRNG,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Boss must select Mera (first usable skill in its list), NOT jump to Gira
+	bossAction := ""
+	for _, log := range res.Logs {
+		if log.ActorID == boss.ID {
+			bossAction = log.ActionName
+			break
+		}
+	}
+	if bossAction != "メラ" {
+		t.Fatalf("boss facing 2 enemies: expected Mera (sequential priority), got %s", bossAction)
+	}
 }

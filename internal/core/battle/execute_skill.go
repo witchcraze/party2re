@@ -8,6 +8,32 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 	}
 	ctx.mpMap[actor.ID] -= skill.MPCost
 
+	isMagic := skill.Category == string(CategoryMagic) || skill.Category == "magic"
+	if isMagic {
+		status := ctx.statusMap[actor.ID]
+		if status == StatusMagicSeal || status == "魔封" {
+			if ctx.rng != nil && ctx.rng.Float64() < 0.25 {
+				ctx.statusMap[actor.ID] = ""
+				ctx.logs = append(ctx.logs, TurnLog{
+					Turn:        ctx.turns,
+					ActorID:     actor.ID,
+					ActionName:  skill.Name,
+					Message:     fmt.Sprintf("%s は魔法が使えるようになりました！", actor.NameOrID()),
+					RemainingHP: copyHPMap(ctx.hpMap),
+				})
+			} else {
+				ctx.logs = append(ctx.logs, TurnLog{
+					Turn:        ctx.turns,
+					ActorID:     actor.ID,
+					ActionName:  skill.Name,
+					Message:     fmt.Sprintf("しかし、%s は魔法が封じられていた", actor.NameOrID()),
+					RemainingHP: copyHPMap(ctx.hpMap),
+				})
+				return nil
+			}
+		}
+	}
+
 	switch skill.Kind {
 	case ActionKindDejon:
 		for _, opp := range fullOpponents {
@@ -88,6 +114,14 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 			// item-256 splash heal to other living party members (_skill.cgi:9118-9130)
 			if isMagic && hasItem(actor.ItemDefinitionIDs, "item-256") {
 				splashAmt := healAmt / 2
+				primaryMax := tgt.MaxHP
+				if primaryMax <= 0 {
+					primaryMax = tgt.HP
+				}
+				capAmt := int(float64(primaryMax) * 0.3)
+				if splashAmt > capAmt {
+					splashAmt = capAmt
+				}
 				for _, ally := range allyParty {
 					if ally.ID == tgt.ID || ctx.hpMap[ally.ID] <= 0 {
 						continue
@@ -96,11 +130,7 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 					if allyMax <= 0 {
 						allyMax = ally.HP
 					}
-					capAmt := int(float64(allyMax) * 0.3)
 					actualSplash := splashAmt
-					if actualSplash > capAmt {
-						actualSplash = capAmt
-					}
 					ctx.hpMap[ally.ID] += actualSplash
 					if ctx.hpMap[ally.ID] > allyMax {
 						ctx.hpMap[ally.ID] = allyMax
@@ -118,7 +148,9 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 			}
 		}
 		if isMagic {
-			ctx.consumeTension(actor)
+			if ctx.tensionMap != nil {
+				ctx.tensionMap[actor.ID] = 1.0
+			}
 		}
 
 	case ActionKindBuff:
@@ -218,6 +250,7 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 		hasDiamondRing := hasItem(actor.ItemDefinitionIDs, "item-144")
 		isMagic := skill.Category == string(CategoryMagic) || skill.Category == "magic"
 		ten := ctx.getTension(actor.ID)
+		has149 := hasItem(actor.ItemDefinitionIDs, "item-149")
 
 		for _, tgt := range targetList {
 			var baseDmg int
@@ -226,13 +259,15 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 				if hasItem(actor.ItemDefinitionIDs, "item-143") && basePower < 300 {
 					basePower *= 2
 				}
-				if hasItem(actor.ItemDefinitionIDs, "item-149") {
+				if has149 {
 					basePower *= 1.1
 				}
 				if hasItem(actor.ItemDefinitionIDs, "weapon-34") && ctx.rng != nil && ctx.rng.Intn(4) < 1 {
 					basePower *= 1.2
 				}
-				basePower *= ten
+				if !has149 {
+					basePower *= ten
+				}
 				effDef := tgt.Defense + ctx.defenseBuff[tgt.ID]
 				baseDmg = rollDamage(basePower, float64(effDef)*0.3, true, tgt.Defense, ctx.rng)
 			} else {

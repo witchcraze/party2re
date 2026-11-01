@@ -260,35 +260,23 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 
 			var usedSkill *ActionSkill
 			if usedCustom == nil {
-				// When facing multiple opponents, prioritize affordable all-enemies skills
-				if len(opponents) > 1 {
-					for i := range actor.Skills {
-						sk := &actor.Skills[i]
-						if sk.TargetScope == TargetScopeAllEnemies && ctx.mpMap[actorID] >= sk.MPCost {
-							usedSkill = sk
-							break
-						}
-					}
-				}
-				if usedSkill == nil {
-					for i := range actor.Skills {
-						sk := &actor.Skills[i]
-						if ctx.mpMap[actorID] >= sk.MPCost {
-							if sk.Kind == ActionKindDejon {
-								hasFallenTarget := false
-								for _, opp := range fullOpponents {
-									if ctx.hpMap[opp.ID] <= 0 && !ctx.banishedMap[opp.ID] {
-										hasFallenTarget = true
-										break
-									}
-								}
-								if !hasFallenTarget {
-									continue
+				for i := range actor.Skills {
+					sk := &actor.Skills[i]
+					if ctx.mpMap[actorID] >= sk.MPCost {
+						if sk.Kind == ActionKindDejon {
+							hasFallenTarget := false
+							for _, opp := range fullOpponents {
+								if ctx.hpMap[opp.ID] <= 0 && !ctx.banishedMap[opp.ID] {
+									hasFallenTarget = true
+									break
 								}
 							}
-							usedSkill = sk
-							break
+							if !hasFallenTarget {
+								continue
+							}
 						}
+						usedSkill = sk
+						break
 					}
 				}
 			}
