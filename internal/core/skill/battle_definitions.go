@@ -15,6 +15,7 @@ type BattleDefinitions struct {
 	RosterSkills         map[string]bool
 	RecoveryStatGems     map[string]bool
 	DamageGems           map[string]bool
+	DefenseGems          map[string]bool
 	RevivalSkills        map[string]bool
 	StatusSkills         map[string]bool
 	TransformationSkills map[string]bool
