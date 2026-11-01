@@ -38,6 +38,7 @@ func (p *callbackAdmission) projectRandom(kind string, seen map[CallbackInvocati
 }
 
 func (p *callbackAdmission) projectSelection(entry callbackSelection, explicit bool, seen map[CallbackInvocation]bool) ([]CallbackContinuation, error) {
+	// Native projections retain actor identities/records; PruneRoster is a save boundary.
 	state := p.s.callbackCopy()
 	context := cloneCallbackContext(*p.c)
 	if explicit {

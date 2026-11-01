@@ -89,3 +89,63 @@ func TestInvocationWrapperNativeRepeatedExtendedHandledWithoutPorts(t *testing.T
 		t.Fatal(s, err)
 	}
 }
+
+func TestInvocationWrapperNativeDismissAndMergeRetainDeadActor(t *testing.T) {
+	for _, row := range []struct {
+		id, gem string
+		wantMP  int
+	}{{"job-59-dismiss", "gem-88", 20}, {"job-59-merge", "gem-92", 60}} {
+		t.Run(row.id, func(t *testing.T) {
+			s, c, d := rosterRegistryFixture()
+			s.Actors[0].RosterIdentity = "calling-59"
+			s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-59"}
+			s.Actors[0].MP = 20
+			d.RegisterPlayerCallbacks(PlayerCallbackContexts{Roster: &c}, len(c.PartyIDs))
+			d.RegisterNonJobInvocations()
+			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
+			before, err := json.Marshal(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ops, err := d.InvocationAction(&s, &f, []string{row.gem, "missing"}, noArithmeticDraws{t})
+			if err != nil {
+				t.Fatal("native dead-actor projection lost its actor record", err)
+			}
+			after, err := json.Marshal(s)
+			if err != nil || string(before) != string(after) {
+				t.Fatal("admission changed caller state", err)
+			}
+			// Check the actual registered projection as well as enclosing admission:
+			// dismissal/merge mark the acting helper dead; they do not prune it.
+			var projected corebattle.LifetimeState
+			if err := json.Unmarshal(before, &projected); err != nil {
+				t.Fatal(err)
+			}
+			frame := f
+			known, err := d.Invocations.Entries[row.id].Project(&projected, &frame)
+			if err != nil || !known || frame.ActorID != "self" || len(projected.Actors) != 2 || projected.Actors[0].ID != frame.ActorID || projected.Actors[0].HP != 0 || projected.Actors[0].MP != row.wantMP || !projected.Actors[0].RosterDetached {
+				t.Fatal(known, err, projected, frame)
+			}
+			if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); err != nil || !reflect.DeepEqual(s, projected) {
+				t.Fatal("execution pruned a projected actor or reached the later missing slot", err, s)
+			}
+		})
+	}
+}
+
+func TestInvocationWrapperNativeBranchedProjectionRetainsActor(t *testing.T) {
+	s, c := recoveryGemFixture(false)
+	s.Actors[0].Status = corebattle.StatusMagicSeal
+	var d BattleDefinitions
+	d.RegisterDefenseGems()
+	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"ally"}}
+	branches, err := d.Invocations.Entries["gem_guard_sky"].ProjectBranches(&s, &f)
+	if err != nil || len(branches) != 2 {
+		t.Fatal(branches, err)
+	}
+	for _, branch := range branches {
+		if branch.Context.ActorID != f.ActorID || len(branch.State.Actors) != len(s.Actors) || branch.State.Actors[0].ID != f.ActorID || branch.State.Actors[0].HP != s.Actors[0].HP {
+			t.Fatal("native seal cure/failure removed the actor", branch)
+		}
+	}
+}
