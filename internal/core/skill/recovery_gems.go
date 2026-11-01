@@ -60,13 +60,26 @@ func (d BattleDefinitions) RecoveryStatAction(s *corebattle.LifetimeState, c *co
 // projection; the finite slot sequence is admitted together inside this body.
 func (d BattleDefinitions) RecoveryStatInvocation(c *corebattle.EffectContext, ids []string) corebattle.CallbackDefinition {
 	ids = slices.Clone(ids)
+	context := func(frame *corebattle.CallbackContext) corebattle.EffectContext {
+		child := *c
+		if frame.Damage != nil {
+			child = frame.Damage.EffectContext
+			child.Damage = c.Damage
+		}
+		child.TargetContext = frame.TargetContext
+		return child
+	}
+	consume := func(frame *corebattle.CallbackContext, entries []corebattle.RecoveryStatGemEntry) {
+		if len(frame.Arguments) > 0 && (frame.Custom || len(entries) > 1 || entries[0].TargetScope == corebattle.TargetScopeSingleAlly || entries[0].TargetScope == corebattle.TargetScopeSingleEnemy) {
+			frame.Arguments = frame.Arguments[1:]
+		}
+	}
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
 			if c == nil || frame.AfterEffects {
 				return corebattle.ErrUnsupportedEffect
 			}
-			child := *c
-			child.TargetContext = frame.TargetContext
+			child := context(frame)
 			target := ""
 			if len(frame.Arguments) > 0 {
 				target = frame.Arguments[0]
@@ -74,11 +87,47 @@ func (d BattleDefinitions) RecoveryStatInvocation(c *corebattle.EffectContext, i
 			_, err := d.RecoveryStatAction(s, &child, ids, target, random.Default())
 			return err
 		},
+		ProjectBranches: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
+			if c == nil || frame.AfterEffects {
+				return nil, corebattle.ErrUnsupportedEffect
+			}
+			child := context(frame)
+			target := ""
+			if len(frame.Arguments) > 0 {
+				target = frame.Arguments[0]
+			}
+			entries, err := d.RecoveryStatAction(s, &child, ids, target, random.Default())
+			if err != nil {
+				return nil, err
+			}
+			var sources []int
+			for _, entry := range entries {
+				sources = append(sources, entry.SourceID)
+			}
+			states, err := s.ProjectRecoveryStatGemBranches(sources, &child, target)
+			if err != nil {
+				return nil, err
+			}
+			var branches []corebattle.CallbackContinuation
+			for _, state := range states {
+				next := *frame
+				damage := corebattle.DamageContext{}
+				if frame.Damage != nil {
+					damage = *frame.Damage
+				}
+				damage.EffectContext = state.Context
+				next.Damage = &damage
+				next.TargetContext = state.Context.TargetContext
+				consume(&next, entries)
+				branches = append(branches, corebattle.CallbackContinuation{State: state.State, Context: next})
+			}
+			return branches, nil
+		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
-			c.TargetContext = frame.TargetContext
+			*c = context(frame)
 			target := ""
 			if len(frame.Arguments) > 0 {
 				target = frame.Arguments[0]
@@ -92,10 +141,14 @@ func (d BattleDefinitions) RecoveryStatInvocation(c *corebattle.EffectContext, i
 				sources = append(sources, entry.SourceID)
 			}
 			_, err = s.ApplyRecoveryStatGems(sources, c, target, rng)
-			if err == nil && len(frame.Arguments) > 0 && (c.Custom || len(entries) > 1 || entries[0].TargetScope == corebattle.TargetScopeSingleAlly || entries[0].TargetScope == corebattle.TargetScopeSingleEnemy) {
-				frame.Arguments = frame.Arguments[1:]
+			if err == nil {
+				consume(frame, entries)
 			}
 			frame.TargetContext = c.TargetContext
+			if frame.Damage == nil {
+				frame.Damage = &corebattle.DamageContext{}
+			}
+			frame.Damage.EffectContext = *c
 			return err
 		},
 	}

@@ -194,3 +194,38 @@ func TestInvocationBranchesResolveCurrentJobPerOutcome(t *testing.T) {
 		t.Fatal(err, s)
 	}
 }
+
+func TestInvocationRetainsNewOperationContext(t *testing.T) {
+	// Synthetic callbacks check frame propagation only, not any concrete pool.
+	for _, kind := range []string{"entry", "gem-87"} {
+		s, c, d := invocationFixture()
+		s.actor(c.ActorID).Jobs.OldJobID = "job-59"
+		project := func(_ *LifetimeState, f *CallbackContext) (bool, error) {
+			f.Damage = &DamageContext{EffectContext: EffectContext{TargetContext: f.TargetContext, TensionCalls: 1}}
+			return true, nil
+		}
+		d.Entries["created"] = CallbackDefinition{
+			Validate: d.Entries["noop"].Validate,
+			Project:  project,
+			Execute: func(s *LifetimeState, f *CallbackContext, _ random.Generator) error {
+				_, err := project(s, f)
+				return err
+			},
+		}
+		d.JobTables[59] = invocationTable(CallbackEntry{ID: "created", Name: "summon"})
+		check := func(_ *LifetimeState, f *CallbackContext) error {
+			if f.AfterEffects || f.Damage == nil || f.Damage.TensionCalls != 1 {
+				t.Fatal(kind, "lost newly created operation context", f)
+			}
+			return nil
+		}
+		d.Entries["later"] = CallbackDefinition{Validate: check, Execute: func(s *LifetimeState, f *CallbackContext, _ random.Generator) error { return check(s, f) }}
+		op := CallbackInvocation{Kind: kind}
+		if kind == "entry" {
+			op.EntryID = "created"
+		}
+		if err := s.ApplyInvocations(&c, d, []CallbackInvocation{op, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); err != nil || c.Damage == nil || c.Damage.TensionCalls != 1 {
+			t.Fatal(kind, err, c)
+		}
+	}
+}
