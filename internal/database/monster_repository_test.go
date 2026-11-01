@@ -524,7 +524,7 @@ type failingDeleteCompanionStore struct {
 	err error
 }
 
-func (f *failingDeleteCompanionStore) DeleteHomeCompanion(_ context.Context, _ string) error {
+func (f *failingDeleteCompanionStore) DeleteHomeCompanion(_ context.Context, _, _ string) error {
 	return f.err
 }
 
@@ -597,6 +597,21 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 		t.Fatalf("DepositToBox unowned ortega: got %v, want %v", err, monster.ErrForbidden)
 	}
 
+	// Verify repository-level DeleteHomeCompanion scopes by character_id and is_npc=TRUE
+	if err := homeMemberRepo.DeleteHomeCompanion(ctx, c2.ID, ortegaID); !errors.Is(err, monster.ErrMonsterNotFound) {
+		t.Fatalf("DeleteHomeCompanion with wrong characterID: got %v, want %v", err, monster.ErrMonsterNotFound)
+	}
+	if err := homeMemberRepo.DeleteHomeCompanion(ctx, c1.ID, nonNPCID); !errors.Is(err, monster.ErrMonsterNotFound) {
+		t.Fatalf("DeleteHomeCompanion on is_npc=false resident: got %v, want %v", err, monster.ErrMonsterNotFound)
+	}
+	membersAfterRejectedDelete, err := homeMemberRepo.FindByCharacterID(ctx, c1.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID after rejected deletes: %v", err)
+	}
+	if len(membersAfterRejectedDelete) != 2 {
+		t.Fatalf("expected both ortega and nonNPC resident intact, got %+v", membersAfterRejectedDelete)
+	}
+
 	// 2. Duplicate name collision with Ortega in home_members
 	dupBox, err := svc.TameMonster(ctx, c1.ID, "slime", "オルテガ")
 	if err != nil {
@@ -624,7 +639,42 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 		t.Fatalf("BringToHome 9th pet: got %v, want %v", err, monster.ErrHomeFull)
 	}
 
-	// 4. Mid-transaction storage error after character_monsters.Save rolls back both stores
+	// 4. Full box (50 monsters in box) rejects DepositToBox on Ortega without mutating home_members or character_monsters
+	// c1 currently has 2 boxed monsters (dupBox, ninthPet); add 48 more to reach BaseBoxCapacity (50)
+	var extraBoxIDs []string
+	for i := 1; i <= monster.BaseBoxCapacity-2; i++ {
+		bid := id.New()
+		extraBoxIDs = append(extraBoxIDs, bid)
+		if err := monRepo.Save(ctx, monster.MonsterInstance{
+			ID:          bid,
+			CharacterID: c1.ID,
+			MonsterID:   "slime",
+			CustomName:  fmt.Sprintf("箱満%d", i),
+			Location:    monster.LocationBox,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}); err != nil {
+			t.Fatalf("Save extra box monster %d: %v", i, err)
+		}
+	}
+	if _, err := svc.DepositToBox(ctx, c1.ID, ortegaID); !errors.Is(err, monster.ErrBoxFull) {
+		t.Fatalf("DepositToBox ortega on full box: got %v, want %v", err, monster.ErrBoxFull)
+	}
+	if _, err := monRepo.FindByID(ctx, ortegaID); !errors.Is(err, monster.ErrMonsterNotFound) {
+		t.Fatalf("expected ortega not in character_monsters after ErrBoxFull, got err=%v", err)
+	}
+	companionsAfterBoxFull, err := homeMemberRepo.ListHomeCompanions(ctx, c1.ID)
+	if err != nil {
+		t.Fatalf("ListHomeCompanions after ErrBoxFull: %v", err)
+	}
+	if len(companionsAfterBoxFull) != 1 || companionsAfterBoxFull[0].ID != ortegaID {
+		t.Fatalf("expected ortega still in home_members after ErrBoxFull, got %+v", companionsAfterBoxFull)
+	}
+	if err := svc.ReleaseMonster(ctx, c1.ID, extraBoxIDs[0]); err != nil {
+		t.Fatalf("ReleaseMonster to free box slot: %v", err)
+	}
+
+	// 5. Mid-transaction storage error after character_monsters.Save rolls back both stores
 	simulatedErr := errors.New("simulated home_members delete failure")
 	failingSvc := monster.NewService(
 		charRepo,
@@ -664,6 +714,13 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 	}
 	if len(companionsAfterDeposit) != 0 {
 		t.Fatalf("expected 0 companions in home_members after deposit, got %+v", companionsAfterDeposit)
+	}
+	remainingMembers, err := homeMemberRepo.FindByCharacterID(ctx, c1.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID after deposit: %v", err)
+	}
+	if len(remainingMembers) != 1 || remainingMembers[0].ID != nonNPCID || remainingMembers[0].IsNPC {
+		t.Fatalf("expected non-NPC resident to remain in home_members, got %+v", remainingMembers)
 	}
 
 	broughtHome, err := svc.BringToHome(ctx, c1.ID, ortegaID)

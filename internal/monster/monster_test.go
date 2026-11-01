@@ -153,11 +153,15 @@ func (s *mockHomeCompanionStore) FindHomeCompanionForUpdate(_ context.Context, i
 	return c, nil
 }
 
-func (s *mockHomeCompanionStore) DeleteHomeCompanion(_ context.Context, id string) error {
+func (s *mockHomeCompanionStore) DeleteHomeCompanion(_ context.Context, characterID, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.deleteErr != nil {
 		return s.deleteErr
+	}
+	c, ok := s.companions[id]
+	if !ok || c.CharacterID != characterID {
+		return monster.ErrMonsterNotFound
 	}
 	delete(s.companions, id)
 	return nil

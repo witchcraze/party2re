@@ -68,16 +68,6 @@ func (r *HomeMemberRepository) FindByIDForUpdate(ctx context.Context, id string)
 	return m, nil
 }
 
-// Delete removes a home member by ID.
-func (r *HomeMemberRepository) Delete(ctx context.Context, id string) error {
-	executor := ExecutorFromContext(ctx, r.db)
-	_, err := executor.ExecContext(ctx, `
-		DELETE FROM home_members
-		WHERE id = ?
-	`, id)
-	return err
-}
-
 // ListHomeCompanions retrieves all NPC companions for a character from home_members.
 func (r *HomeMemberRepository) ListHomeCompanions(ctx context.Context, characterID string) ([]monster.HomeCompanion, error) {
 	members, err := r.FindByCharacterID(ctx, characterID)
@@ -118,9 +108,24 @@ func (r *HomeMemberRepository) FindHomeCompanionForUpdate(ctx context.Context, i
 	}, nil
 }
 
-// DeleteHomeCompanion deletes an NPC companion from home_members.
-func (r *HomeMemberRepository) DeleteHomeCompanion(ctx context.Context, id string) error {
-	return r.Delete(ctx, id)
+// DeleteHomeCompanion deletes an NPC companion from home_members scoped to its owner character.
+func (r *HomeMemberRepository) DeleteHomeCompanion(ctx context.Context, characterID, id string) error {
+	executor := ExecutorFromContext(ctx, r.db)
+	res, err := executor.ExecContext(ctx, `
+		DELETE FROM home_members
+		WHERE id = ? AND character_id = ? AND is_npc = TRUE
+	`, id, characterID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return monster.ErrMonsterNotFound
+	}
+	return nil
 }
 
 // AddMember adds a new resident or NPC companion to the character's home.

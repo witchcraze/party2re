@@ -21,7 +21,7 @@ type HomeCompanion struct {
 type HomeCompanionStore interface {
 	ListHomeCompanions(ctx context.Context, characterID string) ([]HomeCompanion, error)
 	FindHomeCompanionForUpdate(ctx context.Context, id string) (HomeCompanion, error)
-	DeleteHomeCompanion(ctx context.Context, id string) error
+	DeleteHomeCompanion(ctx context.Context, characterID, id string) error
 }
 
 // BringToHome transfers a monster from Monster Grandpa's box into the player's home as a pet.
@@ -170,7 +170,7 @@ func (s *Service) DepositToBox(ctx context.Context, characterID, instanceID stri
 		if err := s.monsters.Save(txCtx, newInst); err != nil {
 			return err
 		}
-		if err := s.companions.DeleteHomeCompanion(txCtx, comp.ID); err != nil {
+		if err := s.companions.DeleteHomeCompanion(txCtx, characterID, comp.ID); err != nil {
 			return err
 		}
 		updated = newInst
