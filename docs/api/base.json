@@ -11742,6 +11742,13 @@
           "updated_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Revision used by the service for atomic step validation."
+          },
+          "encounter": {
+            "$ref": "#/components/schemas/DungeonActiveEncounter"
           }
         },
         "required": [
@@ -15261,6 +15268,72 @@
               "recovery_pending"
             ]
           }
+        ]
+      },
+      "DungeonActiveEncounter": {
+        "type": "object",
+        "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter.",
+        "properties": {
+          "monster": {
+            "type": "object",
+            "description": "Dungeon monster definition including encounter rewards.",
+            "additionalProperties": true
+          },
+          "enemies": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "description": "Shared battle participant; field names follow corebattle.Participant.",
+              "properties": {
+                "ID": {
+                  "type": "string"
+                },
+                "HP": {
+                  "type": "integer"
+                },
+                "MP": {
+                  "type": "integer"
+                },
+                "MaxHP": {
+                  "type": "integer"
+                },
+                "MaxMP": {
+                  "type": "integer"
+                },
+                "Status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ID",
+                "HP",
+                "MP"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "battle",
+              "boss"
+            ]
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "monster",
+          "enemies",
+          "event_type",
+          "x",
+          "y"
         ]
       }
     },

@@ -41,6 +41,7 @@ func (s *Service) handleDungeonClear(
 	dungeon Dungeon,
 ) (ExpeditionStepResult, error) {
 	now := time.Now().UTC()
+	exp.Encounter = nil
 	exp.Status = StatusCleared
 	exp.AccumulatedExp += dungeon.ClearExpBonus
 	exp.AccumulatedGold += dungeon.ClearGoldBonus
@@ -147,6 +148,7 @@ func (s *Service) handleEscape(
 	msg string,
 ) (ExpeditionStepResult, error) {
 	now := time.Now().UTC()
+	exp.Encounter = nil
 	exp.Status = StatusEscaped
 	exp.UpdatedAt = now
 
@@ -237,6 +239,7 @@ func (s *Service) handleWipeout(
 	msg string,
 ) (ExpeditionStepResult, error) {
 	now := time.Now().UTC()
+	exp.Encounter = nil
 	exp.Status = StatusWipedOut
 	exp.UpdatedAt = now
 

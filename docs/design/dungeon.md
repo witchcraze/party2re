@@ -9,7 +9,9 @@ do not describe every event. Current Go is in `internal/dungeon`.
 The leader performs the initial advance. Afterwards cardinal movement is
 available once enemies are defeated. Movement advances the shared round and
 dispatches the selected map's `event_<symbol>`; active enemies ordinarily block
-movement. A wall hit invokes the wall event without advancing coordinates.
+movement (`lib/vs_dungeon.cgi:74–80`). Combat actions remain available and
+`lib/_battle.cgi:1184–1220` permits escape with current vitality and earned stock.
+A wall hit invokes the wall event without advancing coordinates.
 
 | Symbol | Legacy behavior |
 |---|---|
@@ -48,7 +50,11 @@ delivery and replay prevention; do not invent a floor-scaled 100G chest rule.
 Go currently dispatches generic `T/X/D/B/E` events in `expedition.go`, uses
 Valkey working state/rewards (including `consumed_events` so each `T` tile event
 grants treasure at most once per expedition and subsequent visits resolve as
-normal movement), and finalizes durable records in MariaDB.
+normal movement), and finalizes durable records in MariaDB. Unresolved battles
+retain enemy HP/MP/status across requests and block every movement direction.
+The leader can resume the shared resolver against that enemy or escape; a new
+encounter is not generated on resume. This remains batch combat, rather than
+legacy per-character action dispatch.
 That generic event model does not reproduce all legacy map-owned events.
 Its turn-limit wipeout, trap bases, treasure generation, and party scouting
 need comparison with the behavior above; they are implementation differences,

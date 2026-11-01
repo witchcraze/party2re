@@ -7123,6 +7123,72 @@
         ],
         "type": "object"
       },
+      "DungeonActiveEncounter": {
+        "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter.",
+        "properties": {
+          "enemies": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Shared battle participant; field names follow corebattle.Participant.",
+              "properties": {
+                "HP": {
+                  "type": "integer"
+                },
+                "ID": {
+                  "type": "string"
+                },
+                "MP": {
+                  "type": "integer"
+                },
+                "MaxHP": {
+                  "type": "integer"
+                },
+                "MaxMP": {
+                  "type": "integer"
+                },
+                "Status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ID",
+                "HP",
+                "MP"
+              ],
+              "type": "object"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "type": "array"
+          },
+          "event_type": {
+            "enum": [
+              "battle",
+              "boss"
+            ],
+            "type": "string"
+          },
+          "monster": {
+            "additionalProperties": true,
+            "description": "Dungeon monster definition including encounter rewards.",
+            "type": "object"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "monster",
+          "enemies",
+          "event_type",
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
       "DungeonActiveExpedition": {
         "additionalProperties": false,
         "properties": {
@@ -7165,6 +7231,9 @@
           "dungeon_id": {
             "type": "string"
           },
+          "encounter": {
+            "$ref": "#/components/schemas/DungeonActiveEncounter"
+          },
           "id": {
             "type": "string"
           },
@@ -7187,6 +7256,10 @@
             "type": "integer"
           },
           "pos_y": {
+            "type": "integer"
+          },
+          "revision": {
+            "description": "Revision used by the service for atomic step validation.",
             "type": "integer"
           },
           "started_at": {
@@ -22910,6 +22983,100 @@
         ]
       }
     },
+    "/characters/{id}/dungeons/fight": {
+      "post": {
+        "description": "Leader-only continuation using the saved enemy HP/MP and existing battle resolver. Returns 409 when no encounter is active or the run changed concurrently.",
+        "operationId": "fightDungeonEncounter",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DungeonStepResponse"
+                }
+              }
+            },
+            "description": "Dungeon escape result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request - invalid input or JSON syntax"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized - missing or invalid session token"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error",
+            "description": "Not Found"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error",
+            "description": "No active encounter or expedition state changed"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error",
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error",
+            "description": "Not Implemented"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Continue the active dungeon encounter",
+        "tags": [
+          "Combat"
+        ]
+      }
+    },
     "/characters/{id}/dungeons/map": {
       "get": {
         "operationId": "getDungeonMap",
@@ -22997,6 +23164,7 @@
     },
     "/characters/{id}/dungeons/move": {
       "post": {
+        "description": "Rejects movement in all directions while an active enemy remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape.",
         "operationId": "moveDungeonExpedition",
         "parameters": [
           {
@@ -23074,7 +23242,7 @@
           },
           "409": {
             "$ref": "#/components/responses/Error",
-            "description": "Conflict"
+            "description": "Active enemies block movement, or expedition state changed"
           },
           "415": {
             "$ref": "#/components/responses/Error",

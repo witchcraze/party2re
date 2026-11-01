@@ -88,6 +88,12 @@ func mapLuaError(err error) error {
 		return nil
 	}
 	errStr := err.Error()
+	if strings.Contains(errStr, "ERR_COMBAT_ACTIVE") {
+		return ErrCombatActive
+	}
+	if strings.Contains(errStr, "ERR_EXPEDITION_STATE_CHANGED") {
+		return ErrExpeditionStateChanged
+	}
 	if strings.Contains(errStr, "ERR_EXPEDITION_NOT_FOUND") {
 		return ErrExpeditionNotFound
 	}
@@ -156,7 +162,14 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 	}
 	consumedEvents := DecodeItems(sMap["consumed_events"])
 
+	encounter, err := decodeEncounter(sMap["encounter"])
+	if err != nil {
+		return nil, err
+	}
+	revision, _ := strconv.Atoi(sMap["revision"])
 	active := &ActiveExpedition{
+		Encounter:         encounter,
+		Revision:          revision,
 		ID:                sMap["expedition_id"],
 		CharacterID:       sMap["character_id"],
 		PartyID:           sMap["party_id"],
@@ -186,6 +199,10 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 		return r.fallback.SaveActiveExpedition(ctx, exp)
 	}
 
+	encounterJSON, err := encodeEncounter(exp.Encounter)
+	if err != nil {
+		return err
+	}
 	if err := r.saveMemberIndex(ctx, exp); err != nil {
 		return err
 	}
@@ -200,6 +217,8 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	cmds := r.client.DoMulti(ctx,
 		r.client.B().Hset().Key(sKey).FieldValue().
 			FieldValue("expedition_id", exp.ID).
+			FieldValue("revision", strconv.Itoa(exp.Revision)).
+			FieldValue("encounter", encounterJSON).
 			FieldValue("character_id", exp.CharacterID).
 			FieldValue("party_id", exp.PartyID).
 			FieldValue("party_name", exp.PartyName).
@@ -272,6 +291,14 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	memberExpDeltasJSON := EncodeMemberHPDeltas(params.MemberExpDeltas)
 	memberGoldDeltasJSON := EncodeMemberHPDeltas(params.MemberGoldDeltas)
 
+	encounterJSON, err := encodeEncounter(params.Encounter)
+	if err != nil {
+		return StepOutcome{}, err
+	}
+	expectedRevision := ""
+	if params.ExpectedRevision != nil {
+		expectedRevision = strconv.Itoa(*params.ExpectedRevision)
+	}
 	res := r.stepScript.Exec(ctx, r.client, []string{sKey, rKey}, []string{
 		params.ExpectedExpeditionID,
 		strconv.Itoa(params.NewFloor),
@@ -291,6 +318,9 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		consumedItemsJSON,
 		memberExpDeltasJSON,
 		memberGoldDeltasJSON,
+		expectedRevision,
+		strconv.FormatBool(params.Combat),
+		encounterJSON,
 	})
 
 	if err := res.Error(); err != nil {
@@ -298,7 +328,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 16 {
+	if err != nil || len(vals) < 20 {
 		return StepOutcome{}, fmt.Errorf("unexpected lua step response format: %v", err)
 	}
 
@@ -316,17 +346,18 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	dungeonID := vals[11]
 	startedAt, _ := time.Parse(time.RFC3339Nano, vals[12])
 
-	consumedEvents := []string{}
-	if len(vals) >= 17 {
-		consumedEvents = DecodeItems(vals[16])
-	}
-	eventConsumed := true
-	if len(vals) >= 18 {
-		eventConsumed = vals[17] != "0"
-	}
+	consumedEvents := DecodeItems(vals[16])
+	eventConsumed := vals[17] != "0"
 
+	encounter, err := decodeEncounter(vals[18])
+	if err != nil {
+		return StepOutcome{}, err
+	}
+	revision, _ := strconv.Atoi(vals[19])
 	exp := ActiveExpedition{
-		PartyID: vals[13], PartyName: vals[14], Members: DecodeMembers(vals[15]),
+		Encounter: encounter,
+		Revision:  revision,
+		PartyID:   vals[13], PartyName: vals[14], Members: DecodeMembers(vals[15]),
 		ID:                params.ExpectedExpeditionID,
 		CharacterID:       characterID,
 		DungeonID:         dungeonID,

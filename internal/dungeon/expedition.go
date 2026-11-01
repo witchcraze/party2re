@@ -58,6 +58,10 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		return ExpeditionStepResult{}, ErrForbidden
 	}
 
+	if exp.Encounter != nil {
+		return ExpeditionStepResult{}, ErrCombatActive
+	}
+
 	dungeon, ok := s.dungeonMap[exp.DungeonID]
 	if !ok {
 		return ExpeditionStepResult{}, ErrDungeonNotFound
@@ -109,6 +113,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 
 		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
@@ -169,6 +174,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 
 		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
@@ -244,6 +250,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 
 		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
@@ -277,6 +284,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 			nextFloor := dungeon.Floors[exp.CurrentFloor]
 			stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
 				ExpectedExpeditionID: exp.ID,
+				ExpectedRevision:     &exp.Revision,
 				NewFloor:             exp.CurrentFloor + 1,
 				NewX:                 nextFloor.StartX,
 				NewY:                 nextFloor.StartY,
@@ -317,6 +325,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	default:
 		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,

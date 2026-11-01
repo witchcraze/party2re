@@ -77,6 +77,10 @@ func (s *Service) resolveEncounter(
 	monsterPart.Agility = monster.Agility
 	monsterPart.TeamID = "enemies"
 
+	if exp.Encounter != nil {
+		monsterPart = exp.Encounter.Enemies[0]
+	}
+
 	var partyRes corebattle.PartyBattleResult
 	var battleRes corebattle.Result
 
@@ -209,6 +213,8 @@ func (s *Service) resolveMonsterCombat(
 
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               true,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
@@ -258,9 +264,12 @@ func (s *Service) resolveMonsterCombat(
 	if battleRes.Outcome == corebattle.OutcomeDraw && !allDead {
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               true,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 exp.PosX,
 			NewY:                 exp.PosY,
+			Encounter:            pendingEncounter(exp, monster, eventType, newX, newY, battleRes),
 			HPDelta:              leaderHPDelta,
 			MemberHPDeltas:       memberHPDeltas,
 			MemberMPDeltas:       memberMPDeltas,
@@ -285,6 +294,8 @@ func (s *Service) resolveMonsterCombat(
 	// Player Defeated
 	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 		ExpectedExpeditionID: exp.ID,
+		ExpectedRevision:     &exp.Revision,
+		Combat:               true,
 		NewFloor:             exp.CurrentFloor,
 		NewX:                 newX,
 		NewY:                 newY,
@@ -332,6 +343,8 @@ func (s *Service) resolveBossCombat(
 
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               true,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
@@ -373,9 +386,12 @@ func (s *Service) resolveBossCombat(
 	if battleRes.Outcome == corebattle.OutcomeDraw && !allDead {
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               true,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 exp.PosX,
 			NewY:                 exp.PosY,
+			Encounter:            pendingEncounter(exp, bossMonster, EventBoss, newX, newY, battleRes),
 			HPDelta:              leaderHPDelta,
 			MemberHPDeltas:       memberHPDeltas,
 			MemberMPDeltas:       memberMPDeltas,
@@ -400,6 +416,8 @@ func (s *Service) resolveBossCombat(
 	// Defeat by Boss
 	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 		ExpectedExpeditionID: exp.ID,
+		ExpectedRevision:     &exp.Revision,
+		Combat:               true,
 		NewFloor:             exp.CurrentFloor,
 		NewX:                 newX,
 		NewY:                 newY,

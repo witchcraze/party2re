@@ -238,7 +238,14 @@ state/reward/revealed buffers; Challenge uses immutable run-keyed session/reward
 hashes. The [keyspace owner](valkey-keyspace.md) defines their 7200-second activity
 lifetime and run-qualified member references.
 
-Dungeon's `dungeon_step` atomically updates its existing buffer. Challenge's
+Dungeon's `dungeon_step` atomically updates its existing buffer. Unresolved normal
+and boss encounters retain the enemy participant's HP/MP/status and their original
+destination in that buffer. All cardinal moves reject before tile dispatch while
+an encounter remains, without consuming a turn, event or reward. The leader can
+resume through `Service.Fight` (`POST /characters/{id}/dungeons/fight`) or escape.
+Step revisions reject stale combat results and movement updates; the Memory
+adapter follows the same checks. Victory clears the encounter and grants its
+rewards once; terminal cleanup removes the live encounter with the run. Challenge's
 [transition boundary](#challenge-participant-exit-target) serializes every start,
 advance, participant exit and defeat through SQL coordination before publishing
 the accepted live revision. Publication renews activity only for a newly accepted

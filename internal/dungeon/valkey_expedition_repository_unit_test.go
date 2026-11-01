@@ -358,6 +358,7 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 		"dungeon-cave",                  // [11] dungeon_id
 		now.Format(time.RFC3339Nano),    // [12] started_at
 		"party-live", "Live Party", "[]",
+		"[]", "1", "", "1", // consumed events, event consumed, encounter, revision
 	}
 
 	params := dungeon.StepParams{
