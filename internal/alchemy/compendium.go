@@ -19,14 +19,38 @@ type DiscoveredRecipe struct {
 	CraftedAt    *time.Time `json:"crafted_at,omitempty"`
 }
 
+// CompendiumEntry is the observation of one learned combination. The product
+// fields (Name, ResultItemDefinitionID, ResultItemName) are empty and omitted
+// until the character has claimed that recipe once.
 type CompendiumEntry struct {
 	RecipeID               string       `json:"recipe_id"`
-	Name                   string       `json:"name"`
-	ResultItemDefinitionID string       `json:"result_item_definition_id"`
-	ResultItemName         string       `json:"result_item_name"`
+	Name                   string       `json:"name,omitempty"`
+	ResultItemDefinitionID string       `json:"result_item_definition_id,omitempty"`
+	ResultItemName         string       `json:"result_item_name,omitempty"`
 	Ingredients            []Ingredient `json:"ingredients"`
 	IsLearned              bool         `json:"is_learned"`
 	IsCrafted              bool         `json:"is_crafted"`
+}
+
+// RecipeView is the observation projection of a Recipe for a character. The
+// combination (ID, Ingredients) is always visible; the product facts (Name,
+// result item and quantity) are omitted until the character has crafted it.
+type RecipeView struct {
+	ID                     string       `json:"id"`
+	Name                   string       `json:"name,omitempty"`
+	ResultItemDefinitionID string       `json:"result_item_definition_id,omitempty"`
+	ResultQuantity         int          `json:"result_quantity,omitempty"`
+	Ingredients            []Ingredient `json:"ingredients"`
+}
+
+func viewRecipe(r Recipe, crafted bool) RecipeView {
+	v := RecipeView{ID: r.ID, Ingredients: r.Ingredients}
+	if crafted {
+		v.Name = r.Name
+		v.ResultItemDefinitionID = r.ResultItemDefinitionID
+		v.ResultQuantity = r.ResultQuantity
+	}
+	return v
 }
 
 type Compendium struct {
@@ -132,35 +156,31 @@ func (s *Service) GetCompendium(ctx context.Context, characterID string) (Compen
 	}
 
 	all := s.recipes.All()
-	entries := make([]CompendiumEntry, 0, len(all))
+	entries := make([]CompendiumEntry, 0, len(discovered))
 	craftedCount := 0
 	learnedCount := len(discovered)
 
 	for _, r := range all {
 		d, isLearned := discoveredMap[r.ID]
-		isCrafted := isLearned && d.IsCrafted
-		if isCrafted {
-			craftedCount++
+		if !isLearned {
+			continue
 		}
-
-		resultItemName := "？？？"
-		if isCrafted {
+		entry := CompendiumEntry{
+			RecipeID:    r.ID,
+			Ingredients: r.Ingredients,
+			IsLearned:   true,
+			IsCrafted:   d.IsCrafted,
+		}
+		if d.IsCrafted {
+			craftedCount++
+			entry.Name = r.Name
+			entry.ResultItemDefinitionID = r.ResultItemDefinitionID
+			entry.ResultItemName = r.ResultItemDefinitionID
 			if def, err := s.items.FindByID(r.ResultItemDefinitionID); err == nil {
-				resultItemName = def.Name
-			} else {
-				resultItemName = r.ResultItemDefinitionID
+				entry.ResultItemName = def.Name
 			}
 		}
-
-		entries = append(entries, CompendiumEntry{
-			RecipeID:               r.ID,
-			Name:                   r.Name,
-			ResultItemDefinitionID: r.ResultItemDefinitionID,
-			ResultItemName:         resultItemName,
-			Ingredients:            r.Ingredients,
-			IsLearned:              isLearned,
-			IsCrafted:              isCrafted,
-		})
+		entries = append(entries, entry)
 	}
 
 	pct := 0

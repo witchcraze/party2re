@@ -438,8 +438,8 @@ func TestCompendium_100PercentCompletionAndTitle(t *testing.T) {
 	if comp.TotalRecipes != 2 || comp.LearnedCount != 2 || comp.CraftedCount != 0 {
 		t.Errorf("compendium initial: total=%d, learned=%d, crafted=%d", comp.TotalRecipes, comp.LearnedCount, comp.CraftedCount)
 	}
-	if comp.Entries[0].ResultItemName != "？？？" {
-		t.Errorf("expected masked result item name ？？？, got %s", comp.Entries[0].ResultItemName)
+	if len(comp.Entries) != 2 || comp.Entries[0].ResultItemName != "" || comp.Entries[0].Name != "" {
+		t.Errorf("uncrafted entries must hide product facts, got %+v", comp.Entries)
 	}
 
 	// Craft first recipe
