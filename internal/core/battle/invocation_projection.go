@@ -80,6 +80,7 @@ func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[Callbac
 		return nil, nil
 	}
 	seen[op] = true
+	defer delete(seen, op)
 	if op.Kind == "entry" {
 		if op.GeneratedChildID != "" {
 			if op.GeneratedChildMP > p.s.actor(p.c.ActorID).MP {
@@ -103,6 +104,18 @@ func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[Callbac
 		}
 		return nil, nil
 	}
+	switch op.Kind {
+	case "random", "tool-84":
+		return p.projectRandom(op.Kind, seen)
+	case "job-82-generated":
+		child, err := p.s.generatedCallback(p.c, p.d)
+		if err != nil {
+			return nil, err
+		}
+		return p.projectSelection(callbackSelection{child: &child}, false, seen)
+	case "gem-86":
+		return p.projectExtended(seen)
+	}
 	name, calling := callingCommand(op.Kind)
 	if !calling {
 		return nil, nil
@@ -117,10 +130,7 @@ func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[Callbac
 	}
 	for _, entry := range entries {
 		if callingMatch(entry.CallbackEntry, name) {
-			child := explicitCallbackTarget(p.c)
-			copy := *p
-			copy.c = &child
-			return copy.projectAfter(CallbackInvocation{Kind: "entry", EntryID: entry.ID}, seen)
+			return p.projectSelection(entry, true, seen)
 		}
 	}
 	return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil

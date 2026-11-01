@@ -828,9 +828,18 @@ slots separately for every living outcome, and stops only the branch whose actor
 died. Alternative targets are never accumulated as simultaneous effects. No
 execution hook or caller RNG runs during projection. Unknown transitions discard
 tentative writes and retain conservative `AfterEffects` validation; they must not
-be approximated by sampled outcomes. Delegated calling selection uses projected
-current/previous jobs and preserves its explicit target boundary. These are
-admission facts, not a serialized executor or a committed-command replay mechanism.
+be approximated by sampled outcomes. Wrapper projection follows every selectable
+random/current-job position, including the actor's job73 proxy and tool84's
+extended/current300 entries. Each path starts from isolated predecessor facts;
+one unknown or cyclic child makes the whole wrapper transition unknown. Generated
+selection keeps its correlated child and internal MP guard; a frozen binding
+retains its captured child and cost. Random/tool projection restores MP decreases
+only, while gem86 retains handled no-effect, job73's special case and its
+post-child listed-MP debit. Calling selection uses projected current/previous jobs
+and preserves its explicit target boundary. These are admission facts, not a
+serialized executor or a committed-command replay mechanism. Shared traversal
+does not certify concrete producers: missing asset bodies and incomplete job
+state/operation projections still gate the full native random closure.
 
 `RegisterNonJobInvocations` binds tool84/85 and gem83/86–92 to those same
 invocation operations. `NonJobInvocationEntries` supplies the outer CMP
