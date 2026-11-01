@@ -63,6 +63,11 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 		if !ok {
 			return ErrUnsupportedEffect
 		}
+		if op.GeneratedChildID != "" {
+			if def.Invocation.Kind != "job-82-generated" || op.GeneratedChildMP < 0 {
+				return ErrUnsupportedEffect
+			}
+		}
 		c := *p.c
 		c.AfterEffects = afterEffects
 		if def.Validate != nil {
@@ -74,7 +79,14 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 			if def.Execute != nil || def.Invocation.Kind == "entry" {
 				return ErrUnsupportedEffect
 			}
-			if err := p.visit(def.Invocation, afterEffects); err != nil {
+			child := def.Invocation
+			if op.GeneratedChildID != "" {
+				if !afterEffects && op.GeneratedChildMP > p.s.actor(p.c.ActorID).MP {
+					return nil // The captured source guard skips the entire child.
+				}
+				child = CallbackInvocation{Kind: "entry", EntryID: op.GeneratedChildID}
+			}
+			if err := p.visit(child, afterEffects); err != nil {
 				return err
 			}
 		} else if def.Execute == nil || def.Validate == nil {
@@ -243,8 +255,11 @@ func (p *callbackAdmission) table(job int, kind string, afterEffects bool) error
 			}
 			entries = first
 		}
-		for _, entry := range entries {
+		for position, entry := range entries {
 			if kind == "random" && entry.Extended {
+				continue
+			}
+			if kind == "generated" && !generatedPositionReachable(job, position, len(entries)) {
 				continue
 			}
 			if entry.ID == "" || entry.RequiredSP < 0 || entry.MPCost < 0 {

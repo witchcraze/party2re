@@ -78,6 +78,12 @@ func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[Callbac
 	}
 	seen[op] = true
 	if op.Kind == "entry" {
+		if op.GeneratedChildID != "" {
+			if op.GeneratedChildMP > p.s.actor(p.c.ActorID).MP {
+				return true, nil
+			}
+			return p.projectAfter(CallbackInvocation{Kind: "entry", EntryID: op.GeneratedChildID}, seen)
+		}
 		def := p.d.Entries[op.EntryID]
 		if def.Project != nil {
 			return def.Project(p.s, p.c)

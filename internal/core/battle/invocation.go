@@ -29,6 +29,9 @@ type CallbackContext struct {
 // Kinds are random, tool-84, gem-86..92, job-82-generated, and entry (by native ID).
 type CallbackInvocation struct {
 	Kind, EntryID string
+	// Server-owned frozen job82 construction facts; never client effect input.
+	GeneratedChildID string
+	GeneratedChildMP int
 }
 
 type CallbackEntry struct {
@@ -154,6 +157,9 @@ func (s *LifetimeState) generatedCallback(c *CallbackContext, d CallbackCatalog)
 func (s *LifetimeState) invokeCallback(c *CallbackContext, d CallbackCatalog, op CallbackInvocation, rng random.Generator) error {
 	switch op.Kind {
 	case "entry":
+		if op.GeneratedChildID != "" {
+			return s.executeGenerated(c, d, callbackSelection{CallbackEntry: CallbackEntry{ID: op.GeneratedChildID, MPCost: op.GeneratedChildMP}}, rng)
+		}
 		return s.executeCallback(c, d, callbackSelection{CallbackEntry: CallbackEntry{ID: op.EntryID}}, rng)
 	case "random", "tool-84":
 		job := callbackJob(s.actor(c.ActorID).Jobs.JobID)

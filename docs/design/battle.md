@@ -794,6 +794,17 @@ slot runs. The registry identifies outer entries and their declared transitive
 edges by native identity. Tables retain ordered positions, duplicate names and
 all source-context variants; table construction chooses against the actual
 actor at each invocation and captures generated children before execution.
+
+`RegisterPlayerCallbacks` composes the existing operation owners into the 608
+ordered player/helper/form positions and the two ordinary job73 gear bindings.
+`PlayerCallbackTable` supplies metadata using canonical persistent job IDs
+(for example `job-05`), retaining SP0 and extended0 separately from scalar skill
+definitions. This metadata is not ordinary permission or cost payment. Save a
+selected binding's serializable `Invocation` with frozen command input: job82's
+child ID and listed MP, and variant IDs such as77.4/79.3, must survive later stat
+changes and reload. Rebuild function catalogs and operation ports from saved
+facts; table presence never substitutes for a missing asset/operation owner.
+
 Admission traverses recursive random, generated, book/tool and helper edges,
 including cycles. Later slots and nested current-job calls must also cover
 contexts reachable after earlier effects, including copied jobs and job300.
