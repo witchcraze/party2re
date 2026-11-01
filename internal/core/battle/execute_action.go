@@ -62,7 +62,8 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 	ctx.applyDamageWithCategory(actor, target, baseDamage, element, "", actionName, isCustom, incantation, isCritical)
 }
 
-func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Participant, baseDamage int, element string, category string, actionName string, isCustom bool, incantation string, isCritical bool) {
+// applyDamageWithCategory reports whether the hit was effective (not immune).
+func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Participant, baseDamage int, element string, category string, actionName string, isCustom bool, incantation string, isCritical bool) bool {
 	mult := ctx.field.DamageMultiplier(element)
 	dmg := int(float64(baseDamage) * mult)
 	if ctx.defendingMap[target.ID] {
@@ -155,6 +156,7 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 		Message:     msg,
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
+	return !isImmune
 }
 
 func (ctx *battleContext) applyMazinSynergy(fallen Participant) {

@@ -249,12 +249,12 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 		decayMult := 1.0
 		hasDiamondRing := hasItem(actor.ItemDefinitionIDs, "item-144")
 		isMagic := skill.Category == string(CategoryMagic) || skill.Category == "magic"
-		ten := ctx.getTension(actor.ID)
 		has149 := hasItem(actor.ItemDefinitionIDs, "item-149")
 
 		for _, tgt := range targetList {
 			var baseDmg int
 			if isMagic || skill.Direct {
+				ten := ctx.getTension(actor.ID)
 				basePower := float64(skill.Power) * decayMult
 				if hasItem(actor.ItemDefinitionIDs, "item-143") && basePower < 300 {
 					basePower *= 2
@@ -275,13 +275,13 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 				effDef := tgt.Defense + ctx.defenseBuff[tgt.ID]
 				baseDmg = CalculateDamage(int(effAtk), effDef, ctx.rng, false)
 			}
-			ctx.applyDamageWithCategory(actor, tgt, baseDmg, skill.Element, skill.Category, skill.Name, false, "", false)
+			effective := ctx.applyDamageWithCategory(actor, tgt, baseDmg, skill.Element, skill.Category, skill.Name, false, "", false)
+			if (isMagic || skill.Direct) && effective {
+				ctx.consumeTension(actor)
+			}
 			if skill.TargetScope == TargetScopeAllEnemies && !hasDiamondRing {
 				decayMult *= 0.85
 			}
-		}
-		if isMagic || skill.Direct {
-			ctx.consumeTension(actor)
 		}
 	}
 	return nil
