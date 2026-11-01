@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 func createPartyTestChar(id string, level int, hp int, atk int, def int) corecharacter.Character {
@@ -155,7 +156,7 @@ func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	c1.JobID = "warrior"
 	charRepo.chars[c1.ID] = c1
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}), challenge.WithRNG(random.NewDeterministic(1)))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -204,7 +205,7 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}), challenge.WithRNG(random.NewDeterministic(1)))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
