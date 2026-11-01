@@ -149,19 +149,19 @@ func TestEscape_InputAndStatusValidations(t *testing.T) {
 		t.Errorf("expected ErrNoActiveExpedition, got %v", err)
 	}
 
-	// 3. Active expedition not in StatusExploring
+	// 3. Unsupported expedition status
 	_, _, activeStore2, service2 := setupSettlementTest(t)
 	now := time.Now().UTC()
 	_ = activeStore2.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
 		CharacterID: "hero",
 		DungeonID:   "test-dg-01",
-		Status:      dungeon.StatusCleared,
+		Status:      "invalid",
 		StartedAt:   now,
 		UpdatedAt:   now,
 	})
 	_, err = service2.Escape(ctx, "hero")
 	if !errors.Is(err, dungeon.ErrNoActiveExpedition) {
-		t.Errorf("expected ErrNoActiveExpedition when status is cleared, got %v", err)
+		t.Errorf("expected ErrNoActiveExpedition for unsupported status, got %v", err)
 	}
 
 	// 4. Character not found in charRepo

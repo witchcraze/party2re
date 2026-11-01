@@ -10,66 +10,18 @@ import (
 	corerandom "github.com/witchcraze/party2re/internal/core/random"
 )
 
-func (s *Service) buildCombatAllies(ctx context.Context, exp *ActiveExpedition, char *corecharacter.Character) ([]corebattle.Participant, error) {
-	if len(exp.Members) == 0 {
-		var playerPart corebattle.Participant
-		var err error
-		if s.participantBuilder != nil {
-			playerPart, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, char.ID, exp.CurrentHP)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			playerPart = buildFallbackParticipantWithHP(*char, exp.CurrentHP)
-		}
-		playerPart.TeamID = "allies"
-		return []corebattle.Participant{playerPart}, nil
-	}
-
-	allies := make([]corebattle.Participant, 0, len(exp.Members))
-	for i := range exp.Members {
-		m := &exp.Members[i]
-		if m.CurrentHP <= 0 {
-			continue
-		}
-		var p corebattle.Participant
-		var err error
-		if s.participantBuilder != nil {
-			p, err = s.participantBuilder.BuildParticipantWithState(ctx, m.CharacterID, m.CurrentHP, &m.CurrentMP, m.ConsumedItems)
-		} else {
-			var memberChar corecharacter.Character
-			if m.CharacterID == char.ID {
-				memberChar = *char
-			} else {
-				memberChar, err = s.characterRepo.FindByID(ctx, m.CharacterID)
-			}
-			if err == nil {
-				p = buildFallbackParticipantWithHP(memberChar, m.CurrentHP)
-				p.MP = m.CurrentMP
-				p.MaxMP = m.MaxMP
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
-		p.TeamID = "allies"
-		allies = append(allies, p)
-	}
-	return allies, nil
-}
-
 func (s *Service) resolveEncounter(
 	ctx context.Context,
 	exp *ActiveExpedition,
 	char *corecharacter.Character,
 	monster DungeonMonster,
-) (corebattle.Result, bool, map[string]int, map[string]int, map[string][]corebattle.ConsumedItem, int, error) {
+) (corebattle.Result, *corebattle.FieldState, bool, map[string]int, map[string]int, map[string][]corebattle.ConsumedItem, int, error) {
 	allies, err := s.buildCombatAllies(ctx, exp, char)
 	if err != nil {
-		return corebattle.Result{}, false, nil, nil, nil, 0, err
+		return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
 	}
 	if len(allies) == 0 {
-		return corebattle.Result{Outcome: corebattle.OutcomeDefeat}, false, nil, nil, nil, -exp.CurrentHP, nil
+		return corebattle.Result{Outcome: corebattle.OutcomeDefeat}, nil, false, nil, nil, nil, -exp.CurrentHP, nil
 	}
 
 	monsterPart := corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense)
@@ -77,17 +29,26 @@ func (s *Service) resolveEncounter(
 	monsterPart.Agility = monster.Agility
 	monsterPart.TeamID = "enemies"
 
+	if exp.Encounter != nil {
+		monsterPart = exp.Encounter.Enemies[0]
+	}
+
+	var initialField *corebattle.FieldState
+	if exp.Encounter != nil {
+		initialField = exp.Encounter.Field
+	}
 	var partyRes corebattle.PartyBattleResult
 	var battleRes corebattle.Result
 
 	if partyResolver, ok := s.battleEngine.(corebattle.PartyBattleResolver); ok {
 		partyRes, err = partyResolver.ResolvePartyBattle(corebattle.PartyBattleRequest{
-			Allies:  allies,
-			Enemies: []corebattle.Participant{monsterPart},
-			RNG:     adaptRandomSource(s.rng),
+			Allies:       allies,
+			InitialField: initialField,
+			Enemies:      []corebattle.Participant{monsterPart},
+			RNG:          adaptRandomSource(s.rng),
 		})
 		if err != nil {
-			return corebattle.Result{}, false, nil, nil, nil, 0, err
+			return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
 		}
 		winnerID := monster.ID
 		loserID := char.ID
@@ -102,26 +63,28 @@ func (s *Service) resolveEncounter(
 			Turns:           partyRes.Turns,
 			RemainingHP:     partyRes.RemainingHP,
 			RemainingMP:     partyRes.RemainingMP,
+			RemainingCMP:    partyRes.RemainingCMP,
 			RemainingStatus: partyRes.RemainingStatus,
 			ConsumedItems:   partyRes.ConsumedItems,
 			Logs:            partyRes.Logs,
 		}
 	} else {
 		if len(allies) > 1 {
-			return corebattle.Result{}, false, nil, nil, nil, 0, corebattle.ErrInvalidRequest
+			return corebattle.Result{}, nil, false, nil, nil, nil, 0, corebattle.ErrInvalidRequest
 		}
 		battleRes, err = s.battleEngine.Resolve(corebattle.Request{
 			Participants: []corebattle.Participant{allies[0], monsterPart},
 			RNG:          adaptRandomSource(s.rng),
 		})
 		if err != nil {
-			return corebattle.Result{}, false, nil, nil, nil, 0, err
+			return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
 		}
 		partyRes = corebattle.PartyBattleResult{
 			Outcome:         battleRes.Outcome,
 			WinnerSide:      "enemies",
 			RemainingHP:     battleRes.RemainingHP,
 			RemainingMP:     battleRes.RemainingMP,
+			RemainingCMP:    battleRes.RemainingCMP,
 			RemainingStatus: battleRes.RemainingStatus,
 			ConsumedItems:   battleRes.ConsumedItems,
 			Logs:            battleRes.Logs,
@@ -175,7 +138,7 @@ func (s *Service) resolveEncounter(
 		leaderHPDelta = -exp.CurrentHP
 	}
 
-	return battleRes, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, nil
+	return battleRes, partyRes.FinalField, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, nil
 }
 
 func (s *Service) resolveMonsterCombat(
@@ -186,7 +149,7 @@ func (s *Service) resolveMonsterCombat(
 	eventType TileEventType,
 	newX, newY int,
 ) (ExpeditionStepResult, error) {
-	battleRes, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, monster)
+	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, monster)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
@@ -209,6 +172,8 @@ func (s *Service) resolveMonsterCombat(
 
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               true,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
@@ -258,9 +223,12 @@ func (s *Service) resolveMonsterCombat(
 	if battleRes.Outcome == corebattle.OutcomeDraw && !allDead {
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               true,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 exp.PosX,
 			NewY:                 exp.PosY,
+			Encounter:            pendingEncounter(exp, monster, eventType, newX, newY, battleRes, field),
 			HPDelta:              leaderHPDelta,
 			MemberHPDeltas:       memberHPDeltas,
 			MemberMPDeltas:       memberMPDeltas,
@@ -285,6 +253,8 @@ func (s *Service) resolveMonsterCombat(
 	// Player Defeated
 	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 		ExpectedExpeditionID: exp.ID,
+		ExpectedRevision:     &exp.Revision,
+		Combat:               true,
 		NewFloor:             exp.CurrentFloor,
 		NewX:                 newX,
 		NewY:                 newY,
@@ -309,7 +279,7 @@ func (s *Service) resolveBossCombat(
 	bossMonster DungeonMonster,
 	newX, newY int,
 ) (ExpeditionStepResult, error) {
-	battleRes, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, bossMonster)
+	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, bossMonster)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
@@ -332,6 +302,9 @@ func (s *Service) resolveBossCombat(
 
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               true,
+			FinishStatus:         StatusCleared,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 newX,
 			NewY:                 newY,
@@ -373,9 +346,12 @@ func (s *Service) resolveBossCombat(
 	if battleRes.Outcome == corebattle.OutcomeDraw && !allDead {
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               true,
 			NewFloor:             exp.CurrentFloor,
 			NewX:                 exp.PosX,
 			NewY:                 exp.PosY,
+			Encounter:            pendingEncounter(exp, bossMonster, EventBoss, newX, newY, battleRes, field),
 			HPDelta:              leaderHPDelta,
 			MemberHPDeltas:       memberHPDeltas,
 			MemberMPDeltas:       memberMPDeltas,
@@ -400,6 +376,8 @@ func (s *Service) resolveBossCombat(
 	// Defeat by Boss
 	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 		ExpectedExpeditionID: exp.ID,
+		ExpectedRevision:     &exp.Revision,
+		Combat:               true,
 		NewFloor:             exp.CurrentFloor,
 		NewX:                 newX,
 		NewY:                 newY,

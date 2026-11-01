@@ -238,7 +238,27 @@ state/reward/revealed buffers; Challenge uses immutable run-keyed session/reward
 hashes. The [keyspace owner](valkey-keyspace.md) defines their 7200-second activity
 lifetime and run-qualified member references.
 
-Dungeon's `dungeon_step` atomically updates its existing buffer. Challenge's
+Dungeon's `dungeon_step` atomically updates its existing buffer. Unresolved normal
+and boss encounters retain the enemy participant's HP/MP/status, allied statuses,
+CMP and remaining elemental field state together with their original destination
+in that buffer. These encounter-only facts are cleared when combat finishes; they
+are not durable character ailments. All cardinal moves reject before tile dispatch while
+an encounter remains, without consuming a turn, event or reward. The leader can
+resume through `Service.Fight` (`POST /characters/{id}/dungeons/fight`) or escape.
+Step revisions reject stale combat results and movement updates; the Memory
+adapter follows the same checks. Victory clears the encounter and grants its
+rewards once. Before terminal SQL settlement, a revision-checked step freezes the
+run's clear/escape/wipeout outcome and snapshot, rejecting further battle updates.
+Concurrent identical exits reuse that frozen snapshot rather than their earlier
+reads; a different terminal intent cannot replace it.
+Boss victory freezes clear in the same step as the victory rewards. A stale Escape
+cannot claim SQL settlement or delete a newer battle result. If SQL fails or
+post-commit cleanup is lost, Fight/Escape retries the frozen outcome without
+re-running combat; clear bonuses are derived once from the frozen base ledger.
+SQL's run-ID claim remains the durable idempotency boundary, and live cleanup
+remains owner/run-qualified and occurs only after SQL succeeds.
+
+Challenge's
 [transition boundary](#challenge-participant-exit-target) serializes every start,
 advance, participant exit and defeat through SQL coordination before publishing
 the accepted live revision. Publication renews activity only for a newly accepted

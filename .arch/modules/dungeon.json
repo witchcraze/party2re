@@ -1,7 +1,7 @@
 {
   "module": "dungeon",
   "tier": 2,
-  "description": "Valkey-owned expedition buffers with run-qualified cleanup and SQL reward/history settlement (C1, C2).",
+  "description": "Valkey-owned expedition and active-enemy buffers with revision-checked combat continuation, immutable terminal settlement snapshots, movement admission, run-qualified cleanup and SQL reward/history settlement (C1, C2).",
   "package": "internal/dungeon",
   "dependencies": [
     {"name": "settlement", "target_module": "database", "relation_type": "consumer_interface", "source_ref": "internal/dungeon/dungeon.go#Repository"},

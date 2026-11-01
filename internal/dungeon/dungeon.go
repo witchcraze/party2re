@@ -21,6 +21,9 @@ var (
 	ErrLevelRequirementNotMet    = errors.New("character level requirement not met for dungeon")
 	ErrActiveExpeditionExists    = errors.New("an active expedition is already in progress")
 	ErrNoActiveExpedition        = errors.New("no active dungeon expedition in progress")
+	ErrCombatActive              = errors.New("cannot advance until all enemies are defeated")
+	ErrNoActiveCombat            = errors.New("no active dungeon combat")
+	ErrExpeditionStateChanged    = errors.New("expedition state changed; retry from current state")
 	ErrInvalidDirection          = errors.New("invalid move direction")
 	ErrImpassableWall            = errors.New("cannot move into wall or out of map bounds")
 	ErrExpeditionAlreadyFinished = errors.New("expedition is already completed")
@@ -93,6 +96,8 @@ type Dungeon struct {
 }
 
 type ActiveExpedition struct {
+	Revision          int                `json:"revision"`
+	Encounter         *ActiveEncounter   `json:"encounter,omitempty"`
 	ID                string             `json:"id"`
 	CharacterID       string             `json:"character_id"`
 	PartyID           string             `json:"party_id,omitempty"`
@@ -163,6 +168,10 @@ type ExpeditionStepResult struct {
 // StepParams encapsulates the parameters for advancing an active dungeon expedition step atomically.
 type StepParams struct {
 	ExpectedExpeditionID string
+	ExpectedRevision     *int
+	FinishStatus         ExpeditionStatus
+	Combat               bool
+	Encounter            *ActiveEncounter
 	NewFloor             int
 	NewX                 int
 	NewY                 int

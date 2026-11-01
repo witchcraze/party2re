@@ -127,6 +127,7 @@ func (s *stubBossService) GetCharacterRecord(ctx context.Context, characterID st
 }
 
 type stubDungeonService struct {
+	fightFn                func(context.Context, string) (dungeon.ExpeditionStepResult, error)
 	listDungeonsFn         func(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
 	startExpeditionFn      func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
 	moveFn                 func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
@@ -509,4 +510,11 @@ func TestCombatEndpoints(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s *stubDungeonService) Fight(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error) {
+	if s.fightFn != nil {
+		return s.fightFn(ctx, characterID)
+	}
+	return dungeon.ExpeditionStepResult{EventType: dungeon.EventBattle}, nil
 }

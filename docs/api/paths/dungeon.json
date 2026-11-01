@@ -86,6 +86,7 @@
   },
   "/characters/{id}/dungeons/escape": {
     "post": {
+      "description": "Freeze the observed expedition revision before SQL settlement; concurrent combat changes reject with 409. A terminal buffer retries its original clear/escape/wipeout outcome, preserving run-ID idempotency and SQL-first cleanup.",
       "operationId": "escapeDungeonExpedition",
       "parameters": [
         {
@@ -145,7 +146,7 @@
         },
         "409": {
           "$ref": "#/components/responses/Error",
-          "description": "Conflict"
+          "description": "Expedition changed or another command froze the observed run"
         },
         "422": {
           "$ref": "#/components/responses/Error",
@@ -172,6 +173,100 @@
         }
       ],
       "summary": "Escape from active dungeon expedition",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/characters/{id}/dungeons/fight": {
+    "post": {
+      "description": "Leader-only continuation using saved enemy HP/MP, participant status/CMP and elemental field state through the existing battle resolver. A frozen terminal buffer retries SQL settlement instead of combat. Returns 409 when no encounter is active or a concurrent command changes or freezes the run.",
+      "operationId": "fightDungeonEncounter",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DungeonStepResponse"
+              }
+            }
+          },
+          "description": "Dungeon escape result"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "404": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "No active encounter or expedition state changed"
+        },
+        "422": {
+          "$ref": "#/components/responses/Error",
+          "description": "Unprocessable Content"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Continue the active dungeon encounter",
       "tags": [
         "Combat"
       ]
@@ -264,6 +359,7 @@
   },
   "/characters/{id}/dungeons/move": {
     "post": {
+      "description": "Rejects movement in all directions while an active enemy remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape.",
       "operationId": "moveDungeonExpedition",
       "parameters": [
         {
@@ -341,7 +437,7 @@
         },
         "409": {
           "$ref": "#/components/responses/Error",
-          "description": "Conflict"
+          "description": "Active enemies block movement, or expedition state changed"
         },
         "415": {
           "$ref": "#/components/responses/Error",

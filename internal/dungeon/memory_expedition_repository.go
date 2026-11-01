@@ -60,6 +60,7 @@ func (m *MemoryExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 	}
 
 	cp := exp
+	cp.Encounter = cloneEncounter(exp.Encounter)
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
@@ -71,6 +72,7 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	defer m.mu.Unlock()
 
 	cp := exp
+	cp.Encounter = cloneEncounter(exp.Encounter)
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
@@ -131,6 +133,15 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	if exp.Status != StatusExploring {
 		return StepOutcome{}, ErrExpeditionNotActive
 	}
+
+	if exp.Encounter != nil && !params.Combat {
+		return StepOutcome{}, ErrCombatActive
+	}
+	if params.ExpectedRevision != nil && exp.Revision != *params.ExpectedRevision {
+		return StepOutcome{}, ErrExpeditionStateChanged
+	}
+	exp.Revision++
+	exp.Encounter = cloneEncounter(params.Encounter)
 
 	currentHP := exp.CurrentHP + params.HPDelta
 	turnsRemaining := exp.TurnsRemaining + params.TurnsDelta
@@ -206,6 +217,9 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		finalStatus = StatusWipedOut
 	}
 
+	if params.FinishStatus != "" {
+		finalStatus = params.FinishStatus
+	}
 	exp.CurrentFloor = params.NewFloor
 	exp.PosX = params.NewX
 	exp.PosY = params.NewY
@@ -260,6 +274,7 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	m.expirations[characterID] = time.Now().UTC().Add(m.ttl)
 
 	cp := exp
+	cp.Encounter = cloneEncounter(exp.Encounter)
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)

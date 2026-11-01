@@ -37,6 +37,17 @@ if status ~= 'exploring' then
     return redis.error_reply("ERR_EXPEDITION_NOT_ACTIVE: expedition is not in exploring status")
 end
 
+local encounter = redis.call('HGET', state_key, 'encounter') or ''
+if encounter ~= '' and ARGV[20] ~= 'true' then
+    return redis.error_reply('ERR_COMBAT_ACTIVE')
+end
+local revision = tonumber(redis.call('HGET', state_key, 'revision') or '0')
+if ARGV[19] ~= '' and tonumber(ARGV[19]) ~= revision then
+    return redis.error_reply('ERR_EXPEDITION_STATE_CHANGED')
+end
+revision = revision + 1
+encounter = ARGV[21] or ''
+
 -- 4. Calculate new HP and turns budget
 local current_hp = tonumber(redis.call('HGET', state_key, 'current_hp') or '0')
 local turns_remaining = tonumber(redis.call('HGET', state_key, 'turns_remaining') or '0')
@@ -159,6 +170,10 @@ if turns_remaining <= 0 then
     final_status = 'wiped_out'
 end
 
+if ARGV[22] and ARGV[22] ~= '' then
+    final_status = ARGV[22]
+end
+
 -- 5. Check and record event consumption
 local events_str = redis.call('HGET', state_key, 'consumed_events')
 local consumed_events = {}
@@ -229,6 +244,8 @@ end
 
 -- 6. Update state hash
 redis.call('HMSET', state_key,
+    'revision', tostring(revision),
+    'encounter', encounter,
     'current_floor', new_floor,
     'pos_x', new_x,
     'pos_y', new_y,
@@ -296,5 +313,7 @@ return {
     redis.call('HGET', state_key, 'party_name') or '',
     members_str,
     new_events_str,
-    tostring(event_consumed)
+    tostring(event_consumed),
+    encounter,
+    tostring(revision)
 }

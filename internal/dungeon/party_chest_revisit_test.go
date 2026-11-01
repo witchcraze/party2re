@@ -2,6 +2,7 @@ package dungeon_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -270,22 +271,8 @@ func TestPartyChest_RevisitChest_RealMariaDBFinalization(t *testing.T) {
 	}
 }
 
-// TestPartyCombat_OutcomeDraw_BypassingEnemyToNonCombatTile_CurrentLimitation
-// reproduces the parity gap where an unresolved 100-turn draw allows the party to bypass
-// an undefeated monster by moving to an adjacent non-combat tile (treasure chest 'T').
-//
-// In original Party2 (lib/vs_dungeon.cgi:77):
-//
-//	if (@enemys > 0 && $event ne '宝') {
-//	    $mes .= "※敵を全て倒すまで、先に進むことはできません";
-//	    return;
-//	}
-//
-// Under the current synchronous 1-step auto-battle engine without persistent in-combat state,
-// a draw keeps the party at (0, 0). The party is then able to move South onto (0, 1) (chest 'T'),
-// bypassing the undefeated monster at (1, 0). This test documents this current engine limitation
-// and verifies that state and resources remain consistent, without asserting that the bypass is authentic parity.
-func TestPartyCombat_OutcomeDraw_BypassingEnemyToNonCombatTile_CurrentLimitation(t *testing.T) {
+// An unresolved encounter must prevent a party from bypassing its enemy to loot a chest.
+func TestPartyCombat_OutcomeDraw_BlocksAdjacentTreasure(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockDungeonRepo()
 
@@ -347,20 +334,14 @@ func TestPartyCombat_OutcomeDraw_BypassingEnemyToNonCombatTile_CurrentLimitation
 			res.Expedition.PosX, res.Expedition.PosY, res.Expedition.TurnsRemaining)
 	}
 
-	// 2. Move in another direction to a non-combat tile: South to (0, 1) Chest 'T'
-	// Reproduction: under current engine, this succeeds and reaches the chest, demonstrating
-	// the bypass of the undefeated enemy at (1, 0).
-	res2, err := svc.Move(ctx, cLead.ID, dungeon.DirectionSouth)
+	if _, err := svc.Move(ctx, cLead.ID, dungeon.DirectionSouth); !errors.Is(err, dungeon.ErrCombatActive) {
+		t.Fatalf("expected active combat to block treasure, got %v", err)
+	}
+	active, err := svc.GetActiveExpedition(ctx, cLead.ID)
 	if err != nil {
-		t.Fatalf("Move South failed: %v", err)
+		t.Fatal(err)
 	}
-	if res2.Expedition.PosX != 0 || res2.Expedition.PosY != 1 {
-		t.Fatalf("expected pos (0,1), got (%d,%d)", res2.Expedition.PosX, res2.Expedition.PosY)
-	}
-	if res2.EventType != dungeon.EventTreasure {
-		t.Fatalf("expected EventTreasure, got %v", res2.EventType)
-	}
-	if res2.Expedition.TurnsRemaining != initialTurns-2 {
-		t.Fatalf("expected turns-2 (%d), got %d", initialTurns-2, res2.Expedition.TurnsRemaining)
+	if active.PosX != 0 || active.PosY != 0 || active.TurnsRemaining != initialTurns-1 || active.AccumulatedGold != 0 || len(active.ConsumedEvents) != 0 {
+		t.Fatalf("rejected movement changed expedition: %+v", active)
 	}
 }

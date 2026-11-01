@@ -560,6 +560,7 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/dungeons/start", h.handleStartDungeon)
 	mux.HandleFunc("POST /characters/{id}/dungeons/party-start", h.handleStartPartyDungeon)
 	mux.HandleFunc("POST /characters/{id}/dungeons/move", h.handleMoveDungeon)
+	mux.HandleFunc("POST /characters/{id}/dungeons/fight", h.handleFightDungeon)
 	mux.HandleFunc("POST /characters/{id}/dungeons/escape", h.handleEscapeDungeon)
 	// Colosseum PvP (Real-time 8-Player Bet & Split Rooms)
 	mux.HandleFunc("POST /characters/{id}/pvp/rooms", h.handleCreatePvPRoom)
