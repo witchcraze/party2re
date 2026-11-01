@@ -158,7 +158,10 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 
 	var members []ExpeditionMember
 	if mJSON, ok := sMap["members"]; ok && mJSON != "" {
-		members = DecodeMembers(mJSON)
+		members, err = decodeMembers(mJSON)
+		if err != nil {
+			return nil, err
+		}
 	}
 	consumedEvents := DecodeItems(sMap["consumed_events"])
 
@@ -354,11 +357,15 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	if err != nil {
 		return StepOutcome{}, err
 	}
+	members, err := decodeMembers(vals[15])
+	if err != nil {
+		return StepOutcome{}, err
+	}
 	revision, _ := strconv.Atoi(vals[19])
 	exp := ActiveExpedition{
 		Encounter: encounter,
 		Revision:  revision,
-		PartyID:   vals[13], PartyName: vals[14], Members: DecodeMembers(vals[15]),
+		PartyID:   vals[13], PartyName: vals[14], Members: members,
 		ID:                params.ExpectedExpeditionID,
 		CharacterID:       characterID,
 		DungeonID:         dungeonID,

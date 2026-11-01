@@ -323,7 +323,14 @@ claims the history row, delegates surviving vitality persistence (HP/MP, 1 HP fl
 fallen characters) and consumable inventory item deduction to shared post-battle settlement
 (`battle.ApplyPostBattleResult`), applies experience and gold rewards to each participating
 member, awards small medals to the expedition leader, delivers reward items to inventory/depot
-(Rank 3/5), and atomically increments `character_dungeon_records` (Rank 8). Duplicate run-ID
+(Rank 3/5), and atomically increments `character_dungeon_records` (Rank 8). Pre-cutover
+expedition `members` payloads that omit `current_mp` distinguish missing MP from explicit
+`"current_mp": 0` (`ExpeditionMember.HasCurrentMP()`): combat participant construction
+passes `nil` MP to `BuildParticipantWithState` so stored character MP is used and updated
+into the run buffer on combat completion, and non-combat settlement resolves/omits missing
+member MP so stored character MP is preserved while explicit `0` MP is committed as `0`.
+If required member or run state cannot be read, settlement aborts before freezing or
+deleting the active run. Duplicate run-ID
 claims map to `ErrExpeditionAlreadyFinished`, which `internal/dungeon` treats as idempotent
 completion so post-commit Valkey `DeleteActiveExpedition` can safely retry without
 double-granting rewards or overwriting concurrent wallet updates. Clear, escape

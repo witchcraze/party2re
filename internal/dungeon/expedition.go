@@ -7,6 +7,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 func (s *Service) GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error) {
@@ -69,7 +71,10 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 
 	char, err := s.characterRepo.FindByID(ctx, characterID)
 	if err != nil {
-		return ExpeditionStepResult{}, ErrCharacterNotFound
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return ExpeditionStepResult{}, ErrCharacterNotFound
+		}
+		return ExpeditionStepResult{}, err
 	}
 
 	floorIdx := exp.CurrentFloor - 1

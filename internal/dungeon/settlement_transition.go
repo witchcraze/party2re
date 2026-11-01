@@ -4,7 +4,59 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
+
+func (s *Service) resolveMissingMemberMPs(
+	ctx context.Context,
+	exp *ActiveExpedition,
+	leader *corecharacter.Character,
+) (map[string][2]int, error) {
+	resolved := make(map[string][2]int)
+	for _, m := range exp.Members {
+		if m.HasCurrentMP() {
+			continue
+		}
+		var memberChar corecharacter.Character
+		if leader != nil && m.CharacterID == leader.ID {
+			memberChar = *leader
+		} else {
+			var err error
+			memberChar, err = s.characterRepo.FindByID(ctx, m.CharacterID)
+			if err != nil {
+				if errors.Is(err, corecharacter.ErrNotFound) {
+					return nil, ErrCharacterNotFound
+				}
+				return nil, err
+			}
+		}
+		maxMP := memberChar.Stats.MaxMP
+		if maxMP <= 0 {
+			maxMP = memberChar.Stats.MP
+		}
+		currMP := memberChar.Stats.MP
+		if currMP < 0 {
+			currMP = 0
+		} else if maxMP > 0 && currMP > maxMP {
+			currMP = maxMP
+		}
+		resolved[m.CharacterID] = [2]int{currMP, maxMP}
+	}
+	return resolved, nil
+}
+
+func applyResolvedMemberMPs(exp *ActiveExpedition, resolved map[string][2]int) {
+	for i := range exp.Members {
+		if !exp.Members[i].HasCurrentMP() {
+			if mp, ok := resolved[exp.Members[i].CharacterID]; ok {
+				exp.Members[i].CurrentMP = mp[0]
+				exp.Members[i].MaxMP = mp[1]
+				exp.Members[i].mpKnown = true
+			}
+		}
+	}
+}
 
 // freezeExpedition fences further combat before SQL settles this exact snapshot.
 func (s *Service) freezeExpedition(ctx context.Context, exp *ActiveExpedition, status ExpeditionStatus) error {
@@ -53,6 +105,9 @@ func (s *Service) freezeExpedition(ctx context.Context, exp *ActiveExpedition, s
 func (s *Service) resumeSettlement(ctx context.Context, exp *ActiveExpedition) (ExpeditionStepResult, error) {
 	char, err := s.characterRepo.FindByID(ctx, exp.CharacterID)
 	if err != nil {
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return ExpeditionStepResult{}, ErrCharacterNotFound
+		}
 		return ExpeditionStepResult{}, err
 	}
 	switch exp.Status {

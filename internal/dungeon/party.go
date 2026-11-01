@@ -2,11 +2,13 @@ package dungeon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -28,6 +30,100 @@ type ExpeditionMember struct {
 	AccumulatedGold int                       `json:"accumulated_gold"`
 	ItemIDs         []string                  `json:"item_ids,omitempty"`
 	ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	mpKnown         bool
+}
+
+// HasCurrentMP reports whether the member carries an explicit MP snapshot rather than a pre-MP legacy payload.
+func (m ExpeditionMember) HasCurrentMP() bool {
+	return m.mpKnown || m.CurrentMP > 0 || m.MaxMP > 0
+}
+
+type rawExpeditionMember struct {
+	CharacterID     string                    `json:"character_id"`
+	Name            string                    `json:"name"`
+	JobID           string                    `json:"job_id"`
+	Level           int                       `json:"level"`
+	CurrentHP       int                       `json:"current_hp"`
+	MaxHP           int                       `json:"max_hp"`
+	CurrentMP       *int                      `json:"current_mp,omitempty"`
+	MaxMP           *int                      `json:"max_mp,omitempty"`
+	AccumulatedExp  int                       `json:"accumulated_exp"`
+	AccumulatedGold int                       `json:"accumulated_gold"`
+	ItemIDs         []string                  `json:"item_ids,omitempty"`
+	ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+}
+
+func (m *ExpeditionMember) UnmarshalJSON(data []byte) error {
+	var raw rawExpeditionMember
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*m = ExpeditionMember{
+		CharacterID:     raw.CharacterID,
+		Name:            raw.Name,
+		JobID:           raw.JobID,
+		Level:           raw.Level,
+		CurrentHP:       raw.CurrentHP,
+		MaxHP:           raw.MaxHP,
+		AccumulatedExp:  raw.AccumulatedExp,
+		AccumulatedGold: raw.AccumulatedGold,
+		ItemIDs:         raw.ItemIDs,
+		ConsumedItems:   raw.ConsumedItems,
+	}
+	if raw.CurrentMP != nil {
+		m.CurrentMP = *raw.CurrentMP
+		m.mpKnown = true
+	}
+	if raw.MaxMP != nil {
+		m.MaxMP = *raw.MaxMP
+	}
+	return nil
+}
+
+func EncodeMembers(members []ExpeditionMember) string {
+	raw := make([]rawExpeditionMember, len(members))
+	for i, m := range members {
+		entry := rawExpeditionMember{
+			CharacterID:     m.CharacterID,
+			Name:            m.Name,
+			JobID:           m.JobID,
+			Level:           m.Level,
+			CurrentHP:       m.CurrentHP,
+			MaxHP:           m.MaxHP,
+			AccumulatedExp:  m.AccumulatedExp,
+			AccumulatedGold: m.AccumulatedGold,
+			ItemIDs:         m.ItemIDs,
+			ConsumedItems:   m.ConsumedItems,
+		}
+		if m.HasCurrentMP() {
+			currMP := m.CurrentMP
+			maxMP := m.MaxMP
+			entry.CurrentMP = &currMP
+			entry.MaxMP = &maxMP
+		}
+		raw[i] = entry
+	}
+	b, _ := json.Marshal(raw)
+	return string(b)
+}
+
+func DecodeMembers(data string) []ExpeditionMember {
+	members, _ := decodeMembers(data)
+	return members
+}
+
+func decodeMembers(data string) ([]ExpeditionMember, error) {
+	if strings.TrimSpace(data) == "" {
+		return []ExpeditionMember{}, nil
+	}
+	var members []ExpeditionMember
+	if err := json.Unmarshal([]byte(data), &members); err != nil {
+		return nil, err
+	}
+	if members == nil {
+		members = []ExpeditionMember{}
+	}
+	return members, nil
 }
 
 // StartPartyExpedition begins a 2D dungeon exploration for up to 4 party members.
@@ -91,7 +187,10 @@ func (s *Service) startRoster(
 		}
 		char, err := s.characterRepo.FindByID(ctx, mID)
 		if err != nil {
-			return nil, ErrCharacterNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return nil, ErrCharacterNotFound
+			}
+			return nil, err
 		}
 
 		if char.Level < dungeon.MinLevel {
@@ -144,6 +243,7 @@ func (s *Service) startRoster(
 			CurrentMP:   currMP,
 			MaxMP:       maxMP,
 			ItemIDs:     itemIDs,
+			mpKnown:     true,
 		})
 	}
 

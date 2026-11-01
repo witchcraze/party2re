@@ -32,7 +32,11 @@ func (s *Service) buildCombatAllies(ctx context.Context, exp *ActiveExpedition, 
 		var p corebattle.Participant
 		var err error
 		if s.participantBuilder != nil {
-			p, err = s.participantBuilder.BuildParticipantWithState(ctx, m.CharacterID, m.CurrentHP, &m.CurrentMP, m.ConsumedItems)
+			var mp *int
+			if m.HasCurrentMP() {
+				mp = &m.CurrentMP
+			}
+			p, err = s.participantBuilder.BuildParticipantWithState(ctx, m.CharacterID, m.CurrentHP, mp, m.ConsumedItems)
 		} else {
 			var memberChar corecharacter.Character
 			if m.CharacterID == char.ID {
@@ -42,8 +46,12 @@ func (s *Service) buildCombatAllies(ctx context.Context, exp *ActiveExpedition, 
 			}
 			if err == nil {
 				p = buildFallbackParticipantWithHP(memberChar, m.CurrentHP)
-				p.MP = m.CurrentMP
-				p.MaxMP = m.MaxMP
+				if m.HasCurrentMP() {
+					p.MP = m.CurrentMP
+					if m.MaxMP > 0 {
+						p.MaxMP = m.MaxMP
+					}
+				}
 			}
 		}
 		if err != nil {

@@ -90,7 +90,9 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 			c = corecharacter.Character{ID: mem.CharacterID}
 		}
 		c.Stats.HP = mem.CurrentHP
-		c.Stats.MP = mem.CurrentMP
+		if mem.HasCurrentMP() {
+			c.Stats.MP = mem.CurrentMP
+		}
 		if history.Outcome == dungeon.StatusCleared || history.Outcome == dungeon.StatusEscaped {
 			earnedExp := mem.AccumulatedExp
 			earnedGold := mem.AccumulatedGold

@@ -440,11 +440,6 @@ func DecodeItems(data string) []string {
 	return items
 }
 
-func EncodeMembers(members []ExpeditionMember) string {
-	b, _ := json.Marshal(members)
-	return string(b)
-}
-
 func EncodeMemberHPDeltas(deltas map[string]int) string {
 	if len(deltas) == 0 {
 		return "{}"
@@ -465,13 +460,4 @@ func EncodeConsumedItems(items map[string][]corebattle.ConsumedItem) string {
 		return "{}"
 	}
 	return string(b)
-}
-
-func DecodeMembers(data string) []ExpeditionMember {
-	var members []ExpeditionMember
-	_ = json.Unmarshal([]byte(data), &members)
-	if members == nil {
-		members = []ExpeditionMember{}
-	}
-	return members
 }

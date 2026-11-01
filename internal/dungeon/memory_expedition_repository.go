@@ -179,6 +179,7 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 				if exp.Members[i].MaxMP > 0 && exp.Members[i].CurrentMP > exp.Members[i].MaxMP {
 					exp.Members[i].CurrentMP = exp.Members[i].MaxMP
 				}
+				exp.Members[i].mpKnown = true
 			}
 		}
 	}
