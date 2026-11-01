@@ -65,6 +65,18 @@ type CallbackDefinition struct {
 	// and means unknown; later callbacks must admit arbitrary prior effects.
 	// Never sample outcomes or omit operation facts changed by the body.
 	Project func(*LifetimeState, *CallbackContext) (bool, error)
+	// ProjectBranches supplies alternative complete transitions without RNG or
+	// external Apply hooks. Each includes every changed state/context fact; a
+	// no-effect outcome is an unchanged branch. Empty means unknown. When present
+	// it takes precedence over Project. Admission isolates each returned branch.
+	ProjectBranches func(*LifetimeState, *CallbackContext) ([]CallbackContinuation, error)
+}
+
+// CallbackContinuation is a pure predecessor outcome for later admission.
+// Function ports are rebuilt by consumers; persist only resulting run facts.
+type CallbackContinuation struct {
+	State   LifetimeState
+	Context CallbackContext
 }
 
 // CallbackCatalog is server-owned, default-empty certification. Table variants
