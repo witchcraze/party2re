@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -127,7 +128,9 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 		exp.PartyID = partyID.String
 	}
 	if membersJSON.Valid && membersJSON.String != "" {
-		exp.Members = dungeon.DecodeMembers(membersJSON.String)
+		if err := json.Unmarshal([]byte(membersJSON.String), &exp.Members); err != nil {
+			return nil, err
+		}
 	}
 
 	exp.Status = dungeon.ExpeditionStatus(statusStr)
@@ -225,16 +228,13 @@ func (r *DungeonRepository) FinalizeExpedition(
 	roster := members
 	if len(roster) == 0 {
 		leaderHP := 100
-		leaderMP := 0
 		if character != nil {
 			leaderHP = character.Stats.HP
-			leaderMP = character.Stats.MP
 		}
 		roster = []dungeon.ExpeditionMember{
 			{
 				CharacterID: charID,
 				CurrentHP:   leaderHP,
-				CurrentMP:   leaderMP,
 			},
 		}
 	} else {
@@ -316,7 +316,9 @@ func (r *DungeonRepository) FinalizeExpedition(
 		for i, m := range sortedMembers {
 			ids[i] = m.CharacterID
 			state.RemainingHP[m.CharacterID] = m.CurrentHP
-			state.RemainingMP[m.CharacterID] = m.CurrentMP
+			if m.HasCurrentMP() {
+				state.RemainingMP[m.CharacterID] = m.CurrentMP
+			}
 			if len(m.ConsumedItems) > 0 {
 				state.ConsumedItems[m.CharacterID] = m.ConsumedItems
 			}

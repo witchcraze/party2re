@@ -23,6 +23,10 @@ func (s *Service) resolveEncounter(
 	if len(allies) == 0 {
 		return corebattle.Result{Outcome: corebattle.OutcomeDefeat}, nil, false, nil, nil, nil, -exp.CurrentHP, nil
 	}
+	initialMP := make(map[string]int, len(allies))
+	for _, a := range allies {
+		initialMP[a.ID] = a.MP
+	}
 
 	monsterPart := corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense)
 	monsterPart.Name = monster.Name
@@ -111,6 +115,8 @@ func (s *Service) resolveEncounter(
 			}
 			if remMP, ok := partyRes.RemainingMP[m.CharacterID]; ok {
 				memberMPDeltas[m.CharacterID] = remMP - m.CurrentMP
+			} else if initMP, ok := initialMP[m.CharacterID]; ok && !m.HasCurrentMP() {
+				memberMPDeltas[m.CharacterID] = initMP - m.CurrentMP
 			}
 			if items, ok := partyRes.ConsumedItems[m.CharacterID]; ok && len(items) > 0 {
 				consumedItems[m.CharacterID] = items

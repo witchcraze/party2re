@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 // freezeExpedition fences further combat before SQL settles this exact snapshot.
@@ -53,6 +55,9 @@ func (s *Service) freezeExpedition(ctx context.Context, exp *ActiveExpedition, s
 func (s *Service) resumeSettlement(ctx context.Context, exp *ActiveExpedition) (ExpeditionStepResult, error) {
 	char, err := s.characterRepo.FindByID(ctx, exp.CharacterID)
 	if err != nil {
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return ExpeditionStepResult{}, ErrCharacterNotFound
+		}
 		return ExpeditionStepResult{}, err
 	}
 	switch exp.Status {

@@ -32,7 +32,10 @@ func (s *Service) Escape(ctx context.Context, characterID string) (ExpeditionSte
 	}
 	char, err := s.characterRepo.FindByID(ctx, characterID)
 	if err != nil {
-		return ExpeditionStepResult{}, ErrCharacterNotFound
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return ExpeditionStepResult{}, ErrCharacterNotFound
+		}
+		return ExpeditionStepResult{}, err
 	}
 	return s.handleEscape(ctx, exp, &char, "探索を中断し、戦利品を持って無事に脱出した！")
 }
@@ -79,7 +82,9 @@ func (s *Service) handleDungeonClear(
 	for _, m := range exp.Members {
 		if m.CharacterID == char.ID {
 			char.Stats.HP = m.CurrentHP
-			char.Stats.MP = m.CurrentMP
+			if m.HasCurrentMP() {
+				char.Stats.MP = m.CurrentMP
+			}
 			break
 		}
 	}
@@ -178,7 +183,9 @@ func (s *Service) handleEscape(
 	for _, m := range exp.Members {
 		if m.CharacterID == char.ID {
 			char.Stats.HP = m.CurrentHP
-			char.Stats.MP = m.CurrentMP
+			if m.HasCurrentMP() {
+				char.Stats.MP = m.CurrentMP
+			}
 			break
 		}
 	}
@@ -281,7 +288,9 @@ func (s *Service) handleWipeout(
 	for _, m := range exp.Members {
 		if m.CharacterID == char.ID {
 			char.Stats.HP = m.CurrentHP
-			char.Stats.MP = m.CurrentMP
+			if m.HasCurrentMP() {
+				char.Stats.MP = m.CurrentMP
+			}
 			break
 		}
 	}
