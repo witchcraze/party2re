@@ -407,7 +407,7 @@
               }
             }
           },
-          "description": "Conflict - character is currently sleeping or awaiting wake-up"
+          "description": "Conflict - character is currently sleeping, awaiting wake-up, or monster is not in the storage box"
         },
         "500": {
           "content": {
@@ -429,7 +429,7 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Release a monster into the wild",
+      "summary": "Release a boxed monster into the wild",
       "tags": [
         "Monster"
       ]
@@ -495,7 +495,7 @@
               }
             }
           },
-          "description": "Invalid custom name or duplicate name at home"
+          "description": "Invalid custom name"
         },
         "401": {
           "content": {
@@ -535,7 +535,7 @@
               }
             }
           },
-          "description": "Conflict - character is currently sleeping or awaiting wake-up"
+          "description": "Conflict - character is currently sleeping, awaiting wake-up, or monster is not in the storage box"
         },
         "415": {
           "$ref": "#/components/responses/Error",
@@ -561,7 +561,7 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Rename a monster or pet",
+      "summary": "Rename a boxed monster",
       "tags": [
         "Monster"
       ]
@@ -675,7 +675,7 @@
               }
             }
           },
-          "description": "Conflict - character is currently sleeping or awaiting wake-up"
+          "description": "Conflict - character is currently sleeping, awaiting wake-up, or monster is not in the storage box"
         },
         "415": {
           "$ref": "#/components/responses/Error",
@@ -701,7 +701,7 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Send a monster to another player",
+      "summary": "Send a boxed monster to another player",
       "tags": [
         "Monster"
       ]

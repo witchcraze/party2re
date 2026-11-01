@@ -297,4 +297,51 @@ func TestMonsterEndpoints(t *testing.T) {
 		}
 		resp.Body.Close()
 	}
+
+	// 10. Non-box location conflict: rename/send/release on home pet returns 409 Conflict
+	{
+		mConflict := &stubMonsterService{
+			renameFn: func(ctx context.Context, characterID, instanceID, newName string) (monster.MonsterInstance, error) {
+				return monster.MonsterInstance{}, monster.ErrInvalidLocation
+			},
+			sendMonsterFn: func(ctx context.Context, senderCharID, recipientCharID, instanceID string) error {
+				return monster.ErrInvalidLocation
+			},
+			releaseMonsterFn: func(ctx context.Context, characterID, instanceID string) error {
+				return monster.ErrInvalidLocation
+			},
+		}
+		hConflict, _ := apihttp.NewHandler(
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithMonster(mConflict),
+		)
+		sConflict := httptest.NewServer(hConflict.Router())
+		defer sConflict.Close()
+
+		for _, tc := range []struct {
+			path string
+			body []byte
+		}{
+			{"/characters/c1/monsters/m-home/rename", []byte(`{"custom_name":"新名"}`)},
+			{"/characters/c1/monsters/m-home/send", []byte(`{"recipient_character_id":"c2"}`)},
+			{"/characters/c1/monsters/m-home/release", nil},
+		} {
+			req, _ := http.NewRequest(http.MethodPost, sConflict.URL+tc.path, bytes.NewReader(tc.body))
+			req.Header.Set("Authorization", "Bearer valid-token")
+			if tc.body != nil {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("POST %s failed: %v", tc.path, err)
+			}
+			if resp.StatusCode != http.StatusConflict {
+				t.Errorf("POST %s: expected 409 Conflict, got %d", tc.path, resp.StatusCode)
+			}
+			resp.Body.Close()
+		}
+	}
 }
