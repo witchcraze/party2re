@@ -8,7 +8,6 @@ import (
 
 	"github.com/witchcraze/party2re/internal/chapel"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 )
 
 // ChapelService defines the chapel blessings operations exposed over HTTP.
@@ -32,11 +31,22 @@ func WithChapel(c ChapelService) Option {
 			if err != nil || kind == chapel.BlessingNone {
 				return nil, chapel.ErrInvalidBlessing
 			}
+			actor, err := h.characters.Get(ctx, actorID)
+			if err != nil {
+				return nil, err
+			}
 			blessing, err := c.SelectBlessing(ctx, actorID, kind)
 			if err != nil {
 				return nil, err
 			}
-			return chapelBlessingResponse{Blessing: blessing}, nil
+			var blessingName string
+			for _, info := range chapel.AvailableBlessings {
+				if info.Type == blessing.ActiveBlessing {
+					blessingName = info.Name
+					break
+				}
+			}
+			return chapelBlessingResponse{Blessing: blessing, Message: fmt.Sprintf("%sは「%s」と祈るのですね…", actor.Name, blessingName)}, nil
 		}, chapelActionRejection)(h)
 	}
 }
@@ -49,6 +59,8 @@ func chapelActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusConflict, ErrorDetail{Code: "CHAPEL_ALREADY_PRAYED", Message: chapel.MsgAlreadyPrayed}
 	case errors.Is(err, chapel.ErrInvalidCharacterID):
 		return http.StatusBadRequest, ErrorDetail{Code: "CHAPEL_INVALID_CHARACTER_ID", Message: "Invalid chapel character ID."}
+	case errors.Is(err, corecharacter.ErrNotFound):
+		return http.StatusNotFound, ErrorDetail{Code: "CHARACTER_NOT_FOUND", Message: "Character not found."}
 	default:
 		return 0, ErrorDetail{}
 	}
@@ -60,53 +72,5 @@ type prayChapelRequest struct {
 
 type chapelBlessingResponse struct {
 	Blessing chapel.CharacterBlessing `json:"blessing"`
-	Message  string                   `json:"message,omitempty"`
-}
-
-func (h *Handler) handleChapelPray(w http.ResponseWriter, r *http.Request) {
-	if h.chapel == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("chapel service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req prayChapelRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		blessingType, err := chapel.ParseBlessingType(req.Blessing)
-		if err != nil || blessingType == chapel.BlessingNone {
-			writeError(w, http.StatusBadRequest, chapel.ErrInvalidBlessing)
-			return
-		}
-
-		blessing, err := h.chapel.SelectBlessing(r.Context(), char.ID, blessingType)
-		if err != nil {
-			if errors.Is(err, chapel.ErrInvalidBlessing) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			if errors.Is(err, chapel.ErrAlreadyPrayed) {
-				writeError(w, http.StatusConflict, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		var blessingName string
-		for _, info := range chapel.AvailableBlessings {
-			if info.Type == blessing.ActiveBlessing {
-				blessingName = info.Name
-				break
-			}
-		}
-
-		writeJSON(w, http.StatusOK, chapelBlessingResponse{
-			Blessing: blessing,
-			Message:  fmt.Sprintf("%sは「%s」と祈るのですね…", char.Name, blessingName),
-		})
-	})
+	Message  string                   `json:"message"`
 }
