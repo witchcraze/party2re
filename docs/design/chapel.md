@@ -37,7 +37,10 @@ blessing/status read failures fail the whole observation.
 The local legacy dispatch reconciles as follows (`party2/lib/chapel.cgi:17–25,
 39–49,54–89`): the no-target `いのる` option menu is supplied by the owned scene;
 `いのる` with a named choice maps to `chapel_pray` and `SelectBlessing`. The
-existing Chapel REST GET/prayer POST remain until separately verified retirement.
+status read uses `scene_enter` with `destination:chapel`, then owned character
+context; the former `GET /characters/{id}/chapel` is retired. The prayer REST
+POST remains until its confirmation message and execution contract have verified
+replacement coverage.
 
 In original Party2 (`party2/lib/chapel.cgi`), if a character already has an active wish or has already prayed on the current day (`&checkWished || -e $filePath`):
 - Any subsequent attempt to pray is rejected with the authentic Sister response:

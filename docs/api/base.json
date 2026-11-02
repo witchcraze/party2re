@@ -8921,22 +8921,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "GetChapelResponse": {
-        "properties": {
-          "blessing": {
-            "$ref": "#/components/schemas/ChapelCharacterBlessing"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ChapelChapelStatus"
-          }
-        },
-        "required": [
-          "blessing",
-          "status"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "ChapelCharacterBlessing": {
         "properties": {
           "active_blessing": {

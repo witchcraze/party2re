@@ -462,7 +462,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/custom-skills", h.handleSetCustomSkill)
 
 	// Chapel
-	mux.HandleFunc("GET /characters/{id}/chapel", h.handleGetChapel)
 	mux.HandleFunc("POST /characters/{id}/chapel/pray", h.handleChapelPray)
 
 	// Altar of Rebirth

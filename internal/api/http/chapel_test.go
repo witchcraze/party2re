@@ -2,10 +2,10 @@ package http_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/chapel"
@@ -14,23 +14,14 @@ import (
 )
 
 type stubChapelService struct {
-	getBlessingFn    func(ctx context.Context, characterID string) (chapel.CharacterBlessing, error)
-	getStatusFn      func(ctx context.Context, characterID, characterName string) (chapel.ChapelStatus, error)
 	selectBlessingFn func(ctx context.Context, characterID string, blessing chapel.BlessingType) (chapel.CharacterBlessing, error)
-	clearBlessingFn  func(ctx context.Context, characterID string) error
 }
 
 func (s *stubChapelService) GetBlessing(ctx context.Context, characterID string) (chapel.CharacterBlessing, error) {
-	if s.getBlessingFn != nil {
-		return s.getBlessingFn(ctx, characterID)
-	}
 	return chapel.CharacterBlessing{CharacterID: characterID, ActiveBlessing: chapel.BlessingNone}, nil
 }
 
 func (s *stubChapelService) GetStatus(ctx context.Context, characterID, characterName string) (chapel.ChapelStatus, error) {
-	if s.getStatusFn != nil {
-		return s.getStatusFn(ctx, characterID, characterName)
-	}
 	return chapel.ChapelStatus{
 		LocationName:       chapel.LocationName,
 		NPCName:            chapel.NPCName,
@@ -47,9 +38,6 @@ func (s *stubChapelService) SelectBlessing(ctx context.Context, characterID stri
 }
 
 func (s *stubChapelService) ClearBlessing(ctx context.Context, characterID string) error {
-	if s.clearBlessingFn != nil {
-		return s.clearBlessingFn(ctx, characterID)
-	}
 	return nil
 }
 
@@ -68,15 +56,7 @@ func TestChapelEndpoints(t *testing.T) {
 			return corecharacter.Character{}, corecharacter.ErrNotFound
 		},
 	}
-	chService := &stubChapelService{
-		getBlessingFn: func(_ context.Context, characterID string) (chapel.CharacterBlessing, error) {
-			return chapel.CharacterBlessing{
-				CharacterID:    characterID,
-				ActiveBlessing: chapel.BlessingGold,
-				PrayedAt:       time.Now(),
-			}, nil
-		},
-	}
+	chService := &stubChapelService{}
 
 	h := newTestHandler(
 		t,
@@ -88,17 +68,6 @@ func TestChapelEndpoints(t *testing.T) {
 	)
 	router := h.Router()
 
-	t.Run("GET /characters/{id}/chapel - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/chapel", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
 	t.Run("POST /characters/{id}/chapel/pray - success MONSTER", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/chapel/pray", `{"blessing":"MONSTER"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
@@ -107,6 +76,16 @@ func TestChapelEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var response struct {
+			Blessing chapel.CharacterBlessing `json:"blessing"`
+			Message  string                   `json:"message"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if response.Blessing.ActiveBlessing != chapel.BlessingMonster || response.Message != "Heroは「モンスターと仲良くしたい」と祈るのですね…" {
+			t.Fatalf("retained prayer lost its blessing or confirmation: %+v", response)
 		}
 	})
 

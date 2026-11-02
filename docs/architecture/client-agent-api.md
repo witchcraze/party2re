@@ -196,7 +196,9 @@ each option's `type` supplies the explicit `chapel_pray` blessing input. Require
 read failures fail the whole observation. Its free command preserves known
 outcomes across refresh failure, with GET-only recovery; observation never prays
 or resets the quota. See the [Chapel owner](../design/chapel.md) for lifecycle
-and retained REST boundaries. Bank facility data
+and retained REST boundaries. The former Chapel status GET is retired; select
+Chapel through `scene_enter` and read character context. Prayer POST remains
+pending its own replacement verification. Bank facility data
 contains `parent` and the owned `GetState` facts: `character_id`, wallet `money`,
 int64 `deposit` and `max_deposit`, `npc_name` and the complete `dialogues` array.
 The reader passes the incoming context and owned actor to the existing Bank
