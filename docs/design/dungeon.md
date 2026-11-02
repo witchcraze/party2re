@@ -89,8 +89,12 @@ Its turn-limit wipeout, trap bases and treasure generation
 need comparison with the behavior above; they are implementation differences,
 not canonical rules inferred from the Go catalog.
 
-Current map observation uses the acting member's saved job and run inventory
-(or required character/inventory reads for older solo buffers). Canonical
+Current map observation uses the acting member's saved job and nonempty run
+inventory. An empty or omitted saved `item_ids` cannot distinguish no items
+from a run created without inventory discovery, so observation requires a fresh
+read of that actor's inventory. A missing reader or failed read returns no map;
+observation never fills or rewrites the saved roster. Older solo buffers also
+require the actor's character read. Canonical
 `job-09/job-26/job-27/job-79` and `item-197` identities and compatible aliases
 are recognized. A party member's bonus does not expand another actor's view.
 Required-source or invalid-geometry failures return no partial map.

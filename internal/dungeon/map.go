@@ -62,6 +62,7 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 	hasGoggles := false
 	goggleReason := ""
 	actorFound := false
+	needsInventory := true
 
 	// Saved inventory belongs to this run; another member cannot lend visibility.
 	for _, m := range exp.Members {
@@ -71,6 +72,7 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 		actorFound = true
 		hasScoutJob = isScoutingJob(m.JobID)
 		hasGoggles = hasScopeGoggles(m.ItemIDs)
+		needsInventory = len(m.ItemIDs) == 0
 		scoutReason = "Scouting Job (" + m.JobID + "): " + m.Name
 		goggleReason = "Item 197 (Scope Goggles): " + m.Name
 	}
@@ -86,6 +88,10 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 		}
 		hasScoutJob = isScoutingJob(char.JobID)
 		scoutReason = "Scouting Job (" + char.JobID + "): " + char.Name
+		goggleReason = "Item 197 (Scope Goggles): " + char.Name
+	}
+	// Empty item_ids also encodes older runs whose inventory was never read.
+	if needsInventory {
 		if s.invRepo == nil {
 			return MapView{}, fmt.Errorf("dungeon inventory reader not configured")
 		}
@@ -96,7 +102,6 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 		for _, it := range inv.Items {
 			if it.Quantity > 0 && hasScopeGoggles([]string{it.DefinitionID}) {
 				hasGoggles = true
-				goggleReason = "Item 197 (Scope Goggles): " + char.Name
 				break
 			}
 		}

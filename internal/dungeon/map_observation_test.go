@@ -3,8 +3,10 @@ package dungeon_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -24,11 +26,13 @@ func (r *mapCharacterReader) FindByID(context.Context, string) (corecharacter.Ch
 }
 
 type mapInventoryReader struct {
-	inv coreinventory.Inventory
-	err error
+	inv    coreinventory.Inventory
+	err    error
+	actors []string
 }
 
-func (r *mapInventoryReader) FindByCharacterID(context.Context, string) (coreinventory.Inventory, error) {
+func (r *mapInventoryReader) FindByCharacterID(_ context.Context, actor string) (coreinventory.Inventory, error) {
+	r.actors = append(r.actors, actor)
 	return r.inv, r.err
 }
 
@@ -82,6 +86,7 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 	if !reflect.DeepEqual(before, *run) {
 		t.Fatal("observation mutated run")
 	}
+	inventory.inv.Items = nil
 	run.Members = []dungeon.ExpeditionMember{{CharacterID: "hero", JobID: "job-01"}, {CharacterID: "scout", JobID: "job-79", ItemIDs: []string{"item-197"}}}
 	for _, tc := range []struct {
 		actor  string
@@ -149,5 +154,89 @@ func TestDungeonStartDoesNotSaveAnIncompleteVisibilitySnapshot(t *testing.T) {
 	}
 	if run, err := store.GetActiveExpedition(ctx, "hero"); run != nil || err != nil {
 		t.Fatalf("saved partial roster: %+v %v", run, err)
+	}
+}
+
+func TestMapObservationRecoversMissingSavedInventory(t *testing.T) {
+	ctx := context.Background()
+	for _, origin := range []string{"old-json", "empty-snapshot", "start-without-provider", "start-with-provider"} {
+		for _, ownsGoggles := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/goggles=%t", origin, ownsGoggles), func(t *testing.T) {
+				store := dungeon.NewMemoryExpeditionRepository()
+				hero := createTestChar("hero", 10, 100, 30, 20)
+				hero.JobID = "job-01"
+				chars := &mockCharRepo{chars: map[string]corecharacter.Character{"hero": hero}}
+				inv := &mapInventoryReader{}
+				if ownsGoggles {
+					inv.inv.Items = []coreitem.Instance{{ID: "scope", DefinitionID: "item-197", Quantity: 1}}
+				}
+				run := dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: "dungeon-01", CurrentFloor: 1, Status: dungeon.StatusExploring, TurnsRemaining: 20}
+				switch origin {
+				case "old-json":
+					run.Members = dungeon.DecodeMembers(`[{"character_id":"hero","job_id":"job-01"},{"character_id":"ally","job_id":"job-79","item_ids":["item-197"]}]`)
+				case "empty-snapshot":
+					run.Members = []dungeon.ExpeditionMember{{CharacterID: "hero", JobID: "job-01", ItemIDs: []string{}}, {CharacterID: "ally", JobID: "job-79", ItemIDs: []string{"item-197"}}}
+					encoded := dungeon.EncodeMembers(run.Members)
+					if strings.Contains(encoded, `"item_ids":[]`) {
+						t.Fatal("empty and missing inventory unexpectedly distinguishable")
+					}
+					run.Members = dungeon.DecodeMembers(encoded)
+				default:
+					opts := []dungeon.Option{dungeon.WithActiveExpeditionStore(store)}
+					if origin == "start-with-provider" {
+						opts = append(opts, dungeon.WithInventoryProvider(inv))
+					}
+					starter, err := dungeon.NewService(newMockDungeonRepo(), chars, &corebattle.Engine{}, opts...)
+					if err != nil {
+						t.Fatal(err)
+					}
+					started, err := starter.StartExpedition(ctx, "hero", "dungeon-01")
+					if err != nil {
+						t.Fatal(err)
+					}
+					run = *started
+					run.Members = dungeon.DecodeMembers(dungeon.EncodeMembers(run.Members))
+				}
+				if err := store.SaveActiveExpedition(ctx, run); err != nil {
+					t.Fatal(err)
+				}
+				svc, err := dungeon.NewService(newMockDungeonRepo(), chars, &corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store), dungeon.WithInventoryProvider(inv))
+				if err != nil {
+					t.Fatal(err)
+				}
+				inv.actors = nil
+				got, err := svc.ObserveExpedition(ctx, "hero")
+				radius := 1
+				if ownsGoggles {
+					radius++
+				}
+				if err != nil || got == nil || got.Map == nil || got.Map.Radius != radius {
+					t.Fatalf("wrong actor radius: %+v %v want=%d", got, err, radius)
+				}
+				for _, actor := range inv.actors {
+					if actor != "hero" {
+						t.Fatalf("read another member inventory: %s", actor)
+					}
+				}
+				failure := errors.New("inventory read failed")
+				inv.err = failure
+				if len(run.Members[0].ItemIDs) == 0 {
+					if got, err := svc.ObserveExpedition(ctx, "hero"); got != nil || !errors.Is(err, failure) {
+						t.Fatalf("partial map on failed enrichment: %+v %v", got, err)
+					}
+					noReader, err := dungeon.NewService(newMockDungeonRepo(), chars, &corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got, err := noReader.ObserveExpedition(ctx, "hero"); got != nil || err == nil {
+						t.Fatalf("missing reader fabricated map: %+v %v", got, err)
+					}
+				}
+				saved, err := store.GetActiveExpedition(ctx, "hero")
+				if err != nil || dungeon.EncodeMembers(saved.Members) != dungeon.EncodeMembers(run.Members) {
+					t.Fatalf("observation rewrote saved inventory: %+v %v", saved, err)
+				}
+			})
+		}
 	}
 }

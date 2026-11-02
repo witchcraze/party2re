@@ -50,7 +50,7 @@ func setupPartyTestService() (*dungeon.Service, *mockDungeonRepo, *mockCharRepo)
 	c4.JobID = "78" // Treasure Hunter
 	charRepo.chars[c4.ID] = c4
 
-	svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithAdmission(approvedRoster{}))
+	svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithAdmission(approvedRoster{}), dungeon.WithInventoryProvider(&mockInventoryRepo{}))
 	if err != nil {
 		panic(err)
 	}
@@ -165,7 +165,7 @@ func TestPartyMapScouting(t *testing.T) {
 			"lead":   c1Lead(10),
 			cTest.ID: cTest,
 		}}
-		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{}, dungeon.WithAdmission(approvedRoster{}))
+		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{}, dungeon.WithAdmission(approvedRoster{}), dungeon.WithInventoryProvider(&mockInventoryRepo{}))
 		_, err := tSvc.StartPartyExpedition(ctx, "lead", []string{"lead", cTest.ID}, "dungeon-01", "")
 		if err != nil {
 			t.Fatalf("failed to start for job %s: %v", jobID, err)
