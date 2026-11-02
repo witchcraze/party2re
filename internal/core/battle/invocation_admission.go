@@ -14,11 +14,14 @@ func (s *LifetimeState) ValidateInvocations(c *CallbackContext, d CallbackCatalo
 	}
 	state := s.callbackCopy()
 	context := cloneCallbackContext(*c)
-	p := callbackAdmission{s: &state, c: &context, d: d}
+	remaining := maxInvocationContinuations
+	context.admissionBudget = &remaining
+	p := callbackAdmission{s: &state, c: &context, d: d, remaining: &remaining}
 	return p.sequence(ops, c.Arguments, true)
 }
 
 func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments []string, known bool) error {
+	p.c.admissionBudget = p.remaining
 	for i, op := range ops {
 		// Visits depend on the projected state, not just entry identity.
 		p.seen = map[callbackVisit]bool{}
@@ -35,6 +38,10 @@ func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments []strin
 				known = false
 				continue
 			}
+			if len(branches) > *p.remaining {
+				return ErrUnsupportedEffect
+			}
+			*p.remaining -= len(branches)
 			for _, branch := range branches {
 				state := branch.State.callbackCopy()
 				context := cloneCallbackContext(branch.Context)
@@ -45,7 +52,7 @@ func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments []strin
 				if actor.HP <= 0 {
 					continue
 				}
-				child := callbackAdmission{s: &state, c: &context, d: p.d}
+				child := callbackAdmission{s: &state, c: &context, d: p.d, remaining: p.remaining}
 				if err := child.sequence(ops[i+1:], arguments, true); err != nil {
 					return err
 				}
@@ -68,7 +75,12 @@ type callbackAdmission struct {
 	d              CallbackCatalog
 	seen           map[callbackVisit]bool
 	explicitTarget bool
+	remaining      *int
 }
+
+// One shared budget covers all prefixes and later slots, rather than resetting
+// the work allowance for each independently projected predecessor.
+const maxInvocationContinuations = 16384
 
 func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) error {
 	key := callbackVisit{op, afterEffects, p.explicitTarget}

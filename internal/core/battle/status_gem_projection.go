@@ -2,7 +2,6 @@ package battle
 
 import (
 	"math"
-	"reflect"
 
 	"github.com/witchcraze/party2re/internal/core/random"
 )
@@ -12,30 +11,13 @@ type StatusContinuation struct {
 	Context StatusContext
 }
 
-func appendStatusContinuation(branches []StatusContinuation, s LifetimeState, c StatusContext) []StatusContinuation {
-	facts := func(c StatusContext) StatusContext {
-		c.Damage, c.targetResources, c.Defeat = nil, nil, nil
-		return c
-	}
-	for _, old := range branches {
-		cursor, previous := TargetCursor{}, TargetCursor{}
-		if c.Defeat != nil {
-			cursor = c.Defeat.Cursor
-		}
-		if old.Context.Defeat != nil {
-			previous = old.Context.Defeat.Cursor
-		}
-		if cursor == previous && reflect.DeepEqual(facts(old.Context), facts(c)) && reflect.DeepEqual(old.State, s) {
-			return branches
-		}
-	}
-	f := cloneCallbackContext(CallbackContext{Status: &c})
-	return append(branches, StatusContinuation{State: s.callbackCopy(), Context: *f.Status})
-}
-
 // ProjectStatusGemBranches supplies complete intrinsic status/cure alternatives.
 // The job dispel body retains its independent reset owner and unknown projection.
 func (s *LifetimeState) ProjectStatusGemBranches(c *StatusContext, id, targetID string) ([]StatusContinuation, error) {
+	return s.projectStatusGemBranches(c, id, targetID, true)
+}
+
+func (s *LifetimeState) projectStatusGemBranches(c *StatusContext, id, targetID string, followed bool) ([]StatusContinuation, error) {
 	if s == nil || c == nil {
 		return nil, ErrInvalidRequest
 	}
@@ -49,23 +31,25 @@ func (s *LifetimeState) ProjectStatusGemBranches(c *StatusContext, id, targetID 
 	if source == 0 {
 		return nil, nil
 	}
-	if err := s.ValidateStatusEntry(c, nil, id, targetID, random.Default()); err != nil {
+	if err := s.validateTargetContext(c.TargetContext, random.Default()); err != nil {
 		return nil, err
 	}
 	if c.Custom && s.actor(targetID) == nil {
 		targetID = c.ActorID
 	}
 	e, chance := statusEntryEffect(source, targetID)
-	branches := appendStatusContinuation(nil, *s, *c)
+	branches := []StatusContinuation{{State: s.callbackCopy(), Context: *cloneCallbackContext(CallbackContext{Status: c}).Status}}
 	if source == 62 {
 		first, err := s.projectSymbolicTargets(c.TargetContext, e, false)
 		if err != nil {
 			return nil, err
 		}
-		var results []StatusContinuation
+		results := statusContinuations{remaining: c.admissionBudget}
 		for _, branch := range first {
 			if !branch.Resolution.Resolved {
-				results = appendStatusContinuation(results, branch.State, *c)
+				if err := results.add(branch.State, *c); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			child := branch.Resolution.TargetEffect
@@ -75,10 +59,12 @@ func (s *LifetimeState) ProjectStatusGemBranches(c *StatusContext, id, targetID 
 				return nil, err
 			}
 			for _, n := range next {
-				results = appendStatusContinuation(results, n.State, n.Context)
+				if err := results.add(n.State, n.Context); err != nil {
+					return nil, err
+				}
 			}
 		}
-		return results, nil
+		return results.branches, nil
 	}
 	ids := c.EnemyIDs
 	if source < 62 {
@@ -89,10 +75,12 @@ func (s *LifetimeState) ProjectStatusGemBranches(c *StatusContext, id, targetID 
 	if source == 70 {
 		ids = []string{targetID}
 	}
-	var results []StatusContinuation
+	results := statusContinuations{remaining: c.admissionBudget}
 	if source >= 71 {
 		if branches[0].State.actor(c.ActorID).categorySealed(e.Category) {
-			results = appendStatusContinuation(results, branches[0].State, branches[0].Context)
+			if err := results.add(branches[0].State, branches[0].Context); err != nil {
+				return nil, err
+			}
 			branches[0].State.actor(c.ActorID).Status = ""
 		}
 		if source == 71 {
@@ -101,30 +89,34 @@ func (s *LifetimeState) ProjectStatusGemBranches(c *StatusContext, id, targetID 
 			branches[0].Context.AreaStatusCalls++
 		}
 	}
-	for _, target := range ids {
+	for index, target := range ids {
 		e.TargetID = target
-		var next []StatusContinuation
+		next := statusContinuations{remaining: c.admissionBudget}
 		for _, branch := range branches {
 			var children []StatusContinuation
 			var err error
 			if source < 62 {
 				children, err = branch.State.projectGemCure(branch.Context, e)
 			} else {
-				children, err = branch.State.projectGemStatus(branch.Context, e, chance, source == 70 || source == 71)
+				children, err = branch.State.projectGemStatus(branch.Context, e, chance, source == 70 || source == 71, followed || index+1 < len(ids))
 			}
 			if err != nil {
 				return nil, err
 			}
 			for _, child := range children {
-				next = appendStatusContinuation(next, child.State, child.Context)
+				if err := next.add(child.State, child.Context); err != nil {
+					return nil, err
+				}
 			}
 		}
-		branches = next
+		branches = next.branches
 	}
 	for _, branch := range branches {
-		results = appendStatusContinuation(results, branch.State, branch.Context)
+		if err := results.add(branch.State, branch.Context); err != nil {
+			return nil, err
+		}
 	}
-	return results, nil
+	return results.branches, nil
 }
 
 func (s *LifetimeState) projectGemCure(c StatusContext, e TargetEffect) ([]StatusContinuation, error) {
@@ -132,7 +124,7 @@ func (s *LifetimeState) projectGemCure(c StatusContext, e TargetEffect) ([]Statu
 	if err != nil {
 		return nil, err
 	}
-	var results []StatusContinuation
+	results := statusContinuations{remaining: c.admissionBudget}
 	for _, branch := range targets {
 		child := c
 		r := branch.Resolution
@@ -143,24 +135,28 @@ func (s *LifetimeState) projectGemCure(c StatusContext, e TargetEffect) ([]Statu
 				t.Status = ""
 			}
 		}
-		results = appendStatusContinuation(results, branch.State, child)
+		if err := results.add(branch.State, child); err != nil {
+			return nil, err
+		}
 	}
-	return results, nil
+	return results.branches, nil
 }
 
-func (s *LifetimeState) projectGemStatus(c StatusContext, e TargetEffect, chance float64, death bool) ([]StatusContinuation, error) {
+func (s *LifetimeState) projectGemStatus(c StatusContext, e TargetEffect, chance float64, death, followed bool) ([]StatusContinuation, error) {
 	target := c.TargetContext
 	target.symbolicConversion = true
 	targets, err := s.projectSymbolicTargets(target, e, true)
 	if err != nil {
 		return nil, err
 	}
-	var results []StatusContinuation
+	results := statusContinuations{remaining: c.admissionBudget}
 	for _, branch := range targets {
 		child := c
 		r, p := branch.Resolution, branch.State
 		if !r.Resolved || r.Payload.Symbol == "" || p.actor(r.TargetID).HP <= 0 {
-			results = appendStatusContinuation(results, p, child)
+			if err := results.add(p, child); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if death {
@@ -175,22 +171,30 @@ func (s *LifetimeState) projectGemStatus(c StatusContext, e TargetEffect, chance
 		}
 		t := p.actor(r.TargetID)
 		if statusImmune(t, false, death, p.Fields.Current()) || (!death && power <= 0) {
-			results = appendStatusContinuation(results, p, child)
+			if err := results.add(p, child); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if t.Gear == nil {
 			return nil, ErrUnsupportedEffect
 		}
 		if power < 100 || t.Gear.WeaponID == "weapon-68" && t.Gear.ArmorID == "armor-53" {
-			results = appendStatusContinuation(results, p, child)
+			if err := results.add(p, child); err != nil {
+				return nil, err
+			}
 		}
 		if !death {
 			if hasItem(t.ItemDefinitionIDs, "item-161") && t.Tension >= 5 {
-				results = appendStatusContinuation(results, p, child)
+				if err := results.add(p, child); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			t.Status, t.Tension = r.Payload.Symbol, 1
-			results = appendStatusContinuation(results, p, child)
+			if err := results.add(p, child); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if child.Defeat == nil {
@@ -198,15 +202,17 @@ func (s *LifetimeState) projectGemStatus(c StatusContext, e TargetEffect, chance
 		}
 		defeat := *child.Defeat
 		defeat.TargetContext = child.TargetContext
-		states, err := p.projectDefeatBranches(&defeat, t.ID, random.Default(), map[string]bool{}, true)
+		states, err := p.projectDefeatBranches(&defeat, t.ID, random.Default(), map[string]bool{}, followed)
 		if err != nil {
 			return nil, err
 		}
 		for _, state := range states {
 			next := child
 			next.Defeat = &state.Context
-			results = appendStatusContinuation(results, state.State, next)
+			if err := results.add(state.State, next); err != nil {
+				return nil, err
+			}
 		}
 	}
-	return results, nil
+	return results.branches, nil
 }

@@ -53,6 +53,9 @@ type TargetContext struct {
 	possessionOriginID string
 	// Only concrete gem bodies certify symbolic-to-zero conversion tails.
 	symbolicConversion bool
+	// Private admission work is shared across alternatives, never caller RNG
+	// or persisted battle facts. Execution starts with the caller's nil budget.
+	admissionBudget *int
 }
 
 // TargetEffect is the input and continuation of a spell target helper.

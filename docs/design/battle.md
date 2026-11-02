@@ -846,6 +846,13 @@ Mixed status/revival producers retain status/cure/death counters in
 reset cursor in `Defeat`. These are command-local facts: consumers save their
 scalar values with resulting battle state and frozen input, then rebuild ports
 after reload. Each alternative isolates nested participant and context references.
+Status alternatives are indexed by state hash and coalesced only after exact
+state/context comparison. Admission retains at most4096 distinct status outcomes
+per frontier and shares a16384 continuation-work allowance across prefixes,
+intrinsic status validation and later slots. Exceeding either limit returns
+`ErrUnsupportedEffect` before execution, charges or committed RNG; no truncated
+set can certify a later slot. These are admission safeguards, not changed source
+target counts, probabilities or effect order.
 
 `RegisterNonJobInvocations` binds tool84/85 and gem83/86–92 to those same
 invocation operations. `NonJobInvocationEntries` supplies the outer CMP
