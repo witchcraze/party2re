@@ -73,10 +73,6 @@
       "name": "CustomSkills"
     },
     {
-      "description": "Chapel free prayer and blessings",
-      "name": "Chapel"
-    },
-    {
       "description": "Agricultural plantation and crop cultivation",
       "name": "Farm"
     },
@@ -9039,10 +9035,12 @@
           }
         },
         "required": [
-          "blessing"
+          "blessing",
+          "message"
         ],
         "type": "object",
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Gateway chapel_pray result in CharacterActionSuccess.result: the accepted blessing and HTTP-owned prayer confirmation. Both survive a failed context refresh; recover with GET only."
       },
       "CharacterAlchemyResponse": {
         "properties": {

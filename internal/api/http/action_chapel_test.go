@@ -59,6 +59,7 @@ func chapelGatewayRouter(t *testing.T, configured bool) (*chapelGatewayFixture, 
 	t.Helper()
 	f := &chapelGatewayFixture{gatewayFixture: newGatewayFixture(t), blessing: chapel.CharacterBlessing{CharacterID: "hero", ActiveBlessing: chapel.BlessingNone}}
 	f.char.Money = 0
+	f.char.Name = "Hero"
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "chapel"}}
 	timers := timer.NewService(nil)
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers, playercontext.WithNavigation(store,
@@ -76,7 +77,14 @@ func chapelGatewayRouter(t *testing.T, configured bool) (*chapelGatewayFixture, 
 }
 
 func TestChapelGatewayObservationAndPrayer(t *testing.T) {
-	for _, input := range []string{"GOLD", "EXP", "MONSTER", "DROP", "CASINO", "1", "exp_wish", "モンスターと仲良くしたい", "treasure_wish", "casino_wish"} {
+	messages := map[chapel.BlessingType]string{
+		chapel.BlessingGold:    "Heroは「お金がほしい」と祈るのですね…",
+		chapel.BlessingExp:     "Heroは「強くなりたい」と祈るのですね…",
+		chapel.BlessingMonster: "Heroは「モンスターと仲良くしたい」と祈るのですね…",
+		chapel.BlessingDrop:    "Heroは「宝箱がほしい」と祈るのですね…",
+		chapel.BlessingCasino:  "Heroは「コインがほしい」と祈るのですね…",
+	}
+	for _, input := range []string{"GOLD", "EXP", "MONSTER", "DROP", "CASINO", "1", "2", "3", "4", "5", "お金がほしい", "強くなりたい", "モンスターと仲良くしたい", "宝箱がほしい", "コインがほしい", "gold_wish", "exp_wish", "monster_wish", "treasure_wish", "casino_wish", " gold "} {
 		t.Run(input, func(t *testing.T) {
 			f, store, _, router := chapelGatewayRouter(t, true)
 			status, observed := navigationGET(t, router)
@@ -107,7 +115,7 @@ func TestChapelGatewayObservationAndPrayer(t *testing.T) {
 			if err := json.Unmarshal(got["result"], &result); err != nil {
 				t.Fatal(err)
 			}
-			if status != 200 || f.executions != 1 || result.Blessing.ActiveBlessing != want || result.Blessing.CharacterID != "hero" || f.char.Money != 0 || store.writes != 0 {
+			if status != 200 || f.executions != 1 || result.Blessing.ActiveBlessing != want || result.Blessing.CharacterID != "hero" || result.Message != messages[want] || f.char.Money != 0 || store.writes != 0 {
 				t.Fatalf("incorrect free prayer: %d %s", status, got)
 			}
 			assertGatewayContext(t, got)
@@ -160,7 +168,7 @@ func TestChapelGatewayInputsAndGuards(t *testing.T) {
 		}
 		assertGatewayError(t, got, "CHAPEL_INVALID_BLESSING")
 	}
-	for _, condition := range []string{"anonymous", "foreign", "wrong location", "sleep", "wake", "work", "unconfigured"} {
+	for _, condition := range []string{"anonymous", "foreign", "wrong location", "sleep", "wake", "work", "unconfigured", "shared sleep", "shared wake", "sleep read error"} {
 		t.Run(condition, func(t *testing.T) {
 			f, store, timers, router := chapelGatewayRouter(t, condition != "unconfigured")
 			actor, token, want := "hero", "session", 409
@@ -181,6 +189,12 @@ func TestChapelGatewayInputsAndGuards(t *testing.T) {
 				f.actions = []scheduling.ScheduledAction{{ID: "work", State: scheduling.StateProcessing, ExecuteAt: time.Now().Add(-time.Hour)}}
 			case "unconfigured":
 				want = 501
+			case "shared sleep":
+				f.sleep.Sleeping = true
+			case "shared wake":
+				f.sleep.CanWake = true
+			case "sleep read error":
+				f.sleepErr, want = errors.New("sleep read failed"), 500
 			}
 			status, got := gatewayRequest(t, router, actor, token, "application/json", `{"action":"chapel_pray","params":{"blessing":"GOLD"}}`, nil)
 			if status != want || f.executions != 0 || store.writes != 0 {
@@ -200,6 +214,7 @@ func TestChapelGatewayOutcomeAndReadRecovery(t *testing.T) {
 					f.executionErr, want = fmt.Errorf("wrapped: %w", chapel.ErrAlreadyPrayed), 409
 				}
 				f.afterExecute = func() {
+					f.char.Name = "Renamed after prayer"
 					switch failure {
 					case "query":
 						f.queryErr = errors.New("private query")
@@ -217,6 +232,15 @@ func TestChapelGatewayOutcomeAndReadRecovery(t *testing.T) {
 					assertGatewayError(t, got, "CHAPEL_ALREADY_PRAYED")
 				} else if string(got["success"]) != "true" || !strings.Contains(string(got["result"]), `"active_blessing":"DROP"`) {
 					t.Fatalf("lost blessing: %s", got)
+				}
+				if !rejected {
+					var result chapelBlessingResponse
+					if err := json.Unmarshal(got["result"], &result); err != nil {
+						t.Fatal(err)
+					}
+					if result.Message != "Heroは「宝箱がほしい」と祈るのですね…" || f.characterCalls != 2 {
+						t.Fatalf("lost confirmation or read name after prayer: %+v reads=%d", result, f.characterCalls)
+					}
 				}
 				if failure == "" {
 					assertGatewayContext(t, got)

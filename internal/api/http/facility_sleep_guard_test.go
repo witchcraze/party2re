@@ -71,7 +71,6 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithDepot(&stubDepotService{}),
 		apihttp.WithPlantation(&stubPlantationService{}),
 		apihttp.WithAltar(&stubAltarService{}),
-		apihttp.WithChapel(&stubChapelService{}),
 		apihttp.WithWishingWell(&stubWishingWellService{}),
 		apihttp.WithContest(&stubContestService{}),
 		apihttp.WithGemStore(&stubGemStoreService{}),
@@ -133,8 +132,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"altar_pray", http.MethodPost, "/characters/char-1/altar/pray", `{}`},
 		{"altar_wish", http.MethodPost, "/characters/char-1/altar/wish", `{"item_id":"sword-1"}`},
 		{"altar_offer", http.MethodPost, "/characters/char-1/altar/offer", `{"orb":"silver"}`},
-		// Chapel
-		{"chapel_pray", http.MethodPost, "/characters/char-1/chapel/pray", `{"blessing":"EXP"}`},
 		// Wishing Well
 		{"wishingwell_exchange", http.MethodPost, "/characters/char-1/wishing-well/exchange", `{"stat":"STR","sp":10}`},
 		// Contest

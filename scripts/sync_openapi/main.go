@@ -494,8 +494,6 @@ func moduleForRoute(route Route) string {
 		return "casino"
 	case strings.HasPrefix(p, "/challenges") || strings.HasPrefix(p, "/characters/{id}/challenges"):
 		return "challenge"
-	case strings.HasPrefix(p, "/characters/{id}/chapel"):
-		return "chapel"
 	case strings.HasPrefix(p, "/characters/{id}/collections"):
 		return "collection"
 	case strings.HasPrefix(p, "/characters/{id}/contest") || strings.HasPrefix(p, "/characters/{id}/photos") || strings.HasPrefix(p, "/contest"):
@@ -580,7 +578,6 @@ func moduleToTagName(module string) string {
 		"boss":         "Combat",
 		"casino":       "Casino",
 		"challenge":    "Combat",
-		"chapel":       "Chapel",
 		"character":    "Character",
 		"collection":   "Collections",
 		"contest":      "Contest",

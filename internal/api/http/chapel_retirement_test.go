@@ -59,16 +59,19 @@ func chapelReadRouter(t *testing.T, configured bool) (*gatewayFixture, *chapelRe
 	return f, repo, store, h.Router()
 }
 
-func TestRetiredChapelStatusDoesNotReadOrExecute(t *testing.T) {
+func TestRetiredChapelRoutesDoNotReadOrExecute(t *testing.T) {
 	for _, configured := range []bool{false, true} {
 		f, repo, store, router := chapelReadRouter(t, configured)
-		for _, actor := range []struct{ id, token string }{{"hero", ""}, {"hero", "session"}, {"other", "session"}, {"missing", "session"}} {
-			r := httptest.NewRequest(http.MethodGet, "/characters/"+actor.id+"/chapel", nil)
-			r.Header.Set("Authorization", "Bearer "+actor.token)
-			w := httptest.NewRecorder()
-			router.ServeHTTP(w, r)
-			if w.Code != 404 || repo.reads != 0 || f.characterCalls != 0 || f.executions != 0 || store.writes != 0 {
-				t.Fatalf("retired GET reached a service: configured=%t actor=%s status=%d reads=%d body=%s", configured, actor.id, w.Code, repo.reads, w.Body.String())
+		for _, route := range []struct{ method, suffix string }{{http.MethodGet, ""}, {http.MethodPost, "/pray"}, {http.MethodPost, "/donate"}} {
+			for _, actor := range []struct{ id, token string }{{"hero", ""}, {"hero", "session"}, {"other", "session"}, {"missing", "session"}} {
+				r := httptest.NewRequest(route.method, "/characters/"+actor.id+"/chapel"+route.suffix, strings.NewReader(`{"blessing":"GOLD"}`))
+				r.Header.Set("Authorization", "Bearer "+actor.token)
+				r.Header.Set("Content-Type", "application/json")
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, r)
+				if w.Code != 404 || repo.reads != 0 || f.characterCalls != 0 || f.executions != 0 || store.writes != 0 {
+					t.Fatalf("retired GET reached a service: configured=%t actor=%s status=%d reads=%d body=%s", configured, actor.id, w.Code, repo.reads, w.Body.String())
+				}
 			}
 		}
 	}
@@ -168,7 +171,7 @@ func TestChapelContextReadBoundary(t *testing.T) {
 	}
 }
 
-func TestOpenAPIChapelRetirementKeepsPrayerAndGateway(t *testing.T) {
+func TestOpenAPIChapelRetirementKeepsGateway(t *testing.T) {
 	var spec struct {
 		Paths      map[string]map[string]json.RawMessage
 		Components struct{ Schemas map[string]json.RawMessage }
@@ -179,10 +182,23 @@ func TestOpenAPIChapelRetirementKeepsPrayerAndGateway(t *testing.T) {
 	if _, exists := spec.Paths["/characters/{id}/chapel"]; exists {
 		t.Error("retired Chapel GET remains in OpenAPI")
 	}
+	if _, exists := spec.Paths["/characters/{id}/chapel/pray"]; exists {
+		t.Error("retired Chapel POST remains in OpenAPI")
+	}
 	if _, exists := spec.Components.Schemas["GetChapelResponse"]; exists {
 		t.Error("orphan Chapel GET schema remains")
 	}
-	for _, route := range []struct{ method, path string }{{"post", "/characters/{id}/chapel/pray"}, {"get", "/api/v1/characters/{id}/context"}, {"post", "/api/v1/characters/{id}/actions"}} {
+	var result struct {
+		Required    []string
+		Description string
+	}
+	if err := json.Unmarshal(spec.Components.Schemas["ChapelBlessingResponse"], &result); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(result.Required, []string{"blessing", "message"}) || !strings.Contains(result.Description, "chapel_pray") {
+		t.Fatalf("missing Gateway confirmation contract: %+v", result)
+	}
+	for _, route := range []struct{ method, path string }{{"get", "/api/v1/characters/{id}/context"}, {"post", "/api/v1/characters/{id}/actions"}} {
 		if len(spec.Paths[route.path][route.method]) == 0 {
 			t.Errorf("required route missing: %s %s", route.method, route.path)
 		}
