@@ -40,24 +40,62 @@ func (d BattleDefinitions) RevivalAction(s *corebattle.LifetimeState, c *corebat
 // RevivalInvocation preserves naked/explicit target arguments. Unprojected
 // preceding callbacks remain gated; #1436 owns mixed custom-slot composition.
 func (d BattleDefinitions) RevivalInvocation(c *corebattle.RevivalContext, id string) corebattle.CallbackDefinition {
+	context := func(frame *corebattle.CallbackContext) corebattle.RevivalContext {
+		child := *c
+		child.TargetContext = frame.TargetContext
+		if child.NativeDefeat != nil {
+			defeat := *child.NativeDefeat
+			defeat.TargetContext = frame.TargetContext
+			if frame.Defeat != nil {
+				defeat.Cursor = frame.Defeat.Cursor
+			}
+			child.NativeDefeat = &defeat
+		}
+		return child
+	}
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
 			if c == nil || frame.AfterEffects || !d.RevivalSkills[id] {
 				return corebattle.ErrUnsupportedEffect
 			}
-			child := *c
-			child.TargetContext = frame.TargetContext
+			child := context(frame)
 			target := ""
 			if len(frame.Arguments) > 0 {
 				target = frame.Arguments[0]
 			}
 			return s.ValidateRevival(&child, id, target, random.Default())
 		},
+		ProjectBranches: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
+			if c == nil || frame.AfterEffects || !d.RevivalSkills[id] {
+				return nil, corebattle.ErrUnsupportedEffect
+			}
+			child := context(frame)
+			target := ""
+			if len(frame.Arguments) > 0 {
+				target = frame.Arguments[0]
+			}
+			states, err := s.ProjectRevivalGemBranches(&child, id, target)
+			if err != nil {
+				return nil, err
+			}
+			var branches []corebattle.CallbackContinuation
+			for _, state := range states {
+				next := *frame
+				if state.Context.NativeDefeat != nil {
+					next.Defeat = state.Context.NativeDefeat
+				}
+				if (id == "gem-63" || id == "gem-64") && len(next.Arguments) > 0 {
+					next.Arguments = next.Arguments[1:]
+				}
+				branches = append(branches, corebattle.CallbackContinuation{State: state.State, Context: next})
+			}
+			return branches, nil
+		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil || !d.RevivalSkills[id] {
 				return corebattle.ErrUnsupportedEffect
 			}
-			c.TargetContext = frame.TargetContext
+			*c = context(frame)
 			target := ""
 			if len(frame.Arguments) > 0 {
 				target = frame.Arguments[0]
@@ -67,6 +105,9 @@ func (d BattleDefinitions) RevivalInvocation(c *corebattle.RevivalContext, id st
 				frame.Arguments = frame.Arguments[1:]
 			}
 			frame.TargetContext = c.TargetContext
+			if c.NativeDefeat != nil {
+				frame.Defeat = c.NativeDefeat
+			}
 			return err
 		},
 	}

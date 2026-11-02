@@ -11,6 +11,26 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 	c.PhantomEnemyIDs = slices.Clone(c.PhantomEnemyIDs)
 	c.Arguments = slices.Clone(c.Arguments)
 	c.Invoke = nil
+	if c.Status != nil {
+		status := *c.Status
+		f := cloneCallbackContext(CallbackContext{Damage: &DamageContext{EffectContext: status.EffectContext}, Defeat: status.Defeat})
+		status.EffectContext, status.Defeat = f.Damage.EffectContext, f.Defeat
+		c.Status = &status
+	}
+	if c.Defeat != nil {
+		defeat := *c.Defeat
+		f := cloneCallbackContext(CallbackContext{TargetContext: defeat.TargetContext})
+		defeat.TargetContext = f.TargetContext
+		if defeat.RequesterLevel != nil {
+			level := *defeat.RequesterLevel
+			defeat.RequesterLevel = &level
+		}
+		if defeat.Seals != nil {
+			seals := *defeat.Seals
+			defeat.Seals = &seals
+		}
+		c.Defeat = &defeat
+	}
 	if c.Damage != nil {
 		damage := *c.Damage
 		damage.PartyIDs = slices.Clone(damage.PartyIDs)

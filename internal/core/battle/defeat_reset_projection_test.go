@@ -15,7 +15,7 @@ func TestDefeatResetProjectionBoundsIndependentStatDraws(t *testing.T) {
 			a.Jobs.JobID = "job-01"
 			a.Temporary = TemporaryRevival
 			before := reloadLifetime(t, s)
-			states, prevented, err := s.projectDefeatReset(c, "enemy")
+			states, prevented, err := s.projectDefeatResetBranches(c, "enemy")
 			if err != nil || !prevented || !reflect.DeepEqual(before, s) {
 				t.Fatal(states, err)
 			}
@@ -37,7 +37,7 @@ func TestDefeatResetProjectionBoundsIndependentStatDraws(t *testing.T) {
 				actual := p.actor("enemy")
 				covered := false
 				for _, state := range states {
-					bound := state.actor("enemy")
+					bound := state.State.actor("enemy")
 					if bound.Temporary == actual.Temporary && bound.Attack >= actual.Attack && bound.Defense <= actual.Defense && bound.HP > 0 && bound.HP <= actual.HP {
 						covered = true
 					}
@@ -56,7 +56,7 @@ func TestDefeatResetProjectionKeepsAllManaAndZeroHPRevivalOutcomes(t *testing.T)
 		a := s.actor("enemy")
 		a.MaxHP, a.MP, a.MaxMP, a.Temporary = maxHP, 0, 100, TemporaryRevival
 		a.Gear.AccessoryID, a.ItemDefinitionIDs = "item-111", []string{"item-111"}
-		states, _, err := s.projectDefeatReset(c, "enemy")
+		states, _, err := s.projectDefeatResetBranches(c, "enemy")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,7 +75,7 @@ func TestDefeatResetProjectionKeepsAllManaAndZeroHPRevivalOutcomes(t *testing.T)
 				rng.done()
 				actual, covered := p.actor("enemy"), false
 				for _, state := range states {
-					bound := state.actor("enemy")
+					bound := state.State.actor("enemy")
 					if bound.MP == actual.MP && (bound.HP > 0) == (actual.HP > 0) && bound.HP <= actual.HP {
 						covered = true
 					}

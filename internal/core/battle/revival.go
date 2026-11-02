@@ -8,7 +8,10 @@ import "github.com/witchcraze/party2re/internal/core/random"
 type RevivalContext struct {
 	TargetContext
 	Defeat func(string) error
-	Deaths *RevivalDeathCallbacks
+	// NativeDefeat binds gem66's native closure for validation, projection and
+	// execution. Other sacrifice bodies retain their existing Defeat owner.
+	NativeDefeat *DefeatContext
+	Deaths       *RevivalDeathCallbacks
 }
 
 // RevivalDeathCallbacks is the status owner's complete area instant-death
@@ -80,9 +83,13 @@ func (s *LifetimeState) ValidateRevival(c *RevivalContext, id, targetID string, 
 		}
 	}
 	if b.mode == "sacrifice" || b.mode == "death-sacrifice" || b.mode == "last" {
-		if c.Defeat == nil {
+		if c.Defeat == nil && !(id == "gem-66" && c.NativeDefeat != nil) {
 			return ErrUnsupportedEffect
 		}
+	}
+	if id == "gem-66" && c.NativeDefeat != nil {
+		_, err := s.ProjectRevivalGemBranches(c, id, targetID)
+		return err
 	}
 	if b.mode == "death-sacrifice" {
 		if c.Deaths == nil || c.Deaths.Validate == nil || c.Deaths.Execute == nil {
@@ -164,7 +171,7 @@ func (s *LifetimeState) ApplyRevival(c *RevivalContext, id, targetID string, rng
 				r.Applications = append(r.Applications, arithmeticApplication(target, before, t.HP, 0))
 			}
 		}
-		return s.finishSacrifice(c, id, r)
+		return s.finishSacrifice(c, id, r, rng)
 	} else {
 		r.TargetConsumed = true
 		target, err := s.resolveRevivalTarget(c, id, targetID, rng)
@@ -179,7 +186,7 @@ func (s *LifetimeState) ApplyRevival(c *RevivalContext, id, targetID string, rng
 			before := t.HP
 			t.HP, t.MP = t.MaxHP, t.MaxMP
 			r.Applications = append(r.Applications, arithmeticApplication(t.ID, before, t.HP, 0))
-			return s.finishSacrifice(c, id, r)
+			return s.finishSacrifice(c, id, r, rng)
 		}
 		if t.HP > 0 || (b.mode == "mp" && t.MP < 1) {
 			return r, nil
@@ -201,9 +208,16 @@ func (s *LifetimeState) ApplyRevival(c *RevivalContext, id, targetID string, rng
 	return r, nil
 }
 
-func (s *LifetimeState) finishSacrifice(c *RevivalContext, id string, r RevivalActionResult) (RevivalActionResult, error) {
+func (s *LifetimeState) finishSacrifice(c *RevivalContext, id string, r RevivalActionResult, rng random.Generator) (RevivalActionResult, error) {
 	// Do not clear HP first: defeat can prevent the sacrifice by reviving actor.
-	if err := c.Defeat(c.ActorID); err != nil {
+	var err error
+	if id == "gem-66" && c.NativeDefeat != nil {
+		c.NativeDefeat.TargetContext = c.TargetContext
+		_, err = s.ApplyDefeat(c.NativeDefeat, c.ActorID, rng)
+	} else {
+		err = c.Defeat(c.ActorID)
+	}
+	if err != nil {
 		return r, err
 	}
 	s.actor(c.ActorID).MP = 1

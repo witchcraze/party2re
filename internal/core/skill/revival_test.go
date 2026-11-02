@@ -109,7 +109,7 @@ func TestRevivalUnsupportedClosuresRejectBeforeRandomOrDelegatedExecution(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, ids := range [][]string{{"gem-66"}, {"job-7-entry-8"}, {"delegated"}, {"random"}, {"gem-63", "gem-64"}, {"tool-110"}} {
+	for _, ids := range [][]string{{"gem-66"}, {"job-7-entry-8"}, {"delegated"}, {"random"}, {"tool-110"}} {
 		if _, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(ids, err)
 		}
