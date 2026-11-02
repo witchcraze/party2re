@@ -7,10 +7,12 @@ do not describe every event. Current Go is in `internal/dungeon`.
 ## Legacy movement and map events
 
 The leader performs the initial advance. Afterwards cardinal movement is
-available once enemies are defeated. Movement advances the shared round and
-dispatches the selected map's `event_<symbol>`; active enemies ordinarily block
-movement (`lib/vs_dungeon.cgi:74–80`). Combat actions remain available and
-`lib/_battle.cgi:1184–1220` permits escape with current vitality and earned stock.
+available only when no living enemy-side members remain, including ordinary
+unopened Dungeon chests. Movement advances the shared round and dispatches the
+selected map's `event_<symbol>`. Both action registration and the movement guard
+enforce this restriction (`lib/vs_dungeon.cgi:37–48,74–80`). Combat actions
+remain available, and `lib/_battle.cgi:1184–1220` permits escape with current
+vitality and earned stock.
 A wall hit invokes the selected map's wall event without consuming a round.
 The base wall event leaves coordinates unchanged; map8 overrides it with a warp.
 
@@ -48,6 +50,26 @@ map supplies the base damage. It does not establish a universal 15%-MaxHP trap.
 `_add_treasure` starts from `$#partys`, and acting Job 78 adds `1 + int(rand(2))`.
 Inspect map event flags and the shared treasure/exit routines for actual reward
 delivery and replay prevention; do not invent a floor-scaled 100G chest rule.
+
+Ordinary Dungeon treasure blocks movement. `add_treasure` creates positive-HP,
+NPC-colored chest members (`lib/_npc_action.cgi:498–552`); `read_member` restores
+the saved event flags and places living opposing members in `@enemys`
+(`lib/_battle.cgi:453–493`). The initial flags are `S` (`lib/quest.cgi:639`);
+map0 `event_2` appends `2` before generating treasure (`map/0/1.cgi:16`),
+without setting `$event` to `宝`.
+Thus the `$event ne '宝'` guard's exception does not apply to this normal path.
+Nor does that exception register a movement action: with chests present,
+`add_battle_action` registers inspection instead of directions/map observation
+(`vs_dungeon.cgi:37–48`). Each request rebuilds actions before execution
+(`party.cgi:19–24`, `lib/_skill.cgi:22–23,286`), and the dispatcher rejects an
+unregistered action (`lib/_battle.cgi:640`). A direct movement call also rejects
+the normal chest state (`vs_dungeon.cgi:77–80`). This is not merely a hidden UI
+choice. Opening a chest sets its HP to zero; dead NPC members are omitted from
+the next saved/reloaded roster (`_npc_action.cgi:58`, `_battle.cgi:518–535`).
+Movement can resume only after no living enemy-side members remain and the
+round limit permits it. Escape is a separate action, not permission to move
+past unopened chests. This contract preserves the legacy behavior; allowing
+ordinary chest abandonment by movement would require an approved departure.
 
 ## Current implementation and remaining reconciliation
 
@@ -94,7 +116,7 @@ in their own units.
 | Map definition (`internal/dungeon`) | Stable native catalog/map identity, dimensions, start, round limit, cells and their map-owned event identities. Keep movement eligibility, visible appearance and event behavior separate: a displayed wall may be traversable, and `D` does not globally mean stairs. |
 | Live expedition (existing Valkey buffer) | Selected map identity, position, current round, existing run/revision/member/encounter facts, and typed event state. Distinguish one-time triggers, keys/doors, reversible switches, selected routes and counters; do not encode them as a legacy flag string. Shared cross-map events explicitly reuse a state identity rather than resetting on every map change. |
 | Accepted event transition | Save position, round, event state and resulting encounter/reward facts together through the existing revision-checked step contract. A rejected limit move changes none of them and consumes no encounter RNG. Reload and stale competing requests must not regenerate an accepted one-time event. |
-| Pending encounter | Distinguish hostile combat from unopened treasure. Base movement blocks on hostile enemies but permits leaving treasure (`vs_dungeon.cgi:77–80`); treasure generation is distinct from actor-authorized inspection and delivery. Persist any accepted random choice needed to resume without redrawing it. |
+| Pending encounter | Distinguish hostile combat from unopened treasure for resolution, while both block ordinary Dungeon movement whenever living enemy-side members remain. Treasure generation is distinct from actor-authorized inspection and delivery; it does not activate the isolated `$event == '宝'` exception. Discovery must withhold movement choices and direct movement calls must reject the same state. Persist any accepted random choice needed to resume without redrawing it. |
 | Movement availability | Derive exhausted movement from current round and the selected map's limit, independently of terminal status. An exhausted expedition remains active, retaining vitality and stock; Escape and required combat/inspection continuations remain available. A genuine defeat remains a distinct outcome. |
 | Terminal settlement | Reuse frozen outcomes and the SQL run-ID settlement claim. A map boss trigger does not by itself authorize the current generic boss-victory clear bonus, medals, or forced expedition completion. Exit parity beyond the movement-limit guard remains separately scoped below. |
 
@@ -179,8 +201,16 @@ untestable unused framework. It does not replace the existing catalog.
 - Treasure event `2` generates its pending treasure once per expedition; revisit,
   save/reload and stale competing transitions do not regenerate it. Triggering
   treasure must not stand in for inspection or immediately grant a fixed 100G
-  reward. Boss event `B` likewise triggers once and retains existing combat
-  continuation facts, without importing synthetic catalog clear rewards.
+  reward. With one or more living unopened chests, withhold all four movement
+  choices and reject direct movement without changing position, round, event
+  state, stock or RNG. Test the generated normal flag state (initial `S` plus
+  `2`, not synthetic `宝`), reload and partial opening of multiple chests;
+  movement stays blocked until the last living enemy-side member is gone, and
+  then resumes only if the round limit permits it. If native inspection is
+  deferred, retain the movement block and Escape rather than silently allowing
+  passage or auto-opening chests. Boss event `B` likewise triggers once and
+  retains existing combat continuation facts, without importing synthetic
+  catalog clear rewards.
 - Hidden passage is traversable but uses the wall appearance within the actor's
   visible radius, before and after crossing; center marker and out-of-bounds
   rendering remain correct. Read observations cannot reveal it through private
