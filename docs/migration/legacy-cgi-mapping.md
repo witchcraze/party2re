@@ -232,4 +232,4 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `party2/stage/0.cgi` .. `27.cgi` | 28の通常冒険ステージ構成・敵出現テーブル | `internal/adventure/data/stages.json`<br/>[design/stages-and-monsters.md](../design/stages-and-monsters.md) | Compliant |
 | `party2/stage/king1.cgi` .. `king99.cgi` | 10体の封印魔王ステージ構成・耐性テーブル | `internal/boss/catalog.go`<br/>[design/boss.md](../design/boss.md) | Compliant |
 | `party2/challenge/0.cgi` .. `8.cgi` | 9段階の連戦チャレンジステージ構成 | `internal/challenge/data/challenge_tiers.json`<br/>[design/challenge.md](../design/challenge.md) | Compliant |
-| `party2/map/0` .. `17` | ダンジョンマップ階層データ・タイル行列 | `internal/dungeon/catalog.go`<br/>[design/dungeon.md](../design/dungeon.md) | Compliant |
+| `party2/map/0` .. `17` | ダンジョンマップ・イベント | `internal/dungeon/catalog.go`<br/>[native contract and restoration scopes](../design/dungeon.md#native-map-contract-target) | Review against source: current catalog differs; native restoration remains planned. |
