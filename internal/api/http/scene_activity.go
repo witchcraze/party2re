@@ -4,14 +4,16 @@ import (
 	"context"
 	"slices"
 
+	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
 // ActivitySceneData retains owned facts and authorized feature projections;
 // private game facts remain masked by the owning service.
 type ActivitySceneData struct {
-	Activities []playercontext.Activity `json:"activities"`
-	Casino     *CasinoRoomSceneData     `json:"casino,omitempty"`
+	Activities []playercontext.Activity       `json:"activities"`
+	Casino     *CasinoRoomSceneData           `json:"casino,omitempty"`
+	Dungeon    *dungeon.ExpeditionObservation `json:"dungeon,omitempty"`
 }
 
 func (h *Handler) composeActivityScene(ctx context.Context, result playercontext.Result, response *PlayerContextResponse) (bool, error) {
@@ -24,6 +26,13 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 		if facts[i].Kind == "casino" {
 			var err error
 			data.Casino, err = h.casinoActivityData(ctx, result, facts[i])
+			if err != nil {
+				return true, err
+			}
+		}
+		if facts[i].Kind == "dungeon" {
+			var err error
+			data.Dungeon, err = h.dungeonActivityData(ctx, result, facts[i])
 			if err != nil {
 				return true, err
 			}

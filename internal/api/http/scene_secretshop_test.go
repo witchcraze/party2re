@@ -15,6 +15,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
 )
@@ -69,7 +70,9 @@ func secretShopSceneRouter(t *testing.T, options ...func(*playercontext.Service)
 	for _, option := range options {
 		option(pc)
 	}
-	h, err := NewHandler(f.gatewayFixture, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithSecretShop(reads), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture })
+	h, err := NewHandler(f.gatewayFixture, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithSecretShop(reads), WithPlayerContext(pc), WithDungeon(&dungeonSceneFixture{observeExpeditionFn: func(context.Context, string) (*dungeon.ExpeditionObservation, error) {
+		return &dungeon.ExpeditionObservation{ID: "active", LeaderID: "leader", Status: "in_progress", Directions: []dungeon.Direction{}}, nil
+	}}), func(h *Handler) { h.homes = f.gatewayFixture })
 	if err != nil {
 		t.Fatal(err)
 	}

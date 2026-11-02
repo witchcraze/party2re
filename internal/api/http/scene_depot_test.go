@@ -17,6 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -79,7 +80,9 @@ func depotSceneRouter(t *testing.T, options ...func(*playercontext.Service)) (*d
 	for _, option := range options {
 		option(pc)
 	}
-	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithDepot(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture })
+	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithDepot(f), WithPlayerContext(pc), WithDungeon(&dungeonSceneFixture{observeExpeditionFn: func(context.Context, string) (*dungeon.ExpeditionObservation, error) {
+		return &dungeon.ExpeditionObservation{ID: "active", LeaderID: "leader", Status: "in_progress", Directions: []dungeon.Direction{}}, nil
+	}}), func(h *Handler) { h.homes = f.gatewayFixture })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +239,7 @@ func TestDepotSceneActualActivitySkipsDepotReads(t *testing.T) {
 			case "party", "dungeon":
 				activities = []playercontext.Activity{{Kind: kind, ID: "active", Role: "member", Phase: "in_progress", Actions: []string{}}}
 			case "conflict":
-				activities = []playercontext.Activity{{Kind: "party", ID: "room", Role: "member", Actions: []string{}}, {Kind: "dungeon", ID: "run", Role: "member", Actions: []string{}}}
+				activities = []playercontext.Activity{{Kind: "party", ID: "room", Role: "member", Actions: []string{}}, {Kind: "dungeon", ID: "active", Role: "member", Phase: "in_progress", Actions: []string{}}}
 			}
 			wantKind := "activity"
 			if kind == "conflict" {

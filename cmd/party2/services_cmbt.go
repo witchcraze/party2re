@@ -163,6 +163,7 @@ func newCmbtServices(
 		core.charRepo,
 		battleEngine,
 		dungeon.WithActiveExpeditionStore(valkeyExpeditionStore),
+		dungeon.WithInventoryProvider(core.invRepo),
 		dungeon.WithParticipantBuilder(battleAdapter),
 	)
 	if err != nil {

@@ -127,14 +127,14 @@ func (s *stubBossService) GetCharacterRecord(ctx context.Context, characterID st
 }
 
 type stubDungeonService struct {
-	fightFn                func(context.Context, string) (dungeon.ExpeditionStepResult, error)
-	listDungeonsFn         func(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
-	startExpeditionFn      func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
-	moveFn                 func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
-	escapeFn               func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
-	getActiveExpeditionFn  func(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
+	fightFn           func(context.Context, string) (dungeon.ExpeditionStepResult, error)
+	listDungeonsFn    func(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
+	startExpeditionFn func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
+	moveFn            func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
+	escapeFn          func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
+
 	startPartyExpeditionFn func(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
-	viewMapFn              func(ctx context.Context, characterID string) (dungeon.MapView, error)
+	observeExpeditionFn    func(ctx context.Context, characterID string) (*dungeon.ExpeditionObservation, error)
 }
 
 func (s *stubDungeonService) ListDungeons(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error) {
@@ -167,17 +167,11 @@ func (s *stubDungeonService) Escape(ctx context.Context, characterID string) (du
 	}
 	return dungeon.ExpeditionStepResult{EventType: dungeon.EventEscape, Expedition: dungeon.ActiveExpedition{Status: dungeon.StatusEscaped}}, nil
 }
-func (s *stubDungeonService) GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error) {
-	if s.getActiveExpeditionFn != nil {
-		return s.getActiveExpeditionFn(ctx, characterID)
+func (s *stubDungeonService) ObserveExpedition(ctx context.Context, characterID string) (*dungeon.ExpeditionObservation, error) {
+	if s.observeExpeditionFn != nil {
+		return s.observeExpeditionFn(ctx, characterID)
 	}
-	return nil, dungeon.ErrNoActiveExpedition
-}
-func (s *stubDungeonService) ViewMap(ctx context.Context, characterID string) (dungeon.MapView, error) {
-	if s.viewMapFn != nil {
-		return s.viewMapFn(ctx, characterID)
-	}
-	return dungeon.MapView{Radius: 1, CenterX: 5, CenterY: 5, Formatted: "[P]"}, nil
+	return nil, nil
 }
 
 func TestCombatEndpoints(t *testing.T) {
@@ -418,8 +412,8 @@ func TestCombatEndpoints(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected retired route 404, got %d", rec.Code)
 		}
 	})
 

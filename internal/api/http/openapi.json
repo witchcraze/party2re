@@ -155,6 +155,9 @@
           },
           "casino": {
             "$ref": "#/components/schemas/CasinoRoomSceneData"
+          },
+          "dungeon": {
+            "$ref": "#/components/schemas/DungeonExpeditionObservation"
           }
         },
         "required": [
@@ -4862,6 +4865,31 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "dungeon_fight"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "required": [],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "dungeon_escape"
                 }
               },
@@ -7416,6 +7444,26 @@
         ],
         "type": "object"
       },
+      "DungeonContinuationControls": {
+        "additionalProperties": false,
+        "properties": {
+          "can_escape": {
+            "type": "boolean"
+          },
+          "can_fight": {
+            "type": "boolean"
+          },
+          "can_move": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_move",
+          "can_fight",
+          "can_escape"
+        ],
+        "type": "object"
+      },
       "DungeonDungeon": {
         "additionalProperties": false,
         "properties": {
@@ -7587,6 +7635,80 @@
         ],
         "type": "object"
       },
+      "DungeonExpeditionObservation": {
+        "additionalProperties": false,
+        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Directions use the selected floor geometry, not catalog categories. No private roster inventory, event flags or provisional rewards.",
+        "properties": {
+          "controls": {
+            "$ref": "#/components/schemas/DungeonContinuationControls"
+          },
+          "current_floor": {
+            "type": "integer"
+          },
+          "directions": {
+            "items": {
+              "enum": [
+                "north",
+                "south",
+                "east",
+                "west"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "dungeon_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "leader_id": {
+            "type": "string"
+          },
+          "map": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DungeonMapView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "exploring",
+              "cleared",
+              "escaped",
+              "wiped_out"
+            ],
+            "type": "string"
+          },
+          "turns_remaining": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "leader_id",
+          "dungeon_id",
+          "revision",
+          "current_floor",
+          "turns_remaining",
+          "status",
+          "map",
+          "directions",
+          "controls"
+        ],
+        "type": "object"
+      },
       "DungeonExpeditionStepResult": {
         "additionalProperties": false,
         "properties": {
@@ -7724,18 +7846,6 @@
         ],
         "type": "object"
       },
-      "DungeonMapResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "map_view": {
-            "$ref": "#/components/schemas/DungeonMapView"
-          }
-        },
-        "required": [
-          "map_view"
-        ],
-        "type": "object"
-      },
       "DungeonMapView": {
         "additionalProperties": false,
         "properties": {
@@ -7762,15 +7872,9 @@
               "items": {
                 "type": "string"
               },
-              "type": [
-                "array",
-                "null"
-              ]
+              "type": "array"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           }
         },
         "required": [
@@ -23010,91 +23114,6 @@
           }
         ],
         "summary": "Continue the active dungeon encounter",
-        "tags": [
-          "Combat"
-        ]
-      }
-    },
-    "/characters/{id}/dungeons/map": {
-      "get": {
-        "operationId": "getDungeonMap",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DungeonMapResponse"
-                }
-              }
-            },
-            "description": "Dungeon map view"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get current dungeon ASCII map view and scouting visibility",
         "tags": [
           "Combat"
         ]

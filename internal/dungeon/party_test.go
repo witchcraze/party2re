@@ -114,49 +114,49 @@ func TestPartyMapScouting(t *testing.T) {
 		t.Fatalf("failed to start solo expedition: %v", err)
 	}
 
-	mapView1, err := svc.ViewMap(ctx, "char-1")
+	mapView1, err := svc.ObserveExpedition(ctx, "char-1")
 	if err != nil {
-		t.Fatalf("ViewMap failed: %v", err)
+		t.Fatalf("ObserveExpedition failed: %v", err)
 	}
-	if mapView1.Radius != 1 {
-		t.Errorf("expected solo warrior map radius 1, got %d", mapView1.Radius)
+	if mapView1.Map.Radius != 1 {
+		t.Errorf("expected solo warrior map radius 1, got %d", mapView1.Map.Radius)
 	}
-	if mapView1.ScoutingBonusActive {
+	if mapView1.Map.ScoutingBonusActive {
 		t.Errorf("expected no scouting bonus for solo warrior")
 	}
 	// Check formatted string contains "●"
-	if !strings.Contains(mapView1.Formatted, "●") {
-		t.Errorf("expected formatted map to contain ●, got:\n%s", mapView1.Formatted)
+	if !strings.Contains(mapView1.Map.Formatted, "●") {
+		t.Errorf("expected formatted map to contain ●, got:\n%s", mapView1.Map.Formatted)
 	}
 	// Size of tiles should be (2*1+1) = 3
-	if len(mapView1.Tiles) != 3 || len(mapView1.Tiles[0]) != 3 {
-		t.Errorf("expected 3x3 tiles for radius 1, got %dx%d", len(mapView1.Tiles), len(mapView1.Tiles[0]))
+	if len(mapView1.Map.Tiles) != 3 || len(mapView1.Map.Tiles[0]) != 3 {
+		t.Errorf("expected 3x3 tiles for radius 1, got %dx%d", len(mapView1.Map.Tiles), len(mapView1.Map.Tiles[0]))
 	}
 
-	// 2. Party with Thief (job 9): expanded view radius = 2 (5x5 grid)
+	// 2. Party with Thief (job 9): leader retains radius 1
 	_, _ = svc.Escape(ctx, "char-1") // end solo expedition
 	_, err = svc.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2"}, "dungeon-01", "")
 	if err != nil {
 		t.Fatalf("failed to start party expedition: %v", err)
 	}
 
-	mapView2, err := svc.ViewMap(ctx, "char-1")
+	mapView2, err := svc.ObserveExpedition(ctx, "char-1")
 	if err != nil {
-		t.Fatalf("ViewMap failed: %v", err)
+		t.Fatalf("ObserveExpedition failed: %v", err)
 	}
-	if mapView2.Radius != 2 {
-		t.Errorf("expected party with thief map radius 2, got %d", mapView2.Radius)
+	if mapView2.Map.Radius != 1 {
+		t.Errorf("expected non-scout leader map radius 1, got %d", mapView2.Map.Radius)
 	}
-	if !mapView2.ScoutingBonusActive {
-		t.Errorf("expected scouting bonus active for thief")
+	if mapView2.Map.ScoutingBonusActive {
+		t.Errorf("another member must not supply scouting")
 	}
 	// Size of tiles should be (2*2+1) = 5
-	if len(mapView2.Tiles) != 5 || len(mapView2.Tiles[0]) != 5 {
-		t.Errorf("expected 5x5 tiles for radius 2, got %dx%d", len(mapView2.Tiles), len(mapView2.Tiles[0]))
+	if len(mapView2.Map.Tiles) != 3 || len(mapView2.Map.Tiles[0]) != 3 {
+		t.Errorf("expected 3x3 tiles for radius 2, got %dx%d", len(mapView2.Map.Tiles), len(mapView2.Map.Tiles[0]))
 	}
 
 	// 3. Ninja (26), Geomancer (27), Ranger (79)
-	jobs := []string{"26", "27", "79", "ninja", "geomancer", "ranger"}
+	jobs := []string{"job-09", "job-26", "job-27", "job-79", "9", "26", "27", "79", "thief", "ninja", "geomancer", "ranger", "盗賊", "忍者", "風水師", "レンジャー"}
 	for _, jobID := range jobs {
 		cTest := createTestChar("scout-"+jobID, 10, 100, 30, 20)
 		cTest.JobID = jobID
@@ -170,12 +170,12 @@ func TestPartyMapScouting(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to start for job %s: %v", jobID, err)
 		}
-		mv, err := tSvc.ViewMap(ctx, "lead")
+		mv, err := tSvc.ObserveExpedition(ctx, cTest.ID)
 		if err != nil {
-			t.Fatalf("ViewMap failed for job %s: %v", jobID, err)
+			t.Fatalf("ObserveExpedition failed for job %s: %v", jobID, err)
 		}
-		if mv.Radius != 2 {
-			t.Errorf("expected radius 2 for scouting job %s, got %d", jobID, mv.Radius)
+		if mv.Map.Radius != 2 {
+			t.Errorf("expected radius 2 for scouting job %s, got %d", jobID, mv.Map.Radius)
 		}
 	}
 
@@ -193,31 +193,31 @@ func TestPartyMapScouting(t *testing.T) {
 	)
 	// Give item 197 to scope-hero
 	inv, _ := coreinventory.New(cItem.ID)
-	_ = inv.Add(coreitem.Instance{ID: "scope-inst", DefinitionID: "197", Quantity: 1})
+	_ = inv.Add(coreitem.Instance{ID: "scope-inst", DefinitionID: "item-197", Quantity: 1})
 	invRepo.invs[cItem.ID] = inv
 
 	_, err = itemSvc.StartPartyExpedition(ctx, cItem.ID, []string{cItem.ID}, "dungeon-01", "")
 	if err != nil {
 		t.Fatalf("failed to start item expedition: %v", err)
 	}
-	mvItem, err := itemSvc.ViewMap(ctx, cItem.ID)
+	mvItem, err := itemSvc.ObserveExpedition(ctx, cItem.ID)
 	if err != nil {
-		t.Fatalf("ViewMap failed: %v", err)
+		t.Fatalf("ObserveExpedition failed: %v", err)
 	}
-	if mvItem.Radius != 2 {
-		t.Errorf("expected radius 2 for item 197 holder, got %d", mvItem.Radius)
+	if mvItem.Map.Radius != 2 {
+		t.Errorf("expected radius 2 for item 197 holder, got %d", mvItem.Map.Radius)
 	}
-	if len(mvItem.Tiles) != 5 || len(mvItem.Tiles[0]) != 5 {
-		t.Errorf("expected 5x5 tiles for radius 2, got %dx%d", len(mvItem.Tiles), len(mvItem.Tiles[0]))
+	if len(mvItem.Map.Tiles) != 5 || len(mvItem.Map.Tiles[0]) != 5 {
+		t.Errorf("expected 5x5 tiles for radius 2, got %dx%d", len(mvItem.Map.Tiles), len(mvItem.Map.Tiles[0]))
 	}
 
 	// 5. Stacking: Scouting Job (Thief 9) + Scope Goggles (item 197) expands radius to 3 (7x7 grid)
 	cBoth := createTestChar("scout-scope-hero", 10, 100, 30, 20)
-	cBoth.JobID = "9" // Thief
+	cBoth.JobID = "job-09" // Thief
 	stackCharRepo := &mockCharRepo{chars: map[string]corecharacter.Character{cBoth.ID: cBoth}}
 	stackInvRepo := &mockInventoryRepo{invs: make(map[string]coreinventory.Inventory)}
 	stackInv, _ := coreinventory.New(cBoth.ID)
-	_ = stackInv.Add(coreitem.Instance{ID: "scope-inst-2", DefinitionID: "197", Quantity: 1})
+	_ = stackInv.Add(coreitem.Instance{ID: "scope-inst-2", DefinitionID: "item-197", Quantity: 1})
 	stackInvRepo.invs[cBoth.ID] = stackInv
 
 	stackSvc, _ := dungeon.NewService(
@@ -231,23 +231,23 @@ func TestPartyMapScouting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start stack expedition: %v", err)
 	}
-	mvBoth, err := stackSvc.ViewMap(ctx, cBoth.ID)
+	mvBoth, err := stackSvc.ObserveExpedition(ctx, cBoth.ID)
 	if err != nil {
-		t.Fatalf("ViewMap failed: %v", err)
+		t.Fatalf("ObserveExpedition failed: %v", err)
 	}
-	if mvBoth.Radius != 3 {
-		t.Errorf("expected radius 3 for scouting job + scope goggles, got %d", mvBoth.Radius)
+	if mvBoth.Map.Radius != 3 {
+		t.Errorf("expected radius 3 for scouting job + scope goggles, got %d", mvBoth.Map.Radius)
 	}
-	if !mvBoth.ScoutingBonusActive {
+	if !mvBoth.Map.ScoutingBonusActive {
 		t.Errorf("expected scouting bonus active for stacked scouting")
 	}
-	if len(mvBoth.Tiles) != 7 || len(mvBoth.Tiles[0]) != 7 {
-		t.Errorf("expected 7x7 tiles for radius 3, got %dx%d", len(mvBoth.Tiles), len(mvBoth.Tiles[0]))
+	if len(mvBoth.Map.Tiles) != 7 || len(mvBoth.Map.Tiles[0]) != 7 {
+		t.Errorf("expected 7x7 tiles for radius 3, got %dx%d", len(mvBoth.Map.Tiles), len(mvBoth.Map.Tiles[0]))
 	}
 
-	// 6. Stacking in Multi-member Party: Member 1 is Thief, Member 2 holds Scope Goggles
+	// 6. Different members cannot stack their visibility bonuses.
 	cScout := createTestChar("party-thief", 10, 100, 30, 20)
-	cScout.JobID = "9"
+	cScout.JobID = "job-09"
 	cGoggleUser := createTestChar("party-goggle-user", 10, 100, 30, 20)
 	cGoggleUser.JobID = "warrior"
 	multiCharRepo := &mockCharRepo{chars: map[string]corecharacter.Character{
@@ -256,7 +256,7 @@ func TestPartyMapScouting(t *testing.T) {
 	}}
 	multiInvRepo := &mockInventoryRepo{invs: make(map[string]coreinventory.Inventory)}
 	goggleInv, _ := coreinventory.New(cGoggleUser.ID)
-	_ = goggleInv.Add(coreitem.Instance{ID: "goggle-inst", DefinitionID: "197", Quantity: 1})
+	_ = goggleInv.Add(coreitem.Instance{ID: "goggle-inst", DefinitionID: "item-197", Quantity: 1})
 	multiInvRepo.invs[cGoggleUser.ID] = goggleInv
 
 	multiSvc, _ := dungeon.NewService(
@@ -270,21 +270,21 @@ func TestPartyMapScouting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start multi-party expedition: %v", err)
 	}
-	mvMulti, err := multiSvc.ViewMap(ctx, cScout.ID)
+	mvMulti, err := multiSvc.ObserveExpedition(ctx, cScout.ID)
 	if err != nil {
-		t.Fatalf("ViewMap failed: %v", err)
+		t.Fatalf("ObserveExpedition failed: %v", err)
 	}
-	if mvMulti.Radius != 3 {
-		t.Errorf("expected radius 3 for multi-party stacking, got %d", mvMulti.Radius)
+	if mvMulti.Map.Radius != 2 {
+		t.Errorf("expected actor-only radius 2, got %d", mvMulti.Map.Radius)
 	}
-	if !mvMulti.ScoutingBonusActive {
+	if !mvMulti.Map.ScoutingBonusActive {
 		t.Errorf("expected scouting bonus active for multi-party stacking")
 	}
-	if len(mvMulti.Tiles) != 7 || len(mvMulti.Tiles[0]) != 7 {
-		t.Errorf("expected 7x7 tiles for multi-party stacking radius 3, got %dx%d", len(mvMulti.Tiles), len(mvMulti.Tiles[0]))
+	if len(mvMulti.Map.Tiles) != 5 || len(mvMulti.Map.Tiles[0]) != 5 {
+		t.Errorf("expected actor-only 5x5 tiles, got %dx%d", len(mvMulti.Map.Tiles), len(mvMulti.Map.Tiles[0]))
 	}
-	if !strings.Contains(mvMulti.BonusReason, "Scouting Job") || !strings.Contains(mvMulti.BonusReason, "Scope Goggles") {
-		t.Errorf("expected BonusReason to mention both bonuses, got: %s", mvMulti.BonusReason)
+	if !strings.Contains(mvMulti.Map.BonusReason, "Scouting Job") || strings.Contains(mvMulti.Map.BonusReason, "Scope Goggles") {
+		t.Errorf("expected BonusReason to mention only actor scouting, got: %s", mvMulti.Map.BonusReason)
 	}
 }
 

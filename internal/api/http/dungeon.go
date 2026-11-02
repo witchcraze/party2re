@@ -18,8 +18,7 @@ type DungeonService interface {
 	Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
 	Fight(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
 	Escape(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
-	GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
-	ViewMap(ctx context.Context, characterID string) (dungeon.MapView, error)
+	ObserveExpedition(ctx context.Context, characterID string) (*dungeon.ExpeditionObservation, error)
 }
 
 // WithDungeon configures the dungeon service for the Handler.
@@ -57,10 +56,6 @@ type startDungeonResponse struct {
 
 type dungeonStepResponse struct {
 	Result dungeon.ExpeditionStepResult `json:"result"`
-}
-
-type dungeonMapResponse struct {
-	MapView dungeon.MapView `json:"map_view"`
 }
 
 func (h *Handler) handleListDungeons(w http.ResponseWriter, r *http.Request) {
@@ -225,30 +220,6 @@ func (h *Handler) handleEscapeDungeon(w http.ResponseWriter, r *http.Request) {
 
 		writeJSON(w, http.StatusOK, dungeonStepResponse{
 			Result: res,
-		})
-	})
-}
-
-func (h *Handler) handleGetDungeonMap(w http.ResponseWriter, r *http.Request) {
-	if h.dungeons == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("dungeon service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		mv, err := h.dungeons.ViewMap(r.Context(), char.ID)
-		if err != nil {
-			if errors.Is(err, dungeon.ErrNoActiveExpedition) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, dungeonMapResponse{
-			MapView: mv,
 		})
 	})
 }
