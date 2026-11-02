@@ -26,6 +26,19 @@ In accordance with `party2/lib/chapel.cgi`, characters can select from exactly f
 
 ## Single Active Wish Constraint & Daily Quota (単一の祈り制約と祈願日次枠)
 
+Prayer is free. The owned Chapel scene exposes the current blessing, prayer
+record and five options; each option's `type` is the explicit `blessing` input
+for Gateway `chapel_pray`. Existing parser aliases remain accepted; `NONE` is
+invalid. The command delegates to `SelectBlessing`, which owns the active-wish
+and prayer-record checks. Eligibility in context does not reserve a prayer.
+Observation never prays, clears the record or renews navigation, and required
+blessing/status read failures fail the whole observation.
+
+The local legacy dispatch reconciles as follows (`party2/lib/chapel.cgi:17–25,
+39–49,54–89`): the no-target `いのる` option menu is supplied by the owned scene;
+`いのる` with a named choice maps to `chapel_pray` and `SelectBlessing`. The
+existing Chapel REST GET/prayer POST remain until separately verified retirement.
+
 In original Party2 (`party2/lib/chapel.cgi`), if a character already has an active wish or has already prayed on the current day (`&checkWished || -e $filePath`):
 - Any subsequent attempt to pray is rejected with the authentic Sister response:
   > **「祈りに大事なのは、数でなく気持ちなのです」**

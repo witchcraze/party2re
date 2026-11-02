@@ -3892,6 +3892,28 @@
         ],
         "type": "object"
       },
+      "ChapelSceneData": {
+        "additionalProperties": false,
+        "description": "Owned Chapel blessing and status; available_blessings[].type supplies the explicit chapel_pray blessing value. GET never prays or resets the prayer record. Required reads fail the whole observation.",
+        "properties": {
+          "blessing": {
+            "$ref": "#/components/schemas/ChapelCharacterBlessing"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChapelChapelStatus"
+          }
+        },
+        "required": [
+          "parent",
+          "blessing",
+          "status"
+        ],
+        "type": "object"
+      },
       "Character": {
         "properties": {
           "created_at": {
@@ -4269,6 +4291,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "chapel",
                         "depot",
                         "home",
                         "shop_weapon",
@@ -4388,6 +4411,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "chapel",
                         "depot",
                         "home",
                         "shop_weapon",
@@ -5404,6 +5428,41 @@
                   "required": [
                     "session_id",
                     "expected_revision"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "chapel_pray",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blessing": {
+                      "description": "Prayer key or alias accepted by ParseBlessingType. NONE is rejected; canonical choices are GOLD, EXP, MONSTER, DROP and CASINO.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "blessing"
                   ],
                   "type": "object"
                 }
@@ -12866,6 +12925,7 @@
                 "enum": [
                   "town",
                   "bank",
+                  "chapel",
                   "depot",
                   "home",
                   "shop_weapon",
@@ -13002,6 +13062,7 @@
             "enum": [
               "town",
               "bank",
+              "chapel",
               "depot",
               "home",
               "shop_weapon",
@@ -13105,6 +13166,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/DepotSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ChapelSceneData"
                     }
                   ]
                 }
@@ -13514,6 +13578,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/DepotSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "chapel"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ChapelSceneData"
                 },
                 "support": {
                   "properties": {
@@ -41526,7 +41620,7 @@
       "name": "CustomSkills"
     },
     {
-      "description": "Chapel worship, deity blessings, and gold donations",
+      "description": "Chapel free prayer and blessings",
       "name": "Chapel"
     },
     {

@@ -73,7 +73,7 @@
       "name": "CustomSkills"
     },
     {
-      "description": "Chapel worship, deity blessings, and gold donations",
+      "description": "Chapel free prayer and blessings",
       "name": "Chapel"
     },
     {
@@ -2428,6 +2428,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/DepotSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ChapelSceneData"
                     }
                   ]
                 }
@@ -2842,6 +2845,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/DepotSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "chapel"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ChapelSceneData"
                 },
                 "support": {
                   "properties": {
@@ -3291,6 +3324,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "chapel",
                         "depot",
                         "home",
                         "shop_weapon",
@@ -3382,6 +3416,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "chapel",
                         "depot",
                         "home",
                         "shop_weapon",
@@ -4433,6 +4468,41 @@
                 "params"
               ]
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "chapel_pray",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "blessing": {
+                      "type": "string",
+                      "description": "Prayer key or alias accepted by ParseBlessingType. NONE is rejected; canonical choices are GOLD, EXP, MONSTER, DROP and CASINO."
+                    }
+                  },
+                  "required": [
+                    "blessing"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
           }
         ]
       },
@@ -4796,6 +4866,7 @@
             "enum": [
               "town",
               "bank",
+              "chapel",
               "depot",
               "home",
               "shop_weapon",
@@ -4915,6 +4986,7 @@
                 "enum": [
                   "town",
                   "bank",
+                  "chapel",
                   "depot",
                   "home",
                   "shop_weapon",
@@ -15393,6 +15465,28 @@
           "event_type",
           "x",
           "y"
+        ]
+      },
+      "ChapelSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Owned Chapel blessing and status; available_blessings[].type supplies the explicit chapel_pray blessing value. GET never prays or resets the prayer record. Required reads fail the whole observation.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "blessing": {
+            "$ref": "#/components/schemas/ChapelCharacterBlessing"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChapelChapelStatus"
+          }
+        },
+        "required": [
+          "parent",
+          "blessing",
+          "status"
         ]
       }
     },

@@ -30,6 +30,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"bank_withdraw", "amount", "integer", true},
 		{"adventure_start", "stage_id", "string", true},
 		{"rescue_request", "reason", "string", true},
+		{"chapel_pray", "blessing", "string", true},
 		{"home_sleep", "target_home_id", "string", false},
 		{"home_wake", "", "", false},
 		{"depot_expand", "", "", false},
@@ -69,7 +70,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "prayAtChapel"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {

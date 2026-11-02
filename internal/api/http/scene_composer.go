@@ -73,6 +73,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "bank":
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
 			adapter.read = h.bankSceneData
+		case "chapel":
+			adapter.title, adapter.commands = "礼拝堂", []string{"chapel_pray"}
+			adapter.read = h.chapelSceneData
 		case "depot":
 			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}
 			adapter.read = h.depotSceneData
@@ -193,7 +196,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		}
 		scene.Data = data
 		switch data := data.(type) {
-		case BankSceneData:
+		case BankSceneData, ChapelSceneData:
 			scene.Support.Observation = "details"
 		case DepotSceneData:
 			scene.Support.Observation = "details"

@@ -98,12 +98,12 @@ func TestActionURLResolver(t *testing.T) {
 			wantURL:    "/characters/char-999/home/wake",
 		},
 		{
-			name:       "chapel bless action",
-			actionID:   "chapel_bless",
+			name:       "chapel prayer Gateway action",
+			actionID:   "chapel_pray",
 			label:      "お祈願",
 			category:   "chapel",
 			wantMethod: http.MethodPost,
-			wantURL:    "/characters/char-999/chapel/bless",
+			wantURL:    "/api/v1/characters/char-999/actions",
 		},
 		{
 			name:       "wishingwell exchange action",

@@ -16,9 +16,15 @@ func TestProductionSceneRegistryMatchesNavigationSchemas(t *testing.T) {
 		if d.ID == "depot" && (d.Parent != "town" || !d.Pageable || d.CursorPageable || d.SubjectKind != "") {
 			t.Fatalf("Depot must use the shared owned facility offset list: %+v", d)
 		}
+		if d.ID == "chapel" && (d.Parent != "town" || d.Pageable || d.CursorPageable || d.SubjectKind != "") {
+			t.Fatalf("Chapel must be an owned facility without subjects or paging: %+v", d)
+		}
 	}
 	if !slices.Contains(destinations, "depot") {
 		t.Fatal("production Depot scene is missing")
+	}
+	if !slices.Contains(destinations, "chapel") {
+		t.Fatal("production Chapel scene is missing")
 	}
 	slices.Sort(destinations)
 	var spec map[string]any
