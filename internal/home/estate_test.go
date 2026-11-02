@@ -3,11 +3,14 @@ package home
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type mockGuildPoints struct {
@@ -742,4 +745,199 @@ func TestBuildHouse_Transactional(t *testing.T) {
 			t.Errorf("expected no timer locks set on failure, got %v", tmr.locks)
 		}
 	})
+}
+
+func TestSetCharacterColorKeepsConcurrentResourceUpdates(t *testing.T) {
+	ctx := context.Background()
+	// stale is the snapshot the color change read first; db holds the state
+	// after a concurrent reward committed 50G.
+	stale := map[string]corecharacter.Character{
+		"char-1": {ID: "char-1", PlayerID: "player-1", Name: "Hero", Money: 100, Color: corecharacter.DefaultColor},
+	}
+	db := map[string]corecharacter.Character{
+		"char-1": {ID: "char-1", PlayerID: "player-1", Name: "Hero", Money: 150, Color: corecharacter.DefaultColor},
+	}
+	svc, err := NewService(
+		newMockHomeRepo(stale),
+		&mockCharReader{chars: stale},
+		WithCharacterUpdater(&mockCharUpdater{chars: db}),
+		WithTransactionRunner(&mockTransactionRunner{chars: db}),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	t.Run("valid color keeps concurrent gold", func(t *testing.T) {
+		if err := svc.SetCharacterColor(ctx, "char-1", "#123456"); err != nil {
+			t.Fatalf("SetCharacterColor failed: %v", err)
+		}
+		got := db["char-1"]
+		if got.Money != 150 {
+			t.Errorf("expected money 150 after color change, got %d", got.Money)
+		}
+		if got.Color != "#123456" {
+			t.Errorf("expected color #123456, got %s", got.Color)
+		}
+	})
+
+	t.Run("invalid color leaves character unchanged", func(t *testing.T) {
+		before := db["char-1"]
+		if err := svc.SetCharacterColor(ctx, "char-1", "invalid"); !errors.Is(err, corecharacter.ErrInvalidColor) {
+			t.Fatalf("expected ErrInvalidColor, got %v", err)
+		}
+		if db["char-1"].Money != before.Money || db["char-1"].Color != before.Color {
+			t.Errorf("expected character unchanged, got %+v", db["char-1"])
+		}
+	})
+}
+
+func TestSetCharacterColorRequiresTransactionRunner(t *testing.T) {
+	chars := map[string]corecharacter.Character{
+		"char-1": {ID: "char-1", PlayerID: "player-1", Name: "Hero", Money: 100, Color: corecharacter.DefaultColor},
+	}
+	svc, err := NewService(
+		newMockHomeRepo(chars),
+		&mockCharReader{chars: chars},
+		WithCharacterUpdater(&mockCharUpdater{chars: chars}),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	if err := svc.SetCharacterColor(context.Background(), "char-1", "#123456"); !errors.Is(err, ErrTransactionRunnerRequired) {
+		t.Fatalf("expected ErrTransactionRunnerRequired, got %v", err)
+	}
+	if chars["char-1"].Color != corecharacter.DefaultColor {
+		t.Errorf("expected color unchanged, got %s", chars["char-1"].Color)
+	}
+}
+
+func TestSetCharacterColorUnknownCharacter(t *testing.T) {
+	chars := map[string]corecharacter.Character{}
+	svc, err := NewService(
+		newMockHomeRepo(chars),
+		&mockCharReader{chars: chars},
+		WithCharacterUpdater(&mockCharUpdater{chars: chars}),
+		WithTransactionRunner(&mockTransactionRunner{chars: chars}),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	if err := svc.SetCharacterColor(context.Background(), "missing", "#123456"); !errors.Is(err, ErrCharacterNotFound) {
+		t.Fatalf("expected ErrCharacterNotFound, got %v", err)
+	}
+}
+
+// rowLockTxProvider serializes transactions, which is what SELECT ... FOR UPDATE
+// does for a single character row.
+type rowLockTxProvider struct {
+	mu sync.Mutex
+}
+
+func (p *rowLockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return fn(ctx)
+}
+
+// barrierCharRepo pauses the first FindByIDForUpdate call after it has read the
+// character, so the test can start a concurrent reward while the color change
+// holds the row lock.
+type barrierCharRepo struct {
+	chars   map[string]corecharacter.Character
+	locked  chan struct{}
+	release chan struct{}
+	paused  bool
+}
+
+func (r *barrierCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	char, ok := r.chars[id]
+	if !ok {
+		return corecharacter.Character{}, corecharacter.ErrNotFound
+	}
+	return char, nil
+}
+
+func (r *barrierCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	char, err := r.FindByID(ctx, id)
+	if err != nil {
+		return char, err
+	}
+	if !r.paused {
+		r.paused = true
+		close(r.locked)
+		<-r.release
+	}
+	return char, nil
+}
+
+func (r *barrierCharRepo) Update(_ context.Context, char corecharacter.Character) error {
+	r.chars[char.ID] = char
+	return nil
+}
+
+type barrierInvRepo struct{}
+
+func (barrierInvRepo) FindByCharacterID(context.Context, string) (coreinventory.Inventory, error) {
+	return coreinventory.Inventory{}, nil
+}
+
+func (barrierInvRepo) FindByCharacterIDForUpdate(context.Context, string) (coreinventory.Inventory, error) {
+	return coreinventory.Inventory{}, nil
+}
+
+func (barrierInvRepo) Save(context.Context, coreinventory.Inventory) error {
+	return nil
+}
+
+func TestSetCharacterColorBarrierSerializesWithReward(t *testing.T) {
+	ctx := context.Background()
+	repo := &barrierCharRepo{
+		chars: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", PlayerID: "player-1", Name: "Hero", Money: 100, Color: corecharacter.DefaultColor},
+		},
+		locked:  make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	eco, err := economy.NewService(repo, barrierInvRepo{}, economy.WithTransactionProvider(&rowLockTxProvider{}))
+	if err != nil {
+		t.Fatalf("economy.NewService failed: %v", err)
+	}
+	svc, err := NewService(newMockHomeRepo(), repo, WithTransactionRunner(eco))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	colorErr := make(chan error, 1)
+	go func() {
+		colorErr <- svc.SetCharacterColor(ctx, "char-1", "#123456")
+	}()
+	select {
+	case <-repo.locked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("color change did not lock the character row")
+	}
+
+	rewardErr := make(chan error, 1)
+	go func() {
+		_, err := eco.ExecuteTransaction(ctx, economy.TransactionRequest{
+			CharacterID: "char-1",
+			Grant:       economy.ResourceGrant{Gold: 50},
+		}, func(*economy.TxContext) error { return nil })
+		rewardErr <- err
+	}()
+	close(repo.release)
+
+	if err := <-colorErr; err != nil {
+		t.Fatalf("SetCharacterColor failed: %v", err)
+	}
+	if err := <-rewardErr; err != nil {
+		t.Fatalf("reward transaction failed: %v", err)
+	}
+	got := repo.chars["char-1"]
+	if got.Money != 150 {
+		t.Errorf("expected money 150 after reward, got %d", got.Money)
+	}
+	if got.Color != "#123456" {
+		t.Errorf("expected color #123456, got %s", got.Color)
+	}
 }
