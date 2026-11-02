@@ -2,6 +2,7 @@ package alchemy_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"sync"
 	"testing"
@@ -161,6 +162,166 @@ func TestAlchemyIntegrationOvernightDepotSynthesis(t *testing.T) {
 	if comp.CraftedCount != 1 {
 		t.Errorf("expected crafted count 1, got %d", comp.CraftedCount)
 	}
+}
+
+// failingSynthesisStateRepo fails the synthesis state save so the rollback of the
+// depot consumption is checked against the real database.
+type failingSynthesisStateRepo struct {
+	alchemy.Repository
+}
+
+func (r failingSynthesisStateRepo) SaveSynthesisState(context.Context, alchemy.Synthesis) error {
+	return errors.New("synthesis state save failed")
+}
+
+func TestAlchemyIntegrationGearConsumptionAndRollback(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alcRepo, err := database.NewAlchemyRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	charService, err := character.NewService(charRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemCatalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipeCatalog, err := alchemy.InitialRecipeCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	simTime := time.Date(2026, 9, 12, 15, 0, 0, 0, timer.JST)
+
+	newService := func(t *testing.T, synthRepo alchemy.Repository) *alchemy.Service {
+		t.Helper()
+		svc, err := alchemy.NewService(
+			charRepo,
+			depotRepo,
+			synthRepo,
+			recipeCatalog,
+			itemCatalog,
+			alchemy.WithTransactionProvider(txProvider),
+			alchemy.WithNowFunc(func() time.Time { return simTime }),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc
+	}
+
+	// setup creates a character whose Depot holds two single-unit gear stacks for the
+	// recipe's first ingredient, followed by an unrelated herb stack.
+	setup := func(t *testing.T, recipeID string) (string, alchemy.Recipe) {
+		t.Helper()
+		player, err := database.CreateTestPlayer(ctx, db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		createdChar, err := charService.Create(ctx, player.ID, "AlchGear")
+		if err != nil {
+			t.Fatal(err)
+		}
+		recipe, err := recipeCatalog.FindByID(recipeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gear1, err := item.NewInstance(recipe.Ingredients[0].DefinitionID, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gear2, err := item.NewInstance(recipe.Ingredients[0].DefinitionID, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		herb, err := item.NewInstance("item-001", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dep, err := depot.NewDepot(createdChar.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dep.Items = []item.Instance{gear1, gear2, herb}
+		if err := depotRepo.Save(ctx, dep); err != nil {
+			t.Fatal(err)
+		}
+		return createdChar.ID, recipe
+	}
+
+	for _, recipeID := range []string{"recipe-043", "recipe-064", "recipe-065", "recipe-084"} {
+		t.Run(recipeID, func(t *testing.T) {
+			charID, recipe := setup(t, recipeID)
+			svc := newService(t, alcRepo)
+			if err := svc.UnlockRecipe(ctx, charID, recipeID); err != nil {
+				t.Fatalf("UnlockRecipe failed: %v", err)
+			}
+			if _, err := svc.Synthesize(ctx, charID, recipeID); err != nil {
+				t.Fatalf("Synthesize failed: %v", err)
+			}
+
+			saved, err := depotRepo.FindByCharacterID(ctx, charID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gearID := recipe.Ingredients[0].DefinitionID
+			if qty := saved.Quantity(gearID); qty != 0 {
+				t.Errorf("%s quantity = %d after reload, want 0", gearID, qty)
+			}
+			if qty := saved.Quantity("item-001"); qty != 1 {
+				t.Errorf("item-001 quantity = %d after reload, want 1", qty)
+			}
+		})
+	}
+
+	t.Run("recipe-043 rollback", func(t *testing.T) {
+		charID, recipe := setup(t, "recipe-043")
+		svc := newService(t, failingSynthesisStateRepo{alcRepo})
+		if err := svc.UnlockRecipe(ctx, charID, "recipe-043"); err != nil {
+			t.Fatalf("UnlockRecipe failed: %v", err)
+		}
+		if _, err := svc.Synthesize(ctx, charID, "recipe-043"); err == nil {
+			t.Fatal("Synthesize succeeded, want synthesis state save error")
+		}
+
+		saved, err := depotRepo.FindByCharacterID(ctx, charID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if qty := saved.Quantity(recipe.Ingredients[0].DefinitionID); qty != 2 {
+			t.Errorf("gear quantity = %d after rollback, want 2", qty)
+		}
+		if qty := saved.Quantity("item-001"); qty != 1 {
+			t.Errorf("item-001 quantity = %d after rollback, want 1", qty)
+		}
+		state, err := alcRepo.GetSynthesisState(ctx, charID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state.State == alchemy.StateOngoing {
+			t.Errorf("synthesis state = %v after rollback, want not ongoing", state.State)
+		}
+	})
 }
 
 func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
