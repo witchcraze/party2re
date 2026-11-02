@@ -278,6 +278,239 @@ func TestSynthesize_RequiresZeroGoldFeeAndConsumesFromDepot(t *testing.T) {
 	}
 }
 
+func TestSynthesize_ConsumesEveryGearInstanceBeforeStarting(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 12, 14, 0, 0, 0, timer.JST)
+	charRepo := newMemoryCharRepo()
+	depotRepo := newMemoryDepotRepo()
+	alchemyRepo := newMemoryAlchemyRepo()
+
+	char, _ := corecharacter.New("Alchem")
+	charRepo.characters[char.ID] = char
+
+	herb, _ := coreitem.NewDefinition("item-001", "Herb", 30)
+	blade, _ := coreitem.NewEquipmentDefinition("weapon-06", "Blade", 100, coreitem.SlotMainHand)
+	product, _ := coreitem.NewDefinition("item-002", "Super Herb", 100)
+	itemCatalog, _ := coreitem.NewCatalog([]coreitem.Definition{herb, blade, product})
+	recipe, _ := NewRecipe("rec-blade-fusion", "Fuse Blades", "item-002", 1, []Ingredient{{"weapon-06", 2}})
+	recipeCatalog, _ := NewRecipeCatalog([]Recipe{recipe})
+	svc, err := NewService(charRepo, depotRepo, alchemyRepo, recipeCatalog, itemCatalog, WithNowFunc(func() time.Time {
+		return now
+	}))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	if err := svc.UnlockRecipe(ctx, char.ID, "rec-blade-fusion"); err != nil {
+		t.Fatalf("UnlockRecipe failed: %v", err)
+	}
+
+	// Two identical gear instances followed by an unrelated item: the second
+	// gear slot must not be skipped when the first one is removed.
+	blade1, _ := coreitem.NewInstance("weapon-06", 1)
+	blade2, _ := coreitem.NewInstance("weapon-06", 1)
+	herbStack, _ := coreitem.NewInstance("item-001", 1)
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Items = []coreitem.Instance{blade1, blade2, herbStack}
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatalf("Save depot failed: %v", err)
+	}
+
+	if _, err := svc.Synthesize(ctx, char.ID, "rec-blade-fusion"); err != nil {
+		t.Fatalf("Synthesize failed: %v", err)
+	}
+
+	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	if qty := updatedDepot.Quantity("weapon-06"); qty != 0 {
+		t.Errorf("weapon-06 quantity = %d, want 0", qty)
+	}
+	if qty := updatedDepot.Quantity("item-001"); qty != 1 {
+		t.Errorf("item-001 quantity = %d, want 1", qty)
+	}
+}
+
+func TestSynthesize_ConsumesEveryGearInstanceForRealRecipes(t *testing.T) {
+	ctx := context.Background()
+	recipeCatalog, err := InitialRecipeCatalog()
+	if err != nil {
+		t.Fatalf("InitialRecipeCatalog failed: %v", err)
+	}
+
+	for _, recipeID := range []string{"recipe-043", "recipe-064", "recipe-065", "recipe-084"} {
+		t.Run(recipeID, func(t *testing.T) {
+			recipe, err := recipeCatalog.FindByID(recipeID)
+			if err != nil {
+				t.Fatalf("FindByID failed: %v", err)
+			}
+			gearID := recipe.Ingredients[0].DefinitionID
+
+			depotRepo := newMemoryDepotRepo()
+			alchemyRepo := newMemoryAlchemyRepo()
+			svc, char := newConsumptionTestService(t, alchemyRepo, depotRepo, recipe)
+			if err := svc.UnlockRecipe(ctx, char.ID, recipeID); err != nil {
+				t.Fatalf("UnlockRecipe failed: %v", err)
+			}
+
+			gear1, _ := coreitem.NewInstance(gearID, 1)
+			gear2, _ := coreitem.NewInstance(gearID, 1)
+			herbStack, _ := coreitem.NewInstance("item-001", 1)
+			dep, _ := depot.NewDepot(char.ID)
+			dep.Items = []coreitem.Instance{gear1, gear2, herbStack}
+			if err := depotRepo.Save(ctx, dep); err != nil {
+				t.Fatalf("Save depot failed: %v", err)
+			}
+
+			if _, err := svc.Synthesize(ctx, char.ID, recipeID); err != nil {
+				t.Fatalf("Synthesize failed: %v", err)
+			}
+
+			updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+			if qty := updatedDepot.Quantity(gearID); qty != 0 {
+				t.Errorf("%s quantity = %d, want 0", gearID, qty)
+			}
+			if qty := updatedDepot.Quantity("item-001"); qty != 1 {
+				t.Errorf("item-001 quantity = %d, want 1", qty)
+			}
+		})
+	}
+}
+
+func newConsumptionTestService(t *testing.T, alchemyRepo Repository, depots DepotRepository, recipes ...Recipe) (*Service, *corecharacter.Character) {
+	t.Helper()
+	now := time.Date(2026, 9, 12, 14, 0, 0, 0, timer.JST)
+	charRepo := newMemoryCharRepo()
+
+	char, _ := corecharacter.New("Alchem")
+	charRepo.characters[char.ID] = char
+
+	herb, _ := coreitem.NewDefinition("item-001", "Herb", 30)
+	blade, _ := coreitem.NewEquipmentDefinition("weapon-06", "Blade", 100, coreitem.SlotMainHand)
+	product, _ := coreitem.NewDefinition("item-002", "Super Herb", 100)
+	itemCatalog, _ := coreitem.NewCatalog([]coreitem.Definition{herb, blade, product})
+	recipeCatalog, _ := NewRecipeCatalog(recipes)
+	svc, err := NewService(charRepo, depots, alchemyRepo, recipeCatalog, itemCatalog, WithNowFunc(func() time.Time {
+		return now
+	}))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	return svc, &char
+}
+
+func TestSynthesize_ConsumesMultiQuantityStacksInIngredientOrder(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := newMemoryDepotRepo()
+	alchemyRepo := newMemoryAlchemyRepo()
+	recipe, _ := NewRecipe("rec-blade-herb", "Blade and Herb", "item-002", 1, []Ingredient{{"item-001", 3}, {"weapon-06", 2}})
+	svc, char := newConsumptionTestService(t, alchemyRepo, depotRepo, recipe)
+	if err := svc.UnlockRecipe(ctx, char.ID, "rec-blade-herb"); err != nil {
+		t.Fatalf("UnlockRecipe failed: %v", err)
+	}
+
+	// Herb comes first in the recipe and its 3 units span two slots. Removing the
+	// first slot must not hide the second herb slot from the loop, and the blade
+	// stack must give up only the 2 units the recipe needs.
+	bladeStack, _ := coreitem.NewInstance("weapon-06", 3)
+	herbSlot1, _ := coreitem.NewInstance("item-001", 1)
+	herbSlot2, _ := coreitem.NewInstance("item-001", 2)
+	bladeSingle, _ := coreitem.NewInstance("weapon-06", 1)
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Items = []coreitem.Instance{bladeStack, herbSlot1, herbSlot2, bladeSingle}
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatalf("Save depot failed: %v", err)
+	}
+
+	if _, err := svc.Synthesize(ctx, char.ID, "rec-blade-herb"); err != nil {
+		t.Fatalf("Synthesize failed: %v", err)
+	}
+
+	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	if qty := updatedDepot.Quantity("item-001"); qty != 0 {
+		t.Errorf("item-001 quantity = %d, want 0", qty)
+	}
+	if qty := updatedDepot.Quantity("weapon-06"); qty != 2 {
+		t.Errorf("weapon-06 quantity = %d, want 2", qty)
+	}
+}
+
+func TestSynthesize_RejectsShortfallAcrossDuplicateIngredients(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := newMemoryDepotRepo()
+	alchemyRepo := newMemoryAlchemyRepo()
+	// Each entry passes the upfront check on its own (3 >= 2), but together they
+	// need 4 blades and the depot holds 3.
+	recipe, _ := NewRecipe("rec-blade-pair", "Blade Pair", "item-002", 1, []Ingredient{{"weapon-06", 2}, {"weapon-06", 2}})
+	svc, char := newConsumptionTestService(t, alchemyRepo, depotRepo, recipe)
+	if err := svc.UnlockRecipe(ctx, char.ID, "rec-blade-pair"); err != nil {
+		t.Fatalf("UnlockRecipe failed: %v", err)
+	}
+
+	blade, _ := coreitem.NewInstance("weapon-06", 3)
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Items = []coreitem.Instance{blade}
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatalf("Save depot failed: %v", err)
+	}
+
+	_, err := svc.Synthesize(ctx, char.ID, "rec-blade-pair")
+	if !errors.Is(err, ErrInsufficientMaterials) {
+		t.Fatalf("expected ErrInsufficientMaterials, got %v", err)
+	}
+
+	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	if qty := updatedDepot.Quantity("weapon-06"); qty != 3 {
+		t.Errorf("weapon-06 quantity = %d, want 3 after rejected synthesis", qty)
+	}
+	state, _ := alchemyRepo.GetSynthesisState(ctx, char.ID)
+	if state.State == StateOngoing {
+		t.Errorf("synthesis state = %v after rejected synthesis, want not ongoing", state.State)
+	}
+}
+
+// failingSaveDepotRepo fails every depot save so the rollback path can be checked.
+type failingSaveDepotRepo struct {
+	*memoryDepotRepo
+}
+
+func (r *failingSaveDepotRepo) Save(context.Context, depot.Depot) error {
+	return errors.New("depot save failed")
+}
+
+func TestSynthesize_RollsBackWhenDepotSaveFails(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := &failingSaveDepotRepo{memoryDepotRepo: newMemoryDepotRepo()}
+	alchemyRepo := newMemoryAlchemyRepo()
+	recipe, _ := NewRecipe("rec-blade-fusion", "Fuse Blades", "item-002", 1, []Ingredient{{"weapon-06", 2}})
+	svc, char := newConsumptionTestService(t, alchemyRepo, depotRepo, recipe)
+	if err := svc.UnlockRecipe(ctx, char.ID, "rec-blade-fusion"); err != nil {
+		t.Fatalf("UnlockRecipe failed: %v", err)
+	}
+
+	blade1, _ := coreitem.NewInstance("weapon-06", 1)
+	blade2, _ := coreitem.NewInstance("weapon-06", 1)
+	herbStack, _ := coreitem.NewInstance("item-001", 1)
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Items = []coreitem.Instance{blade1, blade2, herbStack}
+	if err := depotRepo.memoryDepotRepo.Save(ctx, dep); err != nil {
+		t.Fatalf("Save depot failed: %v", err)
+	}
+
+	if _, err := svc.Synthesize(ctx, char.ID, "rec-blade-fusion"); err == nil {
+		t.Fatal("Synthesize succeeded, want depot save error")
+	}
+
+	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	if qty := updatedDepot.Quantity("weapon-06"); qty != 2 {
+		t.Errorf("weapon-06 quantity = %d, want 2 after failed save", qty)
+	}
+	if qty := updatedDepot.Quantity("item-001"); qty != 1 {
+		t.Errorf("item-001 quantity = %d, want 1 after failed save", qty)
+	}
+	state, _ := alchemyRepo.GetSynthesisState(ctx, char.ID)
+	if state.State == StateOngoing {
+		t.Errorf("synthesis state = %v after failed save, want not ongoing", state.State)
+	}
+}
+
 func TestSynthesize_FailsWhenMaterialsMissing(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()

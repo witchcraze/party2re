@@ -266,7 +266,9 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 		// Consume materials from Depot
 		for _, ing := range recipe.Ingredients {
 			needed := ing.Quantity
-			for _, inst := range dep.Items {
+			// Range over a snapshot: Consume removes emptied slots from dep.Items in place,
+			// which would shift the next entry past the range cursor and skip it.
+			for _, inst := range append([]coreitem.Instance(nil), dep.Items...) {
 				if inst.DefinitionID == ing.DefinitionID && inst.Quantity > 0 {
 					toTake := inst.Quantity
 					if toTake > needed {
@@ -280,6 +282,9 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 						break
 					}
 				}
+			}
+			if needed > 0 {
+				return ErrInsufficientMaterials
 			}
 		}
 
