@@ -134,12 +134,19 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if !exp.ContainsCharacter(actor) {
 			return nil, errors.New("dungeon activity ownership mismatch")
 		}
-		a := playercontext.Activity{Kind: "dungeon", ID: exp.ID, PartyID: exp.PartyID, Phase: string(exp.Status), Role: "actor", Round: exp.CurrentFloor, Actions: []string{}}
+		a := playercontext.Activity{Kind: "dungeon", ID: exp.ID, Revision: exp.Revision, PartyID: exp.PartyID, Phase: string(exp.Status), Role: "actor", Round: exp.CurrentFloor, Actions: []string{}}
 		if exp.CharacterID != actor {
 			a.Role = "member"
 		}
-		if exp.CharacterID == actor && exp.Status == dungeon.StatusExploring {
-			a.Actions = []string{"dungeon_move", "dungeon_escape"}
+		controls := exp.Controls(actor)
+		if controls.CanMove {
+			a.Actions = append(a.Actions, "dungeon_move")
+		}
+		if controls.CanFight {
+			a.Actions = append(a.Actions, "dungeon_fight")
+		}
+		if controls.CanEscape {
+			a.Actions = append(a.Actions, "dungeon_escape")
 		}
 		// Terminal buffers still require their owner to finish settlement.
 		facts = append(facts, a)

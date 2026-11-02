@@ -3888,6 +3888,31 @@
               "type": "object",
               "properties": {
                 "action": {
+                  "const": "dungeon_fight"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": []
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
                   "const": "dungeon_escape"
                 }
               },
@@ -5731,6 +5756,9 @@
           },
           "casino": {
             "$ref": "#/components/schemas/CasinoRoomSceneData"
+          },
+          "dungeon": {
+            "$ref": "#/components/schemas/DungeonExpeditionObservation"
           }
         },
         "required": [
@@ -11910,18 +11938,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "DungeonMapResponse": {
-        "properties": {
-          "map_view": {
-            "$ref": "#/components/schemas/DungeonMapView"
-          }
-        },
-        "required": [
-          "map_view"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "DungeonMapView": {
         "properties": {
           "bonus_reason": {
@@ -11947,15 +11963,9 @@
               "items": {
                 "type": "string"
               },
-              "type": [
-                "array",
-                "null"
-              ]
+              "type": "array"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           }
         },
         "required": [
@@ -15470,6 +15480,100 @@
           "blessing",
           "status"
         ]
+      },
+      "DungeonContinuationControls": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "can_move": {
+            "type": "boolean"
+          },
+          "can_fight": {
+            "type": "boolean"
+          },
+          "can_escape": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_move",
+          "can_fight",
+          "can_escape"
+        ]
+      },
+      "DungeonExpeditionObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "leader_id": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "dungeon_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "current_floor": {
+            "type": "integer"
+          },
+          "turns_remaining": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "exploring",
+              "cleared",
+              "escaped",
+              "wiped_out"
+            ]
+          },
+          "map": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DungeonMapView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "directions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "north",
+                "south",
+                "east",
+                "west"
+              ]
+            }
+          },
+          "controls": {
+            "$ref": "#/components/schemas/DungeonContinuationControls"
+          }
+        },
+        "required": [
+          "id",
+          "leader_id",
+          "dungeon_id",
+          "revision",
+          "current_floor",
+          "turns_remaining",
+          "status",
+          "map",
+          "directions",
+          "controls"
+        ],
+        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Directions use the selected floor geometry, not catalog categories. No private roster inventory, event flags or provisional rewards."
       }
     },
     "securitySchemes": {

@@ -228,8 +228,12 @@ func (s *Service) startRoster(
 
 		var itemIDs []string
 		if s.invRepo != nil {
-			if inv, err := s.invRepo.FindByCharacterID(ctx, char.ID); err == nil {
-				for _, it := range inv.Items {
+			inv, err := s.invRepo.FindByCharacterID(ctx, char.ID)
+			if err != nil {
+				return nil, err
+			}
+			for _, it := range inv.Items {
+				if it.Quantity > 0 {
 					itemIDs = append(itemIDs, it.DefinitionID)
 				}
 			}

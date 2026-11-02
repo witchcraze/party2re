@@ -14,6 +14,7 @@ var continuationCatalog = []ActionDefinition{
 	{ID: "gvg_advance", Label: "ギルド戦を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "expected_round"}, ActivityKind: "gvg"},
 	{ID: "gvg_leave", Label: "ギルド戦部屋を離れる", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "gvg", Recovery: true},
 	{ID: "dungeon_move", Label: "探索を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"direction"}, ActivityKind: "dungeon"},
+	{ID: "dungeon_fight", Label: "探索の戦闘を続ける", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{}, ActivityKind: "dungeon"},
 	{ID: "dungeon_escape", Label: "探索から脱出する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{}, ActivityKind: "dungeon", Recovery: true},
 	{ID: "challenge_advance", Label: "試練を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"session_id"}, ActivityKind: "challenge"},
 	{ID: "challenge_retire", Label: "試練から退出する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"session_id", "expected_revision"}, ActivityKind: "challenge", Recovery: true},

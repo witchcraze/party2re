@@ -85,9 +85,25 @@ encounter is not generated on resume. This remains batch combat, rather than
 legacy per-character action dispatch: per-batch tension, stat-buff and action
 scheduling internals are not a full legacy lifetime snapshot.
 That generic event model does not reproduce all legacy map-owned events.
-Its turn-limit wipeout, trap bases, treasure generation, and party scouting
+Its turn-limit wipeout, trap bases and treasure generation
 need comparison with the behavior above; they are implementation differences,
 not canonical rules inferred from the Go catalog.
+
+Current map observation uses the acting member's saved job and nonempty run
+inventory. An empty or omitted saved `item_ids` cannot distinguish no items
+from a run created without inventory discovery, so observation requires a fresh
+read of that actor's inventory. A missing reader or failed read returns no map;
+observation never fills or rewrites the saved roster. Older solo buffers also
+require the actor's character read. Canonical
+`job-09/job-26/job-27/job-79` and `item-197` identities and compatible aliases
+are recognized. A party member's bonus does not expand another actor's view.
+Required-source or invalid-geometry failures return no partial map.
+Context includes actor-visible cells and actual legal directions, never the full
+floor grid or private event/reward buffers. Member discovery uses the canonical
+run reference; no lobby lifetime grants access. Saved enemies suppress movement,
+and terminal buffers preserve their frozen outcome for leader-only settlement
+retry through Fight or Escape. Observation performs neither operation.
+See the [context contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract).
 
 Active state is no longer mastered by a SQL `dungeon_active_expeditions` table.
 See [run-state architecture](../architecture/transient-run-state.md),
@@ -141,10 +157,9 @@ visibility is a different map rule.
 [The modular Dungeon OpenAPI](../api/paths/dungeon.json) owns current transport
 schemas. Runtime follow-ups update it and regenerate artifacts when their
 public contract changes; this decision adds no working route or schema field.
-[#1052](https://github.com/witchcraze/party2re/issues/1052) owns actor scouting,
-required-read failures and Gateway observation migration independently of native
-map implementation. Its reads must consume the selected map's projection rather
-than infer event types from catalog letters. Existing leader-only commands stay
+Current actor scouting and Gateway observations are described above. Native
+map reads must extend the selected map's projection rather than infer event
+types from catalog letters. Existing leader-only commands stay
 in place; participant commands and individual exit need a separately approved
 contract, not an incidental authorization change in the map implementation.
 The [Dungeon Guidance index](../../.arch/modules/dungeon.json) continues to
@@ -167,7 +182,7 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 | `きた` → `kita` (`39,41,70`) | `Move(north)`, same route. |
 | `みなみ` → `minami` (`39,42,71`) | `Move(south)`, same route. |
 | `ひがし` → `higashi` (`39,43,72`) | `Move(east)`, same route. |
-| `ちず` → `chizu` (`39,44,114–129`) | `ViewMap`, GET `.../dungeons/map`; actor visibility and Gateway work owned by #1052. |
+| `ちず` → `chizu` (`39,44,114–129`) | `ObserveExpedition`, GET `/api/v1/characters/{id}/context` and command refresh; actor-only visibility. The standalone map GET is retired. |
 | Treasure `しらべる` → `shiraberu(target)` (`45–48`; `_npc_action.cgi:6–84`) | Deferred native treasure-inspection contract, including per-actor eligibility and item delivery. Generic `T` automatic rewards do not implement it. No connected native inspect endpoint is claimed. |
 | `add_battle_action2` → map16 `さいくつ` → `saikutu` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Deferred map16 explicit mining use case; no current command replacement. |
 | Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Existing `Escape`, POST `.../dungeons/escape`; map0 verifies availability after exhaustion and stock preservation. Per-character departure, fatigue and exit equipment effects remain unverified/deferred; whole-party Escape is not equivalent. |
@@ -214,7 +229,7 @@ untestable unused framework. It does not replace the existing catalog.
 - Hidden passage is traversable but uses the wall appearance within the actor's
   visible radius, before and after crossing; center marker and out-of-bounds
   rendering remain correct. Read observations cannot reveal it through private
-  event metadata or mutate the run. Scouting policy remains #1052's scope.
+  event metadata or mutate the run. Preserve the actor-only scouting policy above.
 - Exercise the existing Memory and Valkey transition adapters; assert event/
   round/reward consistency across save/reload and stale updates. Verify unchanged
   behavior for existing catalog runs. Use the existing finalizer for exit tests,

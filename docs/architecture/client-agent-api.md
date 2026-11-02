@@ -286,6 +286,23 @@ Dungeon/Challenge discovery uses the consented
 An enrolled follower observes `role:member`;
 membership never authorizes executing the controlling actor's commands.
 
+Dungeon activity details use one owned expedition snapshot for visible map,
+floor, remaining turns, revision and legal cardinal directions. Scouting and
+goggles belong only to the viewing actor; roster inventories, undiscovered
+events and provisional rewards stay private. Missing required run, reward,
+member-reference or map-enrichment reads fail the observation. An absent or
+changed run/revision between activity and detail reads also fails, so stale
+continuation eligibility cannot be combined with a replacement run.
+Exploring leaders receive movement candidates only without an encounter and
+with turns remaining; saved enemies instead permit Fight and Escape. Terminal
+buffers expose their frozen outcome, a null map, and Fight/Escape settlement
+retry candidates. Followers receive the actor-visible map without leader
+controls. Generic town-entry and unfinished-work gates do not reject these
+verified continuations; conflicts retain only recovery/escape choices.
+These Dungeon candidates remain unconnected in the Gateway. The replaced
+standalone map GET is retired; catalog listing and all mutation REST routes
+remain available. GET/refresh never advances, escapes or settles the expedition.
+
 The [Challenge individual-exit boundary](transient-run-state.md#challenge-participant-exit-target)
 uses current roster/leadership and durable pending-publication facts.
 `challenge_retire` is scoped to the authenticated actor with explicit `session_id` and
@@ -514,7 +531,7 @@ authority; it makes no combat, wager or settlement formula parity claim.
 | `lib/vs_player.cgi:32–41`, `vs_guild.cgi:31–38`: `かいし`, pre-round `しらべる` and PvP `ぱーてぃー` | GetCharacterRoom verifies actor membership; leader start/advance and phase-legal leave/team candidates correspond to existing PvP/GvG services and retained character room routes. Detail/party inspection and full mutation migration remain #948. |
 | `lib/_casino.cgi:10–32,100–111`: `にげる`, `すくしょ`, `かいし`, `さそう`, leader `きっく`; delegated game actions | Casino.GetCharacterRoomView reuses owned admitted GetRoomView; context composes masked detail and role/phase choices. Leave/start/kick/turn candidates refer to retained service operations; mutation connection remains #949. Invitation/screenshot have no Casino service replacements and remain explicit #949/#140 reconciliation. |
 | `lib/casino_indian.cgi:10–16`: `つづける`, `しょうぶ`, `おりる`; `casino_highlow.cgi:10–27`: `つづける`, `ハイ`, conditional `ロウ`, `おりる`; `casino_doppel.cgi:10–15`: generated marks | Existing PlayRoomAction delegates to each game service. Context supplies service-owned game choices and visibility; legacy/current menu differences are recorded in the [scoped Casino mapping](../design/casino.md#scoped-legacy-dispatch-reconciliation). Gateway mutation connection remains #949; existing REST action route stays available. |
-| `lib/vs_dungeon.cgi:33–48`: leader initial `すすむ`, `にし`, `きた`, `みなみ`, `ひがし`, `ちず`, treasure `しらべる` | Owned GetActiveExpedition supplies phase/floor; Move and Escape remain existing REST operations and unconnected continuation candidates. Current StartPartyExpedition/Move bundle initialization/tile resolution; separate initial advance/treasure observation is not a verified replacement. Map, treasure and per-turn battle/action reconciliation remain #948. |
+| `lib/vs_dungeon.cgi:33–48`: leader initial `すすむ`, `にし`, `きた`, `みなみ`, `ひがし`, `ちず`, treasure `しらべる` | Owned ObserveExpedition supplies actor-visible map, floor/revision/turn facts and verified direction/Fight/Escape candidates. Standalone map GET is replaced by context; catalog listing and Move/Fight/Escape REST remain. Current StartPartyExpedition/Move bundle initialization/tile resolution; native initial advance/treasure inspection remains under the [Dungeon action mapping](../design/dungeon.md#legacy-action-reconciliation), and per-participant combat/exit remains #1204. |
 | `lib/vs_challenge.cgi:20–46`: treasure `しらべる`, phase-dependent `すすむ` | Owned GetActiveSession supplies phase/round; AdvanceRound remains the retained character challenge advance operation and unconnected candidate. Treasure/battle/party detail reconciliation remains #948. |
 | `lib/_skill.cgi:158` → `lib/_battle.cgi:1184–1222,1330–1346`: participant `にげる` | Gateway `challenge_retire` → `Challenge.Service.ExitSession` settles the caller, preserves survivors and hands leadership to the first remaining member; last exit ends the run. Shared settlement owns resource/consumption/reward/record/fullness effects. |
 | Inherited `lib/_skill.cgi:22–29,78–79,282–317`: spectator `ささやき`/`にげる`/`すくしょ`, generated job/custom skills and `すとっく`, then `add_battle_action` | Shared member/spectator dispatch is inspected only to establish activity authority. No generated skill menu or per-turn battle command is replaced here; skill/stock/combat and battle spectator reconciliation remain #948, screenshot/social presentation #949/#140. Existing feature and battle operations stay registered. |

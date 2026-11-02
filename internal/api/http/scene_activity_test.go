@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -35,6 +36,11 @@ func TestActiveScenesOverrideSelectionAndNeverMutate(t *testing.T) {
 			opts := []Option{WithPlayerContext(pc)}
 			if kind == "casino" {
 				opts = append(opts, WithCasino(&casinoActivityProjection{view: &casino.RoomView{Room: casino.RoomObservation{RoomSummary: casino.RoomSummary{ID: "active", GameType: casino.GameTypeIndian, Status: casino.RoomStatusInProgress}}, Members: []casino.MemberObservation{{CharacterID: "hero", Action: "fold"}}}}))
+			}
+			if kind == "dungeon" {
+				opts = append(opts, WithDungeon(&dungeonSceneFixture{observeExpeditionFn: func(context.Context, string) (*dungeon.ExpeditionObservation, error) {
+					return &dungeon.ExpeditionObservation{ID: "active", LeaderID: "leader", Status: "in_progress", Directions: []dungeon.Direction{}}, nil
+				}}))
 			}
 			router := f.router("rescue_request", timer.NewService(nil), opts...)
 			status, observed := navigationGET(t, router)

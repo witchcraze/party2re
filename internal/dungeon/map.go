@@ -2,6 +2,7 @@ package dungeon
 
 import (
 	"context"
+	"fmt"
 	"strings"
 )
 
@@ -18,7 +19,7 @@ type MapView struct {
 func isScoutingJob(jobID string) bool {
 	j := strings.ToLower(strings.TrimSpace(jobID))
 	switch j {
-	case "9", "26", "27", "79", "thief", "ninja", "geomancer", "ranger", "盗賊", "忍者", "風水師", "レンジャー":
+	case "job-09", "job-26", "job-27", "job-79", "9", "26", "27", "79", "thief", "ninja", "geomancer", "ranger", "盗賊", "忍者", "風水師", "レンジャー":
 		return true
 	default:
 		return strings.Contains(j, "thief") || strings.Contains(j, "ninja") || strings.Contains(j, "geomancer") || strings.Contains(j, "ranger")
@@ -28,31 +29,15 @@ func isScoutingJob(jobID string) bool {
 func hasScopeGoggles(itemIDs []string) bool {
 	for _, it := range itemIDs {
 		lower := strings.ToLower(strings.TrimSpace(it))
-		if lower == "197" || lower == "scope_goggles" || strings.Contains(lower, "scope") || strings.Contains(lower, "スコープ") {
+		if lower == "item-197" || lower == "197" || lower == "scope_goggles" || strings.Contains(lower, "scope") || strings.Contains(lower, "スコープ") {
 			return true
 		}
 	}
 	return false
 }
 
-// ViewMap renders the surrounding dungeon grid (legacy vs_dungeon.cgi: @ちず).
-// Base view radius is 1 (3x3 grid). If any party member is a Thief (9), Ninja (26),
-// Geomancer (27), or Ranger (79), the view radius expands by +1. If any party member
-// possesses Scope Goggles (Item 197), the view radius expands by +1. When both apply,
-// the view radius stacks to 3 (7x7 grid).
-func (s *Service) ViewMap(ctx context.Context, characterID string) (MapView, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return MapView{}, ErrCharacterNotFound
-	}
-
-	exp, err := s.GetActiveExpedition(ctx, characterID)
-	if err != nil {
-		return MapView{}, err
-	}
-	if exp == nil || exp.Status != StatusExploring {
-		return MapView{}, ErrNoActiveExpedition
-	}
-
+// viewMap projects one owned snapshot; bonuses belong to the viewing actor.
+func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveExpedition) (MapView, error) {
 	dungeon, ok := s.dungeonMap[exp.DungeonID]
 	if !ok {
 		return MapView{}, ErrDungeonNotFound
@@ -63,44 +48,61 @@ func (s *Service) ViewMap(ctx context.Context, characterID string) (MapView, err
 		return MapView{}, ErrDungeonNotFound
 	}
 	floor := dungeon.Floors[floorIdx]
+	if floor.Width <= 0 || floor.Height <= 0 || len(floor.Grid) != floor.Height || exp.PosX < 0 || exp.PosX >= floor.Width || exp.PosY < 0 || exp.PosY >= floor.Height {
+		return MapView{}, fmt.Errorf("invalid dungeon map geometry")
+	}
+	for _, row := range floor.Grid {
+		if len(row) != floor.Width {
+			return MapView{}, fmt.Errorf("invalid dungeon map row")
+		}
+	}
 
 	hasScoutJob := false
 	scoutReason := ""
 	hasGoggles := false
 	goggleReason := ""
+	actorFound := false
+	needsInventory := true
 
-	// Check party members for scouting job and scope goggles
+	// Saved inventory belongs to this run; another member cannot lend visibility.
 	for _, m := range exp.Members {
-		if !hasScoutJob && isScoutingJob(m.JobID) {
-			hasScoutJob = true
-			scoutReason = "Scouting Job (" + m.JobID + "): " + m.Name
+		if m.CharacterID != characterID {
+			continue
 		}
-		if !hasGoggles && hasScopeGoggles(m.ItemIDs) {
-			hasGoggles = true
-			goggleReason = "Item 197 (Scope Goggles): " + m.Name
-		}
-		if hasScoutJob && hasGoggles {
-			break
-		}
+		actorFound = true
+		hasScoutJob = isScoutingJob(m.JobID)
+		hasGoggles = hasScopeGoggles(m.ItemIDs)
+		needsInventory = len(m.ItemIDs) == 0
+		scoutReason = "Scouting Job (" + m.JobID + "): " + m.Name
+		goggleReason = "Item 197 (Scope Goggles): " + m.Name
+	}
+	if len(exp.Members) > 0 && !actorFound {
+		return MapView{}, ErrExpeditionStateChanged
 	}
 
-	// Fallback check if solo without members populated
+	// Older solo buffers have no roster; their required sources must still succeed.
 	if len(exp.Members) == 0 {
-		if char, cErr := s.characterRepo.FindByID(ctx, characterID); cErr == nil {
-			if !hasScoutJob && isScoutingJob(char.JobID) {
-				hasScoutJob = true
-				scoutReason = "Scouting Job (" + char.JobID + "): " + char.Name
-			}
-			if !hasGoggles && s.invRepo != nil {
-				if inv, iErr := s.invRepo.FindByCharacterID(ctx, characterID); iErr == nil {
-					for _, it := range inv.Items {
-						if hasScopeGoggles([]string{it.DefinitionID}) {
-							hasGoggles = true
-							goggleReason = "Item 197 (Scope Goggles): " + char.Name
-							break
-						}
-					}
-				}
+		char, err := s.characterRepo.FindByID(ctx, characterID)
+		if err != nil {
+			return MapView{}, err
+		}
+		hasScoutJob = isScoutingJob(char.JobID)
+		scoutReason = "Scouting Job (" + char.JobID + "): " + char.Name
+		goggleReason = "Item 197 (Scope Goggles): " + char.Name
+	}
+	// Empty item_ids also encodes older runs whose inventory was never read.
+	if needsInventory {
+		if s.invRepo == nil {
+			return MapView{}, fmt.Errorf("dungeon inventory reader not configured")
+		}
+		inv, err := s.invRepo.FindByCharacterID(ctx, characterID)
+		if err != nil {
+			return MapView{}, err
+		}
+		for _, it := range inv.Items {
+			if it.Quantity > 0 && hasScopeGoggles([]string{it.DefinitionID}) {
+				hasGoggles = true
+				break
 			}
 		}
 	}

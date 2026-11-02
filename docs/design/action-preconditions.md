@@ -116,6 +116,14 @@ The ephemeral navigation record is an approved simplicity trade-off, not a new
 durable Core Character location. Legacy presence/log effects remain explicit
 reconciliation work in each owning migration.
 
+Dungeon continuation discovery uses the canonical run and saved encounter:
+leaders may move only without enemies and with turns remaining, or Fight/Escape
+while an encounter persists. Terminal buffers allow frozen-outcome settlement
+retry through Fight/Escape; followers have no leader continuation controls.
+These are read-only eligibility facts, independent of ordinary facility selection.
+The [Dungeon observation contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract)
+owns the projection and transport boundary.
+
 ---
 
 ## 3. Gate Flags
