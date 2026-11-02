@@ -122,7 +122,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		ID:             "chapel_pray",
 		Label:          "礼拝堂で祈る（祈願）",
 		Category:       "home",
-		OperationID:    "prayAtChapel",
+		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"blessing"},
 		// Note: Daily blessing prayer is free and does not require wallet gold.
 		RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck,

@@ -121,9 +121,9 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 			Method:      http.MethodPost,
 			PathPattern: "/characters/%s/home/wake",
 		},
-		"chapel_bless": {
+		"chapel_pray": {
 			Method:      http.MethodPost,
-			PathPattern: "/characters/%s/chapel/bless",
+			PathPattern: "/api/v1/characters/%s/actions",
 		},
 		"wishingwell_exchange": {
 			Method:      http.MethodPost,

@@ -23,6 +23,34 @@ type ChapelService interface {
 func WithChapel(c ChapelService) Option {
 	return func(h *Handler) {
 		h.chapel = c
+		if c == nil {
+			withActionCommand[prayChapelRequest]("chapel_pray", nil, nil)(h)
+			return
+		}
+		withActionCommand("chapel_pray", func(ctx context.Context, actorID string, params prayChapelRequest) (any, error) {
+			kind, err := chapel.ParseBlessingType(params.Blessing)
+			if err != nil || kind == chapel.BlessingNone {
+				return nil, chapel.ErrInvalidBlessing
+			}
+			blessing, err := c.SelectBlessing(ctx, actorID, kind)
+			if err != nil {
+				return nil, err
+			}
+			return chapelBlessingResponse{Blessing: blessing}, nil
+		}, chapelActionRejection)(h)
+	}
+}
+
+func chapelActionRejection(err error) (int, ErrorDetail) {
+	switch {
+	case errors.Is(err, chapel.ErrInvalidBlessing):
+		return http.StatusBadRequest, ErrorDetail{Code: "CHAPEL_INVALID_BLESSING", Message: "Select a valid prayer."}
+	case errors.Is(err, chapel.ErrAlreadyPrayed):
+		return http.StatusConflict, ErrorDetail{Code: "CHAPEL_ALREADY_PRAYED", Message: chapel.MsgAlreadyPrayed}
+	case errors.Is(err, chapel.ErrInvalidCharacterID):
+		return http.StatusBadRequest, ErrorDetail{Code: "CHAPEL_INVALID_CHARACTER_ID", Message: "Invalid chapel character ID."}
+	default:
+		return 0, ErrorDetail{}
 	}
 }
 

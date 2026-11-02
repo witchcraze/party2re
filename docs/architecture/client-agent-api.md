@@ -150,7 +150,7 @@ selection and paging. Navigation commands have no price, fatigue, scheduled
 cooldown or implicit feature mutation. Recovery and active-session restrictions
 still apply: browsing cannot bypass sleep or abandon a run.
 
-The registry accepts `town`, `bank`, `depot`, `home`, `secretshop` and the four ordinary shops
+The registry accepts `town`, `bank`, `chapel`, `depot`, `home`, `secretshop` and the four ordinary shops
 (`shop_weapon`, `shop_armor`, `shop_item`, `shop_accessory`), with town as each
 facility's parent. Shop subjects use `target_kind:item` and IDs validated by
 the owned actor's existing Shop catalog, including its eligibility filters.
@@ -190,7 +190,13 @@ mailbox destinations; its mailbox scenes contain bounded letters and next-page
 inputs. The four ordinary Shops expose one ID-ordered, offset-paged `items`
 collection, or one selected `product`, with exact GetCatalog prices/slot,
 explicit select/purchase inputs, NPC inspect facts and service quantity bounds.
-Home, Shop and Bank report `support.observation:details`. Bank facility data
+Home, Shop, Bank and Chapel report `support.observation:details`. Chapel reads
+the owned actor's blessing/status and prayer options through the existing service;
+each option's `type` supplies the explicit `chapel_pray` blessing input. Required
+read failures fail the whole observation. Its free command preserves known
+outcomes across refresh failure, with GET-only recovery; observation never prays
+or resets the quota. See the [Chapel owner](../design/chapel.md) for lifecycle
+and retained REST boundaries. Bank facility data
 contains `parent` and the owned `GetState` facts: `character_id`, wallet `money`,
 int64 `deposit` and `max_deposit`, `npc_name` and the complete `dialogues` array.
 The reader passes the incoming context and owned actor to the existing Bank
