@@ -98,6 +98,9 @@ func (s *LifetimeState) ValidateStatusEntry(c *StatusContext, reset *EquipmentRe
 		}
 		return nil
 	}
+	child := *c
+	child.symbolicConversion = true
+	c = &child
 	for _, entry := range StatusEntries() {
 		if entry.ID != id {
 			continue
@@ -143,6 +146,9 @@ func (s *LifetimeState) ApplyStatusEntry(c *StatusContext, reset *EquipmentReset
 		}
 		return nil, nil
 	}
+	previousConversion := c.symbolicConversion
+	c.symbolicConversion = true
+	defer func() { c.symbolicConversion = previousConversion }()
 	if c.Custom && s.actor(targetID) == nil {
 		targetID = c.ActorID
 	}

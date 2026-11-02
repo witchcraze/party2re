@@ -37,7 +37,7 @@ func TestNonlethalFinalStrikeThroughRegisteredAndDelegatedInvocation(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, ids := range [][]string{{"random"}, {"gem_cure_poison", id}} {
+			for _, ids := range [][]string{{"random"}} {
 				d.Invocations.Entries["random"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "random"}}
 				if _, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 					t.Fatal(ids, err)

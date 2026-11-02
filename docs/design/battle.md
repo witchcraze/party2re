@@ -841,6 +841,19 @@ serialized executor or a committed-command replay mechanism. Shared traversal
 does not certify concrete producers: missing asset bodies and incomplete job
 state/operation projections still gate the full native random closure.
 
+Mixed status/revival producers retain status/cure/death counters in
+`CallbackContext.Status`, shared modifier counters in `Damage`, and the native
+reset cursor in `Defeat`. These are command-local facts: consumers save their
+scalar values with resulting battle state and frozen input, then rebuild ports
+after reload. Each alternative isolates nested participant and context references.
+Status alternatives are indexed by state hash and coalesced only after exact
+state/context comparison. Admission retains at most4096 distinct status outcomes
+per frontier and shares a16384 continuation-work allowance across prefixes,
+intrinsic status validation and later slots. Exceeding either limit returns
+`ErrUnsupportedEffect` before execution, charges or committed RNG; no truncated
+set can certify a later slot. These are admission safeguards, not changed source
+target counts, probabilities or effect order.
+
 `RegisterNonJobInvocations` binds tool84/85 and gem83/86–92 to those same
 invocation operations. `NonJobInvocationEntries` supplies the outer CMP
 contributions separately from child MP metadata. Registration alone does not
@@ -1442,7 +1455,10 @@ then seal12 with its 3 MP charge. The magic-sword multiplier and replacement of
 trailing arguments with direct1 apply to every category on that whitelist; only
 its physical-to-magic conversion is category-dependent (`10171–10184`). Thus
 item166's untyped result still receives that multiplier. An elemental multiplier
-cannot replace these rules.
+cannot replace these rules. The concrete status/death gem bodies certify
+arithmetic conversion of symbolic payloads to zero, including seal12's3 MP
+charge before later helper gates. Other symbolic conversion callers retain
+their conservative gate until their complete tails are certified.
 
 Resolve the target before applying its temporary effect once. Cover selects the
 first same-side covering member, without a living filter. Defense/reduction/double
@@ -1797,9 +1813,28 @@ gem62 resolves once to read current status and again inside the cure helper.
 75–81 and job35.1 (`_data.cgi:2143–2150,2158–2159,2163–2169`;
 `_skill.cgi:2879–2886`). These are concrete intrinsic bodies with independent
 category, target and CMP metadata. They do not assemble job35's table or admit
-mixed custom transitions; unprojected `AfterEffects`, incomplete random tables
-and unavailable descendants remain whole-entry gates. Ordinary learning,
-MP/CMP charges and the production consumer retain their existing owners.
+arbitrary mixed custom transitions. `ProjectStatusGemBranches` supplies complete
+alternatives for these gems, including unchanged outcomes, each helper's fresh
+seal/activation/target checks, symbolic absorption30–49, reflected confusion,
+current-status cure's two resolutions and ordered death/reset/reward tails.
+The plural status/death loop continues after actor death; the enclosing slot
+sequence stops that branch afterward. Job35.1's predecessor projection,
+unprojected `AfterEffects`, incomplete random tables and unavailable descendants
+retain their separate gates. Ordinary learning, MP/CMP charges and the production
+consumer retain their existing owners.
+
+`ProjectRevivalGemBranches` supplies the concrete63–66 alternatives
+(`_data.cgi:2151–2154` at `ff97fc549932a146cc945d7edf71b44c868a840e`). Single63/64
+revive the resolved fallen recipient at half/full MaxHP;65 independently attempts
+half revival for each fallen ally at50%, without a magic-seal check. Sacrifice66
+first restores every other ally's HP, invokes native defeat on the still-living
+actor (including automatic revival), then sets actor MP0. `RevivalContext.NativeDefeat`
+binds that same defeat closure for admission, projection and execution; an opaque
+`Defeat` hook alone cannot certify its mixed predecessor. Later slots see every
+living revival alternative and skip only dead branches. Reset stat alternatives
+remain independent, retaining the shared HP/power bounds and HP999 immunity
+classes; reset cursor and reachable reward/field projections survive the tail.
+Other revival producers and full custom assembly retain their existing owners.
 
 Reset clears transient state, rebuilds equipped stats, **reapplies type3 accessory,
 weapon revision and seal effects**, then floors agility. It does not generically

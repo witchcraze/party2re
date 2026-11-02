@@ -51,6 +51,11 @@ type TargetContext struct {
 	duelOriginID string
 	// Possession changes only the actor; source rosters retain their origin.
 	possessionOriginID string
+	// Only concrete gem bodies certify symbolic-to-zero conversion tails.
+	symbolicConversion bool
+	// Private admission work is shared across alternatives, never caller RNG
+	// or persisted battle facts. Execution starts with the caller's nil budget.
+	admissionBudget *int
 }
 
 // TargetEffect is the input and continuation of a spell target helper.
@@ -182,7 +187,10 @@ func (a LifetimeActor) ConvertEnemyCategory(c TargetContext, e TargetEffect) (Ta
 	}
 	if a.Extended == ExtendedMagicSword && !c.Custom && magicSwordCommand(c.Command) {
 		if e.Payload.Symbol != "" {
-			return TargetEffect{}, 0, ErrUnsupportedEffect
+			if !c.symbolicConversion {
+				return TargetEffect{}, 0, ErrUnsupportedEffect
+			}
+			e.Payload = CallbackPayload{} // Source arithmetic coerces a symbolic effect to zero.
 		}
 		if e.Category == CategoryPhysical {
 			e.Category = CategoryMagic
@@ -193,7 +201,10 @@ func (a LifetimeActor) ConvertEnemyCategory(c TargetContext, e TargetEffect) (Ta
 	}
 	if e.Category == CategoryPhysical && hasAbility(a.Abilities, "seal_kotowari") {
 		if e.Payload.Symbol != "" {
-			return TargetEffect{}, 0, ErrUnsupportedEffect
+			if !c.symbolicConversion {
+				return TargetEffect{}, 0, ErrUnsupportedEffect
+			}
+			e.Payload = CallbackPayload{}
 		}
 		e.Category = CategoryMagic
 		e.Payload.Number = math.Trunc(e.Payload.Number * 0.8)

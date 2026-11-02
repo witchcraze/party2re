@@ -18,6 +18,10 @@ type CallbackContext struct {
 	// Damage supplies an enclosing intrinsic operation's counters and hit facts.
 	// Definitions that accept it write back only during execution.
 	Damage *DamageContext
+	// Status and Defeat retain operation counters and the native reset cursor
+	// across mixed status/revival callbacks. Consumers rebuild their ports.
+	Status *StatusContext
+	Defeat *DefeatContext
 	// ArithmeticDivisor is shared by nested callbacks in this operation only.
 	ArithmeticDivisor int
 	// Invoke executes a declared child in the current argument/actor frame. It
@@ -102,6 +106,7 @@ func (s *LifetimeState) ApplyInvocations(c *CallbackContext, d CallbackCatalog, 
 		}
 		c.TargetContext = child.TargetContext
 		c.Damage = child.Damage
+		c.Status, c.Defeat = child.Status, child.Defeat
 		c.ArithmeticDivisor = child.ArithmeticDivisor
 		if s.actor(c.ActorID).HP <= 0 {
 			break
