@@ -8312,22 +8312,6 @@
         ],
         "type": "object"
       },
-      "GetChapelResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "blessing": {
-            "$ref": "#/components/schemas/ChapelCharacterBlessing"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ChapelChapelStatus"
-          }
-        },
-        "required": [
-          "blessing",
-          "status"
-        ],
-        "type": "object"
-      },
       "GetCharacterTakarakujiTicketResponse": {
         "additionalProperties": false,
         "properties": {
@@ -21594,91 +21578,6 @@
         "summary": "Change character job class",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/chapel": {
-      "get": {
-        "operationId": "getChapelStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetChapelResponse"
-                }
-              }
-            },
-            "description": "Chapel blessing status"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get active chapel blessing and status",
-        "tags": [
-          "Chapel"
         ]
       }
     },

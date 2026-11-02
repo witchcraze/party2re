@@ -54,11 +54,6 @@ func chapelActionRejection(err error) (int, ErrorDetail) {
 	}
 }
 
-type getChapelResponse struct {
-	Blessing chapel.CharacterBlessing `json:"blessing"`
-	Status   chapel.ChapelStatus      `json:"status"`
-}
-
 type prayChapelRequest struct {
 	Blessing string `json:"blessing"`
 }
@@ -66,33 +61,6 @@ type prayChapelRequest struct {
 type chapelBlessingResponse struct {
 	Blessing chapel.CharacterBlessing `json:"blessing"`
 	Message  string                   `json:"message,omitempty"`
-}
-
-func (h *Handler) handleGetChapel(w http.ResponseWriter, r *http.Request) {
-	if h.chapel == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("chapel service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		blessing, err := h.chapel.GetBlessing(r.Context(), char.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		status, err := h.chapel.GetStatus(r.Context(), char.ID, char.Name)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, getChapelResponse{
-			Blessing: blessing,
-			Status:   status,
-		})
-	})
 }
 
 func (h *Handler) handleChapelPray(w http.ResponseWriter, r *http.Request) {
