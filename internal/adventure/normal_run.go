@@ -34,7 +34,10 @@ type NormalRun struct {
 	Floor               int                        `json:"floor"`
 	FloorsCleared       int                        `json:"floors_cleared"`
 	StageCleared        bool                       `json:"stage_cleared"`
+	ClearPending        bool                       `json:"clear_pending"`
+	EXUnlocked          bool                       `json:"ex_unlocked"`
 	EncounterFloor      int                        `json:"encounter_floor"`
+	EncounterStageID    string                     `json:"encounter_stage_id"`
 	Enemies             []string                   `json:"enemies"`
 	EncounterPool       []corebattle.LifetimeActor `json:"encounter_pool,omitempty"`
 	AppearancePositions []int                      `json:"appearance_positions,omitempty"`
@@ -93,6 +96,7 @@ type RunReceipt struct {
 	Command     RunCommand   `json:"command"`
 	Version     int          `json:"version"`
 	Floor       int          `json:"floor"`
+	StageID     string       `json:"stage_id"`
 	Disposition string       `json:"disposition"`
 	Box         *TreasureBox `json:"box,omitempty"`
 	Recipient   RunRecipient `json:"recipient"`

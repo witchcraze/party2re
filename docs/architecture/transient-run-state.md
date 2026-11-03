@@ -552,6 +552,13 @@ actor-owned receipts. See the [schema](../../migrations/111_normal_adventure_run
 and [adapter](../../internal/database/adventure_run_repository.go). These records
 do not resurrect SQL waiting lobbies or establish a second Valkey authority.
 
+Travel uses this same snapshot: assigned coordinates remain separate from
+encounter provenance, pending clear credit and the room-wide EX marker.
+Operation-local old-enemy response context is resolved before saving members;
+only the final roster, generated summon table and result facts survive reload.
+The [Adventure contract](../design/adventure.md#combat-travel-and-encounter-replacement)
+owns the transition semantics; there is no separate travel/EX store.
+
 Party admission takes its existing lobby lock, then serializes roster validation
 and the SQL handoff on the admission's durable run identity. Roster writers and
 the retained Party batch start use that same SQL boundary, including when the

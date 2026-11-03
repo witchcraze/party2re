@@ -61,7 +61,7 @@ func (s Stage) BuildOrdinaryEncounter(catalog *MonsterCatalog, party []corebattl
 	var pool, bosses []Monster
 	if table.PartyCopy {
 		for i, a := range party {
-			m := Monster{ID: fmt.Sprintf("copy-%d", i), Name: fmt.Sprintf("Party echo %d", i+1), HP: a.MaxHP, MP: a.MaxMP, Attack: a.Attack, Defense: a.Defense, Agility: a.Agility, ExperienceReward: a.ExperienceReward, GoldReward: a.GoldReward,
+			m := Monster{ID: fmt.Sprintf("copy-%d", i), EncounterIdentity: "party-echo:" + a.ID, Name: fmt.Sprintf("Party echo %d", i+1), HP: a.MaxHP, MP: a.MaxMP, Attack: a.Attack, Defense: a.Defense, Agility: a.Agility, ExperienceReward: a.ExperienceReward, GoldReward: a.GoldReward,
 				Combat: &corebattle.LifetimeActor{Jobs: a.Jobs, OriginalJobs: a.Jobs, Temporary: corebattle.TemporaryReflectMagic, CrystalReward: 5, NPCLoadout: &corebattle.NPCLoadout{Source: "ff97fc5:stage/15.cgi:15"}}}
 			bosses = append(bosses, m)
 		}
@@ -74,7 +74,7 @@ func (s Stage) BuildOrdinaryEncounter(catalog *MonsterCatalog, party []corebattl
 				jobID = "starter"
 			}
 			jobs := corebattle.BattleJobs{JobID: jobID, SP: requester.Jobs.SP, OldJobID: "job-36", OldSP: 999}
-			pool = append(pool, Monster{ID: fmt.Sprintf("generated-%d", i), Name: fmt.Sprintf("Generated combatant %d", i+1), HP: requester.MaxHP, MP: requester.MaxMP, Attack: requester.BaseStats.Attack, Defense: requester.BaseStats.Defense, Agility: requester.BaseStats.Agility, ExperienceReward: requester.ExperienceReward, GoldReward: requester.GoldReward,
+			pool = append(pool, Monster{ID: fmt.Sprintf("generated-%d", i), EncounterIdentity: generatedEncounterIdentity(jobID), Name: fmt.Sprintf("Generated combatant %d", i+1), HP: requester.MaxHP, MP: requester.MaxMP, Attack: requester.BaseStats.Attack, Defense: requester.BaseStats.Defense, Agility: requester.BaseStats.Agility, ExperienceReward: requester.ExperienceReward, GoldReward: requester.GoldReward,
 				Combat: &corebattle.LifetimeActor{Jobs: jobs, OriginalJobs: jobs, NPCLoadout: &corebattle.NPCLoadout{Source: "ff97fc5:stage/15.cgi:47"}}})
 		}
 	} else {
@@ -119,6 +119,9 @@ func (s Stage) BuildOrdinaryEncounter(catalog *MonsterCatalog, party []corebattl
 	session := CrawlSession{Mode: mode, Rng: rng.Intn, RngFloat: rng.Float64}
 	for i, m := range chosen {
 		a := session.buildMonsterActor(fmt.Sprintf("%s-%d", encounterID, i), m, float64(len(party)-2)*.1, floor == BossFloor)
+		if floor < BossFloor && i < 8 {
+			a.EncounterIdentity += string(rune('A' + i))
+		}
 		a.TeamID = "enemies"
 		actors = append(actors, a)
 	}

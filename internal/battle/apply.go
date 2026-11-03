@@ -27,7 +27,7 @@ type ApplyPostBattleRequest struct {
 	DefeatedEnemies       []corebattle.Participant
 	Habitat               string // Habitat/stage name for monster book recording
 	ExitFatigue           int    // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
-	UnsealDemonKing       bool   // Completing Stage EX / unsealing demon king (vs_monster.cgi:218)
+	UnsealDemonKing       bool   // Explicit stage19 treasure-creation event, independent of battle victory.
 }
 
 // ApplyPostBattleResponse contains the committed state for each participating character.
@@ -136,7 +136,6 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 
 		if req.BattleResult.Outcome == corebattle.OutcomeWin {
 			s.applyMonsterKills(&tc.Character, tc.Inventory, equip, req.BattleResult, req.DefeatedEnemies)
-			s.applyMaoCount(&tc.Character, req)
 
 			if s.monsterRecorder != nil && len(req.DefeatedEnemies) > 0 {
 				if err := s.recordDefeatedMonsters(tc.Context, []string{charID}, req.DefeatedEnemies, req.Habitat); err != nil {
@@ -144,6 +143,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 				}
 			}
 		}
+		s.applyMaoCount(&tc.Character, req)
 
 		resp.UpdatedCharacters[charID] = tc.Character
 		finalChar = tc.Character
@@ -256,8 +256,8 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 
 			if req.BattleResult.Outcome == corebattle.OutcomeWin {
 				s.applyMonsterKills(&char, inv, equip, req.BattleResult, req.DefeatedEnemies)
-				s.applyMaoCount(&char, req)
 			}
+			s.applyMaoCount(&char, req)
 
 			chars[id] = char
 			invs[id] = inv
