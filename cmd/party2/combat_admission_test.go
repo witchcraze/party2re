@@ -502,21 +502,10 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-startBarrier
-			// Retry transient DB deadlocks or lock wait timeouts so concurrent workers can observe
-			// the committed winner's admission state. If unresolvable, it is treated as an unexpected failure
-			// rather than masked as a normal admission rejection.
-			var pDetail party.PartyDetail
-			var err error
-			for retry := 0; retry < 3; retry++ {
-				pDetail, err = combat.party.CreateParty(ctx, char.ID, party.CreatePartyRequest{
-					Name:    pName,
-					StageID: "stage-26",
-				})
-				if err == nil || !database.IsDeadlockError(err) {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+			pDetail, err := combat.party.CreateParty(ctx, char.ID, party.CreatePartyRequest{
+				Name:    pName,
+				StageID: "stage-26",
+			})
 			if err == nil {
 				atomic.AddInt32(&successCount, 1)
 				partyMu.Lock()
@@ -543,18 +532,10 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-startBarrier
-			// Retry transient DB deadlocks or lock wait timeouts during concurrent crawl admission.
-			var err error
-			for retry := 0; retry < 3; retry++ {
-				_, err = combat.adv.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
-					CharacterIDs: []string{char.ID},
-					StageID:      "stage-26",
-				})
-				if err == nil || !database.IsDeadlockError(err) {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+			_, err := combat.adv.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+				CharacterIDs: []string{char.ID},
+				StageID:      "stage-26",
+			})
 			if err == nil {
 				atomic.AddInt32(&successCount, 1)
 			} else if errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) || errors.Is(err, party.ErrAlreadyInParty) {
