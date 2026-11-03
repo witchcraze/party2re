@@ -327,14 +327,20 @@ runs through the lifecycle owner (#1328). Assignment-only callbacks retain
 `$is_clear` and existing EX markers. Tool 150's encounter creation at floor 10 sets clear; stage 24 also
 creates its EX marker and applies the [ordinary NPC/field contract](battle.md#normal-adventure-action-and-target-matrix).
 The run's boss-field port applies the shared cap/reset owner after enemy creation. Ordinary
-treasure creation at floor 11 consumes the retained clear flag for the
-**current** stage, runs Try success if applicable and can unseal stage 19
-(`vs_monster.cgi:91–155`). It is not proof that the destination boss was beaten.
+treasure creation at floor 11 runs Try success if applicable and, independently
+of clear/victory, invokes unsealing for **stage19 only**. Clear credit separately
+consumes the retained clear flag for the current destination (`vs_monster.cgi:91–110`).
+The normal run sends this explicit event to Battle settlement for all enrolled
+real participants, including fallen members, within the same SQL receipt transaction.
+Assignment, chest inspection and exit emit no unseal event; receipt replay cannot
+repeat its counter update. Each genuine treasure recreation is a new source event.
+Global sealing rooms/news/clock remain [separately owned](https://github.com/witchcraze/party2re/issues/1199);
+calling Boss's counter-writing unseal helper as well would double-count.
 Next advance from assigned floor 10 still executes the destination's EX flag
 path before creating floor 11 (`52–80,227–249`); existing EX files are not
 deleted by travel. Try mode is retained until treasure creation invokes
 `success_try`, multiplies pending stock by 1.5/floors it and changes mode to
-normal (`_battle.cgi:1915–1949`). Preserve these transition hooks under the
+normal (`_battle.cgi:1915–1949`). Preserve these transition hooks under
 the [EX marker/continuation](#ex-unlock-and-continuation) and Try lifecycle owners, including their ordering
 before any old-enemy response; do not replay rewards or infer clear solely from coordinates. Exit
 uses the changed floor for fatigue/other floor-dependent effects (#1221), not

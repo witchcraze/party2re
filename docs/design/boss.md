@@ -109,11 +109,15 @@ Upon defeating all enemy boss participants:
 
 ## 6. Demon King Unsealing (`UnsealDemonKing`)
 
-In legacy Party2 (`lib/vs_monster.cgi:105`), stage **19** invokes `make_vs_king`, unsealing the ancient kings and triggering the sealing battle era:
-- **Mao Count**: All participating non-NPC characters gain **+1 Mao Count** (`characters.mao_count` / `$m{mao_c}`).
-- **Worldwide News**: Broadcasts `"<heroes>によって封印されし者達の封印が解かれました！"`.
-- **Rank 2 Locking**: Character rows are locked in ascending lexicographical order within a single transaction.
+Legacy `make_vs_king` fires at stage **19** ordinary floor11 treasure creation,
+outside the clear predicate (`lib/vs_monster.cgi:91–110,159–225`). It increments
+every real participant's MaoCount, creates missing sealing rooms, announces the
+event and updates the global unseal clock. Boss victory or exit is not its trigger.
 
-Current `internal/adventure/unseal.go` also accepts stage 20. That extra trigger
-is a [documented implementation difference](../migration/documentation-audit.md),
-not a canonical legacy rule. Rank 2 locking describes the Go persistence boundary.
+The [normal-run event](adventure.md#combat-travel-and-encounter-replacement)
+uses Battle settlement for the counter under the run/character locks and SQL
+receipt. Do not additionally call `boss.Service.UnsealDemonKing`, which also
+writes counters. Global room/news/clock integration remains [#1199](https://github.com/witchcraze/party2re/issues/1199)
+and its clock consumer [#1201](https://github.com/witchcraze/party2re/issues/1201).
+Retained batch stage20/name/defeated-enemy inference is a known implementation
+difference, tracked in [#1811](https://github.com/witchcraze/party2re/issues/1811).

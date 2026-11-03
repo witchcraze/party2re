@@ -45,7 +45,6 @@ func (s *NormalRunService) prepareExit(r *NormalRun, actor string, request *batt
 	request.ExitFatigue = CalculateExitFatigue(r.Floor, r.Mode)
 	request.BattleResult.RemainingHP = map[string]int{actor: a.HP}
 	request.BattleResult.RemainingMP = map[string]int{actor: a.MP}
-	request.UnsealDemonKing = r.StageCleared && IsDemonKingUnsealStage(r.Stage.ID, r.Stage.Name)
 	return nil
 }
 
