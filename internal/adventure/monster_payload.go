@@ -16,6 +16,10 @@ func (m Monster) NPCPayload() corebattle.LifetimeActor {
 		a.Jobs.OldJobID = "starter"
 	}
 	a.ID, a.Name, a.HP, a.MP, a.CMP = m.ID, m.Name, m.HP, m.MP, m.CMP
+	a.EncounterIdentity = m.EncounterIdentity
+	if a.EncounterIdentity == "" {
+		a.EncounterIdentity = m.ID
+	}
 	a.Attack, a.Defense, a.Agility = m.Attack, m.Defense, m.Agility
 	a.ExperienceReward, a.GoldReward = m.ExperienceReward, m.GoldReward
 	a.NPC = true

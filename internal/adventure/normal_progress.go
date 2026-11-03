@@ -16,6 +16,9 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	if r.Floor == 0 && r.LeaderID != actorID {
 		return ErrLeaderOnly
 	}
+	if r.Floor == TreasureRoomFloor && r.HasEX() {
+		return corebattle.ErrUnsupportedEffect
+	}
 	if r.Floor >= TreasureRoomFloor || r.livingEnemies() {
 		return ErrInvalidFloorAction
 	}
@@ -39,12 +42,9 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	}
 	// Old encounter actors do not survive creation; coordinates remain separate
 	// from encounter provenance, so travel cannot manufacture boss clear credit.
-	for _, id := range r.Enemies {
-		delete(r.LastActions, id)
-	}
-	r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return slices.Contains(r.Enemies, a.ID) })
-	r.Enemies = nil
+	r.discardEncounter()
 	r.EncounterPool, r.AppearancePositions = nil, nil
+	r.markEXOnAdvance(actorID)
 	r.Floor++
 	if r.Floor == TreasureRoomFloor {
 		alive := 0
@@ -72,8 +72,16 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 			}
 			r.Mode = CrawlModeNormal
 		}
+		if r.ClearPending {
+			r.StageCleared, r.ClearPending = true, false
+		}
+		r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID
 		return nil
 	}
+	return s.createEncounter(ctx, r, actorID)
+}
+
+func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, actorID string) error {
 	if r.Stage.Ordinary != nil {
 		party := make([]corebattle.LifetimeActor, 0, len(r.Battle.Actors))
 		for _, a := range r.Battle.Actors {
@@ -91,6 +99,9 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 			r.Enemies = append(r.Enemies, a.ID)
 		}
 		if r.Stage.ID == "stage-24" && r.Floor == BossFloor {
+			if s.cfg.Combat == nil {
+				return ErrRunUnavailable
+			}
 			if err := s.cfg.Combat.PrepareBossField(ctx, r, actorID); err != nil {
 				return err
 			}
@@ -98,7 +109,7 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 				return corebattle.ErrUnsupportedEffect
 			}
 		}
-		r.EncounterFloor = r.Floor
+		r.markEncounterCreated()
 		return nil
 	}
 	ids := r.Stage.GetBossIDs()
@@ -127,7 +138,7 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 		r.Battle.Actors = append(r.Battle.Actors, a)
 		r.Enemies = append(r.Enemies, a.ID)
 	}
-	r.EncounterFloor = r.Floor
+	r.markEncounterCreated()
 	return nil
 }
 

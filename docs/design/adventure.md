@@ -281,7 +281,9 @@ player effects, stock/level processing, field counters and eligible bounded
 NPC response, then update actor time/turn count and write room state
 (`_battle.cgi:761–1178`; `_npc_action.cgi:89–155`). Thus old living enemies can
 respond and survive under new coordinates. With no enemies, no encounter is
-created by the tool. On the next request `read_member` rebuilds sides from the
+created by the tool. An old treasure encounter, including unopened boxes, also
+survives assignment and continues to block advance; tool150 replaces its boxes
+when creating the new encounter. On the next request `read_member` rebuilds sides from the
 persisted members (`453–493`). Only explicit `すすむ`, after the no-enemy and
 end/EX gates, resets statuses, deletes temporary/anti fields, increments the
 assigned floor once and creates an encounter (`vs_monster.cgi:37–82`). A
@@ -333,7 +335,7 @@ path before creating floor 11 (`52–80,227–249`); existing EX files are not
 deleted by travel. Try mode is retained until treasure creation invokes
 `success_try`, multiplies pending stock by 1.5/floors it and changes mode to
 normal (`_battle.cgi:1915–1949`). Preserve these transition hooks under the
-existing EX (#1191) and Try lifecycle (#1328) owners, including their ordering
+the [EX marker/continuation](#ex-unlock-and-continuation) and Try lifecycle owners, including their ordering
 before any old-enemy response; do not replay rewards or infer clear solely from coordinates. Exit
 uses the changed floor for fatigue/other floor-dependent effects (#1221), not
 the number of encounters actually fought (`_battle.cgi:1208–1222`).
@@ -385,11 +387,20 @@ authority; no second EX store or background progression is introduced.
 
 ### Remaining reconciliation gates
 
-Native travel transitions remain owned by
-[#1353](https://github.com/witchcraze/party2re/issues/1353), with the full action
-tail consumed by #1329 and typed discovery/submission by #1330. Other tool
-arguments also include recorded jobs and participants; this travel contract
-does not certify those callbacks (`lib/_data.cgi:1879–1924`).
+Native [travel admission and mutation](../../internal/adventure/combat_travel.go)
+run inside the existing SQL command transaction. Coordinate tools preserve the
+encounter; tool150 generates members while retaining an operation-local old
+enemy side for the player tail and conditional NPC response. Catalog collision
+aliases are server-owned and independent of display names. Unrepresented old
+identities or roster/reset context reject before mutation. Shared reset belongs to
+[the battle adapter](../../internal/battle/reset_all.go); encounter creation
+retains a pending clear flag separately from confirmed clear history and EX.
+Receipts retain resulting coordinates without rerunning consumption or draws.
+
+The full player/NPC action tail and instance binding remain #1329/#1371;
+typed Gateway discovery/submission remains #1330. Transition and bounded SQL
+consumer tests do not certify those integrations. Recorded-job/participant tool
+arguments are separate callbacks (`lib/_data.cgi:1879–1924`).
 
 MP restoration, MP drain and resource-consuming gems use the
 [shared battle resource contract](battle.md#resources-revival-and-roster-changes).
@@ -690,7 +701,7 @@ Aggregates overall statistics and per-stage completion records:
   - *Seasonal sub-identity constraint*: Historical party logs lack runtime seasonal variant metadata, so past Stage 26 records are backfilled as unclassified (`seasonal_sub_id=0`).
   - *Reward and progress constraints*: Historical party logs do not record per-member post-battle settled earnings (individual blessings, Try Mode suppression, level caps) or defeat floor numbers. To preserve the integrity of Chronicle's settled earnings statistics (`total_exp_earned`, `total_gold_earned`), backfilled records set reward EXP/Gold to 0, and record `floors_cleared = 10` for wins and `0` for unrecorded defeat floors, focusing on restoring accurate stage completion counts and attempt history.
   - *Double-counting and data protection*: Backfill shares the canonical `party:<log.id>:<character_id>` deterministic identifier with live runs. `advRepo.FindByID` is verified before saving; existing records are skipped (preserving live settled rewards), and lookup errors abort execution to prevent accidental overwrites.
-- **Combat Travel vs. Clear Flag Contract**: Per #1345/#1353, coordinate-changing tools (tools 66–71, 104, 184, 107) do not modify `is_clear`; boss defeat sets `is_clear`, which is retained across coordinate changes and consumed when Floor 11 treasure room runs for the destination stage coordinates, with travel itself recording no duplicate achievements.
+- **Combat travel and clear credit**: [Travel](#combat-travel-and-encounter-replacement) preserves the pending clear flag on coordinate assignment. Ordinary boss generation, including tool150, sets that flag; explicit floor11 creation consumes it for the current destination. Coordinate changes alone grant no achievements.
 - **Milestone Tiers** (Unlocks based on total cleared stage counts per `adventure_record.cgi` / `vs_monster.cgi`):
 
 | Milestone Key | Display Name | Clear Count Threshold | Description |

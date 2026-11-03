@@ -199,7 +199,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 		if err := s.cfg.Store.SaveRun(ctx, *r, cmd.Version); err != nil {
 			return err
 		}
-		result = RunReceipt{Command: cmd, Version: r.Version, Floor: r.Floor, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition}
+		result = RunReceipt{Command: cmd, Version: r.Version, Floor: r.Floor, StageID: r.Stage.ID, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition}
 		return s.cfg.Store.SaveRunReceipt(ctx, result)
 	})
 	result, err = s.resolveReceipt(ctx, cmd, result, err)

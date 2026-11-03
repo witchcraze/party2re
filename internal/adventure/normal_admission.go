@@ -227,7 +227,7 @@ func (s *NormalRunService) enter(ctx context.Context, player string, a NormalAdm
 		if err := s.cfg.Store.SaveRun(ctx, r, 0); err != nil {
 			return err
 		}
-		result = RunReceipt{Command: cmd, Version: 1, Recipient: r.Recipients[a.ActorID]}
+		result = RunReceipt{Command: cmd, Version: 1, StageID: r.Stage.ID, Recipient: r.Recipients[a.ActorID]}
 		return s.cfg.Store.SaveRunReceipt(ctx, result)
 	})
 	// The outer waiting-admission transaction must resolve before receipts can prove commit.
@@ -322,6 +322,11 @@ func (s *NormalRunService) WithWaitingLobby(ctx context.Context, partyID string,
 
 // livingEnemies uses persisted encounter membership, never coordinate-derived IDs.
 func (r *NormalRun) livingEnemies() bool {
+	for _, box := range r.Boxes {
+		if box.OpenedBy == "" {
+			return true
+		}
+	}
 	for _, id := range r.Enemies {
 		if a := r.actor(id); a != nil && a.HP > 0 {
 			return true

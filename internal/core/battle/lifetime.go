@@ -17,26 +17,27 @@ type LifetimeState struct {
 // must come from the battle adapter, including equipment and instance identities.
 type LifetimeActor struct {
 	Participant
-	Jobs           BattleJobs      `json:"jobs"`
-	OriginalJobs   BattleJobs      `json:"original_jobs"`
-	WeaponSeal     int             `json:"weapon_seal"`
-	JobHistory     map[string]*int `json:"job_history,omitempty"` // nil SP means a recorded job with irrecoverable historical SP.
-	NPC            bool            `json:"npc"`
-	NPCLoadout     *NPCLoadout     `json:"npc_loadout,omitempty"`
-	RosterIdentity string          `json:"roster_identity,omitempty"`
-	RosterDetached bool            `json:"-"` // Dismissal changes color before the request's ordered arrays are rebuilt.
-	SummonForm     int             `json:"summon_form,omitempty"`
-	CrystalReward  int             `json:"crystal_reward,omitempty"`
-	Tension        float64         `json:"tension"`
-	Hit            int             `json:"hit"`
-	Temporary      TemporaryEffect `json:"temporary,omitempty"`
-	Extended       ExtendedEffect  `json:"extended,omitempty"`
-	ExtendedTurns  int             `json:"extended_turns,omitempty"`
-	CMPCharge      int             `json:"cmp_charge"`
-	CMPNeedCharge  int             `json:"cmp_need_charge"`
-	Banished       bool            `json:"banished"`
-	ConsumedItems  []ConsumedItem  `json:"consumed_items"`
-	CrystalDropped bool            `json:"crystal_dropped"`
+	Jobs              BattleJobs      `json:"jobs"`
+	OriginalJobs      BattleJobs      `json:"original_jobs"`
+	WeaponSeal        int             `json:"weapon_seal"`
+	JobHistory        map[string]*int `json:"job_history,omitempty"` // nil SP means a recorded job with irrecoverable historical SP.
+	NPC               bool            `json:"npc"`
+	EncounterIdentity string          `json:"encounter_identity,omitempty"` // Server-owned NPC collision identity, independent of display names.
+	NPCLoadout        *NPCLoadout     `json:"npc_loadout,omitempty"`
+	RosterIdentity    string          `json:"roster_identity,omitempty"`
+	RosterDetached    bool            `json:"-"` // Dismissal changes color before the request's ordered arrays are rebuilt.
+	SummonForm        int             `json:"summon_form,omitempty"`
+	CrystalReward     int             `json:"crystal_reward,omitempty"`
+	Tension           float64         `json:"tension"`
+	Hit               int             `json:"hit"`
+	Temporary         TemporaryEffect `json:"temporary,omitempty"`
+	Extended          ExtendedEffect  `json:"extended,omitempty"`
+	ExtendedTurns     int             `json:"extended_turns,omitempty"`
+	CMPCharge         int             `json:"cmp_charge"`
+	CMPNeedCharge     int             `json:"cmp_need_charge"`
+	Banished          bool            `json:"banished"`
+	ConsumedItems     []ConsumedItem  `json:"consumed_items"`
+	CrystalDropped    bool            `json:"crystal_dropped"`
 }
 
 type ExtendedEffect string

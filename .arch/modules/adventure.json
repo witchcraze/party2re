@@ -157,7 +157,14 @@
           "note": "Recipient history, disposition and immutable command result commit with state and assets."
         }
       ],
-      "note": "One bounded SQL transaction via WithRunForUpdate; no automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
+      "note": "One bounded SQL transaction via WithRunForUpdate; combat adapters can use Adventure-owned travel mutations under this authority. No automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
+    },
+    {
+      "method": "ApplyCombatTravel",
+      "source_ref": "internal/adventure/combat_travel.go#NormalRunService.ApplyCombatTravel",
+      "transaction_type": "Delegated",
+      "lock_sequence": [],
+      "note": "Mutation port for RunCombat under Command's existing transaction; no independent persistence, settlement or action-tail execution. Coordinate-only tools retain encounters; tool150 separates generated members and conditional old-enemy response before the caller saves the final run."
     }
   ]
 }

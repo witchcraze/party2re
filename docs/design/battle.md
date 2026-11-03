@@ -334,7 +334,9 @@ NPC cures precede action, cure-only incapacitation skips normal poison/regenerat
 and field/equipment tails still run in source order. NPC confusion cures at1/3;
 only its purification counter ticks. Ordinary stage24 floor10 applies the special
 party caps (HP/MP maxima999, base stats255, doubled for over-level actors), then
-shared equipment reset; it does not install an EX default field. Curse/specter
+shared equipment reset; it does not install an EX default field. Adventure owns
+[travel and EX progression](adventure.md#combat-travel-and-encounter-replacement),
+including tool150's all-member reset and preserved enemy-response context. Curse/specter
 hooks require a reachable producer; numeric ordinary stages supply none, and
 unsupported specter payloads remain explicitly gated. Full callback composition
 and run integration remain cutover gates under #1436/#1329/#1330.
