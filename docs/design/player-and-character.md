@@ -131,11 +131,71 @@ Runtime enforcement of this specification is implemented across `cmd/party2/conf
 ### 2.9 Transactional Character Creation & Joining News
 
 Character creation (`POST /characters`, `character.Service.CreateWithOptions`) coordinates persistence through an ambient database transaction (`s.runInTx` via injected `TransactionProvider`):
-1. **Atomic Persistence**: The character (`characters`), initial storage (`character_depots`, capacity = 5), and [joining news](notifications.md#character-joining-news) are saved in that order within this single transaction boundary.
-2. **Rollback Guarantee**: A character, depot or news persistence error is propagated and rolls back the transaction. Creation is not reported as successful with missing news, nor as failed after a separately committed character. A commit error can leave its outcome unknown after a connection failure; clients must not automatically replay a creation POST.
+1. **Atomic Persistence**: The character (`characters`), initial storage (`character_depots`, capacity = 5), eligible [referral delivery](#210-registration-referral-delivery), and [joining news](notifications.md#character-joining-news) share this single transaction boundary. An existing referrer character is locked before saving the new character; its depot is locked before appending the reward.
+2. **Rollback Guarantee**: A character, depot, referral item/notice or news persistence error is propagated and rolls back the transaction. Creation is not reported as successful with missing required writes, nor as failed after a separately committed character. A commit error can leave its outcome unknown after a connection failure; clients must not automatically replay a creation POST.
 3. **Ambient Transaction Propagation**: When called within an existing ambient transaction, character creation participates in the caller's transaction without premature commit, ensuring full rollback if subsequent enclosing operations fail.
 
 Legacy `party2/new_entry.cgi:155–206` routes `mode=new_entry` through `new_entry` → `create_user`, saving the character before writing birth memory and joining news. Account registration and character creation are separate in Party2re: only character creation emits joining news. The same-transaction news boundary strengthens failure atomicity over the legacy file writes. Birth memory and trajectory history remain separate work in [#773](https://github.com/witchcraze/party2re/issues/773); joining news does not implement or replace them.
+
+### 2.10 Registration Referral Delivery
+
+An optional `referrer_character_id` on `POST /characters` identifies an existing
+character. Each successful referred character creation grants that character one
+separate `item-023` instance (quantity 1) in its existing depot and one delivery
+notice identifying the joining character and referral reason. This is a redeemable
+item, not a direct SmallMedals credit. Account registration grants nothing;
+additional characters and referral to another character on the same account are
+permitted. The newly generated character is not its own existing referrer.
+
+Omitted/blank referral IDs preserve ordinary creation. A nonexistent referrer or
+missing recipient depot is a delivery no-op. Other lookup, item or notice errors
+fail the enclosing creation transaction. Delivery appends even at/above nominal
+capacity without increasing capacity, stacking the reward, or changing ordinary
+deposit/transfer limits. The [Depot contract](depot.md#capacity-formula) owns this
+overflow distinction.
+
+The creation/name uniqueness constraint is the event boundary: concurrent retries
+of the same creation/name commit at most once, while distinct committed creations
+each grant once. A failed or rolled-back creation leaves no reward or notice;
+there is no separate reward retry endpoint. Successful creation participates in
+an enclosing transaction's final commit/rollback, including joining news.
+
+Legacy evidence: `party2/new_entry.cgi:33–39,66–70,214–217` carries referral `yid`
+from the registration form and delivers kind 3/no.23 after creation;
+`party2/lib/system.cgi:818–835` requires an existing depot and appends the item and
+referral notice without a capacity check. Mapping registration onto every
+character creation and retaining unconditional delivery were approved in
+[#1102](https://github.com/witchcraze/party2re/issues/1102). Explicit character IDs
+replace the legacy hex-encoded name.
+
+### 2.11 Character Name Uniqueness
+
+Creation and Naming Hall rename share the `characters.name` unique constraint.
+Inputs retain the existing NFC normalization and whitespace rejection; stored
+names compare exactly using `utf8mb4_nopad_bin`, without case/accent folding or
+trailing-space padding. Thus `Hero`, `hero` and `Héro` are distinct, while NFC-
+equivalent new inputs contend for one name. Existing stored strings are preserved
+without retroactive normalization. Name lookups use the same column collation.
+
+The SQL constraint arbitrates concurrent creation/creation, creation/rename and
+rename/rename. Its conflict maps to `character.ErrNameAlreadyTaken` and HTTP 409
+on both endpoints. Other SQL errors remain errors. A losing creation leaves no
+character, depot, joining article or referral delivery; a losing rename retains
+its name and money and publishes no rename article. Rename's availability lookup
+is an early check, not the concurrency guarantee.
+
+The [name-uniqueness migration](../../migrations/110_character_name_uniqueness.sql)
+checks existing duplicate groups under that exact target collation before any
+schema change and prints their character IDs. A conflict stops migration and
+retains all rows; operators must resolve it explicitly before rerunning. It never
+deletes, merges or automatically renames characters. See the
+[schema preparation procedure](../development/development-environment.md#2-prepare-database-schema).
+
+Legacy `new_entry.cgi:130–131,155–159` derives the registration directory from
+exact name bytes and rejects an existing identity. Naming Hall's `なまえ` →
+`namae` (`lib/name_change.cgi:34–41,95–143`) targets that same identity. SQL
+uniqueness makes this rule atomic across both operations; existing input NFC
+normalization remains the reconstruction's validation contract.
 
 ---
 
@@ -153,7 +213,7 @@ Legacy `party2/new_entry.cgi:155–206` routes `mode=new_entry` through `new_ent
 ### 3.2 Characters Table
 - `id VARCHAR(32) PRIMARY KEY`
 - `player_id VARCHAR(32) NOT NULL` (Foreign key constraint referencing `players(id)`)
-- `name VARCHAR(64) NOT NULL`
+- `name VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_nopad_bin NOT NULL` (unique index `uq_characters_name`)
 - `job_id VARCHAR(32) NOT NULL`
 - `gender VARCHAR(16) NOT NULL`
 - `level INT NOT NULL`

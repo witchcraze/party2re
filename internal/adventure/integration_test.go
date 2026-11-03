@@ -16,6 +16,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
 
@@ -55,7 +56,7 @@ func TestAdventure_ImmediateDungeonCrawlIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	char, err := characterService.Create(ctx, player.ID, "DungCrwl")
+	char, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,7 @@ func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	char, err := characterService.Create(ctx, player.ID, "ChrnHero")
+	char, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -620,7 +621,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := characterService.Create(ctx, player.ID, "SetlHero")
+	char, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -749,7 +750,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	}
 
 	// 3. Defeat verification: A weak character defeated in crawl survives with 1 HP and exit fatigue in MariaDB
-	weakling, err := characterService.Create(ctx, player.ID, "DftdHero")
+	weakling, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -787,7 +788,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 
 	// 4. Consumption frees inventory hand: Character starts with 1 item in inventory, consumes it in combat,
 	// and Floor 11 treasure is delivered to inventory (freed hand) rather than depot.
-	consumerChar, err := characterService.Create(ctx, player.ID, "ConsHero")
+	consumerChar, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -949,8 +950,8 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		return c
 	}
 
-	hero1 := makeHero("AtmSolo")
-	hero2 := makeHero("AtmParty")
+	hero1 := makeHero(id.New()[:8])
+	hero2 := makeHero(id.New()[:8])
 
 	battleAdapter := battle.NewService(
 		battle.WithCharacterRepository(charRepo),
@@ -1171,7 +1172,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 		t.Fatal(err)
 	}
 
-	char, err := characterService.Create(ctx, player.ID, "TrsHero")
+	char, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -35,12 +35,13 @@ func TestTestutilReExports(t *testing.T) {
 	}
 
 	// 2. CreateTestCharacterWithFunds
-	c, err := CreateTestCharacterWithFunds(ctx, db, "TU_Hero", 8888)
+	name := id.New()[:8]
+	c, err := CreateTestCharacterWithFunds(ctx, db, name, 8888)
 	if err != nil {
 		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 	}
-	if c.Money != 8888 || c.Name != "TU_Hero" {
-		t.Fatalf("expected money 8888 and name TU_Hero, got %+v", c)
+	if c.Money != 8888 || c.Name != name {
+		t.Fatalf("expected money 8888 and name %s, got %+v", name, c)
 	}
 
 	// 3. CreateTestGuildWithLeader

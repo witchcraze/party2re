@@ -58,7 +58,7 @@ func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Char
 		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
 		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName, value.PendingWake)
 	if err != nil {
-		return err
+		return characterNameError(err)
 	}
 
 	initCap := depot.CalculateCapacity(value.JobLevel, 0, value.OverDepot)

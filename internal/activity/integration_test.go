@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
@@ -44,7 +45,7 @@ func TestTrainingPersistsResultAndCharacterAcrossServiceRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := characterService.Create(ctx, player.ID, "TrnHero")
+	value, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestConcurrentTrainingClaimsApplyRewardOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := characterService.Create(ctx, player.ID, "CncTrain")
+	value, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +231,7 @@ func TestTrainingScheduledActionIntegration(t *testing.T) {
 	characters, _ := database.NewCharacterRepository(db)
 	characterService, _ := character.NewService(characters)
 	player, _ := database.CreateTestPlayer(ctx, db)
-	value, _ := characterService.Create(ctx, player.ID, "WrkTrain")
+	value, _ := characterService.Create(ctx, player.ID, id.New()[:8])
 
 	start := time.Now().UTC()
 	clock := &fixedClock{now: start}

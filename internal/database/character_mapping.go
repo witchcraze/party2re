@@ -142,7 +142,7 @@ func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, va
 		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
 		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName, value.PendingWake, value.ID)
 	if err != nil {
-		return 0, err
+		return 0, characterNameError(err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {

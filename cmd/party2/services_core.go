@@ -103,12 +103,14 @@ func (c *coreServices) initPlayerAndChar(
 	guildService *guild.Service,
 	fleamarketRepo *database.FleaMarketRepository,
 	notificationService *notification.Service,
+	referralDelivery character.ReferralDelivery,
 	maxPlayers int,
 	logger logging.Logger,
 ) error {
 	var charOpts []character.Option
 	charOpts = append(charOpts,
 		character.WithTransactionProvider(c.txProvider),
+		character.WithReferralDelivery(referralDelivery),
 		character.WithNewsPublisher(character.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err

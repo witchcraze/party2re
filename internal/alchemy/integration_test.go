@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestAlchemyIntegrationOvernightDepotSynthesis(t *testing.T) {
@@ -50,7 +51,7 @@ func TestAlchemyIntegrationOvernightDepotSynthesis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdChar, err := charService.Create(ctx, player.ID, "AlchInt")
+	createdChar, err := charService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +239,7 @@ func TestAlchemyIntegrationGearConsumptionAndRollback(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		createdChar, err := charService.Create(ctx, player.ID, "AlchGear")
+		createdChar, err := charService.Create(ctx, player.ID, id.New()[:8])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -343,7 +344,7 @@ func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
 
 	charService, _ := character.NewService(charRepo)
 	player, _ := database.CreateTestPlayer(ctx, db)
-	char, _ := charService.Create(ctx, player.ID, "AlchConc")
+	char, _ := charService.Create(ctx, player.ID, id.New()[:8])
 
 	itemCatalog, _ := item.InitialCatalog()
 	recipeCatalog, _ := alchemy.InitialRecipeCatalog()

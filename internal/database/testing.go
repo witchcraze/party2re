@@ -3,11 +3,13 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -105,6 +107,7 @@ func CreateTestCharacter(ctx context.Context, db *sql.DB, name string) (corechar
 
 // CreateTestCharacterWithFunds creates and persists a character with specified initial funds.
 // Automatically ensures the name adheres to the <= 8 char constraint.
+// If the sanitized label is taken, retries with a fresh eight-character name.
 func CreateTestCharacterWithFunds(ctx context.Context, db *sql.DB, name string, money int) (corecharacter.Character, error) {
 	p, err := CreateTestPlayer(ctx, db)
 	if err != nil {
@@ -121,10 +124,17 @@ func CreateTestCharacterWithFunds(ctx context.Context, db *sql.DB, name string, 
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
-	if err := repo.Save(ctx, char); err != nil {
-		return corecharacter.Character{}, err
+	for attempt := 0; attempt < 3; attempt++ {
+		err = repo.Save(ctx, char)
+		if err == nil {
+			return char, nil
+		}
+		if !errors.Is(err, character.ErrNameAlreadyTaken) {
+			return corecharacter.Character{}, err
+		}
+		char.Name = id.New()[:corecharacter.MaxNameLength]
 	}
-	return char, nil
+	return corecharacter.Character{}, err
 }
 
 // CreateTestGuildWithLeader creates and persists a guild with an associated leader character.

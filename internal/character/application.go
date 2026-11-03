@@ -90,19 +90,21 @@ func WithJobDefinitionProvider(provider corejob.DefinitionProvider) Option {
 }
 
 type Service struct {
-	repository   Repository
-	txProvider   TransactionProvider
-	news         NewsPublisher
-	guildChecker GuildMembershipChecker
-	fleaChecker  FleaMarketChecker
-	profileRepo  ProfileRepository
-	cleanupHooks []CleanupHook
-	jobProvider  corejob.DefinitionProvider
+	repository       Repository
+	txProvider       TransactionProvider
+	news             NewsPublisher
+	guildChecker     GuildMembershipChecker
+	fleaChecker      FleaMarketChecker
+	profileRepo      ProfileRepository
+	cleanupHooks     []CleanupHook
+	jobProvider      corejob.DefinitionProvider
+	referralDelivery ReferralDelivery
 }
 
 type CreationOptions struct {
-	JobID  string
-	Gender string
+	JobID               string
+	Gender              string
+	ReferrerCharacterID string
 }
 
 func NewService(repository Repository, opts ...Option) (*Service, error) {
@@ -141,8 +143,9 @@ func (s *Service) Create(ctx context.Context, playerID, name string) (corecharac
 	})
 }
 
-// CreateWithOptions saves the character, initial depot and joining news atomically.
+// CreateWithOptions saves the character, initial depot, referral delivery and joining news atomically.
 // An ambient transaction controls their final commit or rollback.
+// Lock order: existing referrer character(2), then referral depot/items(5).
 func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, options CreationOptions) (corecharacter.Character, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
@@ -157,9 +160,26 @@ func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, 
 		return corecharacter.Character{}, err
 	}
 	value.PlayerID = playerID
+	referrerID := strings.TrimSpace(options.ReferrerCharacterID)
+	if referrerID != "" && (s.referralDelivery == nil || s.txProvider == nil) {
+		return corecharacter.Character{}, errors.New("transactional referral delivery is not configured")
+	}
 	if err := s.runInTx(ctx, func(txCtx context.Context) error {
+		if referrerID != "" {
+			// Lock the existing recipient before creating any dependent records.
+			if _, err := s.findForUpdate(txCtx, referrerID); errors.Is(err, ErrNotFound) {
+				referrerID = ""
+			} else if err != nil {
+				return err
+			}
+		}
 		if err := s.repository.Save(txCtx, value); err != nil {
 			return err
+		}
+		if referrerID != "" {
+			if err := s.referralDelivery(txCtx, referrerID, value); err != nil {
+				return err
+			}
 		}
 		if s.news != nil {
 			return s.news.PublishNews(txCtx, "character",
@@ -250,6 +270,9 @@ func (s *Service) ChangeName(ctx context.Context, characterID, newName string) (
 		// 5. Check if new name is taken
 		if ext, ok := s.repository.(ExtendedRepository); ok {
 			existing, err := ext.FindByName(txCtx, newName)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return err
+			}
 			if err == nil && existing.ID != "" && existing.ID != characterID {
 				return ErrNameAlreadyTaken
 			}

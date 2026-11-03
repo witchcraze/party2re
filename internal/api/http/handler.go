@@ -858,11 +858,12 @@ func (h *Handler) handleDeletePlayerByID(w http.ResponseWriter, r *http.Request)
 // Character
 
 type createCharacterRequest struct {
-	Name   string `json:"name"`
-	JobID  string `json:"job_id"`
-	Job    string `json:"job"`
-	Gender string `json:"gender"`
-	Sex    string `json:"sex"`
+	ReferrerCharacterID string `json:"referrer_character_id"`
+	Name                string `json:"name"`
+	JobID               string `json:"job_id"`
+	Job                 string `json:"job"`
+	Gender              string `json:"gender"`
+	Sex                 string `json:"sex"`
 }
 
 type characterResponse struct {
@@ -898,10 +899,15 @@ func (h *Handler) handleCreateCharacter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	char, err := h.characters.CreateWithOptions(r.Context(), player.ID, req.Name, character.CreationOptions{
-		JobID:  cmp.Or(req.JobID, req.Job),
-		Gender: cmp.Or(req.Gender, req.Sex),
+		JobID:               cmp.Or(req.JobID, req.Job),
+		Gender:              cmp.Or(req.Gender, req.Sex),
+		ReferrerCharacterID: req.ReferrerCharacterID,
 	})
 	if err != nil {
+		if errors.Is(err, character.ErrNameAlreadyTaken) {
+			writeError(w, http.StatusConflict, err)
+			return
+		}
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return
 	}

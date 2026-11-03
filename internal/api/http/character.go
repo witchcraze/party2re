@@ -42,10 +42,11 @@ func (h *Handler) handleChangeCharacterName(w http.ResponseWriter, r *http.Reque
 		updated, err := h.characters.ChangeName(r.Context(), charID, req.Name)
 		if err != nil {
 			switch {
+			case errors.Is(err, character.ErrNameAlreadyTaken):
+				writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			case errors.Is(err, character.ErrInvalidName),
 				errors.Is(err, character.ErrSameName),
 				errors.Is(err, character.ErrInsufficientGold),
-				errors.Is(err, character.ErrNameAlreadyTaken),
 				errors.Is(err, character.ErrInGuildDisallowed),
 				errors.Is(err, character.ErrActiveMarketDisallowed):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
