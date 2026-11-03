@@ -338,6 +338,51 @@ before any old-enemy response; do not replay rewards or infer clear solely from 
 uses the changed floor for fatigue/other floor-dependent effects (#1221), not
 the number of encounters actually fought (`_battle.cgi:1208–1222`).
 
+### EX unlock and continuation
+
+EX eligibility is a durable **room-wide marker**, separate from stage clear,
+the special boss stat cap and named fields. Moving stages never clears it;
+the current stage must also declare EX support (22–26). At legacy revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`, all five stage predicates read the
+same `ex.cgi`, rather than a per-stage achievement. This contract and the
+bounded implementation split below were approved on 2026-11-03 (#1191).
+
+| Marker producer | Condition and evidence |
+| --- | --- |
+| Stage 22 defeat hook | Defeating the source Royal Bee identity draws `rand(3) < 1`; use a server-owned native catalog identity, never client/display names (`_battle.cgi:277–280`) |
+| Stage 23 explicit advance | Leaving assigned floor 10 with at least two ordered allies, including helpers/fallen allies; no boss-victory requirement (`vs_monster.cgi:52,240–245`) |
+| Stage 24 encounter creation | Creating ordinary floor-10 enemies, including tool150; coordinate assignment alone does not qualify (`vs_monster.cgi:143–152`) |
+| Stage 25 explicit advance | Leaving assigned floor 10, without a party-size or victory requirement (`vs_monster.cgi:245–249`) |
+| Stage 26 room creation | After selecting the room season, draw `rand(3) < 1` exactly once (`quest.cgi:596–600`); later travel neither repeats nor repairs that draw |
+
+Explicit advance remains the only ordinary progression operation. With no
+living enemies, floor 10 enters ordinary treasure at 11, running the existing
+Try conversion and current-stage clear/unseal hooks. An eligible EX room may
+then advance 11→12; otherwise it ends at 11. Entering 12 creates that stage's
+EX roster, restores allies' HP/MP/CMP to their current maxima and installs the
+declared default field (stage23 snow, stage24 sanctuary). Stages24/25 then apply
+the shared boss cap/reset hook, so restoration precedes any lower maximum.
+After defeating the EX encounter, explicit advance 12→13 creates EX treasure;
+13 is terminal. Defeat at 12 grants no treasure or automatic exit; ordinary
+earned assets survive and personal exit uses the actual floor. Evidence:
+`vs_monster.cgi:54–153`, `_npc_action.cgi:682–779`, `_battle.cgi:1485–1530`.
+
+EX treasure creation uses the source EX item pool, preserving duplicate
+weights, rather than ordinary weapon/armor/item selection. Stages24/25/26
+also create fixed-item chests. Creation never grants or opens a chest;
+ordinary and fixed inspection allowances are separate and delivery uses
+the existing asset owner (`_npc_action.cgi:6–84,555–599,725–779`).
+
+Native delivery is split between travel-required marker preservation/hooks,
+[EX encounter/remaining marker producers](https://github.com/witchcraze/party2re/issues/1807),
+and [EX treasure/inspection](https://github.com/witchcraze/party2re/issues/1808). The
+last two require their own catalog and SQL continuation tests; ordinary
+encounter coverage does not certify EX skills. Until those owners supply the
+complete transition, entry to an EX encounter/treasure must reject before
+reset, random draws, costs or persisted effects. The retained batch crawl is
+not an EX fallback. The existing SQL run snapshot/receipt remains the only
+authority; no second EX store or background progression is introduced.
+
 ### Remaining reconciliation gates
 
 Native travel transitions remain owned by
