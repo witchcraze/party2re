@@ -87,3 +87,46 @@ func TestDefeatResetProjectionKeepsAllManaAndZeroHPRevivalOutcomes(t *testing.T)
 		}
 	}
 }
+
+func TestDefeatResetProjectionCoversIndependentAccessoryAndAwakenedWeaponDraws(t *testing.T) {
+	for _, accessory := range []string{"item-115", "item-147", "item-251", "item-252", "item-253", "item-254", "item-255"} {
+		t.Run(accessory, func(t *testing.T) {
+			s, c := statusFixture()
+			a := s.actor("enemy")
+			a.BaseStats = BattleBaseStats{100, 100, 100}
+			a.HP, a.MaxHP, a.MP, a.MaxMP = 100, 101, 80, 100
+			a.Abilities = []string{"pharaoh"}
+			s.actor("self").Extended = ExtendedAwakening
+			power, level := 100, 99
+			a.Gear = &BattleGearStats{WeaponID: "weapon-71", WeaponAttack: &power, AccessoryID: accessory}
+			a.ItemDefinitionIDs = []string{"weapon-71", accessory}
+			dc := &DefeatContext{EquipmentResetContext: EquipmentResetContext{TargetContext: c.TargetContext, RequesterLevel: &level}}
+			states, _, err := s.projectDefeatResetBranches(dc, "enemy")
+			if err != nil {
+				t.Fatal(err)
+			}
+			maxAttack := 0
+			for _, state := range states {
+				maxAttack = max(maxAttack, state.State.actor("enemy").Attack)
+			}
+
+			// The accessory draw and awakened weapon-71 draw are independent.
+			// This high weapon roll reaches 295 after the accessory consumes its
+			// own draw; every real continuation must fit the pure projection.
+			p := reloadLifetime(t, s)
+			rng := &targetRNG{t: t, draws: []float64{.9, .9}}
+			auto := AutomaticRevivalContext{TargetContext: dc.TargetContext, Reset: func(id string) error {
+				return p.ApplyEquipmentReset(&dc.EquipmentResetContext, id, rng)
+			}}
+			result, err := p.ApplyAutomaticRevival(&auto, "enemy", rng)
+			if err != nil || !result.Prevented {
+				t.Fatal(result, err)
+			}
+			rng.done()
+			actual := p.actor("enemy")
+			if actual.Attack != 295 || maxAttack < actual.Attack {
+				t.Fatalf("projection max attack=%d, actual=%d", maxAttack, actual.Attack)
+			}
+		})
+	}
+}

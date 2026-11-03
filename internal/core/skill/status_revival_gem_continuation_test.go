@@ -310,6 +310,76 @@ func TestStatusRevivalGemUnsupportedTailIsAtomicAndUnknownStaysGated(t *testing.
 	}
 }
 
+func TestRegisteredInstantDeathRejectsUnsupportedAwakenedResetTailBeforeMutation(t *testing.T) {
+	s, revival, d := revivalRegistryFixture()
+	self, enemy := &s.Actors[0], &s.Actors[1]
+	self.Extended = corebattle.ExtendedAwakening
+	enemy.BaseStats = corebattle.BattleBaseStats{Attack: 100, Defense: 100, Agility: 100}
+	enemy.HP, enemy.MaxHP, enemy.MP, enemy.MaxMP = 100, 101, 80, 100
+	enemy.Abilities = []string{"pharaoh"}
+	power, level := 100, 99
+	enemy.Gear = &corebattle.BattleGearStats{WeaponID: "weapon-71", WeaponAttack: &power, AccessoryID: "item-115"}
+	enemy.ItemDefinitionIDs = []string{"weapon-71", "item-115"}
+	defeat := &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: revival.TargetContext, RequesterLevel: &level}}
+	status := corebattle.StatusContext{EffectContext: corebattle.EffectContext{TargetContext: revival.TargetContext}, Defeat: defeat}
+	d.RegisterStatuses(&status, nil)
+	d.Invocations.Entries["audit-tail"] = corebattle.CallbackDefinition{
+		Validate: func(s *corebattle.LifetimeState, _ *corebattle.CallbackContext) error {
+			if s.Actors[1].Attack > 270 {
+				return corebattle.ErrUnsupportedEffect
+			}
+			return nil
+		},
+		Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error {
+			t.Fatal("unsupported tail executed after registered instant-death prefix")
+			return nil
+		},
+	}
+	frame := corebattle.CallbackContext{TargetContext: revival.TargetContext, Arguments: []string{"enemy", "tail"}}
+	stateBefore, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frameBefore, statusBefore, defeatBefore := frame, status, *defeat
+	ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_instant_death_1"}, {Kind: "entry", EntryID: "audit-tail"}}
+	if _, err = d.InvocationAction(&s, &frame, []string{"gem_instant_death_1", "audit-tail"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatal("registered discovery admitted unsupported continuation", err)
+	}
+	if err = s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatal("registered execution admission accepted unsupported continuation", err)
+	}
+	stateAfter, err := json.Marshal(s)
+	if err != nil || string(stateBefore) != string(stateAfter) || !reflect.DeepEqual(frameBefore, frame) ||
+		!reflect.DeepEqual(statusBefore, status) || !reflect.DeepEqual(defeatBefore, *defeat) || level != 99 {
+		t.Fatal("rejected registered invocation mutated caller state, context, or counters", err, s, frame, status, defeat)
+	}
+
+	// A single registered status invocation remains supported: its real maximum
+	// outcome includes both the item-115 draw and the independent weapon-71 draw.
+	s, revival, d = revivalRegistryFixture()
+	self, enemy = &s.Actors[0], &s.Actors[1]
+	self.Extended = corebattle.ExtendedAwakening
+	enemy.BaseStats = corebattle.BattleBaseStats{Attack: 100, Defense: 100, Agility: 100}
+	enemy.HP, enemy.MaxHP, enemy.MP, enemy.MaxMP = 100, 101, 80, 100
+	enemy.Abilities = []string{"pharaoh"}
+	power, level = 100, 99
+	enemy.Gear = &corebattle.BattleGearStats{WeaponID: "weapon-71", WeaponAttack: &power, AccessoryID: "item-115"}
+	enemy.ItemDefinitionIDs = []string{"weapon-71", "item-115"}
+	defeat = &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: revival.TargetContext, RequesterLevel: &level}}
+	status = corebattle.StatusContext{EffectContext: corebattle.EffectContext{TargetContext: revival.TargetContext}, Defeat: defeat}
+	d.RegisterStatuses(&status, nil)
+	frame = corebattle.CallbackContext{TargetContext: revival.TargetContext, Arguments: []string{"enemy"}}
+	ops, err = d.InvocationAction(&s, &frame, []string{"gem_instant_death_1"}, noArithmeticDraws{t})
+	if err != nil {
+		t.Fatal("supported registered continuation rejected", err)
+	}
+	rng := &damageGemDraws{t: t, draws: []float64{0, .9, .9}}
+	if err = s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || rng.used != 3 ||
+		s.Actors[1].HP != 101 || s.Actors[1].MP != 40 || s.Actors[1].Attack != 295 || status.DeathCalls != 1 {
+		t.Fatal("registered instant-death continuation missed the projected maximum", err, s, status, rng.used)
+	}
+}
+
 func TestRevivalGemSealAlternativesAndItem195RejectUncheckedLaterDefense(t *testing.T) {
 	for _, activate := range []bool{false, true} {
 		s, c, d := revivalRegistryFixture()
