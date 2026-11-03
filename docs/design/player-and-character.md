@@ -42,6 +42,11 @@ Every `Character` belongs to exactly one `Player`. A `Player` may own multiple c
 - **Login Tracking**: Upon successful login, the player's `last_ip` and `updated_at` are refreshed.
 - **Soft-Ban Enforcement**: When an account is soft-banned (`banned_at IS NOT NULL` / `IsBanned() == true`), all active Valkey sessions and Personal Access Tokens are immediately invalidated. Subsequent login attempts (`POST /sessions`) and authenticated character requests receive HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
 
+Character activity is independent of account login tracking. The adopted
+[inactivity retention contract](player-deletion.md#4-inactivity-retention) expires
+individual characters, preserves their account and siblings, and requires a
+durable gameplay clock before automatic deletion can be enabled.
+
 ### 2.7 Request Throttling and Reload Sleep Penalty Reconciliation (Approved Departure)
 
 #### 2.7.1 Legacy Reload Penalty Specification
@@ -95,7 +100,7 @@ In original Party2, world registration capacity was constrained by a hardcoded c
 - **Exile / Ban Treatment (`party2/lib/exile.cgi:177`)**:
   - In original Party2, `&minus_entry_count` was explicitly commented out in `lib/exile.cgi` (`## &minus_entry_count;`). Consequently, banned/exiled players continued to occupy a registration slot in `$entry_count` until directory cleanup.
 - **Recalibration & Inactivity Purge (`party2/login.cgi:190–250`)**:
-  - When rebuilding the player ranking and list (`login.cgi`), the system scanned all user directories (`$userdir`), purged inactive accounts exceeding `$auto_delete_day` (or level <= 2 inactive for 7 days), tallied surviving active user directories (`$count`), and rewrote `$logdir/entry.cgi` as `"$count<><>"`, recalibrating any drift.
+  - When rebuilding the player ranking and list (`login.cgi`), the system scanned all user directories (`$userdir`), purged inactive accounts exceeding `$auto_delete_day` (or `job_lv <= 0` and level <= 2 inactive for strictly more than 7 days), tallied surviving active user directories (`$count`), and rewrote `$logdir/entry.cgi` as `"$count<><>"`, recalibrating any drift.
 
 #### 2.8.2 Reconciled Architecture & Adoption Policy (#1105)
 In Party2re's relational domain model, identity and game progression are separated into distinct `Player` (account) and `Character` (in-game persona) entities. The registration population limit is reconciled with this architecture as follows:
