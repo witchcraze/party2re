@@ -81,15 +81,16 @@ func WithDepotRepository(repo DepotRepository) Option {
 
 // Service implements all gem store operations and domain invariants.
 type Service struct {
-	catalog      *Catalog
-	characters   CharacterRepository
-	inventories  InventoryRepository
-	depots       DepotRepository
-	gemBoxes     GemBoxRepository
-	items        ItemDefinitionProvider
-	txProvider   TransactionProvider
-	randomSource RandomSource
-	economy      *economy.Service
+	mutationCheck func(context.Context, string) error
+	catalog       *Catalog
+	characters    CharacterRepository
+	inventories   InventoryRepository
+	depots        DepotRepository
+	gemBoxes      GemBoxRepository
+	items         ItemDefinitionProvider
+	txProvider    TransactionProvider
+	randomSource  RandomSource
+	economy       *economy.Service
 }
 
 // NewService creates a new GemStore service instance.
@@ -184,6 +185,9 @@ func (s *Service) SortGemBox(ctx context.Context, characterID string) (GemBox, e
 	run := func(txCtx context.Context) error {
 		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 

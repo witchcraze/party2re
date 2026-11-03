@@ -24,6 +24,9 @@ func (s *Service) ListGoldItem(ctx context.Context, characterID, depotItemInstan
 		if err != nil {
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
 		if err != nil {
@@ -125,6 +128,9 @@ func (s *Service) ListBarterItem(ctx context.Context, characterID, depotItemInst
 		if err != nil {
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
 		if err != nil {
@@ -217,6 +223,9 @@ func (s *Service) WithdrawListing(ctx context.Context, characterID, saleID strin
 		if err != nil {
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		// Rank 5: depot lock
 		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
@@ -271,6 +280,10 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 		}
 		char2, err := s.charRepo.FindByIDForUpdate(txCtx, c2)
 		if err != nil {
+			return err
+		}
+
+		if err := s.checkMutation(txCtx, buyerCharacterID); err != nil {
 			return err
 		}
 
@@ -377,6 +390,10 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 			return err
 		}
 
+		if err := s.checkMutation(txCtx, buyerCharacterID); err != nil {
+			return err
+		}
+
 		// Rank 5: depots locked ascending
 		dep1, err := depot.FindOrCreate(txCtx, s.depotRepo, char1)
 		if err != nil {
@@ -469,17 +486,4 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 
 		return nil
 	})
-}
-
-func (s *Service) resolveItemInfo(defID, fallbackName string) (string, string) {
-	cat, name := "item", fallbackName
-	if s.itemCatalog != nil {
-		if def, err := s.itemCatalog.FindByID(defID); err == nil {
-			cat = def.Category()
-			if def.Name != "" {
-				name = def.Name
-			}
-		}
-	}
-	return name, cat
 }

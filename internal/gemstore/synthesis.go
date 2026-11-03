@@ -40,6 +40,9 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 		if err != nil {
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		inv, err := s.inventories.FindByCharacterIDForUpdate(txCtx, characterID)
 		if err != nil {
@@ -154,6 +157,9 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 	run := func(txCtx context.Context) error {
 		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 

@@ -93,6 +93,7 @@ func (f BlessingProviderFunc) HasCasinoBlessing(ctx context.Context, characterID
 type GamePlayedHook func(ctx context.Context, characterID string, gameName string) error
 
 type Service struct {
+	mutationCheck    func(context.Context, string) error
 	repo             Repository
 	roomRepo         RoomRepository
 	depotRepo        DepotRepository
@@ -277,6 +278,9 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 		if s.charRepo != nil {
 			char, err = s.charRepo.FindByIDForUpdate(txCtx, characterID)
 			if err != nil {
+				return err
+			}
+			if err := s.checkMutation(txCtx, characterID); err != nil {
 				return err
 			}
 			if char.Tired >= 100 {

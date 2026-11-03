@@ -12,7 +12,8 @@ import (
 )
 
 type LotteryRepository struct {
-	db *sql.DB
+	ticketPurchaseCheck func(context.Context, string) error
+	db                  *sql.DB
 }
 
 func NewLotteryRepository(db *sql.DB) (*LotteryRepository, error) {
@@ -253,6 +254,20 @@ func (r *LotteryRepository) PurchaseTakarakujiTicket(ctx context.Context, roundI
 		}
 		if boughtCount > 0 {
 			return lottery.ErrAlreadyPurchased
+		}
+
+		// Lock the buyer before the injected ownership check; the round is already locked.
+		var buyerID string
+		if err := executor.QueryRowContext(txCtx, "SELECT id FROM characters WHERE id = ? FOR UPDATE", characterID).Scan(&buyerID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return lottery.ErrInsufficientGold
+			}
+			return err
+		}
+		if r.ticketPurchaseCheck != nil {
+			if err := r.ticketPurchaseCheck(txCtx, characterID); err != nil {
+				return err
+			}
 		}
 
 		// 4. Deduct gold (Rank 2)

@@ -96,7 +96,7 @@ func newMiscServices(
 	}
 	eventplazaService, err := eventplaza.NewService(
 		eventplazaRepo,
-		core.charRepo,
+		normalWriter(core),
 		core.invRepo,
 		plazaOpts...,
 	)
@@ -139,7 +139,7 @@ func newMiscServices(
 	}
 	helperService := helperquest.NewService(
 		helperRepo,
-		core.charRepo,
+		normalWriter(core),
 		helperGuild,
 		core.txProvider,
 		helperquest.WithDepotRepository(econ.depotRepo),
@@ -155,7 +155,7 @@ func newMiscServices(
 		return nil, err
 	}
 	secretshopService, err := secretshop.NewService(
-		core.charRepo,
+		normalWriter(core),
 		core.invRepo,
 		secretshopCatalog,
 		secretshop.WithTransactionProvider(core.txProvider),
@@ -174,7 +174,7 @@ func newMiscServices(
 	jobService, err := job.NewService(
 		core.charJobRepo,
 		job.WithCatalog(core.jobCatalog),
-		job.WithCharacterRepository(core.charRepo),
+		job.WithCharacterRepository(normalWriter(core)),
 		job.WithInventoryRepository(core.invRepo),
 		job.WithEquipmentRepository(econ.equipRepo),
 		job.WithEconomy(core.economy),
@@ -224,9 +224,10 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
+	lotteryRepo.SetTicketPurchaseCheck(normalWriter(core).check)
 	var lotOpts []lottery.Option
 	if core.charRepo != nil {
-		lotOpts = append(lotOpts, lottery.WithCharacterRepository(core.charRepo))
+		lotOpts = append(lotOpts, lottery.WithCharacterRepository(normalWriter(core)))
 	}
 	if econ.depotRepo != nil {
 		lotOpts = append(lotOpts, lottery.WithDepotRepository(econ.depotRepo))
@@ -277,7 +278,7 @@ func newMiscServices(
 		return nil, err
 	}
 	blackmarketService, err := blackmarket.NewService(
-		core.charRepo,
+		normalWriter(core),
 		core.invRepo,
 		blackmarketRepo,
 		blackmarketCatalog,
@@ -385,7 +386,7 @@ func newMiscServices(
 	}
 
 	wishingwellService, err := wishingwell.NewService(
-		core.charRepo,
+		normalWriter(core),
 		wishingwell.WithTransactionProvider(core.txProvider),
 	)
 	if err != nil {
@@ -403,6 +404,10 @@ func newMiscServices(
 			return nil, err
 		}
 	}
+
+	medalService.SetMutationCheck(normalWriter(core).check)
+	monsterService.SetMutationCheck(normalWriter(core).check)
+	casinoService.SetMutationCheck(normalWriter(core).check)
 
 	return &miscServices{
 		medal:          medalService,

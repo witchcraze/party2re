@@ -9,8 +9,8 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
-// Only services changing the actor's live combat state use this writer.
-// Peer deliveries keep the ordinary repository so recipients can receive assets.
+// Single-actor mutation services use this writer. Mixed actor/recipient services
+// check the initiating actor explicitly and keep passive deliveries unguarded.
 type normalCharacterWriter struct {
 	*database.CharacterRepository
 	check func(context.Context, string) error

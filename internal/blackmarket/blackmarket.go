@@ -204,7 +204,10 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 		// 1. Lock character (Tier 2)
 		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
-			return ErrCharacterNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return ErrCharacterNotFound
+			}
+			return err
 		}
 
 		// 2. Lock inventory (Tier 3)
@@ -327,7 +330,10 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 		// 1. Lock character (Tier 2)
 		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
-			return ErrCharacterNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return ErrCharacterNotFound
+			}
+			return err
 		}
 
 		// 2. Lock depot (Tier 5) and verify capacity

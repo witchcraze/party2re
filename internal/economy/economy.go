@@ -158,6 +158,10 @@ func (s *Service) DeductGold(ctx context.Context, characterID string, amount int
 		if err != nil {
 			return ErrCharacterNotFound
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
+
 		if amount == 0 {
 			result = char
 			return nil
@@ -229,6 +233,10 @@ func (s *Service) DeductSmallMedals(ctx context.Context, characterID string, amo
 		if err != nil {
 			return ErrCharacterNotFound
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
+
 		if amount == 0 {
 			result = char
 			return nil

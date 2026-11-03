@@ -34,6 +34,9 @@ func (s *Service) BuyGem(ctx context.Context, characterID, gemID string) (BuyRes
 		if err != nil {
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		// Unlock requirement is based on job_lv (transfer count)
 		if gem.RequiredJobLevel > 1 && char.JobLevel < gem.RequiredJobLevel {
@@ -107,6 +110,9 @@ func (s *Service) SellGem(ctx context.Context, characterID, itemInstanceOrDefID 
 	run := func(txCtx context.Context) error {
 		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 

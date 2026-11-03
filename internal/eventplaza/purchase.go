@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
@@ -82,7 +83,10 @@ func (s *Service) PurchaseBazaarItem(
 	operation := func(txCtx context.Context) error {
 		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
-			return ErrCharacterNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return ErrCharacterNotFound
+			}
+			return err
 		}
 
 		if char.Money < totalCost {

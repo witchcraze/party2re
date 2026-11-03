@@ -277,7 +277,7 @@ func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID s
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// 1. Lock Character first (Deterministic lock order: characters -> inventory_items)
 		if _, err := s.findCharacter(txCtx, characterID); err != nil {
-			return corecharacter.ErrNotFound
+			return err
 		}
 
 		// 2. Lock Inventory next

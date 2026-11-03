@@ -273,6 +273,10 @@ func (s *Service) ChangeMark(ctx context.Context, guildID string, leaderID strin
 			return err
 		}
 
+		if err := s.checkMutation(txCtx, leaderID); err != nil {
+			return err
+		}
+
 		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err
@@ -316,6 +320,10 @@ func (s *Service) ChangeWallpaper(ctx context.Context, guildID string, leaderID 
 	var updatedChar corecharacter.Character
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
 		if err := s.repo.LockCharacterForUpdate(txCtx, leaderID); err != nil {
+			return err
+		}
+
+		if err := s.checkMutation(txCtx, leaderID); err != nil {
 			return err
 		}
 

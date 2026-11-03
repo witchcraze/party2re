@@ -106,6 +106,9 @@ func (s *Service) ExchangePrize(ctx context.Context, characterID string, costCoi
 			if err != nil {
 				return err
 			}
+			if err := s.checkMutation(txCtx, characterID); err != nil {
+				return err
+			}
 			char = c
 		}
 		if char.ID == "" {

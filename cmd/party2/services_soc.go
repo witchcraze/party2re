@@ -174,6 +174,8 @@ func newSocServices(
 		return nil, err
 	}
 
+	guildService.SetMutationCheck(normalWriter(core).check)
+
 	return &socServices{
 		schedRepo:    schedRepo,
 		guildRepo:    guildRepo,

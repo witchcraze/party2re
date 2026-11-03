@@ -49,6 +49,7 @@ type CustomSkill struct {
 }
 
 type CharacterProvider interface {
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 

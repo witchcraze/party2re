@@ -7,3 +7,10 @@ import "context"
 func (s *Service) SetMutationCheck(check func(context.Context, string) error) {
 	s.mutationCheck = check
 }
+
+func (s *Service) checkMutation(ctx context.Context, actor string) error {
+	if s.mutationCheck != nil {
+		return s.mutationCheck(ctx, actor)
+	}
+	return nil
+}

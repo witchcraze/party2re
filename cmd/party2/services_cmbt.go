@@ -199,7 +199,7 @@ func newCmbtServices(
 		return nil, err
 	}
 
-	customSkillService, err := customskill.NewService(customSkillRepo, core.charRepo)
+	customSkillService, err := customskill.NewService(customSkillRepo, normalWriter(core))
 	if err != nil {
 		return nil, err
 	}

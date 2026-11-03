@@ -564,10 +564,14 @@ from an active-run transaction.
 PlayerContext consumes the public owned actor reader. Required read errors fail
 closed. Active and unfinished penalty facts survive lobby loss; private Character
 records and bag contents are never returned as another actor's combat projection.
-Actor-owned transactions and live-state writers check SQL ownership under the
-character lock, allowing the already-serialized native command context. Incoming
-peer credits keep their ordinary asset repository. Sleep and retained combat
-admission also recheck ownership; deletion cannot orphan an enrolled actor.
+Actor-owned asset transactions and live-state writers check SQL ownership after
+Rank 2 character locking, allowing the already-serialized native command context.
+Single-actor services reuse the guarded writer; mixed transfers and purchases
+check only the initiator after all affected character locks, before asset changes.
+Incoming money/items, proceeds from existing offers and committed reward delivery
+keep ordinary recipient access. These checks only observe SQL ownership and never
+acquire a run lock after character locks. Sleep and retained combat admission also
+recheck ownership; deletion cannot orphan an enrolled actor.
 Production cutover must preserve these checks rather than rely on menu eligibility.
 
 ### One command, one bounded SQL transaction

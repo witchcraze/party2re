@@ -19,6 +19,9 @@ func (s *Service) ChangeStoreName(ctx context.Context, characterID, newName stri
 		if err != nil {
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		if char.Money < NameChangePrice {
 			return ErrInsufficientFunds
@@ -59,6 +62,9 @@ func (s *Service) ChangeWallpaper(ctx context.Context, characterID, wallpaper st
 	return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
 		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 
@@ -104,6 +110,9 @@ func (s *Service) AddInterior(ctx context.Context, characterID, furnitureID stri
 	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
 		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 

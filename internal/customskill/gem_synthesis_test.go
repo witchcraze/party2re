@@ -34,6 +34,10 @@ func (r *synthesisCharacters) FindByID(_ context.Context, id string) (corecharac
 	return character, nil
 }
 
+func (r *synthesisCharacters) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 type synthesisGems map[string]customskill.GemDefinition
 
 func (g synthesisGems) FindGemByID(id string) (customskill.GemDefinition, bool) {

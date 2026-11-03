@@ -31,9 +31,9 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 	}
 	var result *CustomSkill
 	run := func(txCtx context.Context) error {
-		char, err := s.charRepo.FindByID(txCtx, characterID)
+		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
-			return ErrCharacterNotFound
+			return err
 		}
 		expectedCap := gemstore.CalculateGemBoxCapacity(char.JobLevel)
 		box, err := s.gemBox.FindByCharacterIDForUpdate(txCtx, characterID)

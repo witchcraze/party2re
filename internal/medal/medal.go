@@ -84,6 +84,7 @@ func WithAchievementCatalog(achievements []Achievement) Option {
 }
 
 type Service struct {
+	mutationCheck   func(context.Context, string) error
 	characters      CharacterRepository
 	depots          DepotRepository
 	txProvider      TransactionProvider
@@ -184,6 +185,9 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 
