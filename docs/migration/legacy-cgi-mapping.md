@@ -84,7 +84,7 @@ this delivery path under the existing [trajectory gap](../design/player-and-char
 - **Scope / Legacy**: `lib/home.cgi`の`ねる`、`lib/sleep.cgi`、共有dispatchの睡眠中操作制限。睡眠時間、訪問先の前提、起床回復、各機能のreset/完了と長期不在・再試行を追う。
 - **Go / HTTP**: `internal/home/sleep.go`、`internal/core/timer/`、`internal/api/http/home_sleep.go`、`internal/api/http/action_home.go`、`internal/api/http/auth_helper.go`、`cmd/party2/wire.go`の回復連動配線。
 - **Contracts**: [design/home.md](../design/home.md)、[design/action-preconditions.md](../design/action-preconditions.md)、[api/paths/home.json](../api/paths/home.json)。
-- **Open follow-ups**: [#1117](https://github.com/witchcraze/party2re/issues/1117) (更新guard)、[#1118](https://github.com/witchcraze/party2re/issues/1118) (起床義務の寿命)、[#1119](https://github.com/witchcraze/party2re/issues/1119) (私有Home条件)、[#1123](https://github.com/witchcraze/party2re/issues/1123) (時間/人数consumer)。人数のidentity・時間窓はCL-01の[#1104](https://github.com/witchcraze/party2re/issues/1104)を参照する。
+- **Open follow-ups**: [#1117](https://github.com/witchcraze/party2re/issues/1117) (更新guard)、[#1118](https://github.com/witchcraze/party2re/issues/1118) (起床義務の寿命)、[#1119](https://github.com/witchcraze/party2re/issues/1119) (私有Home条件)、[#1123](https://github.com/witchcraze/party2re/issues/1123) (時間/人数consumer)。人数のidentity・時間窓は[公開presence契約](../design/player-and-character.md#212-public-presence-and-login-message)を参照する。
 - **Boundary**: 満腹・祝福・錬金等は睡眠からの呼出し/失敗時整合を確認し、各機能全体の監査へ広げない。explicit Wakeとread-only GETの承認済み契約を維持する。
 
 #### CL-02C: Depot & Transfers

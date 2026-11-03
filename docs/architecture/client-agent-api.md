@@ -99,6 +99,38 @@ The four top-level fields are:
   execution must revalidate current state. Character facts come from the query
   snapshot, not the separate profile view's character projection.
 
+### Public presence and message boundary
+
+The planned anonymous `GET /api/v1/presence` returns `observed_at`,
+`online_count` and `characters` from one SQL observation/cleanup transaction.
+Legacy expired/duplicate snapshot pruning is its sole write effect; it never
+advances game activity, entry or sampling clocks. Each character contains
+only `id`, `name`, `color`, `guild_id`, `guild_name`, `icon_url`, `aura_effect` and
+`login_message`; absent guild/icon uses empty strings and absent aura uses zero.
+Apply the [sampled presence and text safety contract](../design/player-and-character.md#212-public-presence-and-login-message)
+before constructing this DTO. Exclude Player IDs/usernames, IP/host, credentials,
+precise activity timestamps, private profile data, wallet/inventory and timers.
+Never expose or reuse the owned context DTO as a public response. Required read
+or unsafe stored-data failures return an error, not partial rows or a false zero.
+
+Planned owned Gateway commands are `presence_enter` (game entry, optional string
+`login_message`) and `presence_refresh` (saved screen refresh, empty params).
+Omitted message preserves it; `""` clears it; null/non-string/invalid text returns
+400 without changing message or clocks. Standard authentication/ownership wrappers
+and service ownership checks apply equally to session and PAT calls: 401 for
+missing/invalid auth, 403 for another owner's character or a banned account, 404
+for a missing character. These observational game commands remain available
+during sleep/death/unfinished work and perform no recovery or settlement. Entry
+publishes immediately; refresh only samples when due. Other gameplay saves reuse
+the same recorder. Post-command GET refresh never records another activity event.
+Preserve known command results on context refresh failure and use GET-only
+recovery; do not automatically replay POST. Public clients use escaped text
+bindings and safe image URLs, never message HTML or executable avatar markup.
+
+These are approved implementation targets, not registered routes/actions.
+Their modular OpenAPI schemas are added with runtime implementation. Browser UI
+and external widget delivery remain separately scoped consumers.
+
 ### Approved navigation and progressive observation contract
 
 The direction approved in [#1047](https://github.com/witchcraze/party2re/issues/1047)
@@ -557,8 +589,8 @@ owned-character gameplay Gateway. Admin-only news publication, contest settlemen
 and ranking refresh remain admin operations even where their existing paths lack
 an `/admin` prefix. Public news, rankings/legends, explicitly public replays under
 the [replay ownership contract](../design/replay.md#original-content-and-access-boundary), and approved
-sanitized public home/store/guild projections may retain anonymous routes; normal
-interactive clients still obtain gameplay information through context. Other
+sanitized public home/store/guild and presence projections may retain anonymous
+routes; normal interactive clients still obtain gameplay information through context. Other
 public facility GETs are migration candidates, not automatic permanent exceptions.
 The route matrix in [#1047](https://github.com/witchcraze/party2re/issues/1047)
 is historical investigation evidence. Current registrations and payloads come
