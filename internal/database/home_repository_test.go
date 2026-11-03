@@ -23,7 +23,11 @@ func TestHomeRepository_Database(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 
 	ctx := context.Background()
 
@@ -40,6 +44,28 @@ func TestHomeRepository_Database(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		for _, cid := range []string{char1.ID, char2.ID} {
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", cid); err != nil {
+				t.Errorf("cleanup character_homes for %s failed: %v", cid, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", cid); err != nil {
+				t.Errorf("cleanup character_depots for %s failed: %v", cid, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", cid); err != nil {
+				t.Errorf("cleanup characters for %s failed: %v", cid, err)
+			}
+		}
+		for _, pid := range []string{char1.PlayerID, char2.PlayerID} {
+			if pid != "" {
+				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", pid); err != nil {
+					t.Errorf("cleanup players for %s failed: %v", pid, err)
+				}
+			}
+		}
+	})
 
 	repo, err := database.NewHomeRepository(db)
 	if err != nil {
@@ -322,7 +348,11 @@ func TestHomeRepository_UpdateCompanionName_Database(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 
 	ctx := context.Background()
 	repo, err := database.NewHomeRepository(db)
@@ -335,6 +365,24 @@ func TestHomeRepository_UpdateCompanionName_Database(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", char.ID); err != nil {
+				t.Errorf("cleanup character_homes for %s failed: %v", char.ID, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID); err != nil {
+				t.Errorf("cleanup character_depots for %s failed: %v", char.ID, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID); err != nil {
+				t.Errorf("cleanup characters for %s failed: %v", char.ID, err)
+			}
+			if char.PlayerID != "" {
+				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID); err != nil {
+					t.Errorf("cleanup players for %s failed: %v", char.PlayerID, err)
+				}
+			}
+		})
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		expires := now.Add(5 * 24 * time.Hour)
 		if err := repo.SaveHome(ctx, home.CharacterHome{
@@ -374,6 +422,24 @@ func TestHomeRepository_UpdateCompanionName_Database(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", char.ID); err != nil {
+				t.Errorf("cleanup character_homes for %s failed: %v", char.ID, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID); err != nil {
+				t.Errorf("cleanup character_depots for %s failed: %v", char.ID, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID); err != nil {
+				t.Errorf("cleanup characters for %s failed: %v", char.ID, err)
+			}
+			if char.PlayerID != "" {
+				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID); err != nil {
+					t.Errorf("cleanup players for %s failed: %v", char.PlayerID, err)
+				}
+			}
+		})
 		now := time.Now().UTC()
 
 		got, err := repo.UpdateCompanionName(ctx, char.ID, "モモンガ", now)
