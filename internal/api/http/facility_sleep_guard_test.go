@@ -116,14 +116,14 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"job_memory_save", http.MethodPost, "/characters/char-1/future-memories", `{}`},
 		{"job_memory_recall", http.MethodPost, "/characters/char-1/recall-future", `{"memory_id":"mem-1"}`},
 		// Depot
-		{"depot_deposit", http.MethodPost, "/characters/char-1/depot/deposit", `{"item_id":"item-1"}`},
+		{"depot_deposit", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_deposit","params":{"item_id":"item-1"}}`},
 		{"depot_withdraw", http.MethodPost, "/characters/char-1/depot/withdraw", `{"item_id":"item-1"}`},
 		{"depot_sell", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sell","params":{"item_id":"item-1"}}`},
 		{"depot_sell_batch", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sell_batch","params":{"item_ids":["item-1"]}}`},
 		{"depot_sort", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sort"}`},
 		{"depot_expand", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_expand"}`},
 		{"depot_send_money", http.MethodPost, "/characters/char-1/depot/send-money", `{"recipient_character_id":"char-2","amount":100}`},
-		{"depot_send_item", http.MethodPost, "/characters/char-1/depot/send-item", `{"recipient_character_id":"char-2","item_id":"item-1"}`},
+		{"depot_send_item", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_send_item","params":{"recipient_character_id":"char-2","item_id":"item-1"}}`},
 		// Plantation
 		{"plantation_sow", http.MethodPost, "/characters/char-1/plantation/sow", `{"seed_id":"seed-1"}`},
 		{"plantation_fertilize", http.MethodPost, "/characters/char-1/plantation/fertilize", `{"fertilizer_id":"fert-1"}`},

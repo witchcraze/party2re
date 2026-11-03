@@ -24,6 +24,8 @@ func TestRetiredDepotRoutesDoNotReadOrExecute(t *testing.T) {
 			{http.MethodPost, "/sell"},
 			{http.MethodPost, "/sell-batch"},
 			{http.MethodPost, "/sort"},
+			{http.MethodPost, "/deposit"},
+			{http.MethodPost, "/send-item"},
 		} {
 			for _, actor := range []struct{ id, token string }{{"hero", ""}, {"hero", "session"}, {"other", "session"}, {"missing", "session"}} {
 				path := "/characters/" + actor.id + "/depot" + route.suffix
@@ -52,7 +54,13 @@ func TestOpenAPIDepotRetirementKeepsRemainingOperationsAndGateway(t *testing.T) 
 			t.Errorf("retired path remains in OpenAPI: %s", path)
 		}
 	}
-	for _, suffix := range []string{"deposit", "withdraw", "send-money", "send-item"} {
+	if _, exists := spec.Paths["/characters/{id}/depot/deposit"]; exists {
+		t.Error("retired deposit path remains in OpenAPI")
+	}
+	if _, exists := spec.Paths["/characters/{id}/depot/send-item"]; exists {
+		t.Error("retired send-item path remains in OpenAPI")
+	}
+	for _, suffix := range []string{"withdraw", "send-money"} {
 		path := "/characters/{id}/depot/" + suffix
 		if len(spec.Paths[path]["post"]) == 0 {
 			t.Errorf("retained Depot operation missing: POST %s", path)

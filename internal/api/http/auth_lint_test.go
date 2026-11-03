@@ -387,10 +387,8 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleSaveFutureMemory":   "job.go",
 		"handleRecallFutureMemory": "job.go",
 		// Depot
-		"handleDepositDepotItem":  "depot.go",
 		"handleWithdrawDepotItem": "depot.go",
 		"handleDepotSendMoney":    "depot.go",
-		"handleDepotSendItem":     "depot.go",
 		// Plantation
 		"handlePlantationSow":       "plantation.go",
 		"handlePlantationFertilize": "plantation.go",

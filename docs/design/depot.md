@@ -180,17 +180,16 @@ activities/conflicts take priority over ordinary selection. The
 owns input, ownership and GET-only refresh recovery behavior.
 
 Owned status uses explicit `scene_enter` for Depot followed by GET context;
-the old GET `/characters/{id}/depot` route is retired. The `depot_expand`
-Gateway command delegates to `Expand` and replaces POST
-`/characters/{id}/depot/expand`; owned context supplies the read-only quote.
-The `depot_sell` and `depot_sell_batch` commands delegate explicit instance
-selection to `SellItem` and `SellItems` and return the existing Depot/gold-earned
-result, replacing the former single/batch sale POST routes. Discovery never
-chooses all visible instances for a batch. Four inventory/transfer REST operations
-remain. Explicit `depot_sort` accepts omitted params or an empty object, delegates
-to `SortItems` and returns the existing Depot result, replacing POST
-`/characters/{id}/depot/sort`. Deposit/withdraw/send command adapters are pending.
-The shared
+the mapping below owns individual route dispositions. Connected Gateway
+commands delegate to the listed services and retain their Depot result,
+including gold earned for sales and trimmed recipient/item IDs for sending.
+`depot_expand` and `depot_sort` accept omitted params or an empty object.
+`depot_deposit` and `depot_sell` require a non-null string `item_id`;
+`depot_sell_batch` requires an explicit array of string `item_ids`.
+`depot_send_item` requires non-null string `item_id` and
+`recipient_character_id`; the actor remains the authenticated path owner.
+Discovery never selects items or recipients. Exact ownership, capacity,
+stacking and equipment detachment remain service-owned. The shared
 [command contract](../architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)
 owns explicit intent, guards and outcome recovery. Observation does not execute
 NPC, delivery, collection or scheduling effects. Legacy `depot.cgi:68–81` dispatch
@@ -199,21 +198,24 @@ maps to the existing services as follows:
 | Legacy routine | Existing service | Transport |
 | --- | --- | --- |
 | Listing/header, `get_depot_c` | GetDepot | Selected Depot GET context; whole-list REST retired |
-| `azukeru` | DepositItem | POST `/characters/{id}/depot/deposit` |
+| `azukeru` | DepositItem | Gateway `depot_deposit`; deposit REST retired |
 | `hikidasu` | WithdrawItem | POST `/characters/{id}/depot/withdraw` |
 | `uru` | SellItem | Gateway `depot_sell`; sale REST retired |
 | `matomete_uru` | SellItems | Gateway `depot_sell_batch`; batch-sale REST retired |
 | `seiton` | SortItems | Gateway `depot_sort`; sort REST retired |
-| `okuru` | SendMoney, SendItem | POST `/characters/{id}/depot/send-money`, `/characters/{id}/depot/send-item` |
+| `okuru` (item) | SendItem | Gateway `depot_send_item`; item-send REST retired |
+| `okuru` (money) | SendMoney | POST `/characters/{id}/depot/send-money` |
 | `expansion_depot` | Expand | Gateway `depot_expand`; expansion REST retired |
 
-This mapping records transport coverage, not full legacy parity. Legacy
-`seiton` (`depot.cgi:313–332`) persists kind/item-number ordering. SortItems results
-now survive repository reload, and context pages preserve that order. The stored
-kind/number comparator described above belongs to the feature; HTTP adds no separate
-sorting rule.
+This mapping records transport coverage, not full legacy parity. Sorting and
+equipped-item movement use the domain contracts above.
 Legacy `hikidasu` (`depot.cgi:208–288`) swaps held equipment/items back into
 storage, while current WithdrawItem moves into inventory and rejects a full
 slot; the equivalent atomic swap contract remains undecided in #1127. Equipped
 item deposit/send uses the atomic equipment-detachment contract above. Shared
 NPC/presence/log effects and remaining command/route migration stay under #947.
+Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item
+lists, all empty in the reference checkout. Current `SendItem` has no such
+configuration; nonempty deployment-specific lists are unverified. Recipient
+Home delivery notices remain under
+[#1110](https://github.com/witchcraze/party2re/issues/1110).

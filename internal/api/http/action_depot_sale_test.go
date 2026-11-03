@@ -25,7 +25,18 @@ type depotSaleFixture struct {
 	*depotExpansionFixture
 	ids        []string
 	batch      bool
+	recipient  string
 	activities []playercontext.Activity
+}
+
+func (f *depotSaleFixture) DepositItem(ctx context.Context, actor, id string) (depot.Depot, error) {
+	f.ids, f.batch = []string{id}, false
+	return f.Expand(ctx, actor)
+}
+
+func (f *depotSaleFixture) SendItem(ctx context.Context, actor, recipient, id string) (depot.Depot, error) {
+	f.ids, f.batch, f.recipient = []string{id}, false, recipient
+	return f.Expand(ctx, actor)
 }
 
 func (f *depotSaleFixture) SellItem(ctx context.Context, actor, id string) (depot.Depot, int, error) {
@@ -62,15 +73,19 @@ func saleGatewayBody(action, params string) string {
 	return `{"action":"` + action + `","params":` + params + `}`
 }
 
-func TestDepotSaleGatewayInputs(t *testing.T) {
-	for _, action := range []string{"depot_sell", "depot_sell_batch"} {
+func TestDepotItemGatewayInputs(t *testing.T) {
+	for _, action := range []string{"depot_deposit", "depot_send_item", "depot_sell", "depot_sell_batch"} {
 		invalid := []string{"", `null`, `{}`, `[]`, `1`, `{"item_id":null}`, `{"item_ids":null}`}
 		valid := `{"item_id":"one"}`
-		if action == "depot_sell" {
+		if action != "depot_sell_batch" {
 			invalid = append(invalid, `{"item_id":1}`, `{"item_id":[]}`, `{"item_ids":["one"]}`)
 		} else {
 			valid = `{"item_ids":["one","two"]}`
 			invalid = append(invalid, `{"item_ids":"one"}`, `{"item_ids":1}`, `{"item_ids":[1]}`, `{"item_ids":[null]}`, `{"item_ids":["one",null]}`, `{"item_id":"one"}`)
+		}
+		if action == "depot_send_item" {
+			valid = `{"item_id":"one","recipient_character_id":"recipient"}`
+			invalid = append(invalid, `{"item_id":"one"}`, `{"recipient_character_id":"recipient"}`, `{"item_id":null,"recipient_character_id":"recipient"}`, `{"item_id":1,"recipient_character_id":"recipient"}`, `{"item_id":"one","recipient_character_id":null}`, `{"item_id":"one","recipient_character_id":1}`)
 		}
 		for _, field := range []string{`"character_id":"other"`, `"player_id":"other"`, `"price":0`, `"quantity":1`, `"extra":null`} {
 			invalid = append(invalid, strings.TrimSuffix(valid, "}")+","+field+"}")
@@ -88,8 +103,8 @@ func TestDepotSaleGatewayInputs(t *testing.T) {
 	}
 }
 
-func TestDepotSaleGatewayOutcomeRecovery(t *testing.T) {
-	for _, action := range []string{"depot_sell", "depot_sell_batch"} {
+func TestDepotItemGatewayOutcomeRecovery(t *testing.T) {
+	for _, action := range []string{"depot_deposit", "depot_send_item", "depot_sell", "depot_sell_batch"} {
 		for _, failure := range []string{"", "query", "profile", "depot"} {
 			for _, rejected := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/%t", action, failure, rejected), func(t *testing.T) {
@@ -98,6 +113,9 @@ func TestDepotSaleGatewayOutcomeRecovery(t *testing.T) {
 					params, wantIDs := `{"item_id":"one"}`, []string{"one"}
 					if action == "depot_sell_batch" {
 						params, wantIDs = `{"item_ids":["two","one"]}`, []string{"two", "one"}
+					}
+					if action == "depot_send_item" {
+						params = `{"item_id":" one ","recipient_character_id":" recipient "}`
 					}
 					wantStatus := 200
 					if rejected {
@@ -117,14 +135,27 @@ func TestDepotSaleGatewayOutcomeRecovery(t *testing.T) {
 					if status != wantStatus || f.executions != 1 || f.batch != (action == "depot_sell_batch") || !reflect.DeepEqual(f.ids, wantIDs) {
 						t.Fatalf("lost intent: %d %s ids=%v", status, got, f.ids)
 					}
+					if action == "depot_send_item" && f.recipient != "recipient" {
+						t.Fatalf("wrong recipient: %q", f.recipient)
+					}
 					if rejected {
 						assertGatewayError(t, got, "DEPOT_ITEM_NOT_FOUND")
 					} else {
-						var result sellDepotResponse
-						if err := json.Unmarshal(got["result"], &result); err != nil {
+						var result any = &sellDepotResponse{}
+						var want any = &sellDepotResponse{Depot: toDepotResponse(f.dep), GoldEarned: 150}
+						if action == "depot_deposit" {
+							result = &depotResponse{}
+							value := toDepotResponse(f.dep)
+							want = &value
+						}
+						if action == "depot_send_item" {
+							result = &sendItemResponse{}
+							want = &sendItemResponse{Depot: toDepotResponse(f.dep), RecipientCharacterID: "recipient", ItemID: "one"}
+						}
+						if err := json.Unmarshal(got["result"], result); err != nil {
 							t.Fatal(err)
 						}
-						if string(got["success"]) != "true" || !reflect.DeepEqual(result, sellDepotResponse{Depot: toDepotResponse(f.dep), GoldEarned: 150}) {
+						if string(got["success"]) != "true" || !reflect.DeepEqual(result, want) {
 							t.Fatalf("lost result: %s", got)
 						}
 					}
@@ -143,17 +174,22 @@ func TestDepotSaleGatewayOutcomeRecovery(t *testing.T) {
 	}
 }
 
-func TestDepotSaleGatewayErrors(t *testing.T) {
-	for _, action := range []string{"depot_sell", "depot_sell_batch"} {
+func TestDepotItemGatewayErrors(t *testing.T) {
+	for _, action := range []string{"depot_deposit", "depot_send_item", "depot_sell", "depot_sell_batch"} {
 		params := `{"item_id":""}`
 		if action == "depot_sell_batch" {
 			params = `{"item_ids":[]}`
+		}
+		if action == "depot_send_item" {
+			params = `{"item_id":"","recipient_character_id":""}`
 		}
 		for _, tc := range []struct {
 			err    error
 			status int
 			code   string
 		}{
+			{depot.ErrDepotFull, 400, "DEPOT_FULL"},
+			{depot.ErrRecipientDepotFull, 400, "DEPOT_RECIPIENT_FULL"}, {depot.ErrSelfTransferNotAllowed, 400, "DEPOT_SELF_TRANSFER"}, {depot.ErrRecipientNotFound, 404, "DEPOT_RECIPIENT_NOT_FOUND"},
 			{depot.ErrInvalidCharacterID, 400, "DEPOT_INVALID_CHARACTER_ID"}, {depot.ErrInvalidItemInstanceID, 400, "DEPOT_INVALID_ITEM_INSTANCE_ID"},
 			{depot.ErrEmptyItemList, 400, "DEPOT_EMPTY_ITEM_LIST"}, {depot.ErrInvalidAmount, 400, "DEPOT_INVALID_AMOUNT"}, {depot.ErrInvalidQuantity, 400, "DEPOT_INVALID_QUANTITY"},
 			{depot.ErrItemNotFound, 404, "DEPOT_ITEM_NOT_FOUND"}, {depot.ErrNotFound, 404, "DEPOT_NOT_FOUND"}, {corecharacter.ErrNotFound, 404, "CHARACTER_NOT_FOUND"},
@@ -179,12 +215,17 @@ func TestDepotSaleGatewayErrors(t *testing.T) {
 	}
 }
 
-func TestDepotSaleGatewayGuardsAndDiscovery(t *testing.T) {
-	for _, action := range []string{"depot_sell", "depot_sell_batch"} {
+func TestDepotItemGatewayGuardsAndDiscovery(t *testing.T) {
+	for _, action := range []string{"depot_deposit", "depot_send_item", "depot_sell", "depot_sell_batch"} {
 		params := `{"item_id":"one"}`
 		field, kind := "item_id", "string"
 		if action == "depot_sell_batch" {
 			params, field, kind = `{"item_ids":["one"]}`, "item_ids", "array"
+		}
+		fields := []string{field}
+		if action == "depot_send_item" {
+			params = `{"item_id":"one","recipient_character_id":"recipient"}`
+			fields = append(fields, "recipient_character_id")
 		}
 		for _, tc := range []struct {
 			name, path, token string
@@ -245,8 +286,11 @@ func TestDepotSaleGatewayGuardsAndDiscovery(t *testing.T) {
 			if err := json.Unmarshal(a.ParamsSchema, &schema); err != nil {
 				t.Fatal(err)
 			}
-			if !slices.Equal(a.RequiredParams, []string{field}) || !slices.Equal(schema.Required, []string{field}) || schema.AdditionalProperties || schema.Properties[field].Type != kind || len(a.ParamsTemplate) != 0 || (kind == "array" && schema.Properties[field].Items.Type != "string") {
+			if !slices.Equal(a.RequiredParams, fields) || !slices.Equal(schema.Required, fields) || len(schema.Properties) != len(fields) || schema.AdditionalProperties || schema.Properties[field].Type != kind || len(a.ParamsTemplate) != 0 || (kind == "array" && schema.Properties[field].Items.Type != "string") {
 				t.Fatalf("incorrect sale params: %+v %s", a, a.ParamsSchema)
+			}
+			if action == "depot_send_item" && schema.Properties["recipient_character_id"].Type != "string" {
+				t.Fatalf("recipient must be a string: %s", a.ParamsSchema)
 			}
 			resolved := NewActionURLResolver().Resolve("hero", action, "", "")
 			if resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" || f.executions != 0 || store.writes != 0 {

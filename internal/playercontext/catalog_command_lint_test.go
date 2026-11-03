@@ -36,6 +36,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"depot_expand", "", "", false},
 		{"depot_sort", "", "", false},
 		{"depot_sell", "item_id", "string", true},
+		{"depot_deposit", "item_id", "string", true},
 		{"depot_sell_batch", "item_ids", "array", true},
 	}
 	for _, tc := range tests {
@@ -70,7 +71,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "prayAtChapel"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {
@@ -95,6 +96,17 @@ func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 				t.Errorf("unmigrated %s escaped operation validation", act.ID)
 			}
 		}
+	}
+}
+
+func TestCatalog_DepotSendGatewayContract(t *testing.T) {
+	act, ok := playercontext.GetAction("depot_send_item")
+	if !ok || act.OperationID != "executeCharacterAction" || !slices.Equal(act.RequiredParams, []string{"item_id", "recipient_character_id"}) {
+		t.Fatalf("send not bound to explicit Gateway inputs: %+v", act)
+	}
+	then, params := gatewayContract(t, loadOpenAPISpec(t), act.ID)
+	if params.Type != "object" || string(params.AdditionalProperties) != "false" || !slices.Equal(then.Required, []string{"params"}) || !slices.Equal(params.Required, act.RequiredParams) || len(params.Properties) != 2 || params.Properties["item_id"].Type != "string" || params.Properties["recipient_character_id"].Type != "string" {
+		t.Fatalf("incorrect send contract: %+v / %+v", then, params)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -38,12 +39,29 @@ func WithDepot(service DepotService) Option {
 	return func(h *Handler) {
 		h.depot = service
 		if service == nil {
+			withActionCommand[depositItemRequest]("depot_deposit", nil, nil)(h)
+			withActionCommand[sendItemRequest]("depot_send_item", nil, nil)(h)
 			withActionCommand[struct{}]("depot_sort", nil, nil)(h)
 			withActionCommand[struct{}]("depot_expand", nil, nil)(h)
 			withActionCommand[sellDepotItemRequest]("depot_sell", nil, nil)(h)
 			withActionCommand[depotSaleBatchRequest]("depot_sell_batch", nil, nil)(h)
 			return
 		}
+		withActionCommand("depot_deposit", func(ctx context.Context, actorID string, params depositItemRequest) (any, error) {
+			value, err := service.DepositItem(ctx, actorID, params.ItemID)
+			if err != nil {
+				return nil, err
+			}
+			return toDepotResponse(value), nil
+		}, depotActionRejection)(h)
+		withActionCommand("depot_send_item", func(ctx context.Context, actorID string, params sendItemRequest) (any, error) {
+			recipientID, itemID := strings.TrimSpace(params.RecipientCharacterID), strings.TrimSpace(params.ItemID)
+			value, err := service.SendItem(ctx, actorID, recipientID, itemID)
+			if err != nil {
+				return nil, err
+			}
+			return sendItemResponse{Depot: toDepotResponse(value), RecipientCharacterID: recipientID, ItemID: itemID}, nil
+		}, depotActionRejection)(h)
 		withActionCommand("depot_sort", func(ctx context.Context, actorID string, _ struct{}) (any, error) {
 			value, err := service.SortItems(ctx, actorID)
 			if err != nil {
@@ -77,6 +95,14 @@ func WithDepot(service DepotService) Option {
 
 func depotActionRejection(err error) (int, ErrorDetail) {
 	switch {
+	case errors.Is(err, depot.ErrRecipientDepotFull):
+		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_RECIPIENT_FULL", Message: "Recipient depot is full."}
+	case errors.Is(err, depot.ErrSelfTransferNotAllowed):
+		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_SELF_TRANSFER", Message: "Cannot send an item to yourself."}
+	case errors.Is(err, depot.ErrRecipientNotFound):
+		return http.StatusNotFound, ErrorDetail{Code: "DEPOT_RECIPIENT_NOT_FOUND", Message: "Recipient character not found."}
+	case errors.Is(err, depot.ErrDepotFull):
+		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_FULL", Message: "Depot is full."}
 	case errors.Is(err, depot.ErrInsufficientFunds):
 		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_INSUFFICIENT_FUNDS", Message: "Insufficient wallet funds."}
 	case errors.Is(err, depot.ErrDepotMaxExpanded):

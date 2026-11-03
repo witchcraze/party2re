@@ -183,8 +183,16 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		ID:             "depot_deposit",
 		Label:          "預かり所にアイテムを預ける",
 		Category:       "economy",
-		OperationID:    "postCharactersIdDepotDeposit",
+		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"item_id"},
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+	},
+	{
+		ID:             "depot_send_item",
+		Label:          "相手の預かり所へアイテムを送る",
+		Category:       "economy",
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{"item_id", "recipient_character_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
