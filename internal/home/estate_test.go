@@ -830,11 +830,17 @@ func TestSetCharacterColorUnknownCharacter(t *testing.T) {
 // rowLockTxProvider serializes transactions, which is what SELECT ... FOR UPDATE
 // does for a single character row.
 type rowLockTxProvider struct {
-	mu sync.Mutex
+	mu        sync.Mutex
+	contended chan struct{}
 }
 
 func (p *rowLockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	p.mu.Lock()
+	if !p.mu.TryLock() {
+		if p.contended != nil {
+			close(p.contended)
+		}
+		p.mu.Lock()
+	}
 	defer p.mu.Unlock()
 	return fn(ctx)
 }
@@ -891,6 +897,7 @@ func (barrierInvRepo) Save(context.Context, coreinventory.Inventory) error {
 
 func TestSetCharacterColorBarrierSerializesWithReward(t *testing.T) {
 	ctx := context.Background()
+	txProvider := &rowLockTxProvider{contended: make(chan struct{})}
 	repo := &barrierCharRepo{
 		chars: map[string]corecharacter.Character{
 			"char-1": {ID: "char-1", PlayerID: "player-1", Name: "Hero", Money: 100, Color: corecharacter.DefaultColor},
@@ -898,7 +905,7 @@ func TestSetCharacterColorBarrierSerializesWithReward(t *testing.T) {
 		locked:  make(chan struct{}),
 		release: make(chan struct{}),
 	}
-	eco, err := economy.NewService(repo, barrierInvRepo{}, economy.WithTransactionProvider(&rowLockTxProvider{}))
+	eco, err := economy.NewService(repo, barrierInvRepo{}, economy.WithTransactionProvider(txProvider))
 	if err != nil {
 		t.Fatalf("economy.NewService failed: %v", err)
 	}
@@ -925,6 +932,16 @@ func TestSetCharacterColorBarrierSerializesWithReward(t *testing.T) {
 		}, func(*economy.TxContext) error { return nil })
 		rewardErr <- err
 	}()
+	select {
+	case <-txProvider.contended:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reward transaction did not contend on the character row lock")
+	}
+	select {
+	case err := <-rewardErr:
+		t.Fatalf("reward transaction completed while color change held the row lock: %v", err)
+	default:
+	}
 	close(repo.release)
 
 	if err := <-colorErr; err != nil {
