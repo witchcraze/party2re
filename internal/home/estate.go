@@ -194,15 +194,16 @@ func (s *Service) ListTownHouses(ctx context.Context, townID string) ([]HomeChec
 }
 
 func (s *Service) SetCharacterColor(ctx context.Context, characterID, color string) error {
-	char, err := s.charReader.FindByID(ctx, characterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			return ErrCharacterNotFound
-		}
-		return err
+	if s.runner == nil {
+		return ErrTransactionRunnerRequired
 	}
-	if err := char.SetColor(color); err != nil {
-		return err
+	// The runner locks the character row and persists the full state, so a
+	// concurrent reward or spend that committed after our read is not reverted.
+	_, err := s.runner.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: characterID}, func(tc *economy.TxContext) error {
+		return tc.Character.SetColor(color)
+	})
+	if errors.Is(err, economy.ErrCharacterNotFound) {
+		return ErrCharacterNotFound
 	}
-	return s.charUpdater.Update(ctx, char)
+	return err
 }
