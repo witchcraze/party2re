@@ -17,7 +17,7 @@ import (
 )
 
 func TestActiveScenesOverrideSelectionAndNeverMutate(t *testing.T) {
-	for _, kind := range []string{"party", "pvp", "gvg", "dungeon", "challenge", "casino"} {
+	for _, kind := range []string{"party", "adventure", "pvp", "gvg", "dungeon", "challenge", "casino"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newGatewayFixture(t)
 			store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "bank"}, loadErr: errors.New("selection unavailable")}

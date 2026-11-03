@@ -11,12 +11,13 @@ import (
 )
 
 type Service struct {
-	repo         Repository
-	charReader   CharacterReader
-	letterSender LetterSender
-	newsPub      NewsPublisher
-	txProvider   TransactionProvider
-	nowFunc      func() time.Time
+	mutationCheck func(context.Context, string) error
+	repo          Repository
+	charReader    CharacterReader
+	letterSender  LetterSender
+	newsPub       NewsPublisher
+	txProvider    TransactionProvider
+	nowFunc       func() time.Time
 }
 
 func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
@@ -95,6 +96,9 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 	)
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
 		if err := s.repo.LockCharacterForUpdate(txCtx, creatorCharID); err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, creatorCharID); err != nil {
 			return err
 		}
 		if _, _, err := s.repo.GetGuildByCharacter(txCtx, creatorCharID); err == nil {

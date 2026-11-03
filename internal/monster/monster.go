@@ -79,10 +79,11 @@ type TransactionProvider interface {
 }
 
 type Service struct {
-	characters CharacterRepository
-	monsters   MonsterRepository
-	companions HomeCompanionStore
-	txProvider TransactionProvider
+	mutationCheck func(context.Context, string) error
+	characters    CharacterRepository
+	monsters      MonsterRepository
+	companions    HomeCompanionStore
+	txProvider    TransactionProvider
 }
 
 type Option func(*Service)
@@ -208,7 +209,8 @@ func (s *Service) GetSummary(ctx context.Context, characterID, locationFilter st
 	}, nil
 }
 
-// TameMonster captures/befriends a monster into the character's box.
+// TameMonster delivers a combat capture reward into the character's box.
+// It permits passive recipients; actor-owned box mutations check admission.
 func (s *Service) TameMonster(ctx context.Context, characterID, monsterID, customName string) (MonsterInstance, error) {
 	monsterID = strings.TrimSpace(monsterID)
 	if monsterID == "" {
@@ -282,6 +284,9 @@ func (s *Service) Rename(ctx context.Context, characterID, instanceID, newName s
 			}
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		inst, err := s.monsters.FindByIDForUpdate(txCtx, instanceID)
 		if err != nil {
@@ -346,6 +351,10 @@ func (s *Service) SendMonster(ctx context.Context, senderCharID, recipientCharID
 			return err
 		}
 
+		if err := s.checkMutation(txCtx, senderCharID); err != nil {
+			return err
+		}
+
 		var recipientChar corecharacter.Character
 		if firstChar.ID == recipientCharID {
 			recipientChar = firstChar
@@ -387,6 +396,9 @@ func (s *Service) ReleaseMonster(ctx context.Context, characterID, instanceID st
 			if errors.Is(err, corecharacter.ErrNotFound) {
 				return ErrCharacterNotFound
 			}
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 

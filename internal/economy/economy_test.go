@@ -355,6 +355,7 @@ func TestGrantAndConsumeItem(t *testing.T) {
 	t.Parallel()
 
 	charRepo := newMockCharRepo()
+	charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1"}
 	invRepo := newMockInvRepo()
 	svc, _ := economy.NewService(charRepo, invRepo)
 

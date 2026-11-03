@@ -103,6 +103,7 @@
           "kind": {
             "enum": [
               "party",
+              "adventure",
               "pvp",
               "gvg",
               "dungeon",
@@ -119,6 +120,11 @@
           },
           "phase": {
             "type": "string"
+          },
+          "revision": {
+            "description": "Current version of an enrolled run when present; observations never advance it.",
+            "minimum": 1,
+            "type": "integer"
           },
           "role": {
             "enum": [

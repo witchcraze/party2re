@@ -325,14 +325,15 @@ func (s *Service) SetCollectionRecorder(recorder CollectionRecorder) {
 }
 
 type Service struct {
-	depotRepo  Repository
-	charRepo   CharacterRepository
-	invRepo    InventoryRepository
-	txProvider TransactionProvider
-	runner     TransactionRunner
-	itemDefs   ItemDefinitionProvider
-	collector  CollectionRecorder
-	equipment  EquipmentRepository
+	mutationCheck func(context.Context, string) error
+	depotRepo     Repository
+	charRepo      CharacterRepository
+	invRepo       InventoryRepository
+	txProvider    TransactionProvider
+	runner        TransactionRunner
+	itemDefs      ItemDefinitionProvider
+	collector     CollectionRecorder
+	equipment     EquipmentRepository
 }
 
 func NewService(depotRepo Repository, charRepo CharacterRepository, invRepo InventoryRepository, opts ...Option) (*Service, error) {

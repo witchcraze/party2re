@@ -14,6 +14,7 @@ import (
 )
 
 type Service struct {
+	mutationCheck     func(context.Context, string) error
 	repo              StoreRepository
 	charRepo          CharacterRepository
 	depotRepo         DepotRepository
@@ -185,6 +186,9 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 			if errors.Is(err, corecharacter.ErrNotFound) {
 				return ErrCharacterNotFound
 			}
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 
@@ -363,4 +367,17 @@ func (s *Service) CheckStore(ctx context.Context, characterID string) (*StoreChe
 		ExpiresAt:   st.ExpiresAt,
 		Message:     msg,
 	}, nil
+}
+
+func (s *Service) resolveItemInfo(defID, fallbackName string) (string, string) {
+	cat, name := "item", fallbackName
+	if s.itemCatalog != nil {
+		if def, err := s.itemCatalog.FindByID(defID); err == nil {
+			cat = def.Category()
+			if def.Name != "" {
+				name = def.Name
+			}
+		}
+	}
+	return name, cat
 }

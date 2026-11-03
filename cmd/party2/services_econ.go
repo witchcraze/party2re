@@ -55,7 +55,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	}
 
 	shopService, err := shop.NewService(
-		core.charRepo,
+		normalWriter(core),
 		core.invRepo,
 		core.itemCatalog,
 		shop.WithTransactionProvider(core.txProvider),
@@ -83,7 +83,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	}
 
 	blacksmithService, err := blacksmith.NewService(
-		core.charRepo,
+		normalWriter(core),
 		core.invRepo,
 		core.itemCatalog,
 		blacksmith.WithEquipmentRepository(equipRepo),
@@ -103,7 +103,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		return nil, err
 	}
 	alchemyService, err := alchemy.NewService(
-		core.charRepo,
+		normalWriter(core),
 		depotRepo,
 		alcRepo,
 		recipeCatalog,
@@ -119,7 +119,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		return nil, err
 	}
 	plantationService, err := plantation.NewService(
-		core.charRepo,
+		normalWriter(core),
 		core.invRepo,
 		depotRepo,
 		plantationRepo,
@@ -134,7 +134,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	if err != nil {
 		return nil, err
 	}
-	bankService, err := bank.NewService(bankRepo)
+	bankService, err := bank.NewService(normalBankRepository{BankRepository: bankRepo, writer: normalWriter(core)})
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +196,12 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		store.WithHomeWallpaperRepository(storeRepo),
 	)
 
+	depotService.SetMutationCheck(normalWriter(core).check)
+	auctionService.SetMutationCheck(normalWriter(core).check)
+	fleamarketService.SetMutationCheck(normalWriter(core).check)
+	gemStoreService.SetMutationCheck(normalWriter(core).check)
+	storeService.SetMutationCheck(normalWriter(core).check)
+
 	return &econServices{
 		shop:           shopService,
 		depot:          depotService,
@@ -238,4 +244,5 @@ func (e *econServices) initStore(core *coreServices, gp store.GuildPointsRegistr
 		core.txProvider,
 		opts...,
 	)
+	e.store.SetMutationCheck(normalWriter(core).check)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/witchcraze/party2re/internal/adventure"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/challenge"
@@ -35,6 +36,9 @@ type casinoActivityReader interface {
 }
 
 type contextActivityReaders struct {
+	normal interface {
+		GetActorRun(context.Context, string, string) (*adventure.ActorRun, error)
+	}
 	party     partyActivityReader
 	pvp       pvpActivityReader
 	gvg       gvgActivityReader
@@ -45,6 +49,22 @@ type contextActivityReaders struct {
 
 func (r contextActivityReaders) read(ctx context.Context, owner, actor string) ([]playercontext.Activity, error) {
 	facts := []playercontext.Activity{}
+	if r.normal != nil {
+		run, err := r.normal.GetActorRun(ctx, owner, actor)
+		if err != nil {
+			return nil, fmt.Errorf("normal adventure activity: %w", err)
+		}
+		if run != nil {
+			phase := "active"
+			if run.IdleDue {
+				phase = "idle_due"
+			}
+			if run.Recipient.TimerPending {
+				phase = "recovery_pending"
+			}
+			facts = append(facts, playercontext.Activity{Kind: "adventure", ID: run.RunID, Revision: run.Version, PartyID: run.PartyID, Role: run.Role, Phase: phase, Round: run.Floor, BlocksWake: run.Recipient.TimerPending, Actions: []string{}})
+		}
+	}
 	p, member, err := r.party.GetActiveParty(ctx, actor)
 	if err != nil && !errors.Is(err, party.ErrNotFound) {
 		return nil, fmt.Errorf("party activity: %w", err)

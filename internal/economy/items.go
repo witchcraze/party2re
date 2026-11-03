@@ -72,6 +72,13 @@ func (s *Service) ConsumeItemInstance(ctx context.Context, characterID string, i
 
 	var resInv coreinventory.Inventory
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		if _, err := s.characters.FindByIDForUpdate(txCtx, characterID); err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
+
 		inv, err := s.findInventory(txCtx, characterID)
 		if err != nil {
 			return err
@@ -116,6 +123,13 @@ func (s *Service) ConsumeItemDefinition(ctx context.Context, characterID string,
 
 	var resInv coreinventory.Inventory
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		if _, err := s.characters.FindByIDForUpdate(txCtx, characterID); err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
+
 		inv, err := s.findInventory(txCtx, characterID)
 		if err != nil {
 			return err
@@ -194,6 +208,10 @@ func (s *Service) Exchange(ctx context.Context, req ExchangeRequest) (*ExchangeR
 		char, err := s.findCharacter(txCtx, req.CharacterID)
 		if err != nil {
 			return ErrCharacterNotFound
+		}
+
+		if err := s.checkMutation(txCtx, req.CharacterID); err != nil {
+			return err
 		}
 
 		// Validate gold and medal deductions

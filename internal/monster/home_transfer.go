@@ -35,6 +35,9 @@ func (s *Service) BringToHome(ctx context.Context, characterID, instanceID strin
 			}
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		inst, err := s.monsters.FindByIDForUpdate(txCtx, instanceID)
 		if err != nil {
@@ -100,6 +103,9 @@ func (s *Service) DepositToBox(ctx context.Context, characterID, instanceID stri
 			if errors.Is(err, corecharacter.ErrNotFound) {
 				return ErrCharacterNotFound
 			}
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 

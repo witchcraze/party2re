@@ -102,7 +102,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 		// 1. Lock Character (Rank 2)
 		char, err := s.findCharacter(txCtx, characterID)
 		if err != nil {
-			return corecharacter.ErrNotFound
+			return err
 		}
 		if char.Money < totalPrice {
 			return ErrInsufficientFunds
@@ -259,7 +259,7 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 		// 1. Lock Character (Rank 2)
 		char, err := s.findCharacter(txCtx, characterID)
 		if err != nil {
-			return corecharacter.ErrNotFound
+			return err
 		}
 
 		salesIDs, err := GetSalesItemIDs(shopType, char.JobLevel)

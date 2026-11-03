@@ -99,6 +99,9 @@ func (s *Service) ExecuteTransaction(ctx context.Context, req TransactionRequest
 			}
 			return err
 		}
+		if err := s.checkMutation(txCtx, charID); err != nil {
+			return err
+		}
 
 		// 2. Resolve cost (either dynamic CostFunc or static Cost)
 		cost := req.Cost

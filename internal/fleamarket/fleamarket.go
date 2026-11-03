@@ -100,6 +100,7 @@ type TransactionProvider interface {
 }
 
 type Service struct {
+	mutationCheck      func(context.Context, string) error
 	repo               FleaMarketRepository
 	charRepo           CharacterRepository
 	depotRepo          DepotRepository
@@ -193,6 +194,10 @@ func (s *Service) CreateListing(
 		seller, err := s.charRepo.FindByIDForUpdate(txCtx, sellerCharacterID)
 		if err != nil {
 			return ErrCharacterNotFound
+		}
+
+		if err := s.checkMutation(txCtx, sellerCharacterID); err != nil {
+			return err
 		}
 
 		// 3. Check active listing count limit (5 + OverFlea)
@@ -314,6 +319,10 @@ func (s *Service) PurchaseListing(
 			return ErrCharacterNotFound
 		}
 
+		if err := s.checkMutation(txCtx, buyerCharacterID); err != nil {
+			return err
+		}
+
 		var buyerChar, sellerChar corecharacter.Character
 		if firstChar.ID == buyerCharacterID {
 			buyerChar = firstChar
@@ -425,6 +434,10 @@ func (s *Service) CancelListing(
 			return err
 		}
 
+		if err := s.checkMutation(txCtx, sellerCharacterID); err != nil {
+			return err
+		}
+
 		// 3. Lock seller depot (Rank 5)
 		sellerDepot, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, sellerCharacterID)
 		if err != nil {
@@ -461,34 +474,4 @@ func (s *Service) CancelListing(
 		return Listing{}, err
 	}
 	return cancelled, nil
-}
-
-// ListActiveListings retrieves paginated active listings.
-func (s *Service) ListActiveListings(ctx context.Context, limit, offset int) ([]Listing, int, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	return s.repo.ListActiveListings(ctx, limit, offset)
-}
-
-// GetListing retrieves a single listing by ID.
-func (s *Service) GetListing(ctx context.Context, listingID string) (Listing, error) {
-	if strings.TrimSpace(listingID) == "" {
-		return Listing{}, ErrInvalidInput
-	}
-	return s.repo.GetListingByID(ctx, listingID)
-}
-
-// GetCharacterListings retrieves all listings created by a specific character.
-func (s *Service) GetCharacterListings(ctx context.Context, characterID string) ([]Listing, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, ErrInvalidInput
-	}
-	return s.repo.GetListingsBySeller(ctx, characterID)
 }

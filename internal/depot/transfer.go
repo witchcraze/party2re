@@ -43,6 +43,10 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 			return err
 		}
 
+		if err := s.checkMutation(txCtx, fromCharacterID); err != nil {
+			return err
+		}
+
 		var sender, recipient corecharacter.Character
 		if c1.ID == fromCharacterID {
 			sender, recipient = c1, c2
@@ -116,6 +120,10 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 			if errors.Is(err, corecharacter.ErrNotFound) {
 				return ErrRecipientNotFound
 			}
+			return err
+		}
+
+		if err := s.checkMutation(txCtx, fromCharacterID); err != nil {
 			return err
 		}
 

@@ -38,6 +38,10 @@ func (s *Service) SendGem(ctx context.Context, senderID, recipientID, itemInstan
 			return err
 		}
 
+		if err := s.checkMutation(txCtx, senderID); err != nil {
+			return err
+		}
+
 		senderChar := char1
 		recipientChar := char2
 		if senderID == secondID {

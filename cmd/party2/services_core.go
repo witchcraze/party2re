@@ -20,6 +20,7 @@ import (
 )
 
 type coreServices struct {
+	normalGuard        func(context.Context, string) error
 	txProvider         database.TransactionProvider
 	charRepo           *database.CharacterRepository
 	invRepo            *database.InventoryRepository
@@ -137,7 +138,7 @@ func (c *coreServices) initPlayerAndChar(
 	}
 
 	charService, err := character.NewService(
-		c.charRepo,
+		normalWriter(c),
 		charOpts...,
 	)
 	if err != nil {

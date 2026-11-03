@@ -67,6 +67,11 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	if s.timer == nil {
 		return SleepResult{}, errors.New("timer service not configured")
 	}
+	if s.sleepAdmission != nil {
+		if err := s.sleepAdmission(ctx, characterID); err != nil {
+			return SleepResult{}, err
+		}
+	}
 
 	char, err := s.charReader.FindByID(ctx, characterID)
 	if err != nil {
@@ -187,6 +192,11 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 func (s *Service) markPendingWake(ctx context.Context, characterID string, initialChar corecharacter.Character, keeper *wakeClaimKeeper) (bool, error) {
 	var hasTempJob bool
 	_, err := s.mutateCharacter(ctx, characterID, initialChar, func(txCtx context.Context, c *corecharacter.Character) error {
+		if s.sleepAdmission != nil {
+			if err := s.sleepAdmission(txCtx, characterID); err != nil {
+				return err
+			}
+		}
 		if err := keeper.checkOwnership(txCtx); err != nil {
 			return err
 		}
@@ -288,12 +298,12 @@ func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (Sleep
 		return SleepStatus{Sleeping: false, RemainingSeconds: 0, CanWake: false, Message: "起きています"}, nil
 	}
 
-	rem, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, characterID)
+	rem, pending, err := s.GetRemainingSleep(ctx, characterID)
 	if err != nil {
 		return SleepStatus{}, err
 	}
 
-	if rem > 0 {
+	if rem > 0 || pending {
 		mins := int(rem.Minutes())
 		secs := int(rem.Seconds()) % 60
 		return SleepStatus{
@@ -342,9 +352,12 @@ func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (Sleep
 }
 
 func (s *Service) checkNotSleeping(ctx context.Context, characterID string) error {
-	rem, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, characterID)
+	rem, pending, err := s.GetRemainingSleep(ctx, characterID)
 	if err != nil {
 		return err
+	}
+	if pending {
+		return ErrWakeInProgress
 	}
 	if rem > 0 {
 		mins := int(rem.Minutes())

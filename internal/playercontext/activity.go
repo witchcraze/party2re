@@ -10,14 +10,15 @@ import (
 // Activity is a whitelist of owned membership/run facts, never raw feature state.
 // Actions are service-verified continuation candidates, not execution approval.
 type Activity struct {
-	Kind     string   `json:"kind"`
-	ID       string   `json:"id"`
-	Role     string   `json:"role"`
-	Phase    string   `json:"phase"`
-	Round    int      `json:"round"`
-	Revision int      `json:"revision,omitempty"`
-	Actions  []string `json:"actions"`
-	PartyID  string   `json:"party_id,omitempty"`
+	Kind       string   `json:"kind"`
+	ID         string   `json:"id"`
+	Role       string   `json:"role"`
+	Phase      string   `json:"phase"`
+	Round      int      `json:"round"`
+	Revision   int      `json:"revision,omitempty"`
+	Actions    []string `json:"actions"`
+	PartyID    string   `json:"party_id,omitempty"`
+	BlocksWake bool     `json:"-"`
 }
 
 // ActivityReader adapts public feature services at the composition root.
@@ -54,7 +55,7 @@ func activityLocation(facts []Activity) string {
 	for _, fact := range facts {
 		// An explicitly linked party roster and its run are one activity.
 		if fact.Kind == "party" && slices.ContainsFunc(facts, func(run Activity) bool {
-			return (run.Kind == "dungeon" || run.Kind == "challenge") && run.PartyID == fact.ID
+			return (run.Kind == "dungeon" || run.Kind == "challenge" || run.Kind == "adventure") && run.PartyID == fact.ID
 		}) {
 			continue
 		}

@@ -35,6 +35,10 @@ func (s *Service) TransferGold(ctx context.Context, fromCharacterID, toCharacter
 			return ErrCharacterNotFound
 		}
 
+		if err := s.checkMutation(txCtx, fromCharacterID); err != nil {
+			return err
+		}
+
 		var sender, recipient corecharacter.Character
 		if c1.ID == fromCharacterID {
 			sender = c1

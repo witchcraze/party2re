@@ -35,6 +35,8 @@ type Service struct {
 	rng                    random.Generator
 	nowFunc                func() time.Time
 	timer                  TimerService
+	sleepPenalty           func(context.Context, string) (time.Time, bool, error)
+	sleepAdmission         func(context.Context, string) error
 	charUpdater            CharacterUpdater
 	guildPoints            GuildPointsRegistrar
 	invMgr                 InventoryManager

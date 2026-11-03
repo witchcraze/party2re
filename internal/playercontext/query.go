@@ -103,6 +103,9 @@ func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, er
 		if err != nil {
 			return Result{}, fmt.Errorf("load context activities: %w", err)
 		}
+		if slices.ContainsFunc(snapshot.Activities, func(a Activity) bool { return a.BlocksWake }) {
+			snapshot.CanWake = false
+		}
 	}
 	if location := activityLocation(snapshot.ActiveActivities()); location != "" {
 		snapshot.LocationID = location

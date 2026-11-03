@@ -279,6 +279,9 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 		if err != nil {
 			return err
 		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 
 		available := AvailableCostumes(char.JobLevel)
 		var selected *OracleItem
@@ -414,6 +417,9 @@ func (s *Service) BuyHomeWallpaper(ctx context.Context, characterID string, wall
 	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
 		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
+			return err
+		}
+		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
 

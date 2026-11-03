@@ -13,13 +13,14 @@ import (
 )
 
 type Service struct {
-	txProvider TransactionProvider
-	charRepo   CharacterRepository
-	equipRepo  EquipmentRepository
-	invRepo    InventoryRepository
-	depotRepo  DepotRepository
-	catalog    ItemDefinitionProvider
-	tabooItems map[string]bool
+	mutationCheck func(context.Context, string) error
+	txProvider    TransactionProvider
+	charRepo      CharacterRepository
+	equipRepo     EquipmentRepository
+	invRepo       InventoryRepository
+	depotRepo     DepotRepository
+	catalog       ItemDefinitionProvider
+	tabooItems    map[string]bool
 }
 
 type Option func(*Service)
@@ -138,6 +139,10 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 		secondChar, err := s.charRepo.FindByIDForUpdate(txCtx, secondID)
 		if err != nil {
 			return ErrTargetNotFound
+		}
+
+		if err := s.checkMutation(txCtx, senderID); err != nil {
+			return err
 		}
 
 		var senderChar, receiverChar *corecharacter.Character

@@ -61,12 +61,12 @@ The dispatch reconciliation for this interaction boundary is:
 
 | Original operation | Current native path | Reconstruction responsibility |
 | --- | --- | --- |
-| `つくる` / `さんか` (`quest.cgi:189–199`) | Party `CreateParty` / `JoinParty`; solo `StartStage` immediately executes | Keep admission separate from combat and preserve actor/roster validation |
+| `つくる` / `さんか` (`quest.cgi:189–199`) | Party `CreateParty` / `JoinParty`; `NormalRunService.EnterSolo` / `EnterParty` enroll at floor 0 | Production starts still use the batch path until #1330 |
 | `けんがく` | Party detail reads exist; no equivalent active normal-adventure view is established | Reconcile admission and actor-dependent observation under #948; spectators are not combatants or archive recipients |
-| `すすむ` | `CrawlSession.AdvanceFloor`, called in an automatic loop | Separate encounter creation from action resolution; persist progress between requests |
+| `すすむ` | `NormalRunService.Command` creates one encounter or ordinary treasure room, using the injected reset/combat port | #1329 supplies the certified explicit combat consumer; #1330 connects transport |
 | Registered battle action and target (`_skill.cgi:set_action`) | `ResolvePartyBattle` automatically selects all combatants' actions until termination | Add resumable explicit-action processing, reusing battle effects and the participant adapter |
-| `しらべる` | `ExamineTreasure`, automatically invoked for each participant | Expose actor-selected inspection; reuse #1196 for allowance/key correctness |
-| `にげる` | Whole-crawl settlement; Party lobby `LeaveParty` is not an equivalent active-combat exit | Restore individual exit/settlement while remaining participants can continue |
+| `しらべる` | Normal-run command claims the selected chest, individual allowance/key and delivery atomically | #1330 connects explicit selection; retained batch starts still inspect automatically |
+| `にげる` | Normal-run command settles one recipient and preserves the remaining roster | Party lobby `LeaveParty` remains separate; #1330 connects active-run exit |
 | Submitted comments / `ささやき` / `すくしょ` | No equivalent normal-adventure command contract established | Reconcile separately under #948; private whispers and manual screenshots are not automatic Replay payloads |
 | Refresh | Current reads and Gateway context | Observe without advancing, granting rewards, recording a scene or renewing game deadlines |
 
@@ -77,16 +77,12 @@ consumed items, actor/NPC timing, progression and earned-reward/exit facts.
 Persisting only HP/MP and restarting the batch resolver loses these facts.
 Current `CrawlSession` is request-local; it is not a production run store.
 
-Native storage and recovery must be established before replacing production
-starts; [#1325](https://github.com/witchcraze/party2re/issues/1325) records the
-selected boundary below and its bounded runtime implementation scopes. Existing
-Party Valkey lobbies and SQL audit rows are not a resumable
-normal-adventure session. Durable assets, consumption and settlement/history
-require SQL transaction and retry protection; the current lobby lock is not
-cross-store atomicity. In solo, settlement currently commits before adventure
-history writes (#1224). In Party, SQL settlement/logging is inside `runInTx`,
-but Valkey status/readiness mutations are outside SQL rollback. Neither path
-proves durable command-by-command recovery.
+The [selected SQL boundary](../architecture/transient-run-state.md#normal-adventure-durable-command-boundary-1325)
+separates `NormalRunService` from the retained batch starts. SQL preserves its
+enrollment, effect state, recipient entitlements and receipts across requests;
+Party lobbies and adventure audit rows alone cannot resume combat. The retained
+batch paths commit assets and history together, but their Valkey lobby updates
+are outside SQL rollback. Their passing tests do not establish interactive parity.
 
 Restore shared action processing, resumable adventure/individual settlement,
 then verified Gateway commands and owned observations as bounded implementation
@@ -98,11 +94,12 @@ remain separately owned; no full parity for these is certified here.
 
 ## Resumable normal-run transitions
 
-The following lifecycle is the #1325 reconstruction target. The user approved
+The following lifecycle follows the #1325 reconstruction decision. The user approved
 SQL authority and the explicit idle-cleanup timing below on 2026-10-11. Legacy
 requirements remain separate from these native decisions; the SQL boundary is in
 [Transient run state](../architecture/transient-run-state.md#normal-adventure-durable-command-boundary-1325).
-No production interactive run store exists yet.
+`NormalRunService` implements lifecycle persistence; the certified combat/reset
+port (#1329) and production Gateway connection (#1330) remain separate.
 
 | Transition | Preconditions and resulting facts |
 | --- | --- |

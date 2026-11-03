@@ -182,6 +182,9 @@ func wireHooks(
 		if cmbt.adv != nil {
 			cmbt.adv.SetPostAdventureHook(postAdventureHook)
 		}
+		if cmbt.normal != nil {
+			cmbt.normal.SetExitEffects(misc.tavern.ResetFullness)
+		}
 		if cmbt.party != nil {
 			cmbt.party.SetPostAdventureHook(postAdventureHook)
 		}
@@ -194,6 +197,9 @@ func wireHooks(
 	}
 	if misc.chapel != nil {
 		soc.home.SetBlessingCleaner(misc.chapel)
+		if cmbt.normal != nil {
+			cmbt.normal.SetBlessings(chapelBlessingAdapter{svc: misc.chapel})
+		}
 	}
 	if econ.alchemy != nil {
 		soc.home.SetAlchemyCompleter(econ.alchemy)
