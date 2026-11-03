@@ -77,7 +77,7 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.title, adapter.commands = "礼拝堂", []string{"chapel_pray"}
 			adapter.read = h.chapelSceneData
 		case "depot":
-			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}
+			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_send_item", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}
 			adapter.read = h.depotSceneData
 		case "secretshop":
 			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase"}

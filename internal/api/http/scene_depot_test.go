@@ -103,11 +103,11 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 				t.Fatalf("lost facts or changed reader order: %+v", data)
 			}
 			for _, action := range observation.AvailableActions {
-				if !slices.Contains([]string{"scene_back", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}, action.Action) {
+				if !slices.Contains([]string{"scene_back", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item"}, action.Action) {
 					t.Fatalf("unconnected mutation offered: %+v", action)
 				}
 			}
-			for _, id := range []string{"depot_deposit", "depot_withdraw"} {
+			for _, id := range []string{"depot_withdraw"} {
 				if !slices.ContainsFunc(observation.Scene.Support.Actions, func(a SceneActionSupport) bool { return a.Action == id && !a.Connected }) {
 					t.Fatalf("missing connection metadata: %+v", observation.Scene.Support)
 				}
@@ -322,7 +322,7 @@ func TestDepotSceneRequiredReadOwnershipAndContext(t *testing.T) {
 }
 
 func TestDepotSceneMutationsRemainUnconnected(t *testing.T) {
-	for _, action := range []string{"depot_deposit", "depot_withdraw"} {
+	for _, action := range []string{"depot_withdraw"} {
 		f, store, router := depotSceneRouter(t)
 		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"`+action+`","params":{"item_id":"z"}}`, nil)
 		if status != 501 || f.reads != 0 || f.writes != 0 || f.executions != 0 || store.writes != 0 {

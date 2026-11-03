@@ -15,10 +15,8 @@ import (
 )
 
 type stubDepotService struct {
-	depositItemFn  func(ctx context.Context, characterID, itemID string) (depot.Depot, error)
 	withdrawItemFn func(ctx context.Context, characterID, itemID string) (depot.Depot, error)
 	sendMoneyFn    func(ctx context.Context, fromID, toID string, amount int) (depot.Depot, error)
-	sendItemFn     func(ctx context.Context, fromID, toID, itemID string) (depot.Depot, error)
 }
 
 func (s *stubDepotService) GetDepot(ctx context.Context, characterID string) (depot.Depot, error) {
@@ -26,9 +24,6 @@ func (s *stubDepotService) GetDepot(ctx context.Context, characterID string) (de
 }
 
 func (s *stubDepotService) DepositItem(ctx context.Context, characterID, itemID string) (depot.Depot, error) {
-	if s.depositItemFn != nil {
-		return s.depositItemFn(ctx, characterID, itemID)
-	}
 	return depot.Depot{CharacterID: characterID, Capacity: 50}, nil
 }
 
@@ -63,9 +58,6 @@ func (s *stubDepotService) SendMoney(ctx context.Context, fromID, toID string, a
 }
 
 func (s *stubDepotService) SendItem(ctx context.Context, fromID, toID, itemID string) (depot.Depot, error) {
-	if s.sendItemFn != nil {
-		return s.sendItemFn(ctx, fromID, toID, itemID)
-	}
 	return depot.Depot{CharacterID: fromID, Capacity: 50}, nil
 }
 
@@ -91,37 +83,6 @@ func TestDepotEndpoints(t *testing.T) {
 		t.Fatalf("failed to create handler: %v", err)
 	}
 	router := h.Router()
-
-	t.Run("POST /characters/{id}/depot/deposit success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{"item_id": "item-1"})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/deposit", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/depot/deposit full error", func(t *testing.T) {
-		depotSvc.depositItemFn = func(ctx context.Context, characterID, itemID string) (depot.Depot, error) {
-			return depot.Depot{}, depot.ErrDepotFull
-		}
-		defer func() { depotSvc.depositItemFn = nil }()
-
-		body, _ := json.Marshal(map[string]string{"item_id": "item-1"})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/deposit", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status 400, got %d", rec.Code)
-		}
-	})
 
 	t.Run("POST /characters/{id}/depot/withdraw success", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{"item_id": "item-1"})
@@ -149,21 +110,8 @@ func TestDepotEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/depot/send-item success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{"recipient_character_id": "c2", "item_id": "item-1"})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/send-item", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
 	t.Run("Unauthenticated returns 401", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/deposit", bytes.NewReader([]byte(`{"item_id":"item-1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/withdraw", bytes.NewReader([]byte(`{"item_id":"item-1"}`)))
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -177,7 +125,7 @@ func TestDepotEndpoints(t *testing.T) {
 			authenticateFn: alwaysAuthPlayer(coreplayer.Player{ID: "p-other", Username: "other"}),
 		}
 		hOther, _ := apihttp.NewHandler(pServiceOther, cService, &stubAdventureService{}, &stubShopService{}, apihttp.WithDepot(depotSvc))
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/deposit", bytes.NewReader([]byte(`{"item_id":"item-1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/withdraw", bytes.NewReader([]byte(`{"item_id":"item-1"}`)))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		rec := httptest.NewRecorder()
 		hOther.Router().ServeHTTP(rec, req)

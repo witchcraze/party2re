@@ -231,14 +231,11 @@ sorts or saves storage, moves items, records collection or schedules work.
 The quote uses the public expansion price reader and is null at the purchased
 expansion cap. It grants no reservation: execution charges the current tier
 inside the existing service transaction. Clients explicitly enter Depot and
-read GET context for status, and submit `depot_expand` to the Gateway to purchase;
-the former Depot status GET, expansion POST, single/batch sale POST and sort POST routes
-return 404. Sales use `depot_sell` and `depot_sell_batch` through the Gateway.
-Explicit sorting uses `depot_sort` through the Gateway. Four inventory/transfer
-REST operations remain: deposit/withdraw/send
-still need command adapters and verified retirement;
+read GET context for status; connected mutations require explicit Gateway
+intent and retain existing service results. The
 [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
-records those operations and the remaining order/equipment/withdrawal gaps.
+owns command inputs, verified REST retirements and remaining withdrawal,
+send-money and legacy-effect gaps.
 
 SecretShop facility/subject data reports `support.observation:details` with a
 typed `SecretShopCatalogSceneData` or `SecretShopProductSceneData`. Both contain

@@ -117,28 +117,6 @@ func mapDepotHTTPError(w http.ResponseWriter, err error) {
 	writeError(w, http.StatusInternalServerError, err)
 }
 
-func (h *Handler) handleDepositDepotItem(w http.ResponseWriter, r *http.Request) {
-	if h.depot == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req depositItemRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		dep, err := h.depot.DepositItem(r.Context(), char.ID, req.ItemID)
-		if err != nil {
-			mapDepotHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, toDepotResponse(dep))
-	})
-}
-
 func (h *Handler) handleWithdrawDepotItem(w http.ResponseWriter, r *http.Request) {
 	if h.depot == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
@@ -184,34 +162,6 @@ func (h *Handler) handleDepotSendMoney(w http.ResponseWriter, r *http.Request) {
 			Depot:                toDepotResponse(dep),
 			RecipientCharacterID: recipientID,
 			Amount:               req.Amount,
-		})
-	})
-}
-
-func (h *Handler) handleDepotSendItem(w http.ResponseWriter, r *http.Request) {
-	if h.depot == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req sendItemRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		recipientID := strings.TrimSpace(req.RecipientCharacterID)
-		itemID := strings.TrimSpace(req.ItemID)
-		dep, err := h.depot.SendItem(r.Context(), char.ID, recipientID, itemID)
-		if err != nil {
-			mapDepotHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, sendItemResponse{
-			Depot:                toDepotResponse(dep),
-			RecipientCharacterID: recipientID,
-			ItemID:               itemID,
 		})
 	})
 }

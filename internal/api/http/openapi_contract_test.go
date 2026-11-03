@@ -66,7 +66,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		{"POST", "/characters/{id}/casino/rooms", `{"name":"Test","game_type":"indian","rate":10,"speed":18,"max_players":8}`, "session", 201},
 		{"POST", "/characters/{id}/bank/inspect", "", "session", 200},
 		{"POST", "/characters/{id}/bank/talk", "", "session", 200},
-		{"POST", "/characters/{id}/depot/deposit", `{"item_id":"sword"}`, "session", 200},
 		{"POST", "/characters/{id}/depot/send-money", `{"recipient_character_id":"c2","amount":10}`, "session", 200},
 		{"GET", "/blacksmith/seals", "", "", 200},
 		{"GET", "/characters/{id}/blacksmith/storage", "", "session", 200},
