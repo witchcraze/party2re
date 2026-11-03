@@ -141,6 +141,8 @@ func (s *Service) Create(ctx context.Context, playerID, name string) (corecharac
 	})
 }
 
+// CreateWithOptions saves the character, initial depot and joining news atomically.
+// An ambient transaction controls their final commit or rollback.
 func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, options CreationOptions) (corecharacter.Character, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
@@ -156,7 +158,16 @@ func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, 
 	}
 	value.PlayerID = playerID
 	if err := s.runInTx(ctx, func(txCtx context.Context) error {
-		return s.repository.Save(txCtx, value)
+		if err := s.repository.Save(txCtx, value); err != nil {
+			return err
+		}
+		if s.news != nil {
+			return s.news.PublishNews(txCtx, "character",
+				fmt.Sprintf("冒険者 %s が参加しました", value.Name),
+				fmt.Sprintf("冒険者 %s (character_id: %s) が参加しました。", value.Name, value.ID),
+				"System", time.Now().UTC())
+		}
+		return nil
 	}); err != nil {
 		return corecharacter.Character{}, err
 	}

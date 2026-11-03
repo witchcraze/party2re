@@ -17,6 +17,7 @@ Global server news and milestone broadcasts (`news.cgi`):
   - `maintenance`: Scheduled server maintenance windows.
   - `event`: In-game seasonal festivals and community events.
   - `milestone`: Major player milestones (e.g. all jobs mastered, encyclopedia completed, boss sealed).
+  - `character`: Character lifecycle announcements, including joining and renaming.
 - **Validation**:
   - `title`: Non-empty, maximum 200 characters.
   - `content`: Non-empty, maximum 10,000 characters.
@@ -24,6 +25,12 @@ Global server news and milestone broadcasts (`news.cgi`):
 - **Chronological Feed & Pagination**:
   - News entries are listed in reverse chronological order (`published_at DESC, created_at DESC`).
   - Supports limit and offset pagination (default: 20, max: 100).
+
+#### Character joining news
+
+Character creation publishes one joining article through the injected `character.NewsPublisher`, after saving the character and initial depot in the same SQL transaction. The publisher must propagate that transaction context without independent commits or external side effects. News becomes visible when the enclosing transaction commits; save/publication failures and outer rollback leave no joining article or partially created character.
+
+Joining articles use category `character`, author `System`, and plain-text title/content containing the new character's name and ID, without account identity or legacy HTML. Ordinary character saves and updates do not emit joining news. This is a global feed entry; character birth memory and trajectory history are a separate responsibility described in [Player and Character](player-and-character.md#29-transactional-character-creation--joining-news).
 
 ### 2. Player Notification Inbox (`player_notifications`)
 
