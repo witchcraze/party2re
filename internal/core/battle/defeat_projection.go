@@ -45,7 +45,9 @@ func (s *LifetimeState) projectDefeatResetBranches(c *DefeatContext, id string) 
 	masks := 2
 	if a.Gear != nil && a.Gear.AccessoryID == "item-159" {
 		masks = 16
-	} else if a.Gear != nil && a.Gear.AccessoryID == "item-115" {
+	} else if a.Gear != nil && (a.Gear.AccessoryID == "item-115" || a.Gear.AccessoryID == "item-147" ||
+		a.Gear.AccessoryID == "item-251" || a.Gear.AccessoryID == "item-252" || a.Gear.AccessoryID == "item-253" ||
+		a.Gear.AccessoryID == "item-254" || a.Gear.AccessoryID == "item-255") {
 		masks = 4
 	}
 	if a.Gear != nil && (a.Gear.AccessoryID == "item-111" || a.Gear.AccessoryID == "item-112") {
