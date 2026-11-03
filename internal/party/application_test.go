@@ -357,7 +357,11 @@ func (m *mockNewsPublisher) PublishNews(_ context.Context, category, title, cont
 	return nil
 }
 
-func setupTestService(t *testing.T) (*Service, *mockPartyRepository, *mockCharacterRepository, *mockNewsPublisher) {
+func setupTestServiceWithEngine(
+	t *testing.T,
+	engine BattleEngine,
+	opts ...Option,
+) (*Service, *mockPartyRepository, *mockCharacterRepository, *mockNewsPublisher) {
 	t.Helper()
 	partyRepo := newMockPartyRepository()
 	charRepo := newMockCharacterRepository()
@@ -399,20 +403,35 @@ func setupTestService(t *testing.T) (*Service, *mockPartyRepository, *mockCharac
 		},
 	}
 
+	if engine == nil {
+		engine = fixedBattleEngine{outcome: battle.OutcomeWin}
+	}
+
+	serviceOpts := []Option{
+		WithNewsPublisher(news),
+		WithRNG(func(n int) int { return 0 }),
+	}
+	serviceOpts = append(serviceOpts, opts...)
+
 	svc, err := NewService(
 		partyRepo,
 		charRepo,
 		invRepo,
 		stages,
 		monsters,
-		battle.Engine{},
-		WithNewsPublisher(news),
+		engine,
+		serviceOpts...,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	return svc, partyRepo, charRepo, news
+}
+
+func setupTestService(t *testing.T, opts ...Option) (*Service, *mockPartyRepository, *mockCharacterRepository, *mockNewsPublisher) {
+	t.Helper()
+	return setupTestServiceWithEngine(t, fixedBattleEngine{outcome: battle.OutcomeWin}, opts...)
 }
 
 func TestPartyService_CreateAndGet(t *testing.T) {
@@ -863,7 +882,14 @@ func TestPartyService_StartPartyAdventure_DuplicateCharacterNames(t *testing.T) 
 }
 
 func TestPartyService_StartPartyAdventure_SurvivingDamagePersisted(t *testing.T) {
-	svc, _, charRepo, _ := setupTestService(t)
+	engine := fixedBattleEngine{
+		remainingHP: map[string]int{
+			"char-dmg-leader": 80,
+			"char-dmg-member": 0,
+		},
+		outcome: battle.OutcomeWin,
+	}
+	svc, _, charRepo, _ := setupTestServiceWithEngine(t, engine)
 
 	leader := corecharacter.Character{
 		ID:         "char-dmg-leader",
@@ -912,10 +938,13 @@ func TestPartyService_StartPartyAdventure_SurvivingDamagePersisted(t *testing.T)
 	if updatedLeader.Stats.HP <= 0 {
 		t.Errorf("expected leader to be alive, got HP=%d", updatedLeader.Stats.HP)
 	}
+	if updatedLeader.Stats.HP != 80 {
+		t.Errorf("expected leader HP=80, got %d", updatedLeader.Stats.HP)
+	}
 
 	// Member with low HP either survived with damage or fell with HP = 1
-	if updatedMember.Stats.HP < 1 {
-		t.Errorf("expected member HP >= 1, got %d", updatedMember.Stats.HP)
+	if updatedMember.Stats.HP != 1 {
+		t.Errorf("expected member HP=1, got %d", updatedMember.Stats.HP)
 	}
 	t.Logf("Battle result outcome=%s, leader HP: %d/%d, member HP: %d/%d", res.Outcome, updatedLeader.Stats.HP, updatedLeader.Stats.MaxHP, updatedMember.Stats.HP, updatedMember.Stats.MaxHP)
 }
@@ -1127,7 +1156,7 @@ func TestPartyService_StartPartyAdventure_VictoryHook(t *testing.T) {
 		svc.invRepo,
 		svc.stages,
 		svc.monsters,
-		mockPartyBattleEngine{outcome: battle.OutcomeDefeat},
+		fixedBattleEngine{outcome: battle.OutcomeDefeat},
 		WithVictoryHook(func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error {
 			defeatHookCalled = true
 			return nil
@@ -1153,17 +1182,6 @@ func TestPartyService_StartPartyAdventure_VictoryHook(t *testing.T) {
 	if defeatHookCalled {
 		t.Fatal("expected VictoryHook to NOT be called on defeat, but it was")
 	}
-}
-
-type mockPartyBattleEngine struct {
-	outcome battle.Outcome
-}
-
-func (m mockPartyBattleEngine) ResolvePartyBattle(req battle.PartyBattleRequest) (battle.PartyBattleResult, error) {
-	return battle.PartyBattleResult{
-		Outcome: m.outcome,
-		Turns:   1,
-	}, nil
 }
 
 func TestPartyService_NeedJoinCondition(t *testing.T) {
