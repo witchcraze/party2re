@@ -152,19 +152,7 @@ func (s *Service) UpdateHome(ctx context.Context, characterID, companionName str
 		cleanCompanion = string([]rune(cleanCompanion)[:MaxCompanionNameLength])
 	}
 
-	h, err := s.repo.GetHome(ctx, characterID)
-	if err != nil {
-		return CharacterHome{}, err
-	}
-
-	h.CompanionName = cleanCompanion
-	h.UpdatedAt = s.nowFunc().UTC()
-
-	if err := s.repo.SaveHome(ctx, h); err != nil {
-		return CharacterHome{}, err
-	}
-
-	return h, nil
+	return s.repo.UpdateCompanionName(ctx, characterID, cleanCompanion, s.nowFunc().UTC())
 }
 
 // SendLetter sends a player-to-player letter to a recipient character.
