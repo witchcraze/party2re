@@ -87,3 +87,27 @@ func TestDefeatResetProjectionKeepsAllManaAndZeroHPRevivalOutcomes(t *testing.T)
 		}
 	}
 }
+
+func TestDefeatResetProjectionCoversIndependentAccessoryAndAwakenedWeaponDraws(t *testing.T) {
+	s, c := statusFixture()
+	a := s.actor("enemy")
+	a.BaseStats = BattleBaseStats{100, 100, 100}
+	a.HP, a.MaxHP, a.MP, a.MaxMP = 100, 101, 80, 100
+	a.Abilities = []string{"pharaoh"}
+	s.actor("self").Extended = ExtendedAwakening
+	power, level := 100, 99
+	a.Gear = &BattleGearStats{WeaponID: "weapon-71", WeaponAttack: &power, AccessoryID: "item-115"}
+	a.ItemDefinitionIDs = []string{"weapon-71", "item-115"}
+	dc := &DefeatContext{EquipmentResetContext: EquipmentResetContext{TargetContext: c.TargetContext, RequesterLevel: &level}}
+	states, _, err := s.projectDefeatResetBranches(dc, "enemy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	maxAttack := 0
+	for _, state := range states {
+		maxAttack = max(maxAttack, state.State.actor("enemy").Attack)
+	}
+	if maxAttack < 295 {
+		t.Fatalf("projected maximum attack = %d, want at least 295", maxAttack)
+	}
+}
