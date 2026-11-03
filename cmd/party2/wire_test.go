@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/contest"
@@ -24,6 +26,7 @@ import (
 	"github.com/witchcraze/party2re/internal/god"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/ranking"
@@ -1026,89 +1029,96 @@ func TestWireHomeRecoveryHooks_WiringAndErrorPropagation(t *testing.T) {
 	}
 }
 
-func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
-	dsn := os.Getenv("PARTY2_DB_DSN")
-	if dsn == "" {
+var wireHomeGuildPointsRequiredTables = []string{
+	"players",
+	"characters",
+	"character_depots",
+	"character_homes",
+	"guilds",
+	"guild_members",
+}
+
+// wireHomeGuildPointsIsolatedDB creates a unique dedicated database holding only copied table
+// definitions (no data). BuildHouse checks town capacity, so tests must not run
+// against the shared test DB. Cleanup drops only this database; missing admin
+// configuration fails the test rather than falling back to the shared DB.
+func wireHomeGuildPointsIsolatedDB(t *testing.T) *sql.DB {
+	t.Helper()
+	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment failed: %v", err)
-	}
-
 	ctx := context.Background()
-
-	var (
-		cleanupGuildIDs  []string
-		cleanupCharIDs   []string
-		cleanupPlayerIDs []string
-	)
-
-	trackChar := func(c corecharacter.Character) {
-		cleanupCharIDs = append(cleanupCharIDs, c.ID)
-		if c.PlayerID != "" {
-			cleanupPlayerIDs = append(cleanupPlayerIDs, c.PlayerID)
-		}
+	source, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
 	}
-
 	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		for _, cid := range cleanupCharIDs {
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", cid); err != nil {
-				t.Errorf("cleanup character_homes for %s failed: %v", cid, err)
-			}
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE character_id = ?", cid); err != nil {
-				t.Errorf("cleanup guild_members for %s failed: %v", cid, err)
-			}
-		}
-		for _, gid := range cleanupGuildIDs {
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE guild_id = ?", gid); err != nil {
-				t.Errorf("cleanup guild_members for guild %s failed: %v", gid, err)
-			}
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid); err != nil {
-				t.Errorf("cleanup guild %s failed: %v", gid, err)
-			}
-		}
-		for _, cid := range cleanupCharIDs {
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", cid); err != nil {
-				t.Errorf("cleanup character_depots for %s failed: %v", cid, err)
-			}
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", cid); err != nil {
-				t.Errorf("cleanup characters for %s failed: %v", cid, err)
-			}
-		}
-		for _, pid := range cleanupPlayerIDs {
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", pid); err != nil {
-				t.Errorf("cleanup players for %s failed: %v", pid, err)
-			}
-		}
-		if err := db.Close(); err != nil {
-			t.Errorf("cleanup db.Close failed: %v", err)
+		if err := source.Close(); err != nil {
+			t.Error(err)
 		}
 	})
+
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated wire home tests")
+	}
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	name := fmt.Sprintf("party2_wire_home_%06x_%s", time.Now().UnixNano()%0x1000000, id.New())
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	copyTableDefinitions(t, source, db, wireHomeGuildPointsRequiredTables)
+	return db
+}
+
+func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
+	db := wireHomeGuildPointsIsolatedDB(t)
+	ctx := context.Background()
 
 	homeRepo, err := database.NewHomeRepository(db)
 	if err != nil {
 		t.Fatalf("NewHomeRepository failed: %v", err)
 	}
 
-	// Verify town capacity before building. If existing houses exceed capacity,
-	// fail fast with a diagnostic error rather than modifying existing data.
+	// Verify town capacity before building in the dedicated database.
 	now := time.Now().UTC()
 	for _, townID := range []string{"town1", "town2", "town3", "town4"} {
 		count, err := homeRepo.CountActiveTownHouses(ctx, townID, now)
 		if err != nil {
 			t.Fatalf("CountActiveTownHouses for %s failed: %v", townID, err)
 		}
-		needed := 1
-		if townID == "town1" {
-			needed = 3
-		}
-		if count+needed > 10 {
-			t.Fatalf("town %s capacity is insufficient (%d active houses, need %d, max 10); existing data occupies town capacity", townID, count, needed)
+		if count != 0 {
+			t.Fatalf("expected 0 active houses in isolated town %s, got %d", townID, count)
 		}
 	}
 
@@ -1132,8 +1142,6 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
 	}
-	cleanupGuildIDs = append(cleanupGuildIDs, testGuild.ID)
-	trackChar(leader)
 
 	guildRepo := soc.guildRepo
 
@@ -1174,7 +1182,6 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 			}
-			trackChar(memberChar)
 			m := guild.Member{
 				GuildID:     testGuild.ID,
 				CharacterID: memberChar.ID,
@@ -1211,7 +1218,6 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 	}
-	trackChar(soloChar)
 	soloRes, err := soc.home.BuildHouse(ctx, soloChar.ID, "town1", "002")
 	if err != nil {
 		t.Fatalf("BuildHouse for unaffiliated character failed: %v", err)
@@ -1233,7 +1239,6 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 	}
-	trackChar(poorChar)
 	mPoor := guild.Member{
 		GuildID:     testGuild.ID,
 		CharacterID: poorChar.ID,
