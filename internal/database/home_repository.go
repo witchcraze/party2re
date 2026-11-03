@@ -77,6 +77,34 @@ func (r *HomeRepository) SaveHome(ctx context.Context, h home.CharacterHome) err
 	return err
 }
 
+// UpdateCompanionName sets only the companion name of a character's home, so estate fields are never overwritten.
+// The write and the read-back share one transaction, so a failed read rolls the write back instead of reporting a saved change as failed.
+func (r *HomeRepository) UpdateCompanionName(ctx context.Context, characterID, companionName string, updatedAt time.Time) (home.CharacterHome, error) {
+	var stored home.CharacterHome
+	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		if _, err := ExecutorFromContext(txCtx, r.db).ExecContext(txCtx, `
+			INSERT INTO character_homes (
+				character_id, town_id, house_style, expires_at, companion_name, bgimg, updated_at
+			) VALUES (?, '', '', NULL, ?, '', ?)
+			ON DUPLICATE KEY UPDATE
+				companion_name = VALUES(companion_name),
+				updated_at = VALUES(updated_at)
+		`, characterID, companionName, updatedAt.UTC()); err != nil {
+			return err
+		}
+		h, err := r.GetHome(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+		stored = h
+		return nil
+	})
+	if err != nil {
+		return home.CharacterHome{}, err
+	}
+	return stored, nil
+}
+
 // CountActiveTownHouses returns the count of active houses in the specified town.
 func (r *HomeRepository) CountActiveTownHouses(ctx context.Context, townID string, now time.Time) (int, error) {
 	var count int

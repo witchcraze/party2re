@@ -102,7 +102,7 @@ Characters can construct and maintain private town houses across the 4 towns (`t
 - **Guild Points Bonus**:
   - Upon successful house construction, the character's guild is awarded `CycleDays * 10` Guild Points (`50 GP` for `town1`, `100 GP` for `town2`, `150 GP` for `town3`, `200 GP` for `town4`) via the wired `GuildPointsRegistrar` within the same transaction. If reading the existing home state, persisting guild points, or saving the house fails, the transaction is rolled back, preserving money, existing house state and settings, and guild points. Characters not affiliated with a guild construct houses normally without awarding points. If construction aborts (e.g., insufficient funds, capacity reached, or already owns a house), no guild points are awarded.
 - **Player Customization**:
-  - `companion_name`: Name of the resident house companion/pet (max 64 characters, default: `ペット`).
+  - `companion_name`: Name of the resident house companion/pet (max 64 characters, default: `ペット`). Changing it writes only this field and its `updated_at`, so it never alters the house town, style, expiry or wallpaper, even if a house is built concurrently.
   - Character chat/display font color (`characters.color` / `＠からー`): HEX `#RRGGBB` format, default `#ffffff`.
   - Note: Fictional wallpaper `theme`, `motto`, and `visitor_count` have been purged in favor of character color and town estate tracking.
 

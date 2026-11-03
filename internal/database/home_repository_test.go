@@ -312,3 +312,80 @@ func TestHomeRepository_Database(t *testing.T) {
 		}
 	})
 }
+
+func TestHomeRepository_UpdateCompanionName_Database(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	repo, err := database.NewHomeRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("keeps house contract when a house exists", func(t *testing.T) {
+		char, err := database.CreateTestCharacter(ctx, db, id.New()[:corecharacter.MaxNameLength])
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		expires := now.Add(5 * 24 * time.Hour)
+		if err := repo.SaveHome(ctx, home.CharacterHome{
+			CharacterID:   char.ID,
+			TownID:        "town1",
+			HouseStyle:    "001",
+			ExpiresAt:     &expires,
+			CompanionName: home.DefaultCompanionName,
+			BgImg:         "bg01",
+			UpdatedAt:     now,
+		}); err != nil {
+			t.Fatalf("SaveHome failed: %v", err)
+		}
+
+		got, err := repo.UpdateCompanionName(ctx, char.ID, "スライム", now.Add(time.Second))
+		if err != nil {
+			t.Fatalf("UpdateCompanionName failed: %v", err)
+		}
+		if got.CompanionName != "スライム" || got.TownID != "town1" || got.HouseStyle != "001" || got.BgImg != "bg01" {
+			t.Errorf("returned home = %+v, want companion updated and estate kept", got)
+		}
+		if got.ExpiresAt == nil || !got.ExpiresAt.Equal(expires) {
+			t.Errorf("expiry = %v, want %v", got.ExpiresAt, expires)
+		}
+
+		active, err := repo.FindActiveHomeByCharacterID(ctx, char.ID, now)
+		if err != nil {
+			t.Fatalf("FindActiveHomeByCharacterID failed: %v", err)
+		}
+		if active.TownID != "town1" || active.HouseStyle != "001" || active.CompanionName != "スライム" {
+			t.Errorf("stored home = %+v, want town1/001 with companion スライム", active)
+		}
+	})
+
+	t.Run("creates a settings-only row without an active house", func(t *testing.T) {
+		char, err := database.CreateTestCharacter(ctx, db, id.New()[:corecharacter.MaxNameLength])
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now().UTC()
+
+		got, err := repo.UpdateCompanionName(ctx, char.ID, "モモンガ", now)
+		if err != nil {
+			t.Fatalf("UpdateCompanionName failed: %v", err)
+		}
+		if got.CompanionName != "モモンガ" || got.TownID != "" || got.HouseStyle != "" || got.ExpiresAt != nil || got.BgImg != "" {
+			t.Errorf("returned home = %+v, want settings only", got)
+		}
+
+		if _, err := repo.FindActiveHomeByCharacterID(ctx, char.ID, now); !errors.Is(err, home.ErrHouseNotFound) {
+			t.Errorf("FindActiveHomeByCharacterID err = %v, want ErrHouseNotFound", err)
+		}
+	})
+}

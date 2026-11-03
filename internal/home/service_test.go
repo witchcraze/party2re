@@ -102,6 +102,46 @@ func (m *mockHomeRepo) SaveHome(ctx context.Context, home CharacterHome) error {
 	return nil
 }
 
+func (m *mockHomeRepo) UpdateCompanionName(ctx context.Context, characterID, companionName string, updatedAt time.Time) (CharacterHome, error) {
+	if m.saveHomeErr != nil {
+		return CharacterHome{}, m.saveHomeErr
+	}
+	h, ok := m.homes[characterID]
+	if !ok {
+		h = CharacterHome{CharacterID: characterID}
+	}
+	h.CompanionName = companionName
+	h.UpdatedAt = updatedAt
+	m.homes[characterID] = h
+	return h, nil
+}
+
+// buildBeforeWriteRepo commits a house purchase once, on the first settings write. Reads are not
+// intercepted, so a caller that read the home before the write keeps its stale house-less snapshot,
+// simulating a concurrent BuildHouse that lands between the caller's read and its save.
+type buildBeforeWriteRepo struct {
+	*mockHomeRepo
+	build CharacterHome
+	built bool
+}
+
+func (r *buildBeforeWriteRepo) commitBuildOnce() {
+	if !r.built {
+		r.built = true
+		r.homes[r.build.CharacterID] = r.build
+	}
+}
+
+func (r *buildBeforeWriteRepo) SaveHome(ctx context.Context, home CharacterHome) error {
+	r.commitBuildOnce()
+	return r.mockHomeRepo.SaveHome(ctx, home)
+}
+
+func (r *buildBeforeWriteRepo) UpdateCompanionName(ctx context.Context, characterID, companionName string, updatedAt time.Time) (CharacterHome, error) {
+	r.commitBuildOnce()
+	return r.mockHomeRepo.UpdateCompanionName(ctx, characterID, companionName, updatedAt)
+}
+
 func (m *mockHomeRepo) CountActiveTownHouses(ctx context.Context, townID string, now time.Time) (int, error) {
 	count := 0
 	for _, h := range m.homes {
@@ -768,6 +808,43 @@ func TestHomeService(t *testing.T) {
 			t.Errorf("expected 0 uncleared notices, got %d", len(notices))
 		}
 	})
+}
+
+func TestUpdateHomeKeepsHouseBuiltBeforeWrite(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockHomeRepo(map[string]corecharacter.Character{
+		"char-1": {ID: "char-1", Name: "Owner"},
+	})
+	expiresAt := time.Now().UTC().Add(5 * 24 * time.Hour)
+	racing := &buildBeforeWriteRepo{
+		mockHomeRepo: repo,
+		build: CharacterHome{
+			CharacterID:   "char-1",
+			TownID:        "town-1",
+			HouseStyle:    "001",
+			ExpiresAt:     &expiresAt,
+			CompanionName: DefaultCompanionName,
+		},
+	}
+	service, err := NewService(racing, &mockCharReader{chars: repo.chars})
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	if _, err := service.UpdateHome(ctx, "char-1", "スライム"); err != nil {
+		t.Fatalf("UpdateHome failed: %v", err)
+	}
+
+	stored := repo.homes["char-1"]
+	if stored.TownID != "town-1" || stored.HouseStyle != "001" {
+		t.Errorf("house contract lost: town=%q style=%q, want town=%q style=%q", stored.TownID, stored.HouseStyle, "town-1", "001")
+	}
+	if stored.ExpiresAt == nil || !stored.ExpiresAt.Equal(expiresAt) {
+		t.Errorf("house expiry lost: got %v, want %v", stored.ExpiresAt, expiresAt)
+	}
+	if stored.CompanionName != "スライム" {
+		t.Errorf("companion name not saved: got %q, want %q", stored.CompanionName, "スライム")
+	}
 }
 
 func TestConcurrentTalkToCompanion(t *testing.T) {
