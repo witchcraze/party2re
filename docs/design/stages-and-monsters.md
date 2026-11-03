@@ -14,7 +14,7 @@ This document describes the stage hierarchy, monster encounters, and clean-room 
 - **Boss IDs (`boss_ids`)**: Designated Floor 10 boss encounters.
 - **Treasure Pools (`treasure_weapons`, `treasure_armors`, `treasure_items`)**: Authentic drop tables from legacy `@treasures`.
 - **Dungeon Crawl Structure**: Floors 1–9 contain stage encounters, Floor 10 the stage boss, and Floor 11 the Treasure Room (`vs_monster.cgi`, `add_treasure`). Current Go resolves the whole crawl on start; this omits the original player-command progression and is a defect tracked by [#1323](https://github.com/witchcraze/party2re/issues/1323). The [Adventure interaction contract](adventure.md#original-interaction-contract-and-reconstruction-target) owns restoration of explicit combat, advance, inspection and exit. The fictional one-hour expedition timer remains removed.
-- **Seasonal Stage Variants**: Stage 26 (`四季のダンジョン` / `神秘の森`) supports 4 seasonal variants (`spring`, `summer`, `autumn`, `winter`). For solo adventures, a variant is selected at crawl execution; for multiplayer parties, the variant is selected at party creation (`lib/quest.cgi:596-600` `set_season`) and preserved across all adventures until the party is disbanded. The selected season is held throughout each crawl session, configuring consistent season-specific monster rosters (floors 1–9), boss encounters (floor 10), and treasure drop pools (floor 11).
+- **Seasonal Stage Variants**: Stage26 has spring/summer/autumn/winter variants. Explicit ordinary rooms preserve their selected marker; missing markers default to spring. The historical batch resolver retains its random selection. [Battle](battle.md#dynamic-effects-and-catalog-admission) owns ordinary template, branch, scaling and reload behavior; room creation selects the marker (`lib/quest.cgi:596–600`, `stage/26.cgi:16–28`).
 
 ### Standard Adventure Stages (00–27)
 0. **プニプニ平原** (`stage-00`): introductory meadow.
@@ -71,12 +71,17 @@ joining, and adventure start.
 `Character.Level` additionally checks against `min_level` as configured in the catalog.
 
 ### 2. Monsters (`monsters.json`)
-Each monster definition specifies:
+The historical batch definitions specify:
 - **ID (`id`)**: Stable unique identifier (`monster-001` .. `monster-322`).
 - **Name (`name`)**: Generic Japanese fantasy creature name (clean-room compliant; external IP and proprietary names replaced).
 - **Combat Stats**: `hp`, `mp`, `attack`, `defense`, `agility`.
 - **Rewards**: `exp_reward`, `gold_reward`.
 - **Drop Items (`drop_item_ids`)**: Item IDs awarded upon defeat.
+
+The same Monster/Stage catalogs also load `ordinary_monsters.json` and
+`ordinary_stages.json` for explicit ordinary encounters. These retain complete
+native combat payloads and source-position identities; the batch last-monster
+boss convention is not their encounter contract. See the [shared battle owner](battle.md#dynamic-effects-and-catalog-admission).
 
 ### Clean-Room Name Replacements
 To maintain strict clean-room isolation from third-party franchises:

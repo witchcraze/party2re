@@ -57,13 +57,18 @@ func (s LifetimeState) callbackCopy() LifetimeState {
 		s.SkillHistory[id] = maps.Clone(history)
 	}
 	for i := range s.Actors {
-		s.Actors[i] = cloneCallbackActor(s.Actors[i])
+		s.Actors[i] = s.Actors[i].Clone()
 	}
 	return s
 }
 
-func cloneCallbackActor(actor LifetimeActor) LifetimeActor {
+// Clone isolates mutable encounter/template facts and admission projections.
+func (actor LifetimeActor) Clone() LifetimeActor {
 	a := &actor
+	if a.NPCLoadout != nil {
+		loadout := *a.NPCLoadout
+		a.NPCLoadout = &loadout
+	}
 	a.Abilities = slices.Clone(a.Abilities)
 	a.ItemDefinitionIDs = slices.Clone(a.ItemDefinitionIDs)
 	a.ConsumedItems = slices.Clone(a.ConsumedItems)

@@ -39,8 +39,12 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	}
 	// Old encounter actors do not survive creation; coordinates remain separate
 	// from encounter provenance, so travel cannot manufacture boss clear credit.
+	for _, id := range r.Enemies {
+		delete(r.LastActions, id)
+	}
 	r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return slices.Contains(r.Enemies, a.ID) })
 	r.Enemies = nil
+	r.EncounterPool, r.AppearancePositions = nil, nil
 	r.Floor++
 	if r.Floor == TreasureRoomFloor {
 		alive := 0
@@ -70,6 +74,33 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 		}
 		return nil
 	}
+	if r.Stage.Ordinary != nil {
+		party := make([]corebattle.LifetimeActor, 0, len(r.Battle.Actors))
+		for _, a := range r.Battle.Actors {
+			if a.TeamID == r.actor(actorID).TeamID && !a.Banished && !a.RosterDetached {
+				party = append(party, a)
+			}
+		}
+		encounter, err := r.Stage.BuildOrdinaryEncounter(s.cfg.Monsters, party, *r.actor(actorID), r.Floor, r.Mode, fmt.Sprintf("%s-f%d-v%d", r.ID, r.Floor, r.Version+1), s.cfg.RNG)
+		if err != nil {
+			return err
+		}
+		r.EncounterPool, r.AppearancePositions = encounter.Pool, encounter.Appears
+		r.Battle.Actors = append(r.Battle.Actors, encounter.Actors...)
+		for _, a := range encounter.Actors {
+			r.Enemies = append(r.Enemies, a.ID)
+		}
+		if r.Stage.ID == "stage-24" && r.Floor == BossFloor {
+			if err := s.cfg.Combat.PrepareBossField(ctx, r, actorID); err != nil {
+				return err
+			}
+			if !r.Battle.SpecialBossField {
+				return corebattle.ErrUnsupportedEffect
+			}
+		}
+		r.EncounterFloor = r.Floor
+		return nil
+	}
 	ids := r.Stage.GetBossIDs()
 	if r.Floor < BossFloor {
 		pool := r.Stage.GetNormalMonsterIDs()
@@ -91,10 +122,10 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 		if err != nil {
 			return err
 		}
-		p := session.buildMonsterParticipant(fmt.Sprintf("%s-f%d-v%d-%d", m.ID, r.Floor, r.Version+1, i), m, float64(len(r.Roster)-2)*0.1, r.Floor == BossFloor)
-		p.TeamID = "enemies"
-		r.Battle.Actors = append(r.Battle.Actors, corebattle.LifetimeActor{Participant: p, NPC: true, Tension: 1, Hit: 95})
-		r.Enemies = append(r.Enemies, p.ID)
+		a := session.buildMonsterActor(fmt.Sprintf("%s-f%d-v%d-%d", m.ID, r.Floor, r.Version+1, i), m, float64(len(r.Roster)-2)*0.1, r.Floor == BossFloor)
+		a.TeamID = "enemies"
+		r.Battle.Actors = append(r.Battle.Actors, a)
+		r.Enemies = append(r.Enemies, a.ID)
 	}
 	r.EncounterFloor = r.Floor
 	return nil

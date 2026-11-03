@@ -25,12 +25,13 @@ var jstZone = time.FixedZone("JST", 9*60*60)
 
 // SeasonalStageData defines monster encounters and loot pools for a seasonal variant of Stage 26.
 type SeasonalStageData struct {
-	Season          string   `json:"season"`
-	BossIDs         []string `json:"boss_ids"`
-	MonsterIDs      []string `json:"monster_ids"`
-	TreasureWeapons []string `json:"treasure_weapons"`
-	TreasureArmors  []string `json:"treasure_armors"`
-	TreasureItems   []string `json:"treasure_items"`
+	Season          string         `json:"season"`
+	BossIDs         []string       `json:"boss_ids"`
+	MonsterIDs      []string       `json:"monster_ids"`
+	TreasureWeapons []string       `json:"treasure_weapons"`
+	TreasureArmors  []string       `json:"treasure_armors"`
+	TreasureItems   []string       `json:"treasure_items"`
+	Ordinary        *OrdinaryStage `json:"ordinary,omitempty"`
 }
 
 // Stage defines an adventure destination with required levels, normal monsters, boss encounters, and treasure pools.
@@ -45,6 +46,7 @@ type Stage struct {
 	TreasureItems   []string            `json:"treasure_items,omitempty"`
 	Seasons         []SeasonalStageData `json:"seasons,omitempty"`
 	Season          string              `json:"season,omitempty"`
+	Ordinary        *OrdinaryStage      `json:"ordinary,omitempty"`
 }
 
 // ForSeason returns a copy of the Stage configured for the given seasonal variant.
@@ -58,6 +60,7 @@ func (s Stage) ForSeason(season string) Stage {
 			cp.TreasureWeapons = sd.TreasureWeapons
 			cp.TreasureArmors = sd.TreasureArmors
 			cp.TreasureItems = sd.TreasureItems
+			cp.Ordinary = sd.Ordinary
 			return cp
 		}
 	}
@@ -361,6 +364,10 @@ func (c *StageCatalog) AvailableStagesAt(char corecharacter.Character, t time.Ti
 var stagesCatalogData []byte
 
 func InitialStageCatalog() (*StageCatalog, error) {
+	var encounters map[string]OrdinaryStage
+	if err := json.Unmarshal(ordinaryStageData, &encounters); err != nil {
+		return nil, fmt.Errorf("decode ordinary stages: %w", err)
+	}
 	var rawList []stageJSON
 	if err := json.Unmarshal(stagesCatalogData, &rawList); err != nil {
 		return nil, fmt.Errorf("decode stage catalog: %w", err)
@@ -375,6 +382,14 @@ func InitialStageCatalog() (*StageCatalog, error) {
 		stage.TreasureArmors = raw.TreasureArmors
 		stage.TreasureItems = raw.TreasureItems
 		stage.Seasons = raw.Seasons
+		if encounter, ok := encounters[stage.ID]; ok {
+			stage.Ordinary = &encounter
+		}
+		for i := range stage.Seasons {
+			if encounter, ok := encounters[stage.ID+"-"+stage.Seasons[i].Season]; ok {
+				stage.Seasons[i].Ordinary = &encounter
+			}
+		}
 		stages = append(stages, stage)
 	}
 	return NewStageCatalog(stages)

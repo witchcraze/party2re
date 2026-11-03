@@ -54,7 +54,7 @@ func (s *LifetimeState) addEnemyAt(c *RosterContext, suffix, position int) Roste
 	if position < 0 || position >= len(c.EnemyPool) {
 		position = 0
 	}
-	a := cloneCallbackActor(c.EnemyPool[position])
+	a := c.EnemyPool[position].Clone()
 	identity := func(n int) string { return "enemy-" + a.ID + "-" + string(rune('I'+n)) }
 	key := identity(suffix)
 	if s.rosterIdentity(key) != nil {

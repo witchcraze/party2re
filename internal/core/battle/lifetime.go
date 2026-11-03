@@ -22,6 +22,7 @@ type LifetimeActor struct {
 	WeaponSeal     int             `json:"weapon_seal"`
 	JobHistory     map[string]*int `json:"job_history,omitempty"` // nil SP means a recorded job with irrecoverable historical SP.
 	NPC            bool            `json:"npc"`
+	NPCLoadout     *NPCLoadout     `json:"npc_loadout,omitempty"`
 	RosterIdentity string          `json:"roster_identity,omitempty"`
 	RosterDetached bool            `json:"-"` // Dismissal changes color before the request's ordered arrays are rebuilt.
 	SummonForm     int             `json:"summon_form,omitempty"`

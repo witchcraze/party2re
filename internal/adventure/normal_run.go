@@ -22,27 +22,29 @@ var (
 // NormalRun is the Adventure-owned durable state, independent of waiting lobbies.
 // Character records and executable callbacks never belong in this snapshot.
 type NormalRun struct {
-	ID             string                   `json:"id"`
-	Version        int                      `json:"version"`
-	Encoding       int                      `json:"encoding"`
-	Admission      NormalAdmission          `json:"admission"`
-	Stage          Stage                    `json:"stage"`
-	RecordSeason   string                   `json:"record_season"`
-	Mode           string                   `json:"mode"`
-	LeaderID       string                   `json:"leader_id"`
-	Roster         []string                 `json:"roster"`
-	Floor          int                      `json:"floor"`
-	FloorsCleared  int                      `json:"floors_cleared"`
-	StageCleared   bool                     `json:"stage_cleared"`
-	EncounterFloor int                      `json:"encounter_floor"`
-	Enemies        []string                 `json:"enemies"`
-	Battle         corebattle.LifetimeState `json:"battle"`
-	LastActions    map[string]time.Time     `json:"last_actions"`
-	Recipients     map[string]RunRecipient  `json:"recipients"`
-	Boxes          []TreasureBox            `json:"boxes"`
-	StartedAt      time.Time                `json:"started_at"`
-	LastActivity   time.Time                `json:"last_activity"`
-	TimedOut       bool                     `json:"timed_out"`
+	ID                  string                     `json:"id"`
+	Version             int                        `json:"version"`
+	Encoding            int                        `json:"encoding"`
+	Admission           NormalAdmission            `json:"admission"`
+	Stage               Stage                      `json:"stage"`
+	RecordSeason        string                     `json:"record_season"`
+	Mode                string                     `json:"mode"`
+	LeaderID            string                     `json:"leader_id"`
+	Roster              []string                   `json:"roster"`
+	Floor               int                        `json:"floor"`
+	FloorsCleared       int                        `json:"floors_cleared"`
+	StageCleared        bool                       `json:"stage_cleared"`
+	EncounterFloor      int                        `json:"encounter_floor"`
+	Enemies             []string                   `json:"enemies"`
+	EncounterPool       []corebattle.LifetimeActor `json:"encounter_pool,omitempty"`
+	AppearancePositions []int                      `json:"appearance_positions,omitempty"`
+	Battle              corebattle.LifetimeState   `json:"battle"`
+	LastActions         map[string]time.Time       `json:"last_actions"`
+	Recipients          map[string]RunRecipient    `json:"recipients"`
+	Boxes               []TreasureBox              `json:"boxes"`
+	StartedAt           time.Time                  `json:"started_at"`
+	LastActivity        time.Time                  `json:"last_activity"`
+	TimedOut            bool                       `json:"timed_out"`
 }
 
 // NormalAdmission is frozen under Party's roster lock. Generation is the lobby
@@ -146,6 +148,7 @@ type RunAdmission interface {
 // earnings/consumption. No batch resolver is a fallback for this port.
 type RunCombat interface {
 	PrepareAdvance(context.Context, *NormalRun, string) error
+	PrepareBossField(context.Context, *NormalRun, string) error
 	ExecuteRunAction(context.Context, *NormalRun, RunCommand) (RunActionEffects, error)
 }
 
