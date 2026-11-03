@@ -73,7 +73,7 @@ func characterIsolatedDB(t *testing.T) *sql.DB {
 		}
 	})
 
-	for _, table := range []string{"players", "characters", "character_depots", "depot_items"} {
+	for _, table := range []string{"players", "characters", "character_depots", "depot_items", "news_articles"} {
 		var tableName, ddl string
 		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
 			t.Fatal(err)

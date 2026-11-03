@@ -271,6 +271,7 @@ func TestService_ChangeName(t *testing.T) {
 	_ = repo.Update(context.Background(), char)
 
 	// 2. Successful name change
+	news.published = nil
 	renamed, err := service.ChangeName(context.Background(), char.ID, "NewHero")
 	if err != nil {
 		t.Fatalf("ChangeName() failed: %v", err)

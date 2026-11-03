@@ -198,6 +198,8 @@ func (f FleaMarketCheckerFunc) HasActiveListings(ctx context.Context, characterI
 }
 
 // NewsPublisher defines announcement publication contract.
+// Creation news must join the supplied transaction without external side effects
+// or independent commits, so publication errors roll back creation as a whole.
 type NewsPublisher interface {
 	PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
 }
