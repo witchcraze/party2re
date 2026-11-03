@@ -22,6 +22,11 @@ func (s *CrawlSession) buildMonsterParticipant(
 	partyAdjustment float64,
 	isBoss bool,
 ) corebattle.Participant {
+	return s.buildMonsterActor(id, m, partyAdjustment, isBoss).Participant
+}
+
+func (s *CrawlSession) buildMonsterActor(id string, m Monster, partyAdjustment float64, isBoss bool) corebattle.LifetimeActor {
+	a := m.NPCPayload()
 	hp := m.HP
 	mp := m.MP
 	atk := m.Attack
@@ -41,6 +46,8 @@ func (s *CrawlSession) buildMonsterParticipant(
 		cmp = int(float64(cmp) * 1.5)
 		expReward = int(float64(expReward) * 1.5)
 		goldReward = int(float64(goldReward) * 1.5)
+		a.Jobs = corebattle.BattleJobs{JobID: a.Jobs.JobID, OldJobID: a.Jobs.OldJobID, SP: int(float64(a.Jobs.SP) * 1.5), OldSP: int(float64(a.Jobs.OldSP) * 1.5)}
+		a.CrystalReward = int(float64(a.CrystalReward) * 1.5)
 	}
 
 	statFactor := func() float64 {
@@ -62,18 +69,35 @@ func (s *CrawlSession) buildMonsterParticipant(
 	scaledAg := max(0, int(float64(ag)*statFactor()))
 	scaledCMP := max(0, int(float64(cmp)*statFactor()))
 
-	p := corebattle.MustNewParticipant(id, scaledHP, scaledAtk, scaledDef)
+	p := &a.Participant
+	p.ID, p.HP, p.Attack, p.Defense = id, scaledHP, scaledAtk, scaledDef
 	p.Name = m.Name
 	p.Agility = scaledAg
-	p.MaxHP = scaledHP
+	if p.MaxHP == 0 {
+		p.MaxHP = scaledHP
+	}
 	p.MP = scaledMP
-	p.MaxMP = scaledMP
+	if p.MaxMP == 0 {
+		p.MaxMP = scaledMP
+	}
 	p.CMP = scaledCMP
-	p.MaxCMP = scaledCMP
+	if p.MaxCMP == 0 {
+		p.MaxCMP = scaledCMP
+	}
+	if p.BaseStats.Attack == 0 {
+		p.BaseStats.Attack = scaledAtk
+	}
+	if p.BaseStats.Defense == 0 {
+		p.BaseStats.Defense = scaledDef
+	}
+	if p.BaseStats.Agility == 0 {
+		p.BaseStats.Agility = scaledAg
+	}
+	a.OriginalJobs = a.Jobs
 	p.ExperienceReward = expReward
 	p.GoldReward = goldReward
 
-	return p
+	return a
 }
 
 // Result compiles the final outcome of the dungeon crawl.

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
 var (
@@ -15,17 +17,18 @@ var (
 )
 
 type Monster struct {
-	ID               string   `json:"id"`
-	Name             string   `json:"name"`
-	HP               int      `json:"hp"`
-	MP               int      `json:"mp"`
-	Attack           int      `json:"attack"`
-	Defense          int      `json:"defense"`
-	Agility          int      `json:"agility"`
-	CMP              int      `json:"cmp,omitempty"`
-	ExperienceReward int      `json:"exp_reward"`
-	GoldReward       int      `json:"gold_reward"`
-	DropItemIDs      []string `json:"drop_item_ids,omitempty"`
+	ID               string                    `json:"id"`
+	Name             string                    `json:"name"`
+	HP               int                       `json:"hp"`
+	MP               int                       `json:"mp"`
+	Attack           int                       `json:"attack"`
+	Defense          int                       `json:"defense"`
+	Agility          int                       `json:"agility"`
+	CMP              int                       `json:"cmp,omitempty"`
+	ExperienceReward int                       `json:"exp_reward"`
+	GoldReward       int                       `json:"gold_reward"`
+	DropItemIDs      []string                  `json:"drop_item_ids,omitempty"`
+	Combat           *corebattle.LifetimeActor `json:"combat,omitempty"`
 }
 
 func NewMonster(id, name string, hp, mp, attack, defense, agility, expReward, goldReward int, dropItemIDs []string) (Monster, error) {
@@ -106,5 +109,10 @@ func InitialMonsterCatalog() (*MonsterCatalog, error) {
 	if err := json.Unmarshal(monstersCatalogData, &list); err != nil {
 		return nil, fmt.Errorf("decode monster catalog: %w", err)
 	}
+	var ordinary []Monster
+	if err := json.Unmarshal(ordinaryMonsterData, &ordinary); err != nil {
+		return nil, fmt.Errorf("decode ordinary monsters: %w", err)
+	}
+	list = append(list, ordinary...)
 	return NewMonsterCatalog(list)
 }

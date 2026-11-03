@@ -277,7 +277,7 @@ identify evidence only. Adventure owns [discovery and operation admission](adven
 | Between-encounter recovery, transformation and calling | `set_action:166–217,226–258`: no enemies, job/SP/curse/equipment gates; survival recovery costs 10 MP, forward transformation 10 MP, reverse 0; calling takes job callbacks | HP, transformed current/previous job, helper membership and randomized stats survive requests. #1333 owns effect/catalog certification; #1329 consumes certified choices. Generic reset is not permission to undo transformation |
 | Revival and fallen self action | `_battle.cgi:654`, `_skill.cgi:4910–4930`: discovery still requires its job/extended-skill gates and living designated helper; fallen self gains 50% MaxHP and immobilization. Living actor can revive fallen ally to 1 HP only with MP strictly >40, then spends 40 | Helper HP halves and a three-operation skill ban is set. #1333 owns effect, #1332 ban lifetime; #1329 tests fallen admission, no helper, exact 40 MP, and death-mark follow-up. A blanket living-actor guard is incorrect |
 | Additional submission and random invocation | `_battle.cgi:565,574–575,780–785,1084–1088`; `_skill.cgi:_yubiwofuru:9773–9787` dynamically selects a non-extended job callback | Second action is not another player turn/NPC round. Random callback temporarily preserves MP when its internal effect lowered it. #1332 owns second-submission lifetime, #1333 transitive random-effect coverage, #1329 step integration |
-| Ordinary enemies and stage bosses | `_npc_action.cgi:89–155,158–495,600–633`: ordered eligible NPC, current/previous-job and custom callbacks, resources and full boss attributes. Random selection among available NPC entries (`313`), not the player's batch priority | Preserve NPC-specific cures/tails, curse payload and special abilities. Curse release (`116–135`) occurs before NPC choice, clears payload, and rebuilds living opponents. #1333 owns ordinary boss catalog coverage; #1329 tests response admission/order |
+| Ordinary enemies and stage bosses | `_npc_action.cgi:89–155,158–495,600–681`: full supplied payloads, ordered eligible NPC and random current/previous-job/custom choice | Adventure freezes source templates and rolls; shared callback admission and NPC-specific operation boundaries preserve costs/cures/tails. #1329 owns durable response execution and receipts |
 
 Player listed MP admission uses the item-249 modifier (integer half cost for
 magician skills, double otherwise); execution charges after the callback unless
@@ -302,6 +302,42 @@ heads. For enemy order `[A,B,C]`, when A is not interval-ready and B acts, the
 result is `[B,C,A]`, not `[A,C,B]`. Only B's action timestamp changes. With no
 eligible living NPC, no rotation occurs. Selection is `_npc_action.cgi:90–92`;
 rotation is `149–153`. Persist semantic order independently of SQL lock order.
+
+Adventure's ordinary tables retain all315 source template sites (74 boss,
+241 monster), including branch order and weighted appearances. Stage15 copies
+each ordered ally's jobs/current stats and maximum resources, and generates ten
+monster slots with jobs0–87 and previous job36/SP999. Preserve the complete
+generated summon pool as well as selected enemies. Stage25 chooses one of three
+three-boss rosters; stage26 uses room-marker priority spring/summer/autumn/winter,
+defaulting to spring. Reload never selects a branch or rolls stats again.
+Ordinary stage23 has the job21/SP10/MP30 boss; job406 is EX-only
+(`ff97fc5:stage/15.cgi:13–66;25.cgi:16–204;26.cgi:16–28,623–1218;
+23.cgi:15–55`; source-position provenance stays in the native catalog).
+
+Initialization rolls each current stat as floor(base×(0.9+rand(0.3)+
+(party size−2)×0.1)); supplied nonzero maxima win. Hard ordinary monsters also
+scale SP, previous SP and rewards by1.5 before stat rolls. Custom CMP cost uses
+occupied slots, including duplicates, with the1/1.1/1.2 multiplier for one/two/three
+slots. Equipment, status, temporary/extended state, hit/tension and independent
+job/SP pairs survive serialization. Display names and assets are native.
+
+NPC choices preserve every eligible name position with the last admitted binding
+for that name. The request starts with the mode's SP0/MP0 normal attack, separate
+from job0; same-request repeats use the previous table left by construction.
+NPC extension admission requires item158 and excludes job73; current and previous
+SP remain independent, and player item249 cost modifiers do not apply. Missing
+callback descendants reject the eligible pool before selection or costs.
+Registered intrinsic callbacks, ordered gem preflight and late charges share the
+existing effect owners; scalar job/gem payloads alone do not certify an NPC.
+
+NPC cures precede action, cure-only incapacitation skips normal poison/regeneration,
+and field/equipment tails still run in source order. NPC confusion cures at1/3;
+only its purification counter ticks. Ordinary stage24 floor10 applies the special
+party caps (HP/MP maxima999, base stats255, doubled for over-level actors), then
+shared equipment reset; it does not install an EX default field. Curse/specter
+hooks require a reachable producer; numeric ordinary stages supply none, and
+unsupported specter payloads remain explicitly gated. Full callback composition
+and run integration remain cutover gates under #1436/#1329/#1330.
 
 **Additional-submission rule:** the active extended effect permits parsing two
 submitted actions. Both must belong to the seven-entry whitelist at

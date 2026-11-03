@@ -1,0 +1,1055 @@
+{
+  "stage-00": {
+    "boss_rosters": [
+      [
+        "ordinary-00-boss-10"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-00-monster-29",
+      "ordinary-00-monster-38",
+      "ordinary-00-monster-47",
+      "ordinary-00-monster-56",
+      "ordinary-00-monster-65",
+      "ordinary-00-monster-77"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "stage-01": {
+    "boss_rosters": [
+      [
+        "ordinary-01-boss-11",
+        "ordinary-01-boss-25",
+        "ordinary-01-boss-42"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-01-monster-64",
+      "ordinary-01-monster-73",
+      "ordinary-01-monster-83",
+      "ordinary-01-monster-97",
+      "ordinary-01-monster-107",
+      "ordinary-01-monster-119",
+      "ordinary-01-monster-128"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      3,
+      4,
+      4,
+      5,
+      5,
+      6
+    ]
+  },
+  "stage-02": {
+    "boss_rosters": [
+      [
+        "ordinary-02-boss-10"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-02-monster-37",
+      "ordinary-02-monster-47",
+      "ordinary-02-monster-61",
+      "ordinary-02-monster-75",
+      "ordinary-02-monster-89",
+      "ordinary-02-monster-103",
+      "ordinary-02-monster-117",
+      "ordinary-02-monster-127",
+      "ordinary-02-monster-137"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      4,
+      4,
+      4,
+      5,
+      5,
+      5,
+      6,
+      6,
+      7,
+      8
+    ]
+  },
+  "stage-03": {
+    "boss_rosters": [
+      [
+        "ordinary-03-boss-10",
+        "ordinary-03-boss-28"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-03-monster-54",
+      "ordinary-03-monster-68",
+      "ordinary-03-monster-82",
+      "ordinary-03-monster-96",
+      "ordinary-03-monster-111",
+      "ordinary-03-monster-126",
+      "ordinary-03-monster-136"
+    ],
+    "appears": []
+  },
+  "stage-04": {
+    "boss_rosters": [
+      [
+        "ordinary-04-boss-10"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-04-monster-37",
+      "ordinary-04-monster-51",
+      "ordinary-04-monster-66",
+      "ordinary-04-monster-81",
+      "ordinary-04-monster-95",
+      "ordinary-04-monster-109",
+      "ordinary-04-monster-123",
+      "ordinary-04-monster-137",
+      "ordinary-04-monster-152",
+      "ordinary-04-monster-166"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      3,
+      4,
+      4,
+      5,
+      5,
+      6,
+      6,
+      7,
+      7,
+      8,
+      9
+    ]
+  },
+  "stage-05": {
+    "boss_rosters": [
+      [
+        "ordinary-05-boss-10",
+        "ordinary-05-boss-28",
+        "ordinary-05-boss-42"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-05-monster-63",
+      "ordinary-05-monster-77",
+      "ordinary-05-monster-91",
+      "ordinary-05-monster-105",
+      "ordinary-05-monster-120",
+      "ordinary-05-monster-135",
+      "ordinary-05-monster-149",
+      "ordinary-05-monster-163",
+      "ordinary-05-monster-178",
+      "ordinary-05-monster-193"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      4,
+      4,
+      4,
+      5,
+      5,
+      5,
+      6,
+      6,
+      6,
+      7,
+      8,
+      9
+    ]
+  },
+  "stage-06": {
+    "boss_rosters": [
+      [
+        "ordinary-06-boss-10"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-06-monster-38",
+      "ordinary-06-monster-52",
+      "ordinary-06-monster-63",
+      "ordinary-06-monster-77",
+      "ordinary-06-monster-91",
+      "ordinary-06-monster-107",
+      "ordinary-06-monster-118",
+      "ordinary-06-monster-133",
+      "ordinary-06-monster-148",
+      "ordinary-06-monster-162",
+      "ordinary-06-monster-176",
+      "ordinary-06-monster-190"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      3,
+      4,
+      4,
+      4,
+      4,
+      5,
+      5,
+      5,
+      6,
+      6,
+      7,
+      7,
+      8,
+      8,
+      9,
+      9,
+      10,
+      10,
+      11
+    ]
+  },
+  "stage-07": {
+    "boss_rosters": [
+      [
+        "ordinary-07-boss-10",
+        "ordinary-07-boss-25",
+        "ordinary-07-boss-45"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-07-monster-68",
+      "ordinary-07-monster-82",
+      "ordinary-07-monster-93",
+      "ordinary-07-monster-107",
+      "ordinary-07-monster-122",
+      "ordinary-07-monster-137",
+      "ordinary-07-monster-151",
+      "ordinary-07-monster-165",
+      "ordinary-07-monster-179",
+      "ordinary-07-monster-193",
+      "ordinary-07-monster-208"
+    ],
+    "appears": []
+  },
+  "stage-08": {
+    "boss_rosters": [
+      [
+        "ordinary-08-boss-10"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-08-monster-38",
+      "ordinary-08-monster-54",
+      "ordinary-08-monster-70",
+      "ordinary-08-monster-85",
+      "ordinary-08-monster-100",
+      "ordinary-08-monster-114",
+      "ordinary-08-monster-129",
+      "ordinary-08-monster-143",
+      "ordinary-08-monster-159",
+      "ordinary-08-monster-175"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      4,
+      5,
+      6,
+      6,
+      7,
+      8,
+      9
+    ]
+  },
+  "stage-09": {
+    "boss_rosters": [
+      [
+        "ordinary-09-boss-10",
+        "ordinary-09-boss-24",
+        "ordinary-09-boss-38",
+        "ordinary-09-boss-57",
+        "ordinary-09-boss-71"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-09-monster-93",
+      "ordinary-09-monster-104",
+      "ordinary-09-monster-119",
+      "ordinary-09-monster-130",
+      "ordinary-09-monster-144",
+      "ordinary-09-monster-158",
+      "ordinary-09-monster-172",
+      "ordinary-09-monster-186",
+      "ordinary-09-monster-200",
+      "ordinary-09-monster-214",
+      "ordinary-09-monster-228",
+      "ordinary-09-monster-242",
+      "ordinary-09-monster-256",
+      "ordinary-09-monster-266",
+      "ordinary-09-monster-280",
+      "ordinary-09-monster-297"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      3,
+      4,
+      4,
+      4,
+      4,
+      5,
+      5,
+      5,
+      5,
+      6,
+      6,
+      6,
+      7,
+      7,
+      7,
+      8,
+      8,
+      8,
+      9,
+      9,
+      9,
+      10,
+      10,
+      11,
+      11,
+      12,
+      13,
+      14,
+      15
+    ]
+  },
+  "stage-10": {
+    "boss_rosters": [
+      [
+        "ordinary-10-boss-10",
+        "ordinary-10-boss-24",
+        "ordinary-10-boss-45"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-10-monster-67",
+      "ordinary-10-monster-83",
+      "ordinary-10-monster-94",
+      "ordinary-10-monster-108",
+      "ordinary-10-monster-122",
+      "ordinary-10-monster-136",
+      "ordinary-10-monster-150",
+      "ordinary-10-monster-164",
+      "ordinary-10-monster-178",
+      "ordinary-10-monster-192",
+      "ordinary-10-monster-206"
+    ],
+    "appears": []
+  },
+  "stage-11": {
+    "boss_rosters": [
+      [
+        "ordinary-11-boss-11",
+        "ordinary-11-boss-32"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-11-monster-58",
+      "ordinary-11-monster-73",
+      "ordinary-11-monster-88",
+      "ordinary-11-monster-102",
+      "ordinary-11-monster-116",
+      "ordinary-11-monster-130",
+      "ordinary-11-monster-144",
+      "ordinary-11-monster-158",
+      "ordinary-11-monster-172"
+    ],
+    "appears": [
+      0,
+      0,
+      1,
+      1,
+      2,
+      2,
+      3,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "stage-12": {
+    "boss_rosters": [
+      [
+        "ordinary-12-boss-10",
+        "ordinary-12-boss-29",
+        "ordinary-12-boss-50"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-12-monster-77",
+      "ordinary-12-monster-92",
+      "ordinary-12-monster-103",
+      "ordinary-12-monster-118",
+      "ordinary-12-monster-133",
+      "ordinary-12-monster-148",
+      "ordinary-12-monster-162",
+      "ordinary-12-monster-177",
+      "ordinary-12-monster-191",
+      "ordinary-12-monster-205",
+      "ordinary-12-monster-220"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      3,
+      4,
+      4,
+      4,
+      4,
+      5,
+      5,
+      5,
+      5,
+      6,
+      6,
+      7,
+      7,
+      8,
+      8,
+      9,
+      10
+    ]
+  },
+  "stage-13": {
+    "boss_rosters": [
+      [
+        "ordinary-13-boss-10",
+        "ordinary-13-boss-29",
+        "ordinary-13-boss-50"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-13-monster-77",
+      "ordinary-13-monster-92",
+      "ordinary-13-monster-106",
+      "ordinary-13-monster-120",
+      "ordinary-13-monster-136",
+      "ordinary-13-monster-152",
+      "ordinary-13-monster-171",
+      "ordinary-13-monster-186",
+      "ordinary-13-monster-201"
+    ],
+    "appears": []
+  },
+  "stage-14": {
+    "boss_rosters": [
+      [
+        "ordinary-14-boss-10",
+        "ordinary-14-boss-29",
+        "ordinary-14-boss-50"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-14-monster-77",
+      "ordinary-14-monster-93",
+      "ordinary-14-monster-108",
+      "ordinary-14-monster-124",
+      "ordinary-14-monster-139",
+      "ordinary-14-monster-154",
+      "ordinary-14-monster-170",
+      "ordinary-14-monster-186",
+      "ordinary-14-monster-203",
+      "ordinary-14-monster-220"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      3,
+      3,
+      4,
+      4,
+      4,
+      4,
+      4,
+      5,
+      5,
+      5,
+      5,
+      6,
+      6,
+      6,
+      6,
+      7,
+      7,
+      8,
+      9
+    ]
+  },
+  "stage-16": {
+    "boss_rosters": [
+      [
+        "ordinary-16-boss-11",
+        "ordinary-16-boss-30",
+        "ordinary-16-boss-49"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-16-monster-75",
+      "ordinary-16-monster-92",
+      "ordinary-16-monster-109"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      2
+    ]
+  },
+  "stage-17": {
+    "boss_rosters": [
+      [
+        "ordinary-17-boss-10",
+        "ordinary-17-boss-28",
+        "ordinary-17-boss-47",
+        "ordinary-17-boss-66"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-17-monster-94",
+      "ordinary-17-monster-110",
+      "ordinary-17-monster-126",
+      "ordinary-17-monster-141",
+      "ordinary-17-monster-156",
+      "ordinary-17-monster-171",
+      "ordinary-17-monster-186",
+      "ordinary-17-monster-200"
+    ],
+    "appears": []
+  },
+  "stage-18": {
+    "boss_rosters": [
+      [
+        "ordinary-18-boss-10",
+        "ordinary-18-boss-30",
+        "ordinary-18-boss-50"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-18-monster-78",
+      "ordinary-18-monster-94",
+      "ordinary-18-monster-110",
+      "ordinary-18-monster-126",
+      "ordinary-18-monster-142",
+      "ordinary-18-monster-159"
+    ],
+    "appears": []
+  },
+  "stage-19": {
+    "boss_rosters": [
+      [
+        "ordinary-19-boss-10"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-19-monster-39",
+      "ordinary-19-monster-54",
+      "ordinary-19-monster-69"
+    ],
+    "appears": []
+  },
+  "stage-20": {
+    "boss_rosters": [
+      [
+        "ordinary-20-boss-10",
+        "ordinary-20-boss-29",
+        "ordinary-20-boss-50"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-20-monster-77",
+      "ordinary-20-monster-93",
+      "ordinary-20-monster-109",
+      "ordinary-20-monster-125"
+    ],
+    "appears": []
+  },
+  "stage-21": {
+    "boss_rosters": [
+      [
+        "ordinary-21-boss-10",
+        "ordinary-21-boss-31",
+        "ordinary-21-boss-52"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-21-monster-81",
+      "ordinary-21-monster-93",
+      "ordinary-21-monster-108",
+      "ordinary-21-monster-123",
+      "ordinary-21-monster-138",
+      "ordinary-21-monster-153",
+      "ordinary-21-monster-168",
+      "ordinary-21-monster-182",
+      "ordinary-21-monster-197",
+      "ordinary-21-monster-213",
+      "ordinary-21-monster-229",
+      "ordinary-21-monster-244",
+      "ordinary-21-monster-260"
+    ],
+    "appears": []
+  },
+  "stage-22": {
+    "boss_rosters": [
+      [
+        "ordinary-22-boss-16",
+        "ordinary-22-boss-34",
+        "ordinary-22-boss-60"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-22-monster-162",
+      "ordinary-22-monster-175",
+      "ordinary-22-monster-191",
+      "ordinary-22-monster-206",
+      "ordinary-22-monster-227"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      4
+    ]
+  },
+  "stage-23": {
+    "boss_rosters": [
+      [
+        "ordinary-23-boss-16"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-23-monster-62",
+      "ordinary-23-monster-72",
+      "ordinary-23-monster-82",
+      "ordinary-23-monster-92",
+      "ordinary-23-monster-101",
+      "ordinary-23-monster-111"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      3,
+      3,
+      4,
+      4,
+      5
+    ]
+  },
+  "stage-24": {
+    "boss_rosters": [
+      [
+        "ordinary-24-boss-19",
+        "ordinary-24-boss-46",
+        "ordinary-24-boss-67"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-24-monster-124",
+      "ordinary-24-monster-146",
+      "ordinary-24-monster-166",
+      "ordinary-24-monster-189",
+      "ordinary-24-monster-214",
+      "ordinary-24-monster-234"
+    ],
+    "appears": [
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      3,
+      3,
+      4,
+      4,
+      5
+    ]
+  },
+  "stage-25": {
+    "boss_rosters": [
+      [
+        "ordinary-25-boss-22",
+        "ordinary-25-boss-40",
+        "ordinary-25-boss-60"
+      ],
+      [
+        "ordinary-25-boss-83",
+        "ordinary-25-boss-103",
+        "ordinary-25-boss-123"
+      ],
+      [
+        "ordinary-25-boss-148",
+        "ordinary-25-boss-165",
+        "ordinary-25-boss-185"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-25-monster-290",
+      "ordinary-25-monster-306",
+      "ordinary-25-monster-323",
+      "ordinary-25-monster-340",
+      "ordinary-25-monster-356",
+      "ordinary-25-monster-373",
+      "ordinary-25-monster-392",
+      "ordinary-25-monster-408",
+      "ordinary-25-monster-422",
+      "ordinary-25-monster-438",
+      "ordinary-25-monster-459",
+      "ordinary-25-monster-481"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      4,
+      4,
+      4,
+      5,
+      6,
+      6,
+      6,
+      6,
+      6,
+      7,
+      7,
+      7,
+      8,
+      9,
+      9,
+      9,
+      9,
+      9,
+      10,
+      10,
+      10,
+      11
+    ]
+  },
+  "stage-26-spring": {
+    "boss_rosters": [
+      [
+        "ordinary-26-boss-632"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-26-monster-719",
+      "ordinary-26-monster-729",
+      "ordinary-26-monster-739",
+      "ordinary-26-monster-748",
+      "ordinary-26-monster-757"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      3,
+      3,
+      3,
+      4
+    ]
+  },
+  "stage-26-summer": {
+    "boss_rosters": [
+      [
+        "ordinary-26-boss-782"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-26-monster-867",
+      "ordinary-26-monster-876",
+      "ordinary-26-monster-885",
+      "ordinary-26-monster-894",
+      "ordinary-26-monster-903"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      3,
+      3,
+      3,
+      4
+    ]
+  },
+  "stage-26-autumn": {
+    "boss_rosters": [
+      [
+        "ordinary-26-boss-928"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-26-monster-1012",
+      "ordinary-26-monster-1021",
+      "ordinary-26-monster-1031",
+      "ordinary-26-monster-1041",
+      "ordinary-26-monster-1051"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      3,
+      3,
+      3,
+      4
+    ]
+  },
+  "stage-26-winter": {
+    "boss_rosters": [
+      [
+        "ordinary-26-boss-1076"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-26-monster-1160",
+      "ordinary-26-monster-1170",
+      "ordinary-26-monster-1179",
+      "ordinary-26-monster-1189"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      3
+    ]
+  },
+  "stage-27": {
+    "boss_rosters": [
+      [
+        "ordinary-27-boss-11"
+      ]
+    ],
+    "monster_ids": [
+      "ordinary-27-monster-36",
+      "ordinary-27-monster-46",
+      "ordinary-27-monster-56",
+      "ordinary-27-monster-66",
+      "ordinary-27-monster-76",
+      "ordinary-27-monster-90",
+      "ordinary-27-monster-103"
+    ],
+    "appears": [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      4,
+      4,
+      5,
+      5,
+      6
+    ]
+  },
+  "stage-15": {
+    "party_copy": true
+  }
+}

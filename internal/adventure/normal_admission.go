@@ -211,10 +211,7 @@ func (s *NormalRunService) enter(ctx context.Context, player string, a NormalAdm
 		if err != nil {
 			return err
 		}
-		if a.Season != "" {
-			stage = stage.ForSeason(a.Season)
-		}
-		r.Stage = stage.SelectSeason(s.cfg.RNG.Intn)
+		r.Stage = stage.OrdinarySeason(a.Season)
 		r.RecordSeason = r.Stage.Season
 		for _, id := range a.CharacterIDs {
 			actor, err := s.cfg.Builder.BuildLifetimeActor(ctx, id, "")

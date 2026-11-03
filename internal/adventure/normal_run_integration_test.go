@@ -53,6 +53,9 @@ func (p *normalPenalty) ProjectRunPenalty(_ context.Context, _ string, until tim
 type normalCombat struct{ calls atomic.Int64 }
 
 func (*normalCombat) PrepareAdvance(context.Context, *adventure.NormalRun, string) error { return nil }
+func (*normalCombat) PrepareBossField(context.Context, *adventure.NormalRun, string) error {
+	return nil
+}
 func (e *normalCombat) ExecuteRunAction(_ context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
 	e.calls.Add(1)
 	fx := adventure.RunActionEffects{RoomActivity: true, ActorActivity: true, ReleaseStock: true}

@@ -323,8 +323,8 @@ SQL receipts must freeze draws/results and consumption once (#1328/#1197).
 Travel itself neither pays nor erases earnings; normal stock processing still
 runs through the lifecycle owner (#1328). Assignment-only callbacks retain
 `$is_clear` and existing EX markers. Tool 150's encounter creation at floor 10 sets clear; stage 24 also
-creates its EX marker and applies its ordinary special boss-field reset/caps
-owned by #1342. Ordinary
+creates its EX marker and applies the [ordinary NPC/field contract](battle.md#normal-adventure-action-and-target-matrix).
+The run's boss-field port applies the shared cap/reset owner after enemy creation. Ordinary
 treasure creation at floor 11 consumes the retained clear flag for the
 **current** stage, runs Try success if applicable and can unseal stage 19
 (`vs_monster.cgi:91–155`). It is not proof that the destination boss was beaten.
@@ -353,8 +353,8 @@ Run consumers persist the resulting facts and apply enclosing costs in order.
 The operation matrix establishes the family boundary. Production cutover still
 requires #1188 job supply, #1332 effect lifetimes and the effects/transactions
 decomposed by [#1333](https://github.com/witchcraze/party2re/issues/1333) into
-#1337–#1346. #1342 preserves full ordinary NPC/boss payloads, multiple/conditional
-rosters and stage 24's ordinary-floor special field. The
+#1337–#1346. Ordinary NPC payloads, conditional rosters, frozen summon tables and
+stage24's special field follow the [shared battle contract](battle.md#dynamic-effects-and-catalog-admission). The
 [entry ownership reconciliation](battle.md#dynamic-effects-and-catalog-admission)
 distinguishes those payloads from their concrete callback bodies, descendant
 closure, registration and production wiring. Its implementation owners remain
