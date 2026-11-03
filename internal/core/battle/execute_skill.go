@@ -6,7 +6,7 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 	if err := ValidateSkillAction(*skill); err != nil {
 		return err
 	}
-	ctx.mpMap[actor.ID] -= skill.MPCost
+	ctx.mpMap[actor.ID] -= skill.EffectiveMPCost(actor)
 
 	isMagic := skill.Category == string(CategoryMagic) || skill.Category == "magic"
 	if isMagic {

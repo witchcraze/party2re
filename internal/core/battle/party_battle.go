@@ -262,7 +262,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			if usedCustom == nil {
 				for i := range actor.Skills {
 					sk := &actor.Skills[i]
-					if ctx.mpMap[actorID] >= sk.MPCost {
+					if ctx.mpMap[actorID] >= sk.EffectiveMPCost(actor) {
 						if sk.Kind == ActionKindDejon {
 							hasFallenTarget := false
 							for _, opp := range fullOpponents {
