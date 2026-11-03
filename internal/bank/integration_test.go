@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestBankIntegrationConcurrentDepositsAndWithdrawals(t *testing.T) {
@@ -53,7 +54,7 @@ func TestBankIntegrationConcurrentDepositsAndWithdrawals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char1, err := corecharacter.New("DepConc")
+	char1, err := corecharacter.New(id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -125,11 +125,12 @@ func TestDatabaseTestEntityFactories(t *testing.T) {
 	// 2. CreateTestCharacterWithFunds
 	var charID string
 	t.Run("CreateTestCharacterWithFunds", func(t *testing.T) {
-		c, err := CreateTestCharacterWithFunds(ctx, db, "RichHero", 7777)
+		name := id.New()[:8]
+		c, err := CreateTestCharacterWithFunds(ctx, db, name, 7777)
 		if err != nil {
 			t.Fatalf("CreateTestCharacterWithFunds error: %v", err)
 		}
-		if c.ID == "" || c.Money != 7777 || c.Name != "RichHero" {
+		if c.ID == "" || c.Money != 7777 || c.Name != name {
 			t.Errorf("unexpected character attributes: %+v", c)
 		}
 		charID = c.ID

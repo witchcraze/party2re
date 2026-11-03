@@ -11,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/collection"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
@@ -43,7 +44,7 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdChar, err := charService.Create(ctx, player.ID, "ShopInt")
+	createdChar, err := charService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -43,6 +43,14 @@ Before running the server, ensure all database migrations are applied:
 make db-migrate
 ```
 
+The [character name uniqueness migration](../../migrations/110_character_name_uniqueness.sql)
+stops before schema changes if existing names conflict under the target exact
+comparison. It reports duplicate names and character IDs and retains their data.
+Resolve the listed identities explicitly, then rerun `make db-migrate`; the
+migration never deletes, merges or renames characters automatically. For a
+disposable local test database, an explicit reset is a separate choice described
+below; it is not an automatic migration repair.
+
 > [!NOTE]
 > When `compose.yaml` initializes a newly created named volume (`mariadb-data`), MariaDB executes migration scripts from `./migrations` automatically via `/docker-entrypoint-initdb.d`. However, for existing volumes or newly added migration files, `/docker-entrypoint-initdb.d` does not run again. Running `make db-migrate` guarantees that any pending incremental migrations in `migrations/*.sql` are recorded and applied safely without losing existing data.
 >

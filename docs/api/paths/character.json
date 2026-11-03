@@ -266,6 +266,7 @@
   },
   "/characters": {
     "post": {
+      "description": "Creates a character, initial depot, joining news and eligible referral delivery in one transaction. Each successful creation, including additional characters on the same account, may refer to an existing character. Retry of the same creation/name is rejected without another reward. After an uncertain response, recover by reading owned characters rather than automatically replaying POST.",
       "operationId": "createCharacter",
       "requestBody": {
         "content": {
@@ -285,7 +286,11 @@
                   "type": "string"
                 },
                 "name": {
-                  "description": "Character name (1..8 runes)",
+                  "description": "Character name (1..8 runes); NFC-normalized, no whitespace, exact case/accent-sensitive uniqueness shared by creation and rename",
+                  "type": "string"
+                },
+                "referrer_character_id": {
+                  "description": "Optional existing referrer character ID, including another character on the same account. Omitted/blank or nonexistent character/depot grants nothing. An eligible creation appends one separate item-023 and a referral delivery notice identifying the joining character, even at/above depot capacity; SmallMedals is not directly incremented. Delivery/notice persistence failures roll back creation.",
                   "type": "string"
                 },
                 "sex": {
@@ -343,6 +348,10 @@
             }
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Character name already taken. Creation and rename share exact, case/accent-sensitive uniqueness after existing NFC input normalization. No failed creation assets/news/referral or failed rename fee/news are committed."
         },
         "415": {
           "$ref": "#/components/responses/Error",
@@ -2161,7 +2170,7 @@
             "schema": {
               "properties": {
                 "name": {
-                  "description": "New character name (1..8 runes)",
+                  "description": "New character name (1..8 runes); NFC-normalized, no whitespace, exact case/accent-sensitive uniqueness shared by creation and rename",
                   "type": "string"
                 }
               },
@@ -2187,7 +2196,7 @@
         },
         "400": {
           "$ref": "#/components/responses/Error",
-          "description": "Invalid name, same name, insufficient funds, name taken, in guild, or active flea market listings"
+          "description": "Invalid name, same name, insufficient funds, in guild, or active flea market listings"
         },
         "401": {
           "$ref": "#/components/responses/Error",
@@ -2200,6 +2209,10 @@
         "404": {
           "$ref": "#/components/responses/Error",
           "description": "Character not found"
+        },
+        "409": {
+          "$ref": "#/components/responses/Error",
+          "description": "Character name already taken. Creation and rename share exact, case/accent-sensitive uniqueness after existing NFC input normalization. No failed creation assets/news/referral or failed rename fee/news are committed."
         },
         "415": {
           "$ref": "#/components/responses/Error",

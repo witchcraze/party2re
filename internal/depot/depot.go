@@ -174,6 +174,12 @@ func (d *Depot) AddItem(instance item.Instance, stackable ...bool) error {
 	return nil
 }
 
+// AppendDelivery preserves an unconditional delivery as a separate instance,
+// even above capacity. Callers must explicitly permit legacy delivery overflow.
+func (d *Depot) AppendDelivery(instance item.Instance) {
+	d.Items = append(d.Items, instance)
+}
+
 // Consume removes quantity of the item with the given instanceID.
 // Returns ErrInvalidQuantity if quantity <= 0 or if the existing item quantity < quantity.
 // If the remaining quantity reaches 0, the item slot is removed from depot storage.

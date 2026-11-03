@@ -42,6 +42,23 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 | `admin.cgi`, `maintenance.cgi` | 管理者操作・メンテナンス制御 | `internal/maintenance/` | [Maintenance](../design/admin.md#system-maintenance-mode)<br/>[api/paths/admin.json](../api/paths/admin.json) | Reconciling | メンテナンスモード切り替え、BAN、管理者による無ペナルティ強制復帰(`admin_refresh`)の追加 |
 | `link.cgi` | 外部リンク・コミュニティ | Client Presentation | N/A | Planned | 静的ナビゲーション・ワンクッション画面 |
 
+#### Registration dispatch and referral reconciliation
+
+`new_entry.cgi:19` dispatches on `mode`, rather than an `@actions` array.
+This table reconciles its form/submission paths and the referral branch;
+other registration policies remain in the owning player/character design.
+
+| Legacy path | Go boundary / transport | Reconciliation |
+| --- | --- | --- |
+| Default → `new_form` (`26–61`), optional `yid` (`33–39`) | Client registration form; optional `referrer_character_id` on POST `/characters` | Client presentation replaces CGI HTML; explicit character ID replaces hex-name encoding. |
+| `mode=new_entry` → `new_entry` → `create_user` (`66–70,155–217`) | `character.Service.CreateWithOptions`; POST `/characters` | Character creation represents each legacy registration, including additional characters; account registration does not grant a referral reward. |
+| Registration name checks/directory creation (`130–131,155–159`) and Naming Hall `なまえ` → `namae` (`lib/name_change.cgi:34–41,95–143`) | `CreateWithOptions`, `ChangeName`; POST `/characters`, POST `/characters/{id}/name` | Shared SQL exact-name uniqueness enforces one winner across creation/rename and returns HTTP 409 for a taken name. Existing input NFC normalization is retained; migration preserves conflicting rows and stops for explicit resolution. Naming Hall password/gender actions are outside this name-uniqueness scope. |
+| `create_user` referral branch → `send_item` (`214–217`; `system.cgi:818–835`) | `CreateWithOptions` → composition-root `referralDeliveryAdapter.DeliverReferral` → Depot and Home notice contracts | Existing referrer/depot receives one separate item-023 plus a notice. Missing recipient/depot is a no-op; full depot still receives the item. Creation, referral and joining news commit/roll back together. |
+
+The [registration/referral design](../design/player-and-character.md#210-registration-referral-delivery)
+owns the approved lifecycle and delivery policies. Birth memory remains outside
+this delivery path under the existing [trajectory gap](../design/player-and-character.md#29-transactional-character-creation--joining-news).
+
 ---
 
 ### CL-02: Living, Housing & Towns (生活・拠点・預かり所)

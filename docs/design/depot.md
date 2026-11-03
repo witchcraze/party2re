@@ -30,11 +30,15 @@ Where:
 - Absolute maximum capacity: 500 slots.
 
 Current `Depot.AddItem` rejects a new slot at or above capacity, while an
-eligible existing stack may still accept items. The approved, not-yet-implemented
+eligible existing stack may still accept items.
+[Registration referral delivery](player-and-character.md#210-registration-referral-delivery)
+uses `Depot.AppendDelivery` to append a separate reward instance even at/above
+capacity, matching `new_entry.cgi:214–217` and `system.cgi:818–835`.
+The approved, not-yet-implemented
 [contest-award delivery contract](photo-contest.md#approved-delivery-contract-and-implementation-gap)
 permits medal delivery even at full/over-capacity storage. Its slot count may
 therefore exceed the calculated capacity; it does not increase the capacity
-itself. Other caller policies remain under
+itself. Referral delivery likewise leaves capacity unchanged. Other caller policies remain under
 [#1139](https://github.com/witchcraze/party2re/issues/1139); this exception does
 not authorize changing ordinary deposits or player transfers.
 

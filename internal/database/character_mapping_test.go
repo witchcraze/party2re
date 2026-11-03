@@ -170,7 +170,7 @@ func TestUpdateCharacterAtomically_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := corecharacter.New("AtomTest")
+	char, err := corecharacter.New(player.ID[:corecharacter.MaxNameLength])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestUpdateCharacter_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := corecharacter.New("UpdTest")
+	char, err := corecharacter.New(player.ID[:corecharacter.MaxNameLength])
 	if err != nil {
 		t.Fatal(err)
 	}
