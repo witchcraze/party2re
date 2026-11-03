@@ -92,7 +92,8 @@ preserves the legacy expiry conditions, mapped to **individual Characters**:
   transfers and another character's actions do not establish owner activity.
   Account login alone, token refresh and unrelated/read-only API polling do not
   refresh every owned character. Game-screen observations replacing legacy saved
-  refreshes must explicitly participate; do not require repeated account login.
+  refreshes must explicitly participate through owned commands; public/owned GET
+  polling stays read-only for activity. Do not require repeated account login.
 - Activity and its corresponding durable gameplay writes commit together. Concurrent
   updates cannot move the clock backward. Persistence failure must not report a
   completed gameplay save while leaving an older deletion clock.
@@ -130,6 +131,9 @@ backlog](https://github.com/witchcraze/party2re/issues/1799) tracks that work.
   disabled until all save-equivalent paths are covered and both beginner/general
   grace periods have elapsed since that baseline. Missing or invalid activity
   evidence preserves the character and reports an operational error.
+- Public presence shares save events and the UTC clock, but preserves a separate
+  [sampled record lifecycle](player-and-character.md#212-public-presence-and-login-message).
+  Retention rollout baselines must not publish online presence.
 - Resolve [persistent deletion atomicity](https://github.com/witchcraze/party2re/issues/1095)
   before enabling. Recheck current activity and beginner status under the same
   transaction/locking boundary as deletion, coordinated with gameplay saves. SQL

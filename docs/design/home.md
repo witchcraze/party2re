@@ -175,10 +175,13 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
 - **Free Recovery**: No monetary fee (deprecates fictional paid Inn).
 - **Visiting House Restriction**: When sleeping at another player's house (`target_home_id != character_id`), the host character must exist in the system (i.e., be a registered player). A private home is always available regardless of whether the host holds an active town lease. Legacy parity: `lib/home.cgi:1-7` checks for the existence of the user directory (created at character registration), not a paid town lease; `lib/system.cgi:418-435` checks for the private `home.cgi` file, which is also created at registration. If the host character does not exist, the request is rejected with `ErrCharacterNotFound` (HTTP `404 Not Found`). A character can always sleep in their own private home.
 
-- **Concurrency Scaling**: Sleep duration scales by online concurrent player count:
-  - `< 20` players: 1x base duration (60 seconds)
-  - `>= 20` players: 2x base duration (120 seconds)
-  - `>= 30` players: 3x base duration (180 seconds)
+- **Concurrency Scaling**: Sleep duration scales by the distinct Character count
+  in the [public sampled-presence contract](player-and-character.md#212-public-presence-and-login-message):
+  `< 20`: 1x base duration; `20–29`: 2x; `>= 30`: 3x.
+  Current Go defaults to a 60-second base and has no production online-counter
+  wiring. [#1123](https://github.com/witchcraze/party2re/issues/1123) owns the base
+  decision, counter acquisition and failure policy; 60 seconds is not a verified
+  legacy value. Authentication/token counts must not replace presence.
 - **Action admission**: Protected action boundaries reject active sleep and
   pending waking recovery. Duration expiry alone does not clear the obligation.
   Observation, explicit Wake and emergency Rescue remain available. Failed SQL,

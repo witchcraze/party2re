@@ -202,6 +202,91 @@ exact name bytes and rejects an existing identity. Naming Hall's `なまえ` →
 uniqueness makes this rule atomic across both operations; existing input NFC
 normalization remains the reconstruction's validation contract.
 
+### 2.12 Public Presence and Login Message
+
+The decision in [#1104](https://github.com/witchcraze/party2re/issues/1104)
+preserves **sampled presence**, independently of account authentication and the
+[continuous retention clock](player-deletion.md#4-inactivity-retention).
+Presence and its message belong to a Character, identified by stable character
+ID. Multiple sessions/PATs for one character count once; different characters of
+one Player count separately. This is recent recorded game activity, not a live
+connection or a claim that the character can currently act.
+
+**Legacy evidence.** `login.cgi:20,25–30,106–109,126–138` validates a 60-character
+message, saves it on the character and prepends a public snapshot on game entry.
+`lib/system.cgi:29–46` appends another snapshot only when strictly more than
+`login_time * 60` seconds have passed since the previous sampled save; intervening
+saves refresh `ltime`, not this sampling clock. `get_login_member` (`1387–1417`)
+discards expired records and later duplicates, rewriting the log with only the
+first remaining record per name. `index.cgi:17–25` displays that list and count.
+The adopted window is **900 seconds**, using `config.cgi_origin:51–52`'s 15-minute
+reference default; the active legacy configuration remains unavailable.
+
+**Recording and expiry.** Share authenticated save-equivalent events and the
+server's injected UTC clock with retention, but keep separate presence records:
+
+- The first game save records a sample. Later saves replace it only when
+  `now > sampled_at + 900s`; equality does not refresh it. Explicit game entry
+  also publishes a new entry snapshot, without resetting that sampling clock.
+- An entry/sample is visible through `recorded_at + 900s`, including equality.
+  Prefer a valid entry snapshot to a valid sample, matching legacy prepend versus
+  append order. List/count observation discards expired and duplicate snapshots,
+  including a newer sample hidden by a still-valid entry. Keep the sampling clock
+  independently: discarding its snapshot must not permit early resampling. One
+  latest entry and one latest sample per character bound the stored snapshots.
+  Display fields come from the chosen snapshot, not a refreshed profile. Entry
+  rows sort newest first, followed by samples oldest first; publication order
+  resolves equal timestamps.
+- Game entry, commands and unchanged game-screen refresh participate at their
+  reconciled save boundaries. Save-before-rejection events count; auth failures,
+  rolled-back saves, public/owned GET polling, account login/token management,
+  incoming transfers and background settlement do not. Explicit owned commands
+  replace legacy saved screen refreshes; GET never renews presence or retention.
+- Session and PAT gameplay follow the same rule. Logout/token expiry does not
+  remove a valid snapshot. Sleeping/dead characters remain eligible. Deleted
+  characters and banned accounts are excluded immediately; unban alone records
+  no activity. No record means offline; an inactivity rollout baseline must not
+  create public presence.
+- Use UTC epoch seconds at recording and observation boundaries, monotonically
+  advancing stored clocks under concurrency. List and count use one observation
+  instant and the same distinct-character predicate. Home consumes this count;
+  [#1123](https://github.com/witchcraze/party2re/issues/1123) owns sleep duration,
+  acquisition and failure policy, without redefining presence.
+
+**Message and safety.** Default to `""`; an explicit empty string clears it.
+Accept 0–60 Unicode code points, preserving spaces, punctuation and ordinary
+combining marks without trimming, normalization or HTML-entity storage. A combined
+glyph/emoji may consume multiple code points. Reject invalid UTF-8/unpaired JSON
+surrogates, C0/C1 controls (including CR/LF/tab), Unicode line/paragraph separators,
+and the existing shared checks for invisible formatting, bidi overrides and
+excessive combining marks. Do not silently repair invalid input. Permitting
+spaces/legacy forbidden punctuation and retaining safe combining marks, while
+rejecting rather than stripping newlines, is the explicitly approved departure
+in #1104; its implementation prioritizes safe storage and output.
+
+Reuse [shared validation](../../internal/validation/validation.go) safety checks;
+its current single-line wrapper trims/normalizes and rejects empty text, so it
+cannot directly implement this message contract. Extract reusable safety checks
+while preserving existing callers' policies; do not duplicate sanitizers or
+silently change other text fields. Validate at the service boundary, use SQL
+parameters, serialize with the shared JSON writer, and render through escaped
+text nodes/framework text binding. HTML, script, attribute and URL contexts need
+their own safe encoders/validators; a single universal escaping function is not
+a security boundary. Recheck stored public text and image URL safety before
+output; malformed data fails the observation instead of leaking unsafe/partial
+content. Never interpolate user text into executable markup or SQL.
+
+**Persistence and delivery.** MariaDB owns the character's message and bounded
+character-dependent presence snapshots and sampling clock; Valkey is unnecessary.
+A gameplay save, its retention event and any due sample commit in the same
+transaction. Entry message changes and entry publication also commit together. Initial deployment
+publishes no fabricated activity; restart preserves eligible records. Character
+cleanup owns these records. The [API boundary](../architecture/client-agent-api.md#public-presence-and-message-boundary)
+defines the planned whitelist and owned update path. These contracts are planned;
+the [storage/safe-text implementation](https://github.com/witchcraze/party2re/issues/1803)
+and [API/save-boundary integration](https://github.com/witchcraze/party2re/issues/1804)
+own executable security/boundary tests and runtime delivery.
+
 ---
 
 ## 3. Data Schema & Persistence
