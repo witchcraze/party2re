@@ -97,20 +97,18 @@ Battle engine operates independently of callers (adventures, arena, GvG, bosses,
 
 **Responsibility:** Define and execute adventure-oriented game flows, dungeon crawl loops, encounter progressions, and stage reward distributions.
 
-Current solo and cooperative starts resolve an entire crawl in one request;
-`CrawlSession` has no production persistence between player operations. This
-omits the original command/action-interval/individual-exit boundary and is a
-reconstruction defect tracked by
-[#1323](https://github.com/witchcraze/party2re/issues/1323), not an approved
-substitute for interactive combat. The required behavior and actual settlement
-limitations are owned by [Adventure](../design/adventure.md#original-interaction-contract-and-reconstruction-target).
-The existing battle adapter, SQL settlement and Party lobby are reusable pieces,
-not proof of a resumable run or cross-store atomicity.
-The selected [durable normal-run boundary](transient-run-state.md#normal-adventure-durable-command-boundary-1325)
-assigns enrolled solo/cooperative runs to Adventure and waiting admission to
-Party; its decision status is recorded in that owner. Core battle supplies
-feature-independent effects, the battle adapter supplies character binding and
-asset application, and PlayerContext consumes owned public Adventure facts.
+Adventure's `NormalRunService` owns SQL enrollment, explicit progress, individual
+chest/exit settlement and recoverable idle cleanup. Party owns waiting admission;
+its roster writers serialize with the one-way SQL handoff. The
+[durable run boundary](transient-run-state.md#normal-adventure-durable-command-boundary-1325)
+owns persistence and recovery. Core battle supplies serializable effects, the
+battle adapter supplies character binding and asset application, Home enforces
+durable sleep deadlines, and PlayerContext reads owned Adventure facts.
+
+Production starts still use the request-local `CrawlSession` batch path.
+The explicit combat consumer (#1329) and verified Gateway cutover (#1330) remain
+required under [the interaction contract](../design/adventure.md#original-interaction-contract-and-reconstruction-target);
+the lifecycle service alone does not establish interactive gameplay parity.
 
 ### Common Foundation Packages
 

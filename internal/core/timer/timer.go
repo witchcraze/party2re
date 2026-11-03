@@ -81,6 +81,7 @@ type DailyQuotaService interface {
 type Service interface {
 	LockService
 	DailyQuotaService
+	DeadlineLockService
 }
 
 type memTimerEntry struct {

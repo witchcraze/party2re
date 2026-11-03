@@ -30,7 +30,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 	var defeatedMonsterCount int
 
 	err := s.repo.WithPartyAdventureLock(ctx, partyID, func(lockedCtx context.Context) error {
-		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
+		return s.withWaitingLobbyTx(lockedCtx, partyID, func(txCtx context.Context) error {
 			// 1. Lock party
 			p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
 			if err != nil {

@@ -78,6 +78,7 @@ type InventoryRepository interface {
 }
 
 type Service struct {
+	legacyEntry        func(context.Context, []string, func(context.Context) error) error
 	adventures         Repository
 	characters         CharacterRepository
 	inventories        InventoryRepository
@@ -236,7 +237,7 @@ func (s *Service) StartStage(ctx context.Context, characterID string, stageID st
 }
 
 // ExecuteCrawl runs the authentic 10-floor dungeon crawl and Floor 11 treasure room (vs_monster.cgi).
-func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (DungeonCrawlResult, error) {
+func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (DungeonCrawlResult, error) {
 	if len(req.CharacterIDs) == 0 {
 		return DungeonCrawlResult{}, ErrNoParticipants
 	}

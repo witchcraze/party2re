@@ -5695,6 +5695,7 @@
             "type": "string",
             "enum": [
               "party",
+              "adventure",
               "pvp",
               "gvg",
               "dungeon",
@@ -5732,6 +5733,11 @@
           "party_id": {
             "type": "string",
             "description": "Existing explicit run-to-party relation when present; a matching live roster and its single run are one activity. Missing linkage is never inferred."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current version of an enrolled run when present; observations never advance it."
           }
         },
         "required": [

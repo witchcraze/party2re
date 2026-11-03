@@ -55,8 +55,12 @@ func (s *Service) applyRewardsForCharacter(
 	inv *coreinventory.Inventory,
 	reward corebattle.Reward,
 	dropDefIDs []string,
+	finalized bool,
 ) (int, int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
-	blessing := s.queryBlessing(ctx, char.ID)
+	blessing := ""
+	if !finalized {
+		blessing = s.queryBlessing(ctx, char.ID)
+	}
 
 	gainedGold := reward.Currency
 	if gainedGold > 0 {
@@ -123,6 +127,13 @@ func (s *Service) applyRewardsForCharacter(
 	}
 
 	return gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, nil
+}
+
+func (req ApplyPostBattleRequest) rewardForCharacter(charID string) corebattle.Reward {
+	if req.RecipientRewards != nil {
+		return req.RecipientRewards[charID]
+	}
+	return req.BattleResult.TotalReward
 }
 
 func (s *Service) maxInventoryCapacity() int {

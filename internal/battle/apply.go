@@ -19,10 +19,11 @@ import (
 type ApplyPostBattleRequest struct {
 	CharacterIDs          []string
 	BattleResult          corebattle.PartyBattleResult
-	PreserveEarnedRewards bool                // TotalReward currency/EXP/crystals were earned before the final outcome.
-	DropItems             []string            // Extra dropped item definition IDs (e.g. stage/boss drops)
-	RecipientDrops        map[string][]string // Optional recipient-targeted drop item definition IDs (characterID -> []itemDefID)
-	RecipientCharacterID  string              // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
+	PreserveEarnedRewards bool                         // TotalReward currency/EXP/crystals were earned before the final outcome.
+	RecipientRewards      map[string]corebattle.Reward // Finalized personal earnings; modifiers were applied at their source operation.
+	DropItems             []string                     // Extra dropped item definition IDs (e.g. stage/boss drops)
+	RecipientDrops        map[string][]string          // Optional recipient-targeted drop item definition IDs (characterID -> []itemDefID)
+	RecipientCharacterID  string                       // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
 	DefeatedEnemies       []corebattle.Participant
 	Habitat               string // Habitat/stage name for monster book recording
 	ExitFatigue           int    // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
@@ -114,8 +115,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 				tc.Context,
 				&tc.Character,
 				&tc.Inventory,
-				req.BattleResult.TotalReward,
+				req.rewardForCharacter(charID),
 				charDrops,
+				req.RecipientRewards != nil,
 			)
 			if err != nil {
 				return err
@@ -235,8 +237,9 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 					txCtx,
 					&char,
 					&inv,
-					req.BattleResult.TotalReward,
+					req.rewardForCharacter(id),
 					charDrops,
+					req.RecipientRewards != nil,
 				)
 				if err != nil {
 					return err

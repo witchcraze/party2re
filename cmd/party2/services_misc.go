@@ -259,7 +259,7 @@ func newMiscServices(
 	tavernService, err := tavern.NewService(
 		tavernCatalog,
 		tavernRepo,
-		core.charRepo,
+		normalWriter(core),
 		core.txProvider,
 		tavern.WithLotteryRepository(lotteryRepo),
 		tavern.WithGuildPointAwarder(soc.guild),
@@ -322,7 +322,7 @@ func newMiscServices(
 	}
 
 	godService, err := god.NewService(
-		core.charRepo,
+		normalWriter(core),
 		god.WithDepotRepository(econ.depotRepo),
 		god.WithInventoryRepository(core.invRepo),
 		god.WithTransactionProvider(core.txProvider),
@@ -372,7 +372,7 @@ func newMiscServices(
 		return nil, err
 	}
 	altarService, err := altar.NewService(
-		core.charRepo,
+		normalWriter(core),
 		core.invRepo,
 		econ.depotRepo,
 		altarRepo,

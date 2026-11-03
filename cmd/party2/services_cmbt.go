@@ -34,6 +34,7 @@ type cmbtServices struct {
 	customSkill *customskill.Service
 	party       *party.Service
 	adv         *adventure.Service
+	normal      *adventure.NormalRunService
 	battle      *battle.Service
 }
 
@@ -73,7 +74,7 @@ func newCmbtServices(
 	}
 
 	battleAdapter := battle.NewService(
-		battle.WithCharacterRepository(core.charRepo),
+		battle.WithCharacterRepository(normalWriter(core)),
 		battle.WithInventoryRepository(core.invRepo),
 		battle.WithEquipmentRepository(econ.equipRepo),
 		battle.WithDepotRepository(econ.depotRepo),
@@ -104,7 +105,7 @@ func newCmbtServices(
 	}
 	pvpService, err := pvp.NewService(
 		pvpRoomRepo,
-		core.charRepo,
+		normalWriter(core),
 		battleEngine,
 		pvp.WithParticipantBuilder(battleAdapter),
 		pvp.WithTransactionProvider(core.txProvider),
@@ -329,7 +330,57 @@ func newCmbtServices(
 			return nil
 		},
 	}
+	normalRepo, err := database.NewNormalAdventureRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	normalService, err := adventure.NewNormalRunService(adventure.NormalRunConfig{
+		Store: normalRepo, Characters: core.charRepo, Inventories: core.invRepo, Builder: battleAdapter, Settler: battleAdapter, History: adventureRepo,
+		Stages: adventureStages, Monsters: adventureMonsters, Admission: normalAdmissionAdapter{service: partyService, store: partyRepo},
+		Penalty: normalPenaltyAdapter{timers: soc.timer}, Clock: adventure.RealClock{}, CheckEntry: admission.busy,
+		EntryLocks: soc.timer,
+	})
+	if err != nil {
+		return nil, err
+	}
+	partyService.SetLobbyBoundary(normalService.WithWaitingLobby)
+	core.normalGuard = normalService.CheckMutation
+	core.economy.SetMutationCheck(normalService.CheckMutation)
+	baseBusy := admission.busy
+	normalAvailable := func(ctx context.Context, actor string) error {
+		c, err := core.charRepo.FindByID(ctx, actor)
+		if err != nil {
+			return err
+		}
+		run, err := normalService.GetActorRun(ctx, c.PlayerID, actor)
+		if err != nil {
+			return err
+		}
+		if run != nil {
+			return party.ErrMemberBusy
+		}
+		return nil
+	}
+	soc.home.SetSleepAdmissionCheck(normalAvailable)
+	admission.busy = func(ctx context.Context, actor string) error {
+		if err := normalAvailable(ctx, actor); err != nil {
+			return err
+		}
+		return baseBusy(ctx, actor)
+	}
+	soc.home.SetSleepPenaltyReader(func(ctx context.Context, actor string) (time.Time, bool, error) {
+		c, err := core.charRepo.FindByID(ctx, actor)
+		if err != nil {
+			return time.Time{}, false, err
+		}
+		facts, err := normalService.GetActorPenalty(ctx, c.PlayerID, actor)
+		if err != nil || facts == nil {
+			return time.Time{}, false, err
+		}
+		return facts.Recipient.PenaltyUntil, facts.Recipient.TimerPending, nil
+	})
 	dungeonService.ConfigureAdmission(admission)
+	advService.SetLegacyAdmission(admission.withMembers)
 	challengeService.ConfigureAdmission(admission)
 	partyService.SetMemberActivityCheck(func(ctx context.Context, actor string) error {
 		err := admission.busy(ctx, actor)
@@ -349,6 +400,7 @@ func newCmbtServices(
 		customSkill: customSkillService,
 		party:       partyService,
 		adv:         advService,
+		normal:      normalService,
 		battle:      battleAdapter,
 	}, nil
 }

@@ -39,7 +39,7 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 		}
 		facts[i].Actions = slices.DeleteFunc(facts[i].Actions, func(id string) bool { return !slices.Contains(result.AvailableActions, id) })
 	}
-	titles := map[string]string{"sleep": "休息中", "scheduled": "実行待ち", "party": "パーティー", "pvp": "対戦部屋", "gvg": "ギルド戦", "dungeon": "ダンジョン探索", "challenge": "試練", "casino": "カジノ", "activity_conflict": "活動の状態を確認してください"}
+	titles := map[string]string{"sleep": "休息中", "scheduled": "実行待ち", "party": "パーティー", "adventure": "冒険", "pvp": "対戦部屋", "gvg": "ギルド戦", "dungeon": "ダンジョン探索", "challenge": "試練", "casino": "カジノ", "activity_conflict": "活動の状態を確認してください"}
 	kind := result.Snapshot.LocationID
 	scene := SceneSnapshot{Kind: "activity", LocationID: kind, Title: titles[kind], Dialogue: "現在の活動を確認してください。", Data: data, Support: SceneSupport{Observation: "details", Actions: []SceneActionSupport{}}}
 	if kind == "activity_conflict" {

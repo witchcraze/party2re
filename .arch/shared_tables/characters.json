@@ -14,7 +14,8 @@
     "internal/bank/bank.go#Repository",
     "internal/auction/types.go#CharacterRepository",
     "internal/pvp/service.go#CharacterRepository",
-    "internal/dungeon/dungeon.go#CharacterRepository"
+    "internal/dungeon/dungeon.go#CharacterRepository",
+    "internal/adventure/normal_run.go#RunCharacters"
   ],
   "callers": [
     {
@@ -205,6 +206,13 @@
       "lock_mode": "SELECT ... FOR UPDATE (ascending character IDs via FindByIDForUpdate; shared battle adapter)",
       "lock_order": 2,
       "purpose": "Lock all participating expedition member characters in ascending ID order before claiming expedition history by run ID, persisting post-battle vitality/consumed items, and applying rewards"
+    },
+    {
+      "module": "adventure",
+      "caller_method": "internal/adventure/normal_command.go#NormalRunService.Command",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock the complete ordered run roster by sorted IDs after its Rank 0 coordination row; preserve receipt and recipient settlement atomicity."
     }
   ]
 }

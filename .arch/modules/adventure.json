@@ -1,7 +1,7 @@
 {
   "module": "adventure",
   "tier": 1,
-  "description": "Stage exploration, 10-floor party dungeon crawl, battle resolution, and rewards.",
+  "description": "Adventure-owned SQL normal-run lifecycle and individual settlement, plus retained batch crawl execution.",
   "package": "internal/adventure",
   "implementation_package": "internal/adventure",
   "dependencies": [
@@ -28,6 +28,36 @@
       "target_module": "database",
       "relation_type": "consumer_interface",
       "source_ref": "internal/adventure/options.go#TransactionProvider"
+    },
+    {
+      "name": "normal_run_store",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/normal_run.go#NormalRunStore"
+    },
+    {
+      "name": "normal_run_characters",
+      "target_module": "core/character",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/normal_run.go#RunCharacters"
+    },
+    {
+      "name": "normal_run_combat",
+      "target_module": "core/battle",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/normal_run.go#RunCombat"
+    },
+    {
+      "name": "normal_run_admission",
+      "target_module": "party",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/normal_run.go#RunAdmission"
+    },
+    {
+      "name": "normal_run_penalty",
+      "target_module": "core/timer",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/normal_run.go#RunPenalty"
     }
   ],
   "transaction_boundaries": [
@@ -40,7 +70,14 @@
     },
     {
       "method": "ExecuteCrawl",
-      "source_ref": "internal/adventure/adventure.go#Service.ExecuteCrawl",
+      "source_ref": "internal/adventure/normal_legacy.go#Service.ExecuteCrawl",
+      "transaction_type": "Delegated",
+      "lock_sequence": [],
+      "note": "Production composition first serializes retained batch admission through sorted character locks and owned-activity checks, then delegates batch execution and ambient settlement."
+    },
+    {
+      "method": "executeCrawl",
+      "source_ref": "internal/adventure/adventure.go#Service.executeCrawl",
       "transaction_type": "RunInTx",
       "lock_sequence": [
         {
@@ -69,6 +106,58 @@
         }
       ],
       "note": "Wraps post-battle reward/item settlement and adventure history persistence in a single RunInTx boundary; VictoryHook and PostAdventureHook execute after commit."
+    },
+    {
+      "method": "WithRunForUpdate",
+      "source_ref": "internal/database/adventure_run_repository.go#NormalAdventureRepository.WithRunForUpdate",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "normal_adventure_runs",
+          "tier": 0,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Admission identity also serializes the one-way Party handoff and waiting roster writers."
+        }
+      ],
+      "note": "Starts before ambient character locks; callback owns bounded state, assets, history and receipts. Reentrant only for the same already-locked run."
+    },
+    {
+      "method": "Command",
+      "source_ref": "internal/adventure/normal_command.go#NormalRunService.Command",
+      "transaction_type": "Delegated",
+      "lock_sequence": [
+        {
+          "table": "normal_adventure_runs",
+          "tier": 0,
+          "mode": "SELECT ... FOR UPDATE (via NormalRunStore)",
+          "note": "Check actor-owned immutable receipt before new-command preconditions."
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Complete active roster sorted by character ID; roster/leader order remains separate."
+        },
+        {
+          "table": "inventory_items / equipment_slots",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
+          "note": "Concrete command consumption and personal chest delivery."
+        },
+        {
+          "table": "character_depots / depot_items",
+          "tier": 5,
+          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
+          "note": "Conditional overflow delivery."
+        },
+        {
+          "table": "adventures / normal_adventure_recipients / normal_adventure_enrollments / normal_adventure_receipts",
+          "tier": 8,
+          "mode": "INSERT / UPDATE / conditional ownership release",
+          "note": "Recipient history, disposition and immutable command result commit with state and assets."
+        }
+      ],
+      "note": "One bounded SQL transaction via WithRunForUpdate; no automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
     }
   ]
 }

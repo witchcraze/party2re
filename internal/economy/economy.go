@@ -87,10 +87,11 @@ func WithEventDispatcher(dispatcher *event.Dispatcher) Option {
 
 // Service provides standardized transactional operations for wallet currency and inventory items.
 type Service struct {
-	characters  CharacterRepository
-	inventories InventoryRepository
-	txProvider  TransactionProvider
-	dispatcher  *event.Dispatcher
+	mutationCheck func(context.Context, string) error
+	characters    CharacterRepository
+	inventories   InventoryRepository
+	txProvider    TransactionProvider
+	dispatcher    *event.Dispatcher
 }
 
 // NewService creates a new transactional economy Service.

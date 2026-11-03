@@ -16,6 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/party"
@@ -216,6 +217,69 @@ func TestCombatAdmissionProduction(t *testing.T) {
 			t.Fatalf("admission changed assets: %+v", after)
 		}
 	}
+	t.Run("normal run owns live state", func(t *testing.T) {
+		for _, c := range chars {
+			if err := retireDungeon(ctx, ds, c.ID); err != nil {
+				t.Fatal(err)
+			}
+			if err := retireChallenge(ctx, combat.challenge, c.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := combat.party.LeaveParty(ctx, lobby.Party.ID, member.ID); err != nil {
+			t.Fatal(err)
+		}
+		entry, err := combat.normal.EnterSolo(ctx, member.PlayerID, member.ID, "normal-owned", adventure.StarterAdventure, "normal", 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := soc.home.Sleep(ctx, member.ID, ""); !errors.Is(err, party.ErrMemberBusy) {
+			t.Fatal("sleep bypassed enrollment", err)
+		}
+		if _, err := combat.adv.StartStage(ctx, member.ID, adventure.StarterAdventure); !errors.Is(err, party.ErrMemberBusy) {
+			t.Fatal("batch bypassed enrollment", err)
+		}
+		if _, err := combat.dungeon.StartExpedition(ctx, member.ID, "dungeon-01"); !errors.Is(err, party.ErrMemberBusy) {
+			t.Fatal("Dungeon bypassed enrollment", err)
+		}
+		if _, err := combat.challenge.StartSession(ctx, member.ID, "1"); !errors.Is(err, party.ErrMemberBusy) {
+			t.Fatal("Challenge bypassed enrollment", err)
+		}
+		called := false
+		if _, err := core.economy.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: member.ID}, func(*economy.TxContext) error { called = true; return nil }); !errors.Is(err, adventure.ErrRunBusy) || called {
+			t.Fatal("actor mutation bypassed enrollment", err)
+		}
+		if err := core.txProvider.RunInTx(ctx, func(ctx context.Context) error {
+			_, err := normalWriter(core).FindByIDForUpdate(ctx, member.ID)
+			return err
+		}); !errors.Is(err, adventure.ErrRunBusy) {
+			t.Fatal("live-state writer bypassed enrollment", err)
+		}
+		if err := normalWriter(core).Delete(ctx, member.ID); !errors.Is(err, adventure.ErrRunBusy) {
+			t.Fatal("deletion orphaned an enrolled actor", err)
+		}
+		// Incoming peer credits remain valid and must survive later native exit.
+		if err := core.txProvider.RunInTx(ctx, func(ctx context.Context) error {
+			c, err := core.charRepo.FindByIDForUpdate(ctx, member.ID)
+			if err != nil {
+				return err
+			}
+			if err := c.AddMoney(7); err != nil {
+				return err
+			}
+			return core.charRepo.Update(ctx, c)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		// This fixture constructs combat services without the later Tavern wiring.
+		combat.normal.SetExitEffects(func(context.Context, string) error { return nil })
+		if _, err := combat.normal.Command(ctx, adventure.RunCommand{PlayerID: member.PlayerID, ActorID: member.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {
+			t.Fatal(err)
+		}
+		if after, err := core.charRepo.FindByID(ctx, member.ID); err != nil || after.Money != member.Money+7 {
+			t.Fatal("exit overwrote a peer credit", after, err)
+		}
+	})
 }
 
 func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
