@@ -66,17 +66,34 @@ const (
 
 // ActionSkill represents a job or class skill that can be executed during battle.
 type ActionSkill struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	MPCost      int    `json:"mp_cost"`
-	Power       int    `json:"power"`
-	Kind        string `json:"kind"`                // "attack", "defend", "heal", "buff", "status"
-	TargetScope string `json:"target_scope"`        // "single_enemy", "all_enemies", "single_ally", "all_allies", "self"
-	Element     string `json:"element,omitempty"`   // "fire", "water", etc.
-	BuffStat    string `json:"buff_stat,omitempty"` // "attack", "defense", "agility"
-	Status      string `json:"status,omitempty"`    // "paralyze", "sleep", "poison"
-	Category    string `json:"category,omitempty"`  // "magic", "physical", etc.
-	Direct      bool   `json:"direct,omitempty"`    // direct damage (bypasses defense)
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	MPCost          int    `json:"mp_cost"`
+	Power           int    `json:"power"`
+	Kind            string `json:"kind"`                        // "attack", "defend", "heal", "buff", "status"
+	TargetScope     string `json:"target_scope"`                // "single_enemy", "all_enemies", "single_ally", "all_allies", "self"
+	Element         string `json:"element,omitempty"`           // "fire", "water", etc.
+	BuffStat        string `json:"buff_stat,omitempty"`         // "attack", "defense", "agility"
+	Status          string `json:"status,omitempty"`            // "paralyze", "sleep", "poison"
+	Category        string `json:"category,omitempty"`          // "magic", "physical", etc.
+	Direct          bool   `json:"direct,omitempty"`            // direct damage (bypasses defense)
+	Item249Modifier int    `json:"item_249_modifier,omitempty"` // 1: halve MP (magician), 2: double MP (non-magician)
+}
+
+// EffectiveMPCost returns the MP cost for the actor, applying the explicit
+// item-249 classification when set on the skill definition (_skill.cgi:68-77,263-273, _battle.cgi:764-780,1804-1825).
+func (sk ActionSkill) EffectiveMPCost(actor Participant) int {
+	if !hasItem(actor.ItemDefinitionIDs, "item-249") {
+		return sk.MPCost
+	}
+	switch sk.Item249Modifier {
+	case 1:
+		return sk.MPCost / 2
+	case 2:
+		return sk.MPCost * 2
+	default:
+		return sk.MPCost
+	}
 }
 
 // ActionCustomSkill represents a crafted custom skill blending gems with incantation.

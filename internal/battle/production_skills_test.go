@@ -1507,3 +1507,124 @@ func TestRepresentativeSpellEquipmentAndStatusModifiers(t *testing.T) {
 		}
 	})
 }
+
+func TestRepresentativeSkillsItem249EffectiveMPCosts(t *testing.T) {
+	ctx := context.Background()
+	detRNG := deterministicBattleRNG{fVal: 1.0 / 3.0, iVal: 0}
+	engine := corebattle.Engine{}
+
+	enemy := corebattle.Participant{
+		ID:                "enemy",
+		Name:              "Enemy",
+		HP:                1,
+		MaxHP:             1,
+		Attack:            100,
+		Defense:           0,
+		Agility:           0,
+		ItemDefinitionIDs: []string{"weapon-63"}, // guaranteed hit on normal attack
+	}
+
+	runHeroBattle := func(t *testing.T, jobID string, sp int, oldJobID string, oldSP int, mp int, hasItem249 bool) (string, int) {
+		t.Helper()
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		charRepo.characters["hero"] = corecharacter.Character{
+			ID:       "hero",
+			Name:     "Hero",
+			JobID:    jobID,
+			SP:       sp,
+			OldJobID: oldJobID,
+			OldSP:    oldSP,
+			Stats:    corecharacter.Stats{HP: 1, MaxHP: 1, MP: mp, MaxMP: max(mp, 10), Attack: 10, Defense: 0, Agility: 100},
+		}
+		if hasItem249 {
+			invRepo.inventories["hero"] = coreinventory.Inventory{
+				Items: []item.Instance{{DefinitionID: "item-249"}},
+			}
+		}
+
+		hero, err := svc.BuildParticipant(ctx, "hero")
+		if err != nil {
+			t.Fatalf("BuildParticipant error = %v", err)
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle error = %v", err)
+		}
+		if len(res.Logs) == 0 {
+			t.Fatal("expected at least one battle log")
+		}
+		return res.Logs[0].ActionName, res.RemainingMP["hero"]
+	}
+
+	// Verify against independent legacy specification table:
+	// - job-5-entry-3 (heal-30): base 3, item-249 -> 6 (absent from _is_magician_skill)
+	// - job-6-entry-1 (magic-20): base 2, item-249 -> 1 (present in _is_magician_skill, int(2/2)=1)
+	// - job-6-entry-3 (magic-wave-25): base 5, item-249 -> 2 (present in _is_magician_skill, int(5/2)=2)
+	tests := []struct {
+		name           string
+		jobID          string
+		sp             int
+		oldJobID       string
+		oldSP          int
+		mp             int
+		hasItem249     bool
+		wantActionName string
+		wantRemainMP   int
+	}{
+		// --- Single-enemy magic-20 (job-06 SP 1, base MP 2, item-249 MP 1) ---
+		{"magic-20 with item-249 MP 0 (below effective cost 1 -> normal attack)", "job-06", 1, "", 0, 0, true, "攻撃", 0},
+		{"magic-20 with item-249 MP 1 (exact effective cost 1 -> magic-20, rem 0)", "job-06", 1, "", 0, 1, true, "magic-20", 0},
+		{"magic-20 with item-249 MP 2 (above effective cost 1 -> magic-20, rem 1)", "job-06", 1, "", 0, 2, true, "magic-20", 1},
+		{"magic-20 without item-249 MP 1 (below base cost 2 -> normal attack)", "job-06", 1, "", 0, 1, false, "攻撃", 1},
+		{"magic-20 without item-249 MP 2 (control: base cost 2 -> magic-20, rem 0)", "job-06", 1, "", 0, 2, false, "magic-20", 0},
+		{"magic-20 via previous job with item-249 MP 1 (old SP 1 -> magic-20, rem 0)", "job-01", 100, "job-06", 1, 1, true, "magic-20", 0},
+		{"magic-20 via previous job locked when old SP 0 despite current SP 100", "job-01", 100, "job-06", 0, 2, true, "攻撃", 2},
+
+		// --- All-enemies magic-wave-25 (job-06 SP 8, base MP 5, item-249 MP 2; fallback magic-20 item-249 MP 1) ---
+		{"magic-wave-25 with item-249 MP 0 (below both skills -> normal attack)", "job-06", 8, "", 0, 0, true, "攻撃", 0},
+		{"magic-wave-25 with item-249 MP 1 (below wave cost 2, exact single cost 1 -> fallback magic-20, rem 0)", "job-06", 8, "", 0, 1, true, "magic-20", 0},
+		{"magic-wave-25 with item-249 MP 2 (exact wave cost 2 -> magic-wave-25, rem 0)", "job-06", 8, "", 0, 2, true, "magic-wave-25", 0},
+		{"magic-wave-25 with item-249 MP 3 (above wave cost 2 -> magic-wave-25, rem 1)", "job-06", 8, "", 0, 3, true, "magic-wave-25", 1},
+		{"magic-wave-25 with item-249 MP 5 (repro vector: wave cost 2 -> magic-wave-25, rem 3)", "job-06", 8, "", 0, 5, true, "magic-wave-25", 3},
+		{"magic-wave-25 without item-249 MP 2 (control: below wave 5, exact single 2 -> magic-20, rem 0)", "job-06", 8, "", 0, 2, false, "magic-20", 0},
+		{"magic-wave-25 without item-249 MP 4 (below wave 5 -> fallback magic-20, rem 2)", "job-06", 8, "", 0, 4, false, "magic-20", 2},
+		{"magic-wave-25 without item-249 MP 5 (control: exact base cost 5 -> magic-wave-25, rem 0)", "job-06", 8, "", 0, 5, false, "magic-wave-25", 0},
+		{"magic-wave-25 via previous job with item-249 MP 2 (old SP 8 -> magic-wave-25, rem 0)", "job-01", 0, "job-06", 8, 2, true, "magic-wave-25", 0},
+		{"magic-wave-25 via previous job fallback when old SP 7 despite current SP 100", "job-01", 100, "job-06", 7, 5, true, "magic-20", 4},
+
+		// --- Single-ally heal-30 (job-05 SP 6, base MP 3, item-249 MP 6) ---
+		{"heal-30 with item-249 MP 5 (below doubled cost 6 -> normal attack, rem 5)", "job-05", 6, "", 0, 5, true, "攻撃", 5},
+		{"heal-30 with item-249 MP 6 (exact doubled cost 6 -> heal-30, rem 0)", "job-05", 6, "", 0, 6, true, "heal-30", 0},
+		{"heal-30 with item-249 MP 7 (above doubled cost 6 -> heal-30, rem 1)", "job-05", 6, "", 0, 7, true, "heal-30", 1},
+		{"heal-30 without item-249 MP 2 (below base cost 3 -> normal attack, rem 2)", "job-05", 6, "", 0, 2, false, "攻撃", 2},
+		{"heal-30 without item-249 MP 3 (exact base cost 3 -> heal-30, rem 0)", "job-05", 6, "", 0, 3, false, "heal-30", 0},
+		{"heal-30 without item-249 MP 6 (control: base cost 3 -> heal-30, rem 3)", "job-05", 6, "", 0, 6, false, "heal-30", 3},
+		{"heal-30 via previous job with item-249 MP 5 (old SP 6, below doubled cost 6 -> normal attack, rem 5)", "job-01", 100, "job-05", 6, 5, true, "攻撃", 5},
+		{"heal-30 via previous job with item-249 MP 6 (old SP 6, exact doubled cost 6 -> heal-30, rem 0)", "job-01", 100, "job-05", 6, 6, true, "heal-30", 0},
+
+		// --- Combined current + previous job fallback order with item-249 ---
+		// Current job-05 (heal-30: effective MP 6), Old job-06 (magic-wave-25: effective MP 2, magic-20: effective MP 1)
+		{"combined job-05 + old job-06 with item-249 MP 5 (skips heal-30(6), selects magic-wave-25(2), rem 3)", "job-05", 6, "job-06", 8, 5, true, "magic-wave-25", 3},
+		{"combined job-05 + old job-06 with item-249 MP 1 (skips heal-30(6) and wave(2), selects magic-20(1), rem 0)", "job-05", 6, "job-06", 8, 1, true, "magic-20", 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotAction, gotMP := runHeroBattle(t, tc.jobID, tc.sp, tc.oldJobID, tc.oldSP, tc.mp, tc.hasItem249)
+			if gotAction != tc.wantActionName {
+				t.Errorf("first ActionName = %q, want %q", gotAction, tc.wantActionName)
+			}
+			if gotMP != tc.wantRemainMP {
+				t.Errorf("RemainingMP = %d, want %d", gotMP, tc.wantRemainMP)
+			}
+		})
+	}
+}
