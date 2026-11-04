@@ -207,7 +207,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		ID:             "auction_send",
 		Label:          "仕送り・送金",
 		Category:       "economy",
-		OperationID:    "postCharactersIdAuctionSend",
+		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},

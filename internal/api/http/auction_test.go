@@ -13,23 +13,13 @@ import (
 )
 
 type stubAuctionService struct {
-	sendFn        func(ctx context.Context, req auction.SendRequest) (auction.SendResult, error)
 	inspectFn     func(ctx context.Context, inspectorCharacterID, targetCharacterID string) (auction.InspectResult, error)
 	inspectByName func(ctx context.Context, inspectorCharacterID, targetName string) (auction.InspectResult, error)
 	getVenueFn    func() auction.VenueInfo
 }
 
-func (s *stubAuctionService) Send(ctx context.Context, req auction.SendRequest) (auction.SendResult, error) {
-	if s.sendFn != nil {
-		return s.sendFn(ctx, req)
-	}
-	return auction.SendResult{
-		SenderCharacterID:   req.SenderCharacterID,
-		TargetCharacterID:   req.TargetCharacterID,
-		TargetCharacterName: req.TargetCharacterName,
-		TransferredGold:     req.Gold,
-		Message:             "送金完了",
-	}, nil
+func (*stubAuctionService) Send(context.Context, auction.SendRequest) (auction.SendResult, error) {
+	panic("retained Auction reads must not send")
 }
 
 func (s *stubAuctionService) Inspect(ctx context.Context, inspectorCharacterID, targetCharacterID string) (auction.InspectResult, error) {
@@ -112,81 +102,6 @@ func TestAuctionEndpoints(t *testing.T) {
 		}
 		if len(info.Dialogue) != 3 {
 			t.Errorf("expected 3 dialogue entries, got %d", len(info.Dialogue))
-		}
-	})
-
-	t.Run("POST /characters/{id}/auction/send - send gold success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/auction/send", `{"target_character_id":"c2","gold":500}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var res auction.SendResult
-		decodeResponseBody(t, rec.Body.Bytes(), &res)
-		if res.TransferredGold != 500 {
-			t.Errorf("expected 500 transferred gold, got %d", res.TransferredGold)
-		}
-	})
-
-	t.Run("POST /characters/{id}/auction/send - send item success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/auction/send", `{"target_character_id":"c2","slot":"weapon"}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/auction/send - errors mapped to bad request", func(t *testing.T) {
-		testCases := []struct {
-			name string
-			err  error
-		}{
-			{"cannot send to self", auction.ErrCannotSendToSelf},
-			{"insufficient money", auction.ErrInsufficientMoney},
-			{"depot full", auction.ErrDepotFull},
-			{"taboo item", auction.ErrTabooItem},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				handler := newTestHandler(
-					t,
-					pService,
-					cService,
-					&stubAdventureService{},
-					&stubShopService{},
-					apihttp.WithAuction(&stubAuctionService{
-						sendFn: func(_ context.Context, _ auction.SendRequest) (auction.SendResult, error) {
-							return auction.SendResult{}, tc.err
-						},
-					}),
-				)
-				req := jsonRequest(t, http.MethodPost, "/characters/c1/auction/send", `{"target_character_id":"c2","gold":100}`)
-				req.Header.Set("Authorization", "Bearer valid-token")
-				rec := httptest.NewRecorder()
-				handler.Router().ServeHTTP(rec, req)
-
-				if rec.Code != http.StatusBadRequest {
-					t.Errorf("expected 400 Bad Request, got %d", rec.Code)
-				}
-			})
-		}
-	})
-
-	t.Run("POST /auction/send - legacy endpoint success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/auction/send", `{"sender_character_id":"c1","target_character_id":"c2","gold":200}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 
