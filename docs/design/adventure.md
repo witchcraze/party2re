@@ -314,6 +314,35 @@ Treasure-floor discovery suppresses NPC response before the tool callback
 (`vs_monster.cgi:38–41`), so travelling out of that room retains suppression
 for the submitted operation. New discovery is computed on the next request.
 
+Job callbacks share this encounter replacement and ordinary action-tail
+contract; navigation never terminates the enclosing action. At the same pinned
+revision, `_skill.cgi` defines these distinct bodies:
+
+| Job position / evidence | Room or ordering rule |
+| --- | --- |
+| 78.2 / 6119–6133 | Normal stage adventure, floor <9: a 1/3 draw resets all members, increments the floor and creates its encounter. Floor ≥9 accepts without a draw or reset |
+| 78.4 / 6147–6174 | A 1/6 draw immobilizes the actor and resets tension. Otherwise direct breath base50 reads the verified package cursor, ignoring the submitted target; absence uses enemy-helper fallback. Move the returned living enemy last, except an ally or breath reflector. Missing cursor provenance rejects the whole callback |
+| 78.6 / 6201–6234 | Resolve the neutral enemy helper first. A treasure target gets a 3/5 draw: recreate the current floor, then set both current/previous job78 SP to100 for every ally, including fallen allies. A failed draw changes only the actor's matching positions; a non-treasure target changes no SP |
+| 79.2 / 6258–6275 | Player: 1/2 self-sleep, remove the enemy head for this operation, save members with that head last, suppress only NPC response and add a three-operation ban. NPC: general random once, then again if the actor survives, even with no enemies |
+
+Room recreation retains room identity, earnings, fields and clear/EX markers;
+only the shortcut performs the all-member reset. Treasure recreation shares
+advance's box generation, Try conversion, retained-clear handling and stage19
+unseal event. Other combat modes remain unsupported for reachable room effects.
+The operation's enemy array and saved member order are separate: the removed
+time-callback head remains available to member-based helpers, then returns last
+when the next request rebuilds sides (`_battle.cgi:453–493`).
+
+`PrepareJobEncounters` supplies operation ports inside `Command`. Its consumer
+registers the callbacks before whole-action admission, preserves changed target
+context through the normal tail, and passes member-only IDs and the genuine
+unseal event in `RunActionEffects`. Its transition requests reload after genuine
+recreation. `Command` restores those living members before defeat verification for
+the next request and settles the event in the receipt transaction. Catalog-wide
+predecessor projections, including both NPC random calls, retain the
+[#1733](https://github.com/witchcraze/party2re/issues/1733) gate; body registration
+alone does not certify an unsupported descendant or mixed sequence.
+
 **Room facts survive travel.** The room ID/log destination, ordered allies,
 leader, mode, record header and earned recipient facts are not reinitialized.
 Member persistence writes changed stage/floor but preserves `$r_stage` and
@@ -431,7 +460,7 @@ Random/delegated discovery and submission also depend on the
 [transitive job closure](battle.md#random-and-delegated-job-closure): discovery
 uses `skill.BattleDefinitions.InvocationAction` and execution shares core
 invocation preflight. Arithmetic selectors and job wallet/held-tool effects use
-their finite native bindings; #1360 owns job-driven room transitions. Tool-only travel coverage does
+their finite native bindings, as do the job-driven room/order bodies above. Tool-only travel coverage does
 not certify a job callback that replaces an encounter, changes job SP or
 reorders enemies. Discovery must retain current/previous-job and caller context
 when applying the shared whole-effect gate; a supported direct child is

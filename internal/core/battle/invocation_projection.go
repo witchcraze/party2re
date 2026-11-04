@@ -8,6 +8,7 @@ import (
 func cloneCallbackContext(c CallbackContext) CallbackContext {
 	c.PartyIDs = slices.Clone(c.PartyIDs)
 	c.EnemyIDs = slices.Clone(c.EnemyIDs)
+	c.MemberOnlyIDs = slices.Clone(c.MemberOnlyIDs)
 	c.PhantomEnemyIDs = slices.Clone(c.PhantomEnemyIDs)
 	c.Arguments = slices.Clone(c.Arguments)
 	c.Invoke = nil
@@ -44,6 +45,7 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 		damage := *c.Damage
 		damage.PartyIDs = slices.Clone(damage.PartyIDs)
 		damage.EnemyIDs = slices.Clone(damage.EnemyIDs)
+		damage.MemberOnlyIDs = slices.Clone(damage.MemberOnlyIDs)
 		damage.PhantomEnemyIDs = slices.Clone(damage.PhantomEnemyIDs)
 		if damage.RequesterLevel != nil {
 			level := *damage.RequesterLevel

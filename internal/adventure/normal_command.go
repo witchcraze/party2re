@@ -112,6 +112,16 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			if err != nil {
 				return err
 			}
+			request.UnsealDemonKing = effects.UnsealDemonKing
+			for _, id := range effects.MemberOnlyIDs {
+				a, actor := r.actor(id), r.actor(cmd.ActorID)
+				if a == nil || actor == nil || a.TeamID == actor.TeamID || slices.Contains(r.Enemies, id) {
+					return ErrRunConflict
+				}
+				if a.HP > 0 {
+					r.Enemies = append(r.Enemies, id)
+				}
+			}
 			if effects.EncounterDefeated {
 				if r.livingEnemies() || r.EncounterFloor < 1 || r.EncounterFloor > BossFloor {
 					return ErrRunConflict

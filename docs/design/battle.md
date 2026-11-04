@@ -838,10 +838,21 @@ normally returning callback. It preserves increases, other actors' MP changes,
 actor death, HP, statuses, field state, ordered roster, held items, money and
 room transitions. Internal MP checks, including job82's generated entry and
 job86's two-target book use, are not waived by absence of ordinary child costs.
-Job callbacks that read or change wallet/held tools are owned by #1359;
-job78/79 encounter replacement, SP reduction and enemy ordering by #1360.
+Job callbacks retain their [requester asset context](#combat-books-stored-tools-and-purchases)
+and [Adventure room/order rules](adventure.md#combat-travel-and-encounter-replacement).
 These operations require the same receipt/transaction boundary as their outer
 command. Refresh/retry must not reroll or replay a nested mutation.
+
+`RegisterJobEncounters` binds78.2/78.4/78.6/79.2 through the shared catalog.
+Adventure injects room validation/recreation; core owns breath damage, resolved
+enemy reordering, matching job SP, player sleep and the ban. Time's removed
+enemy stays in ordered members and operation-local `MemberOnlyIDs`, outside
+the current enemy pool. The ordinary tail ticks its stored ban4 to3 and still
+runs when NPC response alone is suppressed. The NPC body declares both general
+random invocations, with a death check between them; missing native descendants
+or predecessor transitions reject the entire entry before any draw/cost.
+Their full mixed-sequence projections remain with
+[#1733](https://github.com/witchcraze/party2re/issues/1733).
 
 Explicit invocation discovery uses `skill.BattleDefinitions.InvocationAction`;
 execution uses the same `LifetimeState.ValidateInvocations` gate before any
@@ -2022,7 +2033,7 @@ Native state should express only the evidenced context, not emulate CGI globals.
 | Gate and evidence under `party2/lib/` | Preserved rule and bounded native owner |
 | --- | --- |
 | Extension201, `_skill.cgi:343–358` | Damage uses the submitted target. Afterwards agility is written through the then-current package target cursor, independently of the returned damage target, followed by actor agility reset. Item159 reset can change that cursor during damage. Missing cursor addresses an empty-key record in Perl, not self. #1363 owns composition with #1365 reset; reject any invocation whose cursor provenance/state is unrepresented, including indirect closures |
-| Job78 ordering, `_skill.cgi:6145–6174` | The initializer reads the package cursor before declaring its local returned target; submitted target is ignored. Misfire draws first (1/6), immobilizes actor and sets tension1 without damage. Otherwise breath50 direct uses the cursor and ordinary resolution. Returned ally/fallen/breath-reflector suppresses reorder; otherwise move that enemy to the end. #1360 composes #1362/#1363; missing cursor follows missing-target resolution, not an invented submitted target |
+| Job78 ordering, `_skill.cgi:6145–6174` | The initializer reads the package cursor before declaring its local returned target; submitted target is ignored. The [room/order contract](adventure.md#combat-travel-and-encounter-replacement) preserves its misfire, direct breath50 and returned-target reorder guards. An absent cursor uses ordinary fallback; unrepresented provenance rejects the whole entry |
 | Calling80 distributed AT, `_skill.cgi:6436–6465` | Maximum search includes fallen and keeps the first strict maximum. The cap999/1998 reads the package cursor's over-level flag, not the loop variable, summoner, helper or maximum holder. Raise only living nonholders below cap, then independently draw four 1/4 tails in AT/DF/AG/heal order. #1339 composes #1364; missing cursor selects cap999. Unrepresented cursor remains a whole-entry gate |
 | Enemy confusion, `_skill.cgi:9654–9715` | After item195 activation, category conversion, empty-enemy and category checks, draw a member unless current target is actor. Then repeat that test against the replacement. In the special boss field only, a self target draws range0..3 and is kept when draw>1; otherwise draw another member. Both replacements use all ordered members, including fallen/self. Confusion bypasses the ordinary fallen-target rejection; later temporary/phantom resolution still runs. #1362 preserves both blocks and their short-circuit draw order |
 | Item110 fallen reset, `_data.cgi:1366–1384`; `_battle.cgi:1390–1408` | Living target returns. For fallen target, party is overwritten with enemy then immediately restored; area instant death therefore sees the original sides. Only after it returns does persistent item removal run, followed by swapping the sides. Actor and submitted target are not swapped; members are not rebuilt. Nested resets share scratch rosters and can recur before consumption. #1365/#1339 retain whole-entry rejection for this broken callback; #1197 owns any eventual approved consumption contract |
