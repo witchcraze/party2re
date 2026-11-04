@@ -45,11 +45,13 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 #### Registration dispatch and referral reconciliation
 
 `new_entry.cgi:19` dispatches on `mode`, rather than an `@actions` array.
-This table reconciles its form/submission paths and the referral branch;
+This table reconciles its form/submission paths, registration denial and referral branch;
 other registration policies remain in the owning player/character design.
 
 | Legacy path | Go boundary / transport | Reconciliation |
 | --- | --- | --- |
+| `admin_delete_user`, optional `is_add_bl` (`admin.cgi:92,100–116`) | `player.Service.BanPlayer`; POST `/admin/players/{id}/ban` | Account soft-ban replaces deletion (#200). Separate IP denial at BAN time is adopted, defaults off and remains planned. |
+| `mode=new_entry` → `check_black_list` (`new_entry.cgi:66–70,240–245`) | `player.Service.Register`; POST `/players` | IP-based registration denial is adopted but unimplemented; management/release is independent of account BAN. See the [IP policy and follow-up](../design/admin.md#33-optional-ip-registration-denial-planned). |
 | Default → `new_form` (`26–61`), optional `yid` (`33–39`) | Client registration form; optional `referrer_character_id` on POST `/characters` | Client presentation replaces CGI HTML; explicit character ID replaces hex-name encoding. |
 | `mode=new_entry` → `new_entry` → `create_user` (`66–70,155–217`) | `character.Service.CreateWithOptions`; POST `/characters` | Character creation represents each legacy registration, including additional characters; account registration does not grant a referral reward. |
 | Registration name checks/directory creation (`130–131,155–159`) and Naming Hall `なまえ` → `namae` (`lib/name_change.cgi:34–41,95–143`) | `CreateWithOptions`, `ChangeName`; POST `/characters`, POST `/characters/{id}/name` | Shared SQL exact-name uniqueness enforces one winner across creation/rename and returns HTTP 409 for a taken name. Existing input NFC normalization is retained; migration preserves conflicting rows and stops for explicit resolution. Naming Hall password/gender actions are outside this name-uniqueness scope. |
