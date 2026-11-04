@@ -38,6 +38,7 @@ type PlayerCallbackContexts struct {
 	Reset               *corebattle.EquipmentResetContext
 	Fields              *corebattle.NamedFieldContext
 	Tools               *corebattle.OrdinaryToolContext
+	JobAssets           *corebattle.JobAssetContext
 }
 
 // RegisterPlayerCallbacks assembles all 608 source positions, retaining missing
@@ -79,6 +80,7 @@ func (d *BattleDefinitions) RegisterPlayerCallbacks(c PlayerCallbackContexts, pa
 	d.RegisterRevivals(c.Revival)
 	d.RegisterStatuses(c.Status, c.Reset)
 	d.RegisterNamedFields(c.Fields)
+	d.RegisterJobAssets(c.JobAssets)
 	for _, entry := range corebattle.InspectionEntries() {
 		d.Invocations.Entries[entry.ID] = ordinaryToolInvocation(c.Tools, entry.ID, false)
 	}

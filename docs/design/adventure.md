@@ -428,8 +428,8 @@ Try success/exit disposition and #1196/#1197 item rules.
 Random/delegated discovery and submission also depend on the
 [transitive job closure](battle.md#random-and-delegated-job-closure): discovery
 uses `skill.BattleDefinitions.InvocationAction` and execution shares core
-invocation preflight. #1358 owns arithmetic selectors, #1359 job wallet/held-tool
-mutations and #1360 job-driven room transitions. Tool-only travel coverage does
+invocation preflight. Arithmetic selectors and job wallet/held-tool effects use
+their finite native bindings; #1360 owns job-driven room transitions. Tool-only travel coverage does
 not certify a job callback that replaces an encounter, changes job SP or
 reorders enemies. Discovery must retain current/previous-job and caller context
 when applying the shared whole-effect gate; a supported direct child is
@@ -470,6 +470,18 @@ Persist nested effects, histories, debit, item transfer and command receipt in
 one transaction. A committed retry observes its prior draw/result; GET cannot
 execute a purchase, mark a stored tool used or return a book. #1139 owns the
 unresolved capacity-unchecked return policy, and #1197 owns consumed instances.
+
+[`NormalRunService.WithJobAssets`](../../internal/adventure/job_assets.go) supplies
+the requesting command owner's locked wallet and durable single-hand facts to
+the entire combat operation, including NPC and commanded actors. Invoke it once
+inside `Command`, using the injected economy runner and helper-quest facts;
+preflight the complete invocation before effects or outer costs. It commits
+wallet changes and newly created held instances in the same ambient transaction
+as battle state and receipt. The combat hand is saved in the run; NPC scavenging
+changes only that hand. Inventory/save/receipt failure rolls back the operation,
+and committed retries return the receipt without another draw or grant. The
+bounded SQL tests verify this asset boundary; production action/tail composition
+and instance hydration remain with #1329, transport discovery with #1330.
 The [shared modifier contract](battle.md#shared-modifiers-and-callback-outcomes)
 also gates direct entries: helper invocation/returned target does not prove an
 effect applied, and callback category differs from elemental names. Preserve

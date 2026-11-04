@@ -54,6 +54,12 @@
       "source_ref": "internal/adventure/normal_run.go#RunAdmission"
     },
     {
+      "name": "job_asset_runner",
+      "target_module": "economy",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/normal_run.go#NormalRunConfig"
+    },
+    {
       "name": "normal_run_penalty",
       "target_module": "core/timer",
       "relation_type": "consumer_interface",
@@ -158,6 +164,16 @@
         }
       ],
       "note": "One bounded SQL transaction via WithRunForUpdate; combat adapters can use Adventure-owned travel mutations under this authority. No automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
+    },
+    {
+      "method": "WithJobAssets",
+      "source_ref": "internal/adventure/job_assets.go#NormalRunService.WithJobAssets",
+      "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE", "note": "Command already holds the full sorted roster; requester stays distinct from combat actor." },
+        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Requester wallet and held instance commit with Command state/receipt in the ambient SQL transaction." }
+      ],
+      "note": "Requires Command's run authority; supplies operation-local facts through the injected economy runner, with no independent commit or production combat fallback."
     },
     {
       "method": "ApplyCombatTravel",
