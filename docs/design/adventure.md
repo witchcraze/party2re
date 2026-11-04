@@ -119,7 +119,8 @@ Fallen actors are restricted, but not universally barred from operations:
 `_battle.cgi:646–665` allows whisper/screenshot before the fallen check and
 contains a specific self-revival exception. Spectators receive only
 whisper/exit/screenshot in `_skill.cgi:22–30`. These operations' transport and
-visibility reconciliation remains #948; screenshot copying is owned by Replay.
+visibility reconciliation remains #948; automatic scene capture and personal
+exit copies are owned by [Replay](replay.md#native-scene-and-latest-slot-contract).
 An unsupported exception must remain an explicit cutover blocker, not silently
 disappear from discovery.
 
@@ -143,7 +144,7 @@ The user requested original behavior as the default on 2026-10-12 (#1327).
 | `さそう`, `きっく` → `sasou`, `kick` | `_skill.cgi:161–164,769–783`: floor 0; kick leader only. Invitation dispatch redirects its log to the public quest area, not the room | Party owns waiting admission/permissions; #948/#1330 reconcile equivalent commands. Invitation is not room activity just because it was submitted from that room |
 | Plain comment / unknown command | `party.cgi:21–27`: nonempty submission invokes action and writes comment unless `$mes`; `_battle.cgi:640` returns on unknown dispatch without setting an error, so unknown command can remain a comment | #948/#1330 own explicit comment acceptance and visibility. Unknown typed Gateway actions remain schema errors; any faithful text-submission path must treat unknown text as a comment rather than silently equate the two |
 | `ささやき` → `sasayaki` | `_battle.cgi:640–649` checks dispatch/interval first, then returns before fallen/status/resource/tail processing. `system.cgi:251–262` validates named recipient, disables NPC response. No target is a public comment; private recipient may be outside encounter | #948/#1330 own allowed audience and sender/recipient-only observation (`system.cgi:622–630`); accepted writes renew room activity, not actor battle time |
-| `すくしょ` → `sukusho` | `_battle.cgi:650–652` returns before combat tail; `system.cgi:165–207` copies owned scene/public comment lines, excludes private lines, sets `$mes` on success or failure, so no room comment write | #1320 owns archives/capture and #948/#1330 permitted transport; does not renew room activity or run battle effects |
+| `すくしょ` → `sukusho` | `_battle.cgi:650–652` returns before combat tail; `system.cgi:165–207` copies owned scene/public comment lines, excludes private lines, sets `$mes` on success or failure, so no room comment write | #948/#1330 reconcile manual screenshot transport; no automatic Replay capture, room renewal or battle effects. Manual publication is separate from #1320's personal Replay copies |
 | Spectator/fallen exceptions | `_skill.cgi:25–30`: spectator discovers whisper/exit/screenshot only. Fallen actor is blocked after whisper/screenshot dispatch except exit and the gated self-revival callback (`_battle.cgi:654–665`) | #1329/#1330 role tests; #1333 self-revival prerequisite. Discovery cannot imply spectators may fight; blanket rejection of fallen submissions loses original exceptions |
 
 These are domain mappings, not newly registered HTTP routes. #1330 must supply
@@ -230,7 +231,8 @@ distinguish an accepted no-effect result from a rejected operation.
 
 #1328 persists room activity in the same SQL commit as the accepted operation;
 failed/rolled-back commands cannot renew it. #1330/#948 reconcile the actual
-comment/whisper submission path and privacy, while #1320 owns screenshot capture.
+comment/whisper/manual-screenshot submission paths and privacy, while #1320 owns
+automatic Replay capture and personal exit copies.
 Tests must cover accepted/rejected/no-effect text, private whispers, screenshot,
 redirected logs, GET and receipt retries, strict `>1800` seconds and the existing
 cleanup-time one-hour penalty anchor. This gate affects #1328 idle cleanup only;
