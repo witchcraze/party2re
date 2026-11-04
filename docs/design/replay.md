@@ -11,8 +11,10 @@ not established legacy requirements.
 Legacy references below are relative to `party2/` in the reference repository at
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Source inspection and isolated execution
 of original routines establish the requirements below. They do not certify a
-complete CGI installation or browser playback. Investigation details and bounded
-implementation follow-ups belong to #1251.
+complete CGI installation or browser playback. The user selected restoration of
+interactive Adventure under [#1323](https://github.com/witchcraze/party2re/issues/1323);
+the native Replay decisions below are owned by
+[#1320](https://github.com/witchcraze/party2re/issues/1320).
 
 ## Original recording and archive lifecycle
 
@@ -128,14 +130,121 @@ Deploy guarded reads/storage before enabling reconstructed producers. Public
 provenance alone must not expose a payload containing fields absent from the
 verified public scene contract.
 
+## Native scene and latest-slot contract
+
+These are implementation targets, not existing producer capabilities. On
+2026-11-04 the user approved counting structured UTF-8 scene bytes instead of
+legacy HTML bytes, and requested the failure behavior closest to the original.
+Preserve actual scenes and exit-copy order; do not silently drop failed captures.
+The durable recovery below adapts persistence to the approved SQL command boundary.
+
+### Capture and display projection
+
+Use the [normal-run operation/activity matrix](adventure.md#normal-run-operation-discovery)
+to classify the submitted operation separately from combat effects and activity.
+The dispatcher reconciliation is:
+
+| Original boundary | Native capture/copy target |
+| --- | --- |
+| `quest.cgi:189–199` create/join/spectate | Enrollment is not a recorded operation: the actor was outside `vs_monster` before dispatch |
+| `party.cgi:20–27` eligible submission | Freeze the pre-command location/title; append one post-operation display scene after its room-log write, not one per hit, NPC response or floor |
+| `_battle.cgi:640–649,672–680` comments, unknown text, whispers and silently banned skills | A no-message outcome can record even without a battle effect. A whisper can trigger capture, but its private log entry is always excluded. Unknown Gateway action IDs still reject; any legacy-text acceptance is a separate transport contract |
+| `_battle.cgi:650–652`; `system.cgi:165–208` manual screenshot | Success and failure set a message; neither appends an automatic Replay scene. Manual screenshot publication remains separate |
+| `_battle.cgi:1184–1227` participant exit | Freeze a copy of the accumulated prefix for this participant before the exit's log/possible scene append; remaining participants continue |
+| Spectator exit, rejected operation, refresh, receipt lookup/retry, native idle cleanup | No personal copy. Refresh/rejection/retry/cleanup adds no scene; eligible spectator submissions follow the dispatcher rule without creating spectator archive ownership |
+
+The title is the one selected before dispatch, including when advance/travel
+changes floor or stage (`_skill.cgi:23`; `system.cgi:660–677`). Members and comments
+are captured after the operation. Preserve these different observation times.
+Each scene uses its submitting actor's perspective. The shared room archive can
+therefore contain different actor views; an exit copies that immutable sequence,
+not a newly rendered recipient view or one private sequence per current member.
+
+Only the following display fields enter a versioned structured scene:
+
+| Display fact | Allowed representation and visibility |
+| --- | --- |
+| Title and scenery | Captured title text/floor and clean-room background/field/overlay keys; no legacy markup, asset paths or executable content |
+| Ordered member slots | Captured display name/color and clean-room appearance/effect keys. Hide a defeated member when its color differs from the capturing actor's, or it is a substitute; retain same-color fallen real members (`_battle.cgi:423`) |
+| HP display | Mask HP and max HP independently above 999, and preserve the displayed integer HP percentage. Hidden numeric values must be absent from the scene, not merely hidden by the client |
+| State display | Visible state/temporary/extended-state labels, displayed extended duration, and tension only when the original state display does not supersede it (`425–436`) |
+| Comment window | At most three newest non-whisper room entries in their displayed newest-first order: captured speaker, color, text and displayed date. Include real operation/NPC text where written; exclude addresses and private recipients/body |
+
+Escape text and resolve presentation keys through native allowed assets; never
+store/render arbitrary HTML, CSS or source asset URLs. Exclude raw HP behind masks,
+MP, attack/defense/agility, job/level, inventory, account/session data, full engine
+logs and private whisper content. Internal run/command/sequence and capturing-actor
+identities support deduplication; they do not extend the public display allowlist.
+Use actual command/room facts, never invented speech or reconstructed historical
+commands. Missing display/comment/role facts block the affected adoption; current
+engine turn logs cannot certify them.
+
+### Ordering, byte budget and personal copies
+
+Scenes append in committed operation order; playback is oldest scene first.
+Comments inside a scene remain newest first. Count the sum of the exact persisted
+UTF-8 scene encodings, excluding storage envelopes, indexes and copy metadata.
+Use one stable, versioned encoding; record each encoded length once rather than
+re-encoding old scenes with new formatting. Before accepting a scene, suppress it
+only if the accumulated length is **greater than 2,097,152**. At equality append
+the whole next scene, even if it crosses the boundary. Never split/evict scenes,
+silently apply a strict final-size cap, or impose 30-day pruning. Different byte
+lengths from legacy HTML are the explicitly approved representation departure.
+
+A successful participant exit selects the nonempty accepted prefix immediately
+before its own possible scene. Copy only to that exiting character's latest slot,
+with explicit `personal_archive` provenance and recipient metadata. A later exit
+can include the earlier exit's scene; the earlier copy cannot. Empty/absent source
+preserves the previous slot. Ordinary boss floors stay in the same normal run;
+the other modes in the lifecycle table remain excluded. Timeout is not an exit.
+
+Latest-slot replacement is atomic: readers see either the complete previous copy
+or the complete new copy. A successful nonempty replacement removes the superseded
+operation-driven copy from ordinary detail/history reads; it does not accumulate
+new scene history. The existing classified match-history capability remains a
+separate record kind. Preserve unclassified historical payloads and their denied
+access. Shared immutable prefix storage is allowed, but its lifetime must cover
+every referencing personal slot and pending copy, even after active-run disposal.
+
+### Command commit and publication failure
+
+Reuse the [SQL command/receipt boundary](../architecture/transient-run-state.md#one-command-one-bounded-sql-transaction).
+Under the existing run serialization, freeze the display projection, byte decision
+and exit prefix alongside the accepted command. Persist ordered Replay source
+facts/copy intent with state, assets and receipt in that bounded transaction;
+do not reconstruct them from a later run read. The exit intent precedes its
+optional scene append logically, even though native SQL commits them together.
+No archive publication runs for an uncommitted/unknown command outcome.
+
+Failure to preserve required source facts before commit aborts the uncommitted
+transaction. After commit, publication is optional to gameplay: failed scene/copy
+materialization retains the frozen source and pending status, reports the known
+command outcome with archive recovery pending, and leaves the old slot readable.
+Recover only Replay work using the same command/run identity; never rerun combat,
+consumption, rewards, exit effects or room activity. Resolve lost commit/publication
+acknowledgements from persisted evidence, without duplicate scenes or copies.
+GET may observe pending work but never performs publication or mutates the run.
+Use a bounded explicit owner recovery operation; no new generic event framework,
+background poller or independent authority is required.
+
+Serialize latest replacement per recipient and preserve accepted exit order across
+runs: a delayed older copy must never overwrite a newer published copy. Do not
+discard source/pending work when the last participant leaves or the lobby expires.
+Storage/decode failure is distinct from an empty archive; preserve the prior slot
+and make failure observable rather than claiming a successful empty copy.
+
+This is a native crash-recovery guarantee, not a claim of legacy transactional
+atomicity. Legacy file open/copy errors abort the response
+(`system.cgi:1507–1508,1540–1543`), without a rollback of earlier gameplay writes.
+The native receipt must retain the committed outcome independently of publication.
+
 ## Current Go implementation and remaining gaps
 
-`internal/replay` currently stores a `BattleReplay` with two initial participant
-stat snapshots and a `[]corebattle.TurnLog` array in MariaDB `battle_replays`.
-Payloads are JSON, not compressed data. Headers carry combat identities, result,
-turn count and creation time. The recorder adapters accept `pvp`, `gvg`, `boss`,
-`dungeon`, `adventure` and `challenge` names, but those names do not prove legacy
-recording coverage or production integration.
+[`internal/replay`](../../internal/replay/replay.go) stores JSON initial-stat
+snapshots and engine turn logs in `battle_replays`. Its result adapters name several
+combat modes but have no production callers; they neither capture display scenes
+nor implement the latest slot. Storage/read work is tracked by
+[#1825](https://github.com/witchcraze/party2re/issues/1825).
 
 The composition root wires session authentication and character persistence into
 Replay. Personal detail and history verify the authenticated player's ownership
@@ -152,8 +261,7 @@ can carry this pair; existing result adapters supply neither and remain
 unclassified. No production combat feature calls those adapters. Personal history
 selects only this classification and recipient, before limits and cursor creation;
 equal timestamps use descending replay ID as the tie-breaker. This retained
-archive index does not implement the original latest-only slot or approve a new
-copy/retention lifecycle.
+archive index remains distinct from the scene latest-slot target above.
 
 Migration `102_replay_archive_provenance.sql` adds metadata with empty defaults
 and a recipient index, preserving existing payloads without deriving ownership
@@ -173,22 +281,31 @@ marked public/global. Recent therefore returns an empty feed regardless of login
 A verified publisher and structured scene implementation are prerequisites for
 public display support; a visibility flag alone must never enable it.
 
-The current engine turn log contains `turn`, `actor_id`, `action_name`, `target_id`,
-`damage_dealt`, `healing_done`, `is_critical`, `message` and `remaining_hp`. Recorder
-adapters build snapshots from characters, monsters or engine participants and
-save completed results. `DeleteOlderThan` is an available storage operation,
-not evidence of an active automatic retention policy or a legacy rule.
-
 The [current OpenAPI sources](../api/paths/replays.json) describe guarded replay
 detail and the empty recent feed; owned recipient history is in
-[`character.json`](../api/paths/character.json). Operation-driven capture and
-personal latest-slot publication remain tracked by
-[#1320](https://github.com/witchcraze/party2re/issues/1320), with interactive
-normal-adventure restoration owned by
-[#1323](https://github.com/witchcraze/party2re/issues/1323).
-The current immediate solo/party crawl omits player operations and distinct exit
-times; it is an implementation gap, not approval to replace the original Replay
-with a floor/battle-result digest. Restore real submissions and actor exit facts
-under the [Adventure interaction contract](adventure.md#original-interaction-contract-and-reconstruction-target)
-before enabling those producers. Keep the current guarded reads in place. Do not
-fabricate historical commands, chat, exit times or an all-modes replay producer.
+[`character.json`](../api/paths/character.json). No automatic retention is enabled;
+the available pruning method is not an approved scene/latest retention policy.
+
+[`NormalRunService.Command`](../../internal/adventure/normal_command.go) serializes
+explicit lifecycle/individual settlement with SQL state and actor-owned receipts,
+but has no Replay hook or captured room-comment/display facts. Exit removes the
+recipient from the roster; the repository clears live state when the roster is
+empty. Neither receipt nor recipient data currently retains scenes/copy intent.
+Thus existing transaction atomicity does not establish Replay ordering/recovery.
+
+Production solo/party starts still use `ExecuteCrawl` / `StartPartyAdventure`;
+the explicit combat consumer
+[#1329](https://github.com/witchcraze/party2re/issues/1329) and production cutover
+[#1330](https://github.com/witchcraze/party2re/issues/1330) remain prerequisites for
+real operation facts. A closed interactive-restoration tracking issue is not
+evidence of that wiring. Shared solo/party capture adoption is tracked by
+[#1826](https://github.com/witchcraze/party2re/issues/1826); it must preserve actual
+active-side removal after exit rather than render stale departed actors.
+
+[Adventure](adventure.md#original-interaction-contract-and-reconstruction-target)
+owns progression and [Party](party-system.md) owns waiting admission.
+[#948](https://github.com/witchcraze/party2re/issues/948) owns Replay observation,
+navigation and scoped route replacement: retain guarded detail/recent/history
+routes until their actual fields, visibility and navigation replacements pass.
+Do not predeclare proposed scene schemas in OpenAPI or fabricate missing commands,
+chat, exit times, spectators or all-mode recording from batch results.
