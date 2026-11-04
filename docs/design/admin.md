@@ -36,6 +36,7 @@ All `/admin/*` routes enforce strict credential verification:
 - **Response**: List of players containing `id`, `username`, `created_at`, `updated_at`, `last_ip`, `banned_at`, and `is_banned`.
 
 ### 3.2 Account Soft-Ban (`POST /admin/players/{id}/ban`)
+- **Boundary**: Account banning replaces legacy physical deletion (#200); it does not reject new accounts from the same IP. IP registration denial is a separate, optional policy described below.
 - **Semantics**: Sets `banned_at = CURRENT_TIMESTAMP(6)` in MariaDB `players` table.
 - **Session Revocation**: Synchronously purges all active player sessions from Valkey Master via `sessions.DeleteByPlayerID(ctx, playerID)`.
 - **Token Invalidation**: Deletes active Personal Access Tokens (PATs) for the player.
@@ -43,6 +44,30 @@ All `/admin/*` routes enforce strict credential verification:
 - **Enforcement**:
   - `POST /sessions` (Login): Returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
   - Authenticated character and gameplay requests: Returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
+
+### 3.3 Optional IP Registration Denial (Planned)
+
+The approved decision in [#1107](https://github.com/witchcraze/party2re/issues/1107)
+adopts IP registration denial independently of account banning. Management,
+registration enforcement and the optional BAN integration are deferred together
+to low-priority [#1817](https://github.com/witchcraze/party2re/issues/1817);
+none is currently implemented.
+
+- **Administration**: Administrators can add, list and release individual IPv4/IPv6 addresses. BAN can explicitly include denial of the target account's stored `last_ip`; omission means account BAN only. An unknown or invalid stored IP rejects the combined request before changes, rather than silently falling back to BAN alone. The two SQL changes commit or roll back together.
+- **Scope and independence**: Denial applies only to new account registration (`POST /players`), returning 403 without creating an account. It does not block existing accounts' login or gameplay. Releasing an IP does not unban an account, and account BAN alone never adds an IP denial.
+- **Identity**: Match normalized single IP addresses, treating IPv4-mapped IPv6 as IPv4, using the existing [client-IP trust boundary](../architecture/interfaces.md#application-api-boundary). Do not match hostnames, reverse DNS, CIDR or wildcard patterns. Missing/invalid client IP rejects registration with 400; a missing hostname does not matter when the IP is valid. Denylist lookup errors return 503 rather than admitting registration.
+- **Retention**: Active entries persist in MariaDB until explicit administrative release, which removes the denial record. No automatic expiry, denial history or extra IP logging is introduced; existing `last_ip` retention is unchanged.
+- **Operational limits**: Every new registrant sharing a denied NAT/CGNAT address is affected; the BAN option defaults off to avoid implicitly extending an account sanction to other people. Changing IP can bypass this control, so it is not proof of identity or guaranteed re-registration prevention.
+
+Legacy evidence: `party2/admin.cgi:92,100–116` optionally appends the deleted
+user's stored host; `new_entry.cgi:66–70,240–245` checks it before registration.
+`lib/system.cgi:731–740,1016–1021` uses `REMOTE_HOST`, falling back to
+`REMOTE_ADDR`, and appends without an expiry policy. The separate same-IP
+registration rejection is disabled (`new_entry.cgi:140,251–265`). The adopted
+policy preserves optional registration denial while replacing host matching with
+trusted IP matching and adding independent management/release. Verification of
+spoofed headers, proxy boundaries, shared addresses, unknown hosts, normal
+registration and independent release belongs to the implementation issue.
 
 ---
 

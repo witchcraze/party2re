@@ -41,6 +41,7 @@ Every `Character` belongs to exactly one `Player`. A `Player` may own multiple c
 - **Account State**: Each `Player` record tracks `created_at`, `updated_at`, `last_ip`, and an optional `banned_at` timestamp.
 - **Login Tracking**: Upon successful login, the player's `last_ip` and `updated_at` are refreshed.
 - **Soft-Ban Enforcement**: When an account is soft-banned (`banned_at IS NOT NULL` / `IsBanned() == true`), all active Valkey sessions and Personal Access Tokens are immediately invalidated. Subsequent login attempts (`POST /sessions`) and authenticated character requests receive HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
+- **Registration boundary**: Account BAN does not prevent a different account from registering at the same IP. [Optional IP registration denial](admin.md#33-optional-ip-registration-denial-planned), including independent release and explicit BAN-time selection, is adopted but deferred; `last_ip` alone is not a registration prohibition.
 
 Character activity is independent of account login tracking. The adopted
 [inactivity retention contract](player-deletion.md#4-inactivity-retention) expires
