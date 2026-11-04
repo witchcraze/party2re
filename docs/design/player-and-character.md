@@ -250,9 +250,9 @@ server's injected UTC clock with retention, but keep separate presence records:
   create public presence.
 - Use UTC epoch seconds at recording and observation boundaries, monotonically
   advancing stored clocks under concurrency. List and count use one observation
-  instant and the same distinct-character predicate. Home consumes this count;
-  [#1123](https://github.com/witchcraze/party2re/issues/1123) owns sleep duration,
-  acquisition and failure policy, without redefining presence.
+  instant and the same distinct-character predicate. Home consumes this count
+  under its [sleep duration, acquisition and failure contract](home.md#6-resting--sleeping-sleepcgi-homecgi),
+  without redefining presence.
 
 **Message and safety.** Default to `""`; an explicit empty string clears it.
 Accept 0–60 Unicode code points, preserving spaces, punctuation and ordinary

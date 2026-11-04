@@ -179,13 +179,48 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
 - **Free Recovery**: No monetary fee (deprecates fictional paid Inn).
 - **Visiting House Restriction**: When sleeping at another player's house (`target_home_id != character_id`), the host character must exist in the system (i.e., be a registered player). A private home is always available regardless of whether the host holds an active town lease. Legacy parity: `lib/home.cgi:1-7` checks for the existence of the user directory (created at character registration), not a paid town lease; `lib/system.cgi:418-435` checks for the private `home.cgi` file, which is also created at registration. If the host character does not exist, the request is rejected with `ErrCharacterNotFound` (HTTP `404 Not Found`). A character can always sleep in their own private home.
 
-- **Concurrency Scaling**: Sleep duration scales by the distinct Character count
-  in the [public sampled-presence contract](player-and-character.md#212-public-presence-and-login-message):
-  `< 20`: 1x base duration; `20–29`: 2x; `>= 30`: 3x.
-  Current Go defaults to a 60-second base and has no production online-counter
-  wiring. [#1123](https://github.com/witchcraze/party2re/issues/1123) owns the base
-  decision, counter acquisition and failure policy; 60 seconds is not a verified
-  legacy value. Authentication/token counts must not replace presence.
+- **Adopted duration**: The decision in [#1123](https://github.com/witchcraze/party2re/issues/1123)
+  adopts a **300-second (5-minute) default base**, configurable at server startup
+  through Docker Compose's `PARTY2_HOME_SLEEP_BASE_SECONDS`. Unset/empty uses 300;
+  an explicitly supplied value must be a positive integer number of seconds
+  whose 3x duration fits the timer representation, otherwise startup fails.
+  `config.cgi_origin:25–26` labels its value `5` in minutes;
+  `lib/home.cgi:182–188` converts it to seconds and applies the 20/30 thresholds.
+  This adopts the reference configuration, not a recovered active-server value;
+  no separate unset-value fallback was found in the legacy source. The earlier
+  1-minute examples in #459 do not establish a legacy default.
+- **Population and order**: Use the distinct Character count from the
+  [public sampled-presence contract](player-and-character.md#212-public-presence-and-login-message),
+  including its shared UTC-second observation and read-time cleanup. After
+  admission and before any Sleep gameplay save, due presence sample, pending-wake
+  write, sleep timer or Job Memory change, obtain one successful count through
+  the Character public service. An already-visible actor counts normally; do not
+  add the actor or visited host merely because Sleep is requested. This follows
+  `lib/home.cgi:182–188` before `party.cgi:20–30`'s final `write_user`
+  (`lib/system.cgi:29–46`). Fix the duration for that sleep cycle; later
+  population/configuration changes do not recalculate existing timers.
+
+  | Observed characters | Multiplier | Seconds with default base |
+  | --- | --- | --- |
+  | 0 | 1x | 300 |
+  | 19 | 1x | 300 |
+  | 20 | 2x | 600 |
+  | 29 | 2x | 600 |
+  | 30 | 3x | 900 |
+
+- **Count failures**: Missing counter or required query, cleanup, commit or
+  context failure aborts sleep before its gameplay effects; never substitute
+  zero, a stale cached count, session/PAT counts or all registered characters.
+  Successful zero is valid. Legacy `get_login_member`
+  (`lib/system.cgi:1387–1417`) stops on list-open failure; the SQL service's
+  required observation/cleanup failures use the same stop-before-sleep policy.
+  Successful presence pruning remains an observation even if a later Sleep step
+  fails. A temporary transition claim may be acquired/released without starting
+  sleep; retain the existing claim-loss and compensation guarantees below.
+- **Implementation gap**: Go still defaults to 60 seconds, silently uses zero
+  when the optional counter is absent/fails, and has no production counter or
+  Compose base-duration setting. [Implementation follow-up](https://github.com/witchcraze/party2re/issues/1822)
+  owns delivery and production wiring/boundary tests.
 - **Action admission**: Protected action boundaries reject active sleep and
   pending waking recovery. Duration expiry alone does not clear the obligation.
   Observation, explicit Wake and emergency Rescue remain available. Failed SQL,
