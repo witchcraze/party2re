@@ -851,6 +851,7 @@ the current enemy pool. The ordinary tail ticks its stored ban4 to3 and still
 runs when NPC response alone is suppressed. The NPC body declares both general
 random invocations, with a death check between them; missing native descendants
 or predecessor transitions reject the entire entry before any draw/cost.
+The parent retains the child-updated invocation frame after delegation.
 Their full mixed-sequence projections remain with
 [#1733](https://github.com/witchcraze/party2re/issues/1733).
 

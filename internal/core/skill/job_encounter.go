@@ -27,17 +27,18 @@ func (d *BattleDefinitions) RegisterJobEncounters(c *corebattle.JobEncounterCont
 			child.TargetContext, child.Arguments, child.Invoke = f.TargetContext, append([]string(nil), f.Arguments...), f.Invoke
 			return child, nil
 		}
-		d.Invocations.Entries[id] = corebattle.CallbackDefinition{
-			Delegates: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) []corebattle.CallbackInvocation {
-				if id == "job-79-entry-2" {
-					for _, a := range s.Actors {
-						if a.ID == f.ActorID && a.NPC {
-							return []corebattle.CallbackInvocation{{Kind: "job-79-random"}}
-						}
+		delegates := func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) []corebattle.CallbackInvocation {
+			if id == "job-79-entry-2" {
+				for _, a := range s.Actors {
+					if a.ID == f.ActorID && a.NPC {
+						return []corebattle.CallbackInvocation{{Kind: "job-79-random"}}
 					}
 				}
-				return nil
-			},
+			}
+			return nil
+		}
+		d.Invocations.Entries[id] = corebattle.CallbackDefinition{
+			Delegates: delegates,
 			Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
 				child, err := context(f)
 				if err != nil {
@@ -56,8 +57,18 @@ func (d *BattleDefinitions) RegisterJobEncounters(c *corebattle.JobEncounterCont
 				if err != nil {
 					return err
 				}
+				delegated := len(delegates(s, f)) > 0
 				if err := s.ApplyJobEncounter(&child, id, rng); err != nil {
 					return err
+				}
+				if delegated {
+					// Nested invocation already updated f; never restore the pre-call snapshot.
+					updated, err := context(f)
+					if err != nil {
+						return err
+					}
+					*c = updated
+					return nil
 				}
 				*c = child
 				f.TargetContext, f.Arguments = child.TargetContext, child.Arguments

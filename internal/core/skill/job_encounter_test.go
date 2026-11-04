@@ -262,36 +262,79 @@ func TestJobEncounterAdmissionRejectsMissingContextBeforeDraw(t *testing.T) {
 // death contract. They do not certify the native descendant bodies for #1733.
 func TestJobEncounterTimeNPCDoubleRandomStopsAfterDeath(t *testing.T) {
 	for _, die := range []bool{false, true} {
-		s, c, f, d := jobEncounterFixture()
-		s.Actors[0].NPC = true
-		timeBody := d.Invocations.Entries["job-79-entry-2"]
-		calls := 0
-		for _, table := range d.Invocations.JobTables {
-			for _, variant := range table.Variants {
-				for _, entry := range variant {
-					d.Invocations.Entries[entry.ID] = corebattle.CallbackDefinition{
-						Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-						Execute: func(state *corebattle.LifetimeState, _ *corebattle.CallbackContext, _ random.Generator) error {
-							calls++
-							if die {
-								state.Actors[0].HP = 0
-							}
-							return nil
-						},
+		t.Run(map[bool]string{false: "two-calls", true: "death-after-first"}[die], func(t *testing.T) {
+			s, c, f, d := jobEncounterFixture()
+			s.Actors[0].NPC = true
+			second := s.Actors[1].Clone()
+			second.ID = "second"
+			s.Actors = append(s.Actors, second)
+			f.EnemyIDs = []string{"enemy", "second"}
+			f.Command = "outer-command"
+			damage := c.DamageContext
+			damage.TargetContext, damage.DamageCalls = f.TargetContext, 7
+			f.Damage = &damage
+			f.Defeat = &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{
+				TargetContext: f.TargetContext, Cursor: corebattle.TargetCursor{Source: "item150", ActorID: "self"},
+			}}
+			timeBody := d.Invocations.Entries["job-79-entry-2"]
+			calls := 0
+			var lastTarget corebattle.TargetContext
+			var lastDamage *corebattle.DamageContext
+			var lastDefeat *corebattle.DefeatContext
+			for _, table := range d.Invocations.JobTables {
+				for _, variant := range table.Variants {
+					for _, entry := range variant {
+						d.Invocations.Entries[entry.ID] = corebattle.CallbackDefinition{
+							Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
+							Execute: func(state *corebattle.LifetimeState, frame *corebattle.CallbackContext, _ random.Generator) error {
+								if calls > 0 && (!reflect.DeepEqual(frame.TargetContext, lastTarget) || frame.Damage != lastDamage || frame.Defeat != lastDefeat || frame.Damage.DamageCalls != 8 || len(frame.Arguments) != 1) {
+									t.Fatal("second random callback lost the first callback's context", frame)
+								}
+								calls++
+								frame.EnemyIDs, frame.MemberOnlyIDs = []string{"second"}, []string{"enemy"}
+								if calls == 2 {
+									frame.EnemyIDs, frame.MemberOnlyIDs = []string{"enemy"}, []string{"second"}
+								}
+								frame.PhantomTargetID, frame.Item195Activated = frame.EnemyIDs[0], true
+								frame.Arguments = slices.Clone(frame.Arguments[1:])
+								damage := *frame.Damage
+								damage.TargetContext = frame.TargetContext
+								damage.DamageCalls++
+								damage.HealCalls += 2
+								damage.Cursor = corebattle.TargetCursor{Source: "item159", ActorID: frame.PhantomTargetID}
+								frame.Damage = &damage
+								defeat := *frame.Defeat
+								defeat.TargetContext, defeat.Cursor = frame.TargetContext, damage.Cursor
+								frame.Defeat = &defeat
+								lastTarget, lastDamage, lastDefeat = frame.TargetContext, frame.Damage, frame.Defeat
+								if die {
+									state.Actors[0].HP = 0
+								}
+								return nil
+							},
+						}
 					}
 				}
 			}
-		}
-		// Keep the body under test outside its recursive random table closure.
-		d.Invocations.Entries["npc-time-probe"] = timeBody
-		draws := []float64{0, .2, 0, .2} // Job1 position1, excluding its extended position0.
-		want := 2
-		if die {
-			draws, want = draws[:2], 1
-		}
-		executeJobEncounter(t, &s, &f, d, "npc-time-probe", draws...)
-		if calls != want || c.ResponseSuppressed || len(s.SkillBans) != 0 || s.Actors[0].Status != "" {
-			t.Fatal(die, calls, s, c)
-		}
+			// Keep the body under test outside its recursive random table closure.
+			d.Invocations.Entries["npc-time-probe"] = timeBody
+			draws := []float64{0, .2, 0, .2} // Job1 position1, excluding its extended position0.
+			want := 2
+			if die {
+				draws, want = draws[:2], 1
+			}
+			executeJobEncounter(t, &s, &f, d, "npc-time-probe", draws...)
+			if calls != want || c.ResponseSuppressed || len(s.SkillBans) != 0 || s.Actors[0].Status != "" {
+				t.Fatal(die, calls, s, c)
+			}
+			if !reflect.DeepEqual(f.TargetContext, lastTarget) || !reflect.DeepEqual(f.Damage.TargetContext, lastTarget) || !reflect.DeepEqual(f.Defeat.TargetContext, lastTarget) || f.Damage != lastDamage || f.Defeat != lastDefeat ||
+				f.Damage.DamageCalls != 7+want || f.Damage.HealCalls != 2*want ||
+				f.Damage.Cursor != (corebattle.TargetCursor{Source: "item159", ActorID: lastTarget.PhantomTargetID}) || f.Defeat.Cursor != f.Damage.Cursor {
+				t.Fatal("parent overwrote the final random callback's context", die, f, c)
+			}
+			if !reflect.DeepEqual(c.TargetContext, lastTarget) || c.DamageCalls != 7+want || c.Cursor != f.Defeat.Cursor || c.DefeatContext != lastDefeat || len(c.Arguments) != 2-want {
+				t.Fatal("operation context did not retain delegated results", die, c)
+			}
+		})
 	}
 }
