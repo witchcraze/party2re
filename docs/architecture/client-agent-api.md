@@ -131,6 +131,62 @@ These are approved implementation targets, not registered routes/actions.
 Their modular OpenAPI schemas are added with runtime implementation. Browser UI
 and external widget delivery remain separately scoped consumers.
 
+### External share and embed boundary
+
+The [external-card decision](../design/player-and-character.md#213-external-character-and-home-cards-adopted-not-implemented)
+adopts anonymous, server-rendered `GET /share/characters/{id}` and
+`GET /share/homes/{id}` as future presentation routes. They return HTML cards
+without requiring JavaScript, sessions or PATs; the same URLs support standalone
+sharing and blog iframes. They do not expose owned context, accept a viewer to
+enrich the response, or alter existing public profile GET. Browser gameplay UI
+remains #140; these small public pages do not depend on that client. No public
+JSON clone, widget SDK, `document.write` or oEmbed service is required.
+
+Each page supplies escaped title/description, canonical URL and Open Graph
+`og:title`, `og:type=website`, `og:url`, `og:description`, `og:image`/image alt text,
+plus `twitter:card=summary` and matching title/description/image metadata.
+Use absolute HTTPS URLs based on trusted deployment configuration, not arbitrary
+Host/query input. A safe, app-owned static raster thumbnail is sufficient;
+reuse it across cards, with no screenshot renderer or remote image fetching.
+Metadata contains a name and short stable card description, not online state,
+message, last-update time or visitor identities. The clicked page shows the full
+card. Social platforms control preview layout, caching and refresh: metadata is
+not a live card or an immediate revocation guarantee. See the [OGP specification](https://ogp.me/)
+and [Mastodon's preview contract](https://docs.joinmastodon.org/entities/PreviewCard/).
+
+Feature services supply only the [card whitelist](../design/player-and-character.md#213-external-character-and-home-cards-adopted-not-implemented).
+Character owns message/sample-clock and active-identity checks; Home owns ordered
+local members and phrase selection; HTTP owns templates, metadata and safe links.
+Retention supplies the successful-gameplay-save clock. Share existing service
+ports and text/URL validation; do not return raw profile/context or use pet-only
+Home facts as visitor coverage. Missing, deleted or banned target identities
+return the same anonymous 404 without personal metadata; deleted/banned visitors
+must not survive in the projected roster. Other required-read/unsafe-data errors
+fail with a non-personal error page, never a partial card or fabricated offline
+success. Optional absent images use an original safe placeholder, and no phrase
+is a valid absence. GET may select a random phrase but never joins a Home,
+renews presence/retention/selection, prunes local membership or mutates gameplay.
+
+Use automatic contextual HTML escaping, validated image/link URLs and hex colors;
+never interpolate stored markup, user CSS or executable avatar content. The
+script-free, read-only share routes alone permit external framing; narrowly
+scope their CSP/sandbox and frame-header exception without weakening the API,
+owned pages or error handling. Parent iframe examples need a title, constrained
+sandbox and safe outbound links. Follow [iframe sandbox semantics](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe#sandbox)
+and [CSP frame-ancestors](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors).
+Apply anonymous rate limiting, `Cache-Control: no-store` and no automatic polling;
+do not expand API CORS origins for iframe navigation. No auth-dependent rendering,
+tracking cookies or private URL parameters. Source pages stop serving removed
+identities; copies already cached by social platforms cannot be recalled.
+
+Both routes remain unregistered until their implementation issues deliver them;
+add transport specifications with that code, not placeholder OpenAPI operations.
+Required implementation tests cover anonymous field whitelists, session/PAT
+non-enrichment, ban/delete/missing identities, boundary clocks and GET inactivity,
+Home member order/0–3 cap/visitor filtering and independent phrase selection,
+stored-text/URL injection, metadata escaping/canonical host, error/header scope,
+and a browser smoke check for iframe isolation and script-free previews.
+
 ### Approved navigation and progressive observation contract
 
 The direction approved in [#1047](https://github.com/witchcraze/party2re/issues/1047)

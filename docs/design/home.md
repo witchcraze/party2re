@@ -128,6 +128,10 @@ Asynchronous direct messaging between characters:
 
 ### 3. Companion Greeting Phrases & Resident Companions (`character_companion_phrases`, `home_members`)
 
+External Home cards use a [separate local-member/phrase contract](player-and-character.md#213-external-character-and-home-cards-adopted-not-implemented):
+visitors count toward their three displayed members, and phrase selection has no
+speaker/pet gate. `ResidentPets` and `TalkToCompanion` alone do not implement it.
+
 The resident home companion/pet pool aggregates both monster pets brought home from the ranch (`internal/monster.LocationHome`) and Heaven Wish NPC companions (Ortega, Cat, Maid) stored in `home_members` (`HomePetReader` adapter):
 - **Resident Companion Pool (`ListHomePets`)**:
   - Queries ranch monster pets at home (`character_monsters` with `location = "home"`) plus Heaven Wish NPC companions stored in `home_members` (`is_npc = true`), returning unified `HomePet` entries exposed in `HomeView.ResidentPets`.
