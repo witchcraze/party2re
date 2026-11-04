@@ -4596,6 +4596,50 @@
                 "params"
               ]
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "auction_send"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "target_character_id": {
+                      "type": "string"
+                    },
+                    "target_character_name": {
+                      "type": "string"
+                    },
+                    "slot": {
+                      "type": "string"
+                    },
+                    "instance_id": {
+                      "type": "string"
+                    },
+                    "gold": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": -9223372036854775808,
+                      "maximum": 9223372036854775807
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": false,
+                  "description": "Explicit recipient ID or name and gold, equipped slot or owned instance ID. Omitted values retain service validation. Recipient ID takes precedence over name; positive gold takes precedence over items, then slot over instance ID. All supplied fields must be non-null. The authenticated path supplies the sender."
+                }
+              }
+            }
           }
         ]
       },

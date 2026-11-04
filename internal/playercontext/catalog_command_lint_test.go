@@ -20,6 +20,27 @@ func gatewayContract(t *testing.T, spec *openAPISpec, id string) (openAPISchema,
 	return openAPISchema{}, openAPISchema{}
 }
 
+func TestCatalog_AuctionSendGatewayContract(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	action, ok := playercontext.GetAction("auction_send")
+	if !ok || action.OperationID != "executeCharacterAction" || len(action.RequiredParams) != 0 {
+		t.Fatalf("incorrect auction command: %+v", action)
+	}
+	then, params := gatewayContract(t, spec, action.ID)
+	if len(then.Required) != 0 || len(params.Required) != 0 || params.Type != "object" || string(params.AdditionalProperties) != "false" || len(params.Properties) != 5 {
+		t.Fatalf("incorrect auction params: %+v / %+v", then, params)
+	}
+	for _, name := range []string{"target_character_id", "target_character_name", "slot", "instance_id"} {
+		if params.Properties[name].Type != "string" {
+			t.Fatalf("incorrect %s schema: %+v", name, params.Properties[name])
+		}
+	}
+	gold := params.Properties["gold"]
+	if gold.Type != "integer" || gold.Format != "int64" || gold.Minimum.String() != "-9223372036854775808" || gold.Maximum.String() != "9223372036854775807" {
+		t.Fatalf("incorrect gold schema: %+v", gold)
+	}
+}
+
 func TestCatalog_GatewayContracts(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	tests := []struct {

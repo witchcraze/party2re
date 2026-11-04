@@ -600,8 +600,6 @@ func (h *Handler) Router() http.Handler {
 
 	// Auction Hall (Live P2P Trading, Direct Send & Inspect)
 	mux.HandleFunc("GET /auction/hall", h.handleAuctionVenueInfo)
-	mux.HandleFunc("POST /characters/{id}/auction/send", h.handleAuctionSend)
-	mux.HandleFunc("POST /auction/send", h.handleAuctionSendLegacy)
 	mux.HandleFunc("GET /characters/{id}/auction/inspect", h.handleAuctionInspect)
 
 	// Flea Market

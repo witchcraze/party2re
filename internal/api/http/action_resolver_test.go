@@ -17,6 +17,7 @@ func TestActionURLResolver(t *testing.T) {
 		wantMethod string
 		wantURL    string
 	}{
+		{name: "auction send", actionID: "auction_send", label: "送る", category: "economy", wantMethod: http.MethodPost, wantURL: "/api/v1/characters/char-999/actions"},
 		{
 			name:       "bank deposit action",
 			actionID:   "bank_deposit",
