@@ -31,7 +31,8 @@ type CallbackContext struct {
 }
 
 // CallbackInvocation describes an invocation boundary, not a scalar attack kind.
-// Kinds are random, tool-84, gem-86..92, job-82-generated, and entry (by native ID).
+// Kinds are random, tool-84, gem-86..92, job-79-random, job-82-generated,
+// and entry (by native ID). job-79-random retains its two calls and death guard.
 type CallbackInvocation struct {
 	Kind, EntryID string
 	// Server-owned frozen job82 construction facts; never client effect input.
@@ -180,6 +181,16 @@ func (s *LifetimeState) invokeCallback(c *CallbackContext, d CallbackCatalog, op
 			return s.executeGenerated(c, d, callbackSelection{CallbackEntry: CallbackEntry{ID: op.GeneratedChildID, MPCost: op.GeneratedChildMP}}, rng)
 		}
 		return s.executeCallback(c, d, callbackSelection{CallbackEntry: CallbackEntry{ID: op.EntryID}}, rng)
+	case "job-79-random":
+		for range 2 {
+			if err := s.invokeCallback(c, d, CallbackInvocation{Kind: "random"}, rng); err != nil {
+				return err
+			}
+			if s.actor(c.ActorID).HP <= 0 {
+				break
+			}
+		}
+		return nil
 	case "random", "tool-84":
 		job := callbackJob(s.actor(c.ActorID).Jobs.JobID)
 		if op.Kind == "random" {

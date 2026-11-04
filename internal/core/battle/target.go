@@ -38,9 +38,12 @@ type CallbackPayload struct {
 // owner's matching-copy existence predicate; PhantomEnemyIDs is its complete
 // ordered phantom pool. Command identifies the outer submitted callback.
 type TargetContext struct {
-	ActorID          string
-	PartyIDs         []string
-	EnemyIDs         []string
+	ActorID  string
+	PartyIDs []string
+	EnemyIDs []string
+	// MemberOnlyIDs retains members removed from this operation's side arrays.
+	// The next request rebuilds sides from the saved ordered members.
+	MemberOnlyIDs    []string
 	Command          string
 	Custom           bool
 	Item195Activated bool
@@ -126,6 +129,12 @@ func (s *LifetimeState) validateTargetContext(c TargetContext, rng random.Genera
 	party, enemy := c.PartyIDs, c.EnemyIDs
 	if c.duelOriginID != "" {
 		party, enemy = enemy, party
+	}
+	for _, id := range c.MemberOnlyIDs {
+		if s.actor(id) == nil || seen[id] {
+			return ErrInvalidParticipant
+		}
+		seen[id] = true
 	}
 	if len(seen) != len(s.Actors) || !slices.Contains(party, actor.ID) {
 		return ErrInvalidParticipant

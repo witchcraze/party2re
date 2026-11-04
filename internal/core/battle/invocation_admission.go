@@ -136,6 +136,11 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 			}
 		}
 		return nil
+	case "job-79-random":
+		if err := p.visit(CallbackInvocation{Kind: "random"}, afterEffects); err != nil {
+			return err
+		}
+		return p.visit(CallbackInvocation{Kind: "random"}, true)
 	case "random":
 		for job := 1; job <= 87; job++ {
 			if job == 73 {

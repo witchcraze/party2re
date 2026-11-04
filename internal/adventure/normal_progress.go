@@ -47,36 +47,7 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	r.markEXOnAdvance(actorID)
 	r.Floor++
 	if r.Floor == TreasureRoomFloor {
-		alive := 0
-		for _, id := range r.Roster {
-			if p := r.actor(id); p != nil && p.HP > 0 {
-				alive++
-			}
-		}
-		a = r.actor(actorID)
-		count := CalculateTreasureCount(TreasureCalculationInput{StageID: r.Stage.ID, AliveMembers: alive, DeadMembers: len(r.Roster) - alive, TotalMembers: len(r.Roster), HasMerchant: IsMerchantJob(a.Jobs.JobID), HasGambler: IsGamblerJob(a.Jobs.JobID), HasTreasureHunter: IsTreasureHunterJob(a.Jobs.JobID), HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: IsTreasureBlessing(blessing), Rng: s.cfg.RNG.Intn})
-		r.Boxes = GenerateTreasureBoxesWithPools(count, StageTreasurePools{Weapons: r.Stage.TreasureWeapons, Armors: r.Stage.TreasureArmors, Items: r.Stage.TreasureItems}, s.cfg.Clock.Now(), s.cfg.RNG.Intn)
-		if r.Mode == CrawlModeTry {
-			for _, id := range r.Roster {
-				p := r.Recipients[id]
-				converted, err := scaleTryEarnings(p.Conditional)
-				if err != nil {
-					return err
-				}
-				p.Pending, err = addRunEarnings(p.Pending, converted)
-				if err != nil {
-					return err
-				}
-				p.Conditional = RunEarnings{}
-				r.Recipients[id] = p
-			}
-			r.Mode = CrawlModeNormal
-		}
-		if r.ClearPending {
-			r.StageCleared, r.ClearPending = true, false
-		}
-		r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID
-		return nil
+		return s.createTreasureEncounter(r, actorID, blessing)
 	}
 	return s.createEncounter(ctx, r, actorID)
 }
@@ -180,4 +151,38 @@ func (s *NormalRunService) claimChest(ctx context.Context, r *NormalRun, actorID
 	r.Recipients[actorID] = p
 	r.Boxes[i].OpenedBy = actorID
 	return &r.Boxes[i], consumed, nil
+}
+
+// createTreasureEncounter is shared by advance and job-driven room recreation.
+func (s *NormalRunService) createTreasureEncounter(r *NormalRun, actorID, blessing string) error {
+	alive := 0
+	for _, id := range r.Roster {
+		if p := r.actor(id); p != nil && p.HP > 0 {
+			alive++
+		}
+	}
+	a := r.actor(actorID)
+	count := CalculateTreasureCount(TreasureCalculationInput{StageID: r.Stage.ID, AliveMembers: alive, DeadMembers: len(r.Roster) - alive, TotalMembers: len(r.Roster), HasMerchant: IsMerchantJob(a.Jobs.JobID), HasGambler: IsGamblerJob(a.Jobs.JobID), HasTreasureHunter: IsTreasureHunterJob(a.Jobs.JobID), HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: IsTreasureBlessing(blessing), Rng: s.cfg.RNG.Intn})
+	r.Boxes = GenerateTreasureBoxesWithPools(count, StageTreasurePools{Weapons: r.Stage.TreasureWeapons, Armors: r.Stage.TreasureArmors, Items: r.Stage.TreasureItems}, s.cfg.Clock.Now(), s.cfg.RNG.Intn)
+	if r.Mode == CrawlModeTry {
+		for _, id := range r.Roster {
+			p := r.Recipients[id]
+			converted, err := scaleTryEarnings(p.Conditional)
+			if err != nil {
+				return err
+			}
+			p.Pending, err = addRunEarnings(p.Pending, converted)
+			if err != nil {
+				return err
+			}
+			p.Conditional = RunEarnings{}
+			r.Recipients[id] = p
+		}
+		r.Mode = CrawlModeNormal
+	}
+	if r.ClearPending {
+		r.StageCleared, r.ClearPending = true, false
+	}
+	r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID
+	return nil
 }

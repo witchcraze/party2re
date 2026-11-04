@@ -40,6 +40,9 @@ func ParseCombatTravelInput(input string) (CombatTravelInput, error) {
 type CombatTravelTransition struct {
 	Consume            bool
 	ResponseSuppressed bool
+	Reload             bool
+	// A genuine job-driven stage19 treasure creation, consumed once by Command.
+	UnsealDemonKing bool
 	// ResponseEnemies retains the old enemy side for the enclosing player tail;
 	// generated members live in r.Battle. Collisions use the current run actor.
 	ResponseEnemies []corebattle.LifetimeActor
@@ -208,26 +211,12 @@ func (s *NormalRunService) ApplyCombatTravel(ctx context.Context, r *NormalRun, 
 			return CombatTravelTransition{}, err
 		}
 		reset.Cursor = frame.Cursor
-		t.replaced, t.oldFloor, t.oldStage = true, r.EncounterFloor, r.EncounterStageID
-		t.oldTimes = make(map[string]time.Time, len(r.Enemies))
-		for _, id := range r.Enemies {
-			t.ResponseEnemies = append(t.ResponseEnemies, r.actor(id).Clone())
-			t.oldTimes[id] = r.LastActions[id]
-		}
-		r.discardEncounter()
-		r.Floor = input.Floor
-		if err := s.createEncounter(ctx, r, actor); err != nil {
+		replacement, err := s.replaceCombatEncounter(ctx, r, actor, input.Floor, "")
+		if err != nil {
 			return CombatTravelTransition{}, err
 		}
-		for i, id := range r.Enemies {
-			a := r.actor(id)
-			for _, old := range t.ResponseEnemies {
-				if a.EncounterIdentity != "" && a.EncounterIdentity == old.EncounterIdentity {
-					a.ID, r.Enemies[i] = old.ID, old.ID
-					break
-				}
-			}
-		}
+		replacement.Consume = true
+		return replacement, nil
 	}
 	return t, nil
 }
@@ -265,4 +254,35 @@ func (r *NormalRun) discardEncounter() {
 	r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return slices.Contains(r.Enemies, a.ID) })
 	r.Enemies = nil
 	r.Boxes = nil
+}
+
+func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *NormalRun, actor string, floor int, blessing string) (CombatTravelTransition, error) {
+	t := CombatTravelTransition{ResponseSuppressed: r.Floor == TreasureRoomFloor, Reload: true}
+	t.replaced, t.oldFloor, t.oldStage = true, r.EncounterFloor, r.EncounterStageID
+	t.oldTimes = make(map[string]time.Time, len(r.Enemies))
+	for _, id := range r.Enemies {
+		t.ResponseEnemies = append(t.ResponseEnemies, r.actor(id).Clone())
+		t.oldTimes[id] = r.LastActions[id]
+	}
+	r.discardEncounter()
+	r.Floor = floor
+	var err error
+	if floor == TreasureRoomFloor {
+		err = s.createTreasureEncounter(r, actor, blessing)
+	} else {
+		err = s.createEncounter(ctx, r, actor)
+	}
+	if err != nil {
+		return CombatTravelTransition{}, err
+	}
+	for i, id := range r.Enemies {
+		a := r.actor(id)
+		for _, old := range t.ResponseEnemies {
+			if a.EncounterIdentity != "" && a.EncounterIdentity == old.EncounterIdentity {
+				a.ID, r.Enemies[i] = old.ID, old.ID
+				break
+			}
+		}
+	}
+	return t, nil
 }

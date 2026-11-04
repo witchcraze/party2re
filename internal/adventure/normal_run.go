@@ -164,6 +164,10 @@ type RunActionEffects struct {
 	ActorActivity     bool
 	ReleaseStock      bool
 	EncounterDefeated bool
+	// Only an owning encounter-creation transition supplies this event.
+	UnsealDemonKing bool
+	// Excluded from this operation's enemy array, restored last for next request.
+	MemberOnlyIDs []string
 }
 
 // RunPenalty projects a committed absolute deadline. SQL ownership remains held
