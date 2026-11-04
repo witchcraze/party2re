@@ -64,6 +64,20 @@ func (s *Service) BuildLifetimeActor(ctx context.Context, characterID, icon stri
 	p.HP = char.Stats.HP
 	jobs := corebattle.BattleJobs{JobID: char.JobID, SP: char.SP, OldJobID: char.OldJobID, OldSP: char.OldSP}
 	a := corebattle.LifetimeActor{Participant: p, Jobs: jobs, OriginalJobs: jobs, WeaponSeal: char.WeaponSeal, Tension: 1, Hit: 95}
+	if s.invRepo != nil {
+		inv, err := s.invRepo.FindByCharacterID(ctx, char.ID)
+		if err != nil {
+			return corebattle.LifetimeActor{}, err
+		}
+		// shortcut: multi-row inventories need #1329's explicit held-instance binding.
+		if len(inv.Items) <= 1 {
+			held := ""
+			if len(inv.Items) == 1 {
+				held = inv.Items[0].DefinitionID
+			}
+			a.HeldToolID = &held
+		}
+	}
 	a.JobHistory = make(map[string]*int)
 	for _, change := range history.History {
 		if change.FromJobID != "" {

@@ -11,6 +11,15 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 	c.PhantomEnemyIDs = slices.Clone(c.PhantomEnemyIDs)
 	c.Arguments = slices.Clone(c.Arguments)
 	c.Invoke = nil
+	if c.Assets != nil {
+		assets := *c.Assets
+		assets.HelperToolIDs = slices.Clone(assets.HelperToolIDs)
+		if assets.HeldToolID != nil {
+			held := *assets.HeldToolID
+			assets.HeldToolID = &held
+		}
+		c.Assets = &assets
+	}
 	if c.Status != nil {
 		status := *c.Status
 		f := cloneCallbackContext(CallbackContext{Damage: &DamageContext{EffectContext: status.EffectContext}, Defeat: status.Defeat})
@@ -65,6 +74,10 @@ func (s LifetimeState) callbackCopy() LifetimeState {
 // Clone isolates mutable encounter/template facts and admission projections.
 func (actor LifetimeActor) Clone() LifetimeActor {
 	a := &actor
+	if a.HeldToolID != nil {
+		held := *a.HeldToolID
+		a.HeldToolID = &held
+	}
 	if a.NPCLoadout != nil {
 		loadout := *a.NPCLoadout
 		a.NPCLoadout = &loadout

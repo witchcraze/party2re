@@ -37,6 +37,7 @@ type LifetimeActor struct {
 	CMPNeedCharge     int             `json:"cmp_need_charge"`
 	Banished          bool            `json:"banished"`
 	ConsumedItems     []ConsumedItem  `json:"consumed_items"`
+	HeldToolID        *string         `json:"held_tool_id,omitempty"` // nil is unknown; pointer to empty is an evidenced empty hand.
 	CrystalDropped    bool            `json:"crystal_dropped"`
 }
 

@@ -683,13 +683,16 @@ payer from an actor's name. Detailed source reconciliation belongs to
 
 | Operation | Source-backed asset, effect and lifetime contract |
 | --- | --- |
+| Wallet strike, jobs7/8 position0 | Physical base power is3% of the requester wallet, bounded1..500, without a debit. Preserve the fraction until the shared damage helper (`1283–1288,1363–1368`) |
+| Coin strike, job7 position2; plunder, job81 position2 | Physical base power is actor AT×0.8 or AT×1.2. Only a returned target permits the tail: coin strike credits floor(returned damage×0.1)+5; plunder first heals the actor with physical base power returned damage×0.75, then credits min(400,floor(returned damage×0.3)+5). Reflection can still return a target; misses, one-hit defense and absent tuples do not earn money (`1294–1300,6503–6511`) |
+| Wallet wave, job28 position3 | Wallet<100 becomes0 with all-enemy direct physical base50; otherwise debit100 before all-enemy direct physical base180. The debit precedes category/target helper guards (`2470–2476`) |
 | Book exchange, job86 positions0/3 | Require a held book; position0 also permits an empty durable tool in the library field. Search requesting-player depot order for the first matching stored book. Replace that one row with the durable held tool if nonzero, then set both held projections to the selected book. Other duplicate rows retain order. No match reports selection failure, resets action interval to0 and changes no held/depot state. Position3 alone, on success, suppresses NPC response, applies15%MaxHP risk and writes the skill ban, in that order (`6802–6816,6843–6855,10489–10536`) |
 | Book return, job86 position2 | Held combat item must be a book. Attempt15%MaxMP magic restoration first; then send the **durable** held tool to the **actor-named** depot and clear both held projections. Return is not conditional on MP recovery succeeding (`6829–6840`) |
 | Double invocation, job86 position5 | First matching book callback, falling back to position0 if no item ID matches. Gate on floor(listed book MP×1.5) once before the first invocation; no ordinary cost per child. Check actor death only between children. After a normally returning second child, subtract the internal cost without a local zero clamp, send durable held item to actor-named depot, then clear both projections. A child may alter MP/items; return uses their current values, not a captured original item (`6868–6899`) |
 | Stored-tool callback, job50 extended | NPC invokes magic heal500 and returns. Player uses outer submitted command/item/remaining text, trims target whitespace and leading encoded separator, and selects first eligible matching tool in requesting-player depot. Usage-category1 invokes its actual callback with that target; retain the row on selection error, otherwise remove it. Other categories swap the row with the durable held tool, even item0, and equip selected tool in both projections. Record its definition as used **before** child invocation; all copies of that definition are excluded for the actor's color for the room-directory lifetime. Child error retains that history in source; no-match sets interval0. Do not replace this with ordinary held-tool consumption (`3612–3626,10433–10487,10949–10973`) |
 | Enhanced held-tool use, job78 position0 | Separate table of **22**, not23, IDs:1,2,3,4,5,6,9,11,12,13,14,15,18,19,20,41,42,78,80,81,84,87. Category2 items18–20 are included. A callback returning1 clears combat held tool and, only for non-NPC color, durable held tool; unsupported ID returns0 without consumption. Item6's early invalid/living-target return also skips consumption (`5988–6013,10196–10282`) |
 | Empty-hand purchase, job78 position0 | Pool positions are1×5,2,9,11,14×2,15×2,41,80×2,81,84×2. Remove exact helper-quest tool IDs before the weighted draw; insufficient money still follows a draw. Nonzero selected ID and wallet≥floor(base price×2.5) equip combat held tool and debit requester wallet; update durable held tool only for non-NPC. Empty pool produces no purchase. No capacity check or depot delivery is involved (`10284–10305`; `system.cgi:1424–1442`) |
-| Scavenging, job78 position5 | Damage and agility increase precede empty-hand1/5 draw. Its distinct pool is1×5,2×2,3,4,11×2,12,15×2,41,42,80×2,81×2,84×2. Draw first, then helper-list **substring regex** exclusion converts a matching result to0 without redraw. Update combat held tool; durable projection only for non-NPC. This exclusion differs from purchase (`6176–6196`) |
+| Scavenging, job78 position5 | Physical base actor AG×1.4; only a returned target permits actor AG+25%, then an empty-hand1/5 draw. Its distinct pool is1×5,2×2,3,4,11×2,12,15×2,41,42,80×2,81×2,84×2. Draw first, then helper-list **substring regex** exclusion converts a matching result to0 without redraw. Update combat held tool; durable requester projection only for non-NPC. This exclusion differs from purchase (`6176–6196`) |
 
 Enhanced callbacks use neutral categories, not ordinary tool formulas: single
 HP120/300/750; party HP400; party HP999 plus MP100; full single revival with
@@ -739,10 +742,24 @@ identity via #1197 and existing storage owners; never debit or consume twice on
 retry, reroll a committed purchase or discard child travel/roster effects.
 Source file writes are not atomic across history/depot/user files; this is
 behavioral evidence, not an instruction to reproduce partial writes on faults.
-Native owners are #1370 book transactions, #1371 stored-tool execution/history
-and #1372 enhanced tools/purchase; #1359 retains other wallet/scavenging effects.
-The shared registry remains a whole-entry gate until these transactions,
-argument contexts and every reachable child are implemented and tested.
+The six wallet/scavenging bodies use
+[`ApplyJobAssets`](../../internal/core/battle/job_assets.go) and
+[`RegisterJobAssets`](../../internal/core/skill/job_assets.go), including the
+complete player-table assembly. Invocation frames carry requester assets
+separately from actor and sides. Admission checks damage and reachable
+heal/stat descendants without drawing or running external hooks. Unknown prior
+callback transitions remain gated by `AfterEffects` under #1733; these bindings
+do not certify a full random pool. The core retains uncapped intermediate wallet
+credits; the existing economy owner caps the final durable balance, matching
+`system.cgi:71` at user write rather than each nested credit.
+
+`LifetimeActor.HeldToolID` distinguishes unknown (`nil`), evidenced empty and
+held definition. The participant adapter can identify the single-hand projection
+from zero/one inventory rows; ambiguous multiple rows stay unknown. Scavenging
+requires known combat/durable hands and helper-quest facts before any effect.
+Book transactions (#1370), stored-tool execution/history (#1371) and enhanced
+tools/purchase (#1372) retain their own gates. A registered body still requires
+its actual transaction context and every reachable child before discovery or use.
 
 #### Random and delegated job closure
 

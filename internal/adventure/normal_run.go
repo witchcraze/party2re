@@ -8,6 +8,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 var (
@@ -189,6 +190,9 @@ type NormalRunConfig struct {
 	CheckEntry  func(context.Context, string) error
 	ExitEffects func(context.Context, string) error
 	EntryLocks  TimerService
+
+	JobAssetRunner  economy.TransactionRunner
+	JobAssetHelpers func(context.Context) ([]int, error)
 }
 
 type NormalRunService struct{ cfg NormalRunConfig }

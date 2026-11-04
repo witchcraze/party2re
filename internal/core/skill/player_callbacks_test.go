@@ -88,9 +88,8 @@ func TestPlayerCallbackRegistrationKeepsAssetOwnersExplicit(t *testing.T) {
 	}
 	slices.Sort(missing)
 	want := []string{
-		"job-7-entry-0", "job-7-entry-2", "job-8-entry-0", "job-28-entry-3",
 		"job-50-entry-7", "job-78-entry-0", "job-78-entry-2", "job-78-entry-4",
-		"job-78-entry-5", "job-78-entry-6", "job-79-entry-2", "job-81-entry-2",
+		"job-78-entry-6", "job-79-entry-2",
 		"job-86-entry-0", "job-86-entry-2", "job-86-entry-3", "job-86-entry-5",
 	}
 	slices.Sort(want)

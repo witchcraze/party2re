@@ -58,6 +58,53 @@ type historyReadStub struct {
 	err   error
 }
 
+func TestLifetimeHeldToolPreservesKnownAndUnknownHands(t *testing.T) {
+	for _, count := range []int{0, 1, 2} {
+		chars, invs := newMockCharRepo(), newMockInvRepo()
+		char := corecharacter.Character{ID: "hand", JobID: "job-78", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}}
+		chars.characters[char.ID] = char
+		inv, err := coreinventory.New(char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for range count {
+			tool, err := coreitem.NewInstance("item-001", 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := inv.Add(tool); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := invs.Save(context.Background(), inv); err != nil {
+			t.Fatal(err)
+		}
+		svc := battle.NewService(battle.WithCharacterRepository(chars), battle.WithInventoryRepository(invs), battle.WithJobHistoryRepository(&historyReadStub{err: corejob.ErrCharacterJobNotFound}))
+		actor, err := svc.BuildLifetimeActor(context.Background(), char.ID, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count == 2 {
+			if actor.HeldToolID != nil {
+				t.Fatal("ambiguous hand was inferred", actor)
+			}
+			continue
+		}
+		want := ""
+		if count == 1 {
+			want = "item-001"
+		}
+		if actor.HeldToolID == nil || *actor.HeldToolID != want {
+			t.Fatal(actor)
+		}
+		copy := actor.Clone()
+		*copy.HeldToolID = "item-002"
+		if *actor.HeldToolID != want {
+			t.Fatal("clone shares held tool", actor)
+		}
+	}
+}
+
 func (r *historyReadStub) FindByCharacterID(context.Context, string) (corejob.CharacterJob, error) {
 	return r.state, r.err
 }

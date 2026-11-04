@@ -22,6 +22,7 @@ type CallbackContext struct {
 	// across mixed status/revival callbacks. Consumers rebuild their ports.
 	Status *StatusContext
 	Defeat *DefeatContext
+	Assets *JobAssets
 	// ArithmeticDivisor is shared by nested callbacks in this operation only.
 	ArithmeticDivisor int
 	// Invoke executes a declared child in the current argument/actor frame. It
