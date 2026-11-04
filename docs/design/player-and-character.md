@@ -290,6 +290,54 @@ own executable security/boundary tests and runtime delivery.
 
 ---
 
+### 2.13 External Character and Home Cards (Adopted, Not Implemented)
+
+The decision in [#1108](https://github.com/witchcraze/party2re/issues/1108)
+retains both external cards, including wallet/experience, last game update and
+Home visitors. Public share pages with social-preview metadata replace legacy
+`document.write`; the same cards remain embeddable in blogs through iframes.
+The [delivery contract](../architecture/client-agent-api.md#external-share-and-embed-boundary)
+owns transport and rendering. Existing public profile GET behavior is unchanged.
+
+| Card | Public facts |
+| --- | --- |
+| Character | Character ID/name, gender, level, job ID/name, safe icon, equipped weapon/armor/carried item catalog names, base attack/defense/agility, SP, maximum HP/MP, experience and wallet gold. Equipment bonuses are not added to the base stats. |
+| Home | Owner ID/name, safe background, and the first **at most three local members** in the Home roster's order: resident NPCs/pets and visiting characters, with display name, validated color and safe icon. This is not the pet-only list or the global online list. |
+| Both | Current saved login message (empty uses the game title), online indicator, and last successful game-save date/time when offline. No profile comment substitution. |
+
+Legacy `my.cgi:14–65` and `my2.cgi:14–61` dispatch directly to `run`, with no
+action table; `player.cgi:41–50` supplies both snippets and a referral link.
+`my.cgi:28–51` reads raw character stats, separately from equipment names.
+`my2.cgi:27–51` chooses one taught phrase uniformly, independently of a speaker
+or whether any member remains, and reads the first three stored local members
+without renewing/pruning their presence. With no taught phrase, omit the phrase;
+do not fabricate a greeting or require a pet. Local visitor lifecycle comes from
+`lib/system.cgi:475–533,964–985` and Home's owning observation contract, not
+from card requests. Existing `TalkToCompanion` has different speaker/pet gates.
+
+Cards deliberately retain a different online test from the §2.12 list:
+`now < sampled_save_at + 900s`; equality is offline, and a forced entry snapshot
+alone does not extend this clock. Read the clock even if list pruning removed
+its snapshot; no sample means offline. Message and card facts are current saved
+values, not the chosen list snapshot. Offline last-update presentation uses the
+successful gameplay-save clock (legacy `ldate`, `system.cgi:29–46`), not account
+login, profile edits or the sampled clock. Do not disclose any other activity
+timestamps or invent historical dates during rollout; show an unavailable date
+when no actual save is known. The 900-second reference window is shared with §2.12; account/session validity is never an online signal.
+
+Character and Home delivery remain separate work in [#1819](https://github.com/witchcraze/party2re/issues/1819)
+and [#1820](https://github.com/witchcraze/party2re/issues/1820). The latter needs
+the missing local-visitor source owned by Home's migration scope; the pet-only
+adapter is insufficient.
+
+These are intentionally public gameplay facts, including visitors and wallet
+gold, not permission to serialize Character/Profile/Home aggregates. Exclude
+Player IDs/usernames, IP/host, tokens, credentials, private biography, letters,
+notices, inventory contents, bank balances and timers. Apply §2.12's shared text
+and image-output safety without changing existing message input policy.
+
+---
+
 ## 3. Data Schema & Persistence
 
 ### 3.1 Players Table
