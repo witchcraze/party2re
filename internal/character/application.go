@@ -36,6 +36,12 @@ func (f CleanupHookFunc) CleanupCharacter(ctx context.Context, characterID strin
 	return f(ctx, characterID)
 }
 
+// passiveRecipientLocker is implemented by repositories that lock an existing referral
+// recipient without the actor-mutation guards applied to the primary repository.
+type passiveRecipientLocker interface {
+	FindRecipientByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
+}
+
 type Option func(*Service)
 
 // WithTransactionProvider sets the transaction provider.
@@ -167,7 +173,7 @@ func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, 
 	if err := s.runInTx(ctx, func(txCtx context.Context) error {
 		if referrerID != "" {
 			// Lock the existing recipient before creating any dependent records.
-			if _, err := s.findForUpdate(txCtx, referrerID); errors.Is(err, ErrNotFound) {
+			if _, err := s.lockReferrer(txCtx, referrerID); errors.Is(err, ErrNotFound) {
 				referrerID = ""
 			} else if err != nil {
 				return err
@@ -209,6 +215,15 @@ func (s *Service) ListByPlayer(ctx context.Context, playerID string) ([]corechar
 
 func (s *Service) FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error) {
 	return s.ListByPlayer(ctx, playerID)
+}
+
+// lockReferrer locks a passive referral recipient. The repository decides whether
+// its actor-mutation guard applies; the referrer is never the initiating actor.
+func (s *Service) lockReferrer(ctx context.Context, id string) (corecharacter.Character, error) {
+	if locker, ok := s.repository.(passiveRecipientLocker); ok {
+		return locker.FindRecipientByIDForUpdate(ctx, id)
+	}
+	return s.findForUpdate(ctx, id)
 }
 
 func (s *Service) findForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {

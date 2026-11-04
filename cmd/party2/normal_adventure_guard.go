@@ -34,6 +34,12 @@ func (r normalCharacterWriter) FindByIDForUpdate(ctx context.Context, actor stri
 	return c, r.check(ctx, actor)
 }
 
+// FindRecipientByIDForUpdate locks a passive referral recipient. It is not the initiating
+// actor, so the normal-run guard does not apply.
+func (r normalCharacterWriter) FindRecipientByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.CharacterRepository.FindByIDForUpdate(ctx, id)
+}
+
 func (r normalCharacterWriter) Delete(ctx context.Context, actor string) error {
 	return r.tx.RunInTx(ctx, func(ctx context.Context) error {
 		if _, err := r.FindByIDForUpdate(ctx, actor); err != nil && !errors.Is(err, corecharacter.ErrNotFound) {

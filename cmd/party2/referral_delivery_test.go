@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -121,7 +122,7 @@ func (f referralFixture) assertCounts(t *testing.T, creations, rewards int) {
 }
 
 func TestRegistrationReferralLifecycle(t *testing.T) {
-	for _, scenario := range []string{"eligible", "ambient_commit", "no_referral", "nonexistent", "missing_depot", "same_account", "full", "overfull", "existing_medal"} {
+	for _, scenario := range []string{"eligible", "ambient_commit", "no_referral", "nonexistent", "missing_depot", "same_account", "full", "overfull", "existing_medal", "active_run"} {
 		t.Run(scenario, func(t *testing.T) {
 			f := newReferralFixture(t)
 			ctx := context.Background()
@@ -131,6 +132,9 @@ func TestRegistrationReferralLifecycle(t *testing.T) {
 				target, want = "", 0
 			case "nonexistent":
 				target, want = "nonexistent-character", 0
+			case "active_run":
+				// The referrer is enrolled in a normal run; the passive lock must not apply the guard.
+				f.core.normalGuard = func(context.Context, string) error { return adventure.ErrRunBusy }
 			case "same_account":
 				f.playerID = f.referrer.PlayerID
 			case "missing_depot":
