@@ -14927,6 +14927,7 @@
         "additionalProperties": false
       },
       "RescueRescueRecord": {
+        "description": "Gateway rescue_request result in CharacterActionSuccess.result: id, character_id, reason, penalty_seconds and created_at, including idle/no-op results. A failed context refresh preserves the result; recover with GET only.",
         "properties": {
           "character_id": {
             "type": "string"

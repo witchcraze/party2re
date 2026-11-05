@@ -57,11 +57,6 @@ type rescuePenaltyResponse struct {
 	RemainingSeconds int    `json:"remaining_seconds"`
 }
 
-type requestRescueRequest struct {
-	CharacterID string `json:"character_id"`
-	Reason      string `json:"reason"`
-}
-
 func (h *Handler) handleGetRescuePenalty(w http.ResponseWriter, r *http.Request) {
 	if h.rescues == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("rescue service not available"))
@@ -81,24 +76,5 @@ func (h *Handler) handleGetRescuePenalty(w http.ResponseWriter, r *http.Request)
 			IsUnderPenalty:   isUnderPenalty,
 			RemainingSeconds: int(remaining.Seconds()),
 		})
-	})
-}
-
-func (h *Handler) handleRequestRescue(w http.ResponseWriter, r *http.Request) {
-	if h.rescues == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("rescue service not available"))
-		return
-	}
-
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *requestRescueRequest) string {
-		return req.CharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req requestRescueRequest) {
-		rec, err := h.rescues.EmergencyRescue(r.Context(), char.ID, req.Reason, time.Now().UTC())
-		if err != nil {
-			writeError(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, rec)
 	})
 }

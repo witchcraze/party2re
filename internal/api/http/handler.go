@@ -389,7 +389,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /helpers/complete", h.handleCompleteHelperQuest)
 
 	mux.HandleFunc("GET /rescues/penalty", h.handleGetRescuePenalty)
-	mux.HandleFunc("POST /rescues/request", h.handleRequestRescue)
 
 	mux.HandleFunc("GET /news", h.handleListNews)
 	mux.HandleFunc("GET /news/{id}", h.handleGetNews)

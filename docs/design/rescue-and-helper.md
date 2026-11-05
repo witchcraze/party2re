@@ -3,7 +3,7 @@
 ## Overview
 The Rescue and Helper system provides player support mechanics consisting of:
 1. **Helper Quests (`helper.cgi` / 手助けクエスト)**: An NPC/community request board managed by Ricca (何でも屋 @リッカ) where players turn in requested equipment, consumables, or monsters to earn alchemy crafting materials, rare rewards, and guild contribution points.
-2. **Emergency Rescue (`rescue.cgi` / 救出処理)**: An emergency unstuck mechanism allowing players trapped in inconsistent states or infinite loops to safely reset their active operations with a calibrated cooldown/sleep penalty.
+2. **Emergency Rescue (`rescue.cgi` / 救出処理)**: Recovery from stuck operations with a cooldown/sleep penalty, subject to the current recovery limits below.
 
 ---
 
@@ -65,11 +65,31 @@ The evidence has two distinct boundaries:
 ## 2. Emergency Rescue System (救出処理)
 
 ### Purpose & Constraints
-- Cancels and clears any active scheduled action or dangling activity.
-- Applies a cooldown/sleep penalty of **600 seconds (10 minutes)** (`DefaultPenaltySeconds`) via ephemeral lock (`timer.CategorySleep`) in Valkey/memory when unstucking a trapped character. If the character already has active sleep remaining, the 10-minute penalty accumulates onto the remaining duration (`rem + 600s`), strictly matching legacy `rescue.cgi:58-59` (`$m{sleep} = $m{sleep} > 0 ? $m{sleep} + $sleep_time * 60 : $sleep_time * 60`).
-- If the character is already safe in town (has no ongoing or stuck activity to clear), rescue returns early with 0 penalty cooldown and does not set the sleep timer or record a new penalty, matching legacy `rescue.cgi:56-65` (`すでに救出処理がされています`).
-- During the penalty cooldown, character actions are restricted across all action endpoints via sleep guard (`timer.CategorySleep` returning 409 Conflict), as well as domain checks (`IsUnderPenalty` returns true and `CheckActionAllowed` rejects actions with `ErrCharacterUnderPenalty`).
-- Records rescue actions that unstuck trapped characters in `rescue_records` for auditability and moderation.
+
+Legacy `rescue.cgi:17–21,53–70` dispatches credentials to `refresh_player`, clears
+saved activity and adds sleep; already-idle players receive no additional penalty.
+The reconstruction uses session/owned-character authentication and the existing
+service-required reason rather than legacy credential submission.
+
+- **Penalty rule**: **600 seconds (10 minutes)** (`DefaultPenaltySeconds`), added to existing sleep remaining via `timer.CategorySleep`; rescue never authorizes shortening or removing sleep (`rescue.cgi:58–59`).
+- **Idle rule**: No activity to clear means zero penalty, no new timer and no new `rescue_records` row (`rescue.cgi:56–65`).
+- **Current limits**: The service clears scheduled actions; zero cleared jobs does not establish that other feature-owned activity is idle ([#1099](https://github.com/witchcraze/party2re/issues/1099)). Cleanup, record save and timer update are not atomic, and a failed remaining-sleep read can overwrite existing sleep ([#1100](https://github.com/witchcraze/party2re/issues/1100)). These gaps prevent claiming complete recovery or failure-safe penalty preservation.
+
+### Gateway execution and retained observation
+
+Player execution uses `rescue_request` on `POST /api/v1/characters/{id}/actions`;
+`POST /rescues/request` is retired. The command requires a non-null string
+`reason`, takes the actor from authentication and bypasses ordinary entry and
+Sleep/CanWake guards. Its result preserves `id`, `character_id`, `reason`,
+`penalty_seconds` and `created_at`, including service no-op results. The shared
+[outcome contract](../architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)
+preserves known success/rejection on refresh failure; recovery uses GET without
+automatic POST replay. A successful command is not proof that all activity ended.
+
+`GET /rescues/penalty` remains an authenticated owner-only read of rescue-record
+expiry (`created_at + penalty_seconds`), not the authoritative sleep timer or a
+complete recovery status. Shared Helper operations and administrator unstuck
+remain separate.
 
 ---
 
