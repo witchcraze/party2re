@@ -141,11 +141,9 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"contest_delete_photo", http.MethodDelete, "/characters/char-1/photos/photo-1", ``},
 		// Gem Store
 		{"gemstore_buy", http.MethodPost, "/characters/char-1/gemstore/buy", `{"gem_id":"gem-1"}`},
-		{"gemstore_sell", http.MethodPost, "/characters/char-1/gemstore/sell", `{"item_id":"item-1"}`},
 		{"gemstore_send", http.MethodPost, "/characters/char-1/gemstore/send", `{"recipient_character_id":"char-2","item_id":"gem-1"}`},
 		{"gemstore_synthesize", http.MethodPost, "/characters/char-1/gemstore/synthesize", `{"recipe_id":"rec-1"}`},
 		{"gemstore_appraise", http.MethodPost, "/characters/char-1/gemstore/appraise", `{"item_id":"item-1"}`},
-		{"gemstore_sort_gembox", http.MethodPost, "/characters/char-1/gembox/sort", `{}`},
 		// Lottery
 		{"lottery_play", http.MethodPost, "/characters/char-1/lottery/raffle", `{"raffle_type":"STANDARD"}`},
 		{"lottery_takarakuji_buy", http.MethodPost, "/characters/char-1/lottery/takarakuji/buy", `{}`},

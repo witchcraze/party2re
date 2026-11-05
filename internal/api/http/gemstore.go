@@ -25,20 +25,9 @@ type GemStoreService interface {
 	GetDialogue() []string
 }
 
-// WithGemStore configures the GemStoreService for the HTTP handler.
-func WithGemStore(service GemStoreService) Option {
-	return func(h *Handler) {
-		h.gemstore = service
-	}
-}
-
 // Request types
 type gemStoreBuyRequest struct {
 	GemID string `json:"gem_id"`
-}
-
-type gemStoreSellRequest struct {
-	ItemID string `json:"item_id"`
 }
 
 type gemStoreSendRequest struct {
@@ -124,34 +113,6 @@ func (h *Handler) handleGemStoreBuy(w http.ResponseWriter, r *http.Request) {
 		}
 
 		res, err := h.gemstore.BuyGem(r.Context(), char.ID, req.GemID)
-		if err != nil {
-			h.writeGemStoreError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, res)
-	})
-}
-
-func (h *Handler) handleGemStoreSell(w http.ResponseWriter, r *http.Request) {
-	if h.gemstore == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("gemstore service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req gemStoreSellRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.ItemID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("item_id is required"))
-			return
-		}
-
-		res, err := h.gemstore.SellGem(r.Context(), char.ID, req.ItemID)
 		if err != nil {
 			h.writeGemStoreError(w, err)
 			return
@@ -260,27 +221,6 @@ func (h *Handler) handleGetGemBox(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, box)
-	})
-}
-
-func (h *Handler) handleSortGemBox(w http.ResponseWriter, r *http.Request) {
-	if h.gemstore == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("gemstore service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		box, err := h.gemstore.SortGemBox(r.Context(), char.ID)
-		if err != nil {
-			h.writeGemStoreError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]any{
-			"gem_box": box,
-			"message": "お預かりしている宝石をせいとんしました",
-		})
 	})
 }
 

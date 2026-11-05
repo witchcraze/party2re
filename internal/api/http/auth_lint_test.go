@@ -406,11 +406,9 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleDeleteCharacterPhoto": "contest.go",
 		// Gemstore
 		"handleGemStoreBuy":        "gemstore.go",
-		"handleGemStoreSell":       "gemstore.go",
 		"handleGemStoreSend":       "gemstore.go",
 		"handleGemStoreSynthesize": "gemstore.go",
 		"handleGemStoreAppraise":   "gemstore.go",
-		"handleSortGemBox":         "gemstore.go",
 		// Lottery
 		"handlePlayRaffle":          "lottery.go",
 		"handleBuyTakarakujiTicket": "lottery.go",

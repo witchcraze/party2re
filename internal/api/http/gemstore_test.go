@@ -221,22 +221,6 @@ func TestGemStoreHTTP_Endpoints(t *testing.T) {
 		}
 	}
 
-	// 5. POST /characters/{id}/gemstore/sell
-	{
-		payload, _ := json.Marshal(map[string]string{
-			"item_id": "gem_atk_1",
-		})
-		req := httptest.NewRequest(http.MethodPost, "/characters/char_1/gemstore/sell", bytes.NewReader(payload))
-		req.Header.Set("Authorization", bearerToken("session_1"))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		server.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-	}
-
 	// 6. POST /characters/{id}/gemstore/send
 	{
 		payload, _ := json.Marshal(map[string]string{
@@ -317,18 +301,6 @@ func TestGemStoreHTTP_Endpoints(t *testing.T) {
 		}
 		if box.CharacterID != "char_1" {
 			t.Errorf("expected character_id char_1, got %s", box.CharacterID)
-		}
-	}
-
-	// 11. POST /characters/{id}/gembox/sort
-	{
-		req := httptest.NewRequest(http.MethodPost, "/characters/char_1/gembox/sort", nil)
-		req.Header.Set("Authorization", bearerToken("session_1"))
-		rec := httptest.NewRecorder()
-		server.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 		}
 	}
 
