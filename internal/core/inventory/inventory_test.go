@@ -201,3 +201,80 @@ func TestInventoryCapacity(t *testing.T) {
 		t.Fatal("inventory with 1 item should be full at default capacity")
 	}
 }
+
+func TestInventoryHeldToolID(t *testing.T) {
+	tests := []struct {
+		name     string
+		items    []string
+		wantHeld *string
+	}{
+		{
+			name:     "empty inventory proves empty tool hand",
+			items:    nil,
+			wantHeld: ptr(""),
+		},
+		{
+			name:     "single tool proves held tool",
+			items:    []string{"item-001"},
+			wantHeld: ptr("item-001"),
+		},
+		{
+			name:     "single accessory proves held accessory",
+			items:    []string{"item-012"},
+			wantHeld: ptr("item-012"),
+		},
+		{
+			name:     "single shield proves held item",
+			items:    []string{"item-071"},
+			wantHeld: ptr("item-071"),
+		},
+		{
+			name:     "single weapon does not prove held tool",
+			items:    []string{"weapon-01"},
+			wantHeld: nil,
+		},
+		{
+			name:     "single armor does not prove held tool",
+			items:    []string{"armor-01"},
+			wantHeld: nil,
+		},
+		{
+			name:     "multiple items remain ambiguous unknown",
+			items:    []string{"item-001", "item-002"},
+			wantHeld: nil,
+		},
+		{
+			name:     "weapon plus tool remains ambiguous unknown",
+			items:    []string{"weapon-01", "item-001"},
+			wantHeld: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inv, err := New("char-hand")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, defID := range tt.items {
+				inst := item.Instance{ID: string(rune('a' + i)), DefinitionID: defID, Quantity: 1}
+				if err := inv.Add(inst); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := inv.HeldToolID()
+			if tt.wantHeld == nil {
+				if got != nil {
+					t.Fatalf("HeldToolID() = %v, want nil", *got)
+				}
+			} else {
+				if got == nil || *got != *tt.wantHeld {
+					t.Fatalf("HeldToolID() = %v, want %v", got, *tt.wantHeld)
+				}
+			}
+		})
+	}
+}
+
+func ptr(s string) *string {
+	return &s
+}

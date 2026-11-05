@@ -150,3 +150,19 @@ func (i *Inventory) Update(value item.Instance) error {
 	}
 	return ErrItemNotFound
 }
+
+// HeldToolID projects the legacy single-hand tool definition from inventory evidence.
+// An empty inventory proves an empty tool hand (pointer to "").
+// A single-row inventory containing a tool or accessory proves that held item.
+// Inventories containing equipped weapons, armor, or ambiguous multiple rows remain unknown (nil).
+func (i Inventory) HeldToolID() *string {
+	if len(i.Items) == 0 {
+		held := ""
+		return &held
+	}
+	if len(i.Items) == 1 && item.IsToolID(i.Items[0].DefinitionID) {
+		held := i.Items[0].DefinitionID
+		return &held
+	}
+	return nil
+}
