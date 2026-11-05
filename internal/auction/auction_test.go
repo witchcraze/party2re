@@ -27,14 +27,19 @@ func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Contex
 }
 
 type mockCharRepo struct {
-	chars         map[string]corecharacter.Character
-	findErr       error
-	findUpdateErr error
-	updateErr     error
+	chars             map[string]corecharacter.Character
+	findErr           error
+	findUpdateErr     error
+	findUpdateErrByID map[string]error
+	updateErr         error
+	updateCalls       int
 }
 
 func newMockCharRepo() *mockCharRepo {
-	return &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	return &mockCharRepo{
+		chars:             make(map[string]corecharacter.Character),
+		findUpdateErrByID: make(map[string]error),
+	}
 }
 
 func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
@@ -43,12 +48,15 @@ func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.C
 	}
 	c, ok := m.chars[id]
 	if !ok {
-		return corecharacter.Character{}, auction.ErrTargetNotFound
+		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 	return c, nil
 }
 
 func (m *mockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	if err, ok := m.findUpdateErrByID[id]; ok && err != nil {
+		return corecharacter.Character{}, err
+	}
 	if m.findUpdateErr != nil {
 		return corecharacter.Character{}, m.findUpdateErr
 	}
@@ -64,7 +72,7 @@ func (m *mockCharRepo) FindByName(ctx context.Context, name string) (corecharact
 			return c, nil
 		}
 	}
-	return corecharacter.Character{}, auction.ErrTargetNotFound
+	return corecharacter.Character{}, corecharacter.ErrNotFound
 }
 
 func (m *mockCharRepo) FindByNameForUpdate(ctx context.Context, name string) (corecharacter.Character, error) {
@@ -75,6 +83,7 @@ func (m *mockCharRepo) FindByNameForUpdate(ctx context.Context, name string) (co
 }
 
 func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character) error {
+	m.updateCalls++
 	if m.updateErr != nil {
 		return m.updateErr
 	}
@@ -677,13 +686,12 @@ func TestSend_InputValidationErrors(t *testing.T) {
 
 func TestSend_GoldTransactionErrors(t *testing.T) {
 	ctx := context.Background()
+	errSentinel := errors.New("db lock error")
 
 	t.Run("first character not found in tx", func(t *testing.T) {
 		svc, charRepo, _, _, _ := setupAuctionService(t)
-		charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 500}
-		// char-2 exists initially for target ID check, but FindByIDForUpdate fails
 		charRepo.chars["char-2"] = corecharacter.Character{ID: "char-2", Name: "Bob", Money: 500}
-		charRepo.findUpdateErr = errors.New("db lock error")
+		// char-1 does not exist in repo, so FindByIDForUpdate returns corecharacter.ErrNotFound
 
 		_, err := svc.Send(ctx, auction.SendRequest{
 			SenderCharacterID: "char-1",
@@ -691,7 +699,121 @@ func TestSend_GoldTransactionErrors(t *testing.T) {
 			Gold:              100,
 		})
 		if !errors.Is(err, auction.ErrTargetNotFound) {
-			t.Fatalf("expected ErrTargetNotFound on lock fail, got %v", err)
+			t.Fatalf("expected ErrTargetNotFound on missing first char, got %v", err)
+		}
+		if charRepo.updateCalls != 0 {
+			t.Fatalf("expected zero updates, got %d", charRepo.updateCalls)
+		}
+	})
+
+	t.Run("second character not found in tx", func(t *testing.T) {
+		svc, charRepo, _, _, _ := setupAuctionService(t)
+		charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 500}
+		// char-2 does not exist in repo
+
+		_, err := svc.Send(ctx, auction.SendRequest{
+			SenderCharacterID: "char-1",
+			TargetCharacterID: "char-2",
+			Gold:              100,
+		})
+		if !errors.Is(err, auction.ErrTargetNotFound) {
+			t.Fatalf("expected ErrTargetNotFound on missing second char, got %v", err)
+		}
+		if charRepo.updateCalls != 0 {
+			t.Fatalf("expected zero updates, got %d", charRepo.updateCalls)
+		}
+	})
+
+	t.Run("first character storage lock error in tx", func(t *testing.T) {
+		svc, charRepo, _, _, _ := setupAuctionService(t)
+		charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 500}
+		charRepo.chars["char-2"] = corecharacter.Character{ID: "char-2", Name: "Bob", Money: 500}
+		charRepo.findUpdateErrByID["char-1"] = errSentinel
+
+		_, err := svc.Send(ctx, auction.SendRequest{
+			SenderCharacterID: "char-1",
+			TargetCharacterID: "char-2",
+			Gold:              100,
+		})
+		if !errors.Is(err, errSentinel) {
+			t.Fatalf("expected errSentinel on first char lock fail, got %v", err)
+		}
+		if charRepo.updateCalls != 0 {
+			t.Fatalf("expected zero updates, got %d", charRepo.updateCalls)
+		}
+	})
+
+	t.Run("second character storage lock error in tx", func(t *testing.T) {
+		svc, charRepo, _, _, _ := setupAuctionService(t)
+		charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 500}
+		charRepo.chars["char-2"] = corecharacter.Character{ID: "char-2", Name: "Bob", Money: 500}
+		charRepo.findUpdateErrByID["char-2"] = errSentinel
+
+		_, err := svc.Send(ctx, auction.SendRequest{
+			SenderCharacterID: "char-1",
+			TargetCharacterID: "char-2",
+			Gold:              100,
+		})
+		if !errors.Is(err, errSentinel) {
+			t.Fatalf("expected errSentinel on second char lock fail, got %v", err)
+		}
+		if charRepo.updateCalls != 0 {
+			t.Fatalf("expected zero updates, got %d", charRepo.updateCalls)
+		}
+	})
+
+	t.Run("target name lookup storage error", func(t *testing.T) {
+		svc, charRepo, _, _, _ := setupAuctionService(t)
+		charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 500}
+		charRepo.findErr = errSentinel
+
+		_, err := svc.Send(ctx, auction.SendRequest{
+			SenderCharacterID:   "char-1",
+			TargetCharacterName: "Bob",
+			Gold:                100,
+		})
+		if !errors.Is(err, errSentinel) {
+			t.Fatalf("expected errSentinel on name lookup failure, got %v", err)
+		}
+		if charRepo.updateCalls != 0 {
+			t.Fatalf("expected zero updates, got %d", charRepo.updateCalls)
+		}
+	})
+
+	t.Run("target name lookup context cancellation", func(t *testing.T) {
+		svc, charRepo, _, _, _ := setupAuctionService(t)
+		charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 500}
+		charRepo.findErr = context.Canceled
+
+		_, err := svc.Send(ctx, auction.SendRequest{
+			SenderCharacterID:   "char-1",
+			TargetCharacterName: "Bob",
+			Gold:                100,
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled on name lookup failure, got %v", err)
+		}
+		if charRepo.updateCalls != 0 {
+			t.Fatalf("expected zero updates, got %d", charRepo.updateCalls)
+		}
+	})
+
+	t.Run("ordered lock read context cancellation", func(t *testing.T) {
+		svc, charRepo, _, _, _ := setupAuctionService(t)
+		charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 500}
+		charRepo.chars["char-2"] = corecharacter.Character{ID: "char-2", Name: "Bob", Money: 500}
+		charRepo.findUpdateErrByID["char-1"] = context.Canceled
+
+		_, err := svc.Send(ctx, auction.SendRequest{
+			SenderCharacterID: "char-1",
+			TargetCharacterID: "char-2",
+			Gold:              100,
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled on lock read failure, got %v", err)
+		}
+		if charRepo.updateCalls != 0 {
+			t.Fatalf("expected zero updates, got %d", charRepo.updateCalls)
 		}
 	})
 

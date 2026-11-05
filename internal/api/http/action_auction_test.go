@@ -13,8 +13,13 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/auction"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -227,4 +232,289 @@ func TestAuctionSendRetiredRoutes(t *testing.T) {
 			t.Fatalf("%s: status=%d calls=%d", path, w.Code, f.executions)
 		}
 	}
+}
+
+type auctionRealTestTxProvider struct{}
+
+func (auctionRealTestTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
+
+type auctionRealTestCharRepo struct {
+	chars              map[string]corecharacter.Character
+	faultByIDForUpdate map[string]error
+	faultByName        error
+	updateCalls        int
+}
+
+func newAuctionRealTestCharRepo() *auctionRealTestCharRepo {
+	return &auctionRealTestCharRepo{
+		chars:              make(map[string]corecharacter.Character),
+		faultByIDForUpdate: make(map[string]error),
+	}
+}
+
+func (r *auctionRealTestCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	if c, ok := r.chars[id]; ok {
+		return c, nil
+	}
+	return corecharacter.Character{}, corecharacter.ErrNotFound
+}
+
+func (r *auctionRealTestCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	if err, ok := r.faultByIDForUpdate[id]; ok && err != nil {
+		return corecharacter.Character{}, err
+	}
+	return r.FindByID(ctx, id)
+}
+
+func (r *auctionRealTestCharRepo) FindByName(_ context.Context, name string) (corecharacter.Character, error) {
+	if r.faultByName != nil {
+		return corecharacter.Character{}, r.faultByName
+	}
+	for _, c := range r.chars {
+		if c.Name == name {
+			return c, nil
+		}
+	}
+	return corecharacter.Character{}, corecharacter.ErrNotFound
+}
+
+func (r *auctionRealTestCharRepo) FindByNameForUpdate(ctx context.Context, name string) (corecharacter.Character, error) {
+	return r.FindByName(ctx, name)
+}
+
+func (r *auctionRealTestCharRepo) Update(_ context.Context, char corecharacter.Character) error {
+	r.updateCalls++
+	r.chars[char.ID] = char
+	return nil
+}
+
+type auctionRealTestEquipRepo struct {
+	saveCalls int
+}
+
+func (r *auctionRealTestEquipRepo) FindByCharacterID(_ context.Context, id string) (coreequipment.Equipment, error) {
+	return coreequipment.New(id)
+}
+
+func (r *auctionRealTestEquipRepo) Save(_ context.Context, _ coreequipment.Equipment) error {
+	r.saveCalls++
+	return nil
+}
+
+type auctionRealTestInvRepo struct {
+	saveCalls int
+}
+
+func (r *auctionRealTestInvRepo) FindByCharacterID(_ context.Context, id string) (coreinventory.Inventory, error) {
+	return coreinventory.New(id)
+}
+
+func (r *auctionRealTestInvRepo) FindByCharacterIDForUpdate(ctx context.Context, id string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, id)
+}
+
+func (r *auctionRealTestInvRepo) Save(_ context.Context, _ coreinventory.Inventory) error {
+	r.saveCalls++
+	return nil
+}
+
+type auctionRealTestDepotRepo struct {
+	saveCalls int
+}
+
+func (r *auctionRealTestDepotRepo) FindByCharacterID(_ context.Context, id string) (depot.Depot, error) {
+	return depot.Depot{CharacterID: id, Capacity: 50}, nil
+}
+
+func (r *auctionRealTestDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, id string) (depot.Depot, error) {
+	return r.FindByCharacterID(ctx, id)
+}
+
+func (r *auctionRealTestDepotRepo) Save(_ context.Context, _ depot.Depot) error {
+	r.saveCalls++
+	return nil
+}
+
+func TestAuctionGatewayRealServiceRegressions(t *testing.T) {
+	catalog, err := coreitem.DefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	setupRouter := func(t *testing.T) (*gatewayFixture, *auctionRealTestCharRepo, *auctionRealTestEquipRepo, *auctionRealTestInvRepo, *auctionRealTestDepotRepo, http.Handler) {
+		t.Helper()
+		gf := newGatewayFixture(t)
+		charRepo := newAuctionRealTestCharRepo()
+		charRepo.chars["hero"] = corecharacter.Character{ID: "hero", Name: "Hero", PlayerID: "owner", Money: 100}
+		charRepo.chars["peer"] = corecharacter.Character{ID: "peer", Name: "Peer", PlayerID: "other", Money: 100}
+
+		equipRepo := &auctionRealTestEquipRepo{}
+		invRepo := &auctionRealTestInvRepo{}
+		depotRepo := &auctionRealTestDepotRepo{}
+
+		realService, err := auction.NewService(auctionRealTestTxProvider{}, charRepo, equipRepo, invRepo, depotRepo, catalog)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		timers := timer.NewService(nil)
+		h, err := NewHandler(
+			gf,
+			gf,
+			&struct{ AdventureService }{},
+			&struct{ ShopService }{},
+			WithAuction(realService),
+			WithPlayerContext(playercontext.NewService(gf, gf, timers)),
+			func(h *Handler) { h.homes = gf },
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return gf, charRepo, equipRepo, invRepo, depotRepo, h.Router()
+	}
+
+	t.Run("first ordered lock read storage failure", func(t *testing.T) {
+		_, charRepo, equipRepo, invRepo, depotRepo, router := setupRouter(t)
+		charRepo.faultByIDForUpdate["hero"] = errors.New("private storage failure hero")
+
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"auction_send","params":{"target_character_id":"peer","gold":7}}`, nil)
+		if status != 500 {
+			t.Fatalf("status=%d, want 500: %s", status, got)
+		}
+		assertGatewayError(t, got, "EXECUTION_FAILED")
+		if _, ok := got["context"]; ok {
+			t.Fatalf("unexpected context refresh on 500: %s", got)
+		}
+		if strings.Contains(fmt.Sprint(got), "private") {
+			t.Fatalf("private storage failure leaked: %s", got)
+		}
+		if charRepo.updateCalls != 0 || equipRepo.saveCalls != 0 || invRepo.saveCalls != 0 || depotRepo.saveCalls != 0 {
+			t.Fatalf("unexpected writes on prerequisite failure: updates=%d", charRepo.updateCalls)
+		}
+		if charRepo.chars["hero"].Money != 100 || charRepo.chars["peer"].Money != 100 {
+			t.Fatalf("wallets mutated on failure: hero=%d peer=%d", charRepo.chars["hero"].Money, charRepo.chars["peer"].Money)
+		}
+	})
+
+	t.Run("second ordered lock read storage failure", func(t *testing.T) {
+		_, charRepo, equipRepo, invRepo, depotRepo, router := setupRouter(t)
+		charRepo.faultByIDForUpdate["peer"] = errors.New("private storage failure peer")
+
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"auction_send","params":{"target_character_id":"peer","gold":7}}`, nil)
+		if status != 500 {
+			t.Fatalf("status=%d, want 500: %s", status, got)
+		}
+		assertGatewayError(t, got, "EXECUTION_FAILED")
+		if _, ok := got["context"]; ok {
+			t.Fatalf("unexpected context refresh on 500: %s", got)
+		}
+		if strings.Contains(fmt.Sprint(got), "private") {
+			t.Fatalf("private storage failure leaked: %s", got)
+		}
+		if charRepo.updateCalls != 0 || equipRepo.saveCalls != 0 || invRepo.saveCalls != 0 || depotRepo.saveCalls != 0 {
+			t.Fatalf("unexpected writes on prerequisite failure: updates=%d", charRepo.updateCalls)
+		}
+		if charRepo.chars["hero"].Money != 100 || charRepo.chars["peer"].Money != 100 {
+			t.Fatalf("wallets mutated on failure: hero=%d peer=%d", charRepo.chars["hero"].Money, charRepo.chars["peer"].Money)
+		}
+	})
+
+	t.Run("target name lookup storage failure", func(t *testing.T) {
+		_, charRepo, equipRepo, invRepo, depotRepo, router := setupRouter(t)
+		charRepo.faultByName = errors.New("private storage failure name")
+
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"auction_send","params":{"target_character_name":"Peer","gold":7}}`, nil)
+		if status != 500 {
+			t.Fatalf("status=%d, want 500: %s", status, got)
+		}
+		assertGatewayError(t, got, "EXECUTION_FAILED")
+		if _, ok := got["context"]; ok {
+			t.Fatalf("unexpected context refresh on 500: %s", got)
+		}
+		if strings.Contains(fmt.Sprint(got), "private") {
+			t.Fatalf("private storage failure leaked: %s", got)
+		}
+		if charRepo.updateCalls != 0 || equipRepo.saveCalls != 0 || invRepo.saveCalls != 0 || depotRepo.saveCalls != 0 {
+			t.Fatalf("unexpected writes on prerequisite failure: updates=%d", charRepo.updateCalls)
+		}
+		if charRepo.chars["hero"].Money != 100 || charRepo.chars["peer"].Money != 100 {
+			t.Fatalf("wallets mutated on failure: hero=%d peer=%d", charRepo.chars["hero"].Money, charRepo.chars["peer"].Money)
+		}
+	})
+
+	t.Run("genuine missing recipient by ID", func(t *testing.T) {
+		_, charRepo, equipRepo, invRepo, depotRepo, router := setupRouter(t)
+
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"auction_send","params":{"target_character_id":"missing","gold":7}}`, nil)
+		if status != 404 {
+			t.Fatalf("status=%d, want 404: %s", status, got)
+		}
+		assertGatewayError(t, got, "AUCTION_TARGET_NOT_FOUND")
+		assertGatewayContext(t, got)
+		if charRepo.updateCalls != 0 || equipRepo.saveCalls != 0 || invRepo.saveCalls != 0 || depotRepo.saveCalls != 0 {
+			t.Fatalf("unexpected writes on missing target: updates=%d", charRepo.updateCalls)
+		}
+		if charRepo.chars["hero"].Money != 100 || charRepo.chars["peer"].Money != 100 {
+			t.Fatalf("wallets mutated on missing target: hero=%d peer=%d", charRepo.chars["hero"].Money, charRepo.chars["peer"].Money)
+		}
+	})
+
+	t.Run("genuine missing recipient by name", func(t *testing.T) {
+		_, charRepo, equipRepo, invRepo, depotRepo, router := setupRouter(t)
+
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"auction_send","params":{"target_character_name":"Missing","gold":7}}`, nil)
+		if status != 404 {
+			t.Fatalf("status=%d, want 404: %s", status, got)
+		}
+		assertGatewayError(t, got, "AUCTION_TARGET_NOT_FOUND")
+		assertGatewayContext(t, got)
+		if charRepo.updateCalls != 0 || equipRepo.saveCalls != 0 || invRepo.saveCalls != 0 || depotRepo.saveCalls != 0 {
+			t.Fatalf("unexpected writes on missing target: updates=%d", charRepo.updateCalls)
+		}
+		if charRepo.chars["hero"].Money != 100 || charRepo.chars["peer"].Money != 100 {
+			t.Fatalf("wallets mutated on missing target: hero=%d peer=%d", charRepo.chars["hero"].Money, charRepo.chars["peer"].Money)
+		}
+	})
+
+	t.Run("healthy contrast", func(t *testing.T) {
+		_, charRepo, _, _, _, router := setupRouter(t)
+
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"auction_send","params":{"target_character_id":"peer","gold":7}}`, nil)
+		if status != 200 {
+			t.Fatalf("status=%d, want 200: %s", status, got)
+		}
+		assertGatewayContext(t, got)
+		var result auction.SendResult
+		if err := json.Unmarshal(got["result"], &result); err != nil {
+			t.Fatal(err)
+		}
+		if result.TransferredGold != 7 {
+			t.Fatalf("transferred gold=%d, want 7", result.TransferredGold)
+		}
+		if charRepo.updateCalls != 2 {
+			t.Fatalf("expected 2 updates, got %d", charRepo.updateCalls)
+		}
+		if charRepo.chars["hero"].Money != 93 || charRepo.chars["peer"].Money != 107 {
+			t.Fatalf("wallets not updated correctly: hero=%d peer=%d", charRepo.chars["hero"].Money, charRepo.chars["peer"].Money)
+		}
+	})
+
+	t.Run("context cancellation during lock read", func(t *testing.T) {
+		_, charRepo, equipRepo, invRepo, depotRepo, router := setupRouter(t)
+		charRepo.faultByIDForUpdate["hero"] = context.Canceled
+
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"auction_send","params":{"target_character_id":"peer","gold":7}}`, nil)
+		if status != 500 {
+			t.Fatalf("status=%d, want 500: %s", status, got)
+		}
+		assertGatewayError(t, got, "EXECUTION_FAILED")
+		if _, ok := got["context"]; ok {
+			t.Fatalf("unexpected context refresh on cancellation 500: %s", got)
+		}
+		if charRepo.updateCalls != 0 || equipRepo.saveCalls != 0 || invRepo.saveCalls != 0 || depotRepo.saveCalls != 0 {
+			t.Fatalf("unexpected writes on cancellation: updates=%d", charRepo.updateCalls)
+		}
+	})
 }
