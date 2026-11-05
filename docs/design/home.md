@@ -150,21 +150,90 @@ The resident home companion/pet pool aggregates both monster pets brought home f
 
 ### 4. Remote Depot & Inventory Item Usage (`＠つかう`)
 
-Adventurers can inspect equipment and consume location-2 items directly from their home interface:
+Adventurers can inspect equipment and use supported category-2/4 items from
+inventory or Depot. The current Go dispatcher is a whitelist, not complete
+coverage of either category. The table below owns the remaining reconciliation.
 - **Weapon & Armor Inspection**:
   - Weapons: Displays authentic power (attack), weight, and gold price (`武器名：%s / 強さ：%d / 重さ：%d / 価格：%dG`) matching legacy `@weas` (`party2/lib/_data.cgi:394-500`, `party2/lib/home.cgi:274-277`).
   - Armors/Shields/Accessories: Displays authentic defense, weight, and gold price (`防具名：%s / 強さ：%d / 重さ：%d / 価格：%dG`) matching legacy `@arms` (`party2/lib/_data.cgi:506-613`, `party2/lib/home.cgi:278-281`).
   - Stats are resolved directly from the item definition or authentic catalog nominal stats (deprecating obsolete `price / 20 + 1` and `price / 10 + 1` placeholders).
-- **Consumable Usage**:
-  - Stat-boosting seeds:
-    - `命の木の実`, `不思議な木の実`: Increase MaxHP / MaxMP by 3–6 without restoring current HP / MP. If character has `OverLevel == true`, the stat gain is clamped to 0.
-    - `力の種`, `守りの種`, `素早さの種`: Increase respective stats by 1–6. If character has `OverLevel == true`, the stat gain is clamped to 0.
-    - `スキルの種`: Increases SP by 1–3 (not clamped by OverLevel).
-    - `小さなメダル`: Consumed and increases `SmallMedals` counter by 1.
-    - `幸せの種`: Sets experience to `Level * Level * 10` (triggers level up on next adventure: `"次のクエスト時にレベルアップ！"`).
-  - Combat recovery items and combat-only items (`UsageCategory == 1`, e.g. `薬草`, `上薬草`, `特薬草`, `霊樹のしずく`, `魔法の聖水`) cannot be consumed at Home and return `ErrCannotUseHere` with authentic message `"%sは戦闘中でしか使えません"` (HTTP `400 Bad Request`). Non-usable/passive items (`UsageCategory == 0` or `3`) return `ErrCannotUseHere` with `"%sはここでは使えません"`. Recovery at home is performed exclusively via Resting & Sleeping (`＠やすむ`).
-  - Deducts 1 item instance from inventory or remote depot storage upon successful usage.
-  - Protected action admission: Consuming items at Home (`POST /characters/{id}/home/items/use`) enforces the sleep action guard, rejecting active sleep or pending wake recovery with HTTP `409 Conflict`.
+
+Home consumption enforces the sleep action guard (HTTP `409 Conflict`). Combat-only
+items return `ErrCannotUseHere` with `"%sは戦闘中でしか使えません"` (HTTP `400`);
+non-usable/passive items return `"%sはここでは使えません"`. Home recovery uses
+[Sleep](#6-resting--sleeping-sleepcgi-homecgi), not combat recovery items.
+
+#### Legacy dispatch and consumption contract
+
+Evidence is relative to `party2/`, revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`; the inspected checkout
+`3bebb8872f521410396aa090818d573173224ea1` has identical `lib/home.cgi`,
+`lib/_data.cgi` and `lib/system.cgi`. [#1124](https://github.com/witchcraze/party2re/issues/1124)
+records the decision to retain observable legacy behavior, including the
+no-stat consumption of 113/114 and the source-dependent missing-box result.
+This is an adopted specification; the missing dispatches remain unimplemented.
+
+Own Home alone registers `つかう` → `thukau` (`home.cgi:26–39,73–105`).
+Without a target it lists held equipment/tool and Depot entries. By name it
+prefers held weapon, armor, then tool, then the first matching Depot entry
+(`237–340`). Go's explicit source/instance IDs replace that name ambiguity.
+Weapon/armor paths inspect without consuming; categories 0/1/3 do not dispatch
+callbacks. All **53 category-2 and 3 category-4** entries are accounted for below.
+
+- **H2/H4 — held tool** (`284–292`): call without arguments; a nonempty `mes`
+  stops consumption, otherwise clear the held tool. A callback return value is
+  ignored. Other changes made before setting `mes` are not undone by legacy.
+- **D2 — Depot category 2** (`298–348`): call while scanning the original
+  Depot, before removing the selected row. `mes` returns without removing it;
+  otherwise omit that row and preserve other rows, including self-deliveries.
+- **D4 — Depot category 4** (`330–373`): retain the selected row in the first
+  rewrite, refresh the full flag, close the file, call without arguments, then
+  remove the first remaining row of that item number. There is no post-callback
+  `mes` check. This is **not** consume-before-callback or rollback-on-no-effect.
+- Depot capacity never blocks this dispatch. `send_item` (`system.cgi:818–835`)
+  appends each reward directly to an existing Depot even when full, without
+  inventory routing, collection registration or a self-delivery notice.
+  `get_depot_c` (`1267–1291`) counts capacity; it does not reject delivery.
+  Future Go implementations must retain these gameplay outcomes within the
+  project's transactions and error handling, without reproducing unsafe file I/O.
+
+| Legacy item IDs / callback (`lib/_data.cgi` lines) | Reachability, effect and non-consumption condition | Current boundary / remaining owner |
+| --- | --- | --- |
+| 016–020, seeds (`683–737`) | H2/D2; maximum HP/MP +3–6 or attack/defense/speed +1–6; over-level gain 0 still consumes. No current HP/MP recovery; no capacity gate. | Existing Home effect; global stat ceilings remain separate. |
+| 021, skill seed (`738–747`) | H2/D2; SP +1–3, including over-level; consumes. | Existing Home effect. |
+| 022, happy seed (`748–756`) | H2/D2; EXP becomes level²×10; consumes without immediate level-up. | Existing Home/progression effect. |
+| 023, small medal (`757–765`) | H2/D2; medal counter +1; consumes. | Existing Home effect. |
+| 043, transformation staff (`789–799`) | H2/D2; uniform monster number 001–108, fallback appearance if its image is absent; consumes. | Missing; [APPEARANCE #1837](https://github.com/witchcraze/party2re/issues/1837). |
+| 044–056; 138–140, costumes (`800–919;1543–1569`) | H2/D2; fixed appearance, gender branches for 046/055/056/140; consumes. Sleep/job change resets it; callback sets no midnight expiry. | Existing Home/Store adapter; APPEARANCE owns expiry/fallback parity. Original assets are excluded. |
+| 057, fatigue elixir (`920–928`) | H2/D2; fatigue becomes 0, even if already 0; consumes. | Existing Home effect, including its current generic-name alias. |
+| 058, book (`929–955`) | H2/D2; gender-specific job-008 appearance, character message and profile personality change; other profile fields survive; public news on successful profile write; consumes. | Missing; [BOOK #1838](https://github.com/witchcraze/party2re/issues/1838). Editing profile alone is not equivalent. |
+| 059; 262, reins (`956–964;2071–2077`) | H2/D2; enter `god` / `u_god`, respectively; consumes, no capacity gate. | [#1153](https://github.com/witchcraze/party2re/issues/1153) owns Home entry, both sources and durable realm admission. Scene selection alone grants no visit. |
+| 060–065, six orbs (`965–1054`) | H2/D2; append `s/r/b/g/y/p`; existing same rune sets `mes` and keeps item. Full Depot irrelevant. | [ORBS #1839](https://github.com/witchcraze/party2re/issues/1839); Altar.OfferOrb already handles inventory, not Depot/Home dispatch. |
+| 113/114, bracelets/rings (`1408–1429`) | H4/D4; local returned stats are discarded, so **no permanent HP/MP change; consumes one**. Full Depot irrelevant. | [NO-STAT #1840](https://github.com/witchcraze/party2re/issues/1840). Their separate quest equipment effect is not a Home +100 consumable. |
+| 125/126, random bags (`1479–1505`) | H2/D2; one weighted random reward to Depot, including when full; then consume bag. | [BAGS #1841](https://github.com/witchcraze/party2re/issues/1841). |
+| 127–129, recipe books (`1506–1526`) | H2/D2; learn an eligible base then material; exhausted book still consumes, no Depot capacity gate. | Existing Home→Alchemy adapter; membership/two-stage RNG correction [#1181](https://github.com/witchcraze/party2re/issues/1181). Names in a recipe pool establish no other item's dispatch. |
+| 141, appearance scroll (`1570–1580`) | H2/D2; uniform character number 001–040, fallback if image absent; consumes. | Existing adapter; APPEARANCE owns fallback/expiry parity. |
+| 199, ancient treasure (`1809–1820`) | H2/D2; 2–5 weighted random rewards, all to Depot even when full; consumes once. | [BAGS #1841](https://github.com/witchcraze/party2re/issues/1841). Inclusive loop bounds are significant. |
+| 203, sacred mana (`1824`) | H2/D2; SP +200, including over-level; consumes once. | Missing; [MANA #1835](https://github.com/witchcraze/party2re/issues/1835). |
+| 207, future fragment (`1828–1873`) | H2/D2; save job/stat/gender/over-level snapshot and refresh existing job-point records; reject with `mes` for active ordinary/temporary job memory or exhausted slots (saved count > OverFuture). Rejection keeps item; no Depot capacity gate. | [FUTURE #1843](https://github.com/witchcraze/party2re/issues/1843); Job.SaveFutureMemory exists for inventory, not Home/Depot. |
+| 231–236;245, wallpapers (`1940–1993;2002–2010`) | H2/D2; replace own background with field 0/1/2/4/5/6/8 respectively; consumes, no gold or town lease prerequisite. | Missing; [WALLPAPER #1836](https://github.com/witchcraze/party2re/issues/1836). Store.BuyHomeWallpaper charges gold and uses a different catalog. |
+| 237, veteran reward (`1994`) | H2/D2; below level 99: unchanged, keep item. Otherwise let d=EXP−98010, credit trunc(d×U[1,1.5)), upper-cap gold at 999999, set EXP=98010. d≤0 sets `mes` **but still executes those mutations and keeps item**; d>0 consumes even at gold cap. | Missing; [VETERAN #1844](https://github.com/witchcraze/party2re/issues/1844); do not replace the d≤0 branch with pure validation. |
+| 257, seal crystal (`2022`) | H2/D2; remove seal/refund half its cost, consume; absent seal sets `mes`, keeps item. | Existing Home effect; [Blacksmith](blacksmith.md) owns seal/refund rules. |
+| 259, sealed key (`2024–2068`); 258 is the non-usable box | H4/D4; prefer held box, otherwise first Depot box. With box: remove it, deliver fixed 059 plus 2–4 weighted rewards (3–5 total), then consume key. Without box: H4 keeps key; D4 consumes key. Full Depot accepts every reward. | [KEY #1842](https://github.com/witchcraze/party2re/issues/1842); generic reward overflow/loss policies are not equivalent. |
+
+For 125/126/199/259, each random reward selects a slot **1 through N−1**
+of the callback's N-slot list, uniformly; slot 0 is unreachable and repeated
+item slots retain their weight. Bag/key reward pools differ; neither a unique-ID
+pool nor a uniform choice over distinct items is equivalent. The owning follow-ups
+must verify pool membership/weights and both reward-count endpoints from these
+source ranges, rather than duplicate raw catalogs here.
+
+Boundary checks for those follow-ups cover both sources, Depot below/at/above
+capacity, duplicate matching instances, missing-box behavior, 113/114 unchanged
+stats, recipe exhaustion, orb duplication, future-memory rejection and veteran
+level/EXP/gold boundaries. Asset-based appearance/wallpaper follow-ups must use
+independent assets and the [asset contract](https://github.com/witchcraze/party2re/issues/654)
+and [resolution boundary](https://github.com/witchcraze/party2re/issues/729), not legacy image files.
 
 ### 5. Delivery Notices (`character_delivery_notices`)
 

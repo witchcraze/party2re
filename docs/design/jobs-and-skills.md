@@ -146,11 +146,14 @@ exchange still has the independently tracked learned-job eligibility gap
   of their current job, previous job, level, experience, maximum HP/MP, combat stats,
   gender, and over-level flag into a persistent future memory slot.
 - Slot limit is determined by `OverFuture` (`savedCount <= OverFuture`, default allows 1 saved slot).
-- Characters currently using temporary job memory (`JobMemory != nil`) cannot save future memories.
+- Characters using either persistent or temporary job memory (`JobMemory != nil`) cannot save future memories.
 - Capacity limit and absence of active temporary job memory are checked during preflight and
   strictly revalidated under the character row lock within the economy transaction callback
   (`internal/job/future_memory.go`). If revalidation fails under lock, the transaction aborts
   and rolls back completely: `item-207` is not consumed, and no future memory snapshot is created.
+- This describes the current inventory-backed Job API. Home dispatch and Depot consumption
+  remain missing under the [Home reconciliation](home.md#legacy-dispatch-and-consumption-contract);
+  they must reuse the same snapshot and job-point contract.
 - Deterministic locking order (Character Rank 2 -> Inventory Rank 3) coordinates safely with
   future memory deletion on recall and capacity expansions (`WishExpandJobMemory`).
 - Recalling a future memory restores the character's level, experience, stats, and jobs,

@@ -110,8 +110,8 @@ this delivery path under the existing [trajectory gap](../design/player-and-char
 
 - **Scope / Legacy**: `lib/home.cgi`の`つかう`と到達する`lib/_data.cgi`の効果。手持ち/Depotの両source、装備inspect、usage category、効果・前提・乱数・消費順・容量不足/失敗時をアイテムごとに確認する。
 - **Go / HTTP**: `internal/home/item_usage.go`、`internal/home/recipe_usage.go`、`internal/home/costume_usage.go`、`internal/api/http/home_estate.go`のitem一覧/使用。
-- **Contracts**: [design/home.md](../design/home.md)、[design/blacksmith.md](../design/blacksmith.md)、[api/paths/character.json](../api/paths/character.json) (Home item一覧/使用)。
-- **Open follow-ups**: [#1120](https://github.com/witchcraze/party2re/issues/1120) (木の実の現在値)、[#1121](https://github.com/witchcraze/party2re/issues/1121) (無刻印時の消費)、[#1124](https://github.com/witchcraze/party2re/issues/1124) (未対応dispatch/不明callback)。
+- **Contracts**: [Home dispatch reconciliation](../design/home.md#legacy-dispatch-and-consumption-contract) (全56 usage2/4 callback・両source・消費順・満杯境界と実装owner)、[design/blacksmith.md](../design/blacksmith.md)、[api/paths/character.json](../api/paths/character.json) (Home item一覧/使用)。
+- **Remaining work**: 未対応dispatchはHomeの所有表から各実装Issueへ辿る。既存の入口/効果を再実装せず、天界入場は [#1153](https://github.com/witchcraze/party2re/issues/1153)、レシピ候補/抽選は [#1181](https://github.com/witchcraze/party2re/issues/1181) が所有する。
 - **Boundary**: 名前がrecipe poolにあるだけで対応済みとは数えない。レシピ・衣装・祭壇等への呼出しは効果/消費の境界まで追い、CL-03/04/05の全機能監査と分ける。未確定callbackや稼働config不在を仕様推測で埋めない。
 
 #### Cross-unit checks
