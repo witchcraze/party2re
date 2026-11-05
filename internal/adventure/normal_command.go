@@ -137,9 +137,16 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			if err := r.recordEarnings(effects.Earnings); err != nil {
 				return err
 			}
+			var retained []RetainedEarnings
 			if releaseStock {
 				recipient := r.Recipients[cmd.ActorID]
-				request.RecipientRewards[cmd.ActorID] = runReward(recipient.Pending)
+				var due RunEarnings
+				var err error
+				retained, due, err = s.retainedDue(ctx, cmd.ActorID, recipient.Pending)
+				if err != nil {
+					return err
+				}
+				request.RecipientRewards[cmd.ActorID] = runReward(due)
 			}
 			request.BattleResult.ConsumedItems = effects.Consumed
 			// Consume concrete owned instances in this transaction, never at exit again.
@@ -170,6 +177,9 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				}
 				recipient.Pending = RunEarnings{}
 				r.Recipients[cmd.ActorID] = recipient
+				if err := s.settleRetained(ctx, cmd.ActorID, retained); err != nil {
+					return err
+				}
 			}
 			if cmd.Action == "exit" {
 				if s.cfg.ExitEffects == nil {

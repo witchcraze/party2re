@@ -237,6 +237,71 @@ func (r *NormalAdventureRepository) FindActorRun(ctx context.Context, actor stri
 	return &adventure.ActorRun{RunID: id, PartyID: run.Admission.PartyID, Version: run.Version, Floor: run.Floor, LeaderID: run.LeaderID, Role: role, LastActivity: run.LastActivity, Recipient: p}, nil
 }
 
+// FindRetainedEarnings returns every released timeout ledger row of the actor
+// with unpaid unconditional earnings, oldest first; FindPenalty's latest-row read
+// cannot see older balances. It is a plain read that precedes settlement; the
+// rows are locked and re-verified by SaveRetainedRecipient after the settler.
+func (r *NormalAdventureRepository) FindRetainedEarnings(ctx context.Context, actor string) ([]adventure.RetainedEarnings, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `SELECT p.run_id,p.recipient_json FROM normal_adventure_recipients p
+WHERE p.character_id=? AND p.disposition='timeout'
+AND (JSON_EXTRACT(p.recipient_json,'$.pending.experience')>0 OR JSON_EXTRACT(p.recipient_json,'$.pending.gold')>0 OR JSON_EXTRACT(p.recipient_json,'$.pending.crystals')>0)
+AND NOT EXISTS (SELECT 1 FROM normal_adventure_enrollments e WHERE e.character_id=p.character_id AND e.run_id=p.run_id)
+ORDER BY p.penalty_until, p.run_id`, actor)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var found []adventure.RetainedEarnings
+	for rows.Next() {
+		var entry adventure.RetainedEarnings
+		var data []byte
+		if err := rows.Scan(&entry.RunID, &data); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &entry.Recipient); err != nil {
+			return nil, err
+		}
+		found = append(found, entry)
+	}
+	return found, rows.Err()
+}
+
+// SaveRetainedRecipient rewrites only a released timeout ledger row, preserving
+// its disposition and committed penalty deadline. It locks the row and requires
+// the unpaid balance that was credited, so a changed ledger fails the command
+// instead of paying twice or losing stock.
+// Transaction: ambient command transaction. Lock Order: characters(2) -> settler(3/4/5) -> recipients(8).
+func (r *NormalAdventureRepository) SaveRetainedRecipient(ctx context.Context, runID, actor string, credited adventure.RunEarnings, recipient adventure.RunRecipient) error {
+	if TxFromContext(ctx) == nil {
+		return errors.New("retained earnings require the command transaction")
+	}
+	e := ExecutorFromContext(ctx, r.db)
+	var current []byte
+	err := e.QueryRowContext(ctx, `SELECT p.recipient_json FROM normal_adventure_recipients p
+WHERE p.run_id=? AND p.character_id=? AND p.disposition='timeout'
+AND NOT EXISTS (SELECT 1 FROM normal_adventure_enrollments e WHERE e.character_id=p.character_id AND e.run_id=p.run_id)
+FOR UPDATE`, runID, actor).Scan(&current)
+	if errors.Is(err, sql.ErrNoRows) {
+		return adventure.ErrRunConflict
+	}
+	if err != nil {
+		return err
+	}
+	var stored adventure.RunRecipient
+	if err := json.Unmarshal(current, &stored); err != nil {
+		return err
+	}
+	if stored.Pending != credited {
+		return adventure.ErrRunConflict
+	}
+	data, err := json.Marshal(recipient)
+	if err != nil {
+		return err
+	}
+	_, err = e.ExecContext(ctx, `UPDATE normal_adventure_recipients SET recipient_json=? WHERE run_id=? AND character_id=? AND disposition='timeout'`, data, runID, actor)
+	return err
+}
+
 func (r *NormalAdventureRepository) FindPenalty(ctx context.Context, actor string) (*adventure.ActorRun, error) {
 	var result adventure.ActorRun
 	var data []byte

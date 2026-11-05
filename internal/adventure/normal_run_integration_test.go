@@ -128,8 +128,17 @@ func (r *normalHistory) Save(ctx context.Context, v adventure.Adventure) error {
 
 type normalStore struct {
 	adventure.NormalRunStore
-	failWrite  atomic.Bool
-	loseCommit atomic.Bool
+	failWrite      atomic.Bool
+	loseCommit     atomic.Bool
+	tamperRetained atomic.Bool
+}
+
+func (r *normalStore) FindRetainedEarnings(ctx context.Context, actor string) ([]adventure.RetainedEarnings, error) {
+	found, err := r.NormalRunStore.FindRetainedEarnings(ctx, actor)
+	if err == nil && r.tamperRetained.Load() && len(found) > 0 {
+		found[0].Recipient.Pending.Gold++
+	}
+	return found, err
 }
 
 func (r *normalStore) SaveRunReceipt(ctx context.Context, receipt adventure.RunReceipt) error {
