@@ -69,13 +69,11 @@ Items 44..56 and 138..141 are consumable items (type 2) with legacy catalog pric
 
 ### 2.3 Costume Item Consumption & Active Appearance Lifecycle
 
-When a character consumes a costume item in `internal/home` (`UseHomeItem`):
-1. **Application**: The character's appearance icon changes to the costume graphic with gender parity.
-2. **Ephemeral State**: Stored under `party2:daily:costume:<character_id>` in Valkey with expiration set to next midnight JST (`timer.NextMidnightJST(now)`).
-3. **Reset Triggers**:
-   - **Daily Rest (`home.Wake`)**: Sleeping in home resets the costume icon back to standard job icon (`job/<job>_<sex>.gif`).
-   - **Job Change (`job.ChangeJob`)**: Changing professions clears the costume icon back to new job default (`job/<job>_<sex>.gif`).
-   - **Midnight JST Expiration**: Natural TTL expiration at 00:00 JST.
+Home consumption applies the costume appearance, including gender branches.
+The [Home dispatch contract](home.md#legacy-dispatch-and-consumption-contract)
+owns item selection, fallback and reset behavior: Sleep and job change restore
+the ordinary job appearance. Current Go also expires the costume at midnight JST;
+that extra reset is an implementation gap, not an adopted legacy rule.
 
 ### 2.4 Private Estate Wallpaper Boutique
 
