@@ -618,6 +618,14 @@ keeps enrollment discoverable and entry-blocking. Recovery projects the same
 absolute deadline, then releases ownership. Home independently reads SQL before
 Wake; timer loss or an unavailable projection cannot bypass the penalty.
 
+Recovery does not pay the retained stock. Following the legacy rule that user-owned
+stock outlives the deleted room, the recipient ledger stays the only authority for
+unpaid unconditional earnings of every disposed timeout, not just the latest
+penalty record. The actor's next stock-releasing command in a later normal run adds
+all of them to its own release in the same settler call, then moves each to Applied
+in that transaction; receipt replay, rollback and retry therefore credit once.
+Conditional Try stock and the committed penalty are never touched by this claim.
+
 A failed pre-commit write rolls back all effects, including history and receipt.
 A lost commit acknowledgement is resolved by reading the owned receipt under the
 same serialization boundary, never by rerolling. SQL-commit-before-cleanup failure

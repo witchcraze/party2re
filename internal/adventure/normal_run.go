@@ -115,9 +115,24 @@ type ActorRun struct {
 	Recipient    RunRecipient
 }
 
+// RetainedEarnings is an unpaid unconditional balance that a timed-out run left
+// in its recipient ledger after the active room was disposed.
+type RetainedEarnings struct {
+	RunID     string
+	Recipient RunRecipient
+}
+
+// RetainedEarningsStore owns the claim path for RetainedEarnings. Both methods
+// require the ambient command transaction with the actor's character locked.
+type RetainedEarningsStore interface {
+	FindRetainedEarnings(context.Context, string) ([]RetainedEarnings, error)
+	SaveRetainedRecipient(context.Context, string, string, RunRecipient) error
+}
+
 // NormalRunStore keeps receipts and recipient dispositions beyond active state
 // disposal. WithRunForUpdate must start before any ambient character transaction.
 type NormalRunStore interface {
+	RetainedEarningsStore
 	WithRunForUpdate(context.Context, string, bool, func(context.Context) error) error
 	FindRun(context.Context, string) (*NormalRun, error)
 	SaveRun(context.Context, NormalRun, int) error

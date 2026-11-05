@@ -190,6 +190,10 @@ room log modification, clears each non-NPC member's location and sets
 `get_stock`, and user-owned stock is outside the deleted directory. Thus idle
 cleanup is neither ordinary personal exit nor permission to delete pending
 earnings. Participants already removed from the roster are not penalized again.
+Later eligible normal stock processing (`_battle.cgi:912`, `get_stock:1459–1473`)
+is the only consumer, so the native unconditional balances survive the disposed
+room and are credited once at the owner's next stock-releasing normal command;
+this adds no timeout bonus and no release at cleanup itself.
 GET must never perform this mutation or renew its deadline in the reconstruction.
 
 **User-approved native timeout contract (2026-10-11, #1325):** retain the strict 30-minute
