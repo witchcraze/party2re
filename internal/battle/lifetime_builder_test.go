@@ -14,6 +14,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 func TestLifetimeGearUsesEquippedIdentities(t *testing.T) {
@@ -58,50 +59,208 @@ type historyReadStub struct {
 	err   error
 }
 
+func ptr(s string) *string {
+	return &s
+}
+
 func TestLifetimeHeldToolPreservesKnownAndUnknownHands(t *testing.T) {
-	for _, count := range []int{0, 1, 2} {
-		chars, invs := newMockCharRepo(), newMockInvRepo()
-		char := corecharacter.Character{ID: "hand", JobID: "job-78", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}}
-		chars.characters[char.ID] = char
-		inv, err := coreinventory.New(char.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for range count {
-			tool, err := coreitem.NewInstance("item-001", 1)
+	tests := []struct {
+		name         string
+		items        []string
+		equipSlot    coreitem.Slot
+		equipIndex   int
+		wantHeld     *string
+		wantWeaponID string
+		wantArmorID  string
+	}{
+		{
+			name:     "empty inventory proves empty tool hand",
+			items:    nil,
+			wantHeld: ptr(""),
+		},
+		{
+			name:     "single tool proves held tool",
+			items:    []string{"item-001"},
+			wantHeld: ptr("item-001"),
+		},
+		{
+			name:       "single accessory proves held accessory",
+			items:      []string{"item-012"},
+			equipSlot:  coreitem.SlotAccessory,
+			equipIndex: 0,
+			wantHeld:   ptr("item-012"),
+		},
+		{
+			name:         "single equipped weapon leaves tool hand unknown",
+			items:        []string{"weapon-01"},
+			equipSlot:    coreitem.SlotMainHand,
+			equipIndex:   0,
+			wantHeld:     nil,
+			wantWeaponID: "weapon-01",
+		},
+		{
+			name:        "single equipped armor leaves tool hand unknown",
+			items:       []string{"armor-01"},
+			equipSlot:   coreitem.SlotBody,
+			equipIndex:  0,
+			wantHeld:    nil,
+			wantArmorID: "armor-01",
+		},
+		{
+			name:     "multi-row inventory remains ambiguous unknown",
+			items:    []string{"item-001", "item-002"},
+			wantHeld: nil,
+		},
+		{
+			name:         "equipped weapon plus tool remains ambiguous unknown",
+			items:        []string{"weapon-01", "item-001"},
+			equipSlot:    coreitem.SlotMainHand,
+			equipIndex:   0,
+			wantHeld:     nil,
+			wantWeaponID: "weapon-01",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chars, invs, equips := newMockCharRepo(), newMockInvRepo(), newMockEquipRepo()
+			char := corecharacter.Character{ID: "hand", JobID: "job-78", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}}
+			chars.characters[char.ID] = char
+			inv, err := coreinventory.New(char.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := inv.Add(tool); err != nil {
+			equip, err := coreequipment.New(char.ID)
+			if err != nil {
 				t.Fatal(err)
 			}
-		}
-		if err := invs.Save(context.Background(), inv); err != nil {
-			t.Fatal(err)
-		}
-		svc := battle.NewService(battle.WithCharacterRepository(chars), battle.WithInventoryRepository(invs), battle.WithJobHistoryRepository(&historyReadStub{err: corejob.ErrCharacterJobNotFound}))
-		actor, err := svc.BuildLifetimeActor(context.Background(), char.ID, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if count == 2 {
-			if actor.HeldToolID != nil {
-				t.Fatal("ambiguous hand was inferred", actor)
+			for i, defID := range tt.items {
+				tool, err := coreitem.NewInstance(defID, 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := inv.Add(tool); err != nil {
+					t.Fatal(err)
+				}
+				if tt.equipSlot != "" && i == tt.equipIndex {
+					equip.Slots[tt.equipSlot] = tool.ID
+				}
 			}
-			continue
-		}
-		want := ""
-		if count == 1 {
-			want = "item-001"
-		}
-		if actor.HeldToolID == nil || *actor.HeldToolID != want {
-			t.Fatal(actor)
-		}
-		copy := actor.Clone()
-		*copy.HeldToolID = "item-002"
-		if *actor.HeldToolID != want {
-			t.Fatal("clone shares held tool", actor)
-		}
+			if err := invs.Save(context.Background(), inv); err != nil {
+				t.Fatal(err)
+			}
+			if err := equips.Save(context.Background(), equip); err != nil {
+				t.Fatal(err)
+			}
+			svc := battle.NewService(
+				battle.WithCharacterRepository(chars),
+				battle.WithInventoryRepository(invs),
+				battle.WithEquipmentRepository(equips),
+				battle.WithJobHistoryRepository(&historyReadStub{err: corejob.ErrCharacterJobNotFound}),
+			)
+			actor, err := svc.BuildLifetimeActor(context.Background(), char.ID, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.wantWeaponID != "" && (actor.Gear == nil || actor.Gear.WeaponID != tt.wantWeaponID) {
+				t.Fatalf("Gear.WeaponID = %v, want %v", actor.Gear, tt.wantWeaponID)
+			}
+			if tt.wantArmorID != "" && (actor.Gear == nil || actor.Gear.ArmorID != tt.wantArmorID) {
+				t.Fatalf("Gear.ArmorID = %v, want %v", actor.Gear, tt.wantArmorID)
+			}
+			if tt.wantHeld == nil {
+				if actor.HeldToolID != nil {
+					t.Fatalf("HeldToolID = %v, want nil", *actor.HeldToolID)
+				}
+			} else {
+				if actor.HeldToolID == nil || *actor.HeldToolID != *tt.wantHeld {
+					t.Fatalf("HeldToolID = %v, want %v", actor.HeldToolID, *tt.wantHeld)
+				}
+				copy := actor.Clone()
+				*copy.HeldToolID = "item-002"
+				if *actor.HeldToolID != *tt.wantHeld {
+					t.Fatal("clone shares held tool", actor)
+				}
+			}
+		})
+	}
+}
+
+type noDraws struct{ t *testing.T }
+
+func (d noDraws) Intn(int) int     { d.t.Fatal("unexpected RNG call"); return 0 }
+func (d noDraws) IntN(int) int     { d.t.Fatal("unexpected RNG call"); return 0 }
+func (d noDraws) Float64() float64 { d.t.Fatal("unexpected RNG call"); return 0 }
+
+func TestLifetimeUnknownHeldToolRejectsScavengingAdmission(t *testing.T) {
+	for _, equipDef := range []string{"weapon-01", "armor-01"} {
+		t.Run(equipDef, func(t *testing.T) {
+			chars, invs, equips := newMockCharRepo(), newMockInvRepo(), newMockEquipRepo()
+			char := corecharacter.Character{ID: "scavenger", JobID: "job-78", Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 10, Defense: 10, Agility: 10}}
+			chars.characters[char.ID] = char
+			inv, _ := coreinventory.New(char.ID)
+			equip, _ := coreequipment.New(char.ID)
+			itemInst, _ := coreitem.NewInstance(equipDef, 1)
+			_ = inv.Add(itemInst)
+			slot := coreitem.SlotMainHand
+			if equipDef == "armor-01" {
+				slot = coreitem.SlotBody
+			}
+			equip.Slots[slot] = itemInst.ID
+			_ = invs.Save(context.Background(), inv)
+			_ = equips.Save(context.Background(), equip)
+
+			svc := battle.NewService(
+				battle.WithCharacterRepository(chars),
+				battle.WithInventoryRepository(invs),
+				battle.WithEquipmentRepository(equips),
+				battle.WithJobHistoryRepository(&historyReadStub{err: corejob.ErrCharacterJobNotFound}),
+			)
+			actor, err := svc.BuildLifetimeActor(context.Background(), char.ID, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if actor.HeldToolID != nil {
+				t.Fatalf("expected nil HeldToolID, got %v", *actor.HeldToolID)
+			}
+
+			target := actor.Clone()
+			target.ID = "enemy"
+			target.TeamID = "enemy"
+			state := corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{actor, target}}
+
+			assets := corebattle.JobAssets{
+				RequesterID:   char.ID,
+				Wallet:        100,
+				HeldToolID:    actor.HeldToolID, // nil!
+				HelperToolIDs: []int{},
+				AddWallet:     economy.SafeAdd,
+			}
+			ctx := corebattle.JobAssetContext{
+				DamageContext: corebattle.DamageContext{
+					EffectContext: corebattle.EffectContext{
+						TargetContext: corebattle.TargetContext{
+							ActorID:  char.ID,
+							PartyIDs: []string{char.ID},
+							EnemyIDs: []string{"enemy"},
+						},
+					},
+					GuaranteedHit: true,
+				},
+				Arguments: []string{"enemy"},
+				Assets:    &assets,
+			}
+
+			err = state.ApplyJobAssets(&ctx, "job-78-entry-5", noDraws{t})
+			if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+				t.Fatalf("expected ErrUnsupportedEffect, got %v", err)
+			}
+			if assets.Wallet != 100 {
+				t.Fatalf("wallet modified on error: %d", assets.Wallet)
+			}
+			if state.Actors[0].HP != 100 {
+				t.Fatalf("HP modified on error: %d", state.Actors[0].HP)
+			}
+		})
 	}
 }
 

@@ -25,13 +25,7 @@ func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd 
 			return ErrRunForbidden
 		}
 		assets := corebattle.JobAssets{RequesterID: cmd.ActorID, Wallet: tc.Character.Money, AddWallet: economy.SafeAdd}
-		if len(tc.Inventory.Items) <= 1 {
-			held := ""
-			if len(tc.Inventory.Items) == 1 {
-				held = tc.Inventory.Items[0].DefinitionID
-			}
-			assets.HeldToolID = &held
-		}
+		assets.HeldToolID = tc.Inventory.HeldToolID()
 		if s.cfg.JobAssetHelpers != nil {
 			tools, err := s.cfg.JobAssetHelpers(ctx)
 			if err != nil {

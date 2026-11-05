@@ -53,3 +53,33 @@ func TestEveryDefaultCatalogDefinitionHasLegacyStorageKey(t *testing.T) {
 		}
 	}
 }
+
+func TestDefinitionIsToolAndIsToolID(t *testing.T) {
+	tests := []struct {
+		id       string
+		wantTool bool
+	}{
+		{"item-001", true},
+		{"item-012", true}, // accessory
+		{"item-071", true}, // shield
+		{"item-268", true},
+		{"weapon-01", false},
+		{"weapon-71", false},
+		{"armor-01", false},
+		{"armor-55", false},
+		{"", false},
+		{"unknown", false},
+		{"wea-01", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			if got := IsToolID(tt.id); got != tt.wantTool {
+				t.Errorf("IsToolID(%q) = %v, want %v", tt.id, got, tt.wantTool)
+			}
+			def := Definition{ID: tt.id}
+			if got := def.IsTool(); got != tt.wantTool {
+				t.Errorf("Definition{%q}.IsTool() = %v, want %v", tt.id, got, tt.wantTool)
+			}
+		})
+	}
+}

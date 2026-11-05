@@ -28,3 +28,39 @@ func (d Definition) LegacyStorageKey() (kind, no int, err error) {
 	}
 	return 0, 0, ErrNoLegacyStorageKey
 }
+
+// IsTool reports whether this definition represents a legacy tool or accessory
+// (catalog kind 3 / @ites), rather than an equipped weapon or armor.
+func (d Definition) IsTool() bool {
+	if strings.TrimSpace(d.ID) == "" {
+		return false
+	}
+	if kind, _, err := d.LegacyStorageKey(); err == nil {
+		return kind == 3
+	}
+	if d.Slot == SlotMainHand || d.Slot == SlotBody {
+		return false
+	}
+	if d.Slot == SlotAccessory || d.Slot == SlotOffHand {
+		return true
+	}
+	if d.Name != "" && d.Slot == SlotNone {
+		return true
+	}
+	return false
+}
+
+// IsToolID reports whether the definition ID represents a legacy tool or accessory
+// (catalog kind 3 / @ites), rather than an equipped weapon or armor.
+func IsToolID(definitionID string) bool {
+	if strings.TrimSpace(definitionID) == "" {
+		return false
+	}
+	if cat, err := DefaultCatalog(); err == nil {
+		if def, err := cat.FindByID(definitionID); err == nil {
+			return def.IsTool()
+		}
+	}
+	kind, _, err := (Definition{ID: definitionID}).LegacyStorageKey()
+	return err == nil && kind == 3
+}
