@@ -12,13 +12,21 @@
 | Legacy Action | Legacy サブルーチン | Modern Go ドメインメソッド | Modern HTTP エンドポイント | 動作と不変条件 |
 |---|---|---|---|---|
 | `みる (宝珠箱)` | `gem_box.cgi` | `GemStoreService.GetGemBox` | `GET /characters/{id}/gembox` | 宝珠箱内容取得（動的容量、所持宝珠リスト） |
-| `せいとん` | `gem_box.cgi` | `GemStoreService.SortGemBox` | `POST /characters/{id}/gembox/sort` | カタログ昇順（ID・マスター順）で宝珠箱を整頓・永続化 |
+| `せいとん` | `gem_store.cgi:266–281` / `seiton` | `GemStoreService.SortGemBox` | Gateway（下記） | 現行Goはカタログ順で宝珠箱を整頓・永続化。旧実装は保存kind・番号の数値順 |
 | `かう` | `&kau` | `GemStoreService.BuyGem` | `POST /characters/{id}/gemstore/buy` | レベル要件検証 $\rightarrow$ 価格計算（定価 $\times$ 5） $\rightarrow$ 所持金減算 $\rightarrow$ 宝珠箱 (`GemBox`) 追加（満杯時拒否） |
-| `うる` | `&uru` | `GemStoreService.SellGem` | `POST /characters/{id}/gemstore/sell` | 宝珠箱所有確認 $\rightarrow$ 売却額計算（50%価格、最低1G） $\rightarrow$ 宝珠箱から消費 $\rightarrow$ 所持金加算 |
+| `うる` | `gem_store.cgi:177–214` / `uru` | `GemStoreService.SellGem` | Gateway（下記） | 宝珠箱から1個を消費し定価の半額を加算。現行Goの最低1Gは旧実装にない差分 |
 | `おくる` | `&okuru` | `GemStoreService.SendGem` | `POST /characters/{id}/gemstore/send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与（満杯時拒否） |
 | `かこう` | `&kako` | `GemStoreService.SynthesizeGem` | `POST /characters/{id}/gemstore/synthesize` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
 | `かんてい` | `&kantei` | `GemStoreService.AppraiseItem` | `POST /characters/{id}/gemstore/appraise` | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
 | `みる` / `はなす` | `words` / メニュー | `GemStoreService.GetCatalog`<br>`GemStoreService.GetRecipes`<br>`GemStoreService.GetDialogue` | `GET /gemstore/catalog`<br>`GET /gemstore/recipes`<br>`GET /gemstore/dialogue` | 転職・レベル別購入可能宝石、全合成レシピ、店主 `@ジェマ` 会話メッセージの取得 |
+
+### Gatewayと参照・未移行操作
+
+売却・整頓は共通の[コマンド境界](../architecture/client-agent-api.md#input-and-execution-boundary)で実行し、旧売却・整頓POSTは登録しない。入力・結果の正本は[OpenAPI](../api/base.json)と[HTTPアダプター](../../internal/api/http/action_gemstore.go)。操作者は認証済みパスの所有キャラクターに限定し、売却対象には宝珠箱のインスタンスIDまたは定義IDを明示する。定義IDの場合はサービスが最初の一致を1個選ぶ。所有確認、価格、整頓順とトランザクションは既存サービスが担う。
+
+`GET /characters/{id}/gembox` は所有者用の参照として保持する。購入・配送・合成・鑑定POST、カタログ・レシピ・会話GETは、対応するコマンド・観測の検証まで保持する。宝石店の選択scene観測は未接続であり、ナビゲーション登録だけで公開しない。
+
+旧dispatchは `party2/lib/gem_store.cgi:100–106`。対象未指定時の売却候補表示は、保持する宝珠箱GETと明示入力で代替する。旧名指定はGoのID指定に置き換える。最低売却価格、数値順とカタログ順の一致、旧NPC会話・cooldown・presence・logの再現は [#947](https://github.com/witchcraze/party2re/issues/947) の残存照合事項とし、transport移行を完全なゲーム仕様互換の根拠にしない。購入条件は #1135、レシピ解決は #1134、満杯時配送・受信上限は #1139 が扱う。
 
 ---
 

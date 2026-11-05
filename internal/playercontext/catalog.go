@@ -256,6 +256,22 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
+		ID:             "gemstore_sell",
+		Label:          "宝珠箱の宝石を売る",
+		Category:       "shop",
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{"item_id"},
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+	},
+	{
+		ID:             "gemstore_sort",
+		Label:          "宝珠箱を整頓する",
+		Category:       "shop",
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{},
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+	},
+	{
 		ID:             "gemstore_buy",
 		Label:          "宝石購入",
 		Category:       "shop",
