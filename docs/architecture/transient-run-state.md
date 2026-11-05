@@ -576,9 +576,9 @@ Rank 2 character locking, allowing the already-serialized native command context
 Single-actor services reuse the guarded writer; mixed transfers and purchases
 check only the initiator after all affected character locks, before asset changes.
 Incoming money/items, proceeds from existing offers and committed reward delivery
-keep ordinary recipient access. These checks only observe SQL ownership and never
-acquire a run lock after character locks. Sleep and retained combat admission also
-recheck ownership; deletion cannot orphan an enrolled actor.
+(including passive registration referral awards) keep ordinary recipient access.
+These checks only observe SQL ownership and never acquire a run lock after character locks.
+Sleep and retained combat admission also recheck ownership; deletion cannot orphan an enrolled actor.
 Production cutover must preserve these checks rather than rely on menu eligibility.
 
 ### One command, one bounded SQL transaction

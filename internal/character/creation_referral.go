@@ -6,8 +6,8 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-// ReferralDelivery appends the registration reward and notice using the creation
-// transaction, after the service has locked the existing referrer character.
+// ReferralDelivery locks the existing passive recipient and appends the registration reward
+// and notice using the ambient creation transaction.
 type ReferralDelivery func(ctx context.Context, referrerID string, joining corecharacter.Character) error
 
 func WithReferralDelivery(delivery ReferralDelivery) Option {

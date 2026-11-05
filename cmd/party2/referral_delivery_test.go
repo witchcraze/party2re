@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/adventure"
+	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -20,13 +22,20 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
+type referralPenaltyStub struct{}
+
+func (referralPenaltyStub) ProjectRunPenalty(context.Context, string, time.Time) error {
+	return nil
+}
+
 type referralFixture struct {
-	db       *sql.DB
-	core     *coreServices
-	depots   *database.DepotRepository
-	home     *home.Service
-	referrer corecharacter.Character
-	playerID string
+	db         *sql.DB
+	core       *coreServices
+	depots     *database.DepotRepository
+	home       *home.Service
+	normalRepo *database.NormalAdventureRepository
+	referrer   corecharacter.Character
+	playerID   string
 }
 
 func newReferralFixture(t *testing.T) referralFixture {
@@ -41,7 +50,11 @@ func newReferralFixture(t *testing.T) referralFixture {
 			t.Error(err)
 		}
 	}()
-	copyTableDefinitions(t, source, db, []string{"news_articles", "character_delivery_notices", "fleamarket_listings"})
+	copyTableDefinitions(t, source, db, []string{
+		"news_articles", "character_delivery_notices", "fleamarket_listings",
+		"normal_adventure_runs", "normal_adventure_enrollments", "normal_adventure_recipients", "normal_adventure_receipts",
+		"character_jobs", "adventures",
+	})
 	core, err := newCoreServices(db, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +79,51 @@ func newReferralFixture(t *testing.T) referralFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter := referralDeliveryAdapter{depots: depots, home: homes, items: core.itemCatalog}
+	normalRepo, err := database.NewNormalAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	equipmentRepo, err := database.NewEquipmentRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advHistoryRepo, err := database.NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	battleAdapter := battle.NewService(
+		battle.WithCharacterRepository(core.charRepo),
+		battle.WithInventoryRepository(core.invRepo),
+		battle.WithEquipmentRepository(equipmentRepo),
+		battle.WithJobHistoryRepository(core.charJobRepo),
+		battle.WithTransactionProvider(core.txProvider),
+		battle.WithTransactionRunner(core.economy),
+	)
+	normalService, err := adventure.NewNormalRunService(adventure.NormalRunConfig{
+		Store:       normalRepo,
+		Characters:  core.charRepo,
+		Inventories: core.invRepo,
+		Builder:     battleAdapter,
+		Settler:     battleAdapter,
+		History:     advHistoryRepo,
+		Stages:      stages,
+		Monsters:    monsters,
+		Clock:       adventure.RealClock{},
+		Penalty:     referralPenaltyStub{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	core.normalGuard = normalService.CheckMutation
+	adapter := referralDeliveryAdapter{characters: core.charRepo, depots: depots, home: homes, items: core.itemCatalog}
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +144,7 @@ func newReferralFixture(t *testing.T) referralFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return referralFixture{db, core, depots, homes, referrer, player.ID}
+	return referralFixture{db, core, depots, homes, normalRepo, referrer, player.ID}
 }
 
 func (f referralFixture) create(ctx context.Context, name, referrerID string) (corecharacter.Character, error) {
@@ -293,4 +350,187 @@ func TestRegistrationReferralConcurrentRetry(t *testing.T) {
 		t.Fatalf("concurrent registrations: %+v", result)
 	}
 	f.assertCounts(t, 1+int(result.Successes), 1+int(result.Successes))
+}
+
+func TestRegistrationReferralActiveNormalRun(t *testing.T) {
+	f := newReferralFixture(t)
+	ctx := context.Background()
+
+	// 1. Inactive-recipient contrast: registration referring an inactive referrer succeeds and delivers reward.
+	joining1, err := f.create(ctx, "Inactv", f.referrer.ID)
+	if err != nil {
+		t.Fatalf("inactive recipient referral failed: %v", err)
+	}
+	if joining1.Name != "Inactv" {
+		t.Fatalf("joining character=%+v", joining1)
+	}
+	f.assertCounts(t, 1, 1)
+
+	// 2. Enroll referrer in active normal adventure run.
+	runID := "run-referral-active"
+	run := adventure.NormalRun{
+		ID:       runID,
+		Version:  1,
+		Encoding: 1,
+		LeaderID: f.referrer.ID,
+		Roster:   []string{f.referrer.ID},
+		Recipients: map[string]adventure.RunRecipient{
+			f.referrer.ID: {PlayerID: f.referrer.PlayerID},
+		},
+		Admission: adventure.NormalAdmission{
+			ActorID:      f.referrer.ID,
+			CharacterIDs: []string{f.referrer.ID},
+		},
+		StartedAt:    time.Now().UTC(),
+		LastActivity: time.Now().UTC(),
+	}
+	err = f.normalRepo.WithRunForUpdate(ctx, run.ID, true, func(runCtx context.Context) error {
+		if err := f.normalRepo.EnrollRun(runCtx, run); err != nil {
+			return err
+		}
+		return f.normalRepo.SaveRun(runCtx, run, 0)
+	})
+	if err != nil {
+		t.Fatalf("enroll referrer failed: %v", err)
+	}
+
+	// Verify initiating actor mutations remain guarded during active normal adventure run.
+	if _, err := f.core.charService.ChangeName(ctx, f.referrer.ID, "NewName"); !errors.Is(err, adventure.ErrRunBusy) {
+		t.Fatalf("ChangeName during active run must return ErrRunBusy, got: %v", err)
+	}
+	if _, err := f.core.charService.ChangeGender(ctx, f.referrer.ID, "f"); !errors.Is(err, adventure.ErrRunBusy) {
+		t.Fatalf("ChangeGender during active run must return ErrRunBusy, got: %v", err)
+	}
+	if err := f.core.charService.Delete(ctx, f.referrer.PlayerID, f.referrer.ID); !errors.Is(err, adventure.ErrRunBusy) {
+		t.Fatalf("Delete during active run must return ErrRunBusy, got: %v", err)
+	}
+
+	// 3. Passive referral delivery to active adventure recipient succeeds!
+	joining2, err := f.create(ctx, "ActvRef", f.referrer.ID)
+	if err != nil {
+		t.Fatalf("active recipient referral failed: %v", err)
+	}
+	if joining2.Name != "ActvRef" {
+		t.Fatalf("joining2 character=%+v", joining2)
+	}
+	f.assertCounts(t, 2, 2)
+
+	// Verify unchanged run facts, wallet, and enrollment.
+	savedRun, err := f.normalRepo.FindRun(ctx, runID)
+	if err != nil || savedRun == nil {
+		t.Fatalf("run not found after referral: %v", err)
+	}
+	if savedRun.Version != 1 || len(savedRun.Roster) != 1 || savedRun.Roster[0] != f.referrer.ID {
+		t.Fatalf("run facts changed: %+v", savedRun)
+	}
+	enrolledRun, err := f.normalRepo.FindActorRun(ctx, f.referrer.ID)
+	if err != nil || enrolledRun == nil || enrolledRun.RunID != runID {
+		t.Fatalf("actor enrollment changed: %+v err=%v", enrolledRun, err)
+	}
+	referrerChar, err := f.core.charRepo.FindByID(ctx, f.referrer.ID)
+	if err != nil || referrerChar.Money != f.referrer.Money || referrerChar.SmallMedals != f.referrer.SmallMedals {
+		t.Fatalf("referrer assets changed: %+v err=%v", referrerChar, err)
+	}
+
+	// 4. Same-account referral to active recipient also succeeds.
+	originalPlayerID := f.playerID
+	f.playerID = f.referrer.PlayerID
+	joining3, err := f.create(ctx, "SameAcc", f.referrer.ID)
+	if err != nil {
+		t.Fatalf("same-account active recipient referral failed: %v", err)
+	}
+	if joining3.Name != "SameAcc" {
+		t.Fatalf("joining3 character=%+v", joining3)
+	}
+	f.playerID = originalPlayerID
+	f.assertCounts(t, 3, 3)
+
+	// 5. Full-depot passive delivery to active recipient also succeeds (appends above capacity).
+	dep, err := f.depots.FindByCharacterID(ctx, f.referrer.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for len(dep.Items) < dep.Capacity {
+		inst, err := item.NewInstance("weapon-01", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dep.AppendDelivery(inst)
+	}
+	if err := f.depots.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+	itemsBefore := len(dep.Items)
+	joining4, err := f.create(ctx, "FullDep", f.referrer.ID)
+	if err != nil {
+		t.Fatalf("full depot active recipient referral failed: %v", err)
+	}
+	if joining4.Name != "FullDep" {
+		t.Fatalf("joining4 character=%+v", joining4)
+	}
+	depAfterFull, err := f.depots.FindByCharacterID(ctx, f.referrer.ID)
+	if err != nil || len(depAfterFull.Items) != itemsBefore+1 {
+		t.Fatalf("depot item count=%d, want %d", len(depAfterFull.Items), itemsBefore+1)
+	}
+	lastItem := depAfterFull.Items[len(depAfterFull.Items)-1]
+	if lastItem.DefinitionID != "item-023" || lastItem.Quantity != 1 {
+		t.Fatalf("expected referral item-023 appended, got %+v", lastItem)
+	}
+
+	// Total notices: 4 (Inactv, ActvRef, SameAcc, FullDep)
+	notices, err := f.home.ListDeliveryNotices(ctx, f.referrer.ID, false)
+	if err != nil || len(notices) != 4 {
+		t.Fatalf("expected 4 notices, got %d err=%v", len(notices), err)
+	}
+
+	// 6. Required-write failure: failing depot write rolls back character creation while active.
+	if _, err := f.db.ExecContext(ctx, "CREATE TRIGGER fail_referral_active BEFORE INSERT ON depot_items FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected referral failure'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.create(ctx, "Rollbk", f.referrer.ID); err == nil {
+		t.Fatal("expected creation failure on required write error")
+	}
+	if _, err := f.db.ExecContext(ctx, "DROP TRIGGER fail_referral_active"); err != nil {
+		t.Fatal(err)
+	}
+	// Verify "Rollbk" was not created.
+	if _, err := f.core.charRepo.FindByName(ctx, "Rollbk"); !errors.Is(err, character.ErrNotFound) {
+		t.Fatalf("rolled back character should not exist: %v", err)
+	}
+
+	// 7. Post-exit persistence: simulate exit from normal adventure and verify referral items/notices persist.
+	err = f.normalRepo.WithRunForUpdate(ctx, runID, true, func(runCtx context.Context) error {
+		recipient := run.Recipients[f.referrer.ID]
+		recipient.Disposition = "exited"
+		if err := f.normalRepo.SaveRunRecipient(runCtx, runID, f.referrer.ID, recipient); err != nil {
+			return err
+		}
+		_, err := f.db.ExecContext(runCtx, "DELETE FROM normal_adventure_enrollments WHERE character_id = ?", f.referrer.ID)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("exit run failed: %v", err)
+	}
+	// After exit, verify referrer can now perform initiating actor mutations again.
+	refForRename, err := f.core.charRepo.FindByID(ctx, f.referrer.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refForRename.Money += character.NameChangeCost
+	if err := f.core.charRepo.Update(ctx, refForRename); err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := f.core.charService.ChangeName(ctx, f.referrer.ID, "PostExit")
+	if err != nil || renamed.Name != "PostExit" {
+		t.Fatalf("rename after exit must succeed, got renamed=%+v err=%v", renamed, err)
+	}
+	// Verify rewards persist after exit.
+	depAfterExit, err := f.depots.FindByCharacterID(ctx, f.referrer.ID)
+	if err != nil || len(depAfterExit.Items) != itemsBefore+1 {
+		t.Fatalf("depot item count after exit=%d, want %d", len(depAfterExit.Items), itemsBefore+1)
+	}
+	noticesAfterExit, err := f.home.ListDeliveryNotices(ctx, f.referrer.ID, false)
+	if err != nil || len(noticesAfterExit) != 4 {
+		t.Fatalf("notices after exit=%d, want 4", len(noticesAfterExit))
+	}
 }

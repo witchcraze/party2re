@@ -49,7 +49,7 @@ func wireApp(
 	if err != nil {
 		return nil, err
 	}
-	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
+	referrals := referralDeliveryAdapter{characters: core.charRepo, depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
 	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, referrals.DeliverReferral, cfg.Player.MaxPlayers, logger); err != nil {
 		return nil, err
 	}

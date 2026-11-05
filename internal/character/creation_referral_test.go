@@ -20,6 +20,11 @@ func TestCreateReferralUsesCreationTransaction(t *testing.T) {
 					return fn(context.WithValue(ctx, txKey{}, true))
 				}}),
 				WithReferralDelivery(func(ctx context.Context, referrerID string, joining corecharacter.Character) error {
+					if _, err := repo.FindByIDForUpdate(ctx, referrerID); errors.Is(err, ErrNotFound) {
+						return nil
+					} else if err != nil {
+						return err
+					}
 					calls++
 					if ctx.Value(txKey{}) != true || referrerID != "referrer" || repo.characters[joining.ID].ID != joining.ID {
 						t.Fatalf("delivery outside saved creation transaction: referrer=%q joining=%+v", referrerID, joining)
@@ -47,13 +52,10 @@ func TestCreateReferralUsesCreationTransaction(t *testing.T) {
 
 func TestCreateReferralErrors(t *testing.T) {
 	failure := errors.New("referral failure")
-	for _, stage := range []string{"lookup", "delivery", "unconfigured", "no_transaction"} {
+	for _, stage := range []string{"delivery", "unconfigured", "no_transaction"} {
 		t.Run(stage, func(t *testing.T) {
 			repo := newMockRepository()
 			repo.characters["referrer"] = corecharacter.Character{ID: "referrer"}
-			if stage == "lookup" {
-				repo.err = failure
-			}
 			opts := []Option{WithTransactionProvider(&mockTransactionProvider{})}
 			if stage == "no_transaction" {
 				opts = nil
@@ -69,7 +71,7 @@ func TestCreateReferralErrors(t *testing.T) {
 			if err == nil || created.ID != "" {
 				t.Fatalf("created=%+v err=%v", created, err)
 			}
-			if (stage == "lookup" || stage == "delivery") && !errors.Is(err, failure) {
+			if stage == "delivery" && !errors.Is(err, failure) {
 				t.Fatalf("lost referral error: %v", err)
 			}
 		})

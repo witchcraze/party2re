@@ -145,7 +145,7 @@ func (s *Service) Create(ctx context.Context, playerID, name string) (corecharac
 
 // CreateWithOptions saves the character, initial depot, referral delivery and joining news atomically.
 // An ambient transaction controls their final commit or rollback.
-// Lock order: existing referrer character(2), then referral depot/items(5).
+// Lock order: saved character and existing recipient character(2), then referral depot/items(5).
 func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, options CreationOptions) (corecharacter.Character, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
@@ -165,14 +165,6 @@ func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, 
 		return corecharacter.Character{}, errors.New("transactional referral delivery is not configured")
 	}
 	if err := s.runInTx(ctx, func(txCtx context.Context) error {
-		if referrerID != "" {
-			// Lock the existing recipient before creating any dependent records.
-			if _, err := s.findForUpdate(txCtx, referrerID); errors.Is(err, ErrNotFound) {
-				referrerID = ""
-			} else if err != nil {
-				return err
-			}
-		}
 		if err := s.repository.Save(txCtx, value); err != nil {
 			return err
 		}

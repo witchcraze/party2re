@@ -137,7 +137,7 @@ Runtime enforcement of this specification is implemented across `cmd/party2/conf
 ### 2.9 Transactional Character Creation & Joining News
 
 Character creation (`POST /characters`, `character.Service.CreateWithOptions`) coordinates persistence through an ambient database transaction (`s.runInTx` via injected `TransactionProvider`):
-1. **Atomic Persistence**: The character (`characters`), initial storage (`character_depots`, capacity = 5), eligible [referral delivery](#210-registration-referral-delivery), and [joining news](notifications.md#character-joining-news) share this single transaction boundary. An existing referrer character is locked before saving the new character; its depot is locked before appending the reward.
+1. **Atomic Persistence**: The character (`characters`), initial storage (`character_depots`, capacity = 5), eligible [referral delivery](#210-registration-referral-delivery), and [joining news](notifications.md#character-joining-news) share this single transaction boundary. The new character row is saved, while an existing passive referrer character is locked under Rank 2 before its depot is locked under Rank 5 to append the reward.
 2. **Rollback Guarantee**: A character, depot, referral item/notice or news persistence error is propagated and rolls back the transaction. Creation is not reported as successful with missing required writes, nor as failed after a separately committed character. A commit error can leave its outcome unknown after a connection failure; clients must not automatically replay a creation POST.
 3. **Ambient Transaction Propagation**: When called within an existing ambient transaction, character creation participates in the caller's transaction without premature commit, ensuring full rollback if subsequent enclosing operations fail.
 
@@ -152,6 +152,13 @@ notice identifying the joining character and referral reason. This is a redeemab
 item, not a direct SmallMedals credit. Account registration grants nothing;
 additional characters and referral to another character on the same account are
 permitted. The newly generated character is not its own existing referrer.
+
+An ongoing normal adventure does not prevent a passive referrer from receiving
+referral rewards: actor mutation guards apply to initiating actions (such as rename,
+gender change and deletion), not passive recipient deliveries. The passive recipient
+lock reuses the raw character repository and ambient creation transaction at the
+composition boundary, preserving lock hierarchy (Rank 2 character before Rank 5 depot)
+without modifying run or combat facts.
 
 Omitted/blank referral IDs preserve ordinary creation. A nonexistent referrer or
 missing recipient depot is a delivery no-op. Other lookup, item or notice errors
