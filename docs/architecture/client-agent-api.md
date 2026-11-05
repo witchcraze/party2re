@@ -889,7 +889,8 @@ optional Replay/cleanup failures do not change a committed settlement result.
 action-entry and Sleep/CanWake gates. Empty/whitespace reasons reach service
 validation (`422 RESCUE_INVALID_REASON`). It calls the owned actor's Rescue
 service once; it does not guarantee removal of sleep.
-Penalty, cancellation and partial failures belong to [Rescue design](../design/rescue-and-helper.md).
+The command replaces the legacy request POST; retained observations and recovery
+limits belong to the [Rescue contract](../design/rescue-and-helper.md#gateway-execution-and-retained-observation).
 Known service rejections and unexpected errors keep the common outcome boundary.
 
 ### Home sleep and wake command contract

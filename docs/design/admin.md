@@ -7,7 +7,7 @@ Administrative operations provide privileged server and account management tools
 In Party2 Reconstruction, administrative operations are secured via authoritative HTTP endpoints guarded by master administrative API keys, providing:
 - **System Maintenance Mode**: Emergency maintenance toggle and schedule broadcast (`/admin/maintenance`).
 - **Player Account Management**: Multi-criteria player listing and account soft-banning (`/admin/players`, `/admin/players/{id}/ban`).
-- **Rescue Operations**: Emergency unstuck action clearing (`/admin/characters/{id}/unstuck`). Player rescue requests use the separate `/rescues/request` route.
+- **Rescue Operations**: Emergency unstuck action clearing (`/admin/characters/{id}/unstuck`). Player rescue uses the separate Gateway `rescue_request` command under the [Rescue contract](rescue-and-helper.md#gateway-execution-and-retained-observation).
 
 ---
 
