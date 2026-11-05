@@ -65,7 +65,11 @@ func (r *ActionURLResolver) Resolve(characterID, actionID, label, category strin
 // defaultActionEndpoints registers the canonical endpoints for Party2 character actions.
 func defaultActionEndpoints() map[string]ActionEndpoint {
 	return map[string]ActionEndpoint{
-		"auction_send": {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"blacksmith_seal":     {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"blacksmith_name":     {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"blacksmith_deposit":  {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"blacksmith_withdraw": {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"auction_send":        {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"depot_send_item": {
 			Method:      http.MethodPost,
 			PathPattern: "/api/v1/characters/%s/actions",

@@ -191,11 +191,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"blackmarket_trade", http.MethodPost, "/characters/char-1/blackmarket/trade", `{"prize_id":"prize-1"}`},
 		// Secret Shop
 		{"secretshop_puffpuff", http.MethodPost, "/characters/char-1/secretshop/puffpuff", `{}`},
-		// Blacksmith
-		{"blacksmith_seal", http.MethodPost, "/characters/char-1/blacksmith/seal", `{"seal_id":1}`},
-		{"blacksmith_name", http.MethodPost, "/characters/char-1/blacksmith/name", `{"target":"weapon","name":"Excalibur"}`},
-		{"blacksmith_deposit", http.MethodPost, "/characters/char-1/blacksmith/storage/deposit", `{}`},
-		{"blacksmith_withdraw", http.MethodPost, "/characters/char-1/blacksmith/storage/withdraw", `{"slot":1}`},
 		// Flea Market
 		{"fleamarket_create", http.MethodPost, "/characters/char-1/fleamarket/listings", `{"item_id":"item-1","price":100}`},
 		{"fleamarket_purchase", http.MethodPost, "/characters/char-1/fleamarket/listings/list-1/purchase", `{}`},

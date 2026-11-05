@@ -685,11 +685,7 @@ func (h *Handler) Router() http.Handler {
 
 	// Blacksmith
 	mux.HandleFunc("GET /blacksmith/seals", h.handleGetBlacksmithSeals)
-	mux.HandleFunc("POST /characters/{id}/blacksmith/seal", h.handleApplyBlacksmithSeal)
-	mux.HandleFunc("POST /characters/{id}/blacksmith/name", h.handleNameEquipment)
 	mux.HandleFunc("GET /characters/{id}/blacksmith/storage", h.handleGetBlacksmithStorage)
-	mux.HandleFunc("POST /characters/{id}/blacksmith/storage/deposit", h.handleDepositBlacksmithWeapon)
-	mux.HandleFunc("POST /characters/{id}/blacksmith/storage/withdraw", h.handleWithdrawBlacksmithWeapon)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }

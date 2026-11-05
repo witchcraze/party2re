@@ -459,10 +459,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Secret Shop
 		"handleSecretShopPuffPuff": "secretshop.go",
 		// Blacksmith
-		"handleApplyBlacksmithSeal":      "blacksmith.go",
-		"handleNameEquipment":            "blacksmith.go",
-		"handleDepositBlacksmithWeapon":  "blacksmith.go",
-		"handleWithdrawBlacksmithWeapon": "blacksmith.go",
 		// Flea Market
 		"handleCreateFleaMarketListing":   "fleamarket.go",
 		"handlePurchaseFleaMarketListing": "fleamarket.go",
