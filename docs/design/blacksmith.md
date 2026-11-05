@@ -14,7 +14,7 @@ The Blacksmith (鍛冶屋, `party2/lib/blacksmith.cgi`) provides equipment custo
 ### Mechanics
 - Seals can only be engraved on a weapon currently equipped in the main hand slot (`SlotMainHand`).
 - Applying a seal consumes crystals (`刻印晶`, `character.crystal`), capped at 999,999.
-- A weapon can only hold **one** seal at a time; weapons already sealed cannot receive another seal.
+- A weapon holds one seal. Applying another replaces it and charges the new seal's full crystal cost (`blacksmith.cgi:110–140`); there is no existing-seal rejection.
 
 ### Authentic 12 Seals Specification (`_data.cgi:2209-2230`, `_battle.cgi:39-44`)
 
@@ -34,11 +34,10 @@ The Blacksmith (鍛冶屋, `party2/lib/blacksmith.cgi`) provides equipment custo
 | 12 | 理の刻印 | アビリティ「seal_kotowari」付与 (MP 3 消費、通常攻撃を魔法属性化かつダメージ 80% で実行) | 100 |
 
 ### Eligibility Validation (`_can_add_wea_seals`)
-Seals cannot be applied if:
-- No weapon is equipped in `SlotMainHand`.
-- The equipped item is bare hands (`素手`).
-- The item definition type is throw (`t`) or poison/trap (`p`).
-- The weapon already possesses a seal (`wea_seal != 0`).
+An equipped weapon is required. Legacy eligibility comes from each seal's weapon
+ID list (`blacksmith.cgi:239–252`, `_data.cgi:2209–2223`): seals 1–6 permit all
+nonzero catalog weapon IDs; seals 7–12 restrict specific weapons. Neither weapon
+type nor an existing seal supplies an additional rejection.
 
 ### Crystal Drops & Consumable Removal (`_battle.cgi:145-150`, `_item.cgi:140-155`)
 - **Monster Crystal Drops**: When an enemy monster is defeated in combat (via direct damage, poison DOT, or job skill like Dejon), a crystal drop is checked:
@@ -56,7 +55,9 @@ Seals cannot be applied if:
 
 ### Mechanics
 - Allows players to assign a personalized name to their equipped weapon or armor.
-- Submitting an empty name resets the custom name to the item's original catalog name.
+- The Go service accepts an explicit empty name to reset to the catalog name;
+  legacy `nazukeru` instead opens the naming prompt for an empty name. This
+  existing difference is retained by transport migration, not certified as parity.
 - Custom names are stored on the character record (`wea_name`, `arm_name`) and preserved across weapon deposits/withdrawals.
 
 ### Sanitization & Validation Rules
@@ -80,7 +81,8 @@ Seals cannot be applied if:
   - Rejects deposit if the storage already contains 3 weapons (`ErrStorageFull`).
   - Rejects deposit if a stored weapon has the identical effective name (`customName` or catalog `Name`) (`ErrDuplicateStoredName`).
   - Unequips and removes the weapon from the character's inventory, moving it to `blacksmith_deposits`.
-  - Clears `wea_seal` and `wea_name` on the character record.
+  - Clears `wea_seal` and `wea_name` on the character record, matching legacy
+    `write_user` cleanup after unequipping (`system.cgi:80–83`).
 - **Withdraw (`ひきだす`)**:
   - Rejects withdrawal if the character currently has any weapon equipped in `SlotMainHand` (`ErrWeaponSlotOccupied`).
   - Restores the weapon into the character's inventory and automatically equips it.
@@ -101,4 +103,52 @@ Rank 3: equipment_slots, inventory_items (SELECT ... FOR UPDATE)
 Rank 8: blacksmith_deposits (SELECT ... FOR UPDATE)
 ```
 
-Deadlock is mathematically impossible because locks are always acquired in strictly monotonic rank order.
+The composition root injects the transaction provider. Character locking
+serializes customization and storage operations for the same owner; transaction
+rollback must preserve equipment, inventory, storage, crystals and names together.
+
+## 5. Gateway commands and retained reads
+
+The authenticated path character owns every command. Strict parameters reject
+actor overrides and missing/null required fields before service execution.
+Integer inputs retain signed int64 transport bounds; seal/slot ranges, equipment,
+names, storage capacity and crystal costs remain service validations. Wallet gold
+is not required. Successful results retain HTTP-owned dialogue and service facts;
+refresh failure preserves the known outcome and permits GET-only recovery under
+the [shared Gateway contract](../architecture/client-agent-api.md#input-and-execution-boundary).
+
+| Legacy dispatch / source | Gateway replacement and result |
+| --- | --- |
+| `こくいん` → `kokuin`, `blacksmith.cgi:110–140` | `blacksmith_seal` → `ApplySeal`; required `seal_id`, returns `seal` and `message` |
+| `なづける` → `nazukeru`, `blacksmith.cgi:55–105` | `blacksmith_name` → `NameEquipment`; required `target` and `name`, returns canonical `target`, trimmed `name` and `message`; explicit `""` resets the name |
+| `あずける` → `azukeru`, `blacksmith.cgi:144–188` | `blacksmith_deposit` → `DepositWeapon`; omitted/empty params, returns `deposit` and `message`; the equipped main-hand weapon is the target |
+| `ひきだす` → `hikidasu`, `blacksmith.cgi:192–237` | `blacksmith_withdraw` → `WithdrawWeapon`; required owned `slot`, returns `slot` and `message`; slot identity replaces legacy effective-name selection |
+
+These are the four additions to `@actions`/`%actions` at
+`blacksmith.cgi:24–31`, loaded through `party.cgi:13–22`. Their former character
+POSTs (`blacksmith/seal`, `blacksmith/name`, `blacksmith/storage/deposit` and
+`blacksmith/storage/withdraw`) are retired. Independent ActionID schemas and
+resolver links use `executeCharacterAction`.
+
+`GET /blacksmith/seals` retains the seal catalog; owned
+`GET /characters/{id}/blacksmith/storage` retains stored weapon/slot discovery.
+They remain required until equivalent selected observations are verified under
+[Economy migration #947](https://github.com/witchcraze/party2re/issues/947).
+No Blacksmith scene is registered yet: progressive navigation does not offer
+these commands as facility choices. Direct commands still undergo current
+activity/location checks, independently of saved selection or retained reads.
+
+Legacy `system.cgi:9–25` also registers `br`, `いどう`, `まち`, `ほーむ`, optional
+`ぎるど`, `ささやき`, `はなす`, `しらべる`, `ろぐあうと` and `すくしょ`.
+Layout separators and screenshots belong to presentation; session logout replaces
+the logout action; navigation, Home, Guild, whisper and NPC observations retain
+their shared migration owners (#947/#949/#950), rather than becoming equipment
+commands. The naming/seal/deposit/withdraw prompts remain observation work.
+
+Transport migration preserves existing service behavior, including equipped-item
+naming, leading/trailing whitespace trimming, ASCII `@` rejection, and Go
+inventory-capacity checks on withdrawal. Legacy
+differs on these points, uses a wall-clock action cooldown and venue comment/NPC
+logs (`system.cgi:639–680`), and includes weapon names in storage dialogue.
+These reconciliations remain #947 work; the Gateway adds no legacy cooldown,
+presence or log implementation and makes no full gameplay-parity claim.

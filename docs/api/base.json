@@ -4640,6 +4640,147 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "blacksmith_seal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "seal_id": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": -9223372036854775808,
+                      "maximum": 9223372036854775807,
+                      "description": "Explicit seal ID; the service validates 1..12 and weapon applicability."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "seal_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "blacksmith_name",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "description": "Equipped weapon or armor; existing service aliases are accepted."
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "Explicit custom name; an empty string resets it to the catalog name. Service validation and trimming apply."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "target",
+                    "name"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "blacksmith_deposit",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "blacksmith_withdraw",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "slot": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": -9223372036854775808,
+                      "maximum": 9223372036854775807,
+                      "description": "Explicit owned blacksmith storage slot; the service validates 1..3."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "slot"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
           }
         ]
       },
@@ -7734,35 +7875,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "NameEquipmentRequest": {
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "target": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "target"
-        ],
-        "additionalProperties": false
-      },
-      "ApplySealRequest": {
-        "properties": {
-          "seal_id": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 12
-          }
-        },
-        "type": "object",
-        "required": [
-          "seal_id"
-        ],
-        "additionalProperties": false
-      },
       "BlacksmithDeposit": {
         "properties": {
           "character_id": {
@@ -7798,20 +7910,6 @@
           "created_at"
         ],
         "type": "object",
-        "additionalProperties": false
-      },
-      "WithdrawWeaponRequest": {
-        "properties": {
-          "slot": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 3
-          }
-        },
-        "type": "object",
-        "required": [
-          "slot"
-        ],
         "additionalProperties": false
       },
       "BossListResponse": {

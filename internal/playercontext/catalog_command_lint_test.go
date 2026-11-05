@@ -92,7 +92,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {
@@ -257,6 +257,38 @@ func TestCatalog_GatewayDriftDiagnostics(t *testing.T) {
 			}
 			if !strings.Contains(combined, tc.want) || !strings.Contains(combined, tc.id) {
 				t.Fatalf("expected diagnostic %q for %s, got %v", tc.want, tc.id, errs)
+			}
+		})
+	}
+}
+
+func TestCatalog_BlacksmithGatewayContracts(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	for _, tc := range []struct {
+		id     string
+		fields []string
+	}{
+		{"blacksmith_seal", []string{"seal_id"}}, {"blacksmith_name", []string{"target", "name"}},
+		{"blacksmith_deposit", []string{}}, {"blacksmith_withdraw", []string{"slot"}},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			act, ok := playercontext.GetAction(tc.id)
+			if !ok || act.OperationID != "executeCharacterAction" || !slices.Equal(act.RequiredParams, tc.fields) {
+				t.Fatalf("incorrect catalog: %+v", act)
+			}
+			then, params := gatewayContract(t, spec, tc.id)
+			if params.Type != "object" || string(params.AdditionalProperties) != "false" || !slices.Equal(params.Required, tc.fields) || len(params.Properties) != len(tc.fields) || slices.Contains(then.Required, "params") != (len(tc.fields) > 0) {
+				t.Fatalf("incorrect contract: %+v", params)
+			}
+			for _, name := range tc.fields {
+				field := params.Properties[name]
+				if name == "seal_id" || name == "slot" {
+					if field.Type != "integer" || field.Format != "int64" || field.Minimum.String() != "-9223372036854775808" || field.Maximum.String() != "9223372036854775807" {
+						t.Fatalf("incorrect numeric contract: %+v", field)
+					}
+				} else if field.Type != "string" || field.MinLength != 0 {
+					t.Fatalf("incorrect naming contract: %+v", field)
+				}
 			}
 		})
 	}
