@@ -193,6 +193,31 @@ func TestNormalRunRetainedClaimRollsBackWithCommand(t *testing.T) {
 	}
 }
 
+func TestNormalRunRetainedClaimRejectsMidFlightLedgerMismatch(t *testing.T) {
+	f := newNormalFixture(t, 2)
+	member := f.actors[1]
+	oldRun := f.timeoutParty(t, "normal")
+	newRun := f.nextNormalRun(t)
+	cmd := f.claimCommand(t, newRun, "claim")
+	f.store.tamperRetained.Store(true)
+	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, adventure.ErrRunConflict) {
+		t.Fatal("expected ErrRunConflict on mid-flight ledger mismatch, got", err)
+	}
+	f.store.tamperRetained.Store(false)
+	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money {
+		t.Fatal("rejected command leaked assets", c, err)
+	}
+	if p := f.storedRecipient(t, oldRun, member.ID); p.Pending.Gold != 5 || p.Applied != (adventure.RunEarnings{}) {
+		t.Fatal("rejected command mutated ledger", p)
+	}
+	if _, err := f.svc.Command(context.Background(), cmd); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money+5 {
+		t.Fatal(c, err)
+	}
+}
+
 func TestNormalRunTimeoutTryStockStaysRetained(t *testing.T) {
 	f := newNormalFixture(t, 2)
 	member := f.actors[1]

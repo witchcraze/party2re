@@ -122,11 +122,12 @@ type RetainedEarnings struct {
 	Recipient RunRecipient
 }
 
-// RetainedEarningsStore owns the claim path for RetainedEarnings. Both methods
-// require the ambient command transaction with the actor's character locked.
+// RetainedEarningsStore owns the claim path for RetainedEarnings. The read
+// precedes settlement; the write runs after it (Rank 8), locks the row and fails
+// with ErrRunConflict unless its unpaid balance equals the credited one.
 type RetainedEarningsStore interface {
 	FindRetainedEarnings(context.Context, string) ([]RetainedEarnings, error)
-	SaveRetainedRecipient(context.Context, string, string, RunRecipient) error
+	SaveRetainedRecipient(context.Context, string, string, RunEarnings, RunRecipient) error
 }
 
 // NormalRunStore keeps receipts and recipient dispositions beyond active state

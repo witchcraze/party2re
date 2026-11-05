@@ -19,17 +19,19 @@ func (s *NormalRunService) retainedDue(ctx context.Context, actor string, pendin
 	return retained, due, nil
 }
 
-// settleRetained moves paid balances to Applied in the settlement transaction.
+// settleRetained moves paid balances to Applied in the settlement transaction,
+// after the settler (Rank 8 follows Ranks 3/4/5) and before commit.
 // Try stock stays in Conditional, and the committed penalty is not rewritten.
 func (s *NormalRunService) settleRetained(ctx context.Context, actor string, retained []RetainedEarnings) error {
 	for _, entry := range retained {
 		p := entry.Recipient
+		credited := p.Pending
 		var err error
 		if p.Applied, err = addRunEarnings(p.Applied, p.Pending); err != nil {
 			return err
 		}
 		p.Pending = RunEarnings{}
-		if err := s.cfg.Store.SaveRetainedRecipient(ctx, entry.RunID, actor, p); err != nil {
+		if err := s.cfg.Store.SaveRetainedRecipient(ctx, entry.RunID, actor, credited, p); err != nil {
 			return err
 		}
 	}

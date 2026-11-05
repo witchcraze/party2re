@@ -621,8 +621,10 @@ Wake; timer loss or an unavailable projection cannot bypass the penalty.
 Recovery does not pay the retained stock. Following the legacy rule that user-owned
 stock outlives the deleted room, the recipient ledger stays the only authority for
 unpaid unconditional earnings of every disposed timeout, not just the latest
-penalty record. The actor's next stock-releasing command in a later normal run adds
-all of them to its own release in the same settler call, then moves each to Applied
+penalty record. The actor's next stock-releasing command in a later normal run reads
+them without taking Rank 8 row locks before Rank 3/4/5 asset settlement, adds them
+to its own release in the same settler call, then locks each released row at Rank 8,
+verifies its unpaid balance matches the credited amount, and moves it to Applied
 in that transaction; receipt replay, rollback and retry therefore credit once.
 Conditional Try stock and the committed penalty are never touched by this claim.
 
