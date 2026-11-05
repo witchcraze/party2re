@@ -107,7 +107,10 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 	if targetID == "" {
 		targetChar, err := s.charRepo.FindByName(ctx, targetName)
 		if err != nil {
-			return SendResult{}, ErrTargetNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return SendResult{}, ErrTargetNotFound
+			}
+			return SendResult{}, err
 		}
 		targetID = targetChar.ID
 	}
@@ -134,11 +137,17 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 		firstID, secondID := id.Sort2(senderID, targetID)
 		firstChar, err := s.charRepo.FindByIDForUpdate(txCtx, firstID)
 		if err != nil {
-			return ErrTargetNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return ErrTargetNotFound
+			}
+			return err
 		}
 		secondChar, err := s.charRepo.FindByIDForUpdate(txCtx, secondID)
 		if err != nil {
-			return ErrTargetNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return ErrTargetNotFound
+			}
+			return err
 		}
 
 		if err := s.checkMutation(txCtx, senderID); err != nil {
