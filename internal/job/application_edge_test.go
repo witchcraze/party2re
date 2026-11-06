@@ -539,8 +539,8 @@ func TestExchangeJob_Comprehensive(t *testing.T) {
 		{"empty target", "", "job-04"},
 		{"empty targetOld", "job-03", ""},
 		{"same targets", "job-03", "job-03"},
-		{"target not mastered", "job-05", "job-04"},
-		{"targetOld not mastered", "job-03", "job-05"},
+		{"target not recorded", "job-05", "job-04"},
+		{"targetOld not recorded", "job-03", "job-05"},
 	}
 	charRepo = &charRepoStub{char: char}
 	svc, _ = NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))

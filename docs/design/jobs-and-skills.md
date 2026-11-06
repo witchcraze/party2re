@@ -106,14 +106,10 @@ is retained but never grants eligibility or overwrites recalled SP.
 The battle adapter snapshots
 recorded jobs read-only for [in-adventure Tool168 memory](battle.md#temporary-transformation-and-job-memory),
 including explicit unknownSP for historical transitions without a saved value.
-Battle copies never call the job repository's save method. Permanent two-job
-exchange still has the independently tracked learned-job eligibility gap
-[#1160](https://github.com/witchcraze/party2re/issues/1160).
+Battle copies never call the job repository's save method.
 
 ### Job Memory Exchange (おもいだす)
-- Legacy memory exchange can recall recorded jobs, including unmastered jobs;
-  the current permanent exchange implementation still requires two mastered
-  jobs (#1160). Recall replaces current/previous jobs without normal level/stat
+- Memory exchange recalls recorded jobs, including unmastered jobs, restoring their saved SP (`state.SavedSP`); unrecorded jobs and jobs with unknown SP are rejected (`ErrJobUnavailable`). Recall replaces current/previous jobs without normal level/stat
   penalties or incrementing job-change counts. In-adventure Tool168 is a separate
   [previous-job-only operation](battle.md#temporary-transformation-and-job-memory).
 - **Two Memory Lifecycles**:
@@ -189,7 +185,7 @@ exchange still has the independently tracked learned-job eligibility gap
 | Legacy action | Reconstruction contract | Notes |
 | --- | --- | --- |
 | `てんしょく` | `POST /characters/{id}/change-job` / `Service.ChangeJob` | JSON transport replaces the text command. |
-| `おもいだす` | `POST /characters/{id}/exchange-job` / `Service.ExchangeJob` | Uses `item-168` (persistent) or `item-243` (temporary), two mastered jobs, and a persisted job memory snapshot. |
+| `おもいだす` | `POST /characters/{id}/exchange-job` / `Service.ExchangeJob` | Uses `item-168` (persistent) or `item-243` (temporary), two recorded jobs with saved SP, and a persisted job memory snapshot. |
 | `よびおこす` | `POST /characters/{id}/recall-future`, `POST /characters/{id}/future-memories` / `Service.RecallFutureMemory`, `Service.SaveFutureMemory` | Uses `item-207`, slot capacity governed by `over_future` (revalidated under character lock within economy transaction boundary), restores status snapshot and consumes slot. |
 | `じょぶますたー` | `GET /characters/{id}/job-mastery` / `Service.GetJobMastery` | Public inspection of 87-job catalog progress, mastery percentage, and 72-job completion flag. |
 

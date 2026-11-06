@@ -371,3 +371,210 @@ func TestJobMasteryDatabaseProjectionRegression(t *testing.T) {
 		t.Errorf("job-08: expected unlearned / SP 0, got %s / SP %d", j08.Status, j08.CurrentSP)
 	}
 }
+
+func TestExchangeJobUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+
+	chars, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := database.NewCharacterJobRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventories, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	runner, err := economy.NewService(chars, inventories, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := corejob.NewCatalog([]corejob.Definition{
+		{ID: "job-01", Name: "First", CMPTier: 1, MasterySP: 80},
+		{ID: "job-02", Name: "Second", CMPTier: 1, MasterySP: 80},
+		{ID: "job-03", Name: "Third", CMPTier: 1, MasterySP: 80},
+		{ID: "job-04", Name: "Fourth", CMPTier: 1, MasterySP: 80},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Rollback test when repository fails
+	{
+		char, err := database.CreateTestCharacter(ctx, db, "Exchange Rollback")
+		if err != nil {
+			t.Fatal(err)
+		}
+		char.JobID, char.OldJobID, char.SP, char.OldSP, char.Level = "job-03", "job-04", 9, 11, 20
+		if err := chars.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+		state, err := corejob.NewCharacterJob(char.ID, char.JobID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := state.RecordJobSP("job-01", 17); err != nil {
+			t.Fatal(err)
+		}
+		if err := state.RecordJobSP("job-02", 25); err != nil {
+			t.Fatal(err)
+		}
+		if err := jobs.Save(ctx, state); err != nil {
+			t.Fatal(err)
+		}
+		inv, err := coreinventory.New(char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, err := item.NewInstance("item-168", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := inv.Add(token); err != nil {
+			t.Fatal(err)
+		}
+		if err := inventories.Save(ctx, inv); err != nil {
+			t.Fatal(err)
+		}
+
+		failErr := errors.New("simulated save error")
+		failRepo := failAfterJobPointsSave{Repository: jobs, err: failErr}
+		svc, err := job.NewService(failRepo, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, _, err = svc.ExchangeJob(ctx, char.ID, "job-01", "job-02", "item-168")
+		if err == nil || !errors.Is(err, failErr) {
+			t.Fatalf("expected simulated error, got %v", err)
+		}
+
+		// Verify rollback: inventory item preserved, character unchanged
+		reloadedInv, err := inventories.FindByCharacterID(ctx, char.ID)
+		if err != nil || reloadedInv.Quantity("item-168") != 1 {
+			t.Fatalf("expected item-168 quantity 1, got %d (err: %v)", reloadedInv.Quantity("item-168"), err)
+		}
+		reloadedChar, err := chars.FindByID(ctx, char.ID)
+		if err != nil || reloadedChar.JobID != "job-03" || reloadedChar.SP != 9 || reloadedChar.JobMemory != nil {
+			t.Fatalf("expected character untouched, got %#v", reloadedChar)
+		}
+	}
+
+	// 2. Successful exchange, DB round-trip, and memory revert
+	{
+		char, err := database.CreateTestCharacter(ctx, db, "Exchange RoundTrip")
+		if err != nil {
+			t.Fatal(err)
+		}
+		char.JobID, char.OldJobID, char.SP, char.OldSP, char.Level = "job-03", "job-04", 9, 11, 20
+		if err := chars.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+		state, err := corejob.NewCharacterJob(char.ID, char.JobID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := state.RecordJobSP("job-01", 17); err != nil {
+			t.Fatal(err)
+		}
+		if err := state.RecordJobSP("job-02", 25); err != nil {
+			t.Fatal(err)
+		}
+		if err := jobs.Save(ctx, state); err != nil {
+			t.Fatal(err)
+		}
+		inv, err := coreinventory.New(char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, err := item.NewInstance("item-168", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := inv.Add(token); err != nil {
+			t.Fatal(err)
+		}
+		if err := inventories.Save(ctx, inv); err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := job.NewService(jobs, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		updatedChar, updatedJob, err := svc.ExchangeJob(ctx, char.ID, "job-01", "job-02", "item-168")
+		if err != nil {
+			t.Fatalf("ExchangeJob failed: %v", err)
+		}
+		if updatedChar.JobID != "job-01" || updatedChar.SP != 17 || updatedChar.OldJobID != "job-02" || updatedChar.OldSP != 25 {
+			t.Fatalf("unexpected exchange char: %#v", updatedChar)
+		}
+		if updatedJob.CurrentJobID != "job-01" {
+			t.Fatalf("expected CurrentJobID job-01, got %s", updatedJob.CurrentJobID)
+		}
+
+		// Reload from DB
+		reloadedChar, err := chars.FindByID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloadedChar.JobID != "job-01" || reloadedChar.SP != 17 || reloadedChar.OldJobID != "job-02" || reloadedChar.OldSP != 25 {
+			t.Fatalf("DB reload character mismatch: %#v", reloadedChar)
+		}
+		if reloadedChar.JobMemory == nil || reloadedChar.JobMemory.JobID != "job-03" || reloadedChar.JobMemory.SP != 9 {
+			t.Fatalf("DB reload memory mismatch: %#v", reloadedChar.JobMemory)
+		}
+		reloadedJob, err := jobs.FindByCharacterID(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloadedJob.CurrentJobID != "job-01" {
+			t.Fatalf("DB reload state CurrentJobID mismatch: %s", reloadedJob.CurrentJobID)
+		}
+		if sp, ok := reloadedJob.SavedSP("job-01"); !ok || sp != 17 {
+			t.Fatalf("expected SavedSP(job-01) = 17, got (%d, %t)", sp, ok)
+		}
+		if sp, ok := reloadedJob.SavedSP("job-02"); !ok || sp != 25 {
+			t.Fatalf("expected SavedSP(job-02) = 25, got (%d, %t)", sp, ok)
+		}
+		if reloadedJob.IsMastered("job-01") || reloadedJob.IsMastered("job-02") {
+			t.Fatal("expected jobs to remain unmastered in DB")
+		}
+
+		// Revert via ExchangeJob and reload from DB
+		restoredChar, restoredJob, err := svc.ExchangeJob(ctx, char.ID, "", "")
+		if err != nil {
+			t.Fatalf("ExchangeJob revert failed: %v", err)
+		}
+		if restoredChar.JobID != "job-03" || restoredChar.SP != 9 || restoredChar.JobMemory != nil {
+			t.Fatalf("revert character mismatch: %#v", restoredChar)
+		}
+		if restoredJob.CurrentJobID != "job-03" {
+			t.Fatalf("revert state CurrentJobID mismatch: %s", restoredJob.CurrentJobID)
+		}
+
+		afterRevertChar, err := chars.FindByID(ctx, char.ID)
+		if err != nil || afterRevertChar.JobID != "job-03" || afterRevertChar.SP != 9 || afterRevertChar.JobMemory != nil {
+			t.Fatalf("DB after revert character mismatch: %#v", afterRevertChar)
+		}
+		afterRevertJob, err := jobs.FindByCharacterID(ctx, char.ID)
+		if err != nil || afterRevertJob.CurrentJobID != "job-03" {
+			t.Fatalf("DB after revert job mismatch: %#v", afterRevertJob)
+		}
+		if sp, ok := afterRevertJob.SavedSP("job-01"); !ok || sp != 17 {
+			t.Fatalf("expected SavedSP(job-01) still 17 after revert, got (%d, %t)", sp, ok)
+		}
+	}
+}
