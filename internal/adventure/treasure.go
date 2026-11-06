@@ -48,6 +48,16 @@ func isThreeTimesTreasureStage(stageID string) bool {
 		id == "stage-21" || id == "21"
 }
 
+func isStage19(stageIDs ...string) bool {
+	for _, id := range stageIDs {
+		trimmed := strings.ToLower(strings.TrimSpace(id))
+		if trimmed == "stage-19" || trimmed == "19" {
+			return true
+		}
+	}
+	return false
+}
+
 // CalculateTreasureCount calculates the number of treasure boxes spawned on Floor 11
 // in 1:1 parity with legacy vs_monster.cgi ($boss_round+1) and _npc_action.cgi (add_treasure).
 func CalculateTreasureCount(input TreasureCalculationInput) int {
@@ -264,6 +274,9 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 	}
 
 	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, s.now(), s.Rng)
+	if isStage19(s.StageID, s.Stage.ID) {
+		s.UnsealDemonKing = true
+	}
 }
 
 // IsTreasureBlessing reports whether the blessing string matches Chapel Blessing 4 ("宝箱がほしい") or its supported aliases.

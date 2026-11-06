@@ -98,6 +98,7 @@ func (s *Service) settleWithBattleSettler(
 		RecipientDrops:  recipientDrops,
 		DefeatedEnemies: defeatedEnemies,
 		ExitFatigue:     crawlResult.EffectiveExitFatigue(""),
+		UnsealDemonKing: crawlResult.UnsealDemonKing,
 	}
 
 	resp, err := s.battleSettler.ApplyPostBattleResult(ctx, postBattleReq)

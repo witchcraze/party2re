@@ -901,7 +901,7 @@ func TestApplyPostBattleResult_MaoCount_Unseal(t *testing.T) {
 		battle.WithTransactionProvider(txProv),
 	)
 
-	// 1. Victory with UnsealDemonKing = true
+	// 1. Victory with explicit UnsealDemonKing = true
 	reqUnseal := battle.ApplyPostBattleRequest{
 		CharacterIDs: []string{"char-unseal-1", "char-unseal-2"},
 		BattleResult: corebattle.PartyBattleResult{
@@ -923,39 +923,59 @@ func TestApplyPostBattleResult_MaoCount_Unseal(t *testing.T) {
 		t.Errorf("expected char 2 MaoCount = 1, got %d", resp.UpdatedCharacters["char-unseal-2"].MaoCount)
 	}
 
-	// 2. Victory with Habitat = "封印の地" (Stage EX)
-	reqHabitat := battle.ApplyPostBattleRequest{
+	// 2. Inferred Habitat/monster negatives: Habitat alone or monster212 must not unseal
+	negativeHabitats := []string{"封印の地", "stage-20", "20", "stage-19", "19", "プニプニ平原"}
+	for _, habitat := range negativeHabitats {
+		reqHabitat := battle.ApplyPostBattleRequest{
+			CharacterIDs: []string{"char-unseal-1"},
+			BattleResult: corebattle.PartyBattleResult{
+				Outcome:     corebattle.OutcomeWin,
+				RemainingHP: map[string]int{"char-unseal-1": 100},
+			},
+			Habitat: habitat,
+		}
+		respHab, err := svc.ApplyPostBattleResult(ctx, reqHabitat)
+		if err != nil {
+			t.Fatalf("ApplyPostBattleResult negative habitat (%s) failed: %v", habitat, err)
+		}
+		if respHab.UpdatedCharacters["char-unseal-1"].MaoCount != 1 {
+			t.Errorf("expected char 1 MaoCount to remain 1 for habitat %s, got %d", habitat, respHab.UpdatedCharacters["char-unseal-1"].MaoCount)
+		}
+	}
+
+	reqDefeatedMonster := battle.ApplyPostBattleRequest{
 		CharacterIDs: []string{"char-unseal-1"},
 		BattleResult: corebattle.PartyBattleResult{
 			Outcome:     corebattle.OutcomeWin,
 			RemainingHP: map[string]int{"char-unseal-1": 100},
 		},
-		Habitat: "封印の地",
+		DefeatedEnemies: []corebattle.Participant{
+			{ID: "monster-212", Name: "魔王"},
+			{ID: "monster-999", Name: "封印のツボ"},
+		},
 	}
-
-	resp2, err := svc.ApplyPostBattleResult(ctx, reqHabitat)
+	respMonster, err := svc.ApplyPostBattleResult(ctx, reqDefeatedMonster)
 	if err != nil {
-		t.Fatalf("ApplyPostBattleResult habitat failed: %v", err)
+		t.Fatalf("ApplyPostBattleResult negative defeated monster failed: %v", err)
 	}
-	if resp2.UpdatedCharacters["char-unseal-1"].MaoCount != 2 {
-		t.Errorf("expected char 1 MaoCount = 2, got %d", resp2.UpdatedCharacters["char-unseal-1"].MaoCount)
+	if respMonster.UpdatedCharacters["char-unseal-1"].MaoCount != 1 {
+		t.Errorf("expected char 1 MaoCount to remain 1 for defeated monster, got %d", respMonster.UpdatedCharacters["char-unseal-1"].MaoCount)
 	}
 
-	// 3. Normal battle without unseal -> MaoCount should not change
-	reqNormal := battle.ApplyPostBattleRequest{
+	// 3. Defeat after earned events: UnsealDemonKing = true applies even on defeat
+	reqDefeatEarned := battle.ApplyPostBattleRequest{
 		CharacterIDs: []string{"char-unseal-1"},
 		BattleResult: corebattle.PartyBattleResult{
-			Outcome:     corebattle.OutcomeWin,
-			RemainingHP: map[string]int{"char-unseal-1": 100},
+			Outcome:     corebattle.OutcomeDefeat,
+			RemainingHP: map[string]int{"char-unseal-1": 0},
 		},
-		Habitat: "プニプニ平原",
+		UnsealDemonKing: true,
 	}
-
-	resp3, err := svc.ApplyPostBattleResult(ctx, reqNormal)
+	respDefeat, err := svc.ApplyPostBattleResult(ctx, reqDefeatEarned)
 	if err != nil {
-		t.Fatalf("ApplyPostBattleResult normal failed: %v", err)
+		t.Fatalf("ApplyPostBattleResult defeat earned failed: %v", err)
 	}
-	if resp3.UpdatedCharacters["char-unseal-1"].MaoCount != 2 {
-		t.Errorf("expected char 1 MaoCount to remain 2, got %d", resp3.UpdatedCharacters["char-unseal-1"].MaoCount)
+	if respDefeat.UpdatedCharacters["char-unseal-1"].MaoCount != 2 {
+		t.Errorf("expected char 1 MaoCount = 2 after earned unseal on defeat, got %d", respDefeat.UpdatedCharacters["char-unseal-1"].MaoCount)
 	}
 }

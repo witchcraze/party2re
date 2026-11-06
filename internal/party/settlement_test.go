@@ -3,6 +3,7 @@ package party
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -220,5 +221,37 @@ func TestSettleWithBattleSettler_UsesAccumulatedConsumedItems(t *testing.T) {
 	}
 	if got := settler.req.BattleResult.ConsumedItems; !reflect.DeepEqual(got, accumulated) {
 		t.Fatalf("settlement ConsumedItems = %v, want %v", got, accumulated)
+	}
+}
+
+func TestSettleWithBattleSettler_ConveysUnsealDemonKing(t *testing.T) {
+	for _, unseal := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unseal=%v", unseal), func(t *testing.T) {
+			settler := &capturingBattleSettler{}
+			svc, err := NewService(
+				newMockPartyRepository(),
+				newMockCharacterRepository(),
+				&mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)},
+				&mockStageProvider{stages: make(map[string]adventure.Stage)},
+				&mockMonsterProvider{monsters: make(map[string]adventure.Monster)},
+				nil,
+				WithPostBattleSettler(settler),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			members := []Member{{CharacterID: "c1", PartyID: "p1"}}
+			charMap := map[string]corecharacter.Character{"c1": {ID: "c1"}}
+			crawlResult := &adventure.DungeonCrawlResult{
+				Outcome:         corebattle.OutcomeWin,
+				UnsealDemonKing: unseal,
+			}
+			if _, _, err := svc.settlePostBattle(context.Background(), members, charMap, crawlResult, corebattle.PartyBattleResult{}); err != nil {
+				t.Fatal(err)
+			}
+			if settler.req.UnsealDemonKing != unseal {
+				t.Fatalf("expected settler.req.UnsealDemonKing = %v, got %v", unseal, settler.req.UnsealDemonKing)
+			}
+		})
 	}
 }

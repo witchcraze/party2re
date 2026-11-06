@@ -317,7 +317,7 @@ func TestAdventure_Defeat_HPSetToOneAndPersisted(t *testing.T) {
 }
 
 func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
-	// Strong character capable of clearing stage-20 (封印の地)
+	// Strong character capable of clearing stages
 	char, err := corecharacter.New("MaoSlay")
 	if err != nil {
 		t.Fatal(err)
@@ -333,22 +333,46 @@ func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
 	settler := &mockPostBattleSettler{}
 	svc, _ := setupTestAdventureService(t, char, settler)
 
-	// 1. Clear Stage-20 (封印の地 / Stage EX)
-	crawlRes, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+	// 1. Clear Stage-19 (封印の地): Floor 11 treasure creation generates UnsealDemonKing = true
+	crawlRes19, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-19",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl stage-19 failed: %v", err)
+	}
+	if !crawlRes19.StageCleared {
+		t.Fatalf("expected stage-19 to be cleared, outcome: %v", crawlRes19.Outcome)
+	}
+	if len(crawlRes19.TreasureBoxes) == 0 {
+		t.Fatalf("expected stage-19 floor 11 treasure boxes to be created")
+	}
+	if !crawlRes19.UnsealDemonKing {
+		t.Errorf("expected crawlRes19.UnsealDemonKing = true for stage-19 floor 11 treasure event, got false")
+	}
+	if !settler.lastReq.UnsealDemonKing {
+		t.Errorf("expected settler.lastReq.UnsealDemonKing = true for stage-19 treasure event, got false")
+	}
+
+	// 2. Clear Stage-20 (天空城 victory): must NOT set UnsealDemonKing
+	crawlRes20, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
 		StageID:      "stage-20",
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl stage-20 failed: %v", err)
 	}
-	if !crawlRes.StageCleared {
-		t.Fatalf("expected stage-20 to be cleared, outcome: %v", crawlRes.Outcome)
+	if !crawlRes20.StageCleared {
+		t.Fatalf("expected stage-20 to be cleared, outcome: %v", crawlRes20.Outcome)
 	}
-	if !settler.lastReq.UnsealDemonKing {
-		t.Errorf("expected settler.lastReq.UnsealDemonKing = true for stage-20, got false")
+	if crawlRes20.UnsealDemonKing {
+		t.Errorf("expected crawlRes20.UnsealDemonKing = false for stage-20 victory, got true")
+	}
+	if settler.lastReq.UnsealDemonKing {
+		t.Errorf("expected settler.lastReq.UnsealDemonKing = false for stage-20 victory, got true")
 	}
 
-	// 2. Clear Stage-01 (Normal starter stage) -> UnsealDemonKing must be false
+	// 3. Clear Stage-01 (Normal starter stage): must NOT set UnsealDemonKing
 	crawlResNormal, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
 		StageID:      "stage-01",
@@ -359,9 +383,184 @@ func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
 	if !crawlResNormal.StageCleared {
 		t.Fatalf("expected stage-01 to be cleared, outcome: %v", crawlResNormal.Outcome)
 	}
+	if crawlResNormal.UnsealDemonKing {
+		t.Errorf("expected settler.lastReq.UnsealDemonKing = false for stage-01, got true")
+	}
 	if settler.lastReq.UnsealDemonKing {
 		t.Errorf("expected settler.lastReq.UnsealDemonKing = false for stage-01, got true")
 	}
+
+	// 4. Missing treasure on Stage-19 (defeat before floor 11): must NOT set UnsealDemonKing
+	weakChar, err := corecharacter.New("Weakling")
+	if err != nil {
+		t.Fatal(err)
+	}
+	weakChar.Level = 45
+	weakChar.JobLevel = 20
+	weakChar.Stats.HP = 1
+	weakChar.Stats.MaxHP = 10
+	weakChar.Stats.Attack = 1
+	weakChar.Stats.Defense = 1
+	weakChar.Stats.Agility = 1
+
+	weakSettler := &mockPostBattleSettler{}
+	weakSvc, _ := setupTestAdventureService(t, weakChar, weakSettler)
+
+	crawlResWeak, err := weakSvc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{weakChar.ID},
+		StageID:      "stage-19",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl weak stage-19 failed: %v", err)
+	}
+	if crawlResWeak.StageCleared {
+		t.Fatalf("expected weak character to fail stage-19")
+	}
+	if len(crawlResWeak.TreasureBoxes) != 0 {
+		t.Fatalf("expected no treasure boxes on defeat before floor 11, got %d", len(crawlResWeak.TreasureBoxes))
+	}
+	if crawlResWeak.UnsealDemonKing {
+		t.Errorf("expected crawlResWeak.UnsealDemonKing = false on missing treasure, got true")
+	}
+	if weakSettler.lastReq.UnsealDemonKing {
+		t.Errorf("expected weakSettler.lastReq.UnsealDemonKing = false on missing treasure, got true")
+	}
+
+	// 5. Zero treasure boxes on Stage-19 (e.g. solo gambler rolling -1 penalty):
+	// Reaching Floor 11 treasure creation still triggers UnsealDemonKing = true matching legacy vs_monster.cgi:91-105
+	t.Run("zero treasure boxes on stage 19 still triggers unseal on floor 11 creation", func(t *testing.T) {
+		gambler, err := corecharacter.New("Gambler")
+		if err != nil {
+			t.Fatal(err)
+		}
+		gambler.Level = 99
+		gambler.JobID = "job-81"
+		gambler.JobLevel = 20
+		gambler.Stats.HP = 50000
+		gambler.Stats.MaxHP = 50000
+		gambler.Stats.Attack = 20000
+		gambler.Stats.Defense = 20000
+		gambler.Stats.Agility = 20000
+
+		spy := &mockPostBattleSettler{}
+		// RNG sequence for solo Gambler in CalculateTreasureCount:
+		// rng(3) returns 0, rng(2) returns 1 -> diff is -1 -> count = 0 - 1 = -1 -> boxCount = 0
+		fixedRng := func(n int) int {
+			if n == 3 {
+				return 0
+			}
+			if n == 2 {
+				return 1
+			}
+			return 0
+		}
+
+		svcGambler, _ := setupTestAdventureService(t, gambler, spy)
+		crawlRes, err := svcGambler.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+			CharacterIDs: []string{gambler.ID},
+			StageID:      "stage-19",
+			Rng:          fixedRng,
+		})
+		if err != nil {
+			t.Fatalf("ExecuteCrawl gambler stage-19 failed: %v", err)
+		}
+		if !crawlRes.StageCleared {
+			t.Fatalf("expected gambler to clear stage-19, got outcome %v", crawlRes.Outcome)
+		}
+		if len(crawlRes.TreasureBoxes) != 0 {
+			t.Fatalf("expected 0 treasure boxes for gambler penalty, got %d", len(crawlRes.TreasureBoxes))
+		}
+		if !crawlRes.UnsealDemonKing {
+			t.Errorf("expected crawlRes.UnsealDemonKing = true even with 0 treasure boxes on floor 11 reach, got false")
+		}
+		if !spy.lastReq.UnsealDemonKing {
+			t.Errorf("expected spy.lastReq.UnsealDemonKing = true even with 0 treasure boxes on floor 11 reach, got false")
+		}
+	})
+
+	// 6. CrawlSession.Result() does not re-infer event from presence of treasure boxes
+	t.Run("Result does not re-infer unseal from treasure presence", func(t *testing.T) {
+		stages, err := adventure.InitialStageCatalog()
+		if err != nil {
+			t.Fatal(err)
+		}
+		stg19, err := stages.FindByID("stage-19")
+		if err != nil {
+			t.Fatal(err)
+		}
+		sess, err := adventure.NewCrawlSession(stg19, []corecharacter.Character{char}, func(n int) int { return 0 })
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Manually populate boxes without floor 11 unseal transition
+		sess.TreasureBoxes = []adventure.TreasureBox{{ID: "fake-box", ItemID: "item-001"}}
+		sess.UnsealDemonKing = false
+		res := sess.Result()
+		if res.UnsealDemonKing {
+			t.Errorf("expected Result() not to fabricate UnsealDemonKing from treasure boxes alone")
+		}
+	})
+
+	// 7. Defeat after earned events: unseal event conveyed even when crawl outcome is defeat
+	t.Run("defeat after earned event", func(t *testing.T) {
+		spy := &mockPostBattleSettler{}
+		svcTest, _ := setupTestAdventureService(t, char, spy)
+		crawlRes := adventure.DungeonCrawlResult{
+			StageID:         "stage-19",
+			Outcome:         corebattle.OutcomeDefeat,
+			UnsealDemonKing: true,
+		}
+		// Directly verify settlement conveying
+		if err := svcTest.SettlePostBattleForTest(context.Background(), adventure.DungeonCrawlRequest{CharacterIDs: []string{char.ID}}, &crawlRes); err != nil {
+			t.Fatal(err)
+		}
+		if !spy.lastReq.UnsealDemonKing {
+			t.Errorf("expected spy.lastReq.UnsealDemonKing = true for defeat after earned event, got false")
+		}
+	})
+
+	// 8. SQL rollback/retry: transactional failure rolls back without double counting
+	t.Run("SQL rollback and retry", func(t *testing.T) {
+		failOnce := true
+		retrySettler := &mockPostBattleSettler{
+			respFn: func(req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+				if failOnce {
+					failOnce = false
+					return battle.ApplyPostBattleResponse{}, errors.New("simulated DB transaction abort")
+				}
+				return battle.ApplyPostBattleResponse{
+					UpdatedCharacters: map[string]corecharacter.Character{
+						char.ID: {ID: char.ID, MaoCount: 1},
+					},
+				}, nil
+			},
+		}
+		retrySvc, _ := setupTestAdventureService(t, char, retrySettler)
+
+		// First attempt fails during settlement in transaction
+		_, err := retrySvc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+			CharacterIDs: []string{char.ID},
+			StageID:      "stage-19",
+		})
+		if err == nil {
+			t.Fatal("expected error on simulated DB failure, got nil")
+		}
+
+		// Retry succeeds
+		res2, err := retrySvc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+			CharacterIDs: []string{char.ID},
+			StageID:      "stage-19",
+		})
+		if err != nil {
+			t.Fatalf("expected retry to succeed, got %v", err)
+		}
+		if !res2.UnsealDemonKing {
+			t.Errorf("expected res2.UnsealDemonKing = true on retry")
+		}
+		if !retrySettler.lastReq.UnsealDemonKing {
+			t.Errorf("expected retrySettler.lastReq.UnsealDemonKing = true on retry")
+		}
+	})
 }
 
 type txKey struct{}

@@ -64,31 +64,9 @@ func (s *Service) applyMonsterKills(
 	}
 }
 
-// applyMaoCount is the single settlement owner for an explicit unseal event.
-// The legacy batch inference below remains restricted to victories.
+// applyMaoCount increments MaoCount on an explicit demon king unseal event.
 func (s *Service) applyMaoCount(char *corecharacter.Character, req ApplyPostBattleRequest) {
-	if isDemonKingUnseal(req) {
+	if req.UnsealDemonKing {
 		char.MaoCount++
 	}
-}
-
-// isDemonKingUnseal accepts explicit events; retained batch inference requires
-// a victory and remains a separate compatibility path.
-func isDemonKingUnseal(req ApplyPostBattleRequest) bool {
-	if req.UnsealDemonKing {
-		return true
-	}
-	if req.BattleResult.Outcome != corebattle.OutcomeWin {
-		return false
-	}
-	habitat := strings.TrimSpace(req.Habitat)
-	if habitat == "封印の地" || habitat == "stage-20" || habitat == "20" || habitat == "stage-19" || habitat == "19" {
-		return true
-	}
-	for _, enemy := range req.DefeatedEnemies {
-		if ParseDefeatedMonsterID(enemy.ID) == "monster-212" || CleanMonsterName(enemy.Name) == "封印のツボ" {
-			return true
-		}
-	}
-	return false
 }
