@@ -427,7 +427,9 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 			}
 			compAlcAwarded = true
 			if s.legend != nil {
-				_ = s.legend.RecordLegend(txCtx, "comp_alc", characterID)
+				if err := s.legend.RecordLegend(txCtx, "comp_alc", characterID); err != nil {
+					return fmt.Errorf("record legend: %w", err)
+				}
 			}
 		}
 
@@ -456,7 +458,9 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 		}
 
 		if s.synthesisHook != nil {
-			_ = s.synthesisHook(txCtx, characterID, clearedRecipeID)
+			if err := s.synthesisHook(txCtx, characterID, clearedRecipeID); err != nil {
+				return fmt.Errorf("synthesis hook: %w", err)
+			}
 		}
 		return nil
 	})

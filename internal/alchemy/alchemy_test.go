@@ -193,6 +193,7 @@ func (r *memoryAlchemyRepo) SetCompAlcTitle(_ context.Context, characterID strin
 
 type mockLegendInductor struct {
 	calls []legendCall
+	err   error
 }
 
 type legendCall struct {
@@ -202,7 +203,7 @@ type legendCall struct {
 
 func (m *mockLegendInductor) RecordLegend(_ context.Context, category, characterID string) error {
 	m.calls = append(m.calls, legendCall{Category: category, CharacterID: characterID})
-	return nil
+	return m.err
 }
 
 func setupTestService(t *testing.T, simTime *time.Time) (*Service, *memoryCharRepo, *memoryDepotRepo, *memoryAlchemyRepo, *corecharacter.Character) {
@@ -725,6 +726,73 @@ func TestCompendium_100PercentCompletionAndTitle(t *testing.T) {
 		if entry.RecipeID == "rec-dragon-grass" && entry.ResultItemName != "Dragon Grass" {
 			t.Errorf("expected Dragon Grass for rec-dragon-grass, got %s", entry.ResultItemName)
 		}
+	}
+}
+
+func TestClaim_LegendHookFailure_PropagatesError(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	svc, _, depotRepo, _, char := setupTestService(t, &now)
+	errLegendInjected := errors.New("legend injection error")
+	legend := &mockLegendInductor{err: errLegendInjected}
+	svc.SetLegendInductor(legend)
+
+	_ = svc.UnlockRecipe(ctx, char.ID, "rec-super-herb")
+	_ = svc.UnlockRecipe(ctx, char.ID, "rec-dragon-grass")
+
+	// Craft first recipe
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Capacity = 10
+	h1, _ := coreitem.NewInstance("item-001", 10)
+	b1, _ := coreitem.NewInstance("item-042", 5)
+	_ = dep.AddItem(h1)
+	_ = dep.AddItem(b1)
+	_ = depotRepo.Save(ctx, dep)
+
+	_, _ = svc.Synthesize(ctx, char.ID, "rec-super-herb")
+	_ = svc.CompleteOngoingSynthesis(ctx, char.ID)
+	_, err := svc.Claim(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("Claim 1 failed: %v", err)
+	}
+
+	// Craft second recipe (100% completion triggers legend hook)
+	_, _ = svc.Synthesize(ctx, char.ID, "rec-dragon-grass")
+	_ = svc.CompleteOngoingSynthesis(ctx, char.ID)
+	_, err = svc.Claim(ctx, char.ID)
+	if err == nil {
+		t.Fatal("expected error from Claim when LegendInductor fails, got nil")
+	}
+	if !errors.Is(err, errLegendInjected) {
+		t.Errorf("expected errLegendInjected, got: %v", err)
+	}
+}
+
+func TestClaim_SynthesisHookFailure_PropagatesError(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	svc, _, depotRepo, _, char := setupTestService(t, &now)
+	errSynthesisInjected := errors.New("synthesis hook failure")
+	svc.SetSynthesisHook(func(_ context.Context, _, _ string) error {
+		return errSynthesisInjected
+	})
+
+	_ = svc.UnlockRecipe(ctx, char.ID, "rec-super-herb")
+
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Capacity = 10
+	h1, _ := coreitem.NewInstance("item-001", 10)
+	_ = dep.AddItem(h1)
+	_ = depotRepo.Save(ctx, dep)
+
+	_, _ = svc.Synthesize(ctx, char.ID, "rec-super-herb")
+	_ = svc.CompleteOngoingSynthesis(ctx, char.ID)
+	_, err := svc.Claim(ctx, char.ID)
+	if err == nil {
+		t.Fatal("expected error from Claim when SynthesisHook fails, got nil")
+	}
+	if !errors.Is(err, errSynthesisInjected) {
+		t.Errorf("expected errSynthesisInjected, got: %v", err)
 	}
 }
 

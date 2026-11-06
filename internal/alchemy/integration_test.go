@@ -389,3 +389,436 @@ func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
 		t.Errorf("expected exactly 1 concurrent synthesize to succeed, got %d", successCount)
 	}
 }
+
+func TestAlchemyIntegrationClaim_SynthesisHookRollbackAndRetry(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alcRepo, err := database.NewAlchemyRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	charService, err := character.NewService(charRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char, err := charService.Create(ctx, player.ID, id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	itemCatalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipeCatalog, err := alchemy.InitialRecipeCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	alcService, err := alchemy.NewService(
+		charRepo,
+		depotRepo,
+		alcRepo,
+		recipeCatalog,
+		itemCatalog,
+		alchemy.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Unlock recipe-001 (2 herbs -> 1 super herb)
+	if err := alcService.UnlockRecipe(ctx, char.ID, "recipe-001"); err != nil {
+		t.Fatalf("UnlockRecipe failed: %v", err)
+	}
+
+	// 2. Put 2 herbs into Depot
+	dep, err := depot.NewDepot(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dep.Capacity = 10
+	herbInst, err := item.NewInstance("item-001", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dep.AddItem(herbInst); err != nil {
+		t.Fatal(err)
+	}
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Synthesize and complete
+	if _, err := alcService.Synthesize(ctx, char.ID, "recipe-001"); err != nil {
+		t.Fatalf("Synthesize failed: %v", err)
+	}
+	if err := alcService.CompleteOngoingSynthesis(ctx, char.ID); err != nil {
+		t.Fatalf("CompleteOngoingSynthesis failed: %v", err)
+	}
+
+	// Verify depot is now empty
+	depBefore, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(depBefore.Items) != 0 {
+		t.Fatalf("expected depot to be empty after synthesis consumption, got %+v", depBefore.Items)
+	}
+
+	// 4. Set failing synthesis hook
+	errHookInjected := errors.New("synthesis hook failure injected")
+	alcService.SetSynthesisHook(func(_ context.Context, _, _ string) error {
+		return errHookInjected
+	})
+
+	// 5. Attempt claim - must fail and propagate error
+	_, err = alcService.Claim(ctx, char.ID)
+	if err == nil {
+		t.Fatal("expected Claim to fail on synthesis hook error, got nil")
+	}
+	if !errors.Is(err, errHookInjected) {
+		t.Fatalf("expected errHookInjected, got: %v", err)
+	}
+
+	// 6. Assert complete SQL rollback:
+	// - Depot does NOT have the created item (item-002)
+	depAfterRollback, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(depAfterRollback.Items) != 0 {
+		t.Fatalf("depot item was committed despite rollback: %+v", depAfterRollback.Items)
+	}
+
+	// - Synthesis state is still StateCompleted with recipe-001
+	stAfterRollback, err := alcRepo.GetSynthesisState(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stAfterRollback.State != alchemy.StateCompleted || stAfterRollback.RecipeID != "recipe-001" {
+		t.Fatalf("synthesis state was modified despite rollback: %+v", stAfterRollback)
+	}
+	if stAfterRollback.TotalCrafts != 0 {
+		t.Fatalf("total crafts = %d after rollback, want 0", stAfterRollback.TotalCrafts)
+	}
+
+	// - Recipe is NOT marked crafted
+	craftedCount, err := alcRepo.CountCraftedRecipes(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if craftedCount != 0 {
+		t.Fatalf("crafted count = %d after rollback, want 0", craftedCount)
+	}
+
+	// 7. Restore working synthesis hook and retry claim
+	hookCalled := false
+	alcService.SetSynthesisHook(func(_ context.Context, cID, rID string) error {
+		if cID == char.ID && rID == "recipe-001" {
+			hookCalled = true
+		}
+		return nil
+	})
+
+	claimRes, err := alcService.Claim(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("retry Claim failed: %v", err)
+	}
+	if claimRes.CreatedItem.DefinitionID != "item-002" || claimRes.TotalCrafts != 1 {
+		t.Fatalf("unexpected claim result: %+v", claimRes)
+	}
+	if !hookCalled {
+		t.Fatal("working synthesis hook was not called on retry")
+	}
+
+	// 8. Assert successful state in DB:
+	// - Depot has exactly 1 item (item-002, qty 1)
+	depFinal, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(depFinal.Items) != 1 || depFinal.Items[0].DefinitionID != "item-002" || depFinal.Items[0].Quantity != 1 {
+		t.Fatalf("depot items after retry: %+v, want exactly 1 item-002", depFinal.Items)
+	}
+
+	// - Synthesis state cleared
+	stFinal, err := alcRepo.GetSynthesisState(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stFinal.State != alchemy.StateNone || stFinal.RecipeID != "" || stFinal.TotalCrafts != 1 {
+		t.Fatalf("synthesis state after retry: %+v", stFinal)
+	}
+
+	// - Recipe marked crafted
+	finalCraftedCount, err := alcRepo.CountCraftedRecipes(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finalCraftedCount != 1 {
+		t.Fatalf("final crafted count = %d, want 1", finalCraftedCount)
+	}
+}
+
+func TestAlchemyIntegrationClaim_LegendHookRollbackAndRetry(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alcRepo, err := database.NewAlchemyRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	charService, err := character.NewService(charRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char, err := charService.Create(ctx, player.ID, id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	itemCatalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipeCatalog, err := alchemy.InitialRecipeCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	alcService, err := alchemy.NewService(
+		charRepo,
+		depotRepo,
+		alcRepo,
+		recipeCatalog,
+		itemCatalog,
+		alchemy.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allRecipes := recipeCatalog.All()
+	totalRecipes := len(allRecipes)
+	if totalRecipes != 114 {
+		t.Fatalf("expected 114 recipes, got %d", totalRecipes)
+	}
+
+	// 1. Mark the first 113 recipes as already crafted for this character in SQL
+	for i := 0; i < totalRecipes-1; i++ {
+		r := allRecipes[i]
+		if err := alcRepo.SaveDiscoveredRecipe(ctx, char.ID, r.ID, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	count113, err := alcRepo.CountCraftedRecipes(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count113 != totalRecipes-1 {
+		t.Fatalf("expected %d crafted recipes, got %d", totalRecipes-1, count113)
+	}
+
+	// The 114th recipe is the final recipe to complete the compendium
+	finalRecipe := allRecipes[totalRecipes-1]
+	if err := alcService.UnlockRecipe(ctx, char.ID, finalRecipe.ID); err != nil {
+		t.Fatalf("UnlockRecipe failed: %v", err)
+	}
+
+	// 2. Put required ingredients for final recipe into Depot
+	dep, err := depot.NewDepot(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dep.Capacity = 20
+	for _, ing := range finalRecipe.Ingredients {
+		inst, err := item.NewInstance(ing.DefinitionID, ing.Quantity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := dep.AddItem(inst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Synthesize and complete final recipe
+	if _, err := alcService.Synthesize(ctx, char.ID, finalRecipe.ID); err != nil {
+		t.Fatalf("Synthesize failed: %v", err)
+	}
+	if err := alcService.CompleteOngoingSynthesis(ctx, char.ID); err != nil {
+		t.Fatalf("CompleteOngoingSynthesis failed: %v", err)
+	}
+
+	// 4. Configure legend inductor that writes a legend record to SQL using ambient tx, then fails
+	errLegendInjected := errors.New("legend write failure injected")
+	failingLegend := alchemy.LegendInductorFunc(func(txCtx context.Context, category, characterID string) error {
+		exec := database.ExecutorFromContext(txCtx, db)
+		_, _ = exec.ExecContext(txCtx, `
+			INSERT INTO legend_records (category, character_id, character_name, guild_name, color, icon, message, inducted_at)
+			VALUES (?, ?, 'Test', '', '#ffffff', '', '', UTC_TIMESTAMP())
+		`, category, characterID)
+		return errLegendInjected
+	})
+	alcService.SetLegendInductor(failingLegend)
+
+	// 5. Attempt claim - must fail and propagate error
+	_, err = alcService.Claim(ctx, char.ID)
+	if err == nil {
+		t.Fatal("expected Claim to fail on LegendInductor error, got nil")
+	}
+	if !errors.Is(err, errLegendInjected) {
+		t.Fatalf("expected errLegendInjected, got: %v", err)
+	}
+
+	// 6. Assert complete SQL rollback:
+	// - character_alchemy.comp_alc is FALSE in DB
+	var compAlcInDB bool
+	err = db.QueryRowContext(ctx, "SELECT comp_alc FROM character_alchemy WHERE character_id = ?", char.ID).Scan(&compAlcInDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compAlcInDB {
+		t.Fatal("character_alchemy.comp_alc was committed as TRUE despite rollback")
+	}
+
+	// - legend_records has 0 entries for character
+	var legendCount int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM legend_records WHERE character_id = ?", char.ID).Scan(&legendCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legendCount != 0 {
+		t.Fatalf("legend_records committed despite rollback: count = %d", legendCount)
+	}
+
+	// - Final recipe is NOT marked crafted (still 113)
+	countAfterRollback, err := alcRepo.CountCraftedRecipes(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countAfterRollback != totalRecipes-1 {
+		t.Fatalf("crafted count = %d after rollback, want %d", countAfterRollback, totalRecipes-1)
+	}
+
+	// - Synthesis state is still StateCompleted
+	stAfterRollback, err := alcRepo.GetSynthesisState(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stAfterRollback.State != alchemy.StateCompleted || stAfterRollback.RecipeID != finalRecipe.ID {
+		t.Fatalf("synthesis state was modified despite rollback: %+v", stAfterRollback)
+	}
+
+	// 7. Restore working legend inductor and retry claim
+	legendInducted := false
+	workingLegend := alchemy.LegendInductorFunc(func(txCtx context.Context, category, characterID string) error {
+		exec := database.ExecutorFromContext(txCtx, db)
+		_, err := exec.ExecContext(txCtx, `
+			INSERT INTO legend_records (category, character_id, character_name, guild_name, color, icon, message, inducted_at)
+			VALUES (?, ?, 'Test', '', '#ffffff', '', '', UTC_TIMESTAMP())
+		`, category, characterID)
+		if err != nil {
+			return err
+		}
+		legendInducted = true
+		return nil
+	})
+	alcService.SetLegendInductor(workingLegend)
+
+	claimRes, err := alcService.Claim(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("retry Claim failed: %v", err)
+	}
+	if !claimRes.CompAlcAwarded {
+		t.Fatal("expected CompAlcAwarded = true on 100% completion claim retry")
+	}
+	if !legendInducted {
+		t.Fatal("working legend inductor was not called on retry")
+	}
+
+	// 8. Assert successful state in DB:
+	// - character_alchemy.comp_alc is TRUE
+	err = db.QueryRowContext(ctx, "SELECT comp_alc FROM character_alchemy WHERE character_id = ?", char.ID).Scan(&compAlcInDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compAlcInDB {
+		t.Fatal("character_alchemy.comp_alc should be TRUE after successful 100% claim")
+	}
+
+	// - legend_records has 1 record for character
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM legend_records WHERE character_id = ?", char.ID).Scan(&legendCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legendCount != 1 {
+		t.Fatalf("expected exactly 1 legend_records row, got %d", legendCount)
+	}
+
+	// - Crafted recipes count is 114
+	finalCount, err := alcRepo.CountCraftedRecipes(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finalCount != totalRecipes {
+		t.Fatalf("final crafted count = %d, want %d", finalCount, totalRecipes)
+	}
+
+	// - Synthesis state cleared
+	stFinal, err := alcRepo.GetSynthesisState(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stFinal.State != alchemy.StateNone || stFinal.RecipeID != "" || !stFinal.CompAlc {
+		t.Fatalf("synthesis state after final claim: %+v", stFinal)
+	}
+}

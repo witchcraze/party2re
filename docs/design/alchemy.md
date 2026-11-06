@@ -71,15 +71,22 @@ A recipe consists of:
 1. **Lock Hierarchy**: Rank 2 `characters` -> Rank 5 `character_depots` -> Rank 8 `character_alchemy`.
 2. **Preconditions**:
    - Synthesis must be in `completed` state (`matures_at <= now` or accelerated by home rest).
-3. **Execution**:
-   - Create item instance (`coreitem.NewInstance(recipe.ResultItemDefinitionID, recipe.ResultQuantity)`).
-   - Add item instance directly into player's Depot (`depot.AddItem`).
-   - Save updated Depot.
-   - Mark recipe as crafted in `character_alchemy_recipes`.
-   - Increment `total_crafts`.
-   - If total unique crafted recipes equals 114 (100%) and `comp_alc` not yet awarded, set `comp_alc = true` and record title.
-   - Reset synthesis state to `state = none`.
-   - Trigger optional `SynthesisHook` (e.g. for Commemorative Medal milestone tracking).
+3. **Execution & Ambient Transaction Boundary**:
+   - Runs within a single ambient database transaction (`RunInTx`):
+     - Create item instance (`coreitem.NewInstance(recipe.ResultItemDefinitionID, recipe.ResultQuantity)`).
+     - Add item instance directly into player's Depot (`depot.AddItem`).
+     - Save updated Depot (`depots.Save`).
+     - Mark recipe as crafted in `character_alchemy_recipes`.
+     - Increment `total_crafts`.
+     - If total unique crafted recipes equals 114 (100%) and `comp_alc` not yet awarded:
+       - Set `comp_alc = true` in `character_alchemy`.
+       - Record Hall of Fame induction via `LegendInductor.RecordLegend(txCtx, "comp_alc", characterID)`.
+     - Reset synthesis state to `state = none`.
+     - Invoke `SynthesisHook(txCtx, characterID, recipeID)` (e.g. Commemorative Medal progress tracking).
+4. **Failure Propagation & Rollback Guarantees**:
+   - If any step—including `LegendInductor` or `SynthesisHook`—returns an error, the error is propagated out of `Claim` and the entire transaction rolls back.
+   - Rollback ensures depot item addition, crafted marks, `comp_alc` title flag, synthesis state clearing, and achievement progress never commit partially.
+   - The synthesis remains in `completed` state, allowing safe, idempotent retry without lost progress or duplicate items.
 
 ### 5. Learn Recipe & Recipe Scroll Books (`internal/home/recipe_usage.go`, `internal/alchemy/compendium.go`)
 - **Discovery Pool Membership**:
