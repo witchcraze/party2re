@@ -73,7 +73,7 @@ Authentic delivery mechanics based on hand item slot occupancy:
 
 #### Legacy evidence
 
-Paths below are relative to the original `party2/` tree, inspected at `party2-main/party2/`.
+Paths below are relative to the original `party2/` tree; the local reference copy is `party2-main/party2/`.
 
 - **Trigger**: `lib/vs_king.cgi:33–62` calls `_win_vs_king.cgi` after successful `ふういん`, alongside the victory news. The crowd is a sealing side effect, not a separately claimable reward.
 - **Generation**: `lib/_win_vs_king.cgi:5–11,17–54,56–71` appends 2–5 regular guests and 1–2 props per victory, independently and uniformly selected within each range. The total is 3–7 rows, with mean 5 and probabilities `1/8, 2/8, 2/8, 2/8, 1/8`; it is not a uniform draw from 3–7. Regular guests draw from 65 candidate slots (`@c_randoms`) mapping to 64 unique identities, where 0-based slots 60 and 64 share the duplicate name `ジェイ` (collision probability 67/4225 for two independent draws). Props draw from 32 candidate slots (`@c_fixeds`) mapping to 31 unique identities, where 0-based slots 20 and 24 share the duplicate name `クマチャン` (collision probability 34/1024 for two independent draws). Boss tier does not affect the counts. Successive victories append to existing records.
