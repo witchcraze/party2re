@@ -36,20 +36,21 @@ func WithRecipeLearner(l RecipeLearner) ServiceOption {
 	}
 }
 
-// basicRecipePool defines the 34 legacy base items learnable via 基本錬金レシピ (Item 127).
+// basicRecipePool defines the 34 base items learnable via 基本錬金レシピ (Item 127).
 var basicRecipePool = []string{
-	"薬草", "上薬草", "特薬草", "毒消し草", "身代わり人形", "竜のウロコ", "モンスター銅貨", "モンスター銀貨",
-	"闇のロザリオ", "魔獣の皮", "祈りの指輪", "金の指輪", "ひのきの棒", "こんぼう", "ブロンズナイフ", "ダガーナイフ",
-	"ルーンスタッフ", "ロングスピア", "クサナギの剣", "銅の剣", "聖銀のレイピア", "鎖がま", "鉄の斧", "金の斧",
-	"おおきづち", "布の服", "旅人の服", "皮の鎧", "鎖かたびら", "鉄の鎧", "鋼鉄の鎧", "さまよう鎧", "ゾンビメイル", "魔法の法衣",
+	"item-001", "item-002", "item-003", "item-007", "item-072", "item-079", "item-024", "item-025",
+	"item-036", "item-131", "item-012", "item-118", "weapon-01", "weapon-03", "weapon-06", "weapon-43",
+	"weapon-14", "weapon-45", "weapon-18", "weapon-08", "weapon-64", "weapon-09", "weapon-11", "weapon-47",
+	"weapon-07", "armor-01", "armor-02", "armor-04", "armor-07", "armor-11", "armor-16", "armor-13",
+	"armor-17", "armor-18",
 }
 
-// advancedRecipePool defines the 30 legacy base items learnable via 応用錬金レシピ (Item 128).
+// advancedRecipePool defines the 30 base items learnable via 応用錬金レシピ (Item 128).
 var advancedRecipePool = []string{
-	"世界樹の葉", "魔法の聖水", "幸せの種", "スキルの種", "身代わり石像", "銀のたてごと", "魔法の粉", "悪魔の粉",
-	"金の鶏", "モンスター金貨", "金のブレスレット", "怒りのタトゥー", "ソーサリーリング", "ゾンビキラー", "バトルフォーク", "ホーリーランス",
-	"モーニングスター", "鋼鉄の剣", "スライムピアス", "理力の杖", "バスタードソード", "堕天使のレイピア", "バトルアックス", "山賊の斧",
-	"銀の胸当て", "みかわしの服", "シルバーメイル", "賢者のローブ", "毛皮のマント", "魔人の鎧",
+	"item-006", "item-011", "item-022", "item-021", "item-073", "item-078", "item-081", "item-082",
+	"item-106", "item-026", "item-119", "item-115", "item-114", "weapon-15", "weapon-46", "weapon-19",
+	"weapon-21", "weapon-13", "item-090", "weapon-34", "weapon-57", "weapon-65", "weapon-20", "weapon-48",
+	"armor-19", "armor-14", "armor-43", "armor-21", "armor-08", "armor-38",
 }
 
 func isRecipeScrollItem(name string) bool {

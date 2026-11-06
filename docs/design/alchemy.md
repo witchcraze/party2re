@@ -81,16 +81,20 @@ A recipe consists of:
    - Reset synthesis state to `state = none`.
    - Trigger optional `SynthesisHook` (e.g. for Commemorative Medal milestone tracking).
 
-### 5. Learn Recipe & Recipe Scroll Books (`internal/home/recipe_usage.go`)
-- Discovers a new unlearned recipe matching `allowed_bases` filter on the base ingredient (`r.Ingredients[0]`, or any recipe if empty).
-- Strictly matches only the base item (`$recipes{$learn}`) per legacy `party2/lib/_alchemy_recipe.cgi` and `home.cgi:535-546`, preventing secondary materials from matching and ensuring God-only `#` recipes cannot leak into basic or advanced scroll discovery pools.
-- Inserts entry into `character_alchemy_recipes` with `is_crafted = false`.
-- **Home Recipe Scroll Consumption**:
-  - `基本錬金レシピ` (Item 127, 500G): Teaches 1 unlearned recipe from 34 basic base items.
-  - `応用錬金レシピ` (Item 128, 2000G): Teaches 1 unlearned recipe from 30 advanced base items.
-  - `神の錬金レシピ` (Item 129, 7000G): Teaches 1 unlearned recipe from all recipes (empty pool filter).
-  - Pool exhaustion: 1 scroll item is still consumed and `"この錬金レシピからこれ以上習得できる錬金方法はないようだ…"` is returned.
-  - Integrated into `internal/home` via consumer-side `RecipeLearner` interface.
+### 5. Learn Recipe & Recipe Scroll Books (`internal/home/recipe_usage.go`, `internal/alchemy/compendium.go`)
+- **Discovery Pool Membership**:
+  - `基本錬金レシピ` (Item 127, 500G): 34 base items represented by stable definition IDs (`basicRecipePool`), covering exactly 52 learnable recipe combinations.
+  - `応用錬金レシピ` (Item 128, 2000G): 30 base items represented by stable definition IDs (`advancedRecipePool`, 29 base items matching 33 recipe combinations; legacy `怒りのタトゥー` defines no synthesis recipe where it acts as base). Covers exactly 33 learnable recipe combinations.
+  - `神の錬金レシピ` (Item 129, 7000G): No base filter (`allowedBases = nil`), covers all 114 recipes across the entire catalog (including the 29 God-only recipes marked `#` in legacy CGI that are omitted from basic and advanced scroll pools).
+- **Two-Stage Random Selection Contract (`Service.LearnRecipe`)**:
+  - Parity with legacy `party2/lib/home.cgi:524-554`:
+    1. **Stage 1 (Base Selection)**: Group all unlearned candidate recipes matching the allowed base pool by their base item (`r.Ingredients[0].DefinitionID`). Select an eligible base uniformly at random from all bases that have at least one unlearned recipe.
+    2. **Stage 2 (Material Selection)**: Select an unlearned recipe uniformly at random from the candidate combinations for that selected base.
+  - **Parity Guarantee**: Ensures equal discovery probability across eligible base items regardless of the number of combinations each base has (e.g. `金の指輪` with 7 combinations has equal base-level odds as single-combination bases).
+  - **Learned Exclusion**: Once all recipes for a base item are discovered, that base is eliminated from Stage 1 selection.
+  - **Pool Exhaustion**: When all recipes matching the scroll's pool are discovered, returns `ErrNoRecipesToLearn`. In Home item consumption, 1 scroll item is consumed and the message `"この錬金レシピからこれ以上習得できる錬金方法はないようだ…"` is returned.
+- **Clean-Room Display Guarantee**:
+  - Recipe learning notifications via `alchemyRecipeLearnerAdapter` in `cmd/party2/wire.go` resolve ingredient definition IDs to their clean-room item definition names (`def.Name`). Renamed assets (e.g. `ヒノキの棒`, `神薙の剣`, `霊樹の葉`, `不死殺しの剣`, `不死者の鎧`) never leak legacy proprietary or distinctive names into product messages.
 - **No Direct HTTP Discovery**: Recipe discovery is exclusively driven by recipe scroll item consumption via Home item usage; no direct HTTP endpoint exists for recipe learning.
 
 ---
