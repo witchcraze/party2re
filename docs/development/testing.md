@@ -408,8 +408,7 @@ production image. It does not currently run the race detector or exercise the bu
 production image. The GitHub-hosted runner is disposable per job; tests inside a job
 still follow the database ownership/isolation rules above.
 
-`actions/setup-go` restores Go build and module data and BuildKit's `gha` cache restores
-image layers; a miss only costs time. Tests run with `-count=1` because a restored build
+`actions/setup-go` restores Go build and module data; a miss only costs time. Tests run with `-count=1` because a restored build
 cache would otherwise replay earlier test results, so CI always runs the whole suite.
 
 CI runs on pushes to main and PR opening/synchronization/reopening against main.

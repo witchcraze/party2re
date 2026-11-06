@@ -18,7 +18,6 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: docker/setup-buildx-action@v4
 
       - name: Check formatting
         run: |
@@ -54,10 +53,4 @@ jobs:
           if-no-files-found: warn
 
       - name: Build production image (smoke test)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          tags: party2re:ci-smoke
-          cache-from: type=gha,scope=prod
-          cache-to: type=gha,mode=max,scope=prod
+        run: docker build -f Dockerfile -t party2re:ci-smoke .
