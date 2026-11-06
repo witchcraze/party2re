@@ -197,6 +197,50 @@ func TestTestServices_SelectsStackOrFallsBack(t *testing.T) {
 	}
 }
 
+func TestVerify_ClearsTestCacheOnSchemaChangeOrForce(t *testing.T) {
+	fix := setupVerifyFixture(t, true)
+	if err := os.MkdirAll(filepath.Join(fix.root, "migrations"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFixture := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(fix.root, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, step := range []struct {
+		name      string
+		change    func()
+		env       []string
+		wantClear bool
+	}{
+		{name: "first run has no stamp", change: func() {}, wantClear: true},
+		{name: "source change keeps cache", change: func() { writeFixture("sample.go", "package sample\n\nconst Value = 2\n") }},
+		{name: "migration change clears cache", change: func() { writeFixture("migrations/001.sql", "SELECT 1;\n") }, wantClear: true},
+		{name: "force clears cache", change: func() {}, env: []string{"FORCE_VERIFY=1"}, wantClear: true},
+	} {
+		step.change()
+		if err := os.WriteFile(fix.goRecord, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, code := runCmd(t, fix.root, append(fix.env, step.env...), "bash", "./scripts/verify.sh")
+		if code != 0 {
+			t.Fatalf("%s: verify failed with code %d:\n%s", step.name, code, out)
+		}
+		goLog, err := os.ReadFile(fix.goRecord)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(goLog), "go clean -testcache"); got != step.wantClear {
+			t.Fatalf("%s: cleared = %v, want %v:\n%s", step.name, got, step.wantClear, goLog)
+		}
+		if !strings.Contains(string(goLog), "go test -timeout=30m ./...") {
+			t.Fatalf("%s: full suite must allow result caching:\n%s", step.name, goLog)
+		}
+	}
+}
+
 func TestVerify_UnchangedTreeCached(t *testing.T) {
 	fix := setupVerifyFixture(t, true)
 

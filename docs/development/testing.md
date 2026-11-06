@@ -65,8 +65,8 @@ The [Makefile](../../Makefile) owns command definitions:
 - `make test-integration`: Run host test suite with default local MariaDB and Valkey connection settings.
 - `make test-docker`: Run the test suite inside the containerized Go test runner.
 - `make check-changed`: Test only the packages the current change can affect ([selection rules](#21-testing-only-what-a-change-can-affect)), using the [test stack](#4-container-roles).
-- `make check`: Run the full unified local verification pipeline (`scripts/verify.sh`), using the [test stack](#4-container-roles).
-- `make check-clean`: Discard the test stack and force full verification (`FORCE_VERIFY=1`).
+- `make check`: Run the full unified local verification pipeline (`scripts/verify.sh`), using the [test stack](#4-container-roles). Packages whose test binary and read inputs are unchanged reuse Go's cached result, shown as `(cached)`. A change to `migrations/*.sql` or `compose.test.yaml` clears that cache, because Go cannot see database state. Other state outside Go's view, such as a new `mariadb:latest` image, is only exercised by CI or `make check-clean`.
+- `make check-clean`: Discard the test stack and Go's test result cache, then force full verification (`FORCE_VERIFY=1`). Use it to run every test for real.
 
 Environment reset/disposal is described in [development-environment.md](development-environment.md#database-initialization-and-migration).
 
