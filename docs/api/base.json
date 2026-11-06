@@ -2426,6 +2426,9 @@
                       "$ref": "#/components/schemas/DepotSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/BlacksmithSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/ChapelSceneData"
                     }
                   ]
@@ -2841,6 +2844,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/DepotSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "blacksmith"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/BlacksmithSceneData"
                 },
                 "support": {
                   "properties": {
@@ -3320,6 +3353,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "blacksmith",
                         "chapel",
                         "depot",
                         "home",
@@ -3412,6 +3446,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "blacksmith",
                         "chapel",
                         "depot",
                         "home",
@@ -5204,6 +5239,7 @@
             "enum": [
               "town",
               "bank",
+              "blacksmith",
               "chapel",
               "depot",
               "home",
@@ -5324,6 +5360,7 @@
                 "enum": [
                   "town",
                   "bank",
+                  "blacksmith",
                   "chapel",
                   "depot",
                   "home",
@@ -7935,7 +7972,30 @@
         "type": "object",
         "additionalProperties": false
       },
-      "BlacksmithDeposit": {
+      "BlacksmithSceneEquipment": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item_definition_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Effective display name: custom name, otherwise catalog name."
+          },
+          "custom_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_definition_id",
+          "name",
+          "custom_name"
+        ]
+      },
+      "BlacksmithSceneDeposit": {
+        "type": "object",
+        "additionalProperties": false,
         "properties": {
           "character_id": {
             "type": "string"
@@ -7953,11 +8013,17 @@
           "item_definition_id": {
             "type": "string"
           },
+          "name": {
+            "type": "string",
+            "description": "Effective display name: custom name, otherwise catalog name."
+          },
           "seal_id": {
             "type": "integer"
           },
           "slot": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
           }
         },
         "required": [
@@ -7965,12 +8031,90 @@
           "character_id",
           "slot",
           "item_definition_id",
+          "name",
           "seal_id",
           "custom_name",
           "created_at"
-        ],
+        ]
+      },
+      "BlacksmithSceneData": {
         "type": "object",
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Owned crystal balance, equipped customization, seal catalog/applicability and weapon storage. Observation never applies seals, names equipment or moves weapons.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "crystal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "weapon": {
+            "description": "Equipped main-hand weapon, or null.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BlacksmithSceneEquipment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weapon_seal_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12
+          },
+          "armor": {
+            "description": "Equipped body armor, or null.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BlacksmithSceneEquipment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seals": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "$ref": "#/components/schemas/BlacksmithSeal"
+            }
+          },
+          "available_seal_ids": {
+            "type": "array",
+            "description": "Catalog seal IDs applicable to the equipped weapon; empty without one. Crystal sufficiency remains service-owned.",
+            "maxItems": 12,
+            "items": {
+              "type": "integer"
+            }
+          },
+          "storage_capacity": {
+            "type": "integer",
+            "const": 3
+          },
+          "deposits": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/BlacksmithSceneDeposit"
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "crystal",
+          "weapon",
+          "weapon_seal_id",
+          "armor",
+          "seals",
+          "available_seal_ids",
+          "storage_capacity",
+          "deposits"
+        ]
       },
       "BossListResponse": {
         "properties": {

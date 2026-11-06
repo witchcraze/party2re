@@ -183,4 +183,13 @@ func TestBlacksmithIntegration(t *testing.T) {
 	if len(storedList) != 0 {
 		t.Errorf("expected 0 deposits, got %d", len(storedList))
 	}
+
+	// 7. Observation reads the restored facts through the real repositories.
+	observed, err := svc.Observe(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if observed.Weapon == nil || observed.Weapon.Name != "DragonSlayer" || observed.WeaponSealID != 2 || len(observed.Deposits) != 0 || len(observed.AvailableSealIDs) == 0 {
+		t.Errorf("observation = %+v", observed)
+	}
 }
