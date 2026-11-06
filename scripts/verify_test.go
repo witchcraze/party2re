@@ -35,6 +35,14 @@ func setupVerifyFixture(t *testing.T, isGit bool) *verifyFixture {
 		t.Fatal(err)
 	}
 
+	testServices, err := os.ReadFile("test_services.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(scriptsDir, "test_services.sh"), testServices, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	// Copy .githooks/pre-push
 	prePushScript, err := os.ReadFile(filepath.Join("..", ".githooks", "pre-push"))
 	if err == nil {
@@ -155,6 +163,38 @@ func runCmd(t *testing.T, dir string, env []string, name string, args ...string)
 		}
 	}
 	return out.String(), code
+}
+
+func TestTestServices_SelectsStackOrFallsBack(t *testing.T) {
+	script, err := filepath.Abs("test_services.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := `ROOT_DIR=/repo; . "$0"; echo "selected=${COMPOSE_FILE:-}|$TEST_DB_PORT|$TEST_VALKEY_PORT"`
+
+	for _, tc := range []struct {
+		name, upExit, want string
+		warns              bool
+	}{
+		{name: "stack starts", upExit: "0", want: "selected=/repo/compose.test.yaml|4407|7380"},
+		{name: "stack unavailable", upExit: "1", want: "selected=|3306|6379", warns: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			binDir := t.TempDir()
+			fake := "#!/usr/bin/env bash\n[ \"$2\" = up ] && exit " + tc.upExit + "\nexit 0\n"
+			if err := os.WriteFile(filepath.Join(binDir, "docker"), []byte(fake), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			env := []string{"PATH=" + binDir + ":" + os.Getenv("PATH"), "PARTY2_TEST_DB_PORT=4407", "PARTY2_TEST_VALKEY_PORT=7380"}
+			out, code := runCmd(t, t.TempDir(), env, "bash", "-c", probe, script)
+			if code != 0 || !strings.Contains(out, tc.want) {
+				t.Fatalf("code=%d, want %q:\n%s", code, tc.want, out)
+			}
+			if strings.Contains(out, "WARNING") != tc.warns {
+				t.Fatalf("warning presence should be %v:\n%s", tc.warns, out)
+			}
+		})
+	}
 }
 
 func TestVerify_UnchangedTreeCached(t *testing.T) {
@@ -403,37 +443,6 @@ func TestVerify_TimeoutConfiguration(t *testing.T) {
 	}
 }
 
-func extractCIShellScript(t *testing.T, ciPath string) string {
-	t.Helper()
-	content, err := os.ReadFile(ciPath)
-	if err != nil {
-		t.Fatalf("could not read ci.yml: %v", err)
-	}
-	s := string(content)
-	stepIdx := strings.Index(s, "Build and run tests with coverage")
-	if stepIdx == -1 {
-		t.Fatalf("could not find 'Build and run tests with coverage' in %s", ciPath)
-	}
-	s = s[stepIdx:]
-	idx := strings.Index(s, "sh -c \\\n")
-	if idx == -1 {
-		idx = strings.Index(s, "sh -c \\")
-	}
-	if idx == -1 {
-		t.Fatalf("could not find 'sh -c \\' in %s", ciPath)
-	}
-	rest := s[idx:]
-	startQuote := strings.Index(rest, "'")
-	if startQuote == -1 {
-		t.Fatalf("could not find opening quote after sh -c in %s", ciPath)
-	}
-	endQuote := strings.Index(rest[startQuote+1:], "'")
-	if endQuote == -1 {
-		t.Fatalf("could not find closing quote after sh -c in %s", ciPath)
-	}
-	return rest[startQuote+1 : startQuote+1+endQuote]
-}
-
 func extractComposeAppCommand(t *testing.T, composePath string) []string {
 	t.Helper()
 	content, err := os.ReadFile(composePath)
@@ -476,83 +485,13 @@ func extractDockerfileCMD(t *testing.T, dockerfilePath string) []string {
 	return nil
 }
 
-func TestCIWorkflow_CoverageTimeoutConfiguration(t *testing.T) {
-	script := extractCIShellScript(t, filepath.Join("..", ".github", "workflows", "ci.yml"))
-
-	for _, tc := range []struct {
-		name        string
-		extraEnv    []string
-		wantTimeout string
-	}{
-		{
-			name:        "default 30m timeout",
-			wantTimeout: "-timeout=30m",
-		},
-		{
-			name:        "override via TEST_TIMEOUT",
-			extraEnv:    []string{"TEST_TIMEOUT=45m"},
-			wantTimeout: "-timeout=45m",
-		},
-		{
-			name:        "override via PARTY2_TEST_TIMEOUT",
-			extraEnv:    []string{"PARTY2_TEST_TIMEOUT=1h"},
-			wantTimeout: "-timeout=1h",
-		},
-		{
-			name:        "preserve GOFLAGS with -timeout",
-			extraEnv:    []string{"GOFLAGS=-timeout=20m"},
-			wantTimeout: "",
-		},
-		{
-			name:        "preserve GOFLAGS with -test.timeout",
-			extraEnv:    []string{"GOFLAGS=-test.timeout=20m"},
-			wantTimeout: "",
-		},
-		{
-			name:        "preserve unrelated GOFLAGS with default timeout",
-			extraEnv:    []string{"GOFLAGS=-p=2"},
-			wantTimeout: "-timeout=30m",
-		},
-		{
-			name:        "explicit TEST_TIMEOUT takes precedence over GOFLAGS",
-			extraEnv:    []string{"GOFLAGS=-timeout=20m", "TEST_TIMEOUT=45m"},
-			wantTimeout: "-timeout=45m",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			fix := setupVerifyFixture(t, false)
-			env := append(fix.env, tc.extraEnv...)
-			out, code := runCmd(t, fix.root, env, "sh", "-c", script)
-			if code != 0 {
-				t.Fatalf("CI script failed with code %d:\n%s", code, out)
-			}
-			goLog, err := os.ReadFile(fix.goRecord)
-			if err != nil {
-				t.Fatalf("could not read go record: %v", err)
-			}
-			var testCall string
-			for _, line := range strings.Split(string(goLog), "\n") {
-				if strings.HasPrefix(line, "go test") && strings.Contains(line, "./...") {
-					testCall = line
-					break
-				}
-			}
-			if testCall == "" {
-				t.Fatalf("go test call not found in go record:\n%s", string(goLog))
-			}
-			if !strings.Contains(testCall, "-coverprofile=") {
-				t.Fatalf("expected coverage flag in go test call, got: %s", testCall)
-			}
-			if tc.wantTimeout == "" {
-				if strings.Contains(testCall, "-timeout=") {
-					t.Fatalf("expected no -timeout flag when GOFLAGS contains timeout override, got: %s", testCall)
-				}
-			} else {
-				if !strings.Contains(testCall, tc.wantTimeout) {
-					t.Fatalf("expected %s in test call, got: %s", tc.wantTimeout, testCall)
-				}
-			}
-		})
+func TestCIWorkflow_RunsWholeSuiteWithoutResultCache(t *testing.T) {
+	ci, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(ci), "go test -timeout=30m -count=1 ./... -coverprofile=") {
+		t.Fatal("CI must run ./... with -count=1 and coverage")
 	}
 }
 

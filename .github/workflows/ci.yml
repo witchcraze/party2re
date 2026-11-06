@@ -11,35 +11,38 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      COMPOSE_FILE: ${{ github.workspace }}/compose.test.yaml
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       - uses: docker/setup-buildx-action@v4
 
       - name: Check formatting
         run: |
-          docker compose run --rm app sh -c \
-            'unformatted=$(gofmt -l $(find . -name "*.go" -not -path "./vendor/*")); \
-             if [ -n "$unformatted" ]; then echo "Unformatted files:"; echo "$unformatted"; exit 1; fi'
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "Unformatted files:"; echo "$unformatted"; exit 1; fi
 
       - name: Verify OpenAPI specification synchronization
-        run: docker compose run --rm app go run ./scripts/sync_openapi --check
+        run: go run ./scripts/sync_openapi --check
 
       - name: Run static analysis
-        run: docker compose run --rm app go vet ./...
+        run: go vet ./...
 
-      - name: Build and run tests with coverage
+      - name: Start test services
+        run: docker compose up -d --wait mariadb valkey
+
+      # -count=1 is required: the restored build cache would otherwise replay test results.
+      - name: Run tests with coverage
+        env:
+          PARTY2_DB_DSN: party2:party2@tcp(127.0.0.1:3307)/party2?parseTime=true
+          PARTY2_TEST_DB_ADMIN_DSN: root:root@tcp(127.0.0.1:3307)/?parseTime=true
+          PARTY2_VALKEY_ADDR: 127.0.0.1:6380
         run: |
-          docker compose run --name party2re_ci_app --rm=false app sh -c \
-            'timeout_arg="-timeout=30m"; \
-             case " ${GOFLAGS:-} " in *\ -timeout=*|*\ -test.timeout=*) timeout_arg="" ;; esac; \
-             if [ -n "${TEST_TIMEOUT:-}" ]; then timeout_arg="-timeout=${TEST_TIMEOUT}"; \
-             elif [ -n "${PARTY2_TEST_TIMEOUT:-}" ]; then timeout_arg="-timeout=${PARTY2_TEST_TIMEOUT}"; fi; \
-             go test ${timeout_arg} ./... -coverprofile=/tmp/coverage.out -covermode=atomic \
-             && go tool cover -func=/tmp/coverage.out > /tmp/coverage.txt \
-             && cat /tmp/coverage.txt'
-          docker cp party2re_ci_app:/tmp/coverage.out coverage.out || true
-          docker cp party2re_ci_app:/tmp/coverage.txt coverage.txt || true
-          docker rm party2re_ci_app 2>/dev/null || true
+          go test -timeout=30m -count=1 ./... -coverprofile=coverage.out -covermode=atomic
+          go tool cover -func=coverage.out | tee coverage.txt
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v6
@@ -51,4 +54,10 @@ jobs:
           if-no-files-found: warn
 
       - name: Build production image (smoke test)
-        run: docker build -f Dockerfile -t party2re:ci-smoke .
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          tags: party2re:ci-smoke
+          cache-from: type=gha,scope=prod
+          cache-to: type=gha,mode=max,scope=prod

@@ -11,6 +11,7 @@ coverage.out
 coverage.txt
 Dockerfile.dev
 compose.yaml
+compose.test.yaml
 docs/
 assets/
 AGENTS.md

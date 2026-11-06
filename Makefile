@@ -3,6 +3,7 @@
 PORT ?= 8080
 TEST_TIMEOUT ?= $(or $(PARTY2_TEST_TIMEOUT),$(if $(findstring -timeout,$(GOFLAGS)),,30m))
 TIMEOUT_ARG := $(if $(TEST_TIMEOUT),-timeout=$(TEST_TIMEOUT))
+TEST_COMPOSE_FILE := compose.test.yaml
 
 all: check
 
@@ -36,6 +37,7 @@ up:
 down:
 	@echo "Stopping services..."
 	@docker compose down
+	-@COMPOSE_FILE=$(TEST_COMPOSE_FILE) docker compose down
 
 run:
 	@echo "Starting application server (port $(PORT))..."
@@ -75,7 +77,7 @@ check verify:
 
 check-clean:
 	@rm -f .cache/verify_tree_stamp
-	@./scripts/reset_db.sh
+	-@COMPOSE_FILE=$(TEST_COMPOSE_FILE) docker compose down
 	@FORCE_VERIFY=1 TEST_TIMEOUT="$(TEST_TIMEOUT)" ./scripts/verify.sh
 
 check-changed:
