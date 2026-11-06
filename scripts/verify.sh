@@ -57,19 +57,17 @@ fi
 echo "==> [3/7] Validating OpenAPI 3.1 specification and route coverage..."
 if command -v go >/dev/null 2>&1; then
     go run ./scripts/sync_openapi --check
-    go test -count=1 ./internal/api/http -run "OpenAPI"
+    go test -count=1 ./internal/api/http ./internal/architecture -run "OpenAPI"
 else
     docker compose run --rm app go run ./scripts/sync_openapi --check
-    docker compose run --rm app go test -count=1 ./internal/api/http -run "OpenAPI"
+    docker compose run --rm app go test -count=1 ./internal/api/http ./internal/architecture -run "OpenAPI"
 fi
 
 echo "==> [4/7] Validating .arch Guidance Layer symbols and database row-lock hierarchy via Go AST..."
 if command -v go >/dev/null 2>&1; then
     go test -count=1 ./internal/architecture
-    go test -count=1 ./internal/database -run "LockHierarchy"
 else
     docker compose run --rm app go test -count=1 ./internal/architecture
-    docker compose run --rm app go test -count=1 ./internal/database -run "LockHierarchy"
 fi
 
 

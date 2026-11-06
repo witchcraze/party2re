@@ -1,4 +1,4 @@
-package http_test
+package architecture_test
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ type jsonDecodeViolation struct {
 }
 
 func TestAST_NoIgnoredJSONDecodingInHTTPHandlers(t *testing.T) {
-	files, err := filepath.Glob("*.go")
+	files, err := filepath.Glob("../api/http/*.go")
 	if err != nil {
 		t.Fatalf("failed to glob go files: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestAST_NoIgnoredJSONDecodingInHTTPHandlers(t *testing.T) {
 }
 
 func TestAST_NoRawJSONNewDecoderInHTTPHandlers(t *testing.T) {
-	files, err := filepath.Glob("*.go")
+	files, err := filepath.Glob("../api/http/*.go")
 	if err != nil {
 		t.Fatalf("failed to glob go files: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestAST_NoRawJSONNewDecoderInHTTPHandlers(t *testing.T) {
 	fset := token.NewFileSet()
 
 	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") || file == "json.go" {
+		if strings.HasSuffix(file, "_test.go") || filepath.Base(file) == "json.go" {
 			continue
 		}
 

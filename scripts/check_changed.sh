@@ -19,14 +19,11 @@ fi
 echo "==> [check-changed] Selected packages:"
 printf '    %s\n' ${packages:-"(none)"}
 
-# These checks read source across packages, which import data cannot reveal.
-echo "==> [check-changed] Running repository-wide checks (internal/architecture, internal/core, lock hierarchy)..."
-go test -count=1 ./internal/database -run "LockHierarchy"
-
 echo "==> [check-changed] Ensuring services are healthy and migrations are applied..."
 . "${ROOT_DIR}/scripts/test_services.sh"
 "${ROOT_DIR}/scripts/migrate.sh"
 
+# internal/architecture and internal/core read source across packages, which import data cannot reveal.
 timeout="${TEST_TIMEOUT-30m}"
 PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:${TEST_DB_PORT})/party2?parseTime=true" \
 PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:${TEST_DB_PORT})/?parseTime=true" \

@@ -114,6 +114,8 @@ A `200 OK` response with `{"status":"ok"}` confirms that the daemon is listening
 > [!IMPORTANT]
 > `make down` (and `docker compose down`) terminates and removes containers while preserving the persistent named volumes (`mariadb-data`, `valkey-data`). Your database data and cache entries remain intact for subsequent sessions.
 >
+> `make check` and `make check-changed` leave the separate [test stack](testing.md#4-container-roles) running, using about 540MB of memory. `make down` also stops it and discards its tmpfs data; `docker compose down` does not stop it.
+>
 > Do **NOT** use `docker compose down -v` unless you explicitly want to discard and wipe all local database and cache data.
 
 ## Application configuration

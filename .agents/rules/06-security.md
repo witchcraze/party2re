@@ -24,7 +24,7 @@ The presentation/HTTP layer is responsible for extracting session tokens and per
 To completely prevent Insecure Direct Object Reference (IDOR) and unauthorized mutation vulnerabilities:
 - **Mandatory Standard Wrappers**: All HTTP handlers accepting `character_id` (in path or JSON body) or mutating character state MUST route through approved higher-order wrappers (`withAuthenticatedCharacter`, `withAuthenticatedCharacterAndJSON`) or explicit session auth (`authenticatePlayer`, `authenticateAdmin`).
 - **No Direct Parameter Extraction**: Handlers MUST NEVER bypass wrappers to decode `req.CharacterID` directly from JSON request bodies without verifying character ownership (`char.PlayerID == player.ID`).
-- **Continuous Mechanical Verification**: The Go AST static analysis suite (`internal/api/http/auth_lint_test.go`) automatically scans all HTTP endpoints during `make check` and CI to enforce that no character endpoint or request struct bypasses these authorization wrappers.
+- **Continuous Mechanical Verification**: The Go AST static analysis suite (`internal/architecture/auth_lint_test.go`) automatically scans all HTTP endpoints during `make check` and CI to enforce that no character endpoint or request struct bypasses these authorization wrappers.
 
 ## 4. Dependency Vulnerabilities
 Before introducing a new third-party dependency, verify its security posture and whether it introduces known vulnerabilities. Keep the dependency tree small to minimize attack surface.

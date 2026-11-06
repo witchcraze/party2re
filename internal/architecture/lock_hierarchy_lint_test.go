@@ -1,4 +1,4 @@
-package database_test
+package architecture_test
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -248,14 +247,6 @@ func checkDirectBlockLocks(fset *token.FileSet, body *ast.BlockStmt, relPath str
 	}
 
 	return violations
-}
-
-func getRepoRootDir(t *testing.T) string {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("failed to determine runtime caller path")
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
 }
 
 func runLockHierarchyLint(internalDir, rootDir string) (int, []lockViolation, error) {
