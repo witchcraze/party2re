@@ -18,8 +18,9 @@ func (s *Service) JoinRoom(ctx context.Context, roomID string, characterID strin
 		return nil, errors.New("room repository is required")
 	}
 
+	var detail *RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
+		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
 				return err
@@ -71,12 +72,18 @@ func (s *Service) JoinRoom(ctx context.Context, roomID string, characterID strin
 
 			return s.roomRepo.AddMember(txCtx, newMember)
 		})
+		if txErr != nil {
+			return txErr
+		}
+		var err error
+		detail, err = s.getRoomDetail(lockedCtx, roomID, characterID)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return s.getRoomDetail(ctx, roomID, characterID)
+	return detail, nil
 }
 
 // SpectateRoom adds a character as a spectator to a room (party2/lib/casino.cgi:475-518).
@@ -88,8 +95,9 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 		return nil, errors.New("room repository is required")
 	}
 
+	var detail *RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
+		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
 				return err
@@ -121,12 +129,18 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 			}
 			return s.roomRepo.AddMember(txCtx, spectator)
 		})
+		if txErr != nil {
+			return txErr
+		}
+		var err error
+		detail, err = s.getRoomDetail(lockedCtx, roomID, characterID)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return s.getRoomDetail(ctx, roomID, characterID)
+	return detail, nil
 }
 
 // LeaveRoom removes a character from a room, transferring leader or disbanding if empty (party2/lib/_casino.cgi:193-239).

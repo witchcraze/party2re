@@ -27,6 +27,9 @@ var releaseRoomLockLua string
 // releaseRoomLockScript releases the room lock atomically only if the caller owns the token.
 var releaseRoomLockScript = valkey.NewLuaScript(releaseRoomLockLua)
 
+// roomLockObserver is an optional test hook to measure wait and hold timings.
+var roomLockObserver func(waitDur, holdDur time.Duration, acquired bool, err error)
+
 // WithRoomLock executes fn inside an exclusive distributed room lock in Valkey Master.
 // It supports reentrant calls within the same context.
 func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, fn func(ctx context.Context) error) error {
@@ -50,6 +53,7 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 		deadline = d
 	}
 
+	startWait := time.Now()
 	acquired := false
 	for time.Now().Before(deadline) {
 		cmd := v.client.B().Set().Key(lockKey).Value(token).Nx().ExSeconds(lockTTL).Build()
@@ -70,8 +74,12 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 	}
 
 	if !acquired {
+		if roomLockObserver != nil {
+			roomLockObserver(time.Since(startWait), 0, false, errors.New("timeout"))
+		}
 		return errors.New("failed to acquire casino room lock: timeout")
 	}
+	waitDur := time.Since(startWait)
 
 	defer func() {
 		relCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -80,5 +88,11 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 	}()
 
 	lockedCtx := withRoomLockedContext(ctx, roomID)
-	return fn(lockedCtx)
+	startHold := time.Now()
+	err := fn(lockedCtx)
+	holdDur := time.Since(startHold)
+	if roomLockObserver != nil {
+		roomLockObserver(waitDur, holdDur, true, err)
+	}
+	return err
 }

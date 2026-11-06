@@ -65,8 +65,9 @@ func (s *Service) StartDoppel(ctx context.Context, roomID string, leaderID strin
 		return nil, errors.New("room repository is required")
 	}
 
+	var detail *RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
+		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
 				return err
@@ -95,13 +96,13 @@ func (s *Service) StartDoppel(ctx context.Context, roomID string, leaderID strin
 			}
 
 			now := time.Now().UTC()
-			for _, m := range participants {
-				m.Card = -1
-				m.Action = ""
-				m.UpdatedAt = now
-				if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
-					return err
+			for i := range members {
+				if members[i].IsSpectator {
+					continue
 				}
+				members[i].Card = -1
+				members[i].Action = ""
+				members[i].UpdatedAt = now
 			}
 
 			room.Round = 1
@@ -112,14 +113,20 @@ func (s *Service) StartDoppel(ctx context.Context, roomID string, leaderID strin
 			room.WinnerCharacterID = nil
 			room.UpdatedAt = now
 
-			return s.roomRepo.UpdateRoom(txCtx, *room)
+			return s.roomRepo.UpdateRoomDetail(txCtx, RoomDetail{Room: *room, Members: members})
 		})
+		if txErr != nil {
+			return txErr
+		}
+		var err error
+		detail, err = s.getRoomDetail(lockedCtx, roomID, leaderID)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return s.getRoomDetail(ctx, roomID, leaderID)
+	return detail, nil
 }
 
 // PlayDoppelAction handles a participant's mark selection, coin deduction, and showdown evaluation (party2/lib/casino_doppel.cgi:41-146).
@@ -133,6 +140,7 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 		return nil, errors.New("room repository is required")
 	}
 
+	var detail *RoomDetail
 	var showdownWinners []string
 	var secondarySyncErr error
 
@@ -323,7 +331,9 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 		if secondarySyncErr != nil {
 			return secondarySyncErr
 		}
-		return nil
+		var err error
+		detail, err = s.getRoomDetail(lockedCtx, roomID, characterID)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -335,5 +345,5 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 		}
 	}
 
-	return s.getRoomDetail(ctx, roomID, characterID)
+	return detail, nil
 }
