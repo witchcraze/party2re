@@ -34,9 +34,9 @@ func (r normalCharacterWriter) FindByIDForUpdate(ctx context.Context, actor stri
 	return c, r.check(ctx, actor)
 }
 
-// FindRecipientByIDForUpdate locks a passive referral recipient. It is not the initiating
+// LockCharacterRecipientByIDForUpdate locks a passive referral recipient. It is not the initiating
 // actor, so the normal-run guard does not apply.
-func (r normalCharacterWriter) FindRecipientByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+func (r normalCharacterWriter) LockCharacterRecipientByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
 	return r.CharacterRepository.FindByIDForUpdate(ctx, id)
 }
 

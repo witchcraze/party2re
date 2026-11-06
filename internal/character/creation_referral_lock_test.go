@@ -18,8 +18,8 @@ func (r guardedRecipientRepository) FindByIDForUpdate(context.Context, string) (
 	return corecharacter.Character{}, r.err
 }
 
-// FindRecipientByIDForUpdate is the unguarded passive-recipient lock.
-func (r guardedRecipientRepository) FindRecipientByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+// LockCharacterRecipientByIDForUpdate is the unguarded passive-recipient lock.
+func (r guardedRecipientRepository) LockCharacterRecipientByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
 	return r.mockRepository.FindByIDForUpdate(ctx, id)
 }
 
