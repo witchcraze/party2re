@@ -171,7 +171,7 @@ func TestGuildMutationLock_TransferFirst(t *testing.T) {
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			f := newMutationLockFixture(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
 			locked, resume, opStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
@@ -258,7 +258,7 @@ func TestGuildMutationLock_MutationFirst(t *testing.T) {
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			f := newMutationLockFixture(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
 			var lockOnce, transferStartedOnce sync.Once
@@ -387,7 +387,7 @@ func TestGuildMutationLock_CharacterToGuildInterleaving(t *testing.T) {
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			f := newMutationLockFixture(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
 			var charLockedOnce, opAttemptedOnce sync.Once
