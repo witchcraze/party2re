@@ -95,7 +95,7 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 	if targetJobID == "" || targetOldJobID == "" || targetJobID == targetOldJobID ||
-		!state.IsMastered(targetJobID) || !state.IsMastered(targetOldJobID) {
+		!state.HasRecordedJob(targetJobID) || !state.HasRecordedJob(targetOldJobID) {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
 	targetDef, err := s.GetDefinition(targetJobID)
@@ -112,12 +112,10 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 	if targetOldDef.RequiredGender != "" && targetOldDef.RequiredGender != char.Gender {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
-	targetSPValue, ok := state.MasteredSP(targetJobID)
-	if !ok {
+	if _, ok := state.SavedSP(targetJobID); !ok {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
-	targetOldSPValue, ok := state.MasteredSP(targetOldJobID)
-	if !ok {
+	if _, ok := state.SavedSP(targetOldJobID); !ok {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
 
@@ -149,6 +147,21 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 			(targetOldDef.RequiredGender != "" && targetOldDef.RequiredGender != tc.Character.Gender) {
 			return corejob.ErrJobUnavailable
 		}
+		st, err := s.loadState(tc.Context, tc.Character)
+		if err != nil {
+			return err
+		}
+		if !st.HasRecordedJob(targetJobID) || !st.HasRecordedJob(targetOldJobID) {
+			return corejob.ErrJobUnavailable
+		}
+		spVal, ok := st.SavedSP(targetJobID)
+		if !ok {
+			return corejob.ErrJobUnavailable
+		}
+		oldSPVal, ok := st.SavedSP(targetOldJobID)
+		if !ok {
+			return corejob.ErrJobUnavailable
+		}
 		tc.Character.JobMemory = &corecharacter.JobMemory{
 			Kind:     kind,
 			JobID:    tc.Character.JobID,
@@ -156,11 +169,7 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 			OldJobID: tc.Character.OldJobID,
 			OldSP:    tc.Character.OldSP,
 		}
-		if err := tc.Character.ApplyJobMemory(targetJobID, targetSPValue, targetOldJobID, targetOldSPValue); err != nil {
-			return err
-		}
-		st, err := s.loadState(tc.Context, tc.Character)
-		if err != nil {
+		if err := tc.Character.ApplyJobMemory(targetJobID, spVal, targetOldJobID, oldSPVal); err != nil {
 			return err
 		}
 		st.RestoreCurrentJob(targetJobID)
