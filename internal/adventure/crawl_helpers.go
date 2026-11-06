@@ -123,11 +123,6 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		mode = CrawlModeNormal
 	}
 
-	unseal := s.UnsealDemonKing
-	if !unseal && isStage19(s.StageID, s.Stage.ID) && len(s.TreasureBoxes) > 0 {
-		unseal = true
-	}
-
 	return DungeonCrawlResult{
 		AdventureIDs:    make(map[string]string),
 		StageID:         s.StageID,
@@ -151,7 +146,7 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		ParticipantHPs:  participantHPs,
 		ParticipantMPs:  participantMPs,
 		ConsumedItems:   cloneConsumedItems(s.ConsumedItems),
-		UnsealDemonKing: unseal,
+		UnsealDemonKing: s.UnsealDemonKing,
 	}
 }
 

@@ -274,7 +274,7 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 	}
 
 	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, s.now(), s.Rng)
-	if isStage19(s.StageID, s.Stage.ID) && len(s.TreasureBoxes) > 0 {
+	if isStage19(s.StageID, s.Stage.ID) {
 		s.UnsealDemonKing = true
 	}
 }
