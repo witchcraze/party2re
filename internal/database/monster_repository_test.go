@@ -164,14 +164,14 @@ func TestMonsterService_SQL_LocationAndOwnershipMatrix(t *testing.T) {
 	}
 }
 
-func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+// Dead-man bound per subtest: the per-worker fixtures commit row by row, which alone can exceed 60s under full-suite load.
+const monsterStressBudget = 180 * time.Second
 
+func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 	db, charRepo, monRepo, svc := openMonsterTestDB(t)
 	cfg := GetStressConfig()
 
-	createHighCapChar := func(t *testing.T, prefix string) corecharacter.Character {
+	createHighCapChar := func(ctx context.Context, t *testing.T, prefix string) corecharacter.Character {
 		t.Helper()
 		c, err := CreateTestCharacter(ctx, db, prefix)
 		if err != nil {
@@ -186,10 +186,13 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 	}
 
 	t.Run("SendVsSend", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), monsterStressBudget)
+		defer cancel()
+
 		chars := []corecharacter.Character{
-			createHighCapChar(t, "SvS1"),
-			createHighCapChar(t, "SvS2"),
-			createHighCapChar(t, "SvS3"),
+			createHighCapChar(ctx, t, "SvS1"),
+			createHighCapChar(ctx, t, "SvS2"),
+			createHighCapChar(ctx, t, "SvS3"),
 		}
 		registerCharacterCleanup(t, db, chars[0].ID, chars[1].ID, chars[2].ID)
 
@@ -315,8 +318,11 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 	})
 
 	t.Run("SendVsRelease", func(t *testing.T) {
-		sender := createHighCapChar(t, "SvR1")
-		recipient := createHighCapChar(t, "SvR2")
+		ctx, cancel := context.WithTimeout(context.Background(), monsterStressBudget)
+		defer cancel()
+
+		sender := createHighCapChar(ctx, t, "SvR1")
+		recipient := createHighCapChar(ctx, t, "SvR2")
 		registerCharacterCleanup(t, db, sender.ID, recipient.ID)
 
 		totalMonsters := cfg.Workers / 2
@@ -410,6 +416,9 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 	})
 
 	t.Run("LastSlotCapacityRace", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), monsterStressBudget)
+		defer cancel()
+
 		recipient, err := CreateTestCharacter(ctx, db, "CapRec")
 		if err != nil {
 			t.Fatalf("CreateTestCharacter recipient: %v", err)
@@ -417,7 +426,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 		senders := make([]corecharacter.Character, cfg.Workers)
 		cleanupIDs := []string{recipient.ID}
 		for w := 0; w < cfg.Workers; w++ {
-			senders[w] = createHighCapChar(t, fmt.Sprintf("CapS%d", w))
+			senders[w] = createHighCapChar(ctx, t, fmt.Sprintf("CapS%d", w))
 			cleanupIDs = append(cleanupIDs, senders[w].ID)
 		}
 		registerCharacterCleanup(t, db, cleanupIDs...)
