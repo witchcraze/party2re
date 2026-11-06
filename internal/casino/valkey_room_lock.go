@@ -18,7 +18,7 @@ const (
 	// DefaultRoomLockRetryWait is the backoff sleep between failed lock attempts.
 	DefaultRoomLockRetryWait = 10 * time.Millisecond
 	// DefaultRoomLockTimeout is the maximum time to wait to acquire a room lock.
-	DefaultRoomLockTimeout = 5 * time.Second
+	DefaultRoomLockTimeout = 10 * time.Second
 )
 
 //go:embed lua/release_room_lock.lua

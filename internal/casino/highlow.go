@@ -61,8 +61,9 @@ func (s *Service) StartHighLow(ctx context.Context, roomID string, leaderID stri
 		return nil, errors.New("room repository is required")
 	}
 
+	var detail *RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
+		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
 				return err
@@ -96,7 +97,11 @@ func (s *Service) StartHighLow(ctx context.Context, roomID string, leaderID stri
 				cardDeck[i] = i
 			}
 
-			for _, m := range participants {
+			now := time.Now().UTC()
+			for i := range members {
+				if members[i].IsSpectator {
+					continue
+				}
 				n, err := rand.Int(rand.Reader, big.NewInt(int64(len(cardDeck))))
 				if err != nil {
 					return err
@@ -105,15 +110,11 @@ func (s *Service) StartHighLow(ctx context.Context, roomID string, leaderID stri
 				drawnCard := cardDeck[idx]
 				cardDeck = append(cardDeck[:idx], cardDeck[idx+1:]...)
 
-				m.Card = drawnCard
-				m.Action = ""
-				m.UpdatedAt = time.Now().UTC()
-				if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
-					return err
-				}
+				members[i].Card = drawnCard
+				members[i].Action = ""
+				members[i].UpdatedAt = now
 			}
 
-			now := time.Now().UTC()
 			room.Round = 1
 			room.Status = RoomStatusInProgress
 			room.CurrentBet = room.Rate
@@ -122,14 +123,20 @@ func (s *Service) StartHighLow(ctx context.Context, roomID string, leaderID stri
 			room.WinnerCharacterID = nil
 			room.UpdatedAt = now
 
-			return s.roomRepo.UpdateRoom(txCtx, *room)
+			return s.roomRepo.UpdateRoomDetail(txCtx, RoomDetail{Room: *room, Members: members})
 		})
+		if txErr != nil {
+			return txErr
+		}
+		var err error
+		detail, err = s.getRoomDetail(lockedCtx, roomID, leaderID)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return s.getRoomDetail(ctx, roomID, leaderID)
+	return detail, nil
 }
 
 // PlayHighLowAction processes a player's round action (call, high, low, fold)
@@ -144,6 +151,7 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 		return nil, errors.New("room repository is required")
 	}
 
+	var detail *RoomDetail
 	var showdownWinners []string
 	var secondarySyncErr error
 
@@ -397,7 +405,9 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 		if secondarySyncErr != nil {
 			return secondarySyncErr
 		}
-		return nil
+		var err error
+		detail, err = s.getRoomDetail(lockedCtx, roomID, characterID)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -409,5 +419,5 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 		}
 	}
 
-	return s.getRoomDetail(ctx, roomID, characterID)
+	return detail, nil
 }

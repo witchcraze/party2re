@@ -24,7 +24,7 @@ It provides:
   - Prize exchange costs (`prize.CostCoins * count` / `@こうかん`) guard against integer overflow using safe arithmetic (`economy.SafeMultiply`), rejecting unrepresentable counts without coin deduction.
 - **Wallet vs. Bank Balance**:
   - Buying coins deducts from character wallet gold (`characters.money`).
-  - Selling coins is strictly prohibited per legacy clean-room specification (one-way exchange only, purged in #630).
+  - Selling coins is strictly prohibited per legacy clean-room specification (one-way exchange only).
 - **Non-negative Balance**:
   - `casino_accounts.coins >= 0` enforced by table schema and transactional checks.
 
@@ -317,6 +317,15 @@ Rank 5: character_depots, depot_items (Depot Storage)
 Rank 8: casino_accounts (Secondary Feature Records)
 ```
 In `ExchangePrize`, the configured character repository locks the character (Rank 2) before the Depot (Rank 5) and Casino account (Rank 8). This serializes exchanges for the same character before reading depot items. A character lock/read failure aborts the exchange before any asset mutation.
+
+### Room Coordination & Distributed Lock Lifecycle
+
+Multiplayer turn actions and room lifecycle operations synchronize through an exclusive distributed lock in Valkey Master (`party2:casino:lock:room:<room_id>`):
+- **Bounded Acquisition & Safety TTL**: A 10-second acquisition budget (`DefaultRoomLockTimeout`) matches the 10-second safety lease TTL (`DefaultRoomLockTTL`). This bounded budget allows waiting contenders to acquire the lease upon expiration of an orphaned lock and accommodates queue contention under system load without timing out prematurely.
+- **Cancellation & Deadlines**: Competing contenders check caller context cancellation on each 10ms retry, aborting promptly on `ctx.Done()`. Shorter caller deadlines take precedence over the acquisition budget.
+- **Token-Verified Release**: Locks release via an atomic Lua script verifying token ownership, preventing accidental deletion of expired or re-acquired locks.
+- **Reentrant Observation**: `getRoomDetail` executes under the existing locked context (`lockedCtx`), reusing the acquired lock reentrantly to snapshot the room view without releasing and contending for a second lock acquisition.
+- **Atomic Staged Publication**: Game starts and player turns stage in-memory member changes and commit via `UpdateRoomDetail` in one authoritative Valkey payload write rather than multi-step per-member mutations.
 
 ### Showdown Settlement Atomicity & Error Boundary
 
