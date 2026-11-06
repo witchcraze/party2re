@@ -19,25 +19,37 @@ Verification is scoped by change type:
 
 - **Pure / Unit changes** (domain logic, battle calculations, algorithms, or pure helpers without database/cache dependencies): do not require starting local backing services or running all packages. Execute focused tests (`go test -count=1 ./<package> -run '<test>'`) or affected-package tests directly on host Go.
 - **DB / Valkey changes**: require live services (`make up`) and applied schema migrations (`make db-migrate`). Run affected-package tests with connection settings (`PARTY2_DB_DSN`, `PARTY2_TEST_DB_ADMIN_DSN`, `PARTY2_VALKEY_ADDR`). Tests requiring dedicated database isolation must have an admin account configured (`PARTY2_TEST_DB_ADMIN_DSN`; see [Dedicated Database Setup](#52-dedicated-database-setup)).
-- **Documentation-only changes**: inspect changed requirements, local links/anchors, and examples against their sources. Backing services and full runtime test suites are not required solely for prose. Configured pre-push hooks and CI will run their automated checks.
+- **Documentation-only changes**: inspect changed requirements, local links/anchors, and examples against their sources. Backing services and full runtime test suites are not required solely for prose; a bounded existing test or fault-injection experiment can substantiate a testing-policy claim. Configured pre-push hooks and CI will run their automated checks.
 
 | Stage | Verification |
 | --- | --- |
 | TDD iteration | `go test -count=1 ./<package> -run '<test>'` |
 | Change ready | `go test -count=1 ./<package>` for affected packages |
-| Before commit / ready to merge | `make check`; wait for completion |
+| Optional check of dependents | `make check-changed` |
+| Before commit / ready to merge | `make check`; wait for completion (roughly 6–15 minutes, depending on build cache and machine load) |
 | Push | Let the pre-push hook reuse the successful check or verify changed content |
 | Clean database verification needed | `make check-clean` resets the database and forces full verification |
 
-For DB/Valkey changes, run affected-package tests with live services and connection settings (`PARTY2_DB_DSN`, `PARTY2_TEST_DB_ADMIN_DSN`, `PARTY2_VALKEY_ADDR`). `make test-integration` supplies local connection settings and tests all packages; start services via `make up` and apply migrations via `make db-migrate`. `make test` runs all packages on host without supplying connection settings; DB-backed tests skip automatically when connection variables are absent.
+`make test-integration` supplies local connection settings and tests all packages; start services via `make up` and apply migrations via `make db-migrate`. `make test` runs all packages on host without supplying connection settings; DB-backed tests skip automatically when connection variables are absent.
 
 `make check` runs formatting, static analysis, OpenAPI/architecture checks, migrations, the full test suite and a smoke image build. It and the pre-push hook call the same `scripts/verify.sh`, which reuses a successful result for an unchanged working tree. The verified tree hash is captured after code formatting and OpenAPI sync; if working tree files change before verification completes, the run exits non-zero without updating the stamp, ensuring subsequent runs verify the modified contents. Do not start duplicate checks concurrently or repeat a successful check solely for push or session end. If the verification environment changes, use `FORCE_VERIFY=1 make check`.
 
-For documentation-only changes, inspect the changed requirements, local links/anchors
-and examples against their sources. Services and the full runtime suite are not
-required solely for prose; a bounded existing test or fault-injection experiment
-can substantiate a testing-policy claim. Existing push hooks and CI still run
-their configured checks.
+### 2.1 Testing Only What a Change Can Affect
+
+`make check-changed` tests the packages a change can affect. It does not satisfy the Definition of Done or replace `make check`, the pre-push hook or CI: it skips formatting, static analysis, OpenAPI synchronization and the smoke image build, and it records no verified tree.
+
+Changes are the difference from the merge base with the local `origin/main` ref, which is not fetched, plus staged, unstaged and untracked files. They select packages as follows:
+
+| Changed path | Selected tests |
+| --- | --- |
+| Go file in a package | That package and every package whose code or tests depend on it, directly or transitively |
+| Other file at or below a package directory, including `go:embed` inputs and `testdata/` | Every package in an ancestor directory and their dependents, plus packages naming the file in a string literal |
+| File in `.agents/`, `.arch/`, `.github/`, `.githooks/`, `assets/` or `docs/`, or a root `*.md` file | Packages whose Go source has a string literal naming that directory or file, and their dependents |
+| Anything else, including `go.mod`, `go.sum`, `migrations/`, `compose.yaml`, `Makefile`, Dockerfiles and the selection logic | Full suite, with the reason printed |
+
+The full suite also runs when `origin/main`, the merge base or package data is unavailable. `internal/architecture`, `internal/core` and the lock-hierarchy check run on every invocation because they read source across packages. A new test with that behavior must be added to [`scripts/check_changed.sh`](../../scripts/check_changed.sh).
+
+The target always starts healthy services and applies migrations through `scripts/migrate.sh`, then uses the same connection settings as `make check`, so selected DB-backed tests run rather than skip. Literal matching cannot see a test that computes a path without naming its directory or file; `make check` remains the guarantee.
 
 ---
 
@@ -45,13 +57,14 @@ their configured checks.
 
 The [Makefile](../../Makefile) owns command definitions:
 
-- `make up`: Start local MariaDB and Valkey containers in the background.
+- `make up`: Start local MariaDB and Valkey containers in the background, returning when both are healthy and failing if they do not become healthy.
 - `make down`: Stop local services.
 - `make db-migrate`: Apply pending SQL schema migrations to the local database.
 - `make db-reset`: Drop and recreate the local database from migration files.
 - `make test`: Run host test suite without connection settings (pure unit tests run; DB/Valkey tests skip).
 - `make test-integration`: Run host test suite with default local MariaDB and Valkey connection settings.
 - `make test-docker`: Run the test suite inside the containerized Go test runner.
+- `make check-changed`: Test only the packages the current change can affect ([selection rules](#21-testing-only-what-a-change-can-affect)).
 - `make check`: Run the full unified local verification pipeline (`scripts/verify.sh`).
 - `make check-clean`: Reset the database and force full verification (`FORCE_VERIFY=1`).
 

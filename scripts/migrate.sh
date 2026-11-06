@@ -6,22 +6,8 @@ cd "$ROOT_DIR"
 
 DB_NAME="${PARTY2_DB_NAME:-party2}"
 
-echo "==> Ensuring database container is running..."
-docker compose up -d mariadb valkey >/dev/null 2>&1
-
-echo "==> Waiting for MariaDB to be healthy..."
-for i in {1..60}; do
-    HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $(docker compose ps -q mariadb) 2>/dev/null || echo "unhealthy")
-    if [ "$HEALTH" = "healthy" ]; then
-        break
-    fi
-    sleep 1
-done
-
-if ! docker compose exec -T mariadb mariadb -h 127.0.0.1 -u party2 -pparty2 -e "SELECT 1" "$DB_NAME" >/dev/null 2>&1; then
-    echo "ERROR: MariaDB is still not accepting connections."
-    exit 1
-fi
+echo "==> Ensuring services are healthy..."
+docker compose up -d --wait mariadb valkey
 
 # Ensure schema_migrations table exists
 docker compose exec -T mariadb mariadb -h 127.0.0.1 -u party2 -pparty2 "$DB_NAME" -e \
