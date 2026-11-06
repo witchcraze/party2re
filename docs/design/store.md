@@ -81,7 +81,7 @@ erDiagram
    - Characters with `OverStore` attribute expand capacity: `10 + OverStore * 2` (up to 20 maximum).
    - Only unequipped, stored items from `depot` can be placed into the store.
 4. **Pessimistic Locking & Deadlock-Free Ordering**:
-   - Cross-character and cross-inventory transactions strictly adhere to the system Lock Hierarchy (`internal/database/lock_hierarchy_lint_test.go`):
+   - Cross-character and cross-inventory transactions strictly adhere to the system Lock Hierarchy (`internal/architecture/lock_hierarchy_lint_test.go`):
      - **Rank 0**: `store_sales` (`GetSaleByIDForUpdate`) - Shared peer entity.
      - **Rank 2**: `characters` (`FindByIDForUpdate`) - Locked in ascending lexical ID order: `min(id1, id2)` -> `max(id1, id2)`.
      - **Rank 5**: `depots` (`FindByCharacterIDForUpdate`) - Locked in ascending character ID order: `min(id1, id2)` -> `max(id1, id2)`.

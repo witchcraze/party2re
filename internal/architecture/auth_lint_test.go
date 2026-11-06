@@ -1,4 +1,4 @@
-package http_test
+package architecture_test
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ type RouteInfo struct {
 //  3. All administrative routes enforce admin API key validation via authenticateAdmin.
 //  4. Request payloads containing character identifiers cannot bypass ownership validation.
 func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
-	httpDir := "."
+	httpDir := "../api/http"
 
 	fset := token.NewFileSet()
 	pkgFiles := make(map[string]*ast.File)

@@ -27,7 +27,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 - **Cluster Summary**: プレイヤーアカウント、キャラクター生成・管理、認証トークン、緊急脱出、管理者機能、ナビゲーション
 - **Shared Dependencies**: `party2/lib/system.cgi` (ユーザーファイルI/O, セッション, アクセス制御 / 更新連打ペナルティ廃止・レートリミット置換承認は [design/player-and-character.md](../design/player-and-character.md#27-request-throttling-and-reload-sleep-penalty-reconciliation-approved-departure) 参照)
 - **Primary Domain Packages**: `internal/player/`, `internal/character/`, `internal/rescue/`, `internal/maintenance/`, `internal/id/`
-- **Key Testing / Linter Focus**: AST Auth Wrappers (`internal/api/http/auth_lint_test.go`), IP抽出, 不正トークン破棄
+- **Key Testing / Linter Focus**: AST Auth Wrappers (`internal/architecture/auth_lint_test.go`), IP抽出, 不正トークン破棄
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :---: | :--- |

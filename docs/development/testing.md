@@ -47,7 +47,7 @@ Changes are the difference from the merge base with the local `origin/main` ref,
 | File in `.agents/`, `.arch/`, `.github/`, `.githooks/`, `assets/` or `docs/`, or a root `*.md` file | Packages whose Go source has a string literal naming that directory or file, and their dependents |
 | Anything else, including `go.mod`, `go.sum`, `migrations/`, `compose.yaml`, `Makefile`, Dockerfiles and the selection logic | Full suite, with the reason printed |
 
-The full suite also runs when `origin/main`, the merge base or package data is unavailable. `internal/architecture`, `internal/core` and the lock-hierarchy check run on every invocation because they read source across packages. A new test with that behavior must be added to [`scripts/check_changed.sh`](../../scripts/check_changed.sh).
+The full suite also runs when `origin/main`, the merge base or package data is unavailable. `internal/architecture` and `internal/core` run on every invocation because they read source across packages. A new test with that behavior belongs in `internal/architecture`; one placed elsewhere must be added to [`scripts/check_changed.sh`](../../scripts/check_changed.sh).
 
 The target always starts healthy services and applies migrations through `scripts/migrate.sh`, then uses the same connection settings as `make check`, so selected DB-backed tests run rather than skip. Literal matching cannot see a test that computes a path without naming its directory or file; `make check` remains the guarantee.
 
@@ -58,14 +58,14 @@ The target always starts healthy services and applies migrations through `script
 The [Makefile](../../Makefile) owns command definitions:
 
 - `make up`: Start local MariaDB and Valkey containers in the background, returning when both are healthy and failing if they do not become healthy.
-- `make down`: Stop local services.
+- `make down`: Stop the local services and the [test stack](#4-container-roles), which `make check` leaves running (about 540MB of memory); stopping it discards its tmpfs data.
 - `make db-migrate`: Apply pending SQL schema migrations to the local database.
 - `make db-reset`: Drop and recreate the local database from migration files.
 - `make test`: Run host test suite without connection settings (pure unit tests run; DB/Valkey tests skip).
 - `make test-integration`: Run host test suite with default local MariaDB and Valkey connection settings.
 - `make test-docker`: Run the test suite inside the containerized Go test runner.
 - `make check-changed`: Test only the packages the current change can affect ([selection rules](#21-testing-only-what-a-change-can-affect)), using the [test stack](#4-container-roles).
-- `make check`: Run the full unified local verification pipeline (`scripts/verify.sh`), using the [test stack](#4-container-roles). Packages whose test binary and read inputs are unchanged reuse Go's cached result, shown as `(cached)`. A change to `migrations/*.sql` or `compose.test.yaml` clears that cache, because Go cannot see database state. Other state outside Go's view, such as a new `mariadb:latest` image, is only exercised by CI or `make check-clean`.
+- `make check`: Run the full unified local verification pipeline (`scripts/verify.sh`), using the [test stack](#4-container-roles). Packages whose test binary and read inputs are unchanged reuse Go's cached result, shown as `(cached)`. A change to `migrations/*.sql` or `compose.test.yaml` clears that cache, because Go cannot see database state. Other state outside Go's view, such as a new `mariadb:latest` image, is only exercised by CI or `make check-clean`. Files a test reads are inputs to its package's cached result, and `make check` rewrites the generated OpenAPI files on every run, so keep tests that read source or generated files in `internal/architecture`, away from packages with slow DB tests.
 - `make check-clean`: Discard the test stack and Go's test result cache, then force full verification (`FORCE_VERIFY=1`). Use it to run every test for real.
 
 Environment reset/disposal is described in [development-environment.md](development-environment.md#database-initialization-and-migration).
@@ -121,7 +121,7 @@ or `-v`) are preserved and forwarded.
 ## 4. Container Roles
 
 - **`Dockerfile.dev` & `compose.yaml`**: Development and integration test environment. Spawns MariaDB and Valkey alongside Go test runner with bind-mounted source and BuildKit cache mounts. The default test command executes with the 30-minute default package timeout, honoring explicit `TEST_TIMEOUT` and standard `GOFLAGS="-timeout=..."` overrides with the same precedence as `Makefile` and `scripts/verify.sh`.
-- **`compose.test.yaml`**: Test stack, a separate `party2re-test` Compose project whose MariaDB (`127.0.0.1:3307`) and Valkey (`127.0.0.1:6380`) keep their data on tmpfs, so a stop discards it and the development volumes are never touched. `make check`, `make check-changed` and CI use it; the first two start it on demand and `make down` also stops it. `PARTY2_TEST_DB_PORT` and `PARTY2_TEST_VALKEY_PORT` change the local host ports. When the stack cannot start locally (for example occupied ports or no tmpfs support), `make check` and `make check-changed` warn and test against the development services instead. `make test-integration`, `make test-docker`, `make test-stress` and `make bench` keep using the development services.
+- **`compose.test.yaml`**: Test stack, a separate `party2re-test` Compose project whose MariaDB (`127.0.0.1:3307`) and Valkey (`127.0.0.1:6380`) keep their data on tmpfs, so a stop discards it and the development volumes are never touched. `make check`, `make check-changed` and CI use it; the first two start it on demand and leave it running until `make down`. `PARTY2_TEST_DB_PORT` and `PARTY2_TEST_VALKEY_PORT` change the local host ports. When the stack cannot start locally (for example occupied ports or no tmpfs support), `make check` and `make check-changed` warn and test against the development services instead. `make test-integration`, `make test-docker`, `make test-stress` and `make bench` keep using the development services.
 - **`Dockerfile`**: Production distribution image. Multi-stage build compiling a statically linked, stripped binary (`CGO_ENABLED=0`) on `golang:1.26.7-trixie` running on distroless `gcr.io/distroless/static-debian13:nonroot` with CA certificates only.
 
 ---
@@ -377,9 +377,8 @@ callbacks must honor cancellation themselves.
 
 ## 6. Mechanical AST Static Analysis Linters
 
-In-tree Go tests under [internal/architecture](../../internal/architecture/),
-[internal/database](../../internal/database/), Core and HTTP enforce architectural
-boundaries, transaction/lock usage, authentication wrappers, mutation encapsulation,
+In-tree Go tests under [internal/architecture](../../internal/architecture/) and
+Core enforce architectural boundaries, transaction/lock usage, authentication wrappers, mutation encapsulation,
 error propagation and unused-definition checks. `make arch-lint`, `make lock-lint`
 and `make check` run the relevant suites. Their source owns the exact scope and
 exceptions; passing AST checks do not certify runtime locks or legacy parity.

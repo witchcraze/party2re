@@ -1,4 +1,4 @@
-package http_test
+package architecture_test
 
 import (
 	"fmt"
@@ -96,7 +96,7 @@ func detectRootContextInSource(fset *token.FileSet, filename string, src any) ([
 // HTTP handlers and middlewares must always observe r.Context() or pass incoming ctx to preserve
 // cancellation, deadlines, authentication session identities, and ambient transaction scopes.
 func TestProhibitRootContextInHTTPHandlers(t *testing.T) {
-	httpDir := "."
+	httpDir := "../api/http"
 	fset := token.NewFileSet()
 
 	entries, err := os.ReadDir(httpDir)

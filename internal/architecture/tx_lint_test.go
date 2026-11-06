@@ -1,4 +1,4 @@
-package database_test
+package architecture_test
 
 import (
 	"bytes"
@@ -93,7 +93,7 @@ func hasTxKeywords(src []byte) bool {
 }
 
 func TestAmbientTransactionPropagationAST(t *testing.T) {
-	dir := "."
+	dir := "../database"
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("failed to read database directory: %v", err)

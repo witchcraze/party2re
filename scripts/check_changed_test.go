@@ -126,13 +126,8 @@ func TestCheckChanged_PassesEveryKindOfChangeToSelection(t *testing.T) {
 		t.Errorf("selection input contains an ignored file:\n%s", changed)
 	}
 	calls := readLog(t, fix.goCalls)
-	for _, want := range []string{
-		"go test -count=1 ./internal/database -run LockHierarchy",
-		"go test -count=1 ./internal/architecture ./internal/core ./selected",
-	} {
-		if !strings.Contains(calls, want) {
-			t.Errorf("go calls lack %q:\n%s", want, calls)
-		}
+	if want := "go test -count=1 ./internal/architecture ./internal/core ./selected"; !strings.Contains(calls, want) {
+		t.Errorf("go calls lack %q:\n%s", want, calls)
 	}
 	if !strings.Contains(out, "./selected") {
 		t.Errorf("selected packages were not printed:\n%s", out)

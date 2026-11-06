@@ -24,7 +24,7 @@ openapi-sync:
 openapi-check:
 	@echo "Validating OpenAPI specification synchronization and route coverage..."
 	@go run ./scripts/sync_openapi --check
-	@go test -count=1 ./internal/api/http -run "OpenAPI"
+	@go test -count=1 ./internal/api/http ./internal/architecture -run "OpenAPI"
 
 openapi-scaffold:
 	@echo "Scaffolding missing routes and synchronizing OpenAPI specification..."
@@ -95,5 +95,5 @@ arch-lint:
 
 lock-lint:
 	@echo "Validating deterministic database row-lock acquisition hierarchy via Go AST..."
-	@go test -v -count=1 ./internal/database -run "LockHierarchy"
+	@go test -v -count=1 ./internal/architecture -run "LockHierarchy"
 
