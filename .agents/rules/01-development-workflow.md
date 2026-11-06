@@ -13,17 +13,17 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
 - Include the issue number: `<type>/<issue-number>-<short-desc>` (e.g., `feat/160-small-medals`).
 
 **Safe Branching & Working Tree Hygiene:**
-1. Check working tree cleanliness: `rtk git status --porcelain`. Stash or commit uncommitted changes before switching branches. Never use `reset --hard` blindly.
-2. Checkout and sync main: `rtk git checkout main && rtk git pull --ff-only origin main`.
-3. Create feature branch: `rtk git checkout -b <type>/<issue-number>-<short-description>`.
+1. Check working tree cleanliness: `git status --porcelain`. Stash or commit uncommitted changes before switching branches. Never use `reset --hard` blindly.
+2. Checkout and sync main: `git checkout main && git pull --ff-only origin main`.
+3. Create feature branch: `git checkout -b <type>/<issue-number>-<short-description>`.
 
 **Merge Strategy & PR Titles:**
 - Always **Squash and Merge**. PR Titles MUST follow Conventional Commits (e.g., `feat: implement small medals`).
 
 **Post-Merge Local Cleanup:**
-1. Return to synced main: `rtk git checkout main && rtk git pull --ff-only origin main`.
-2. Delete local branch: `rtk git branch -D <branch-name> 2>/dev/null || true`.
-3. Prune remote tracking branches: `rtk git fetch origin --prune`.
+1. Return to synced main: `git checkout main && git pull --ff-only origin main`.
+2. Delete local branch: `git branch -D <branch-name> 2>/dev/null || true`.
+3. Prune remote tracking branches: `git fetch origin --prune`.
 
 ## 2. Issue and PR Workflow
 - **No substantial work without an Issue:** Do not begin substantial implementation from an informal request without an Issue.
@@ -60,8 +60,8 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
 - **Prerequisite & Feasibility Verification:**
   - When creating issues for security, auth, or cross-cutting features, verify whether required underlying infrastructure/models (e.g., Admin role, RBAC, config keys) already exist in the codebase.
   - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
-- **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase (using `fd`, `grep`, or IDE tools) for existing features that solve similar problems. Adopt the same architectural patterns, variable naming conventions, and file structures.
-- **Transparent Tool Usage:** When analyzing codebases, prefer native tools (`view_file`, `grep_search`). Do NOT execute complex or opaque bash scripts (like `sed`, `awk`, or `perl` one-liners) to parse code without explicitly explaining your intent to the user first. Ensure transparency in your actions.
+- **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase with the available file and content search tools for existing features that solve similar problems. Adopt the same architectural patterns, variable naming conventions, and file structures.
+- **Transparent Tool Usage:** When analyzing codebases, prefer the agent's built-in file reading and search tools when available. Do NOT execute complex or opaque bash scripts (like `sed`, `awk`, or `perl` one-liners) to parse code without explicitly explaining your intent to the user first. Ensure transparency in your actions.
 - **HTTP Authorization / Legacy Reconciliation**: For affected work, MUST apply the [auth wrapper rules](06-security.md#3-mandatory-auth-helper-and-common-wrapper-anti-bypass-rule) and [legacy dispatch reconciliation](00-migration-constraints.md#4-legacy-cgi-actions-array--subroutine-reconciliation); those files own the requirements.
 - **Pre-Commit Active Issue Re-Check (対応漏れ再確認)**:
   - Before committing changes and opening a PR upon task completion, agents and developers MUST re-inspect the active issue (`gh issue view <issue-number>`).
@@ -83,6 +83,7 @@ Agents and developers MUST follow a tiered verification strategy scoped to the c
   - **Documentation-only changes**: verify changed requirements, local links/anchors, and examples against their sources. Do NOT start backing services or run runtime test suites solely for prose changes. Configured pre-push hooks and CI will run their verification checks.
 - **TDD Inner Loop:** Identify acceptance criteria and write/update tests before or alongside code. Implement the smallest change satisfying the tests. Run focused tests continuously (`go test -count=1 ./<package> -run '<test>'`), expanding to the affected package(s) when the change is ready. MUST NOT run the full 80+ package test suite on every edit.
 - **Outer Loop & Ready to Merge:** Before committing and opening a PR for code changes, MUST format code (`make fmt`) and pass unified local checks (`make check`). When full database reset and verification are required, use `make check-clean`.
+- **Long-Running Verification:** `make check`, `make check-clean` and `git push` (through the pre-push hook) run the full suite under a default 30-minute test deadline. MUST run them under a command limit exceeding that deadline, or in background execution when the agent's limit is shorter. MUST NOT treat an agent-side timeout as a verification result.
 
 ### Test Database Ownership and Isolation
 

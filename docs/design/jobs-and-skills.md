@@ -5,7 +5,7 @@
 This document specifies the domain definitions, availability conditions, job changes, mastery tracking, and skill invocation models.
 
 The job-change rules were audited directly against the clean-room behavioral
-references at `/home/witchcraze/dev/party2/party2/lib/job_change.cgi`,
+references at `party2-main/party2/lib/job_change.cgi`,
 `job_master.cgi`, `_data.cgi`, and `_skill.cgi`. The implementation does not
 copy those files; the audit establishes the level gate, transition formula,
 special-job item list, final-skill SP thresholds, and temporary job-memory
