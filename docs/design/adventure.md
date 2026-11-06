@@ -365,8 +365,9 @@ The run's boss-field port applies the shared cap/reset owner after enemy creatio
 treasure creation at floor 11 runs Try success if applicable and, independently
 of clear/victory, invokes unsealing for **stage19 only**. Clear credit separately
 consumes the retained clear flag for the current destination (`vs_monster.cgi:91–110`).
-The normal run sends this explicit event to Battle settlement for all enrolled
-real participants, including fallen members, within the same SQL receipt transaction.
+Both normal runs and batch crawl sessions (solo and party) send this explicit event (`UnsealDemonKing`)
+to Battle settlement for enrolled real participants within their respective settlement transactions,
+with no inference from stage 20, habitat, or monster defeat.
 Assignment, chest inspection and exit emit no unseal event; receipt replay cannot
 repeat its counter update. Each genuine treasure recreation is a new source event.
 Global sealing rooms/news/clock remain [separately owned](https://github.com/witchcraze/party2re/issues/1199);

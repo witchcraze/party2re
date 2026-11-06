@@ -114,10 +114,11 @@ outside the clear predicate (`lib/vs_monster.cgi:91–110,159–225`). It increm
 every real participant's MaoCount, creates missing sealing rooms, announces the
 event and updates the global unseal clock. Boss victory or exit is not its trigger.
 
-The [normal-run event](adventure.md#combat-travel-and-encounter-replacement)
-uses Battle settlement for the counter under the run/character locks and SQL
-receipt. Do not additionally call `boss.Service.UnsealDemonKing`, which also
-writes counters. Global room/news/clock integration remains [#1199](https://github.com/witchcraze/party2re/issues/1199)
-and its clock consumer [#1201](https://github.com/witchcraze/party2re/issues/1201).
-Retained batch stage20/name/defeated-enemy inference is a known implementation
-difference, tracked in [#1811](https://github.com/witchcraze/party2re/issues/1811).
+Both the [normal-run event](adventure.md#combat-travel-and-encounter-replacement)
+and batch crawl sessions (solo and party) use Battle settlement for the counter
+under their respective transaction and character locks. Batch crawl settlement conveys
+the explicit stage 19 floor 11 treasure-creation event (`DungeonCrawlResult.UnsealDemonKing`),
+with no inference from stage 20, habitat, or monster defeat. Do not additionally call
+`boss.Service.UnsealDemonKing`, which also writes counters. Global room/news/clock integration
+remains [#1199](https://github.com/witchcraze/party2re/issues/1199) and its clock consumer
+[#1201](https://github.com/witchcraze/party2re/issues/1201).

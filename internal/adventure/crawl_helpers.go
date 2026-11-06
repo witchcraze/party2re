@@ -123,29 +123,35 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		mode = CrawlModeNormal
 	}
 
+	unseal := s.UnsealDemonKing
+	if !unseal && isStage19(s.StageID, s.Stage.ID) && len(s.TreasureBoxes) > 0 {
+		unseal = true
+	}
+
 	return DungeonCrawlResult{
-		AdventureIDs:   make(map[string]string),
-		StageID:        s.StageID,
-		StageName:      s.StageName,
-		Season:         s.Stage.Season,
-		SeasonalSubID:  SeasonToSubID(s.Stage.Season),
-		Mode:           mode,
-		Round:          s.Round,
-		ExitFatigue:    CalculateExitFatigue(s.Round, mode),
-		FloorsCleared:  s.FloorsCleared,
-		StageCleared:   s.StageCleared,
-		Outcome:        outcome,
-		TotalTurns:     s.TotalTurns,
-		TotalEXP:       s.TotalEXP,
-		TotalGold:      s.TotalGold,
-		TotalCrystals:  s.TotalCrystals,
-		FloorResults:   s.FloorResults,
-		TreasureBoxes:  s.TreasureBoxes,
-		InspectedBoxes: cloneInspectedBoxes(s.InspectedBoxes),
-		PartySize:      len(s.Characters),
-		ParticipantHPs: participantHPs,
-		ParticipantMPs: participantMPs,
-		ConsumedItems:  cloneConsumedItems(s.ConsumedItems),
+		AdventureIDs:    make(map[string]string),
+		StageID:         s.StageID,
+		StageName:       s.StageName,
+		Season:          s.Stage.Season,
+		SeasonalSubID:   SeasonToSubID(s.Stage.Season),
+		Mode:            mode,
+		Round:           s.Round,
+		ExitFatigue:     CalculateExitFatigue(s.Round, mode),
+		FloorsCleared:   s.FloorsCleared,
+		StageCleared:    s.StageCleared,
+		Outcome:         outcome,
+		TotalTurns:      s.TotalTurns,
+		TotalEXP:        s.TotalEXP,
+		TotalGold:       s.TotalGold,
+		TotalCrystals:   s.TotalCrystals,
+		FloorResults:    s.FloorResults,
+		TreasureBoxes:   s.TreasureBoxes,
+		InspectedBoxes:  cloneInspectedBoxes(s.InspectedBoxes),
+		PartySize:       len(s.Characters),
+		ParticipantHPs:  participantHPs,
+		ParticipantMPs:  participantMPs,
+		ConsumedItems:   cloneConsumedItems(s.ConsumedItems),
+		UnsealDemonKing: unseal,
 	}
 }
 
