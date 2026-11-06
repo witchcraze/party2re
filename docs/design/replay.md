@@ -79,7 +79,7 @@ complete turn-log array are not substitutes for the original scene contract.
 Whispers and source network addresses are excluded from captured comments.
 Credentials used to authenticate a read are not replay content.
 
-`replay.cgi:16–27,90–105` has one read entry point (`run`) and no action dispatch
+`replay.cgi:16–27,90–102` has one read entry point (`run`) and no action dispatch
 table. With no requested path, or the global log path, it reads the global replay
 without credentials. A personal path requires the matching owner identifier and
 password. A different personal path, missing/wrong password or malformed owner

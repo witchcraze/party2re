@@ -29,7 +29,7 @@ This project is currently rebuilding Party2 toward Version 1.0. These are transi
 
 ## 4. Legacy CGI `@actions` Array & Subroutine Reconciliation
 To prevent unintended feature dropouts during clean-room migration:
-- **Extract Action Dispatch Tables**: When analyzing legacy CGI scripts in `/home/witchcraze/dev/party2`, extract all elements of `@actions`, `$actions{...}` dispatch tables, and action branches (`if ($in{action} eq '...')`).
+- **Extract Action Dispatch Tables**: When analyzing legacy CGI scripts in the local `party2-main/party2/` reference copy (gitignored, so ignore-aware search tools MUST be pointed at that path explicitly), extract all elements of `@actions`, `$actions{...}` dispatch tables, and action branches (`if ($in{action} eq '...')`).
 - **1:1 Mapping Verification**: Create an explicit 1:1 reconciliation mapping table between legacy actions and proposed/implemented Go domain methods & HTTP endpoints.
 - **Explicit Rationale for Omitted/Superseded Actions**: If a legacy action is intentionally omitted, superseded (e.g. replaced by modern session auth / REST conventions), or postponed, explicitly record the reason in the PR or Issue (e.g., `Superseded by session middleware`, `Postponed to Issue #<number>`).
 

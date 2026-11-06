@@ -2,7 +2,9 @@
 
 This file serves as the root index for AI coding agents and human developers contributing to the Party2 reconstruction project.
 
-To prevent context window flooding, the monolithic rules previously stored here have been split into modular, context-specific rule files located in the `.agents/rules/` directory. Antigravity and other agentic tools will automatically apply these rules based on the context of the task.
+To prevent context window flooding, the monolithic rules previously stored here have been split into modular, context-specific rule files located in the `.agents/rules/` directory.
+
+Not every tool loads these modules automatically. Before acting, agents MUST read the modules applicable to the task unless the tool has already loaded them: `01` before any repository change, `00` before game-behavior work or any use of the legacy source, and the others according to the descriptions below. Do not load modules unrelated to the task.
 
 ## Available Rule Modules
 

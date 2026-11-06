@@ -100,7 +100,7 @@ erDiagram
 
 ### Legacy Requirements and Provenance
 
-In the original Party2 implementation (`/home/witchcraze/dev/party2/party2/`):
+In the original Party2 implementation (`party2-main/party2/`):
 
 1. **Signboard Renaming (`party2/lib/store.cgi:289-313`, `sub kanban`)**:
    - UI display: prompts that renaming requires `$NAME_CHANGE_MONEY` G (`店名の変更には $NAME_CHANGE_MONEY G必要です`, where `$NAME_CHANGE_MONEY = 5000` in `party2/lib/store.cgi:30`).
