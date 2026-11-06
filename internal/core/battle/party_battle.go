@@ -249,17 +249,21 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			}
 
 			// Decide Action: Custom Skill -> Job Skill -> Item -> Defend -> Normal Attack
+			isCursed := hasAbility(ctx.abilitiesMap[actorID], "cursed")
+
 			var usedCustom *ActionCustomSkill
-			for i := range actor.CustomSkills {
-				cs := &actor.CustomSkills[i]
-				if ctx.cmpMap[actorID] >= cs.CMPCost {
-					usedCustom = cs
-					break
+			if !isCursed {
+				for i := range actor.CustomSkills {
+					cs := &actor.CustomSkills[i]
+					if ctx.cmpMap[actorID] >= cs.CMPCost {
+						usedCustom = cs
+						break
+					}
 				}
 			}
 
 			var usedSkill *ActionSkill
-			if usedCustom == nil {
+			if usedCustom == nil && !isCursed {
 				for i := range actor.Skills {
 					sk := &actor.Skills[i]
 					if ctx.mpMap[actorID] >= sk.EffectiveMPCost(actor) {
