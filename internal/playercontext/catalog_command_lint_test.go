@@ -94,7 +94,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {

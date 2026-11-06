@@ -681,10 +681,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /parties/{id}/start", h.handleStartPartyAdventure)
 	mux.HandleFunc("POST /parties/{id}/sealing-battle", h.handleStartSealingBattle)
 
-	// Blacksmith
-	mux.HandleFunc("GET /blacksmith/seals", h.handleGetBlacksmithSeals)
-	mux.HandleFunc("GET /characters/{id}/blacksmith/storage", h.handleGetBlacksmithStorage)
-
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }
 

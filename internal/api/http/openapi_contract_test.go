@@ -67,8 +67,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		{"POST", "/characters/{id}/bank/inspect", "", "session", 200},
 		{"POST", "/characters/{id}/bank/talk", "", "session", 200},
 		{"POST", "/characters/{id}/depot/send-money", `{"recipient_character_id":"c2","amount":10}`, "session", 200},
-		{"GET", "/blacksmith/seals", "", "", 200},
-		{"GET", "/characters/{id}/blacksmith/storage", "", "session", 200},
 		{"GET", "/pvp/rooms", "", "", 200},
 		{"GET", "/pvp/rooms/{room_id}", "", "", 200},
 		{"GET", "/gvg/rooms", "", "", 200},

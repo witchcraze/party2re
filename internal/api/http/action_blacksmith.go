@@ -24,7 +24,16 @@ type withdrawWeaponRequest struct {
 	Slot int `json:"slot"`
 }
 
-// WithBlacksmith configures retained reads and the four equipment commands.
+// BlacksmithService defines the blacksmith operations exposed over HTTP.
+type BlacksmithService interface {
+	ApplySeal(ctx context.Context, characterID string, sealID int) (blacksmith.Seal, error)
+	NameEquipment(ctx context.Context, characterID string, target string, customName string) error
+	DepositWeapon(ctx context.Context, characterID string) (blacksmith.Deposit, error)
+	WithdrawWeapon(ctx context.Context, characterID string, slot int) error
+	Observe(ctx context.Context, characterID string) (blacksmith.Observation, error)
+}
+
+// WithBlacksmith configures the scene observation and four equipment commands.
 func WithBlacksmith(service BlacksmithService) Option {
 	return func(h *Handler) {
 		h.blacksmith = service

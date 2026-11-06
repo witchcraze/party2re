@@ -107,7 +107,7 @@ The composition root injects the transaction provider. Character locking
 serializes customization and storage operations for the same owner; transaction
 rollback must preserve equipment, inventory, storage, crystals and names together.
 
-## 5. Gateway commands and retained reads
+## 5. Gateway commands and observation
 
 The authenticated path character owns every command. Strict parameters reject
 actor overrides and missing/null required fields before service execution.
@@ -130,25 +130,32 @@ POSTs (`blacksmith/seal`, `blacksmith/name`, `blacksmith/storage/deposit` and
 `blacksmith/storage/withdraw`) are retired. Independent ActionID schemas and
 resolver links use `executeCharacterAction`.
 
-`GET /blacksmith/seals` retains the seal catalog; owned
-`GET /characters/{id}/blacksmith/storage` retains stored weapon/slot discovery.
-They remain required until equivalent selected observations are verified under
-[Economy migration #947](https://github.com/witchcraze/party2re/issues/947).
-No Blacksmith scene is registered yet: progressive navigation does not offer
-these commands as facility choices. Direct commands still undergo current
-activity/location checks, independently of saved selection or retained reads.
+Selecting `blacksmith` observes the owner's crystals, equipped weapon/armor with
+effective names, current seal, the 12-seal catalog, seal IDs applicable to the
+equipped weapon and stored weapons with effective names, under the
+[selection and read-failure contract](../architecture/client-agent-api.md#actor-target-paging-and-read-failures).
+These supply the facts behind the legacy header (`blacksmith.cgi:37–50`) and the
+seal, naming and withdrawal prompts, whose selectable inputs are the explicit
+command parameters above. Stored-weapon `slot` identifies a withdrawal. Crystal
+sufficiency, duplicate names and capacity remain command-time service checks.
+`GET /blacksmith/seals` and `GET /characters/{id}/blacksmith/storage` are retired;
+the catalog now requires the owned context instead of an anonymous read.
 
 Legacy `system.cgi:9–25` also registers `br`, `いどう`, `まち`, `ほーむ`, optional
 `ぎるど`, `ささやき`, `はなす`, `しらべる`, `ろぐあうと` and `すくしょ`.
 Layout separators and screenshots belong to presentation; session logout replaces
-the logout action; navigation, Home, Guild, whisper and NPC observations retain
-their shared migration owners (#947/#949/#950), rather than becoming equipment
-commands. The naming/seal/deposit/withdraw prompts remain observation work.
+the logout action; navigation, Home, Guild and whisper retain their shared
+migration owners (#947/#949/#950), rather than becoming equipment commands.
+Legacy `はなす` (`@words`, `blacksmith.cgi:17–19`) and NPC `しらべる` have no Go
+Blacksmith operation or observation and remain #947 reconciliation.
 
 Transport migration preserves existing service behavior, including equipped-item
-naming, leading/trailing whitespace trimming, ASCII `@` rejection, and Go
-inventory-capacity checks on withdrawal. Legacy
+naming, leading/trailing whitespace trimming and ASCII `@` rejection. Legacy
 differs on these points, uses a wall-clock action cooldown and venue comment/NPC
 logs (`system.cgi:639–680`), and includes weapon names in storage dialogue.
 These reconciliations remain #947 work; the Gateway adds no legacy cooldown,
 presence or log implementation and makes no full gameplay-parity claim.
+
+`WithdrawWeapon` checks only the main-hand slot and does not reject a full
+inventory, matching the legacy equipped-weapon check (`blacksmith.cgi:192–237`).
+Storage policy beyond this remains [#1127](https://github.com/witchcraze/party2re/issues/1127).
