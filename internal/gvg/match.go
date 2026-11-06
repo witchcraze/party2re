@@ -307,3 +307,4 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 	})
 	return result, err
 }
+// measurement probe for #1873
