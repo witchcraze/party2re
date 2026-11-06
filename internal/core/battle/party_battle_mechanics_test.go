@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/item"
 )
 
 func TestPartyBattle_DefendMitigation(t *testing.T) {
@@ -295,6 +296,193 @@ func TestCheckRevivalCursedItemAddsStatBuffs(t *testing.T) {
 	if result.AttackBuff != 300 || result.DefenseBuff != 300 || result.AgilityBuff != 300 {
 		t.Fatalf("unexpected cursed buffs: %+v", result)
 	}
+}
+
+func TestPartyBattleCursedBlocksSkillsAndCustomSkills(t *testing.T) {
+	engine := corebattle.Engine{}
+	rng := customRNG{
+		float64Func: func() float64 { return 1.0 / 3.0 },
+		intnFunc:    func(n int) int { return 1 },
+	}
+
+	t.Run("cursed revival mid-battle blocks custom and job skills, falling back to item then attack", func(t *testing.T) {
+		hero := corebattle.NewParticipantBuilder("hero").
+			WithName("Hero").
+			WithStats(100, 10, 0).
+			WithCurrentHP(1).
+			WithMP(20, 20).
+			WithCMP(20, 20).
+			WithAgility(10).
+			WithItems("item-260").
+			WithCustomSkills(corebattle.ActionCustomSkill{
+				ID:      "cs-1",
+				Name:    "カスタム奥義",
+				CMPCost: 5,
+				Gems:    []corebattle.GemEffect{{Kind: corebattle.ActionKindAttack, Power: 50}},
+			}).
+			WithSkills(corebattle.ActionSkill{
+				ID:       "sk-1",
+				Name:     "職業技",
+				Kind:     corebattle.ActionKindAttack,
+				Category: "magic",
+				MPCost:   5,
+				Power:    30,
+			}).
+			WithActionItems(corebattle.ActionItem{
+				ID:            "item-001",
+				Name:          "薬草",
+				Kind:          corebattle.ActionKindHeal,
+				Power:         30,
+				TargetScope:   corebattle.TargetScopeSingleAlly,
+				UsageCategory: item.UsageCategoryCombatOnly,
+			}).
+			MustBuild()
+
+		enemy := corebattle.Participant{
+			ID:      "enemy",
+			Name:    "Enemy",
+			HP:      1000,
+			MaxHP:   1000,
+			Attack:  100,
+			Defense: 0,
+			Agility: 100,
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     rng,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+
+		// Turn 1:
+		// 1. Enemy attacks hero -> hero dies -> revives cursed (HP=30, AT/DF/AG+300, cursed added)
+		// 2. Hero acts: Custom skill and Job skill blocked! Hero uses ActionItem "薬草"
+		if len(res.Logs) < 2 {
+			t.Fatalf("expected at least 2 logs, got %d", len(res.Logs))
+		}
+		if res.Logs[0].ActorID != "enemy" {
+			t.Fatalf("turn 1: expected enemy first, got %s", res.Logs[0].ActorID)
+		}
+		if res.Logs[1].ActorID != "hero" || res.Logs[1].ActionName != "薬草" {
+			t.Fatalf("turn 1 hero action after cursed revival: got %q, want %q", res.Logs[1].ActionName, "薬草")
+		}
+		if res.RemainingMP["hero"] != 20 {
+			t.Errorf("expected hero MP to remain 20, got %d", res.RemainingMP["hero"])
+		}
+		if res.RemainingCMP["hero"] != 20 {
+			t.Errorf("expected hero CMP to remain 20, got %d", res.RemainingCMP["hero"])
+		}
+	})
+
+	t.Run("initial cursed state blocks custom and job skills from turn 1", func(t *testing.T) {
+		hero := corebattle.NewParticipantBuilder("hero").
+			WithName("Hero").
+			WithStats(100, 10, 0).
+			WithMP(20, 20).
+			WithCMP(20, 20).
+			WithAgility(100).
+			WithAbilities("cursed").
+			WithCustomSkills(corebattle.ActionCustomSkill{
+				ID:      "cs-1",
+				Name:    "カスタム奥義",
+				CMPCost: 5,
+				Gems:    []corebattle.GemEffect{{Kind: corebattle.ActionKindAttack, Power: 50}},
+			}).
+			WithSkills(corebattle.ActionSkill{
+				ID:       "sk-1",
+				Name:     "職業技",
+				Kind:     corebattle.ActionKindAttack,
+				Category: "magic",
+				MPCost:   5,
+				Power:    30,
+			}).
+			MustBuild()
+
+		enemy := corebattle.Participant{
+			ID:      "enemy",
+			Name:    "Enemy",
+			HP:      1000,
+			MaxHP:   1000,
+			Attack:  10,
+			Defense: 0,
+			Agility: 10,
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     rng,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+
+		if len(res.Logs) == 0 {
+			t.Fatal("expected at least one log")
+		}
+		if res.Logs[0].ActorID != "hero" || res.Logs[0].ActionName != "攻撃" {
+			t.Fatalf("initial cursed hero action: got %q, want %q", res.Logs[0].ActionName, "攻撃")
+		}
+		if res.RemainingMP["hero"] != 20 {
+			t.Errorf("expected hero MP to remain 20, got %d", res.RemainingMP["hero"])
+		}
+		if res.RemainingCMP["hero"] != 20 {
+			t.Errorf("expected hero CMP to remain 20, got %d", res.RemainingCMP["hero"])
+		}
+	})
+
+	t.Run("uncursed control executes custom skill first then job skill on low CMP", func(t *testing.T) {
+		hero := corebattle.NewParticipantBuilder("hero").
+			WithName("Hero").
+			WithStats(100, 10, 0).
+			WithMP(20, 20).
+			WithCMP(5, 5).
+			WithAgility(100).
+			WithCustomSkills(corebattle.ActionCustomSkill{
+				ID:      "cs-1",
+				Name:    "カスタム奥義",
+				CMPCost: 5,
+				Gems:    []corebattle.GemEffect{{Kind: corebattle.ActionKindAttack, Power: 50}},
+			}).
+			WithSkills(corebattle.ActionSkill{
+				ID:       "sk-1",
+				Name:     "職業技",
+				Kind:     corebattle.ActionKindAttack,
+				Category: "magic",
+				MPCost:   5,
+				Power:    30,
+			}).
+			MustBuild()
+
+		enemy := corebattle.Participant{
+			ID:      "enemy",
+			Name:    "Enemy",
+			HP:      1000,
+			MaxHP:   1000,
+			Attack:  10,
+			Defense: 0,
+			Agility: 10,
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     rng,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+
+		if len(res.Logs) == 0 {
+			t.Fatal("expected at least one log")
+		}
+		if res.Logs[0].ActorID != "hero" || res.Logs[0].ActionName != "カスタム奥義" {
+			t.Fatalf("uncursed hero action: got %q, want %q", res.Logs[0].ActionName, "カスタム奥義")
+		}
+	})
 }
 
 func TestPartyBattleMazinSetAbsorbsFallenAllyAttack(t *testing.T) {

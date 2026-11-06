@@ -1628,3 +1628,295 @@ func TestRepresentativeSkillsItem249EffectiveMPCosts(t *testing.T) {
 		})
 	}
 }
+
+func TestPostReview1712CursedRevival(t *testing.T) {
+	ctx := context.Background()
+	engine := corebattle.Engine{}
+	detRNG := deterministicBattleRNG{fVal: 1.0 / 3.0, iVal: 0}
+
+	t.Run("cursed revival mid-battle blocks current job skill", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		charRepo.characters["hero"] = corecharacter.Character{
+			ID:    "hero",
+			Name:  "Hero",
+			JobID: "job-06",
+			SP:    1,
+			Stats: corecharacter.Stats{HP: 1, MaxHP: 100, MP: 2, MaxMP: 2, Attack: 10, Defense: 0, Agility: 10},
+		}
+		invRepo.inventories["hero"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-260"}},
+		}
+
+		hero, err := svc.BuildParticipant(ctx, "hero")
+		if err != nil {
+			t.Fatalf("BuildParticipant error = %v", err)
+		}
+
+		enemy := corebattle.Participant{
+			ID:      "enemy",
+			Name:    "Enemy",
+			HP:      1000,
+			MaxHP:   1000,
+			Attack:  100,
+			Defense: 0,
+			Agility: 100,
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle error = %v", err)
+		}
+
+		if len(res.Logs) < 2 {
+			t.Fatalf("expected at least 2 logs, got %d", len(res.Logs))
+		}
+		// First action: Enemy attacks Hero, triggering cursed revival
+		if res.Logs[0].ActorID != "enemy" {
+			t.Fatalf("expected enemy to act first, got %s", res.Logs[0].ActorID)
+		}
+		// Second action: Hero acts after cursed revival
+		if res.Logs[1].ActorID != "hero" {
+			t.Fatalf("expected hero to act second, got %s", res.Logs[1].ActorID)
+		}
+		if res.Logs[1].ActionName != "攻撃" {
+			t.Errorf("hero action after cursed revival = %q, want %q", res.Logs[1].ActionName, "攻撃")
+		}
+		if remMP := res.RemainingMP["hero"]; remMP != 2 {
+			t.Errorf("hero remaining MP after cursed revival = %d, want 2", remMP)
+		}
+	})
+
+	t.Run("cursed revival mid-battle blocks previous job skill", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		charRepo.characters["hero"] = corecharacter.Character{
+			ID:       "hero",
+			Name:     "Hero",
+			JobID:    "job-01",
+			SP:       100,
+			OldJobID: "job-06",
+			OldSP:    1,
+			Stats:    corecharacter.Stats{HP: 1, MaxHP: 100, MP: 2, MaxMP: 2, Attack: 10, Defense: 0, Agility: 10},
+		}
+		invRepo.inventories["hero"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-260"}},
+		}
+
+		hero, err := svc.BuildParticipant(ctx, "hero")
+		if err != nil {
+			t.Fatalf("BuildParticipant error = %v", err)
+		}
+
+		enemy := corebattle.Participant{
+			ID:      "enemy",
+			Name:    "Enemy",
+			HP:      1000,
+			MaxHP:   1000,
+			Attack:  100,
+			Defense: 0,
+			Agility: 100,
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle error = %v", err)
+		}
+
+		if len(res.Logs) < 2 {
+			t.Fatalf("expected at least 2 logs, got %d", len(res.Logs))
+		}
+		if res.Logs[0].ActorID != "enemy" {
+			t.Fatalf("expected enemy to act first, got %s", res.Logs[0].ActorID)
+		}
+		if res.Logs[1].ActorID != "hero" {
+			t.Fatalf("expected hero to act second, got %s", res.Logs[1].ActorID)
+		}
+		if res.Logs[1].ActionName != "攻撃" {
+			t.Errorf("hero action after cursed revival = %q, want %q", res.Logs[1].ActionName, "攻撃")
+		}
+		if remMP := res.RemainingMP["hero"]; remMP != 2 {
+			t.Errorf("hero remaining MP after cursed revival = %d, want 2", remMP)
+		}
+	})
+
+	t.Run("cursed revival mid-battle falls back to usable combat item when held", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		svc := newTestProductionBattleServiceWithInv(charRepo, invRepo)
+
+		charRepo.characters["hero"] = corecharacter.Character{
+			ID:    "hero",
+			Name:  "Hero",
+			JobID: "job-06",
+			SP:    1,
+			Stats: corecharacter.Stats{HP: 1, MaxHP: 100, MP: 2, MaxMP: 2, Attack: 10, Defense: 0, Agility: 10},
+		}
+		invRepo.inventories["hero"] = coreinventory.Inventory{
+			Items: []item.Instance{{DefinitionID: "item-260"}},
+		}
+
+		hero, err := svc.BuildParticipant(ctx, "hero")
+		if err != nil {
+			t.Fatalf("BuildParticipant error = %v", err)
+		}
+		hero.ActionItems = []corebattle.ActionItem{
+			{
+				ID:            "item-001",
+				Name:          "薬草",
+				Kind:          corebattle.ActionKindHeal,
+				Power:         30,
+				TargetScope:   corebattle.TargetScopeSingleAlly,
+				UsageCategory: item.UsageCategoryCombatOnly,
+			},
+		}
+
+		enemy := corebattle.Participant{
+			ID:      "enemy",
+			Name:    "Enemy",
+			HP:      1000,
+			MaxHP:   1000,
+			Attack:  100,
+			Defense: 0,
+			Agility: 100,
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle error = %v", err)
+		}
+
+		if len(res.Logs) < 2 {
+			t.Fatalf("expected at least 2 logs, got %d", len(res.Logs))
+		}
+		if res.Logs[0].ActorID != "enemy" {
+			t.Fatalf("expected enemy to act first, got %s", res.Logs[0].ActorID)
+		}
+		if res.Logs[1].ActorID != "hero" {
+			t.Fatalf("expected hero to act second, got %s", res.Logs[1].ActorID)
+		}
+		if res.Logs[1].ActionName != "薬草" {
+			t.Errorf("hero action after cursed revival = %q, want %q", res.Logs[1].ActionName, "薬草")
+		}
+		if remMP := res.RemainingMP["hero"]; remMP != 2 {
+			t.Errorf("hero remaining MP after cursed revival = %d, want 2", remMP)
+		}
+	})
+
+	t.Run("initial cursed participant blocks job skills from turn 1", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		svc := newTestProductionBattleService(charRepo)
+
+		charRepo.characters["hero"] = corecharacter.Character{
+			ID:    "hero",
+			Name:  "Hero",
+			JobID: "job-06",
+			SP:    1,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 2, MaxMP: 2, Attack: 10, Defense: 0, Agility: 100},
+		}
+
+		hero, err := svc.BuildParticipant(ctx, "hero")
+		if err != nil {
+			t.Fatalf("BuildParticipant error = %v", err)
+		}
+		hero.Abilities = []string{"cursed"}
+
+		enemy := corebattle.Participant{
+			ID:      "enemy",
+			Name:    "Enemy",
+			HP:      1000,
+			MaxHP:   1000,
+			Attack:  10,
+			Defense: 0,
+			Agility: 10,
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle error = %v", err)
+		}
+
+		if len(res.Logs) == 0 {
+			t.Fatal("expected at least 1 log")
+		}
+		if res.Logs[0].ActorID != "hero" {
+			t.Fatalf("expected hero to act first, got %s", res.Logs[0].ActorID)
+		}
+		if res.Logs[0].ActionName != "攻撃" {
+			t.Errorf("initial cursed hero action = %q, want %q", res.Logs[0].ActionName, "攻撃")
+		}
+		if remMP := res.RemainingMP["hero"]; remMP != 2 {
+			t.Errorf("initial cursed hero remaining MP = %d, want 2", remMP)
+		}
+	})
+
+	t.Run("uncursed control executes job skill", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		svc := newTestProductionBattleService(charRepo)
+
+		charRepo.characters["hero"] = corecharacter.Character{
+			ID:    "hero",
+			Name:  "Hero",
+			JobID: "job-06",
+			SP:    1,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 2, MaxMP: 2, Attack: 10, Defense: 0, Agility: 100},
+		}
+
+		hero, err := svc.BuildParticipant(ctx, "hero")
+		if err != nil {
+			t.Fatalf("BuildParticipant error = %v", err)
+		}
+
+		enemy := corebattle.Participant{
+			ID:      "enemy",
+			Name:    "Enemy",
+			HP:      1000,
+			MaxHP:   1000,
+			Attack:  10,
+			Defense: 0,
+			Agility: 10,
+		}
+
+		res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  []corebattle.Participant{hero},
+			Enemies: []corebattle.Participant{enemy},
+			RNG:     detRNG,
+		})
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle error = %v", err)
+		}
+
+		if len(res.Logs) == 0 {
+			t.Fatal("expected at least 1 log")
+		}
+		if res.Logs[0].ActorID != "hero" {
+			t.Fatalf("expected hero to act first, got %s", res.Logs[0].ActorID)
+		}
+		if res.Logs[0].ActionName != "magic-20" {
+			t.Errorf("uncursed hero action = %q, want %q", res.Logs[0].ActionName, "magic-20")
+		}
+		if remMP := res.RemainingMP["hero"]; remMP != 0 {
+			t.Errorf("uncursed hero remaining MP = %d, want 0", remMP)
+		}
+	})
+}
