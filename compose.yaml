@@ -26,6 +26,7 @@ services:
 
   mariadb:
     image: mariadb:latest
+    command: ["--max-connections=500"]
     environment:
       MARIADB_DATABASE: party2
       MARIADB_USER: party2

@@ -64,9 +64,9 @@ The [Makefile](../../Makefile) owns command definitions:
 - `make test`: Run host test suite without connection settings (pure unit tests run; DB/Valkey tests skip).
 - `make test-integration`: Run host test suite with default local MariaDB and Valkey connection settings.
 - `make test-docker`: Run the test suite inside the containerized Go test runner.
-- `make check-changed`: Test only the packages the current change can affect ([selection rules](#21-testing-only-what-a-change-can-affect)).
-- `make check`: Run the full unified local verification pipeline (`scripts/verify.sh`).
-- `make check-clean`: Reset the database and force full verification (`FORCE_VERIFY=1`).
+- `make check-changed`: Test only the packages the current change can affect ([selection rules](#21-testing-only-what-a-change-can-affect)), using the [test stack](#4-container-roles).
+- `make check`: Run the full unified local verification pipeline (`scripts/verify.sh`), using the [test stack](#4-container-roles). Packages whose test binary and read inputs are unchanged reuse Go's cached result, shown as `(cached)`. A change to `migrations/*.sql` or `compose.test.yaml` clears that cache, because Go cannot see database state. Other state outside Go's view, such as a new `mariadb:latest` image, is only exercised by CI or `make check-clean`.
+- `make check-clean`: Discard the test stack and Go's test result cache, then force full verification (`FORCE_VERIFY=1`). Use it to run every test for real.
 
 Environment reset/disposal is described in [development-environment.md](development-environment.md#database-initialization-and-migration).
 
@@ -104,7 +104,8 @@ count: 50 workers can queue for a 25-connection pool. Tests that need a differen
 pool size may configure it explicitly; for environment-configured pools, use
 `PARTY2_DB_MAX_OPEN_CONNS` and `PARTY2_DB_MAX_IDLE_CONNS`. The stress entrypoint
 preserves these settings. Account for all concurrently running packages and
-pools against the server's total connection limit when increasing them.
+pools against the server's total connection limit (500 in both Compose files) when
+increasing them.
 
 For local resource pressure, `GOFLAGS=-p=2 make check` limits concurrent package
 builds and test binaries using Go's standard flag. It preserves each concurrency
@@ -120,6 +121,7 @@ or `-v`) are preserved and forwarded.
 ## 4. Container Roles
 
 - **`Dockerfile.dev` & `compose.yaml`**: Development and integration test environment. Spawns MariaDB and Valkey alongside Go test runner with bind-mounted source and BuildKit cache mounts. The default test command executes with the 30-minute default package timeout, honoring explicit `TEST_TIMEOUT` and standard `GOFLAGS="-timeout=..."` overrides with the same precedence as `Makefile` and `scripts/verify.sh`.
+- **`compose.test.yaml`**: Test stack, a separate `party2re-test` Compose project whose MariaDB (`127.0.0.1:3307`) and Valkey (`127.0.0.1:6380`) keep their data on tmpfs, so a stop discards it and the development volumes are never touched. `make check`, `make check-changed` and CI use it; the first two start it on demand and `make down` also stops it. `PARTY2_TEST_DB_PORT` and `PARTY2_TEST_VALKEY_PORT` change the local host ports. When the stack cannot start locally (for example occupied ports or no tmpfs support), `make check` and `make check-changed` warn and test against the development services instead. `make test-integration`, `make test-docker`, `make test-stress` and `make bench` keep using the development services.
 - **`Dockerfile`**: Production distribution image. Multi-stage build compiling a statically linked, stripped binary (`CGO_ENABLED=0`) on `golang:1.26.7-trixie` running on distroless `gcr.io/distroless/static-debian13:nonroot` with CA certificates only.
 
 ---
@@ -150,7 +152,7 @@ The existing repository reset assertion in [`ranking_extra_repository_test.go`](
 
 Environment-wide initialization/disposal is separate from per-test setup/cleanup. A fresh CI job may initialize and discard its whole environment; a developer may explicitly reset a local environment between uses. These permissions do not authorize an individual shared-DB test to clear unrelated rows. See [local reset procedures](development-environment.md#database-initialization-and-migration) and [CI environment lifetime](#8-continuous-integration-and-delivery).
 
-Future development with multiple concurrent sessions should isolate each environment's DB, cache and runtime resources. This policy does not add session provisioning or change the current Compose configuration.
+Future development with multiple concurrent sessions should isolate each environment's DB, cache and runtime resources. This policy does not add session provisioning.
 
 ### 5.2 Dedicated Database Setup
 
@@ -400,12 +402,14 @@ compares latency/allocations; the default +30% regression threshold exits with c
 ## 8. Continuous Integration and Delivery
 
 The [CI workflow](../../.github/workflows/ci.yml) runs formatting, OpenAPI sync
-validation, vet and tests with atomic coverage in the Compose development
-container using the default 30-minute package timeout while honoring `TEST_TIMEOUT`
-and `GOFLAGS="-timeout=..."` overrides, then builds the production image. It does not
-currently run the race detector or exercise the built production image. MariaDB initializes from migrations
-on first volume creation; the GitHub-hosted runner is disposable per job. Tests
-inside a job still follow the database ownership/isolation rules above.
+validation, vet and tests with atomic coverage on the host Go toolchain against the
+[test stack](#4-container-roles) with a 30-minute package timeout, then builds the
+production image. It does not currently run the race detector or exercise the built
+production image. The GitHub-hosted runner is disposable per job; tests inside a job
+still follow the database ownership/isolation rules above.
+
+`actions/setup-go` restores Go build and module data; a miss only costs time. Tests run with `-count=1` because a restored build
+cache would otherwise replay earlier test results, so CI always runs the whole suite.
 
 CI runs on pushes to main and PR opening/synchronization/reopening against main.
 After retargeting a PR, use a supported trigger and confirm a passing run for the

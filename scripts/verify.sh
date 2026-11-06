@@ -75,6 +75,7 @@ fi
 
 
 echo "==> [5/7] Ensuring database migrations are applied..."
+. "${ROOT_DIR}/scripts/test_services.sh"
 "${ROOT_DIR}/scripts/migrate.sh"
 
 resolve_timeout_arg() {
@@ -97,10 +98,18 @@ TIMEOUT_ARG=$(resolve_timeout_arg)
 
 echo "==> [6/7] Running full test suite..."
 if command -v go >/dev/null 2>&1; then
-    PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" \
-    PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:3306)/?parseTime=true" \
-    PARTY2_VALKEY_ADDR="127.0.0.1:6379" \
-    go test ${TIMEOUT_ARG} -count=1 ./...
+    # Go's test cache cannot see the database, so a schema change must clear it.
+    SCHEMA_STAMP_FILE="${ROOT_DIR}/.cache/test_schema_stamp"
+    SCHEMA_HASH=$(cat migrations/*.sql compose.test.yaml 2>/dev/null | sha256sum) || true
+    if [ "$FORCE_VERIFY" != "0" ] || [ "$SCHEMA_HASH" != "$(cat "$SCHEMA_STAMP_FILE" 2>/dev/null)" ]; then
+        go clean -testcache
+        mkdir -p "${ROOT_DIR}/.cache"
+        echo "$SCHEMA_HASH" > "$SCHEMA_STAMP_FILE"
+    fi
+    PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:${TEST_DB_PORT})/party2?parseTime=true" \
+    PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:${TEST_DB_PORT})/?parseTime=true" \
+    PARTY2_VALKEY_ADDR="127.0.0.1:${TEST_VALKEY_PORT}" \
+    go test ${TIMEOUT_ARG} ./...
 else
     docker compose run --rm app go test ${TIMEOUT_ARG} -count=1 ./...
 fi

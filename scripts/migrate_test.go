@@ -463,9 +463,13 @@ func TestMigrate_RealIsolatedDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	composePath, err := filepath.Abs(filepath.Join("..", "compose.yaml"))
-	if err != nil {
-		t.Fatal(err)
+	// Target the services behind PARTY2_TEST_DB_ADMIN_DSN: make check selects them through COMPOSE_FILE.
+	composeFile := os.Getenv("COMPOSE_FILE")
+	if composeFile == "" {
+		composeFile, err = filepath.Abs(filepath.Join("..", "compose.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	migrationsDir := filepath.Join(root, "migrations")
@@ -486,7 +490,7 @@ INSERT IGNORE INTO schema_migrations (version) VALUES ('001_self_registered');
 	}
 
 	env := []string{
-		"COMPOSE_FILE=" + composePath,
+		"COMPOSE_FILE=" + composeFile,
 		"PARTY2_DB_NAME=" + dbName,
 	}
 	if _, err := exec.LookPath("docker"); err != nil {

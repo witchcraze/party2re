@@ -30,6 +30,7 @@ func setupCheckChangedFixture(t *testing.T) *checkChangedFixture {
 	files := map[string]string{
 		"scripts/check_changed.sh": string(script),
 		"scripts/migrate.sh":       "#!/usr/bin/env bash\nexit \"${MIGRATE_EXIT:-0}\"\n",
+		"scripts/test_services.sh": "TEST_DB_PORT=3307\nTEST_VALKEY_PORT=6380\n",
 		"bin/go": `#!/usr/bin/env bash
 echo "go $*" >> "$GO_CALLS"
 if [ "$1" = run ]; then

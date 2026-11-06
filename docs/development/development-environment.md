@@ -144,7 +144,7 @@ To apply pending migrations safely without dropping data:
 make db-migrate
 ```
 
-The local database persists across runs and normally serves both development and DB-backed tests. Temporary development/test data is allowed. See the [test DB ownership and isolation procedure](testing.md#51-database-ownership-and-isolation) before writing fixture setup or cleanup.
+The local database persists across runs and serves development and directly run DB-backed tests. Temporary development/test data is allowed. `make check` and `make check-changed` use the disposable [test stack](testing.md#4-container-roles) instead, so they neither change this database nor apply migrations to it unless they warn that the stack is unavailable. See the [test DB ownership and isolation procedure](testing.md#51-database-ownership-and-isolation) before writing fixture setup or cleanup.
 
 To recreate the local database completely from all migration files:
 
@@ -152,7 +152,7 @@ To recreate the local database completely from all migration files:
 make db-reset
 ```
 
-This explicitly drops and recreates the local Compose `party2` database; it does not reset Valkey. `make check-clean` performs the same DB reset before forcing full verification. Stop tests and application processes using the environment before either command. These are environment operations, not individual test setup/cleanup, and are not required before every normal test run. Normal `make check` applies pending migrations without resetting the database.
+This explicitly drops and recreates the local Compose `party2` database; it does not reset Valkey. `make check-clean` instead discards the test stack, never this database, before forcing full verification. Stop tests and application processes using the environment before either command. These are environment operations, not individual test setup/cleanup, and are not required before every normal test run. Normal `make check` applies pending migrations to the test stack without resetting its database.
 
 The database volume can also be wiped manually if needed:
 
