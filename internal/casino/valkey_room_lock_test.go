@@ -449,3 +449,174 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 		t.Fatalf("expected exactly 1 lock acquisition for PlayDoppelAction, got %d", count)
 	}
 }
+
+func TestValkeyRoomLock_LeaseSafetyAndContentionHoldTiming(t *testing.T) {
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	raw := openIsolatedTestValkey(t, 11)
+	defer raw.Close()
+
+	ctx := context.Background()
+	charA, err := database.CreateTestCharacterWithFunds(ctx, db, "LeaseSafeA", 50000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charB, err := database.CreateTestCharacterWithFunds(ctx, db, "LeaseSafeB", 50000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, query := range []string{"DELETE FROM casino_accounts WHERE character_id = ?", "DELETE FROM character_depots WHERE character_id = ?", "DELETE FROM characters WHERE id = ?"} {
+			_, _ = db.ExecContext(context.Background(), query, charA.ID)
+			_, _ = db.ExecContext(context.Background(), query, charB.ID)
+		}
+		_, _ = db.ExecContext(context.Background(), "DELETE FROM players WHERE id IN (?, ?)", charA.PlayerID, charB.PlayerID)
+	})
+
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	casinoRepo, err := database.NewCasinoRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomRepo, err := casino.NewValkeyRoomRepository(raw, casino.WithValkeyCharacterRepository(charRepo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := casino.NewService(casinoRepo,
+		casino.WithCharacterRepository(charRepo),
+		casino.WithTransactionProvider(database.NewTransactionProvider(db)),
+		casino.WithRoomRepository(roomRepo))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ExchangeGoldToCoins(ctx, charA.ID, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = svc.ExchangeGoldToCoins(ctx, charB.ID, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hlRoom, err := svc.CreateRoom(ctx, charA.ID, casino.CreateRoomRequest{
+		Name: "LeaseSafety-" + id.New()[:8], GameType: casino.GameTypeHighLow, Speed: casino.SpeedFast, MaxPlayers: 2, Rate: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = roomRepo.DeleteRoom(context.Background(), hlRoom.Room.ID) })
+
+	_, err = svc.JoinRoom(ctx, hlRoom.Room.ID, charB.ID, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type timingMetrics struct {
+		mu                      sync.Mutex
+		count                   int64
+		maxHold                 time.Duration
+		totalHold               time.Duration
+		maxWait                 time.Duration
+		totalWait               time.Duration
+		lockAcquisitionFailures int64
+	}
+	var metrics timingMetrics
+
+	cleanupObserver := casino.SetRoomLockObserverForTest(func(waitDur, holdDur time.Duration, acquired bool, err error) {
+		metrics.mu.Lock()
+		defer metrics.mu.Unlock()
+		if !acquired {
+			metrics.lockAcquisitionFailures++
+			return
+		}
+		metrics.count++
+		if holdDur > metrics.maxHold {
+			metrics.maxHold = holdDur
+		}
+		metrics.totalHold += holdDur
+		if waitDur > metrics.maxWait {
+			metrics.maxWait = waitDur
+		}
+		metrics.totalWait += waitDur
+	})
+	t.Cleanup(cleanupObserver)
+
+	// Run 20 rounds of HighLow with competing wagers per round
+	for round := 0; round < 20; round++ {
+		_, err := svc.StartHighLow(ctx, hlRoom.Room.ID, charA.ID)
+		if err != nil {
+			t.Fatalf("round %d StartHighLow: %v", round, err)
+		}
+
+		// Fixed cards so Actor 0 wins
+		for i, id := range []string{charA.ID, charB.ID} {
+			member, err := roomRepo.GetMember(ctx, hlRoom.Room.ID, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			member.Card = []int{12, 0}[i]
+			if err := roomRepo.UpdateMember(ctx, *member); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		// Competing plays: 2 turns from Actor 0, 1 from Actor 1
+		errs := make([]error, 3)
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			_, errs[0] = svc.PlayHighLowAction(ctx, hlRoom.Room.ID, charA.ID, casino.HighLowActionHigh)
+		}()
+		go func() {
+			defer wg.Done()
+			_, errs[1] = svc.PlayHighLowAction(ctx, hlRoom.Room.ID, charA.ID, casino.HighLowActionHigh)
+		}()
+		go func() {
+			defer wg.Done()
+			_, errs[2] = svc.PlayHighLowAction(ctx, hlRoom.Room.ID, charB.ID, casino.HighLowActionHigh)
+		}()
+		wg.Wait()
+
+		for _, e := range errs {
+			if e != nil && !errors.Is(e, casino.ErrAlreadyActed) && !errors.Is(e, casino.ErrGameNotInRound) {
+				t.Fatalf("round %d unexpected play error: %v", round, e)
+			}
+		}
+	}
+
+	metrics.mu.Lock()
+	count := metrics.count
+	maxHold := metrics.maxHold
+	avgHold := time.Duration(0)
+	maxWait := metrics.maxWait
+	avgWait := time.Duration(0)
+	if count > 0 {
+		avgHold = metrics.totalHold / time.Duration(count)
+		avgWait = metrics.totalWait / time.Duration(count)
+	}
+	failures := metrics.lockAcquisitionFailures
+	metrics.mu.Unlock()
+
+	t.Logf("Room lock timing metrics (20 rounds, %d acquisitions): maxHold=%v, avgHold=%v, maxWait=%v, avgWait=%v, lockAcquisitionFailures=%d",
+		count, maxHold, avgHold, maxWait, avgWait, failures)
+
+	if failures != 0 {
+		t.Fatalf("expected 0 lock acquisition failures, got %d", failures)
+	}
+
+	// Lease Safety Verification:
+	// DefaultRoomLockTTL is 10s. The critical section (hold duration) must complete with ample headroom.
+	// We enforce a conservative dead-man bound of 2 seconds (5x margin to 10s lease TTL).
+	if maxHold > 2*time.Second {
+		t.Fatalf("lease safety violation: max lock hold duration %v exceeded safe threshold (2s) relative to 10s lease TTL", maxHold)
+	}
+}
