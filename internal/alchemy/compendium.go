@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -102,19 +103,21 @@ func (s *Service) LearnRecipe(ctx context.Context, characterID string, allowedBa
 		}
 	}
 
-	var candidates []Recipe
+	byBase := make(map[string][]Recipe)
+	var baseKeys []string
+
 	for _, r := range allRecipes {
 		if discoveredMap[r.ID] {
 			continue
 		}
+		if len(r.Ingredients) == 0 {
+			continue
+		}
+		baseID := r.Ingredients[0].DefinitionID
 		if len(baseFilter) > 0 {
-			if len(r.Ingredients) == 0 {
-				continue
-			}
-			base := r.Ingredients[0]
-			match := baseFilter[base.DefinitionID]
+			match := baseFilter[baseID]
 			if !match && s.items != nil {
-				if def, err := s.items.FindByID(base.DefinitionID); err == nil {
+				if def, err := s.items.FindByID(baseID); err == nil {
 					match = baseFilter[def.Name]
 				}
 			}
@@ -122,15 +125,22 @@ func (s *Service) LearnRecipe(ctx context.Context, characterID string, allowedBa
 				continue
 			}
 		}
-		candidates = append(candidates, r)
+		if len(byBase[baseID]) == 0 {
+			baseKeys = append(baseKeys, baseID)
+		}
+		byBase[baseID] = append(byBase[baseID], r)
 	}
 
-	if len(candidates) == 0 {
+	if len(baseKeys) == 0 {
 		return Recipe{}, ErrNoRecipesToLearn
 	}
 
+	slices.Sort(baseKeys)
+
 	s.rngMu.Lock()
-	chosen := candidates[s.rng.Intn(len(candidates))]
+	chosenBase := baseKeys[s.rng.Intn(len(baseKeys))]
+	recipesForBase := byBase[chosenBase]
+	chosen := recipesForBase[s.rng.Intn(len(recipesForBase))]
 	s.rngMu.Unlock()
 
 	if err := s.repo.SaveDiscoveredRecipe(ctx, characterID, chosen.ID, false); err != nil {

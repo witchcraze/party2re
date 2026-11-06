@@ -14,14 +14,17 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/contest"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/god"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -1373,5 +1376,147 @@ func TestMonsterTamerAdapter(t *testing.T) {
 	err = adapter.TameMonster(ctx, "unknown-char", "slime", "スラりん")
 	if !errors.Is(err, monster.ErrCharacterNotFound) {
 		t.Fatalf("expected ErrCharacterNotFound for missing character, got %v", err)
+	}
+}
+
+type wireMockAlchemyRepo struct {
+	discovered map[string][]alchemy.DiscoveredRecipe
+}
+
+func (m *wireMockAlchemyRepo) GetSynthesisState(_ context.Context, _ string) (alchemy.Synthesis, error) {
+	return alchemy.Synthesis{}, nil
+}
+func (m *wireMockAlchemyRepo) GetSynthesisStateForUpdate(_ context.Context, _ string) (alchemy.Synthesis, error) {
+	return alchemy.Synthesis{}, nil
+}
+func (m *wireMockAlchemyRepo) SaveSynthesisState(_ context.Context, _ alchemy.Synthesis) error {
+	return nil
+}
+func (m *wireMockAlchemyRepo) CompleteOngoingSynthesis(_ context.Context, _ string) error {
+	return nil
+}
+func (m *wireMockAlchemyRepo) GetDiscoveredRecipes(_ context.Context, characterID string) ([]alchemy.DiscoveredRecipe, error) {
+	return m.discovered[characterID], nil
+}
+func (m *wireMockAlchemyRepo) SaveDiscoveredRecipe(_ context.Context, characterID, recipeID string, isCrafted bool) error {
+	if m.discovered == nil {
+		m.discovered = make(map[string][]alchemy.DiscoveredRecipe)
+	}
+	m.discovered[characterID] = append(m.discovered[characterID], alchemy.DiscoveredRecipe{RecipeID: recipeID, IsCrafted: isCrafted})
+	return nil
+}
+func (m *wireMockAlchemyRepo) MarkRecipeCrafted(_ context.Context, _, _ string) error {
+	return nil
+}
+func (m *wireMockAlchemyRepo) CountCraftedRecipes(_ context.Context, _ string) (int, error) {
+	return 0, nil
+}
+func (m *wireMockAlchemyRepo) SetCompAlcTitle(_ context.Context, _ string) error {
+	return nil
+}
+
+type wireMockDepotRepo struct{}
+
+func (wireMockDepotRepo) FindByCharacterID(_ context.Context, _ string) (depot.Depot, error) {
+	return depot.Depot{}, nil
+}
+func (wireMockDepotRepo) FindByCharacterIDForUpdate(_ context.Context, _ string) (depot.Depot, error) {
+	return depot.Depot{}, nil
+}
+func (wireMockDepotRepo) Save(_ context.Context, _ depot.Depot) error {
+	return nil
+}
+
+func TestAlchemyRecipeLearnerAdapter(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Nil alchemy service returns ErrRecipeLearnerUnavailable
+	nilAdapter := alchemyRecipeLearnerAdapter{alchemy: nil}
+	_, err := nilAdapter.LearnRecipe(ctx, "char-1", []string{"weapon-01"})
+	if !errors.Is(err, home.ErrRecipeLearnerUnavailable) {
+		t.Fatalf("expected ErrRecipeLearnerUnavailable, got %v", err)
+	}
+
+	// 2. Real alchemy service with item catalog
+	char := corecharacter.Character{ID: "char-1", Name: "Hero"}
+	charRepo := &wireMockCharRepo{char: char}
+	depotRepo := wireMockDepotRepo{}
+	alchemyRepo := &wireMockAlchemyRepo{}
+
+	recipes, err := alchemy.InitialRecipeCatalog()
+	if err != nil {
+		t.Fatalf("InitialRecipeCatalog failed: %v", err)
+	}
+	items, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatalf("coreitem.InitialCatalog failed: %v", err)
+	}
+
+	alcSvc, err := alchemy.NewService(charRepo, depotRepo, alchemyRepo, recipes, items)
+	if err != nil {
+		t.Fatalf("alchemy.NewService failed: %v", err)
+	}
+
+	adapter := alchemyRecipeLearnerAdapter{
+		alchemy: alcSvc,
+		items:   items,
+	}
+
+	// Learn weapon-01: clean-room name "ヒノキの棒" must be returned, NOT legacy "ひのきの棒"
+	res, err := adapter.LearnRecipe(ctx, "char-1", []string{"weapon-01"})
+	if err != nil {
+		t.Fatalf("unexpected error learning weapon-01: %v", err)
+	}
+	if res.BaseName != "ヒノキの棒" {
+		t.Errorf("expected clean-room BaseName 'ヒノキの棒', got %q", res.BaseName)
+	}
+	if strings.Contains(res.BaseName, "ひのき") {
+		t.Errorf("legacy proprietary/old name leaked into BaseName: %q", res.BaseName)
+	}
+
+	// Learn item-006: clean-room name "霊樹の葉" must be returned, NOT legacy "世界樹の葉"
+	res, err = adapter.LearnRecipe(ctx, "char-1", []string{"item-006"})
+	if err != nil {
+		t.Fatalf("unexpected error learning item-006: %v", err)
+	}
+	if res.BaseName != "霊樹の葉" {
+		t.Errorf("expected clean-room BaseName '霊樹の葉', got %q", res.BaseName)
+	}
+	if strings.Contains(res.BaseName, "世界樹") {
+		t.Errorf("legacy proprietary/old name leaked into BaseName: %q", res.BaseName)
+	}
+
+	// Learn single-ingredient recipe (recipe-003: item-002 x2 -> item-003)
+	res, err = adapter.LearnRecipe(ctx, "char-1", []string{"item-002"})
+	if err != nil {
+		t.Fatalf("unexpected error learning item-002: %v", err)
+	}
+	if res.BaseName != "上薬草" || res.MaterialName != "上薬草" {
+		t.Errorf("expected 上薬草 x 上薬草, got %s x %s", res.BaseName, res.MaterialName)
+	}
+
+	// Exhaustion translates alchemy.ErrNoRecipesToLearn to home.ErrNoRecipesToLearn
+	// Discover remaining weapon-01 recipe (it has 2 recipes total: recipe-040 and recipe-041)
+	_, err = adapter.LearnRecipe(ctx, "char-1", []string{"weapon-01"})
+	if err != nil {
+		t.Fatalf("unexpected error learning second weapon-01 recipe: %v", err)
+	}
+	// Third attempt must return home.ErrNoRecipesToLearn
+	_, err = adapter.LearnRecipe(ctx, "char-1", []string{"weapon-01"})
+	if !errors.Is(err, home.ErrNoRecipesToLearn) {
+		t.Fatalf("expected home.ErrNoRecipesToLearn, got %v", err)
+	}
+
+	// 3. Fallback when items is nil
+	nilItemsAdapter := alchemyRecipeLearnerAdapter{
+		alchemy: alcSvc,
+		items:   nil,
+	}
+	resFallback, err := nilItemsAdapter.LearnRecipe(ctx, "char-1", []string{"weapon-18"})
+	if err != nil {
+		t.Fatalf("unexpected error with nil items: %v", err)
+	}
+	if resFallback.BaseName != "weapon-18" {
+		t.Errorf("expected fallback to definition ID 'weapon-18', got %q", resFallback.BaseName)
 	}
 }

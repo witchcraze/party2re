@@ -188,7 +188,7 @@ func TestRecipeScroll_AdvancedRecipe_Learn(t *testing.T) {
 	invMgr.invs["char-hero"] = inv
 
 	learner := &mockRecipeLearner{
-		result: LearnedRecipe{BaseName: "世界樹の葉", MaterialName: "魔法の聖水"},
+		result: LearnedRecipe{BaseName: "霊樹の葉", MaterialName: "魔法の聖水"},
 	}
 
 	svc, err := NewService(
@@ -212,7 +212,7 @@ func TestRecipeScroll_AdvancedRecipe_Learn(t *testing.T) {
 	if !res.Consumed {
 		t.Errorf("expected item to be consumed")
 	}
-	expectedMsg := "勇者 は錬金レシピを読んだ！【世界樹の葉 × 魔法の聖水 ＝ ？？？】の錬金方法を習得した！"
+	expectedMsg := "勇者 は錬金レシピを読んだ！【霊樹の葉 × 魔法の聖水 ＝ ？？？】の錬金方法を習得した！"
 	if res.Message != expectedMsg {
 		t.Errorf("expected message %q, got %q", expectedMsg, res.Message)
 	}
