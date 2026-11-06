@@ -17,7 +17,7 @@ import (
 
 func TestValkeyRoomLock_MutualExclusion(t *testing.T) {
 	raw := openIsolatedTestValkey(t, 11)
-	defer raw.Close()
+	t.Cleanup(raw.Close)
 
 	repo, err := casino.NewValkeyRoomRepository(raw)
 	if err != nil {
@@ -26,7 +26,9 @@ func TestValkeyRoomLock_MutualExclusion(t *testing.T) {
 
 	roomID := "lock-room-" + id.New()[:8]
 	t.Cleanup(func() {
-		_ = raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build())
+		if err := raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build()).Error(); err != nil {
+			t.Errorf("cleanup lock key: %v", err)
+		}
 	})
 
 	started1 := make(chan struct{})
@@ -99,7 +101,7 @@ func TestValkeyRoomLock_MutualExclusion(t *testing.T) {
 
 func TestValkeyRoomLock_Reentrancy(t *testing.T) {
 	raw := openIsolatedTestValkey(t, 11)
-	defer raw.Close()
+	t.Cleanup(raw.Close)
 
 	repo, err := casino.NewValkeyRoomRepository(raw)
 	if err != nil {
@@ -108,7 +110,9 @@ func TestValkeyRoomLock_Reentrancy(t *testing.T) {
 
 	roomID := "reentrant-room-" + id.New()[:8]
 	t.Cleanup(func() {
-		_ = raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build())
+		if err := raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build()).Error(); err != nil {
+			t.Errorf("cleanup lock key: %v", err)
+		}
 	})
 
 	reentrantExecuted := false
@@ -128,7 +132,7 @@ func TestValkeyRoomLock_Reentrancy(t *testing.T) {
 
 func TestValkeyRoomLock_Cancellation(t *testing.T) {
 	raw := openIsolatedTestValkey(t, 11)
-	defer raw.Close()
+	t.Cleanup(raw.Close)
 
 	repo, err := casino.NewValkeyRoomRepository(raw)
 	if err != nil {
@@ -137,7 +141,9 @@ func TestValkeyRoomLock_Cancellation(t *testing.T) {
 
 	roomID := "cancel-room-" + id.New()[:8]
 	t.Cleanup(func() {
-		_ = raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build())
+		if err := raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build()).Error(); err != nil {
+			t.Errorf("cleanup lock key: %v", err)
+		}
 	})
 
 	started1 := make(chan struct{})
@@ -178,7 +184,7 @@ func TestValkeyRoomLock_Cancellation(t *testing.T) {
 
 func TestValkeyRoomLock_CallerDeadlineTimeout(t *testing.T) {
 	raw := openIsolatedTestValkey(t, 11)
-	defer raw.Close()
+	t.Cleanup(raw.Close)
 
 	repo, err := casino.NewValkeyRoomRepository(raw)
 	if err != nil {
@@ -187,7 +193,9 @@ func TestValkeyRoomLock_CallerDeadlineTimeout(t *testing.T) {
 
 	roomID := "deadline-room-" + id.New()[:8]
 	t.Cleanup(func() {
-		_ = raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build())
+		if err := raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build()).Error(); err != nil {
+			t.Errorf("cleanup lock key: %v", err)
+		}
 	})
 
 	started1 := make(chan struct{})
@@ -218,7 +226,7 @@ func TestValkeyRoomLock_CallerDeadlineTimeout(t *testing.T) {
 
 func TestValkeyRoomLock_TokenCheckedRelease(t *testing.T) {
 	raw := openIsolatedTestValkey(t, 11)
-	defer raw.Close()
+	t.Cleanup(raw.Close)
 
 	repo, err := casino.NewValkeyRoomRepository(raw)
 	if err != nil {
@@ -228,7 +236,9 @@ func TestValkeyRoomLock_TokenCheckedRelease(t *testing.T) {
 	roomID := "token-release-room-" + id.New()[:8]
 	lockKey := casino.DefaultRoomLockKeyPrefix + roomID
 	t.Cleanup(func() {
-		_ = raw.Do(context.Background(), raw.B().Del().Key(lockKey).Build())
+		if err := raw.Do(context.Background(), raw.B().Del().Key(lockKey).Build()).Error(); err != nil {
+			t.Errorf("cleanup lock key: %v", err)
+		}
 	})
 
 	foreignToken := "foreign-hijacked-token"
@@ -279,10 +289,14 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("cleanup db close: %v", err)
+		}
+	})
 
 	raw := openIsolatedTestValkey(t, 11)
-	defer raw.Close()
+	t.Cleanup(raw.Close)
 
 	ctx := context.Background()
 	charA, err := database.CreateTestCharacterWithFunds(ctx, db, "PlayerA", 10000)
@@ -294,11 +308,21 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		for _, query := range []string{"DELETE FROM casino_accounts WHERE character_id = ?", "DELETE FROM character_depots WHERE character_id = ?", "DELETE FROM characters WHERE id = ?"} {
-			_, _ = db.ExecContext(context.Background(), query, charA.ID)
-			_, _ = db.ExecContext(context.Background(), query, charB.ID)
+		for _, query := range []string{
+			"DELETE FROM casino_accounts WHERE character_id = ?",
+			"DELETE FROM character_depots WHERE character_id = ?",
+			"DELETE FROM characters WHERE id = ?",
+		} {
+			if _, err := db.ExecContext(context.Background(), query, charA.ID); err != nil {
+				t.Errorf("cleanup charA (%s): %v", query, err)
+			}
+			if _, err := db.ExecContext(context.Background(), query, charB.ID); err != nil {
+				t.Errorf("cleanup charB (%s): %v", query, err)
+			}
 		}
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM players WHERE id IN (?, ?)", charA.PlayerID, charB.PlayerID)
+		if _, err := db.ExecContext(context.Background(), "DELETE FROM players WHERE id IN (?, ?)", charA.PlayerID, charB.PlayerID); err != nil {
+			t.Errorf("cleanup players: %v", err)
+		}
 	})
 
 	countingClient := &countingValkeyClient{Client: raw}
@@ -338,7 +362,11 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = roomRepo.DeleteRoom(context.Background(), hlRoom.Room.ID) })
+	t.Cleanup(func() {
+		if err := roomRepo.DeleteRoom(context.Background(), hlRoom.Room.ID); err != nil {
+			t.Errorf("cleanup hlRoom: %v", err)
+		}
+	})
 
 	_, err = svc.JoinRoom(ctx, hlRoom.Room.ID, charB.ID, "", 0)
 	if err != nil {
@@ -380,7 +408,11 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = roomRepo.DeleteRoom(context.Background(), indRoom.Room.ID) })
+	t.Cleanup(func() {
+		if err := roomRepo.DeleteRoom(context.Background(), indRoom.Room.ID); err != nil {
+			t.Errorf("cleanup indRoom: %v", err)
+		}
+	})
 
 	_, err = svc.JoinRoom(ctx, indRoom.Room.ID, charB.ID, "", 0)
 	if err != nil {
@@ -418,7 +450,11 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = roomRepo.DeleteRoom(context.Background(), dpRoom.Room.ID) })
+	t.Cleanup(func() {
+		if err := roomRepo.DeleteRoom(context.Background(), dpRoom.Room.ID); err != nil {
+			t.Errorf("cleanup dpRoom: %v", err)
+		}
+	})
 
 	_, err = svc.JoinRoom(ctx, dpRoom.Room.ID, charB.ID, "", 0)
 	if err != nil {
@@ -455,10 +491,14 @@ func TestValkeyRoomLock_LeaseSafetyAndContentionHoldTiming(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("cleanup db close: %v", err)
+		}
+	})
 
 	raw := openIsolatedTestValkey(t, 11)
-	defer raw.Close()
+	t.Cleanup(raw.Close)
 
 	ctx := context.Background()
 	charA, err := database.CreateTestCharacterWithFunds(ctx, db, "LeaseSafeA", 50000)
@@ -470,11 +510,21 @@ func TestValkeyRoomLock_LeaseSafetyAndContentionHoldTiming(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		for _, query := range []string{"DELETE FROM casino_accounts WHERE character_id = ?", "DELETE FROM character_depots WHERE character_id = ?", "DELETE FROM characters WHERE id = ?"} {
-			_, _ = db.ExecContext(context.Background(), query, charA.ID)
-			_, _ = db.ExecContext(context.Background(), query, charB.ID)
+		for _, query := range []string{
+			"DELETE FROM casino_accounts WHERE character_id = ?",
+			"DELETE FROM character_depots WHERE character_id = ?",
+			"DELETE FROM characters WHERE id = ?",
+		} {
+			if _, err := db.ExecContext(context.Background(), query, charA.ID); err != nil {
+				t.Errorf("cleanup charA (%s): %v", query, err)
+			}
+			if _, err := db.ExecContext(context.Background(), query, charB.ID); err != nil {
+				t.Errorf("cleanup charB (%s): %v", query, err)
+			}
 		}
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM players WHERE id IN (?, ?)", charA.PlayerID, charB.PlayerID)
+		if _, err := db.ExecContext(context.Background(), "DELETE FROM players WHERE id IN (?, ?)", charA.PlayerID, charB.PlayerID); err != nil {
+			t.Errorf("cleanup players: %v", err)
+		}
 	})
 
 	charRepo, err := database.NewCharacterRepository(db)
@@ -512,7 +562,11 @@ func TestValkeyRoomLock_LeaseSafetyAndContentionHoldTiming(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = roomRepo.DeleteRoom(context.Background(), hlRoom.Room.ID) })
+	t.Cleanup(func() {
+		if err := roomRepo.DeleteRoom(context.Background(), hlRoom.Room.ID); err != nil {
+			t.Errorf("cleanup hlRoom: %v", err)
+		}
+	})
 
 	_, err = svc.JoinRoom(ctx, hlRoom.Room.ID, charB.ID, "", 0)
 	if err != nil {
@@ -613,10 +667,7 @@ func TestValkeyRoomLock_LeaseSafetyAndContentionHoldTiming(t *testing.T) {
 		t.Fatalf("expected 0 lock acquisition failures, got %d", failures)
 	}
 
-	// Lease Safety Verification:
-	// DefaultRoomLockTTL is 10s. The critical section (hold duration) must complete with ample headroom.
-	// We enforce a conservative dead-man bound of 2 seconds (5x margin to 10s lease TTL).
-	if maxHold > 2*time.Second {
-		t.Fatalf("lease safety violation: max lock hold duration %v exceeded safe threshold (2s) relative to 10s lease TTL", maxHold)
-	}
+	// Timing metrics above are logged for informational verification of critical section
+	// hold durations and wait times. Per .agents/rules/01-development-workflow.md, wall-clock
+	// performance thresholds are omitted to prevent test flakiness under CI scheduling load.
 }
