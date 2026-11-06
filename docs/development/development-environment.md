@@ -30,10 +30,10 @@ Start MariaDB and Valkey containers in the background:
 
 ```sh
 make up
-# Or: docker compose up -d mariadb valkey
+# Or: docker compose up -d --wait mariadb valkey
 ```
 
-Both services must be healthy before the application daemon starts. The `app` service waits for both health checks automatically.
+The command returns once both services are healthy and fails if they do not become healthy. The `app` service also waits for both health checks.
 
 ### 2. Prepare Database Schema
 
@@ -158,7 +158,7 @@ The database volume can also be wiped manually if needed:
 
 ```sh
 docker compose down -v
-docker compose up -d mariadb valkey
+docker compose up -d --wait mariadb valkey
 ```
 
 `docker compose down -v` removes all Compose-managed named volumes, including MariaDB and Valkey data. Use it only when explicitly discarding that local environment's data.

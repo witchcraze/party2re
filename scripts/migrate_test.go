@@ -27,16 +27,9 @@ func TestMain(m *testing.M) {
 // by forwarding SQL execution over PARTY2_TEST_BRIDGE_DSN when the test runs inside
 // a container where the `docker` CLI is not installed (e.g. `docker compose run app go test`).
 func runTestDockerBridge(args []string) int {
-	if len(args) > 0 && args[0] == "inspect" {
-		fmt.Println("healthy")
-		return 0
-	}
 	if len(args) >= 2 && args[0] == "compose" {
 		switch args[1] {
 		case "up":
-			return 0
-		case "ps":
-			fmt.Println("bridge-mariadb")
 			return 0
 		case "exec":
 			var (
@@ -151,18 +144,9 @@ func setupMigrateFakeFixture(t *testing.T, migrations map[string]string) *migrat
 	fakeDocker := `#!/usr/bin/env bash
 set -euo pipefail
 
-if [ "${1:-}" = "inspect" ]; then
-    echo "${FAKE_HEALTH:-healthy}"
-    exit "${FAKE_INSPECT_EXIT:-0}"
-fi
-
 if [ "${1:-}" = "compose" ] && [ "${2:-}" = "up" ]; then
+    echo "UP:$*" >> "$SQL_LOG"
     exit "${FAKE_UP_EXIT:-0}"
-fi
-
-if [ "${1:-}" = "compose" ] && [ "${2:-}" = "ps" ]; then
-    echo "cid-mariadb"
-    exit 0
 fi
 
 if [ "${1:-}" = "compose" ] && [ "${2:-}" = "exec" ]; then
@@ -185,9 +169,6 @@ if [ "${1:-}" = "compose" ] && [ "${2:-}" = "exec" ]; then
 
     if [ "$has_e" -eq 1 ]; then
         case "$query" in
-            "SELECT 1")
-                exit "${FAKE_PING_EXIT:-0}"
-                ;;
             *"CREATE TABLE IF NOT EXISTS schema_migrations"*)
                 echo "CREATE_TABLE" >> "$SQL_LOG"
                 if [ "${FAKE_CREATE_EXIT:-0}" -ne 0 ]; then
@@ -291,6 +272,21 @@ func TestMigrate_FakeFaultInjection(t *testing.T) {
 	defaultMigrations := map[string]string{
 		"001_test.sql": "CREATE TABLE test_one (id INT PRIMARY KEY);\nINSERT IGNORE INTO schema_migrations (version) VALUES ('001_test');\n",
 	}
+
+	t.Run("waits for healthy services and stops when they do not become healthy", func(t *testing.T) {
+		fix := setupMigrateFakeFixture(t, defaultMigrations)
+		out, code := runCmd(t, fix.root, append(fix.env, "FAKE_UP_EXIT=1"), "bash", "./scripts/migrate.sh")
+		if code == 0 {
+			t.Fatalf("expected non-zero exit when services are unhealthy, got 0:\n%s", out)
+		}
+		log := readLog(t, fix.sqlLog)
+		if !strings.Contains(log, "UP:compose up -d --wait mariadb valkey") {
+			t.Fatalf("services were not started with --wait:\n%s", log)
+		}
+		if strings.Contains(log, "CREATE_TABLE") {
+			t.Fatalf("migration continued after unhealthy services:\n%s", log)
+		}
+	})
 
 	t.Run("stops when schema_migrations table creation fails", func(t *testing.T) {
 		fix := setupMigrateFakeFixture(t, defaultMigrations)

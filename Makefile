@@ -1,4 +1,4 @@
-.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress bench smoke db-migrate db-reset up down setup-hooks arch-lint lock-lint run
+.PHONY: all check verify check-clean check-changed fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress bench smoke db-migrate db-reset up down setup-hooks arch-lint lock-lint run
 
 PORT ?= 8080
 TEST_TIMEOUT ?= $(or $(PARTY2_TEST_TIMEOUT),$(if $(findstring -timeout,$(GOFLAGS)),,30m))
@@ -31,7 +31,7 @@ openapi-scaffold:
 
 up:
 	@echo "Starting database and cache services..."
-	@docker compose up -d mariadb valkey
+	@docker compose up -d --wait mariadb valkey
 
 down:
 	@echo "Stopping services..."
@@ -77,6 +77,9 @@ check-clean:
 	@rm -f .cache/verify_tree_stamp
 	@./scripts/reset_db.sh
 	@FORCE_VERIFY=1 TEST_TIMEOUT="$(TEST_TIMEOUT)" ./scripts/verify.sh
+
+check-changed:
+	@TEST_TIMEOUT="$(TEST_TIMEOUT)" ./scripts/check_changed.sh
 
 setup-hooks:
 	@echo "Configuring Git hooks path..."
