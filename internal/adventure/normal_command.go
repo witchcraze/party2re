@@ -192,6 +192,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 					return err
 				}
 				r.Roster = slices.DeleteFunc(r.Roster, func(id string) bool { return id == cmd.ActorID })
+				r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == cmd.ActorID })
 				if r.LeaderID == cmd.ActorID {
 					r.LeaderID = ""
 					if len(r.Roster) > 0 {
