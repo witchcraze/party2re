@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -157,7 +158,9 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	before := r.Battle
 	f.send(t, runID, 0, "exit", "")
 	r, err = f.store.FindRun(context.Background(), runID)
-	if err != nil || r.LeaderID != member.ID || len(r.Roster) != 2 || !reflect.DeepEqual(before, r.Battle) {
+	wantBattle := before
+	wantBattle.Actors = before.Actors[1:]
+	if err != nil || r.LeaderID != member.ID || len(r.Roster) != 2 || slices.Contains(r.Roster, leader.ID) || !reflect.DeepEqual(wantBattle, r.Battle) {
 		t.Fatal("survivor continuation changed", r, err)
 	}
 	if r.Recipients[member.ID].Pending.Gold != 5 {
@@ -169,6 +172,11 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 		t.Fatal(c, err)
 	}
 	f.send(t, runID, 1, "exit", "")
+	r, err = f.store.FindRun(context.Background(), runID)
+	wantBattle.Actors = before.Actors[2:]
+	if err != nil || r.LeaderID != f.actors[2].ID || len(r.Roster) != 1 || slices.Contains(r.Roster, member.ID) || !reflect.DeepEqual(wantBattle, r.Battle) {
+		t.Fatal("second survivor continuation changed", r, err)
+	}
 	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money+5 {
 		t.Fatal(c, err)
 	}
@@ -287,5 +295,141 @@ func TestNormalRunTimeoutPendingRecoveryAndRetention(t *testing.T) {
 	}
 	if time.Unix(0, f.penalty.deadline.Load()).UTC() != deadline {
 		t.Fatal("retry extended deadline")
+	}
+}
+
+func TestNormalRunExitExcludesDepartedActorFromEncounterAndEXMarker(t *testing.T) {
+	f := newNormalFixture(t, 2)
+	installTravel(t, f)
+	tool184 := addTravelTool(t, f, 1, "item-184")
+	tool107 := addTravelTool(t, f, 1, "item-107")
+
+	// 1. Enroll A and B in a normal Party at floor 0.
+	_, lobby := f.waitingParty(t, "normal")
+	entry, err := f.svc.EnterParty(context.Background(), f.actors[0].PlayerID, f.actors[0].ID, lobby)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := entry.Command.RunID
+
+	// A explicitly exits; B becomes the only Roster member.
+	f.send(t, runID, 0, "exit", "")
+	r, err := f.store.FindRun(context.Background(), runID)
+	if err != nil || len(r.Roster) != 1 || r.Roster[0] != f.actors[1].ID {
+		t.Fatalf("unexpected roster after exit: %+v %v", r, err)
+	}
+	if len(r.Battle.Actors) != 1 || r.Battle.Actors[0].ID != f.actors[1].ID {
+		t.Fatalf("departed actor remained in battle actors: %+v", r.Battle.Actors)
+	}
+
+	// 2. B uses owned item184 with {"destination_stage_id":"stage-23"}, then item107 with {}, then explicitly advances from floor10.
+	cmd184 := travelCommand(t, f, runID, 1, tool184, `{"destination_stage_id":"stage-23"}`)
+	if _, err := f.svc.Command(context.Background(), cmd184); err != nil {
+		t.Fatal(err)
+	}
+	cmd107 := travelCommand(t, f, runID, 1, tool107, `{}`)
+	if _, err := f.svc.Command(context.Background(), cmd107); err != nil {
+		t.Fatal(err)
+	}
+	r, err = f.store.FindRun(context.Background(), runID)
+	if err != nil || r.Stage.ID != "stage-23" || r.Floor != 10 {
+		t.Fatalf("expected stage-23 floor 10, got stage %s floor %d: %v", r.Stage.ID, r.Floor, err)
+	}
+
+	// Advance from floor 10 to floor 11.
+	f.send(t, runID, 1, "advance", "")
+	r, err = f.store.FindRun(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Reload persisted run: len(Roster)=1, len(Battle.Actors)=1, EXUnlocked=false.
+	if len(r.Roster) != 1 || len(r.Battle.Actors) != 1 || r.EXUnlocked {
+		t.Fatalf("expected solo survivor without EX unlock, got roster=%d actors=%d ex_unlocked=%v", len(r.Roster), len(r.Battle.Actors), r.EXUnlocked)
+	}
+
+	// 4. Healthy contrast: in a run where two active participants reach stage-23 floor 10, EX unlocks.
+	f2 := newNormalFixture(t, 2)
+	installTravel(t, f2)
+	tool184_2 := addTravelTool(t, f2, 0, "item-184")
+	tool107_2 := addTravelTool(t, f2, 0, "item-107")
+	_, lobby2 := f2.waitingParty(t, "normal")
+	entry2, err := f2.svc.EnterParty(context.Background(), f2.actors[0].PlayerID, f2.actors[0].ID, lobby2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID2 := entry2.Command.RunID
+	cmd184_2 := travelCommand(t, f2, runID2, 0, tool184_2, `{"destination_stage_id":"stage-23"}`)
+	if _, err := f2.svc.Command(context.Background(), cmd184_2); err != nil {
+		t.Fatal(err)
+	}
+	cmd107_2 := travelCommand(t, f2, runID2, 0, tool107_2, `{}`)
+	if _, err := f2.svc.Command(context.Background(), cmd107_2); err != nil {
+		t.Fatal(err)
+	}
+	f2.send(t, runID2, 0, "advance", "")
+	r2, err := f2.store.FindRun(context.Background(), runID2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r2.Roster) != 2 || len(r2.Battle.Actors) != 2 || !r2.EXUnlocked {
+		t.Fatalf("expected 2-player run to unlock EX on stage-23, got roster=%d actors=%d ex_unlocked=%v", len(r2.Roster), len(r2.Battle.Actors), r2.EXUnlocked)
+	}
+}
+
+func TestNormalRunExitRollbackPreservesBattleMembership(t *testing.T) {
+	f := newNormalFixture(t, 2)
+	_, lobby := f.waitingParty(t, "normal")
+	leader := f.actors[0]
+	entry, err := f.svc.EnterParty(context.Background(), leader.PlayerID, leader.ID, lobby)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := entry.Command.RunID
+	r, err := f.store.FindRun(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.clock.add(3 * time.Second)
+	cmd := adventure.RunCommand{
+		PlayerID: leader.PlayerID,
+		ActorID:  leader.ID,
+		RunID:    runID,
+		ID:       "exit-fail",
+		Version:  r.Version,
+		Action:   "exit",
+	}
+
+	// Trigger write failure to ensure rollback covers active combat membership as well as roster/enrollment.
+	f.store.failWrite.Store(true)
+	if _, err := f.svc.Command(context.Background(), cmd); err == nil {
+		t.Fatal("expected failure on failWrite")
+	}
+	f.store.failWrite.Store(false)
+
+	// Persisted state after rollback must retain full membership.
+	r, err = f.store.FindRun(context.Background(), runID)
+	if err != nil || len(r.Roster) != 2 || len(r.Battle.Actors) != 2 || r.LeaderID != leader.ID {
+		t.Fatalf("rollback did not preserve membership: roster=%d actors=%d leader=%s err=%v", len(r.Roster), len(r.Battle.Actors), r.LeaderID, err)
+	}
+
+	// Successful exit after rollback.
+	receipt, err := f.svc.Command(context.Background(), cmd)
+	if err != nil || receipt.Disposition != "exit" {
+		t.Fatalf("expected exit success after rollback: %+v %v", receipt, err)
+	}
+	r, err = f.store.FindRun(context.Background(), runID)
+	if err != nil || len(r.Roster) != 1 || len(r.Battle.Actors) != 1 || r.LeaderID != f.actors[1].ID {
+		t.Fatalf("expected 1 member after exit: roster=%d actors=%d leader=%s err=%v", len(r.Roster), len(r.Battle.Actors), r.LeaderID, err)
+	}
+
+	// Receipt replay does not apply removal or side effects twice.
+	receipt2, err := f.svc.Command(context.Background(), cmd)
+	if err != nil || !reflect.DeepEqual(receipt, receipt2) {
+		t.Fatalf("receipt replay changed receipt: %+v vs %+v", receipt, receipt2)
+	}
+	r2, err := f.store.FindRun(context.Background(), runID)
+	if err != nil || !reflect.DeepEqual(r, r2) {
+		t.Fatalf("receipt replay modified run state: %+v vs %+v", r, r2)
 	}
 }

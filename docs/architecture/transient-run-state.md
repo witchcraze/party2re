@@ -603,10 +603,14 @@ consume already debited items or award unopened chests.
 ### Individual settlement and recovery
 
 Personal exit atomically applies outstanding effects, resets fullness, writes
-recipient history/disposition, removes membership, selects the first remaining
-real participant in roster order and releases enrollment. Sorted lock order never
-changes leadership. Last exit clears active state while preserving admission,
-recipient dispositions and receipts; another actor cannot read those receipts.
+recipient history/disposition, removes the departing participant from active
+combat membership (`Battle.Actors`) as well as room membership (`Roster`),
+selects the first remaining real participant in roster order and releases enrollment.
+Remaining actors, legitimate helpers, NPCs, resources and timestamps retain their
+state and order; subsequent encounter scaling, Stage15 echoes, targeting and EX
+marker checks observe only active members. Sorted lock order never changes leadership.
+Last exit clears active state while preserving admission, recipient dispositions and
+receipts; another actor cannot read those receipts.
 
 Room-log-equivalent activity uses the [gameplay matrix](../design/adventure.md#room-activity-contract).
 GET, rejected commands and receipt retries do not renew it. Explicit cleanup is
