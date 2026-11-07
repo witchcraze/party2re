@@ -512,9 +512,10 @@ the requesting command owner's locked wallet and durable single-hand facts to
 the entire combat operation, including NPC and commanded actors. Invoke it once
 inside `Command`, using the injected economy runner and helper-quest facts;
 preflight the complete invocation before effects or outer costs. It commits
-wallet changes and newly created held instances in the same ambient transaction
-as battle state and receipt. The combat hand is saved in the run; NPC scavenging
-changes only that hand. Inventory/save/receipt failure rolls back the operation,
+wallet changes and created or consumed held instances in the same ambient
+transaction as battle state and receipt. The combat hand is saved in the run; an
+NPC's scavenging, enhanced use or purchase changes only that hand, though a
+purchase still debits the requester. Inventory/save/receipt failure rolls back the operation,
 and committed retries return the receipt without another draw or grant. The
 bounded SQL tests verify this asset boundary; production action/tail composition
 and instance hydration remain with #1329, transport discovery with #1330.

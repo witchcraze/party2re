@@ -22,6 +22,7 @@ type JobAssetContext struct {
 	Arguments     []string
 	Assets        *JobAssets
 	DefeatContext *DefeatContext
+	Roster        *RosterContext // Enhanced item78's summon pool; other bodies ignore it.
 }
 
 func (c *JobAssetContext) shift() string {
@@ -66,10 +67,16 @@ func (s *LifetimeState) ApplyJobAssets(c *JobAssetContext, id string, rng random
 	}
 	c.targetResources, c.EffectContext.targetResources = resources, resources
 	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
-	previousReset, previousDefeat := c.Reset, c.Defeat
-	damage := s.nativeDamageContext(c.DamageContext, c.DefeatContext, rng)
-	c.Reset, c.Defeat = damage.Reset, damage.Defeat
-	defer func() { c.Reset, c.Defeat = previousReset, previousDefeat }()
+	// Match admission: without a native closure the supplied Defeat stays bound.
+	if c.DefeatContext != nil {
+		previousReset, previousDefeat := c.Reset, c.Defeat
+		damage := s.nativeDamageContext(c.DamageContext, c.DefeatContext, rng)
+		c.Reset, c.Defeat = damage.Reset, damage.Defeat
+		defer func() { c.Reset, c.Defeat = previousReset, previousDefeat }()
+	}
+	if id == "job-78-entry-0" {
+		return s.applyEnhancedTool(c, rng)
+	}
 	power := c.power(s.actor(c.ActorID), id)
 	if id == "job-28-entry-3" {
 		c.Assets.Wallet = max(0, c.Assets.Wallet-100)

@@ -50,11 +50,17 @@ func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd 
 		} else {
 			tc.AddGrant(economy.ResourceGrant{Gold: assets.Wallet - tc.Character.Money})
 		}
-		if assets.HeldToolID != nil && *assets.HeldToolID != previousHeld {
-			if previousHeld != "" || *assets.HeldToolID == "" {
-				return corebattle.ErrUnsupportedEffect
-			}
+		if assets.HeldToolID == nil || *assets.HeldToolID == previousHeld {
+			return nil
+		}
+		switch {
+		case previousHeld == "":
 			tc.AddGrant(economy.ResourceGrant{ItemDefinitionID: *assets.HeldToolID, ItemQuantity: 1})
+		case *assets.HeldToolID == "":
+			// A known held hand is exactly one inventory row.
+			return tc.Inventory.ConsumeOne(tc.Inventory.Items[0].ID)
+		default:
+			return corebattle.ErrUnsupportedEffect
 		}
 		return nil
 	})
