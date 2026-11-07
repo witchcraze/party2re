@@ -5,16 +5,21 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/adventure"
+	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/character"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -28,6 +33,22 @@ type referralFixture struct {
 	referrer corecharacter.Character
 	playerID string
 }
+
+type referralRunBuilder struct{}
+
+func (referralRunBuilder) BuildLifetimeActor(context.Context, string, string) (corebattle.LifetimeActor, error) {
+	return corebattle.LifetimeActor{}, nil
+}
+
+type referralRunSettler struct{}
+
+func (referralRunSettler) ApplyPostBattleResult(context.Context, battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+	return battle.ApplyPostBattleResponse{}, nil
+}
+
+type referralRunPenalty struct{}
+
+func (referralRunPenalty) ProjectRunPenalty(context.Context, string, time.Time) error { return nil }
 
 func newReferralFixture(t *testing.T) referralFixture {
 	t.Helper()
@@ -207,6 +228,114 @@ func TestRegistrationReferralLifecycle(t *testing.T) {
 			}
 			if originalSlots == 0 && scenario != "missing_depot" {
 				f.assertCounts(t, 1, want)
+			}
+		})
+	}
+}
+
+func activeReferralRun(t *testing.T, f referralFixture) (*database.NormalAdventureRepository, *adventure.NormalRun) {
+	t.Helper()
+	ctx := context.Background()
+	runRepo, err := database.NewNormalAdventureRepository(f.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := database.NewAdventureRepository(f.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalService, err := adventure.NewNormalRunService(adventure.NormalRunConfig{
+		Store: runRepo, Characters: f.core.charRepo, Inventories: f.core.invRepo,
+		Builder: referralRunBuilder{}, Settler: referralRunSettler{}, History: history,
+		Stages: stages, Monsters: monsters, Clock: adventure.RealClock{}, Penalty: referralRunPenalty{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	startedAt := time.Now().UTC()
+	run := adventure.NormalRun{
+		ID: id.New(), Version: 1, Encoding: 1,
+		Admission: adventure.NormalAdmission{
+			ActorID: f.referrer.ID, CharacterIDs: []string{f.referrer.ID},
+			StageID: adventure.StarterAdventure, Mode: "normal", Speed: 3,
+		},
+		Stage: adventure.Stage{ID: adventure.StarterAdventure}, Mode: "normal",
+		LeaderID: f.referrer.ID, Roster: []string{f.referrer.ID},
+		Recipients: map[string]adventure.RunRecipient{
+			f.referrer.ID: {PlayerID: f.referrer.PlayerID},
+		},
+		StartedAt: startedAt, LastActivity: startedAt,
+	}
+	if err := runRepo.WithRunForUpdate(ctx, run.ID, true, func(runCtx context.Context) error {
+		if err := runRepo.SaveRun(runCtx, run, 0); err != nil {
+			return err
+		}
+		return runRepo.EnrollRun(runCtx, run)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := runRepo.FindActorRun(ctx, f.referrer.ID); err != nil || active == nil || active.RunID != run.ID {
+		t.Fatalf("expected SQL enrollment in active run %q, got %+v (err=%v)", run.ID, active, err)
+	}
+	f.core.normalGuard = normalService.CheckMutation
+	return runRepo, &run
+}
+
+func TestRegistrationReferralToActiveRunRecipient(t *testing.T) {
+	for _, failDelivery := range []bool{false, true} {
+		name := "success_preserves_run"
+		if failDelivery {
+			name = "delivery_failure_rolls_back_registration_and_reward"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newReferralFixture(t)
+			ctx := context.Background()
+			runRepo, before := activeReferralRun(t, f)
+			if err := f.core.normalGuard(ctx, f.referrer.ID); !errors.Is(err, adventure.ErrRunBusy) {
+				t.Fatalf("real NormalRunService guard = %v, want %v", err, adventure.ErrRunBusy)
+			}
+			if failDelivery {
+				if _, err := f.db.ExecContext(ctx, "CREATE TRIGGER fail_active_referral BEFORE INSERT ON character_delivery_notices FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected active referral failure'"); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if _, err := f.db.ExecContext(ctx, "DROP TRIGGER fail_active_referral"); err != nil {
+						t.Error(err)
+					}
+				}()
+			}
+
+			created, err := f.create(ctx, "Joining", f.referrer.ID)
+			if failDelivery {
+				if err == nil {
+					t.Fatal("expected referral delivery to fail")
+				}
+				f.assertCounts(t, 0, 0)
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if created.PlayerID != f.playerID {
+					t.Fatalf("created character belongs to %q, want %q", created.PlayerID, f.playerID)
+				}
+				f.assertCounts(t, 1, 1)
+			}
+
+			after, err := runRepo.FindRun(ctx, before.ID)
+			if err != nil || after == nil || !reflect.DeepEqual(before, after) {
+				t.Fatalf("referral changed the recipient's active run: before=%+v after=%+v err=%v", before, after, err)
+			}
+			active, err := runRepo.FindActorRun(ctx, f.referrer.ID)
+			if err != nil || active == nil || active.RunID != before.ID {
+				t.Fatalf("referral changed SQL run enrollment: active=%+v err=%v", active, err)
 			}
 		})
 	}
