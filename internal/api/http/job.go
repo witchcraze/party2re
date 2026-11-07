@@ -154,8 +154,7 @@ func (h *Handler) handleSaveFutureMemory(w http.ResponseWriter, r *http.Request)
 		snapshot, err := h.jobs.SaveFutureMemory(r.Context(), char.ID)
 		if err != nil {
 			if errors.Is(err, corejob.ErrJobUnavailable) || errors.Is(err, jobapp.ErrRequiredItem) ||
-				errors.Is(err, jobapp.ErrFutureMemorySlotLimit) ||
-				err.Error() == "future memory slot limit reached" {
+				errors.Is(err, corecharacter.ErrFutureMemorySlotLimit) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

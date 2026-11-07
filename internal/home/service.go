@@ -46,6 +46,7 @@ type Service struct {
 	chapel                 BlessingCleaner
 	alchemy                AlchemyCompleter
 	recipeLearner          RecipeLearner
+	futureMemory           FutureMemorySaver
 	costume                CostumeResetter
 	costumeApplier         CostumeApplier
 	jobRestorer            JobStateRestorer

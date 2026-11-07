@@ -135,7 +135,7 @@ func TestFutureMemory_Integration_ConcurrentSavesEnforceCapacity(t *testing.T) {
 			atomic.AddInt32(&successCount, 1)
 			return nil
 		}
-		if errors.Is(err, job.ErrFutureMemorySlotLimit) || err.Error() == "future memory slot limit reached" {
+		if errors.Is(err, corecharacter.ErrFutureMemorySlotLimit) {
 			atomic.AddInt32(&slotLimitCount, 1)
 			return nil
 		}

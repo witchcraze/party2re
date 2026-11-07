@@ -250,7 +250,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	// Validate supported consumable items before transaction
 	if !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
 		switch def.Name {
-		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石":
+		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ":
 		default:
 			return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 		}
@@ -488,6 +488,8 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 			}
 			msg = fmt.Sprintf("武器に施された刻印が剥がれ落ちた！刻印晶を %d 個回収した！", refund)
 		}
+	case "未来のカケラ":
+		return s.applyFutureMemoryConsumable(ctx, *char)
 	default:
 		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}

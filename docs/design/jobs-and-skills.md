@@ -88,9 +88,9 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
   - All mutations execute under transactional row locks via `economy.ExecuteTransaction` (`job_change.cgi:361-400, 525-549`), keeping `CharacterJob.CurrentJobID` synchronized with `Character.JobID` across start, manual revert, and `home.Sleep` restoration.
 
 ### Future Memory & Recall (よびおこす)
-- Consuming 1x `item-207` (未来のカケラ) saves a snapshot of current/previous jobs, level, experience, max HP/MP, combat stats, gender, and `OverLevel` into a future memory slot (`savedCount <= OverFuture`, default 1 slot).
+- Consuming 1x `item-207` (未来のカケラ) from inventory (Job endpoint) or from a chosen Home inventory/Depot instance saves a snapshot of current/previous jobs, level, experience, max HP/MP, combat stats, gender, and `OverLevel` into a future memory slot (`savedCount <= OverFuture`, default 1 slot).
 - Saving a future memory refreshes persisted SP (`RecordJobSP`) for the current and previous jobs **only when their records already exist** (`HasRecordedJob`, `_data.cgi:1843–1867`).
-- Preflight and transactional row-lock revalidation (Character Rank 2 -> Inventory Rank 3) enforce `JobMemory == nil` and `savedCount <= OverFuture`; lock-revalidation failures roll back without consuming `item-207` or creating a snapshot.
+- Every source revalidates `JobMemory == nil` and `savedCount <= OverFuture` under the character row lock, inside the transaction that consumes `item-207`; a rejection or any later failure rolls back without consuming the item, creating a snapshot or changing SP records. Depot capacity is not a save condition.
 - Recalling a future memory restores the snapshot's level, experience, stats, and jobs, restores SP for each job whose record exists via `SavedSP` (leaving that SP position unchanged when no record exists, `job_change.cgi:648–663`), recovers HP/MP to full, and deletes the consumed snapshot.
 - Home dispatch and Depot consumption remain tracked under the [Home reconciliation](home.md#legacy-dispatch-and-consumption-contract) and reuse the same snapshot and job-point contract.
 
