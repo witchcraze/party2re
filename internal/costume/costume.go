@@ -26,6 +26,9 @@ type Repository interface {
 	SaveActiveCostume(ctx context.Context, costume ActiveCostume, ttl time.Duration) error
 	ClearActiveCostume(ctx context.Context, characterID string) error
 	ClearActiveCostumeWithClaim(ctx context.Context, characterID, claimCategory, claimToken string) (bool, error)
+	// RestoreActiveCostume undoes a save: only while applied is still the stored
+	// value, it puts previous back (or clears when nil); later writes are kept.
+	RestoreActiveCostume(ctx context.Context, applied ActiveCostume, previous *ActiveCostume) (bool, error)
 }
 
 // CostumeRepository is an alias for Repository for domain readability.

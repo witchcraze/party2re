@@ -27,9 +27,9 @@ type PersonalityRecorder interface {
 // SetPersonalityRecorder registers the cross-domain personality writer.
 func (s *Service) SetPersonalityRecorder(r PersonalityRecorder) { s.personality = r }
 
-// applyPersonalityBook changes the login message and profile personality (with
-// its news) in the item transaction and records the appearance for after commit.
-func (s *Service) applyPersonalityBook(ctx context.Context, char *corecharacter.Character, look *pendingAppearance) (string, error) {
+// applyPersonalityBook changes the login message, profile personality (with its
+// news) and appearance inside the item transaction.
+func (s *Service) applyPersonalityBook(ctx context.Context, char *corecharacter.Character, look *appearanceUndo) (string, error) {
 	if s.personality == nil {
 		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, personalityBookName)
 	}
@@ -40,7 +40,10 @@ func (s *Service) applyPersonalityBook(ctx context.Context, char *corecharacter.
 		return "", err
 	}
 	// shortcut: placeholder job-08 art until production job images exist (IMG-006).
-	look.set(s, personalityBookItemNo, personalityBookName, "assets/images/placeholders/job/appearance.svg#job-08-"+appearanceGender(char.Gender))
+	icon := "assets/images/placeholders/job/appearance.svg#job-08-" + appearanceGender(char.Gender)
+	if err := s.wearAppearance(ctx, char.ID, personalityBookItemNo, personalityBookName, icon, look); err != nil {
+		return "", err
+	}
 	return fmt.Sprintf("%sはエッチな本をじっくり読んだ………%sの性格がムッツリスケベになった！", char.Name, char.Name), nil
 }
 

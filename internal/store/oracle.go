@@ -351,9 +351,12 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 }
 
 // ApplyCostume applies an active costume state to the character until next midnight JST or rest.
-func (s *Service) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, expiresAt time.Time) error {
+// The returned undo restores the previous costume only while this one is still
+// current, for callers whose surrounding transaction rolls back.
+func (s *Service) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, expiresAt time.Time) (func(context.Context) error, error) {
+	noop := func(context.Context) error { return nil }
 	if s.costumeRepo == nil {
-		return nil
+		return noop, nil
 	}
 	now := s.nowFunc().UTC()
 	if expiresAt.IsZero() {
@@ -364,14 +367,25 @@ func (s *Service) ApplyCostume(ctx context.Context, characterID string, itemNo i
 		ttl = 24 * time.Hour
 		expiresAt = now.Add(ttl)
 	}
-	return s.costumeRepo.SaveActiveCostume(ctx, ActiveCostume{
+	previous, err := s.costumeRepo.GetActiveCostume(ctx, characterID)
+	if err != nil {
+		return noop, err
+	}
+	applied := ActiveCostume{
 		CharacterID: characterID,
 		ItemNo:      itemNo,
 		ItemName:    itemName,
 		Icon:        icon,
 		RentedAt:    now,
 		ExpiresAt:   expiresAt,
-	}, ttl)
+	}
+	if err := s.costumeRepo.SaveActiveCostume(ctx, applied, ttl); err != nil {
+		return noop, err
+	}
+	return func(ctx context.Context) error {
+		_, err := s.costumeRepo.RestoreActiveCostume(ctx, applied, previous)
+		return err
+	}, nil
 }
 
 // ResetCostume implements CostumeResetter, resetting costume on rest or job change.

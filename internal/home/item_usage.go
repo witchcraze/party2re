@@ -48,7 +48,7 @@ func (s *Service) randomSource() corecharacter.RandomSource {
 }
 
 // UseHomeItem inspects or consumes an item from either the character's inventory or depot.
-func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, source string) (*UseHomeItemResult, error) {
+func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, source string) (_ *UseHomeItemResult, retErr error) {
 	char, err := s.charReader.FindByID(ctx, characterID)
 	if err != nil {
 		return nil, err
@@ -152,9 +152,14 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		}
 	}
 
-	// Appearance lives outside the database, so effects only record it and it is
-	// applied once the database work has committed.
-	var look pendingAppearance
+	// Appearance is written inside the transaction; undo it unless the use committed.
+	var look appearanceUndo
+	committed := false
+	defer func() {
+		if !committed {
+			retErr = errors.Join(retErr, look.rollback(ctx))
+		}
+	}()
 	if s.runner != nil {
 		var resMsg string
 		var kept bool
@@ -202,7 +207,8 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 				}
 				return nil, err
 			}
-			return s.applyAppearance(ctx, characterID, look, committedHomeItemResult(def, resMsg, kept, &txRes.Character)), nil
+			committed = true
+			return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 		}
 
 		// source == "depot"
@@ -262,7 +268,8 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			}
 			return nil, err
 		}
-		return s.applyAppearance(ctx, characterID, look, committedHomeItemResult(def, resMsg, kept, &txRes.Character)), nil
+		committed = true
+		return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 	}
 
 	// Fallback path for unit test mocks without runner configured.
@@ -301,7 +308,8 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		}
 	}
 
-	return s.applyAppearance(ctx, characterID, look, committedHomeItemResult(def, msg, kept, &char)), nil
+	committed = true
+	return committedHomeItemResult(def, msg, kept, &char), nil
 }
 
 // committedHomeItemResult reports a committed callback; a kept item reports
@@ -321,14 +329,14 @@ func committedHomeItemResult(def item.Definition, msg string, kept bool, char *c
 	}
 }
 
-func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition, look *pendingAppearance) (string, error) {
+func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition, look *appearanceUndo) (string, error) {
 	if isRecipeScrollItem(def.Name) {
 		return s.applyRecipeScrollConsumable(ctx, char, def.Name)
 	}
 	if bag, ok := rewardBags[def.Name]; ok {
 		return s.applyRewardBag(ctx, char, bag)
 	}
-	if costumeMsg, ok, err := s.applyCostumeConsumable(char, def.Name, look); ok {
+	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name, look); ok {
 		return costumeMsg, err
 	}
 

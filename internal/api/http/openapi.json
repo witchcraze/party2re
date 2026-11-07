@@ -10258,10 +10258,6 @@
           "action": {
             "type": "string"
           },
-          "appearance_not_applied": {
-            "description": "True when the item use committed but its appearance change could not be stored.",
-            "type": "boolean"
-          },
           "character": {
             "anyOf": [
               {

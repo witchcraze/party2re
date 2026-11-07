@@ -612,7 +612,7 @@ func TestOracleService_ApplyAndResetCostume(t *testing.T) {
 
 	// 1. Without costumeRepo (nil safe)
 	svcNoRepo := store.NewService(nil, nil, nil, nil, nil)
-	if err := svcNoRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Time{}); err != nil {
+	if _, err := svcNoRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Time{}); err != nil {
 		t.Errorf("expected nil error on nil costumeRepo apply, got %v", err)
 	}
 	if err := svcNoRepo.ResetCostume(ctx, "char-1"); err != nil {
@@ -623,7 +623,7 @@ func TestOracleService_ApplyAndResetCostume(t *testing.T) {
 	costumeRepo := costume.NewMemoryCostumeRepository()
 	svcWithRepo := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
 
-	err := svcWithRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Now().Add(time.Hour))
+	_, err := svcWithRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatalf("ApplyCostume failed: %v", err)
 	}
@@ -649,7 +649,7 @@ func TestOracleService_ResetCostumeWithClaim(t *testing.T) {
 	// 1. Without timer: refuses unsafe deletion
 	costumeRepo := costume.NewMemoryCostumeRepository()
 	svcNoTimer := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
-	_ = svcNoTimer.ApplyCostume(ctx, "char-1", 46, "costume-46", "icon", time.Now().Add(time.Hour))
+	_, _ = svcNoTimer.ApplyCostume(ctx, "char-1", 46, "costume-46", "icon", time.Now().Add(time.Hour))
 	reset, err := svcNoTimer.ResetCostumeWithClaim(ctx, "char-1", "waking", "any-token")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -705,7 +705,7 @@ func TestOracleService_ResetCostumeWithClaim_PauseAfterOwnershipVerification(t *
 		svc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
 
 		// 1. Initial costume
-		_ = svc.ApplyCostume(ctx, "c1", 46, "old-costume", "icon", time.Now().Add(time.Hour))
+		_, _ = svc.ApplyCostume(ctx, "c1", 46, "old-costume", "icon", time.Now().Add(time.Hour))
 
 		// 2. Setup claim
 		const oldToken = "old-token-123"

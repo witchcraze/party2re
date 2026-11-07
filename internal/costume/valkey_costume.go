@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,11 @@ import (
 var releaseWithClaimLua string
 
 var releaseWithClaimScript = valkey.NewLuaScript(releaseWithClaimLua)
+
+//go:embed lua/restore_if_current.lua
+var restoreIfCurrentLua string
+
+var restoreIfCurrentScript = valkey.NewLuaScript(restoreIfCurrentLua)
 
 const (
 	valkeyCostumeKeyPrefix = "party2:daily:costume:"
@@ -126,4 +132,34 @@ func (r *ValkeyCostumeRepository) ClearActiveCostumeWithClaim(ctx context.Contex
 		return false, err
 	}
 	return n == 1, nil
+}
+
+// RestoreActiveCostume atomically restores previous (or deletes) only while the
+// stored value is exactly applied, so a newer save or a reset is never undone.
+func (r *ValkeyCostumeRepository) RestoreActiveCostume(ctx context.Context, applied ActiveCostume, previous *ActiveCostume) (bool, error) {
+	if r.client == nil {
+		return false, nil
+	}
+	appliedRaw, err := json.Marshal(applied)
+	if err != nil {
+		return false, err
+	}
+	previousRaw, ttl := "", int64(0)
+	if previous != nil {
+		ttl = int64(time.Until(previous.ExpiresAt).Seconds())
+		if ttl > 0 {
+			raw, err := json.Marshal(previous)
+			if err != nil {
+				return false, err
+			}
+			previousRaw = string(raw)
+		}
+	}
+	res := restoreIfCurrentScript.Exec(ctx, r.client, []string{valkeyCostumeKeyPrefix + applied.CharacterID},
+		[]string{string(appliedRaw), previousRaw, strconv.FormatInt(ttl, 10)})
+	if err := res.Error(); err != nil {
+		return false, err
+	}
+	n, err := res.AsInt64()
+	return n == 1, err
 }

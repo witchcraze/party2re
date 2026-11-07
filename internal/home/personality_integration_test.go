@@ -12,30 +12,46 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/inventory"
 	"github.com/witchcraze/party2re/internal/notification"
+	"github.com/witchcraze/party2re/internal/store"
 )
 
 const bookDefinition = "item-058"
 
+// bookCostume wraps the production Store adapter over the in-memory costume
+// repository, counting calls and optionally failing or running a hook first.
 type bookCostume struct {
-	itemNo int
-	icon   string
-	calls  int
-	fail   bool
+	store   *store.Service
+	repo    *costume.MemoryCostumeRepository
+	calls   int
+	fail    bool
+	onApply func(characterID string)
 }
 
-func (c *bookCostume) ApplyCostume(_ context.Context, _ string, itemNo int, _, icon string, _ time.Time) error {
+func (c *bookCostume) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, exp time.Time) (func(context.Context) error, error) {
 	c.calls++
 	if c.fail {
-		return errors.New("injected appearance store failure")
+		return nil, errors.New("injected appearance store failure")
 	}
-	c.itemNo, c.icon = itemNo, icon
-	return nil
+	if c.onApply != nil {
+		c.onApply(characterID)
+	}
+	return c.store.ApplyCostume(ctx, characterID, itemNo, itemName, icon, exp)
+}
+
+func (c *bookCostume) active(t *testing.T, characterID string) *costume.ActiveCostume {
+	t.Helper()
+	got, err := c.repo.GetActiveCostume(context.Background(), characterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
 }
 
 // bookFailures injects failures before commit (profile save, the runner's
@@ -56,9 +72,15 @@ func (r failingEconomyCharacters) Update(context.Context, corecharacter.Characte
 
 type failingDepotConsume struct {
 	*testDepotManagerAdapter
+	beforeFail *func(characterID string)
 }
 
-func (failingDepotConsume) ConsumeOne(context.Context, string, string) error { return errInjectedBook }
+func (d failingDepotConsume) ConsumeOne(_ context.Context, characterID, _ string) error {
+	if *d.beforeFail != nil {
+		(*d.beforeFail)(characterID)
+	}
+	return errInjectedBook
+}
 
 // failingProfiles makes the profile save fail after the login message was written.
 type failingProfiles struct {
@@ -74,19 +96,26 @@ func (r failingProfiles) SaveProfile(ctx context.Context, p character.Profile) e
 }
 
 type bookFixture struct {
-	db       *sql.DB
-	svc      *home.Service
-	costume  *bookCostume
-	invRepo  *database.InventoryRepository
-	depots   *database.DepotRepository
-	charRepo *database.CharacterRepository
-	presence *character.PresenceService
+	db      *sql.DB
+	svc     *home.Service
+	costume *bookCostume
+	// beforeDepotFail runs inside a failing Depot consumption, after the appearance write.
+	beforeDepotFail func(characterID string)
+	invRepo         *database.InventoryRepository
+	depots          *database.DepotRepository
+	charRepo        *database.CharacterRepository
+	presence        *character.PresenceService
 }
 
 func newBookFixture(t *testing.T, fail bookFailures) *bookFixture {
 	t.Helper()
 	db := homeIsolatedDB(t)
-	f := &bookFixture{db: db, costume: &bookCostume{fail: fail.appearance}}
+	mem := costume.NewMemoryCostumeRepository()
+	f := &bookFixture{db: db, costume: &bookCostume{
+		store: store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(mem)),
+		repo:  mem,
+		fail:  fail.appearance,
+	}}
 	var err error
 	if f.charRepo, err = database.NewCharacterRepository(db); err != nil {
 		t.Fatal(err)
@@ -144,7 +173,7 @@ func newBookFixture(t *testing.T, fail bookFailures) *bookFixture {
 	}
 	var depots home.DepotManager = &testDepotManagerAdapter{repo: f.depots}
 	if fail.depotConsume {
-		depots = failingDepotConsume{&testDepotManagerAdapter{repo: f.depots}}
+		depots = failingDepotConsume{&testDepotManagerAdapter{repo: f.depots}, &f.beforeDepotFail}
 	}
 	f.svc, err = home.NewService(homeRepo, f.charRepo,
 		home.WithEconomy(eco),
@@ -279,8 +308,8 @@ func TestPersonalityBook_BothSourcesAndProfiles(t *testing.T) {
 		if f.newsCount(t, c) != 1 {
 			t.Fatalf("%s: want exactly one news article, got %d", tc.source, f.newsCount(t, c))
 		}
-		if f.costume.itemNo != 58 || f.costume.icon != "assets/images/placeholders/job/appearance.svg#job-08-"+tc.gender {
-			t.Fatalf("%s: appearance %+v", tc.source, f.costume)
+		if got := f.costume.active(t, c.ID); got == nil || got.ItemNo != 58 || got.Icon != "assets/images/placeholders/job/appearance.svg#job-08-"+tc.gender {
+			t.Fatalf("%s: appearance %+v", tc.source, got)
 		}
 	}
 }
@@ -304,10 +333,10 @@ func TestPersonalityBook_ProfileFailureRollsBack(t *testing.T) {
 	}
 }
 
-// Database work that fails after the effect ran (runner character save for both
-// sources, Depot consumption) must leave no appearance, for the book and for an
-// ordinary costume sharing the same path.
-func TestItemAppearance_NotAppliedWhenTransactionFails(t *testing.T) {
+// Database work that fails after the appearance write (runner character save for
+// both sources, Depot consumption) restores the previous appearance, for the book
+// and for an ordinary costume sharing the same path.
+func TestItemAppearance_RestoredWhenTransactionFails(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name   string
@@ -321,6 +350,11 @@ func TestItemAppearance_NotAppliedWhenTransactionFails(t *testing.T) {
 		f := newBookFixture(t, tc.fail)
 		for _, def := range []string{bookDefinition, "item-044"} {
 			c := f.character(t, "f")
+			before := costume.ActiveCostume{CharacterID: c.ID, ItemNo: 51, ItemName: "previous", Icon: "chr/003.gif",
+				RentedAt: time.Now().UTC().Add(-time.Minute), ExpiresAt: time.Now().UTC().Add(time.Hour)}
+			if err := f.costume.repo.SaveActiveCostume(ctx, before, time.Hour); err != nil {
+				t.Fatal(err)
+			}
 			id := f.stockItem(t, c, tc.source, def)
 			if _, err := f.svc.UseHomeItem(ctx, c.ID, id, tc.source); !errors.Is(err, errInjectedBook) {
 				t.Fatalf("%s %s: want injected failure, got %v", tc.name, def, err)
@@ -329,26 +363,84 @@ func TestItemAppearance_NotAppliedWhenTransactionFails(t *testing.T) {
 			if err != nil || st.LoginMessage != "" || !f.held(t, c, tc.source, id) || f.newsCount(t, c) != 0 {
 				t.Fatalf("%s %s: partial commit message=%q held=%v", tc.name, def, st.LoginMessage, f.held(t, c, tc.source, id))
 			}
+			if got := f.costume.active(t, c.ID); got == nil || *got != before {
+				t.Fatalf("%s %s: appearance not restored: %+v", tc.name, def, got)
+			}
 		}
-		if f.costume.calls != 0 {
-			t.Fatalf("%s: appearance applied for a rolled-back use", tc.name)
+		if f.costume.calls == 0 {
+			t.Fatalf("%s: the failure must happen after the appearance write", tc.name)
 		}
 	}
 }
 
-// An appearance store failure after commit keeps the committed use and reports it.
-func TestPersonalityBook_AppearanceFailureAfterCommitIsReported(t *testing.T) {
-	f := newBookFixture(t, bookFailures{appearance: true})
+// A newer appearance stored before the failed use is compensated (here written
+// directly, as a later locked writer or a reset would) is never overwritten.
+func TestItemAppearance_UndoKeepsNewerChange(t *testing.T) {
+	f := newBookFixture(t, bookFailures{depotConsume: true})
+	ctx := context.Background()
+	c := f.character(t, "m")
+	newer := costume.ActiveCostume{CharacterID: c.ID, ItemNo: 52, ItemName: "newer", Icon: "chr/015.gif",
+		RentedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	f.beforeDepotFail = func(id string) {
+		if err := f.costume.repo.SaveActiveCostume(ctx, newer, time.Hour); err != nil {
+			t.Error(err)
+		}
+	}
+	id := f.stock(t, c, "depot")
+	if _, err := f.svc.UseHomeItem(ctx, c.ID, id, "depot"); !errors.Is(err, errInjectedBook) {
+		t.Fatalf("want injected failure, got %v", err)
+	}
+	if got := f.costume.active(t, c.ID); got == nil || *got != newer {
+		t.Fatalf("undo clobbered the newer appearance: %+v", got)
+	}
+	// A reset (cleared costume) is equally kept.
+	f.beforeDepotFail = func(id string) {
+		if err := f.costume.repo.ClearActiveCostume(ctx, id); err != nil {
+			t.Error(err)
+		}
+	}
+	c2 := f.character(t, "f")
+	id = f.stock(t, c2, "depot")
+	if _, err := f.svc.UseHomeItem(ctx, c2.ID, id, "depot"); !errors.Is(err, errInjectedBook) {
+		t.Fatalf("want injected failure, got %v", err)
+	}
+	if got := f.costume.active(t, c2.ID); got != nil {
+		t.Fatalf("undo revived a reset appearance: %+v", got)
+	}
+}
+
+// The appearance is written while the item transaction holds the character row
+// lock, so it is ordered with every other character-locked appearance writer in
+// database commit order; an appearance-store failure rolls the use back.
+func TestItemAppearance_WrittenUnderCharacterLockAndStoreFailureRollsBack(t *testing.T) {
+	f := newBookFixture(t, bookFailures{})
 	ctx := context.Background()
 	for _, source := range []string{"inventory", "depot"} {
 		c := f.character(t, "m")
-		id := f.stock(t, c, source)
-		res, err := f.svc.UseHomeItem(ctx, c.ID, id, source)
-		if err != nil || !res.Consumed || !res.AppearanceNotApplied || f.held(t, c, source, id) {
-			t.Fatalf("%s: res=%+v err=%v", source, res, err)
+		locked := false
+		f.costume.onApply = func(id string) {
+			_, err := f.db.ExecContext(ctx, `SELECT id FROM characters WHERE id = ? FOR UPDATE NOWAIT`, id)
+			locked = err != nil
 		}
-		if st, _ := f.presence.State(ctx, c.ID); st.LoginMessage != "性格：ムッツリスケベ" || f.newsCount(t, c) != 1 {
-			t.Fatalf("%s: committed effects missing", source)
+		if _, err := f.svc.UseHomeItem(ctx, c.ID, f.stock(t, c, source), source); err != nil {
+			t.Fatal(err)
+		}
+		if !locked {
+			t.Fatalf("%s: appearance written without the character lock held", source)
+		}
+	}
+	f.costume.onApply = nil
+
+	f.costume.fail = true
+	for _, source := range []string{"inventory", "depot"} {
+		c := f.character(t, "f")
+		id := f.stock(t, c, source)
+		if _, err := f.svc.UseHomeItem(ctx, c.ID, id, source); err == nil {
+			t.Fatalf("%s: appearance failure reported as success", source)
+		}
+		st, _ := f.presence.State(ctx, c.ID)
+		if st.LoginMessage != "" || !f.held(t, c, source, id) || f.newsCount(t, c) != 0 {
+			t.Fatalf("%s: use not rolled back", source)
 		}
 	}
 }

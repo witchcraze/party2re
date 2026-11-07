@@ -10438,10 +10438,6 @@
           },
           "message": {
             "type": "string"
-          },
-          "appearance_not_applied": {
-            "type": "boolean",
-            "description": "True when the item use committed but its appearance change could not be stored."
           }
         },
         "required": [
