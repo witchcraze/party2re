@@ -169,7 +169,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| `lib/job_change.cgi` | 転職所 (@ダーマ神官) | `internal/job/` | [design/jobs-and-skills.md](../design/jobs-and-skills.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
+| `lib/job_change.cgi` | 転職所 (@ダーマ神官) | `internal/job/` | [design/jobs-and-skills.md](../design/jobs-and-skills.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | 初回極め(`RecordMastery`)と離職時SP最新化(`RecordJobSP`/`SavedSP`)の分離、おもいだす2職記憶スワップ、よびおこす枠/排他ロック検証。詳細は [design/jobs-and-skills.md](../design/jobs-and-skills.md) 参照。 |
 | `lib/job_master.cgi` | 職業極め所 | `internal/job/` | [design/jobs-and-skills.md](../design/jobs-and-skills.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `lib/sp_change.cgi` | 願いの泉 (@女神) | `internal/wishingwell/` | [design/wishing-well.md](../design/wishing-well.md)<br/>[api/paths/wishing_well.json](../api/paths/wishing_well.json) | Review against source | SPを消費して5大ステータス強化。OverLevel/JobMemoryガード |
 | `lib/custom_skill.cgi` | 特技設定 (@マニャ) | `internal/customskill/` | [design/custom_skill.md](../design/custom_skill.md)<br/>[api/paths/customskill.json](../api/paths/customskill.json) | Review against source | 3宝玉スロット合成、GemBox消費・返還接続、転職後キャパシティガード解除、CMP計算式復元 |

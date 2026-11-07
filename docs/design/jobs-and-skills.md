@@ -62,99 +62,37 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
   preserves `OverLevel` status while still applying the Lv 1 reset and stat halving
   (`party2/lib/job_change.cgi:214-226`). Similarly, the celestial Dragon Noble wish
   (`WishCelestialDragon` in Heaven, `party2/lib/god.cgi:196-218`) preserves `OverLevel`.
-- The current job and SP are retained as the previous job and previous SP.
-  Returning to that previous job restores its previous SP; a mastered job
-  restores the SP retained in its mastery record; an unvisited job starts at
-  zero SP.
+- On departure, the outgoing job and its current SP become `OldJobID`/`OldSP`, `RecordMastery` awards first-time mastery when `SP >= master_sp`, and `RecordJobSP` refreshes the job's persisted SP (`job_change.cgi:243–305`). Target SP resolves from current `SP` when re-selecting the active job, `OldSP` when returning to `OldJobID`, `SavedSP` when re-entering any other mastered job, or `0` for unmastered jobs (`job_change.cgi:207–221, 271–273`).
 - Every job change records a transition in the character's job history (`FromJobID` -> `ToJobID`).
-- All state mutations, item/armor consumption, and completion side effects (all-job mastery news broadcasts and Hall of Fame legend inductions) execute strictly within the transaction boundary; transaction failures guarantee zero leaked news or legend side effects.
+- All state mutations, item/armor consumption, lock-guarded revalidation (e.g. rejecting concurrent job-memory activation), and completion side effects (all-job mastery news broadcasts and Hall of Fame legend inductions) execute strictly within the transaction boundary; transaction failures guarantee zero leaked side effects.
 
-### Job Mastery
-- A job becomes **Mastered** when the character's SP reaches the required SP
-  of that job's final skill. Level 99 is not a mastery condition.
-- Mastered jobs and their retained mastery SP are tracked persistently on the
-  character's job record.
-
-### Recorded job SP
-
-Known SP, recorded job experience and mastery are separate facts. Leaving a job records its latest
-SP, including decreases and zero, even when it is not mastered
-(`job_change.cgi:243–305`). `CharacterJob.RecordedJobSP` persists through the
-existing job repository in `character_job_points`; saves upsert supplied jobs
-without deleting other recorded values. Mastered departures also refresh their
-retained masterySP, without repeating a mastery notification or losing mastery
-when SP falls. Saving future memory refreshes both job/SP pairs independently of
-mastery **only when their records already exist** (`_data.cgi:1843–1867`);
-entering a job alone does not create a departure record. Recall reads the latest
-saved values, with mastery-only snapshots retained as a compatibility fallback.
-An absent matching record leaves that SP position unchanged, as in
-`job_change.cgi:648–663`; it is not reset to an invented zero.
-
-Migration103 preserves known current/previousSP and existing masterySP, in that
-priority order. Transition history cannot reconstruct SP that was never saved;
-it is not backfilled with invented zero values. **A preserved SP row is not proof
-of a job record**, including the current/previous rows seeded by migration103.
-Record existence comes from a departure (`History.FromJobID`), a mastery record,
-or an explicitly written job record (`RecordedJobIDs`, persisted as
-`character_job_points.is_recorded`). Migration104 marks only rows backed by
-departure/mastery evidence and never changes their SP. Ordinary job changes
-write an explicit record, including same-job reselection where no cross-job
-transition exists (`job_change.cgi:207–212,243–305`). Presence remains true across
-SP decreases and preservation-only partial saves. Future-memory save/recall
-checks this presence independently of whether SP is known; preservation-only SP
-is retained but never grants eligibility or overwrites recalled SP.
-The battle adapter snapshots
-recorded jobs read-only for [in-adventure Tool168 memory](battle.md#temporary-transformation-and-job-memory),
-including explicit unknownSP for historical transitions without a saved value.
-Battle copies never call the job repository's save method.
+### Job Mastery & Recorded Job SP
+- **First-Time Mastery (`RecordMastery`) vs. Departure SP Refresh (`RecordJobSP`)**:
+  - A job becomes **Mastered** (`MasteredJobs`) when the character leaves it with `SP >= master_sp` (the final skill's required SP; Level 99 is not a mastery condition). `RecordMastery` triggers only on the first time a job reaches mastery so mastery notifications and 72-job completion checks never repeat.
+  - Leaving any job (including same-job re-selection, `job_change.cgi:207–212, 243–305`) calls `RecordJobSP`, which records the job as experienced (`RecordedJobIDs`, persisted as `character_job_points.is_recorded = true`) and updates its latest SP (`RecordedJobSP` in `character_job_points`, plus `MasteredJobSP` in `character_job_masteries` when mastered), including decreases and zero. Decreasing SP below `master_sp` after mastery updates the retained SP without revoking `MasteredJobs`.
+  - `SavedSP` is the canonical reader for retained SP across mastered job re-entry (`ChangeJob`), job memory exchange (`ExchangeJob`), future-memory recall (`RecallFutureMemory`), and mastery catalog inspection (`GetJobMastery`), reading `RecordedJobSP` first and falling back to `MasteredJobSP` for legacy mastery-only rows.
+- **Record Existence & Migration Invariants**:
+  - Entering a job alone does not create a departure record. Record existence (`HasRecordedJob`) requires a departure (`History.FromJobID`), a mastery record (`MasteredJobs`), or an explicit `RecordedJobIDs` flag (`is_recorded = true`).
+  - Migration 103 backfilled known current/previous SP and mastery SP into `character_job_points` without inventing zero values for historical transitions. Migration 104 marked `is_recorded = true` only on rows backed by departure or mastery evidence; preservation-only rows (`is_recorded = false`) retain their SP across partial upserts but do not grant recall eligibility.
+  - The battle adapter snapshots recorded jobs read-only for [in-adventure Tool168 memory](battle.md#temporary-transformation-and-job-memory) (including unknown SP for unrecorded historical transitions) and never persists to the job repository.
 
 ### Job Memory Exchange (おもいだす)
-- Memory exchange recalls recorded jobs, including unmastered jobs, restoring their saved SP (`state.SavedSP`); unrecorded jobs and jobs with unknown SP are rejected (`ErrJobUnavailable`). Recall replaces current/previous jobs without normal level/stat
-  penalties or incrementing job-change counts. In-adventure Tool168 is a separate
-  [previous-job-only operation](battle.md#temporary-transformation-and-job-memory).
+- Recalls two recorded jobs (`HasRecordedJob` with known `SavedSP`, including unmastered jobs) without level/stat halving or incrementing job-change counts; unrecorded jobs or unknown SP return `ErrJobUnavailable`. In-adventure Tool168 is a separate [previous-job-only operation](battle.md#temporary-transformation-and-job-memory).
 - **Two Memory Lifecycles**:
-  - **Persistent Job Memory (`JobMemoryKindPersistent = "persistent"`)**:
-    - Started by consuming 1x `item-168` (記憶のカケラ / Memory Fragment).
-    - Retained across home rest and sleep (`home.Sleep`).
-    - Cleared only via manual revert (`ExchangeJob` / `POST /characters/{id}/exchange-job` without item), which restores the remembered current/old jobs and SP without consuming items.
-  - **Temporary Job Memory (`JobMemoryKindTemporary = "temporary"`)**:
-    - Started by consuming 1x `item-243` (陽炎の追憶記 / Haze Memoir).
-    - Automatically reverted upon resting at home (`home.Sleep`), restoring the remembered current/old jobs and SP.
-    - Manual revert via `ExchangeJob` is prohibited (`ErrJobUnavailable`, legacy `job_change.cgi:121`).
-- **Facility Guard Matrix**:
-  - **Normal Job Change (`ChangeJob`)**: Prohibited while either persistent or temporary memory is active (`ErrJobUnavailable`, legacy `job_change.cgi:151`). Checked at preflight and strictly revalidated under the character row lock within the economy transaction callback (`internal/job/change.go`); concurrent memory starts abort with `ErrJobUnavailable` and roll back without item/armor consumption, stat/level/history mutations, or post-success side-effect hooks.
-  - **Future Memory (`SaveFutureMemory` / `RecallFutureMemory`)**: Prohibited while either persistent or temporary memory is active (legacy `_data.cgi:1843`, `job_change.cgi:564`).
-  - **Overlapping Start**: Starting another job memory while either memory kind is active is prohibited (`ErrJobUnavailable`).
-  - **Wishing Well SP Exchange**: Prohibited only when persistent job memory is active (`party2/lib/sp_change.cgi:74`); allowed during temporary job memory.
-  - **God Lv99 Limit Break ("もっと強くなりたい")**: Prohibited only when temporary job memory is active (`party2/lib/god.cgi:121`); allowed during persistent job memory.
-- **Invariants & Safety**:
-  - Characters with celestial OverLevel status (`OverLevel == true`) are prohibited from recalling or swapping job memories (`ErrJobUnavailable`, `party2/lib/job_change.cgi:361-364`).
-  - Both target jobs (`targetJobID` and `targetOldJobID`) must satisfy gender compatibility with the character's gender (`RequiredGender`, `party2/lib/job_change.cgi:388-395`).
-  - All state mutations for job exchange and memory restoration execute strictly under transactional row locks via `economy.ExecuteTransaction` (`party2/lib/job_change.cgi:361-400, 525-549`).
-  - Active job synchronization invariant: `CharacterJob.CurrentJobID` (`character_jobs.current_job_id`) is strictly synchronized with `Character.JobID` (`characters.job_id`) across job exchange, manual memory reversal, and home sleep job memory restoration (`home.Sleep`).
-- **Database Schema & Legacy Migration**:
-  - `characters` table includes `job_memory_kind VARCHAR(32) NOT NULL DEFAULT 'persistent'`.
-  - Existing database rows default to `persistent`, guaranteeing legacy data is never silently misclassified as sleep-scoped temporary memory.
-
+  - **Persistent (`JobMemoryKindPersistent = "persistent"`)**: Started by consuming 1x `item-168` (記憶のカケラ); retained across `home.Sleep`; cleared only via manual revert (`ExchangeJob` without item), restoring remembered current/old jobs and SP. Existing `characters.job_memory_kind` rows default to `'persistent'`.
+  - **Temporary (`JobMemoryKindTemporary = "temporary"`)**: Started by consuming 1x `item-243` (陽炎の追憶記); automatically reverted by `home.Sleep`; manual revert via `ExchangeJob` is prohibited (`ErrJobUnavailable`, `job_change.cgi:121`).
+- **Facility Guard Matrix & Invariants**:
+  - While either memory kind is active, normal job change (`ChangeJob`, `job_change.cgi:151`), future-memory save/recall (`SaveFutureMemory` / `RecallFutureMemory`, `_data.cgi:1843`, `job_change.cgi:564`), and starting another job memory are prohibited (`ErrJobUnavailable`).
+  - Wishing Well SP exchange is prohibited only during persistent memory (`sp_change.cgi:74`); God Lv99 limit break is prohibited only during temporary memory (`god.cgi:121`).
+  - Characters with `OverLevel == true` cannot start or swap job memories (`job_change.cgi:361-364`), and both target jobs must match the character's gender (`RequiredGender`, `job_change.cgi:388-395`).
+  - All mutations execute under transactional row locks via `economy.ExecuteTransaction` (`job_change.cgi:361-400, 525-549`), keeping `CharacterJob.CurrentJobID` synchronized with `Character.JobID` across start, manual revert, and `home.Sleep` restoration.
 
 ### Future Memory & Recall (よびおこす)
-- With item `item-207` (未来のカケラ / Future Fragment), a character may save a snapshot
-  of their current job, previous job, level, experience, maximum HP/MP, combat stats,
-  gender, and over-level flag into a persistent future memory slot.
-- Slot limit is determined by `OverFuture` (`savedCount <= OverFuture`, default allows 1 saved slot).
-- Characters using either persistent or temporary job memory (`JobMemory != nil`) cannot save future memories.
-- Capacity limit and absence of active temporary job memory are checked during preflight and
-  strictly revalidated under the character row lock within the economy transaction callback
-  (`internal/job/future_memory.go`). If revalidation fails under lock, the transaction aborts
-  and rolls back completely: `item-207` is not consumed, and no future memory snapshot is created.
-- This describes the current inventory-backed Job API. Home dispatch and Depot consumption
-  remain missing under the [Home reconciliation](home.md#legacy-dispatch-and-consumption-contract);
-  they must reuse the same snapshot and job-point contract.
-- Deterministic locking order (Character Rank 2 -> Inventory Rank 3) coordinates safely with
-  future memory deletion on recall and capacity expansions (`WishExpandJobMemory`).
-- Recalling a future memory restores the character's level, experience, stats, and jobs,
-  restores the SP for both jobs from their saved job records, recovers HP/MP to full,
-  and consumes/deletes the future memory snapshot.
+- Consuming 1x `item-207` (未来のカケラ) saves a snapshot of current/previous jobs, level, experience, max HP/MP, combat stats, gender, and `OverLevel` into a future memory slot (`savedCount <= OverFuture`, default 1 slot).
+- Saving a future memory refreshes persisted SP (`RecordJobSP`) for the current and previous jobs **only when their records already exist** (`HasRecordedJob`, `_data.cgi:1843–1867`).
+- Preflight and transactional row-lock revalidation (Character Rank 2 -> Inventory Rank 3) enforce `JobMemory == nil` and `savedCount <= OverFuture`; lock-revalidation failures roll back without consuming `item-207` or creating a snapshot.
+- Recalling a future memory restores the snapshot's level, experience, stats, and jobs, restores SP for each job whose record exists via `SavedSP` (leaving that SP position unchanged when no record exists, `job_change.cgi:648–663`), recovers HP/MP to full, and deletes the consumed snapshot.
+- Home dispatch and Depot consumption remain tracked under the [Home reconciliation](home.md#legacy-dispatch-and-consumption-contract) and reuse the same snapshot and job-point contract.
 
 ### All-Job Completion & Suppin Unlock
 - Mastering all 72 completion jobs (`job-01` through `job-72`) marks the character as

@@ -578,3 +578,230 @@ func TestExchangeJobUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
 		}
 	}
 }
+
+func TestMasteredJobDepartureAndFutureSaveRefreshRetainedSPDatabaseRoundTrip(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+
+	chars, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := database.NewCharacterJobRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventories, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	memories, err := database.NewFutureMemoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	runner, err := economy.NewService(chars, inventories, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := corejob.NewCatalog([]corejob.Definition{
+		{ID: "job-01", Name: "First", CMPTier: 1, MasterySP: 80},
+		{ID: "job-02", Name: "Second", CMPTier: 1, MasterySP: 80},
+		{ID: "job-03", Name: "Third", CMPTier: 1, MasterySP: 80},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := job.NewService(
+		jobs,
+		job.WithCatalog(catalog),
+		job.WithCharacterRepository(chars),
+		job.WithInventoryRepository(inventories),
+		job.WithEconomy(runner),
+		job.WithFutureMemoryRepository(memories),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := database.CreateTestCharacter(ctx, db, "Mastered SP Refresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.JobID, char.OldJobID, char.SP, char.OldSP, char.Level = "job-01", "", 80, 0, 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Depart job-01 at threshold SP 80 -> job-02 (masters job-01 at 80)
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "job-02"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := jobs.FindByCharacterID(ctx, char.ID)
+	if err != nil || !loaded.IsMastered("job-01") || loaded.RecordedJobSP["job-01"] != 80 || loaded.MasteredJobSP["job-01"] != 80 {
+		t.Fatalf("after 80 departure: %#v (err=%v)", loaded, err)
+	}
+
+	// 2. Return to job-01, reach SP 120, depart to job-02 -> job-03 -> re-enter job-01 (restores 120)
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "job-01"); err != nil {
+		t.Fatal(err)
+	}
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level, char.SP = 20, 120
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "job-02"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = jobs.FindByCharacterID(ctx, char.ID)
+	if err != nil || !loaded.IsMastered("job-01") || loaded.RecordedJobSP["job-01"] != 120 || loaded.MasteredJobSP["job-01"] != 120 {
+		t.Fatalf("after 120 departure: %#v (err=%v)", loaded, err)
+	}
+
+	// Move to job-03 so job-01 is not OldJobID, then re-enter job-01 -> must restore 120
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "job-03"); err != nil {
+		t.Fatal(err)
+	}
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	reentered120, _, err := svc.ChangeJob(ctx, char.ID, "job-01")
+	if err != nil || reentered120.SP != 120 {
+		t.Fatalf("expected re-entered job-01 SP 120, got %#v (err=%v)", reentered120, err)
+	}
+
+	// 3. Spend SP down to 20 (below threshold 80), depart to job-02 -> job-03 -> re-enter job-01 (restores 20, retains mastery)
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level, char.SP = 20, 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "job-02"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = jobs.FindByCharacterID(ctx, char.ID)
+	if err != nil || !loaded.IsMastered("job-01") || loaded.RecordedJobSP["job-01"] != 20 || loaded.MasteredJobSP["job-01"] != 20 {
+		t.Fatalf("after 20 departure: %#v (err=%v)", loaded, err)
+	}
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "job-03"); err != nil {
+		t.Fatal(err)
+	}
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	reentered20, st20, err := svc.ChangeJob(ctx, char.ID, "job-01")
+	if err != nil || reentered20.SP != 20 || !st20.IsMastered("job-01") {
+		t.Fatalf("expected re-entered job-01 SP 20 with mastery retained, got char=%#v state=%#v (err=%v)", reentered20, st20, err)
+	}
+
+	// 4. FutureMemory save while job-01 is OldJobID with SP 7 refreshes saved SP in DB;
+	// subsequent ChangeJob to job-01 (when no longer OldJobID) restores 7, not 20 or 120.
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "job-02"); err != nil {
+		t.Fatal(err)
+	}
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.SP, char.OldSP, char.Level = 15, 7, 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := coreinventory.New(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frag, err := item.NewInstance("item-207", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inv.Add(frag); err != nil {
+		t.Fatal(err)
+	}
+	if err := inventories.Save(ctx, inv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SaveFutureMemory(ctx, char.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Move from job-02 to job-03 so job-01 is neither JobID nor OldJobID, then ChangeJob to job-01
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "job-03"); err != nil {
+		t.Fatal(err)
+	}
+	char, err = chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	reentered7, _, err := svc.ChangeJob(ctx, char.ID, "job-01")
+	if err != nil || reentered7.SP != 7 {
+		t.Fatalf("expected re-entered job-01 SP 7 after future memory save, got %#v (err=%v)", reentered7, err)
+	}
+}

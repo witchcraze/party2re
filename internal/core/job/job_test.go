@@ -48,8 +48,8 @@ func TestCharacterJobRecordsMasterySP(t *testing.T) {
 	if !state.RecordMastery("job-01", 12, 10) || !state.IsMastered("job-01") {
 		t.Fatal("expected mastery to be recorded")
 	}
-	if got, ok := state.MasteredSP("job-01"); !ok || got != 12 {
-		t.Fatalf("mastered SP = %d, %v", got, ok)
+	if got, ok := state.SavedSP("job-01"); !ok || got != 12 {
+		t.Fatalf("saved SP = %d, %v", got, ok)
 	}
 	if state.RecordMastery("job-01", 20, 10) {
 		t.Fatal("mastery should only be recorded once")
