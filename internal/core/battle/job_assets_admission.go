@@ -17,6 +17,8 @@ func (s *LifetimeState) ValidateJobAssets(c *JobAssetContext, id string, rng ran
 	switch id {
 	case "job-78-entry-0":
 		return s.validateEnhancedTool(c, rng)
+	case "job-50-entry-7":
+		return s.validateStoredTool(c, rng)
 	case "job-7-entry-0", "job-7-entry-2", "job-8-entry-0", "job-28-entry-3", "job-78-entry-5", "job-81-entry-2":
 	default:
 		return ErrUnsupportedEffect

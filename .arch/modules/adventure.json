@@ -60,6 +60,12 @@
       "source_ref": "internal/adventure/normal_run.go#NormalRunConfig"
     },
     {
+      "name": "job_asset_depots",
+      "target_module": "depot",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/normal_run.go#JobAssetDepots"
+    },
+    {
       "name": "normal_run_penalty",
       "target_module": "core/timer",
       "relation_type": "consumer_interface",
@@ -171,7 +177,8 @@
       "transaction_type": "ExecuteTransaction",
       "lock_sequence": [
         { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE", "note": "Command already holds the full sorted roster; requester stays distinct from combat actor." },
-        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Requester wallet and held instance commit with Command state/receipt in the ambient SQL transaction." }
+        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Requester wallet and held instance commit with Command state/receipt in the ambient SQL transaction." },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE (via JobAssetDepots)", "note": "Requester depot for job50's stored tools; consumption and exchange save only when no selection error occurred." }
       ],
       "note": "Requires Command's run authority; supplies operation-local facts through the injected economy runner, with no independent commit or production combat fallback."
     },

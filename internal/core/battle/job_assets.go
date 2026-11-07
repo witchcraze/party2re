@@ -15,6 +15,14 @@ type JobAssets struct {
 	HeldToolID    *string                     // nil means the durable single-hand projection is unavailable.
 	HelperToolIDs []int                       // nil means helper-quest facts are unavailable; empty is known.
 	AddWallet     func(int, int) (int, error) `json:"-"` // Inject the shared safe arithmetic; cap only at durable commit.
+	StoredTools   []StoredTool                // nil means the requester depot is unavailable.
+	// StoredItem and StoredTarget are the outer command's selector and remaining
+	// text; nested job50 binds them instead of its forwarded argument.
+	StoredItem, StoredTarget string
+	StoredOutcomes           []StoredToolOutcome
+	// SelectionError is the operation-wide source selection message. The
+	// consumer commits only stored-tool history and skips costs and tails.
+	SelectionError bool
 }
 
 type JobAssetContext struct {
@@ -23,6 +31,11 @@ type JobAssetContext struct {
 	Assets        *JobAssets
 	DefeatContext *DefeatContext
 	Roster        *RosterContext // Enhanced item78's summon pool; other bodies ignore it.
+	// Job50 runs its stored child through the enclosing frame and catalog, and
+	// stored travel tools through Adventure's port.
+	Frame   *CallbackContext
+	Catalog CallbackCatalog
+	Travel  *StoredToolTravel
 }
 
 func (c *JobAssetContext) shift() string {
@@ -76,6 +89,9 @@ func (s *LifetimeState) ApplyJobAssets(c *JobAssetContext, id string, rng random
 	}
 	if id == "job-78-entry-0" {
 		return s.applyEnhancedTool(c, rng)
+	}
+	if id == "job-50-entry-7" {
+		return s.applyStoredTool(c, rng)
 	}
 	power := c.power(s.actor(c.ActorID), id)
 	if id == "job-28-entry-3" {

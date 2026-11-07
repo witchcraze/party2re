@@ -26,6 +26,7 @@ type assetCombat struct {
 	npc   bool
 	fail  atomic.Bool
 	calls atomic.Int64
+	extra func(*skill.BattleDefinitions, *corebattle.JobAssetContext)
 }
 
 func (c *assetCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
@@ -42,6 +43,9 @@ func (c *assetCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalR
 		operation := &corebattle.JobAssetContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: frame.TargetContext}, GuaranteedHit: true, Defeat: func(string) error { return corebattle.ErrUnsupportedEffect }}}
 		var d skill.BattleDefinitions
 		d.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{JobAssets: operation}, len(r.Roster))
+		if c.extra != nil {
+			c.extra(&d, operation)
+		}
 		ops, err := d.InvocationAction(&r.Battle, &frame, []string{cmd.Action}, c.f.rng)
 		if err != nil {
 			return err

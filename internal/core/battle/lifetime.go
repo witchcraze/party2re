@@ -11,6 +11,8 @@ type LifetimeState struct {
 	DroppedCrystals  int                        `json:"dropped_crystals"`
 	SpecialBossField bool                       `json:"special_boss_field"`
 	RosterSequence   uint64                     `json:"roster_sequence"`
+	// StoredToolHistory is job50's used definitions per color for the room.
+	StoredToolHistory map[string]map[string]bool `json:"stored_tool_history,omitempty"`
 }
 
 // LifetimeActor keeps current resources and effect facts together. Participant
