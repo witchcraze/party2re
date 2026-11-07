@@ -444,21 +444,42 @@ func TestEnhancedToolSQLNPCActorChargesRequesterOnly(t *testing.T) {
 	}
 }
 
-// A weapon row cannot certify the hand, so nothing may be charged or consumed.
+// A weapon or stacked tool row cannot certify the hand, so nothing may be charged or consumed.
 func TestEnhancedToolSQLUnknownHandRejectsBeforeAssets(t *testing.T) {
-	f := newNormalFixture(t, 1)
-	c := installAssets(t, f)
-	grantHeld(t, f, "weapon-01")
-	entry := f.enter(t, "normal")
-	run := entry.Command.RunID
-	seedAssetEncounter(t, f, run)
-	cmd := assetCommand(t, f, run, 0, "job-78-entry-0", "unknown-hand")
-	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
-	assertAssets(t, f, cmd.ActorID, 100, 1)
-	if c.fail.Load() || f.rng.calls.Load() != 0 {
-		t.Fatal("rejection drew", f.rng.calls.Load())
+	for _, tc := range []struct {
+		name string
+		id   string
+		qty  int
+	}{
+		{"weapon", "weapon-01", 1},
+		{"stacked-tool", "item-001", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newNormalFixture(t, 1)
+			c := installAssets(t, f)
+			_, err := f.cfg.JobAssetRunner.ExecuteTransaction(context.Background(), economy.TransactionRequest{
+				CharacterID: f.actors[0].ID,
+				Grant:       economy.ResourceGrant{ItemDefinitionID: tc.id, ItemQuantity: tc.qty},
+			}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry := f.enter(t, "normal")
+			run := entry.Command.RunID
+			seedAssetEncounter(t, f, run)
+			cmd := assetCommand(t, f, run, 0, "job-78-entry-0", "unknown-hand")
+			if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+				t.Fatal(err)
+			}
+			assertAssets(t, f, cmd.ActorID, 100, 1)
+			inv, err := f.invs.FindByCharacterID(context.Background(), cmd.ActorID)
+			if err != nil || len(inv.Items) != 1 || inv.Items[0].Quantity != tc.qty {
+				t.Fatal(inv, err)
+			}
+			if c.fail.Load() || f.rng.calls.Load() != 0 {
+				t.Fatal("rejection drew", f.rng.calls.Load())
+			}
+		})
 	}
 }
 
