@@ -438,6 +438,7 @@ func (h *Handler) writeGuildError(w http.ResponseWriter, err error) {
 		errors.Is(err, guild.ErrMemberNotPending),
 		errors.Is(err, guild.ErrMemberIsPending),
 		errors.Is(err, guild.ErrNoticeTooLong),
+		errors.Is(err, home.ErrContentTooLong),
 		isTextValidationError(err):
 		writeError(w, http.StatusBadRequest, err)
 	case errors.Is(err, home.ErrLetterThrottled):

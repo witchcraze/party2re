@@ -182,7 +182,8 @@ func (s *Service) UpdateHome(ctx context.Context, characterID, companionName str
 
 // SendLetter sends a player-to-player letter to a recipient character.
 func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content, color string) (Letter, error) {
-	if err := ValidateLetter(senderID, recipientID, content, s.letterMaxLength); err != nil {
+	validContent, err := ValidateLetter(senderID, recipientID, content, s.letterMaxLength)
+	if err != nil {
 		return Letter{}, err
 	}
 
@@ -217,7 +218,7 @@ func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content
 		SenderName:           sender.Name,
 		RecipientCharacterID: recipient.ID,
 		RecipientName:        recipient.Name,
-		Content:              validation.SanitizeText(content),
+		Content:              validContent,
 		Color:                cleanColor,
 		IsRead:               false,
 		ReadAt:               nil,

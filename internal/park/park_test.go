@@ -69,7 +69,7 @@ func TestValidatePost(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected nil err, got %v", err)
 		}
-		expected := "Line 1\nLine 2\r\nLine 3"
+		expected := "Line 1Line 2Line 3"
 		if got != expected {
 			t.Errorf("expected %q, got %q", expected, got)
 		}

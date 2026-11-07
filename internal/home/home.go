@@ -13,7 +13,6 @@ import (
 var (
 	ErrInvalidSender             = errors.New("sender character ID cannot be empty")
 	ErrInvalidRecipient          = errors.New("recipient character ID cannot be empty")
-	ErrCannotSendToSelf          = errors.New("cannot send a letter to yourself")
 	ErrEmptyContent              = errors.New("letter content cannot be empty")
 	ErrContentTooLong            = errors.New("letter content exceeds the maximum length")
 	ErrLetterThrottled           = errors.New("letters cannot be sent consecutively; please wait and try again")
@@ -66,7 +65,7 @@ const (
 	MaxCompanionNameLength = 64
 	// DefaultCompanionPhraseLimit is the number of phrases kept per character.
 	DefaultCompanionPhraseLimit = 30
-	// DefaultLetterMaxLength is the maximum letter body length in Unicode characters.
+	// DefaultLetterMaxLength is the maximum letter body length, counted after legacy HTML escaping.
 	DefaultLetterMaxLength = 500
 	// DefaultLetterLogLimit is the number of letters kept in each inbox and outbox.
 	DefaultLetterLogLimit = 30
@@ -189,31 +188,29 @@ type UseHomeItemResult struct {
 	Character *corecharacter.Character `json:"character,omitempty"`
 }
 
-// ValidateLetter validates sender, recipient, and message content for a letter.
-func ValidateLetter(senderID, recipientID, content string, maxLength int) error {
+// ValidateLetter validates sender, recipient, and message content for a letter, returning the normalized content.
+func ValidateLetter(senderID, recipientID, content string, maxLength int) (string, error) {
 	senderID = strings.TrimSpace(senderID)
 	if senderID == "" {
-		return ErrInvalidSender
+		return "", ErrInvalidSender
 	}
 	recipientID = strings.TrimSpace(recipientID)
 	if recipientID == "" {
-		return ErrInvalidRecipient
-	}
-	if senderID == recipientID {
-		return ErrCannotSendToSelf
+		return "", ErrInvalidRecipient
 	}
 
-	if _, err := validation.ValidateMultiLine(content, maxLength); err != nil {
+	normalized, err := validation.ValidateLegacyComment(content, maxLength)
+	if err != nil {
 		if errors.Is(err, validation.ErrEmpty) {
-			return ErrEmptyContent
+			return "", ErrEmptyContent
 		}
 		if errors.Is(err, validation.ErrTooLong) {
-			return ErrContentTooLong
+			return "", ErrContentTooLong
 		}
-		return err
+		return "", err
 	}
 
-	return nil
+	return normalized, nil
 }
 
 // ValidatePhrase validates companion phrase text.

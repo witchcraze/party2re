@@ -111,9 +111,9 @@ Characters can construct and maintain private town houses across the 4 towns (`t
 Asynchronous direct messaging between characters:
 - **Sender & Recipient Verification**:
   - Letters are addressed from a sender character to a recipient character.
-  - Sending to self is rejected (`ErrCannotSendToSelf`). Legacy `send_letter` has no such check; this unresolved difference is not an approved rule.
+  - A character may send a letter to itself, as in legacy. It appears in both of that character's boxes, and a guild callout delivers one to its sender.
 - **Letter Attributes**:
-  - `content`: 1 to N Unicode characters (see [Body length](#letter-settings)). Sanitized via `internal/validation.ValidateMultiLine`: Unicode NFC normalized, permits newlines (`\n`, `\r`), and rejects C0/C1 control characters, zero-width characters (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`), bidirectional text overrides (`\u202A`–`\u202E`, `\u2066`–`\u2069`), and excessive combining diacritics (Zalgo).
+  - `content`: 1 to N characters (see [Body length](#letter-settings)). Sanitized via `internal/validation.ValidateLegacyComment`: Unicode NFC normalized, removes line breaks, and rejects C0/C1 control characters, zero-width characters (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`), bidirectional text overrides (`\u202A`–`\u202E`, `\u2066`–`\u2069`), and excessive combining diacritics (Zalgo).
   - `color`: Custom font color HEX code (default: `#000000`).
   - `is_read`: Boolean status with timestamp `read_at`.
 - **Folder Navigation**:
@@ -140,8 +140,11 @@ Asynchronous direct messaging between characters:
 - **Adopted retention** (approved in #1126):
   - Each inbox and outbox keeps the newest N letters. Delivery always succeeds at capacity. The oldest letters leave that box even when unread, through the owner's deletion flag, so the other party's copy remains.
   - N defaults to 30. `PARTY2_HOME_LETTER_LOG_LIMIT` overrides it. Lowering N or upgrading shortens a box on its next send; there is no startup trim.
-- **Body length** (approved in #1126): N defaults to 500 Unicode characters. `PARTY2_HOME_LETTER_MAX_LENGTH` overrides it, and guild notices must also fit within it.
-- **Implementation gap**: legacy counts the body after HTML escaping, removes line breaks and counts the `＠てがみをかく>宛先` command text as part of the input. Go counts sanitized text before storage, keeps line breaks and receives the recipient separately. No approval supersedes the counting and line-break difference yet.
+- **Body length** (`lib/system.cgi:700-725`, approved in #1126): N defaults to 500. `PARTY2_HOME_LETTER_MAX_LENGTH` overrides it, and guild notices must also fit within it.
+  - Line breaks are removed, joining the lines.
+  - The limit applies to the length after legacy HTML escaping: `&`, `;` and `,` count as 5, `<` and `>` as 4, `"` as 6, and other characters as 1. Letters are stored unescaped, so this affects counting only.
+  - Legacy also counts the `＠てがみをかく>宛先` command text. Go receives the recipient as a separate field, so this does not apply.
+- **Implementation gap**: legacy silently removes combining marks in several ranges, while Go keeps them after NFC normalization and rejects excessive sequences. A kept mark counts as one character.
 
 ### 3. Companion Greeting Phrases & Resident Companions (`character_companion_phrases`, `home_members`)
 

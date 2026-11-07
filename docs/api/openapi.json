@@ -34889,7 +34889,7 @@
                     "type": "string"
                   },
                   "content": {
-                    "description": "Nonblank multiline text; validated after whitespace trimming and NFC normalization, with a default maximum of 500 Unicode characters. Disallowed controls, zero-width/bidi formatting and excessive combining marks return 422.",
+                    "description": "Nonblank text; line breaks are removed. Validated after whitespace trimming and NFC normalization, with a default maximum of 500 characters counted after HTML escaping. Disallowed controls, zero-width/bidi formatting and excessive combining marks return 422.",
                     "minLength": 1,
                     "pattern": "[^\t-\r    - \u2028\u2029  　]",
                     "type": "string"
@@ -34978,7 +34978,7 @@
           },
           "422": {
             "$ref": "#/components/responses/Error",
-            "description": "Invalid recipient, self-send, blank or overlong normalized content, or text validation failure. Missing or blank sender ID is rejected earlier by the ownership wrapper with 400."
+            "description": "Invalid recipient, blank or overlong normalized content, or text validation failure. Missing or blank sender ID is rejected earlier by the ownership wrapper with 400."
           },
           "429": {
             "$ref": "#/components/responses/Error",

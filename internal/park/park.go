@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	// DefaultMaxContentLength is the maximum post body length in Unicode characters.
+	// DefaultMaxContentLength is the maximum post body length, counted after legacy HTML escaping.
 	DefaultMaxContentLength = 500
 	// DefaultLogLimit is the number of posts kept on the board.
 	DefaultLogLimit = 30
@@ -54,7 +54,7 @@ func ValidatePost(characterID, content, color, recipient string, maxLength int) 
 	if strings.TrimSpace(characterID) == "" {
 		return "", ErrInvalidCharacterID
 	}
-	normalizedContent, err := validation.ValidateMultiLine(content, maxLength)
+	normalizedContent, err := validation.ValidateLegacyComment(content, maxLength)
 	if err != nil {
 		if errors.Is(err, validation.ErrEmpty) {
 			return "", ErrEmptyContent

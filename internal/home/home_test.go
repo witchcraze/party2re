@@ -50,7 +50,6 @@ func TestValidateLetter(t *testing.T) {
 			senderCharacterID:    "char-1",
 			recipientCharacterID: "char-1",
 			content:              "Hello self!",
-			expectErr:            ErrCannotSendToSelf,
 		},
 		{
 			name:                 "empty content",
@@ -98,7 +97,7 @@ func TestValidateLetter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateLetter(tt.senderCharacterID, tt.recipientCharacterID, tt.content, DefaultLetterMaxLength)
+			_, err := ValidateLetter(tt.senderCharacterID, tt.recipientCharacterID, tt.content, DefaultLetterMaxLength)
 			if tt.expectErr != nil {
 				if !errors.Is(err, tt.expectErr) {
 					t.Fatalf("expected error %v, got %v", tt.expectErr, err)

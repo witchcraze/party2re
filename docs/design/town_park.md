@@ -13,9 +13,9 @@ The Town Park Feature Module (`internal/park`) provides a central social gatheri
 Players can submit public bulletin board messages:
 - **Author Identity**: Each post is bound to a verified character owned by the authenticated player session.
 - **Content Validation & Sanitization**:
-  - Length constraint: 1 to N characters (UTF-8 runes), defaulting to 500 from legacy `$max_comment`. `PARTY2_PARK_POST_MAX_LENGTH` overrides it (approved in #1126). Counting differs from legacy as described in the [letter settings](home.md#letter-settings).
-  - Unicode NFC normalization & whitespace trimming via shared validator (`validation.ValidateMultiLine`).
-  - Security guards: Rejection of C0/C1 control characters (except newlines `\n` and `\r`), zero-width formatting characters (e.g. `\u200B`), bidirectional override characters (e.g. `\u202E`), and excessive combining diacritical marks (Zalgo text).
+  - Length constraint: 1 to N characters, defaulting to 500 from legacy `$max_comment`, counted after legacy HTML escaping as described in the [letter settings](home.md#letter-settings). `PARTY2_PARK_POST_MAX_LENGTH` overrides it (approved in #1126).
+  - Unicode NFC normalization, whitespace trimming and line-break removal via shared validator (`validation.ValidateLegacyComment`).
+  - Security guards: Rejection of C0/C1 control characters, zero-width formatting characters (e.g. `\u200B`), bidirectional override characters (e.g. `\u202E`), and excessive combining diacritical marks (Zalgo text).
   - HTML escaping: All HTML tags and special characters (`<`, `>`, `&`, `"`, `'`) are escaped (`SanitizeContent`).
 - **Color & Recipient Styling**:
   - Optional custom font color (e.g. HEX `#ff0000`, max 16 characters). Default: `#000000`.

@@ -181,7 +181,7 @@ func TestService_PostMessage(t *testing.T) {
 		}
 	})
 
-	t.Run("Post preserves newlines in multiline content", func(t *testing.T) {
+	t.Run("Post removes line breaks", func(t *testing.T) {
 		laterTime := fixedTime.Add(30 * time.Second)
 		nfcSvc, _ := park.NewService(
 			repo,
@@ -192,8 +192,8 @@ func TestService_PostMessage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected success, got %v", err)
 		}
-		if post.Content != "1行目\n2行目" {
-			t.Errorf("expected multiline preserved, got %q", post.Content)
+		if post.Content != "1行目2行目" {
+			t.Errorf("expected line breaks removed, got %q", post.Content)
 		}
 	})
 }

@@ -192,6 +192,35 @@ func TestLetterThrottleAndRetention(t *testing.T) {
 		assertIDs(t, inboxIDs(t, b), second.ID, first.ID)
 	})
 
+	t.Run("a letter to oneself uses both boxes", func(t *testing.T) {
+		a := newChar(t)
+		first := send(t, a, a, t0, 2)
+		assertIDs(t, inboxIDs(t, a), first.ID)
+		assertIDs(t, outboxIDs(t, a), first.ID)
+
+		err := repo.CreateLetter(ctx, letterAt(a, a, t0.Add(29*time.Second)), 2)
+		if !errors.Is(err, home.ErrLetterThrottled) {
+			t.Fatalf("expected ErrLetterThrottled at 29s, got %v", err)
+		}
+
+		second := send(t, a, a, t0.Add(30*time.Second), 2)
+		third := send(t, a, a, t0.Add(60*time.Second), 2)
+		assertIDs(t, inboxIDs(t, a), third.ID, second.ID)
+		assertIDs(t, outboxIDs(t, a), third.ID, second.ID)
+		if _, err := repo.GetLetterByID(ctx, first.ID); !errors.Is(err, home.ErrLetterNotFound) {
+			t.Fatalf("expected evicted letter to be purged, got %v", err)
+		}
+
+		if err := repo.DeleteLetter(ctx, third.ID, a.ID); err != nil {
+			t.Fatal(err)
+		}
+		assertIDs(t, inboxIDs(t, a), second.ID)
+		assertIDs(t, outboxIDs(t, a), second.ID)
+		if _, err := repo.GetLetterByID(ctx, third.ID); !errors.Is(err, home.ErrLetterNotFound) {
+			t.Fatalf("expected deleted letter to be purged, got %v", err)
+		}
+	})
+
 	t.Run("concurrent letters from one sender deliver once", func(t *testing.T) {
 		a, b := newChar(t), newChar(t)
 		fns := make([]func() error, 8)

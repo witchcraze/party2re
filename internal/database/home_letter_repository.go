@@ -23,7 +23,7 @@ func (r *HomeRepository) CreateLetter(ctx context.Context, letter home.Letter, l
 		executor := ExecutorFromContext(txCtx, r.db)
 		lockIDs := []string{letter.SenderCharacterID, letter.RecipientCharacterID}
 		slices.Sort(lockIDs)
-		for _, characterID := range lockIDs {
+		for _, characterID := range slices.Compact(lockIDs) {
 			var lockedID string
 			err := executor.QueryRowContext(txCtx, `SELECT id FROM characters WHERE id = ? FOR UPDATE`, characterID).Scan(&lockedID)
 			if errors.Is(err, sql.ErrNoRows) {

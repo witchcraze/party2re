@@ -1006,6 +1006,22 @@ func TestListOutboxByCursor(t *testing.T) {
 	}
 }
 
+func TestSendLetterStoresBodyWithoutLineBreaks(t *testing.T) {
+	repo := newMockHomeRepo()
+	chars := &mockCharReader{chars: map[string]corecharacter.Character{"char-1": {ID: "char-1", Name: "Hero"}}}
+	service, err := NewService(repo, chars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	letter, err := service.SendLetter(context.Background(), "char-1", "char-1", "1行目\r\n2行目", "")
+	if err != nil {
+		t.Fatalf("SendLetter failed: %v", err)
+	}
+	if letter.Content != "1行目2行目" {
+		t.Fatalf("expected line breaks removed, got %q", letter.Content)
+	}
+}
+
 func TestSendLetterLimits(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockHomeRepo()

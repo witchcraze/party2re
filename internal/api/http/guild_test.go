@@ -455,6 +455,7 @@ func TestGuild_ErrorMappings(t *testing.T) {
 		{"notice too long", guild.ErrNoticeTooLong, http.StatusBadRequest},
 		{"callout control char", validation.ErrControlCharacter, http.StatusBadRequest},
 		{"letter throttled", home.ErrLetterThrottled, http.StatusTooManyRequests},
+		{"letter too long", home.ErrContentTooLong, http.StatusBadRequest},
 	}
 
 	for _, tt := range tests {
