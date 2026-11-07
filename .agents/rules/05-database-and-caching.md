@@ -1,6 +1,6 @@
 ---
 name: Database and Caching Strategy
-description: Guidelines for database transaction boundaries, concurrency control, and appropriate usage of Redis/Valkey.
+description: Guidelines for database transaction boundaries, concurrency control, appropriate usage of Redis/Valkey, and documenting deployment environment variables.
 ---
 
 # Database and Caching Strategy
@@ -129,3 +129,11 @@ See [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keys
   - Any partially allocated resources (database connection pools, Valkey client sockets, background workers, listeners) MUST be cleanly and deterministically released using structured `defer` or context cancellation.
   - The process MUST NOT leave hanging connection pools, orphaned sockets, or leaking goroutines.
 - **Test Isolation Boundary**: In-memory adapters MAY be selected by factories for explicitly injected test dependencies. Production bootstrap MUST supply validated real stores; factory nil-client test branches MUST NOT become connectivity-error fallbacks.
+
+## 8. Deployment Environment Variable Documentation
+This applies to every environment variable read by production code, including database and Valkey settings and variables of any other domain.
+- **Same-PR Update:** A PR that adds, renames or removes a variable, or changes its default, fallback alias or invalid-value behavior, MUST update the [`README.md` environment variable table](../../README.md#実行環境変数) and the [Docker Compose example](../../README.md#docker-compose-での起動例) in the same PR.
+- **Required Content:** The table MUST state whether the variable is required, its default, its aliases and its invalid-value behavior when that behavior is not a startup error. The Compose example MUST show required variables as active lines and optional variables as commented lines.
+- **Secrets:** Passwords and API keys MUST use placeholders such as `<admin-api-key>`. NEVER write a real secret.
+- **Exclusions:** Variables read only by tests or development tooling (`_test.go`, `internal/testutil`, `PARTY2_TEST_*`, `GOFLAGS`) MUST NOT be listed.
+- **Verification:** Before committing such a change, search non-test Go files under `cmd/` and `internal/` for environment reads, including keys passed through variables, and compare the names with the README.

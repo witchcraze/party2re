@@ -54,6 +54,7 @@ To preserve testability, decouple packages from global runtime state, and preven
 - **Constructors Accept Config**: Service/repository constructors MUST accept config structs or explicit arguments (e.g., `NewService(cfg Config, ...)`), and MUST NOT call `os.Getenv` or load secrets/paths directly within constructors.
 - **Isolated Environment Loaders**: Environment variable parsing MUST be isolated to dedicated loader functions (e.g., `pkg.ConfigFromEnvironment()` or `pkg.DefaultConfig()`), or handled entirely at the composition root (`cmd/party2/config.go`).
 - **Test-Friendly Defaults**: Provide sane default values for local development and testing without requiring mandatory environment variables unless strictly necessary for secrets or external connection addresses.
+- **Deployment Documentation**: Changes to environment variables MUST follow [`05-database-and-caching.md`](05-database-and-caching.md#8-deployment-environment-variable-documentation).
 
 ## 9. File Sizing, Package Cohesion, and Mechanical Linting
 To keep files readable, maintainable, and within effective token limits for AI pair programming:

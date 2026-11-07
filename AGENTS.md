@@ -13,7 +13,7 @@ Not every tool loads these modules automatically. Before acting, agents MUST rea
 - **`.agents/rules/02-documentation-sync.md`**: Rules for maintaining the Single Source of Truth (SSOT) and synchronizing documents within Pull Requests.
 - **`.agents/rules/03-architecture.md`**: Guidelines for system architecture, modular monolith design, layer boundaries, and API connections.
 - **`.agents/rules/04-domain-modeling.md`**: Guidelines for modeling game logic, combat, progression, and scheduled actions.
-- **`.agents/rules/05-database-and-caching.md`**: Guidelines for database transaction boundaries (Unit of Work), pessimistic locking, and appropriate usage of Valkey (Redis).
+- **`.agents/rules/05-database-and-caching.md`**: Guidelines for database transaction boundaries (Unit of Work), pessimistic locking, appropriate usage of Valkey (Redis), and documenting deployment environment variables for any change that touches them.
 - **`.agents/rules/06-security.md`**: Guidelines for security reviews, authorization, input validation, and preventing common vulnerabilities.
 - **`.agents/rules/07-guidance-layer.md`**: Guidelines for managing the Guidance Layer (.arch/*.json), agent navigation, and automated verification.
 

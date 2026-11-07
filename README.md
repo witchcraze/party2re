@@ -166,7 +166,14 @@ ghcr.io/witchcraze/party2re:v1.0.0      # リリースタグ
 | `PARTY2_DB_MAX_IDLE_CONNS` | 任意 | DB最大アイドル接続プール数（デフォルト: `25`） | `25` |
 | `PARTY2_DB_CONN_MAX_LIFETIME` | 任意 | DB接続の最大生存期間（デフォルト: `5m`） | `10m` |
 | `PARTY2_DB_CONN_MAX_IDLE_TIME` | 任意 | DB接続の最大アイドル時間（デフォルト: `1m`） | `2m` |
-| `PARTY2_VALKEY_ADDR` | **必須** | Valkey 接続アドレス | `valkey:6379` |
+| `PARTY2_VALKEY_ADDR` | **必須** | Valkey 接続アドレス。未設定時は別名 `VALKEY_ADDR` を参照します。 | `valkey:6379` |
+| `PARTY2_VALKEY_PASSWORD` | 任意 | Valkey の AUTH パスワード（デフォルト: なし） | `<valkey-password>` |
+| `PARTY2_VALKEY_DB` | 任意 | Valkey の DB 番号（デフォルト: `0`）。不正値は無視します。 | `0` |
+| `PARTY2_VALKEY_DIAL_TIMEOUT` | 任意 | Valkey の接続タイムアウト（デフォルト: `5s`）。不正値は無視します。 | `10s` |
+| `PARTY2_ADDR` | 任意 | 待受アドレス。未設定時は別名 `ADDR` を参照します。ポート指定より優先します。 | `:8080` |
+| `PARTY2_PORT` | 任意 | 待受ポート（デフォルト: `8080`）。未設定時は別名 `PORT` を参照します。 | `8080` |
+| `PARTY2_ADMIN_API_KEY` | 任意 | 管理 API のキー。未設定時は別名 `ADMIN_API_KEY` を参照します。どちらもない場合、管理 API は `403` を返します。 | `<admin-api-key>` |
+| `PARTY2_MAX_PLAYERS` | 任意 | アカウント数の上限（デフォルト: `999`）。`0` 以下で無制限です。非整数の場合は起動エラーになります。 | `999` |
 | `PARTY2_CORS_ORIGINS` | 任意 | 許可するCORS Origin一覧（カンマ区切り）。省略時は全クロスオリジンを拒否（同一オリジンのみ許可する安全なデフォルト）。<br>※ CORSはブラウザのクロスオリジン相互運用性ポリシーであり、認可制御ではありません。認証トークンや管理者キーの検証はCORSとは独立して実施されます。<br>※ Webフロントエンド（SPA等）をAPIサーバーとは別ドメイン（例: `https://app.party2.game`）やローカル開発用ポート（例: `http://localhost:3000`）から配信して通信を行う構成の場合は、当環境変数に対象オリジンの指定を推奨します。 | `https://app.party2.game,http://localhost:3000` |
 | `PARTY2_TRUSTED_PROXIES` | 任意 | 信頼するリバースプロキシのCIDR/IP一覧（カンマ区切り）。省略時（デフォルト）はフォワーディングヘッダー（`X-Forwarded-For`, `X-Real-IP`）を信用せず、`RemoteAddr` をクライアント識別子として採用するため直接公開時も安全です。<br>※ Nginx, AWS ALB, Cloudflare などのリバースプロキシ背後に配置する場合、プロキシのIP/CIDRを指定することで正当なクライアントIPによるレート制限が行われます。 | `127.0.0.1/32,10.0.0.0/8` |
 | `PARTY2_HOME_COMPANION_PHRASE_LIMIT` | 任意 | キャラクターごとに保持するペットのことばの件数（デフォルト: `30`）。上限を超えると最も古いことばから消えます。未設定・非整数・`0` 以下の値は `30` として扱います。 | `50` |
@@ -186,8 +193,21 @@ services:
     environment:
       PARTY2_DB_DSN: party2:party2@tcp(mariadb:3306)/party2?parseTime=true
       PARTY2_VALKEY_ADDR: valkey:6379
-      # 任意: ペットのことばの保持件数（省略時は 30）
-      PARTY2_HOME_COMPANION_PHRASE_LIMIT: "30"
+      # 以下は任意です。必要な行のコメントを外してください。説明は「実行環境変数」を参照してください。
+      # PARTY2_DB_MAX_OPEN_CONNS: "25"
+      # PARTY2_DB_MAX_IDLE_CONNS: "25"
+      # PARTY2_DB_CONN_MAX_LIFETIME: 5m
+      # PARTY2_DB_CONN_MAX_IDLE_TIME: 1m
+      # PARTY2_VALKEY_PASSWORD: <valkey-password>
+      # PARTY2_VALKEY_DB: "0"
+      # PARTY2_VALKEY_DIAL_TIMEOUT: 5s
+      # PARTY2_ADDR: ":8080"
+      # PARTY2_PORT: "8080"
+      # PARTY2_ADMIN_API_KEY: <admin-api-key>
+      # PARTY2_CORS_ORIGINS: https://app.party2.game,http://localhost:3000
+      # PARTY2_TRUSTED_PROXIES: 127.0.0.1/32,10.0.0.0/8
+      # PARTY2_MAX_PLAYERS: "999"
+      # PARTY2_HOME_COMPANION_PHRASE_LIMIT: "30"
     depends_on:
       mariadb:
         condition: service_healthy
