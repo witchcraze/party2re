@@ -325,6 +325,17 @@ func (a *testDepotManagerAdapter) Consume(ctx context.Context, characterID, item
 	return a.repo.Save(ctx, dp)
 }
 
+func (a *testDepotManagerAdapter) AppendDeliveries(ctx context.Context, characterID string, items []coreitem.Instance) error {
+	dp, err := a.repo.FindByCharacterIDForUpdate(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	for _, inst := range items {
+		dp.AppendDelivery(inst)
+	}
+	return a.repo.Save(ctx, dp)
+}
+
 func (a *testDepotManagerAdapter) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
 	return a.Consume(ctx, characterID, itemInstanceID, 1)
 }

@@ -40,8 +40,8 @@ permits medal delivery even at full/over-capacity storage. Its slot count may
 therefore exceed the calculated capacity; it does not increase the capacity
 itself. Referral delivery likewise leaves capacity unchanged. The adopted
 [Home bag/treasure/key contract](home.md#legacy-dispatch-and-consumption-contract)
-also requires direct, separate Depot reward instances at/above capacity; its
-dispatch remains unimplemented. Other caller policies remain under
+also requires direct, separate Depot reward instances at/above capacity; the
+125/126/199 bags use this path, while the sealed key remains unimplemented. Other caller policies remain under
 [#1139](https://github.com/witchcraze/party2re/issues/1139); this exception does
 not authorize changing ordinary deposits or player transfers.
 

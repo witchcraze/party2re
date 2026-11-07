@@ -59,6 +59,18 @@ func (m *mockDepotManager) Consume(ctx context.Context, characterID, itemInstanc
 	return nil
 }
 
+func (m *mockDepotManager) AppendDeliveries(ctx context.Context, characterID string, items []coreitem.Instance) error {
+	dp, err := m.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	for _, inst := range items {
+		dp.AppendDelivery(inst)
+	}
+	m.depots[characterID] = dp
+	return nil
+}
+
 func (m *mockDepotManager) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
 	return m.Consume(ctx, characterID, itemInstanceID, 1)
 }
@@ -667,6 +679,18 @@ func (m *transactionalMockDepotManager) Consume(ctx context.Context, characterID
 	}
 	if _, err := dp.Consume(itemInstanceID, quantity); err != nil {
 		return err
+	}
+	m.depots[characterID] = dp
+	return nil
+}
+
+func (m *transactionalMockDepotManager) AppendDeliveries(ctx context.Context, characterID string, items []coreitem.Instance) error {
+	dp, err := m.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	for _, inst := range items {
+		dp.AppendDelivery(inst)
 	}
 	m.depots[characterID] = dp
 	return nil
