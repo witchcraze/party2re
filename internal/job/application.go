@@ -341,8 +341,10 @@ func targetSP(state corejob.CharacterJob, char corecharacter.Character, targetID
 	if targetID == char.OldJobID {
 		return char.OldSP
 	}
-	if value, ok := state.MasteredSP(targetID); ok {
-		return value
+	if state.IsMastered(targetID) {
+		if value, ok := state.SavedSP(targetID); ok {
+			return value
+		}
 	}
 	return 0
 }

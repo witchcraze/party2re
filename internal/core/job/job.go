@@ -190,15 +190,6 @@ func (c *CharacterJob) RecordMastery(jobID string, sp, masterySP int) bool {
 	return true
 }
 
-// MasteredSP returns the retained SP for a mastered job.
-func (c *CharacterJob) MasteredSP(jobID string) (int, bool) {
-	if c == nil || c.MasteredJobSP == nil {
-		return 0, false
-	}
-	value, ok := c.MasteredJobSP[strings.TrimSpace(jobID)]
-	return value, ok
-}
-
 // MasteredJobCount returns the number of distinct mastered jobs.
 func (c *CharacterJob) MasteredJobCount() int {
 	if c == nil {

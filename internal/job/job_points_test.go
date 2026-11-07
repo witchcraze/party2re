@@ -45,6 +45,105 @@ func TestChangeJobRecordsUnmasteredAndLatestMasteredPoints(t *testing.T) {
 	}
 }
 
+func TestChangeJobRestoresLatestMasteredSPAndNotStaleOrUnmastered(t *testing.T) {
+	ctx := context.Background()
+	catalog, err := corejob.NewCatalog([]corejob.Definition{
+		{ID: "job-01", Name: "First", CMPTier: 1, MasterySP: 80},
+		{ID: "job-02", Name: "Second", CMPTier: 1, MasterySP: 80},
+		{ID: "job-03", Name: "Third", CMPTier: 1, MasterySP: 80},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Sequence: leave job-01 at 80 (masters it) -> job-02 -> job-01 -> leave at 120 -> job-02 -> job-03 -> re-enter job-01 (gets 120) -> leave at 20 -> job-02 -> job-03 -> re-enter job-01 (gets 20, still mastered).
+	char := corecharacter.Character{
+		ID: "character-1", JobID: "job-01", Gender: "m", Level: 20, SP: 80,
+		Stats: corecharacter.Stats{MaxHP: 40, MaxMP: 20, HP: 40, MP: 20, Attack: 20, Defense: 20, Agility: 20},
+	}
+	state, err := corejob.NewCharacterJob(char.ID, char.JobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := &repositoryStub{value: state}
+	chars := &charRepoStub{char: char}
+	inv, err := coreinventory.New(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := NewService(repo, WithCatalog(catalog), WithCharacterRepository(chars), WithInventoryRepository(&inventoryRepoStub{inventory: inv}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stepChange := func(level, sp int, target string) (corecharacter.Character, corejob.CharacterJob) {
+		t.Helper()
+		chars.char.Level = level
+		chars.char.SP = sp
+		c, st, err := svc.ChangeJob(ctx, char.ID, target)
+		if err != nil {
+			t.Fatalf("ChangeJob(%s) failed: %v", target, err)
+		}
+		return c, st
+	}
+
+	// Leave job-01 at SP 80 -> job-02
+	_, st := stepChange(20, 80, "job-02")
+	if !st.IsMastered("job-01") || st.RecordedJobSP["job-01"] != 80 {
+		t.Fatalf("expected job-01 mastered at 80, got %#v", st)
+	}
+
+	// Return to job-01 (currently OldJobID, restores OldSP 80), then earn/set SP 120 and leave to job-02
+	c, _ := stepChange(20, 10, "job-01")
+	if c.SP != 80 {
+		t.Fatalf("expected SP 80 when returning from old_job, got %d", c.SP)
+	}
+	_, st = stepChange(20, 120, "job-02")
+	if !st.IsMastered("job-01") || st.RecordedJobSP["job-01"] != 120 || st.MasteredJobSP["job-01"] != 120 {
+		t.Fatalf("expected job-01 SP refreshed to 120, got %#v", st)
+	}
+
+	// Move to job-03 so job-01 is no longer OldJobID, then re-enter job-01 -> must restore 120
+	stepChange(20, 15, "job-03")
+	c, _ = stepChange(20, 5, "job-01")
+	if c.SP != 120 {
+		t.Fatalf("expected re-entering mastered job-01 to restore SP 120, got %d", c.SP)
+	}
+
+	// Spend SP down to 20 (below mastery threshold 80), leave to job-02 -> job-03 -> re-enter job-01 -> must restore 20 and keep mastery
+	_, st = stepChange(20, 20, "job-02")
+	if !st.IsMastered("job-01") || st.RecordedJobSP["job-01"] != 20 || st.MasteredJobSP["job-01"] != 20 {
+		t.Fatalf("expected job-01 SP refreshed to 20 while retaining mastery, got %#v", st)
+	}
+	stepChange(20, 5, "job-03")
+	c, st = stepChange(20, 5, "job-01")
+	if c.SP != 20 || !st.IsMastered("job-01") {
+		t.Fatalf("expected re-entering mastered job-01 after SP drop to restore 20 (not 80/120), got SP=%d mastered=%v", c.SP, st.IsMastered("job-01"))
+	}
+	// Unmastered job-02 (left with SP 5) must NOT restore saved SP on normal ChangeJob when not OldJobID
+	c, _ = stepChange(20, 20, "job-02")
+	if c.SP != 0 {
+		t.Fatalf("expected unmastered job-02 (not OldJobID) to start at SP 0 on normal ChangeJob, got %d", c.SP)
+	}
+
+	// 2. Simulate FutureMemory save refreshing RecordedJobSP on a database reload where MasteredJobSP still holds stale 80:
+	// targetSP must prefer SavedSP (RecordedJobSP) over stale MasteredJobSP.
+	repo.value = corejob.CharacterJob{
+		CharacterID:    char.ID,
+		CurrentJobID:   "job-02",
+		MasteredJobs:   []string{"job-01"},
+		MasteredJobSP:  map[string]int{"job-01": 80},
+		RecordedJobSP:  map[string]int{"job-01": 20},
+		RecordedJobIDs: []string{"job-01"},
+	}
+	chars.char.JobID = "job-02"
+	chars.char.OldJobID = "job-03"
+	c, _ = stepChange(20, 10, "job-01")
+	if c.SP != 20 {
+		t.Fatalf("expected targetSP to use SavedSP (20) over stale MasteredJobSP (80), got %d", c.SP)
+	}
+}
+
 func TestFutureMemoryDoesNotCreateUnknownRecords(t *testing.T) {
 	state, err := corejob.NewCharacterJob("character", "job-02")
 	if err != nil {
