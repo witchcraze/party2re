@@ -10,37 +10,30 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
-	"github.com/witchcraze/party2re/internal/ratelimit"
 )
 
 type CharacterReader interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
-type Limiter interface {
-	Allow(ctx context.Context, key string, limit int64, window time.Duration) (ratelimit.Result, error)
-}
-
 type Service struct {
-	repo         Repository
-	charReader   CharacterReader
-	npc          *TownGirlNPC
-	rateLimitDur time.Duration
-	limiter      Limiter
-	nowFunc      func() time.Time
+	repo       Repository
+	charReader CharacterReader
+	npc        *TownGirlNPC
+	logLimit   int
+	maxLength  int
+	nowFunc    func() time.Time
 }
 
 type ServiceOption func(*Service)
 
-func WithRateLimit(d time.Duration) ServiceOption {
-	return func(s *Service) {
-		s.rateLimitDur = d
+// SetLimits overrides the board log and body limits; a non-positive value is ignored.
+func (s *Service) SetLimits(logLimit, maxLength int) {
+	if logLimit > 0 {
+		s.logLimit = logLimit
 	}
-}
-
-func WithRateLimiter(limiter Limiter) ServiceOption {
-	return func(s *Service) {
-		s.limiter = limiter
+	if maxLength > 0 {
+		s.maxLength = maxLength
 	}
 }
 
@@ -64,11 +57,12 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 		return nil, errors.New("character reader is required")
 	}
 	s := &Service{
-		repo:         repo,
-		charReader:   charReader,
-		npc:          NewTownGirlNPC(nil),
-		rateLimitDur: 3 * time.Second,
-		nowFunc:      func() time.Time { return time.Now().UTC() },
+		repo:       repo,
+		charReader: charReader,
+		npc:        NewTownGirlNPC(nil),
+		logLimit:   DefaultLogLimit,
+		maxLength:  DefaultMaxContentLength,
+		nowFunc:    func() time.Time { return time.Now().UTC() },
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -78,7 +72,7 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 
 // PostMessage creates a new public message in the park.
 func (s *Service) PostMessage(ctx context.Context, characterID, content, color, recipient string) (Post, error) {
-	validContent, err := ValidatePost(characterID, content, color, recipient)
+	validContent, err := ValidatePost(characterID, content, color, recipient, s.maxLength)
 	if err != nil {
 		return Post{}, err
 	}
@@ -92,26 +86,6 @@ func (s *Service) PostMessage(ctx context.Context, characterID, content, color, 
 	}
 
 	now := s.nowFunc().UTC()
-	if s.rateLimitDur > 0 {
-		if s.limiter != nil {
-			res, err := s.limiter.Allow(ctx, "park:post:"+characterID, 1, s.rateLimitDur)
-			if err == nil && !res.Allowed {
-				return Post{}, ErrRateLimited
-			}
-		} else {
-			latestTime, err := s.repo.GetLatestPostTimeByCharacter(ctx, characterID)
-			if err != nil {
-				// return error if repo fails
-				return Post{}, err
-			}
-			if !latestTime.IsZero() {
-				if now.Sub(latestTime.UTC()) < s.rateLimitDur {
-					return Post{}, ErrRateLimited
-				}
-			}
-		}
-	}
-
 	cleanContent := SanitizeContent(validContent)
 	cleanRecipient := strings.TrimSpace(recipient)
 	if len(cleanRecipient) > 64 {
@@ -132,7 +106,7 @@ func (s *Service) PostMessage(ctx context.Context, characterID, content, color, 
 		CreatedAt:     now,
 	}
 
-	if err := s.repo.CreatePost(ctx, post); err != nil {
+	if err := s.repo.CreatePost(ctx, post, s.logLimit); err != nil {
 		return Post{}, err
 	}
 

@@ -90,6 +90,7 @@ Active members can broadcast messages to all fellow guild members:
 
 - Any active member (`!is_pending`) can invoke `BroadcastCallout` with a message (up to 200 characters). Sanitized via `internal/validation.ValidateSingleLine` (Unicode NFC normalized, single-line, rejecting control characters, zero-width characters, bidirectional overrides, and Zalgo text).
 - Delivers the sanitized letter to every guild member on the roster in roster order, including pending applicants (`is_pending = true`). Pending applicants cannot send broadcast callouts themselves.
+- Letters use the shared [throttle and length rules](home.md#letter-settings), and the sender receives a copy. A throttled recipient stops the broadcast like any delivery failure (`lib/guild.cgi:50-57`) and returns HTTP `429`. A body over the letter limit fails before any delivery and returns HTTP `400`.
 - If delivery of a letter fails, the broadcast terminates immediately and returns the delivery error without awarding Guild Points or updating `last_active_at` (earlier successful deliveries to preceding members are preserved and not rolled back).
 - Upon complete successful delivery to all roster recipients, awards **+1 Guild Point (`gpoint`)** to the guild and updates `last_active_at` timestamp.
 

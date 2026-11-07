@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -51,14 +52,15 @@ func (m *mockPetReader) ListHomePets(ctx context.Context, characterID string) ([
 }
 
 type mockHomeRepo struct {
-	homes       map[string]CharacterHome
-	letters     map[string]Letter
-	phrases     map[string][]CompanionPhrase
-	notices     map[string][]DeliveryNotice
-	chars       map[string]corecharacter.Character
-	getHomeErr  error
-	saveHomeErr error
-	phraseLimit int
+	homes          map[string]CharacterHome
+	letters        map[string]Letter
+	phrases        map[string][]CompanionPhrase
+	notices        map[string][]DeliveryNotice
+	chars          map[string]corecharacter.Character
+	letterLogLimit int
+	getHomeErr     error
+	saveHomeErr    error
+	phraseLimit    int
 }
 
 func newMockHomeRepo(chars ...map[string]corecharacter.Character) *mockHomeRepo {
@@ -182,7 +184,8 @@ func (m *mockHomeRepo) ListActiveTownHouses(ctx context.Context, townID string, 
 	return list, nil
 }
 
-func (m *mockHomeRepo) CreateLetter(ctx context.Context, letter Letter) error {
+func (m *mockHomeRepo) CreateLetter(ctx context.Context, letter Letter, logLimit int) error {
+	m.letterLogLimit = logLimit
 	m.letters[letter.ID] = letter
 	return nil
 }
@@ -1000,5 +1003,64 @@ func TestListOutboxByCursor(t *testing.T) {
 	}
 	if len(page1.Items) != 2 || !page1.HasMore || page1.NextCursor == "" {
 		t.Fatalf("unexpected page 1: %+v", page1)
+	}
+}
+
+func TestSendLetterStoresBodyWithoutLineBreaks(t *testing.T) {
+	repo := newMockHomeRepo()
+	chars := &mockCharReader{chars: map[string]corecharacter.Character{"char-1": {ID: "char-1", Name: "Hero"}}}
+	service, err := NewService(repo, chars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	letter, err := service.SendLetter(context.Background(), "char-1", "char-1", "1行目\r\n2行目", "")
+	if err != nil {
+		t.Fatalf("SendLetter failed: %v", err)
+	}
+	if letter.Content != "1行目2行目" {
+		t.Fatalf("expected line breaks removed, got %q", letter.Content)
+	}
+}
+
+func TestSendLetterLimits(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockHomeRepo()
+	chars := &mockCharReader{chars: map[string]corecharacter.Character{
+		"char-1": {ID: "char-1", Name: "Hero"},
+		"char-2": {ID: "char-2", Name: "Mage"},
+	}}
+	service, err := NewService(repo, chars)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	send := func(length int) error {
+		_, err := service.SendLetter(ctx, "char-1", "char-2", strings.Repeat("あ", length), "")
+		return err
+	}
+	if err := send(DefaultLetterMaxLength); err != nil {
+		t.Fatalf("expected success at the default limit, got %v", err)
+	}
+	if repo.letterLogLimit != DefaultLetterLogLimit {
+		t.Fatalf("expected default log limit, got %d", repo.letterLogLimit)
+	}
+	if err := send(DefaultLetterMaxLength + 1); !errors.Is(err, ErrContentTooLong) {
+		t.Fatalf("expected ErrContentTooLong, got %v", err)
+	}
+
+	service.SetLetterLimits(0, -1)
+	if err := send(DefaultLetterMaxLength); err != nil {
+		t.Fatalf("non-positive overrides must be ignored, got %v", err)
+	}
+
+	service.SetLetterLimits(5, 10)
+	if err := send(10); err != nil {
+		t.Fatalf("expected success at the override, got %v", err)
+	}
+	if repo.letterLogLimit != 5 {
+		t.Fatalf("expected log limit 5, got %d", repo.letterLogLimit)
+	}
+	if err := send(11); !errors.Is(err, ErrContentTooLong) {
+		t.Fatalf("expected ErrContentTooLong, got %v", err)
 	}
 }

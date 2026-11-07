@@ -69,6 +69,33 @@ func ValidateSingleLine(input string, maxRunes int) (string, error) {
 	return sanitized, nil
 }
 
+// ValidateLegacyComment validates chat-style body text like the legacy comment field: line breaks are removed,
+// and maxLength applies to the length after the legacy HTML escaping, whatever form the caller stores.
+// It otherwise applies the ValidateSingleLine checks and returns the normalized text.
+func ValidateLegacyComment(input string, maxLength int) (string, error) {
+	sanitized, err := ValidateSingleLine(strings.NewReplacer("\r", "", "\n", "").Replace(input), maxLength)
+	if err != nil {
+		return "", err
+	}
+	length := 0
+	for _, r := range sanitized {
+		switch r {
+		case '&', ';', ',':
+			length += 5
+		case '<', '>':
+			length += 4
+		case '"':
+			length += 6
+		default:
+			length++
+		}
+	}
+	if length > maxLength {
+		return "", ErrTooLong
+	}
+	return sanitized, nil
+}
+
 // ValidateMultiLine validates multi-line text input (such as comments or bio fields).
 // It permits newlines (\n) and carriage returns (\r), while rejecting other control characters,
 // zero-width characters, bidi overrides, and excessive combining marks.

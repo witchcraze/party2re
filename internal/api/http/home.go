@@ -166,8 +166,12 @@ func (h *Handler) handleSendLetter(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
+			if errors.Is(err, home.ErrLetterThrottled) {
+				writeError(w, http.StatusTooManyRequests, err)
+				return
+			}
 			if errors.Is(err, home.ErrInvalidSender) || errors.Is(err, home.ErrInvalidRecipient) ||
-				errors.Is(err, home.ErrCannotSendToSelf) || errors.Is(err, home.ErrEmptyContent) ||
+				errors.Is(err, home.ErrEmptyContent) ||
 				errors.Is(err, home.ErrContentTooLong) || isTextValidationError(err) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return

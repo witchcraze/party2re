@@ -141,7 +141,7 @@ func TestHomeRepository_Database(t *testing.T) {
 			CreatedAt:            now,
 		}
 
-		err = repo.CreateLetter(ctx, l)
+		err = repo.CreateLetter(ctx, l, home.DefaultLetterLogLimit)
 		if err != nil {
 			t.Fatalf("CreateLetter failed: %v", err)
 		}
@@ -225,9 +225,9 @@ func TestHomeRepository_Database(t *testing.T) {
 			Content:              "Sender deletes first test",
 			Color:                "#00ff00",
 			IsRead:               false,
-			CreatedAt:            now,
+			CreatedAt:            now.Add(time.Minute),
 		}
-		if err := repo.CreateLetter(ctx, l2); err != nil {
+		if err := repo.CreateLetter(ctx, l2, home.DefaultLetterLogLimit); err != nil {
 			t.Fatalf("CreateLetter 2 failed: %v", err)
 		}
 

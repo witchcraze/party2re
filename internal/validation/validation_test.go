@@ -747,3 +747,46 @@ func TestValidateGuildName(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateLegacyComment(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		max     int
+		want    string
+		wantErr error
+	}{
+		{"plain text at the limit", "あいう", 3, "あいう", nil},
+		{"plain text over the limit", "あいう", 2, "", validation.ErrTooLong},
+		{"ampersand is 5", "&", 5, "&", nil},
+		{"ampersand over", "&", 4, "", validation.ErrTooLong},
+		{"semicolon is 5", ";", 5, ";", nil},
+		{"semicolon over", ";", 4, "", validation.ErrTooLong},
+		{"comma is 5", ",", 5, ",", nil},
+		{"comma over", ",", 4, "", validation.ErrTooLong},
+		{"less-than is 4", "<", 4, "<", nil},
+		{"less-than over", "<", 3, "", validation.ErrTooLong},
+		{"greater-than is 4", ">", 4, ">", nil},
+		{"greater-than over", ">", 3, "", validation.ErrTooLong},
+		{"double quote is 6", "\"", 6, "\"", nil},
+		{"double quote over", "\"", 5, "", validation.ErrTooLong},
+		{"single quote is 1", "'", 1, "'", nil},
+		{"line breaks are removed and not counted", "1\r\n2\n3\r4", 4, "1234", nil},
+		{"only line breaks is empty", "\r\n\n", 10, "", validation.ErrEmpty},
+		{"control character", "a\x00b", 10, "", validation.ErrControlCharacter},
+		{"zero width", "a\u200Bb", 10, "", validation.ErrZeroWidth},
+		{"bidi override", "a\u202Eb", 10, "", validation.ErrBidiOverride},
+		{"zalgo", "Z\u0300\u0301\u0302", 10, "", validation.ErrZalgo},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validation.ValidateLegacyComment(tt.input, tt.max)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("expected error %v, got %v", tt.wantErr, err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}

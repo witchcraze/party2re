@@ -389,6 +389,29 @@ func TestHomeEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /letters - throttled sender returns 429", func(t *testing.T) {
+		throttledSvc := &mockHomeService{
+			sendLetterFn: func(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error) {
+				return home.Letter{}, home.ErrLetterThrottled
+			},
+		}
+		h, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(throttledSvc))
+		body, _ := json.Marshal(map[string]string{
+			"sender_character_id":    "char-1",
+			"recipient_character_id": "char-2",
+			"content":                "Hello",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/letters", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusTooManyRequests {
+			t.Fatalf("expected 429, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("POST /letters - invalid text rejection returns 422", func(t *testing.T) {
 		invalidSvc := &mockHomeService{
 			sendLetterFn: func(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error) {

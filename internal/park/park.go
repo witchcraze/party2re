@@ -14,16 +14,18 @@ import (
 var (
 	ErrInvalidCharacterID = errors.New("character ID cannot be empty")
 	ErrEmptyContent       = errors.New("post content cannot be empty")
-	ErrContentTooLong     = errors.New("post content exceeds maximum length of 200 characters")
+	ErrContentTooLong     = errors.New("post content exceeds the maximum length")
 	ErrInvalidColor       = errors.New("invalid post color format")
-	ErrRateLimited        = errors.New("posting rate limit exceeded, please wait a few moments")
 	ErrCharacterNotFound  = errors.New("character not found")
 )
 
 const (
-	MaxContentLength = 200
-	MaxColorLength   = 16
-	DefaultColor     = "#000000"
+	// DefaultMaxContentLength is the maximum post body length, counted after legacy HTML escaping.
+	DefaultMaxContentLength = 500
+	// DefaultLogLimit is the number of posts kept on the board.
+	DefaultLogLimit = 30
+	MaxColorLength  = 16
+	DefaultColor    = "#000000"
 )
 
 type Post struct {
@@ -48,11 +50,11 @@ func SanitizeContent(content string) string {
 }
 
 // ValidatePost validates the input fields for creating a post and returns the normalized content.
-func ValidatePost(characterID, content, color, recipient string) (string, error) {
+func ValidatePost(characterID, content, color, recipient string, maxLength int) (string, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return "", ErrInvalidCharacterID
 	}
-	normalizedContent, err := validation.ValidateMultiLine(content, MaxContentLength)
+	normalizedContent, err := validation.ValidateLegacyComment(content, maxLength)
 	if err != nil {
 		if errors.Is(err, validation.ErrEmpty) {
 			return "", ErrEmptyContent

@@ -56,6 +56,8 @@ type Service struct {
 	wakeClaimTTL           time.Duration
 	wakeClaimRenewInterval time.Duration
 	phraseLimit            int
+	letterLogLimit         int
+	letterMaxLength        int
 }
 
 func (s *Service) SetHomePetReader(r HomePetReader) {
@@ -66,6 +68,16 @@ func (s *Service) SetHomePetReader(r HomePetReader) {
 func (s *Service) SetCompanionPhraseLimit(limit int) {
 	if limit > 0 {
 		s.phraseLimit = limit
+	}
+}
+
+// SetLetterLimits overrides the mailbox log and body limits; a non-positive value is ignored.
+func (s *Service) SetLetterLimits(logLimit, maxLength int) {
+	if logLimit > 0 {
+		s.letterLogLimit = logLimit
+	}
+	if maxLength > 0 {
+		s.letterMaxLength = maxLength
 	}
 }
 
@@ -82,6 +94,8 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 		rng:               random.Default(),
 		baseSleepDuration: DefaultBaseSleepDuration,
 		phraseLimit:       DefaultCompanionPhraseLimit,
+		letterLogLimit:    DefaultLetterLogLimit,
+		letterMaxLength:   DefaultLetterMaxLength,
 		nowFunc:           func() time.Time { return time.Now().UTC() },
 	}
 	for _, opt := range opts {
@@ -168,7 +182,8 @@ func (s *Service) UpdateHome(ctx context.Context, characterID, companionName str
 
 // SendLetter sends a player-to-player letter to a recipient character.
 func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content, color string) (Letter, error) {
-	if err := ValidateLetter(senderID, recipientID, content); err != nil {
+	validContent, err := ValidateLetter(senderID, recipientID, content, s.letterMaxLength)
+	if err != nil {
 		return Letter{}, err
 	}
 
@@ -203,14 +218,14 @@ func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content
 		SenderName:           sender.Name,
 		RecipientCharacterID: recipient.ID,
 		RecipientName:        recipient.Name,
-		Content:              validation.SanitizeText(content),
+		Content:              validContent,
 		Color:                cleanColor,
 		IsRead:               false,
 		ReadAt:               nil,
 		CreatedAt:            now,
 	}
 
-	if err := s.repo.CreateLetter(ctx, letter); err != nil {
+	if err := s.repo.CreateLetter(ctx, letter, s.letterLogLimit); err != nil {
 		return Letter{}, err
 	}
 

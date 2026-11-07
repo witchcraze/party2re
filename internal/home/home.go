@@ -13,9 +13,9 @@ import (
 var (
 	ErrInvalidSender             = errors.New("sender character ID cannot be empty")
 	ErrInvalidRecipient          = errors.New("recipient character ID cannot be empty")
-	ErrCannotSendToSelf          = errors.New("cannot send a letter to yourself")
 	ErrEmptyContent              = errors.New("letter content cannot be empty")
-	ErrContentTooLong            = errors.New("letter content exceeds maximum length of 1000 characters")
+	ErrContentTooLong            = errors.New("letter content exceeds the maximum length")
+	ErrLetterThrottled           = errors.New("letters cannot be sent consecutively; please wait and try again")
 	ErrEmptyPhrase               = errors.New("phrase cannot be empty")
 	ErrPhraseTooLong             = errors.New("phrase exceeds maximum length of 120 characters")
 	ErrLetterNotFound            = errors.New("letter not found")
@@ -61,13 +61,24 @@ type CompanionTalkResult struct {
 
 const (
 	DefaultCompanionName   = "ペット"
-	MaxLetterContentLength = 1000
 	MaxPhraseLength        = 120
 	MaxCompanionNameLength = 64
 	// DefaultCompanionPhraseLimit is the number of phrases kept per character.
 	DefaultCompanionPhraseLimit = 30
-	MaxColorLength              = 7
+	// DefaultLetterMaxLength is the maximum letter body length, counted after legacy HTML escaping.
+	DefaultLetterMaxLength = 500
+	// DefaultLetterLogLimit is the number of letters kept in each inbox and outbox.
+	DefaultLetterLogLimit = 30
+	// LetterThrottleSeconds is the wait before a sender can follow their own latest inbox letter.
+	LetterThrottleSeconds = 30
+	MaxColorLength        = 7
 )
+
+// IsLetterThrottled reports whether a sender must wait, given the latest letter in the recipient's inbox.
+// Times compare in whole Unix seconds, so a letter is allowed exactly LetterThrottleSeconds later.
+func IsLetterThrottled(senderID, latestSenderID string, latestAt, now time.Time) bool {
+	return latestSenderID == senderID && latestAt.Unix()+LetterThrottleSeconds > now.Unix()
+}
 
 // CharacterHome represents private home estate settings for a character.
 type CharacterHome struct {
@@ -177,31 +188,29 @@ type UseHomeItemResult struct {
 	Character *corecharacter.Character `json:"character,omitempty"`
 }
 
-// ValidateLetter validates sender, recipient, and message content for a letter.
-func ValidateLetter(senderID, recipientID, content string) error {
+// ValidateLetter validates sender, recipient, and message content for a letter, returning the normalized content.
+func ValidateLetter(senderID, recipientID, content string, maxLength int) (string, error) {
 	senderID = strings.TrimSpace(senderID)
 	if senderID == "" {
-		return ErrInvalidSender
+		return "", ErrInvalidSender
 	}
 	recipientID = strings.TrimSpace(recipientID)
 	if recipientID == "" {
-		return ErrInvalidRecipient
-	}
-	if senderID == recipientID {
-		return ErrCannotSendToSelf
+		return "", ErrInvalidRecipient
 	}
 
-	if _, err := validation.ValidateMultiLine(content, MaxLetterContentLength); err != nil {
+	normalized, err := validation.ValidateLegacyComment(content, maxLength)
+	if err != nil {
 		if errors.Is(err, validation.ErrEmpty) {
-			return ErrEmptyContent
+			return "", ErrEmptyContent
 		}
 		if errors.Is(err, validation.ErrTooLong) {
-			return ErrContentTooLong
+			return "", ErrContentTooLong
 		}
-		return err
+		return "", err
 	}
 
-	return nil
+	return normalized, nil
 }
 
 // ValidatePhrase validates companion phrase text.

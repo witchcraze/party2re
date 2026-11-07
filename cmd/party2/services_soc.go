@@ -138,7 +138,7 @@ func newSocServices(
 	}
 
 	timerService := timer.NewService(valkeyClient)
-	parkService, _ := park.NewService(parkRepo, core.charRepo, park.WithRateLimiter(limiter))
+	parkService, _ := park.NewService(parkRepo, core.charRepo)
 
 	invService, _ := inventory.NewService(core.invRepo)
 	var depotMgr home.DepotManager

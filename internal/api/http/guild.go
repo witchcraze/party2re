@@ -9,6 +9,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/pagination"
 )
 
@@ -437,8 +438,11 @@ func (h *Handler) writeGuildError(w http.ResponseWriter, err error) {
 		errors.Is(err, guild.ErrMemberNotPending),
 		errors.Is(err, guild.ErrMemberIsPending),
 		errors.Is(err, guild.ErrNoticeTooLong),
+		errors.Is(err, home.ErrContentTooLong),
 		isTextValidationError(err):
 		writeError(w, http.StatusBadRequest, err)
+	case errors.Is(err, home.ErrLetterThrottled):
+		writeError(w, http.StatusTooManyRequests, err)
 	default:
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, err)
