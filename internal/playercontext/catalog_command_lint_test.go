@@ -57,6 +57,23 @@ func TestCatalog_FleaMarketListGatewayContract(t *testing.T) {
 	}
 }
 
+func TestCatalog_GemStoreSendGatewayContract(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	action, ok := playercontext.GetAction("gemstore_send")
+	if !ok || action.OperationID != "executeCharacterAction" {
+		t.Fatalf("incorrect command: %+v", action)
+	}
+	then, params := gatewayContract(t, spec, action.ID)
+	if !slices.Contains(then.Required, "params") || params.Type != "object" || string(params.AdditionalProperties) != "false" || len(params.Properties) != 2 || len(params.Required) != 2 {
+		t.Fatalf("incorrect params: %+v / %+v", then, params)
+	}
+	for _, name := range []string{"recipient_character_id", "item_id"} {
+		if params.Properties[name].Type != "string" || !slices.Contains(params.Required, name) {
+			t.Fatalf("incorrect %s schema: %+v", name, params)
+		}
+	}
+}
+
 func TestCatalog_GatewayContracts(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	tests := []struct {
@@ -74,6 +91,9 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"depot_sort", "", "", false},
 		{"gemstore_sort", "", "", false},
 		{"gemstore_sell", "item_id", "string", true},
+		{"gemstore_buy", "gem_id", "string", true},
+		{"gemstore_synthesize", "recipe_id", "string", true},
+		{"gemstore_appraise", "item_id", "string", true},
 		{"alchemy_synthesize", "recipe_id", "string", true},
 		{"fleamarket_purchase", "listing_id", "string", true},
 		{"fleamarket_cancel", "listing_id", "string", true},
@@ -115,7 +135,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox", "getBlackMarketStatus", "getBlackMarketPoints", "sacrificeBlackMarketItem", "tradeBlackMarketPrize", "getCharactersIdAlchemy", "postCharactersIdAlchemySynthesize", "postCharactersIdAlchemyClaim", "createFleaMarketListing", "purchaseFleaMarketListing", "cancelFleaMarketListing", "listFleaMarketListings", "getFleaMarketListing", "getCharacterFleaMarketListings"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox", "getBlackMarketStatus", "getBlackMarketPoints", "sacrificeBlackMarketItem", "tradeBlackMarketPrize", "getCharactersIdAlchemy", "postCharactersIdAlchemySynthesize", "postCharactersIdAlchemyClaim", "createFleaMarketListing", "purchaseFleaMarketListing", "cancelFleaMarketListing", "listFleaMarketListings", "getFleaMarketListing", "getCharacterFleaMarketListings", "buyGem", "sendGem", "synthesizeGem", "appraiseGemStoreItem", "getCharacterGemBox", "getGemStoreCatalog", "getGemStoreRecipes", "getGemStoreDialogue"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {

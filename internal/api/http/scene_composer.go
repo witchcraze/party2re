@@ -91,6 +91,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "fleamarket":
 			adapter.title, adapter.commands = "フリーマーケット", []string{"fleamarket_list", "fleamarket_purchase", "fleamarket_cancel"}
 			adapter.read = h.fleaMarketSceneData
+		case "gemstore":
+			adapter.title, adapter.commands = "宝石店", []string{"gemstore_buy", "gemstore_sell", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "gemstore_sort"}
+			adapter.read = h.gemStoreSceneData
 		case "secretshop":
 			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase"}
 			adapter.read = h.secretShopSceneData
@@ -208,7 +211,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		}
 		scene.Data = data
 		switch data := data.(type) {
-		case BankSceneData, BlacksmithSceneData, ChapelSceneData:
+		case BankSceneData, BlacksmithSceneData, ChapelSceneData, GemStoreSceneData:
 			scene.Support.Observation = "details"
 		case AlchemySceneData:
 			scene.Support.Observation = "details"
