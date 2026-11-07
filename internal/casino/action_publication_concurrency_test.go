@@ -68,6 +68,7 @@ func TestActionPublication_ConcurrentWagers(t *testing.T) {
 						}
 					}
 					f.fault.resetCalls()
+					f.resetHooks()
 					// Competing identical turns plus the opponent: Doppel may reselect, but never pays twice.
 					errs := testutil.RunRace(
 						func() error { return f.play(ctx, 0, false) },
@@ -85,6 +86,9 @@ func TestActionPublication_ConcurrentWagers(t *testing.T) {
 					}
 					if room.Round != 0 || room.Pot != 0 || room.WinnerCharacterID == nil {
 						return fmt.Errorf("incomplete settlement: %+v", room)
+					}
+					if hooks := f.getHooks(); len(hooks) != 1 || hooks[0].CharacterID != *room.WinnerCharacterID || hooks[0].GameName != f.hookGameName() {
+						return fmt.Errorf("unexpected concurrent winner hooks: got %+v, want winner %s (%s)", hooks, *room.WinnerCharacterID, f.hookGameName())
 					}
 					for i, actor := range f.actors {
 						acc, err := f.accounts.GetAccount(ctx, actor)
