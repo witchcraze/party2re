@@ -108,12 +108,11 @@ func (s *Service) executeHeavenWish(
 		}
 		msg = "ギルドが神々しい佇まいに生まれ変わりました！"
 
-	case WishRefresh, WishFullRecovery:
+	case WishRefresh:
 		wishName = "元気いっぱいになりたい"
-		desc = "疲労度 -150 % (HP・MP完全回復)"
+		desc = "疲労度 -150 %"
 		char.ReduceTired(150)
-		char.RecoverVitality()
-		msg = "疲労度が 150% 回復し、HPとMPが完全に回復しました！"
+		msg = "疲労度が 150% 回復しました！"
 
 	case WishAllOrbs:
 		wishName = "新しい冒険場所に行きたい"

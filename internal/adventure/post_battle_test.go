@@ -1055,7 +1055,7 @@ func TestAdventure_ExitFatigue_NormalAndCalm_SettlerAndFallback(t *testing.T) {
 		}
 	})
 
-	t.Run("fallback settlement path applies exit fatigue for party and clamps at 100", func(t *testing.T) {
+	t.Run("fallback settlement path applies exit fatigue for party without an upper bound", func(t *testing.T) {
 		p1 := makeStrongHero("fb-1", 15)
 		p2 := makeStrongHero("fb-2", 80)
 		charRepo := &memoryCharRepo{chars: map[string]corecharacter.Character{p1.ID: p1, p2.ID: p2}}
@@ -1082,8 +1082,8 @@ func TestAdventure_ExitFatigue_NormalAndCalm_SettlerAndFallback(t *testing.T) {
 		if got := charRepo.chars[p1.ID].Tired; got != 49 {
 			t.Errorf("p1 Tired = %d, want 49 (15 + 34)", got)
 		}
-		if got := charRepo.chars[p2.ID].Tired; got != 100 {
-			t.Errorf("p2 Tired = %d, want 100 (80 + 34 clamped to 100)", got)
+		if got := charRepo.chars[p2.ID].Tired; got != 114 {
+			t.Errorf("p2 Tired = %d, want 114 (80 + 34, no upper bound)", got)
 		}
 	})
 }

@@ -148,14 +148,14 @@ func TestCharacterApplyCombatSurvival(t *testing.T) {
 	nilChar.ApplyCombatSurvival(50, 10, false)
 }
 
-func TestCharacterFatigueClamping(t *testing.T) {
+func TestCharacterFatigueBounds(t *testing.T) {
 	c := &Character{Tired: 0}
 
 	if c.IsExhausted() {
 		t.Errorf("expected IsExhausted to be false at 0%% tired")
 	}
 
-	// Increments and upper bound clamping
+	// Increments
 	c.AddTired(40)
 	if c.Tired != 40 || c.IsExhausted() {
 		t.Errorf("expected 40%% tired, got %d (exhausted=%v)", c.Tired, c.IsExhausted())
@@ -166,36 +166,36 @@ func TestCharacterFatigueClamping(t *testing.T) {
 		t.Errorf("expected 100%% tired and exhausted, got %d (exhausted=%v)", c.Tired, c.IsExhausted())
 	}
 
-	// Cannot exceed 100
+	// Legacy has no upper bound
 	c.AddTired(30)
-	if c.Tired != 100 {
-		t.Errorf("expected Tired to be clamped at 100, got %d", c.Tired)
+	if c.Tired != 130 || !c.IsExhausted() {
+		t.Errorf("expected 130%% tired and exhausted, got %d (exhausted=%v)", c.Tired, c.IsExhausted())
 	}
 
 	// Negative/zero delta ignored
 	c.AddTired(0)
 	c.AddTired(-10)
-	if c.Tired != 100 {
-		t.Errorf("expected Tired to remain 100, got %d", c.Tired)
+	if c.Tired != 130 {
+		t.Errorf("expected Tired to remain 130, got %d", c.Tired)
 	}
 
-	// Celestial wish drops below 0% as authentic legacy buffer
+	// Celestial wish subtracts from the uncapped value and can drop below 0%
 	c.ReduceTired(150)
-	if c.Tired != -50 || c.IsExhausted() {
-		t.Errorf("expected -50%% tired after ReduceTired(150), got %d (exhausted=%v)", c.Tired, c.IsExhausted())
+	if c.Tired != -20 || c.IsExhausted() {
+		t.Errorf("expected -20%% tired after ReduceTired(150), got %d (exhausted=%v)", c.Tired, c.IsExhausted())
 	}
 
 	// Adding fatigue moves upward from negative buffer
-	c.AddTired(20)
-	if c.Tired != -30 || c.IsExhausted() {
-		t.Errorf("expected -30%% tired after AddTired(20), got %d (exhausted=%v)", c.Tired, c.IsExhausted())
+	c.AddTired(10)
+	if c.Tired != -10 || c.IsExhausted() {
+		t.Errorf("expected -10%% tired after AddTired(10), got %d (exhausted=%v)", c.Tired, c.IsExhausted())
 	}
 
 	// Negative/zero delta ignored for ReduceTired
 	c.ReduceTired(0)
 	c.ReduceTired(-20)
-	if c.Tired != -30 {
-		t.Errorf("expected Tired to remain -30, got %d", c.Tired)
+	if c.Tired != -10 {
+		t.Errorf("expected Tired to remain -10, got %d", c.Tired)
 	}
 
 	// Sleep resets to 0

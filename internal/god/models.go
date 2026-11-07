@@ -45,7 +45,6 @@ const (
 	WishGuildRank         = "wish_guild_rank"
 	WishGuildGorgeous     = "wish_guild_gorgeous"
 	WishRefresh           = "wish_refresh"
-	WishFullRecovery      = "wish_full_recovery" // alias for wish_refresh
 	WishAllOrbs           = "wish_all_orbs"
 	WishCelestialDragon   = "wish_celestial_dragon"
 	WishGodOfNewWorld     = "wish_god_of_new_world"
