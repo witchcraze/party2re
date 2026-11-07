@@ -7,6 +7,12 @@ import (
 const (
 	NPCName      = "@闇商人"
 	LocationName = "闇市場"
+
+	// MinAccessJobLevel is the legacy goods.cgi yamiichiba discovery requirement.
+	MinAccessJobLevel = 15
+
+	SourceInventory = "inventory"
+	SourceDepot     = "depot"
 )
 
 var (
@@ -28,19 +34,28 @@ type CharacterPoints struct {
 	URarePoints int    `json:"u_rare_points"`
 }
 
-// Status describes black market location, NPC, accumulated points, and available trade prizes.
+// Status describes black market location, NPC, accumulated points, visible trade prizes and sacrifice candidates.
 type Status struct {
-	CharacterID  string  `json:"character_id"`
-	LocationName string  `json:"location_name"`
-	NPCName      string  `json:"npc_name"`
-	RarePoints   int     `json:"rare_points"`
-	URarePoints  int     `json:"u_rare_points"`
-	Prizes       []Prize `json:"prizes"`
-	UPrizes      []Prize `json:"u_prizes"`
+	CharacterID         string               `json:"character_id"`
+	LocationName        string               `json:"location_name"`
+	NPCName             string               `json:"npc_name"`
+	RarePoints          int                  `json:"rare_points"`
+	URarePoints         int                  `json:"u_rare_points"`
+	Prizes              []Prize              `json:"prizes"`
+	UPrizes             []Prize              `json:"u_prizes"`
+	SacrificeCandidates []SacrificeCandidate `json:"sacrifice_candidates"`
 }
 
-// PointsStatus is an alias for Status for backward compatibility.
-type PointsStatus = Status
+// SacrificeCandidate is an owned eligible instance and the points one sacrifice yields.
+type SacrificeCandidate struct {
+	ItemInstanceID   string `json:"item_instance_id"`
+	ItemDefinitionID string `json:"item_definition_id"`
+	ItemName         string `json:"item_name"`
+	Source           string `json:"source"`
+	Quantity         int    `json:"quantity"`
+	RarePoints       int    `json:"rare_points"`
+	URarePoints      int    `json:"u_rare_points"`
+}
 
 type TalkResult struct {
 	CharacterID string `json:"character_id"`

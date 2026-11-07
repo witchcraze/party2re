@@ -3,6 +3,8 @@ package blackmarket_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/blackmarket"
@@ -283,9 +285,10 @@ func TestCatalogLoading(t *testing.T) {
 }
 
 func TestCheckEligibility(t *testing.T) {
-	c := corecharacter.Character{Level: 1}
-	if !blackmarket.CheckEligibility(c) {
-		t.Errorf("expected level 1 character to be eligible under authentic Party2 spec")
+	for jobLevel, want := range map[int]bool{14: false, 15: true} {
+		if got := blackmarket.CheckEligibility(corecharacter.Character{JobLevel: jobLevel}); got != want {
+			t.Errorf("job level %d eligibility = %t", jobLevel, got)
+		}
 	}
 }
 
@@ -308,9 +311,10 @@ func TestGetStatus(t *testing.T) {
 	}
 
 	char := corecharacter.Character{
-		ID:    "char-1",
-		Name:  "Hero",
-		Level: 1,
+		ID:       "char-1",
+		Name:     "Hero",
+		Level:    1,
+		JobLevel: blackmarket.MinAccessJobLevel,
 	}
 	_ = charRepo.Update(ctx, char)
 
@@ -351,7 +355,7 @@ func TestTalkAndInspect(t *testing.T) {
 
 	svc, _ := blackmarket.NewService(charRepo, invRepo, bmRepo, catalog)
 
-	char := corecharacter.Character{ID: "char-talker", Name: "Talker"}
+	char := corecharacter.Character{ID: "char-talker", Name: "Talker", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 
 	talk, err := svc.Talk(ctx, "char-talker")
@@ -392,7 +396,7 @@ func TestSacrificeItem_Inventory(t *testing.T) {
 		blackmarket.WithTransactionProvider(&mockTxProvider{}),
 	)
 
-	char := corecharacter.Character{ID: "char-hero", Name: "Hero"}
+	char := corecharacter.Character{ID: "char-hero", Name: "Hero", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 
 	inv, _ := invRepo.FindByCharacterID(ctx, "char-hero")
@@ -492,7 +496,7 @@ func TestSacrificeItem_Depot(t *testing.T) {
 		blackmarket.WithTransactionProvider(&mockTxProvider{}),
 	)
 
-	char := corecharacter.Character{ID: "char-depot", Name: "DepotUser"}
+	char := corecharacter.Character{ID: "char-depot", Name: "DepotUser", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 
 	dep, _ := depotRepo.FindByCharacterID(ctx, "char-depot")
@@ -551,7 +555,7 @@ func TestSacrificeItem_PreservationOnFailure(t *testing.T) {
 		URarePoints: 5,
 	}
 
-	char := corecharacter.Character{ID: "char-fail", Name: "FailTestChar"}
+	char := corecharacter.Character{ID: "char-fail", Name: "FailTestChar", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 
 	inv, _ := invRepo.FindByCharacterID(ctx, "char-fail")
@@ -632,7 +636,7 @@ func TestSacrificeItem_Depot_StackedItem(t *testing.T) {
 		blackmarket.WithTransactionProvider(&mockTxProvider{}),
 	)
 
-	char := corecharacter.Character{ID: "char-depot-stack", Name: "StackDepotUser"}
+	char := corecharacter.Character{ID: "char-depot-stack", Name: "StackDepotUser", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 
 	dep, _ := depotRepo.FindByCharacterID(ctx, "char-depot-stack")
@@ -713,7 +717,7 @@ func TestTradePrize_ToDepot(t *testing.T) {
 	char := corecharacter.Character{
 		ID:       "char-trader",
 		Name:     "Trader",
-		JobLevel: 10,
+		JobLevel: blackmarket.MinAccessJobLevel,
 	}
 	_ = charRepo.Update(ctx, char)
 
@@ -799,11 +803,10 @@ func TestTradePrize_DepotFull(t *testing.T) {
 		blackmarket.WithTransactionProvider(&mockTxProvider{}),
 	)
 
-	// Level 0 character has base depot capacity 5
 	char := corecharacter.Character{
 		ID:       "char-full-depot",
 		Name:     "FullDepotUser",
-		JobLevel: 0,
+		JobLevel: blackmarket.MinAccessJobLevel,
 	}
 	_ = charRepo.Update(ctx, char)
 
@@ -813,9 +816,9 @@ func TestTradePrize_DepotFull(t *testing.T) {
 	}
 
 	dep, _ := depotRepo.FindByCharacterID(ctx, "char-full-depot")
-	dep.Capacity = 5
-	for i := 1; i <= 5; i++ {
-		dummyInst, _ := coreitem.NewInstance("unique-item-"+string(rune('A'+i)), 1)
+	dep.Capacity = depot.CalculateCapacity(char.JobLevel, dep.ExDepot, char.OverDepot)
+	for i := 0; i < dep.Capacity; i++ {
+		dummyInst, _ := coreitem.NewInstance(fmt.Sprintf("unique-item-%d", i), 1)
 		_ = dep.AddItem(dummyInst)
 	}
 	_ = depotRepo.Save(ctx, dep)
@@ -860,9 +863,6 @@ func TestValidationErrors(t *testing.T) {
 	if _, err := svc.GetStatus(ctx, ""); err != blackmarket.ErrCharacterNotFound {
 		t.Errorf("expected ErrCharacterNotFound, got %v", err)
 	}
-	if _, err := svc.GetPointsStatus(ctx, ""); err != blackmarket.ErrCharacterNotFound {
-		t.Errorf("expected ErrCharacterNotFound, got %v", err)
-	}
 	if _, err := svc.Talk(ctx, ""); err != blackmarket.ErrCharacterNotFound {
 		t.Errorf("expected ErrCharacterNotFound, got %v", err)
 	}
@@ -883,7 +883,7 @@ func TestValidationErrors(t *testing.T) {
 	}
 
 	// Depot not configured
-	char := corecharacter.Character{ID: "char-nodepot"}
+	char := corecharacter.Character{ID: "char-nodepot", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 	if _, err := svc.TradePrize(ctx, "char-nodepot", "bm_prize_087"); err != blackmarket.ErrDepotNotConfigured {
 		t.Errorf("expected ErrDepotNotConfigured, got %v", err)
@@ -941,7 +941,7 @@ func TestPrizeItemDefinitionsParity(t *testing.T) {
 		t.Fatalf("failed to create black market service: %v", err)
 	}
 
-	char := corecharacter.Character{ID: "char-parity-test", Name: "Parity Hero", JobLevel: 10}
+	char := corecharacter.Character{ID: "char-parity-test", Name: "Parity Hero", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 
 	status, err := svc.GetStatus(ctx, "char-parity-test")
@@ -1006,6 +1006,163 @@ func TestPrizeItemDefinitionsParity(t *testing.T) {
 	for i, tc := range testCases {
 		if dep.Items[i].DefinitionID != tc.expectedDefID {
 			t.Errorf("depot item %d has definition ID %s, expected %s", i, dep.Items[i].DefinitionID, tc.expectedDefID)
+		}
+	}
+}
+
+type blackMarketObservationFixture struct {
+	chars *mockCharacterRepo
+	inv   *mockInventoryRepo
+	dep   *mockDepotRepo
+	bm    *mockBlackMarketRepo
+	svc   *blackmarket.Service
+}
+
+func newBlackMarketObservationFixture(t *testing.T, jobLevel int) *blackMarketObservationFixture {
+	t.Helper()
+	f := &blackMarketObservationFixture{chars: newMockCharacterRepo(), inv: newMockInventoryRepo(), dep: newMockDepotRepo(), bm: newMockBlackMarketRepo()}
+	f.chars.characters["hero"] = corecharacter.Character{ID: "hero", JobLevel: jobLevel}
+	catalog, err := blackmarket.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.svc, err = blackmarket.NewService(f.chars, f.inv, f.bm, catalog, blackmarket.WithDepotRepository(f.dep), blackmarket.WithItemDefinitionProvider(newMockItemDefProvider()), blackmarket.WithTransactionProvider(&mockTxProvider{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+func TestAccessRequiresDiscoveryJobLevelWithoutMutation(t *testing.T) {
+	ctx := context.Background()
+	f := newBlackMarketObservationFixture(t, blackmarket.MinAccessJobLevel-1)
+	f.bm.points["hero"] = blackmarket.CharacterPoints{CharacterID: "hero", RarePoints: 10}
+	inv, _ := coreinventory.New("hero")
+	rare, _ := coreitem.NewInstance("weapon-29", 1)
+	inv.Items = append(inv.Items, rare)
+	f.inv.inventories["hero"] = inv
+
+	for name, run := range map[string]func() error{
+		"status":    func() error { _, err := f.svc.GetStatus(ctx, "hero"); return err },
+		"talk":      func() error { _, err := f.svc.Talk(ctx, "hero"); return err },
+		"inspect":   func() error { _, err := f.svc.Inspect(ctx, "hero"); return err },
+		"sacrifice": func() error { _, err := f.svc.SacrificeItem(ctx, "hero", rare.ID); return err },
+		"trade":     func() error { _, err := f.svc.TradePrize(ctx, "hero", "bm_prize_087"); return err },
+	} {
+		if err := run(); !errors.Is(err, blackmarket.ErrAccessDenied) {
+			t.Errorf("%s: got %v", name, err)
+		}
+	}
+	if len(f.inv.inventories["hero"].Items) != 1 || f.bm.points["hero"].RarePoints != 10 || len(f.dep.depots) != 0 {
+		t.Fatalf("denied access mutated assets: %+v %+v %+v", f.inv.inventories, f.bm.points, f.dep.depots)
+	}
+}
+
+func TestGetStatusObservesVisiblePrizesAndCandidates(t *testing.T) {
+	ctx := context.Background()
+	f := newBlackMarketObservationFixture(t, blackmarket.MinAccessJobLevel)
+
+	empty, err := f.svc.GetStatus(ctx, "hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty.UPrizes == nil || len(empty.UPrizes) != 0 || len(empty.Prizes) != 12 || empty.SacrificeCandidates == nil || len(empty.SacrificeCandidates) != 0 {
+		t.Fatalf("empty status: %+v", empty)
+	}
+
+	inv, _ := coreinventory.New("hero")
+	rare, _ := coreitem.NewInstance("weapon-29", 1)
+	common, _ := coreitem.NewInstance("weapon-01", 1)
+	inv.Items = append(inv.Items, common, rare)
+	f.inv.inventories["hero"] = inv
+	dep, _ := depot.NewDepotWithCapacity("hero", blackmarket.MinAccessJobLevel, 0, 0)
+	ultra, _ := coreitem.NewInstance("item-268", 2)
+	dep.Items = append(dep.Items, ultra)
+	f.dep.depots["hero"] = dep
+	f.bm.points["hero"] = blackmarket.CharacterPoints{CharacterID: "hero", URarePoints: 1}
+
+	status, err := f.svc.GetStatus(ctx, "hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.UPrizes) != 12 {
+		t.Fatalf("positive balance hides u-prizes: %d", len(status.UPrizes))
+	}
+	want := []blackmarket.SacrificeCandidate{
+		{ItemInstanceID: rare.ID, ItemDefinitionID: "weapon-29", ItemName: "weapon-29", Source: blackmarket.SourceInventory, Quantity: 1, RarePoints: 1},
+		{ItemInstanceID: ultra.ID, ItemDefinitionID: "item-268", ItemName: "item-268", Source: blackmarket.SourceDepot, Quantity: 2, URarePoints: 50},
+	}
+	if !reflect.DeepEqual(status.SacrificeCandidates, want) {
+		t.Fatalf("candidates: %+v", status.SacrificeCandidates)
+	}
+}
+
+type failingCharacterReads struct{ *mockCharacterRepo }
+
+func (failingCharacterReads) FindByID(context.Context, string) (corecharacter.Character, error) {
+	return corecharacter.Character{}, errBlackMarketStorage
+}
+
+type failingInventoryReads struct{ *mockInventoryRepo }
+
+func (failingInventoryReads) FindByCharacterID(context.Context, string) (coreinventory.Inventory, error) {
+	return coreinventory.Inventory{}, errBlackMarketStorage
+}
+
+type failingDepotReads struct{ *mockDepotRepo }
+
+func (failingDepotReads) FindByCharacterID(context.Context, string) (depot.Depot, error) {
+	return depot.Depot{}, errBlackMarketStorage
+}
+
+type missingDepotRows struct{ *mockDepotRepo }
+
+func (missingDepotRows) FindByCharacterID(context.Context, string) (depot.Depot, error) {
+	return depot.Depot{}, depot.ErrNotFound
+}
+
+func (r missingDepotRows) Save(context.Context, depot.Depot) error {
+	r.depots["written"] = depot.Depot{}
+	return nil
+}
+
+var errBlackMarketStorage = errors.New("private storage failure")
+
+func TestGetStatusTreatsMissingDepotAsEmptyWithoutCreatingIt(t *testing.T) {
+	f := newBlackMarketObservationFixture(t, blackmarket.MinAccessJobLevel)
+	catalog, _ := blackmarket.LoadDefaultCatalog()
+	svc, err := blackmarket.NewService(f.chars, f.inv, f.bm, catalog, blackmarket.WithDepotRepository(missingDepotRows{f.dep}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := svc.GetStatus(context.Background(), "hero")
+	if err != nil || len(status.SacrificeCandidates) != 0 || len(f.dep.depots) != 0 {
+		t.Fatalf("missing depot: %+v %v %+v", status, err, f.dep.depots)
+	}
+}
+
+func TestGetStatusRequiredReadFailuresKeepTheirCause(t *testing.T) {
+	ctx := context.Background()
+	f := newBlackMarketObservationFixture(t, blackmarket.MinAccessJobLevel)
+	catalog, _ := blackmarket.LoadDefaultCatalog()
+	for name, build := range map[string]func() (*blackmarket.Service, error){
+		"character": func() (*blackmarket.Service, error) {
+			return blackmarket.NewService(failingCharacterReads{f.chars}, f.inv, f.bm, catalog, blackmarket.WithDepotRepository(f.dep))
+		},
+		"inventory": func() (*blackmarket.Service, error) {
+			return blackmarket.NewService(f.chars, failingInventoryReads{f.inv}, f.bm, catalog, blackmarket.WithDepotRepository(f.dep))
+		},
+		"depot": func() (*blackmarket.Service, error) {
+			return blackmarket.NewService(f.chars, f.inv, f.bm, catalog, blackmarket.WithDepotRepository(failingDepotReads{f.dep}))
+		},
+	} {
+		svc, err := build()
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetStatus(ctx, "hero")
+		if !errors.Is(err, errBlackMarketStorage) || status != nil {
+			t.Errorf("%s: status=%+v err=%v", name, status, err)
 		}
 	}
 }

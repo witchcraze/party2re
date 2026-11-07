@@ -12,8 +12,8 @@ In authentic Party2, the Black Market is not a gold shop. It operates purely as 
 
 ### 1. Eligibility & Access Control
 
-- **Unconditional Access**: In legacy Party2, any character may enter `闇市場` without level or progression restrictions (`CheckEligibility` returns true).
-- **Authentication**: All endpoints require character ownership authentication.
+- **Discovery requirement**: Legacy `闇市場` is reachable only through the Oracle's hidden `＠やみいちば` action, which returns without moving the character below `job_lv` 15 (`lib/goods.cgi:51–56`). `CheckEligibility` applies the same threshold to scene entry, town discovery, the two commands and the retained NPC operations; rejected operations return `ErrAccessDenied` without moving assets.
+- **Authentication**: All operations require character ownership authentication.
 
 ---
 
@@ -79,6 +79,32 @@ In authentic Party2, the Black Market is not a gold shop. It operates purely as 
   - `"レアポイントにより取引できるアイテムが違う…"`
 - **Inspection (`Inspect`)**: Formats legacy CGI inspection quote:
   - `"…お前の魂で取引したいのか？"`
+
+---
+
+## 5. Gateway and Retained Routes
+
+Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and a paged list of eligible sacrifice candidates through character context. Observation never sacrifices, trades, chooses dialogue or creates a Depot. A required read failure fails the whole observation, and a qualification loss shows `selection_unavailable` with a safe back. See the [context and recovery contract](../architecture/client-agent-api.md).
+
+| Former or retained REST operation | Supported replacement / disposition |
+| --- | --- |
+| GET `/characters/{id}/blackmarket`, GET `.../blackmarket/points` (retired) | POST `scene_enter` with `destination:blackmarket`, then GET `/api/v1/characters/{id}/context` |
+| POST `.../blackmarket/sacrifice` (retired) | POST `/api/v1/characters/{id}/actions`, `action:blackmarket_sacrifice`, explicit `params.item_instance_id` |
+| POST `.../blackmarket/trade` (retired) | Same Gateway, `action:blackmarket_trade`, explicit `params.prize_id`; the result keeps the delivered Depot instance and remaining points |
+| POST `.../blackmarket/talk`, POST `.../blackmarket/inspect` (retained) | Existing dialogue; legacy action effects remain unresolved under #947 |
+
+### Scoped legacy action reconciliation
+
+| Legacy action (`lib/black_market.cgi`) | Go disposition | Known difference |
+| --- | --- | --- |
+| `header_html` (97–106) | `rare_points`, `u_rare_points` | Equipped names are not repeated in the scene. |
+| `とりひき` without a target (132–152) | `prizes`, `u_prizes`; `u_prizes` is empty while U-Rare points are zero | None for listing visibility. |
+| `とりひき` with a target (116–125, 135–144) | `blackmarket_trade` | Explicit prize ID replaces the name. A U-Rare trade at zero points rejects instead of redisplaying the list; neither moves assets. Full-Depot delivery remains #1139's specification. |
+| `ささげる` without a target (168–172, 200–250, 310) | `sacrifice_candidates` | Lists eligible instances only, inventory then Depot; legacy lists every owned item and rejects common ones when offered. The empty-handed message is an empty array. |
+| `ささげる` with a target (179–300) | `blackmarket_sacrifice` | Explicit instance ID replaces legacy's Depot-first name match. Sacrificing an equipped item is still blocked by #1140, and the candidate list does not mark equipped rows. |
+| Shared `はなす` (`lib/system.cgi:240–246`), `shiraberu_npc` (81–83) | Retained talk/inspect POSTs | Legacy NPC messages enter the facility log; Go returns them only to the caller. |
+
+Legacy successful actions also apply the shared action cooldown and write `npc_com` to the facility log, while list views set `$act_time = 0`. Go applies neither effect to these commands; this is the same unresolved cooldown, presence and log reconciliation as other migrated facilities, and the Gateway connection does not certify parity for it.
 
 ---
 

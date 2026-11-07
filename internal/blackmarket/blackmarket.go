@@ -73,10 +73,9 @@ func WithDepotRepository(depotRepo DepotRepository) ServiceOption {
 	}
 }
 
-// CheckEligibility returns whether a character can enter the Black Market.
-// In the authentic Party2 specification, any character can enter unconditionally.
-func CheckEligibility(_ corecharacter.Character) bool {
-	return true
+// CheckEligibility reports the legacy discovery requirement (goods.cgi yamiichiba).
+func CheckEligibility(c corecharacter.Character) bool {
+	return c.JobLevel >= MinAccessJobLevel
 }
 
 func NewService(
@@ -104,15 +103,29 @@ func NewService(
 	return svc, nil
 }
 
-// GetStatus returns Black Market status including character points and prize offerings.
-func (s *Service) GetStatus(ctx context.Context, characterID string) (*Status, error) {
+// accessibleCharacter keeps storage failures distinct from a missing character.
+func (s *Service) accessibleCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
 	if strings.TrimSpace(characterID) == "" {
-		return nil, ErrCharacterNotFound
+		return corecharacter.Character{}, ErrCharacterNotFound
 	}
-
 	char, err := s.characterRepo.FindByID(ctx, characterID)
+	if errors.Is(err, corecharacter.ErrNotFound) {
+		return corecharacter.Character{}, ErrCharacterNotFound
+	}
 	if err != nil {
-		return nil, ErrCharacterNotFound
+		return corecharacter.Character{}, err
+	}
+	if !CheckEligibility(char) {
+		return corecharacter.Character{}, ErrAccessDenied
+	}
+	return char, nil
+}
+
+// GetStatus returns the owned points, visible prizes and sacrifice candidates without mutation.
+func (s *Service) GetStatus(ctx context.Context, characterID string) (*Status, error) {
+	char, err := s.accessibleCharacter(ctx, characterID)
+	if err != nil {
+		return nil, err
 	}
 
 	points := CharacterPoints{CharacterID: characterID, RarePoints: 0, URarePoints: 0}
@@ -125,7 +138,11 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (*Status, e
 	}
 
 	prizes := s.catalog.RegularPrizes()
-	uPrizes := s.catalog.UPrizes()
+	// Legacy torihiki offers U-Rare prizes only while the balance is positive.
+	uPrizes := []Prize{}
+	if points.URarePoints > 0 {
+		uPrizes = s.catalog.UPrizes()
+	}
 	if s.itemDefs != nil {
 		for i := range prizes {
 			if def, err := s.itemDefs.FindByID(prizes[i].ItemDefinitionID); err == nil && def.Name != "" {
@@ -139,31 +156,65 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (*Status, e
 		}
 	}
 
+	candidates, err := s.sacrificeCandidates(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Status{
-		CharacterID:  char.ID,
-		LocationName: LocationName,
-		NPCName:      NPCName,
-		RarePoints:   points.RarePoints,
-		URarePoints:  points.URarePoints,
-		Prizes:       prizes,
-		UPrizes:      uPrizes,
+		CharacterID:         char.ID,
+		LocationName:        LocationName,
+		NPCName:             NPCName,
+		RarePoints:          points.RarePoints,
+		URarePoints:         points.URarePoints,
+		Prizes:              prizes,
+		UPrizes:             uPrizes,
+		SacrificeCandidates: candidates,
 	}, nil
 }
 
-// GetPointsStatus is an alias for GetStatus for compatibility.
-func (s *Service) GetPointsStatus(ctx context.Context, characterID string) (*Status, error) {
-	return s.GetStatus(ctx, characterID)
+// sacrificeCandidates lists eligible inventory items before depot items, the
+// order SacrificeItem resolves them in. A depot row that does not exist yet is empty.
+func (s *Service) sacrificeCandidates(ctx context.Context, characterID string) ([]SacrificeCandidate, error) {
+	inv, err := s.inventoryRepo.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	candidates := []SacrificeCandidate{}
+	add := func(source string, items []coreitem.Instance) {
+		for _, it := range items {
+			yield, eligible := s.catalog.GetSacrificeYield(it.DefinitionID)
+			if !eligible {
+				continue
+			}
+			name := it.DefinitionID
+			if s.itemDefs != nil {
+				if def, err := s.itemDefs.FindByID(it.DefinitionID); err == nil && def.Name != "" {
+					name = def.Name
+				}
+			}
+			candidates = append(candidates, SacrificeCandidate{
+				ItemInstanceID: it.ID, ItemDefinitionID: it.DefinitionID, ItemName: name, Source: source,
+				Quantity: it.Quantity, RarePoints: yield.RarePoints, URarePoints: yield.URarePoints,
+			})
+		}
+	}
+	add(SourceInventory, inv.Items)
+	if s.depotRepo != nil {
+		dep, err := s.depotRepo.FindByCharacterID(ctx, characterID)
+		if err != nil && !errors.Is(err, depot.ErrNotFound) {
+			return nil, err
+		}
+		add(SourceDepot, dep.Items)
+	}
+	return candidates, nil
 }
 
 // Talk returns NPC @闇商人 information.
 func (s *Service) Talk(ctx context.Context, characterID string) (*TalkResult, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, ErrCharacterNotFound
-	}
-
-	char, err := s.characterRepo.FindByID(ctx, characterID)
+	char, err := s.accessibleCharacter(ctx, characterID)
 	if err != nil {
-		return nil, ErrCharacterNotFound
+		return nil, err
 	}
 
 	return &TalkResult{
@@ -174,19 +225,7 @@ func (s *Service) Talk(ctx context.Context, characterID string) (*TalkResult, er
 
 // Inspect returns NPC @闇商人 inspection information matching legacy Party2 CGI.
 func (s *Service) Inspect(ctx context.Context, characterID string) (*TalkResult, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, ErrCharacterNotFound
-	}
-
-	char, err := s.characterRepo.FindByID(ctx, characterID)
-	if err != nil {
-		return nil, ErrCharacterNotFound
-	}
-
-	return &TalkResult{
-		CharacterID: char.ID,
-		NPCName:     NPCName,
-	}, nil
+	return s.Talk(ctx, characterID)
 }
 
 // SacrificeItem consumes an eligible rare item instance from character inventory or depot and credits points.
@@ -208,6 +247,9 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 				return ErrCharacterNotFound
 			}
 			return err
+		}
+		if !CheckEligibility(char) {
+			return ErrAccessDenied
 		}
 
 		// 2. Lock inventory (Tier 3)
@@ -334,6 +376,9 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 				return ErrCharacterNotFound
 			}
 			return err
+		}
+		if !CheckEligibility(char) {
+			return ErrAccessDenied
 		}
 
 		// 2. Lock depot (Tier 5) and verify capacity

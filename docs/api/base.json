@@ -460,18 +460,6 @@
         ],
         "type": "object"
       },
-      "BlackMarketSacrificeRequest": {
-        "properties": {
-          "item_instance_id": {
-            "example": "inst-12345",
-            "type": "string"
-          }
-        },
-        "required": [
-          "item_instance_id"
-        ],
-        "type": "object"
-      },
       "BlackMarketSacrificeResult": {
         "properties": {
           "character_id": {
@@ -523,51 +511,6 @@
         ],
         "type": "object"
       },
-      "BlackMarketStatus": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "example": "闇市場",
-            "type": "string"
-          },
-          "npc_name": {
-            "example": "@闇商人",
-            "type": "string"
-          },
-          "prizes": {
-            "items": {
-              "$ref": "#/components/schemas/BlackMarketPrize"
-            },
-            "type": "array"
-          },
-          "rare_points": {
-            "example": 10,
-            "type": "integer"
-          },
-          "u_prizes": {
-            "items": {
-              "$ref": "#/components/schemas/BlackMarketPrize"
-            },
-            "type": "array"
-          },
-          "u_rare_points": {
-            "example": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "rare_points",
-          "u_rare_points",
-          "prizes",
-          "u_prizes"
-        ],
-        "type": "object"
-      },
       "BlackMarketTalkResult": {
         "properties": {
           "character_id": {
@@ -586,18 +529,6 @@
           "character_id",
           "npc_name",
           "dialogue"
-        ],
-        "type": "object"
-      },
-      "BlackMarketTradeRequest": {
-        "properties": {
-          "prize_id": {
-            "example": "bm_prize_087",
-            "type": "string"
-          }
-        },
-        "required": [
-          "prize_id"
         ],
         "type": "object"
       },
@@ -2426,6 +2357,9 @@
                       "$ref": "#/components/schemas/DepotSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/BlackMarketSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/BlacksmithSceneData"
                     },
                     {
@@ -2844,6 +2778,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/DepotSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "blackmarket"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/BlackMarketSceneData"
                 },
                 "support": {
                   "properties": {
@@ -3353,6 +3317,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "blackmarket",
                         "blacksmith",
                         "chapel",
                         "depot",
@@ -3446,6 +3411,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "blackmarket",
                         "blacksmith",
                         "chapel",
                         "depot",
@@ -4823,6 +4789,76 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "blackmarket_sacrifice"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_instance_id": {
+                      "type": "string",
+                      "description": "Explicit owned inventory or depot instance. Eligibility and ownership stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_instance_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "blackmarket_trade"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "prize_id": {
+                      "type": "string",
+                      "description": "Explicit prize ID from the observed prizes or u_prizes."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "prize_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "gemstore_sell"
                 }
               },
@@ -5239,6 +5275,7 @@
             "enum": [
               "town",
               "bank",
+              "blackmarket",
               "blacksmith",
               "chapel",
               "depot",
@@ -5360,6 +5397,7 @@
                 "enum": [
                   "town",
                   "bank",
+                  "blackmarket",
                   "blacksmith",
                   "chapel",
                   "depot",
@@ -15999,6 +16037,124 @@
           "controls"
         ],
         "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Directions use the selected floor geometry, not catalog categories. No private roster inventory, event flags or provisional rewards."
+      },
+      "BlackMarketSacrificeCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Owned eligible instance and the points one sacrifice yields.",
+        "properties": {
+          "item_instance_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "item_definition_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "item_name": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "inventory",
+              "depot"
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "rare_points": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "u_rare_points": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "item_instance_id",
+          "item_definition_id",
+          "item_name",
+          "source",
+          "quantity",
+          "rare_points",
+          "u_rare_points"
+        ]
+      },
+      "BlackMarketSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Owned points, visible prizes and paged sacrifice candidates. Observation never sacrifices, trades, chooses dialogue or creates a depot.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "character_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "location_name": {
+            "type": "string"
+          },
+          "npc_name": {
+            "type": "string"
+          },
+          "rare_points": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "u_rare_points": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "prizes": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketPrize"
+            }
+          },
+          "u_prizes": {
+            "type": "array",
+            "maxItems": 12,
+            "description": "Empty while u_rare_points is zero.",
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketPrize"
+            }
+          },
+          "sacrifice_candidates": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Current page: eligible inventory instances, then depot instances.",
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketSacrificeCandidate"
+            }
+          },
+          "candidate_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total eligible instances before paging."
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          }
+        },
+        "required": [
+          "parent",
+          "character_id",
+          "location_name",
+          "npc_name",
+          "rare_points",
+          "u_rare_points",
+          "prizes",
+          "u_prizes",
+          "sacrifice_candidates",
+          "candidate_count",
+          "page"
+        ]
       }
     },
     "securitySchemes": {

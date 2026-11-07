@@ -1719,15 +1719,48 @@
         ],
         "type": "object"
       },
-      "BlackMarketSacrificeRequest": {
+      "BlackMarketSacrificeCandidate": {
+        "additionalProperties": false,
+        "description": "Owned eligible instance and the points one sacrifice yields.",
         "properties": {
-          "item_instance_id": {
-            "example": "inst-12345",
+          "item_definition_id": {
+            "maxLength": 128,
             "type": "string"
+          },
+          "item_instance_id": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          },
+          "quantity": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "rare_points": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "inventory",
+              "depot"
+            ]
+          },
+          "u_rare_points": {
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
-          "item_instance_id"
+          "item_instance_id",
+          "item_definition_id",
+          "item_name",
+          "source",
+          "quantity",
+          "rare_points",
+          "u_rare_points"
         ],
         "type": "object"
       },
@@ -1782,48 +1815,76 @@
         ],
         "type": "object"
       },
-      "BlackMarketStatus": {
+      "BlackMarketSceneData": {
+        "additionalProperties": false,
+        "description": "Owned points, visible prizes and paged sacrifice candidates. Observation never sacrifices, trades, chooses dialogue or creates a depot.",
         "properties": {
+          "candidate_count": {
+            "description": "Total eligible instances before paging.",
+            "minimum": 0,
+            "type": "integer"
+          },
           "character_id": {
+            "maxLength": 128,
             "type": "string"
           },
           "location_name": {
-            "example": "闇市場",
             "type": "string"
           },
           "npc_name": {
-            "example": "@闇商人",
+            "type": "string"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "parent": {
+            "const": "town",
             "type": "string"
           },
           "prizes": {
             "items": {
               "$ref": "#/components/schemas/BlackMarketPrize"
             },
+            "maxItems": 12,
             "type": "array"
           },
           "rare_points": {
-            "example": 10,
+            "minimum": 0,
             "type": "integer"
           },
+          "sacrifice_candidates": {
+            "description": "Current page: eligible inventory instances, then depot instances.",
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketSacrificeCandidate"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
           "u_prizes": {
+            "description": "Empty while u_rare_points is zero.",
             "items": {
               "$ref": "#/components/schemas/BlackMarketPrize"
             },
+            "maxItems": 12,
             "type": "array"
           },
           "u_rare_points": {
-            "example": 2,
+            "minimum": 0,
             "type": "integer"
           }
         },
         "required": [
+          "parent",
           "character_id",
           "location_name",
           "npc_name",
           "rare_points",
           "u_rare_points",
           "prizes",
-          "u_prizes"
+          "u_prizes",
+          "sacrifice_candidates",
+          "candidate_count",
+          "page"
         ],
         "type": "object"
       },
@@ -1845,18 +1906,6 @@
           "character_id",
           "npc_name",
           "dialogue"
-        ],
-        "type": "object"
-      },
-      "BlackMarketTradeRequest": {
-        "properties": {
-          "prize_id": {
-            "example": "bm_prize_087",
-            "type": "string"
-          }
-        },
-        "required": [
-          "prize_id"
         ],
         "type": "object"
       },
@@ -4395,6 +4444,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "blackmarket",
                         "blacksmith",
                         "chapel",
                         "depot",
@@ -4516,6 +4566,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "blackmarket",
                         "blacksmith",
                         "chapel",
                         "depot",
@@ -5851,6 +5902,76 @@
                   },
                   "required": [
                     "slot"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "blackmarket_sacrifice",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_instance_id": {
+                      "description": "Explicit owned inventory or depot instance. Eligibility and ownership stay service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_instance_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "blackmarket_trade",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "prize_id": {
+                      "description": "Explicit prize ID from the observed prizes or u_prizes.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "prize_id"
                   ],
                   "type": "object"
                 }
@@ -13419,6 +13540,7 @@
                 "enum": [
                   "town",
                   "bank",
+                  "blackmarket",
                   "blacksmith",
                   "chapel",
                   "depot",
@@ -13557,6 +13679,7 @@
             "enum": [
               "town",
               "bank",
+              "blackmarket",
               "blacksmith",
               "chapel",
               "depot",
@@ -13662,6 +13785,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/DepotSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BlackMarketSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/BlacksmithSceneData"
@@ -14077,6 +14203,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/DepotSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "blackmarket"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/BlackMarketSceneData"
                 },
                 "support": {
                   "properties": {
@@ -18864,99 +19020,6 @@
         ]
       }
     },
-    "/characters/{id}/blackmarket": {
-      "get": {
-        "description": "Returns current Black Market status, points balances, and prize catalogs for an authenticated character.",
-        "operationId": "getBlackMarketStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/BlackMarketStatus"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Black market status and trade prize catalogs"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character or prize not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected storage or service failure"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get black market status and prize catalogs",
-        "tags": [
-          "Black Market"
-        ]
-      }
-    },
     "/characters/{id}/blackmarket/inspect": {
       "post": {
         "description": "Inspects NPC @闇商人 in the Black Market.",
@@ -19043,216 +19106,6 @@
         ]
       }
     },
-    "/characters/{id}/blackmarket/points": {
-      "get": {
-        "description": "Returns character's Rare Points and U-Rare Points balances along with regular and ultra-rare trade prize catalogs.",
-        "operationId": "getBlackMarketPoints",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/BlackMarketStatus"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Black Market points and prize catalogs status"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character or prize not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected storage or service failure"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Black Market Rare Points status and prize catalogs",
-        "tags": [
-          "Black Market"
-        ]
-      }
-    },
-    "/characters/{id}/blackmarket/sacrifice": {
-      "post": {
-        "description": "Sacrifices an eligible rare weapon, armor, or item from inventory or depot to earn Rare Points or U-Rare Points.",
-        "operationId": "sacrificeBlackMarketItem",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BlackMarketSacrificeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/BlackMarketSacrificeResult"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Item sacrifice successful"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request or rejected trade"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character or prize not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected storage or service failure"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Sacrifice rare item for Rare Points or U-Rare Points",
-        "tags": [
-          "Black Market"
-        ]
-      }
-    },
     "/characters/{id}/blackmarket/talk": {
       "post": {
         "description": "Receives dialogue lines from broker @闇商人.",
@@ -19334,123 +19187,6 @@
           }
         ],
         "summary": "Converse with black market merchant @闇商人",
-        "tags": [
-          "Black Market"
-        ]
-      }
-    },
-    "/characters/{id}/blackmarket/trade": {
-      "post": {
-        "description": "Trades accumulated Rare Points or U-Rare Points for an exclusive black market prize item delivered to depot.",
-        "operationId": "tradeBlackMarketPrize",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BlackMarketTradeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/BlackMarketTradeResult"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Prize trade exchange successful"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request or rejected trade"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character or prize not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected storage or service failure"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Exchange Rare Points for an exclusive black market prize",
         "tags": [
           "Black Market"
         ]
