@@ -423,3 +423,30 @@ func TestGVG_ConcurrentJoinRoom_GuildMemberLimit_Valkey(t *testing.T) {
 	}
 	testConcurrentGvGGuildMemberLimitStress(t, repo)
 }
+
+func TestGVG_WithRoomLock_HonorsCallerDeadlineBeyondDefault(t *testing.T) {
+	repo, err := gvg.NewValkeyRoomRepository(newTestValkeyClient())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const roomID = "room-long-deadline"
+
+	held := make(chan struct{})
+	holderDone := make(chan struct{})
+	go func() {
+		defer close(holderDone)
+		_ = repo.WithRoomLock(context.Background(), roomID, func(context.Context) error {
+			close(held)
+			time.Sleep(gvg.DefaultRoomLockTimeout + 300*time.Millisecond)
+			return nil
+		})
+	}()
+	<-held
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := repo.WithRoomLock(ctx, roomID, func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("waiter with 30s deadline must outwait the default timeout, got: %v", err)
+	}
+	<-holderDone
+}

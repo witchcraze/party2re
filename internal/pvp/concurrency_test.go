@@ -321,3 +321,30 @@ func TestPVP_ConcurrentJoinRoom_Valkey(t *testing.T) {
 	}
 	testConcurrentJoinRoomStress(t, repo)
 }
+
+func TestPVP_WithRoomLock_HonorsCallerDeadlineBeyondDefault(t *testing.T) {
+	repo, err := pvp.NewValkeyRoomRepository(newTestValkeyClient())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const roomID = "room-long-deadline"
+
+	held := make(chan struct{})
+	holderDone := make(chan struct{})
+	go func() {
+		defer close(holderDone)
+		_ = repo.WithRoomLock(context.Background(), roomID, func(context.Context) error {
+			close(held)
+			time.Sleep(pvp.DefaultRoomLockTimeout + 300*time.Millisecond)
+			return nil
+		})
+	}()
+	<-held
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := repo.WithRoomLock(ctx, roomID, func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("waiter with 30s deadline must outwait the default timeout, got: %v", err)
+	}
+	<-holderDone
+}
