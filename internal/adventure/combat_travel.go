@@ -286,3 +286,47 @@ func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *Normal
 	}
 	return t, nil
 }
+
+// PrepareStoredToolTravel adapts these tools for job50's stored invocation. The
+// consumer registers the port on its JobAssetContext and finishes the returned
+// transition's tail; the stored instance is consumed only through
+// WithJobAssets's outcome, so the transition never consumes a held tool.
+// Transaction: enclosing Command; no independent commit.
+func (s *NormalRunService) PrepareStoredToolTravel(ctx context.Context, r *NormalRun, actor string, reset *corebattle.EquipmentResetContext) (*corebattle.StoredToolTravel, *CombatTravelTransition) {
+	transition := &CombatTravelTransition{}
+	input := func(tool, target string) (CombatTravelInput, error) {
+		if !slices.Contains([]string{"item-066", "item-067", "item-068", "item-069", "item-070", "item-071", "item-083", "item-104", "item-107", "item-150", "item-184"}, tool) {
+			return CombatTravelInput{}, corebattle.ErrUnsupportedEffect
+		}
+		if !strings.HasPrefix(target, "{") {
+			return CombatTravelInput{}, nil // Coordinate tools ignore the remaining text.
+		}
+		return ParseCombatTravelInput(target)
+	}
+	return &corebattle.StoredToolTravel{
+		Validate: func(tool, target string) error {
+			value, err := input(tool, target)
+			if err != nil {
+				return err
+			}
+			return s.ValidateCombatTravel(r, actor, tool, value, reset)
+		},
+		Apply: func(tool, target string, frame corebattle.TargetContext) (corebattle.TargetContext, error) {
+			if ctx.Value(normalMutationContext{}) != r.ID {
+				return frame, ErrRunForbidden
+			}
+			value, err := input(tool, target)
+			if err != nil {
+				return frame, err
+			}
+			t, err := s.ApplyCombatTravel(ctx, r, actor, tool, value, reset)
+			if err != nil {
+				return frame, err
+			}
+			t.Consume = false
+			*transition = t
+			frame.EnemyIDs, frame.MemberOnlyIDs = slices.Clone(r.Enemies), nil
+			return frame, nil
+		},
+	}, transition
+}

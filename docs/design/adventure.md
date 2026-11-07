@@ -439,7 +439,7 @@ identities or roster/reset context reject before mutation. Shared reset belongs 
 retains a pending clear flag separately from confirmed clear history and EX.
 Receipts retain resulting coordinates without rerunning consumption or draws.
 
-The full player/NPC action tail and instance binding remain #1329/#1371;
+The full player/NPC action tail and instance binding remain #1329;
 typed Gateway discovery/submission remains #1330. Transition and bounded SQL
 consumer tests do not certify those integrations. Recorded-job/participant tool
 arguments are separate callbacks (`lib/_data.cgi:1879–1924`).
@@ -516,7 +516,18 @@ wallet changes and created or consumed held instances in the same ambient
 transaction as battle state and receipt. The combat hand is saved in the run; an
 NPC's scavenging, enhanced use or purchase changes only that hand, though a
 purchase still debits the requester. Inventory/save/receipt failure rolls back the operation,
-and committed retries return the receipt without another draw or grant. The
+and committed retries return the receipt without another draw or grant.
+
+With the injected depot port, `WithJobAssets` also locks the requester's depot
+after the inventory and lists its ordered tool rows for job50. The outer
+command's `TargetID` and `Input` are that body's item selector and remaining
+target text, also when job50 is reached indirectly. A consumed outcome removes one
+unit of the selected row. An exchange moves the durable held instance, if any, to
+the selected row's position without a capacity check, as the source rewrite does,
+and equips one unit of that row, keeping instance identity. A selection error
+writes no wallet, hand or depot change; the run keeps only the room/color history,
+and the consumer skips costs, the tail and the interval. Stored travel tools use
+`PrepareStoredToolTravel`, whose transition never consumes a held tool. The
 bounded SQL tests verify this asset boundary; production action/tail composition
 and instance hydration remain with #1329, transport discovery with #1330.
 The [shared modifier contract](battle.md#shared-modifiers-and-callback-outcomes)

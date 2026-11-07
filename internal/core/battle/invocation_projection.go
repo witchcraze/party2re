@@ -67,6 +67,10 @@ func (s LifetimeState) callbackCopy() LifetimeState {
 	for id, history := range s.SkillHistory {
 		s.SkillHistory[id] = maps.Clone(history)
 	}
+	s.StoredToolHistory = maps.Clone(s.StoredToolHistory)
+	for color, history := range s.StoredToolHistory {
+		s.StoredToolHistory[color] = maps.Clone(history)
+	}
 	for i := range s.Actors {
 		s.Actors[i] = s.Actors[i].Clone()
 	}

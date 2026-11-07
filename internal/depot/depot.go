@@ -3,6 +3,7 @@ package depot
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -178,6 +179,12 @@ func (d *Depot) AddItem(instance item.Instance, stackable ...bool) error {
 // even above capacity. Callers must explicitly permit legacy delivery overflow.
 func (d *Depot) AppendDelivery(instance item.Instance) {
 	d.Items = append(d.Items, instance)
+}
+
+// InsertDelivery is AppendDelivery at an existing row position, for source
+// rewrites that replace one row in place. Out-of-range positions append.
+func (d *Depot) InsertDelivery(index int, instance item.Instance) {
+	d.Items = slices.Insert(d.Items, min(max(index, 0), len(d.Items)), instance)
 }
 
 // Consume removes quantity of the item with the given instanceID.

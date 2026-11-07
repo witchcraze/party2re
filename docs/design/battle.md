@@ -689,7 +689,7 @@ payer from an actor's name. Detailed source reconciliation belongs to
 | Book exchange, job86 positions0/3 | Require a held book; position0 also permits an empty durable tool in the library field. Search requesting-player depot order for the first matching stored book. Replace that one row with the durable held tool if nonzero, then set both held projections to the selected book. Other duplicate rows retain order. No match reports selection failure, resets action interval to0 and changes no held/depot state. Position3 alone, on success, suppresses NPC response, applies15%MaxHP risk and writes the skill ban, in that order (`6802–6816,6843–6855,10489–10536`) |
 | Book return, job86 position2 | Held combat item must be a book. Attempt15%MaxMP magic restoration first; then send the **durable** held tool to the **actor-named** depot and clear both held projections. Return is not conditional on MP recovery succeeding (`6829–6840`) |
 | Double invocation, job86 position5 | First matching book callback, falling back to position0 if no item ID matches. Gate on floor(listed book MP×1.5) once before the first invocation; no ordinary cost per child. Check actor death only between children. After a normally returning second child, subtract the internal cost without a local zero clamp, send durable held item to actor-named depot, then clear both projections. A child may alter MP/items; return uses their current values, not a captured original item (`6868–6899`) |
-| Stored-tool callback, job50 extended | NPC invokes magic heal500 and returns. Player uses outer submitted command/item/remaining text, trims target whitespace and leading encoded separator, and selects first eligible matching tool in requesting-player depot. Usage-category1 invokes its actual callback with that target; retain the row on selection error, otherwise remove it. Other categories swap the row with the durable held tool, even item0, and equip selected tool in both projections. Record its definition as used **before** child invocation; all copies of that definition are excluded for the actor's color for the room-directory lifetime. Child error retains that history in source; no-match sets interval0. Do not replace this with ordinary held-tool consumption (`3612–3626,10433–10487,10949–10973`) |
+| Stored-tool callback, job50 extended | NPC invokes magic heal500 and returns. Player uses outer submitted command/item/remaining text, trims target whitespace and leading encoded separator, and selects first eligible matching tool in requesting-player depot. Usage-category1 invokes its actual callback with that target; retain the row on selection error, otherwise remove it. Other categories swap the row with the durable held tool, even item0, and equip selected tool in both projections. Record its definition as used **before** child invocation; all copies of that definition are excluded for the actor's color for the room-directory lifetime. Child error retains that history in source; no-match sets interval0. Do not replace this with ordinary held-tool consumption (`3612–3626,10433–10487,10949–10973`). A stored child that reaches job50 again (tool84's current-job table, directly or through job82) hangs in source on the nested depot lock. Native behavior, approved 2026-11-07 in #1371: the inner call sees the history written before the child, does not match and raises the selection error, so the outer row is retained |
 | Enhanced held-tool use, job78 position0 | Separate table of **22**, not23, IDs:1,2,3,4,5,6,9,11,12,13,14,15,18,19,20,41,42,78,80,81,84,87. Category2 items18–20 are included. A callback returning1 clears combat held tool and, only for non-NPC color, durable held tool; unsupported ID returns0 without consumption. Item6's early invalid/living-target return also skips consumption (`5988–6013,10196–10282`) |
 | Empty-hand purchase, job78 position0 | Pool positions are1×5,2,9,11,14×2,15×2,41,80×2,81,84×2. Remove exact helper-quest tool IDs before the weighted draw; insufficient money still follows a draw. Nonzero selected ID and wallet≥floor(base price×2.5) equip combat held tool and debit requester wallet; update durable held tool only for non-NPC. Empty pool produces no purchase. No capacity check or depot delivery is involved (`10284–10305`; `system.cgi:1424–1442`) |
 | Scavenging, job78 position5 | Physical base actor AG×1.4; only a returned target permits actor AG+25%, then an empty-hand1/5 draw. Its distinct pool is1×5,2×2,3,4,11×2,12,15×2,41,42,80×2,81×2,84×2. Draw first, then helper-list **substring regex** exclusion converts a matching result to0 without redraw. Update combat held tool; durable requester projection only for non-NPC. This exclusion differs from purchase (`6176–6196`) |
@@ -761,9 +761,21 @@ and the enhanced-tool/purchase callback require only the facts their reachable
 branch reads, before any effect: the actor's combat hand always, the durable hand
 for a player actor, helper-quest facts for an empty hand, and for an enhanced
 tool the reset, defeat or roster owner its body reaches. An NPC actor never reads
-or writes the durable hand. Book transactions (#1370) and stored-tool
-execution/history (#1371) retain their own gates. A registered body still requires
-its actual transaction context and every reachable child before discovery or use.
+or writes the durable hand. Book transactions (#1370) retain their own gate. A
+registered body still requires its actual transaction context and every
+reachable child before discovery or use.
+
+The stored-tool body, `job-50-entry-7`, is registered with the other asset
+bodies. Discovery and submission share one selection over the requester's
+ordered depot tool rows and the room's `LifetimeState.StoredToolHistory` for the
+actor's color. A category1 child runs through the invocation catalog under its
+tool identity (`tool-<n>`) with the outer target, and its whole closure is
+admitted on a projection that already holds the new history. Travel tools use
+Adventure's injected travel port. A tool with neither binding, or a requester
+depot or durable hand that the swap needs but cannot see, rejects the entry before
+mutation. Results are returned as ordered outcomes (consume, retain, exchange)
+plus the operation-wide selection error, as described in
+[the Adventure asset owner](adventure.md#remaining-reconciliation-gates).
 
 #### Random and delegated job closure
 

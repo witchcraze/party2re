@@ -8,6 +8,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -213,6 +214,14 @@ type NormalRunConfig struct {
 
 	JobAssetRunner  economy.TransactionRunner
 	JobAssetHelpers func(context.Context) ([]int, error)
+	JobAssetDepots  JobAssetDepots
+}
+
+// JobAssetDepots locks and saves the requesting player's depot inside the
+// ambient Command transaction, after the economy runner's inventory lock.
+type JobAssetDepots interface {
+	FindByCharacterIDForUpdate(context.Context, string) (depot.Depot, error)
+	Save(context.Context, depot.Depot) error
 }
 
 type NormalRunService struct{ cfg NormalRunConfig }
