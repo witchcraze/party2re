@@ -10,6 +10,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 // effectiveJobLevel returns the job-change count used for depot capacity.
@@ -162,9 +163,15 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 		if tc.Inventory.IsFull() {
 			return ErrInventoryFull
 		}
-		itemInstance, err := dep.PurgeSlot(itemInstanceID)
+		itemInstance, err := dep.ConsumeOne(itemInstanceID)
 		if err != nil {
 			return err
+		}
+		for _, existing := range dep.Items {
+			if existing.ID == itemInstanceID {
+				itemInstance.ID = id.New()
+				break
+			}
 		}
 		if err := tc.Inventory.Add(itemInstance); err != nil {
 			return ErrInventoryFull

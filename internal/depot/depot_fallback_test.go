@@ -994,7 +994,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on happy path: %v", err)
 	}
-	if len(res.Items) != 0 {
-		t.Fatalf("expected 0 items in depot, got %d", len(res.Items))
+	if len(res.Items) != 1 || res.Items[0].ID != potion.ID || res.Items[0].Quantity != 1 {
+		t.Fatalf("expected 1 remaining item with Quantity=1 in depot, got %#v", res.Items)
 	}
 }

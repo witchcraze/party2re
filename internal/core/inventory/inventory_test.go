@@ -205,7 +205,7 @@ func TestInventoryCapacity(t *testing.T) {
 func TestInventoryHeldToolID(t *testing.T) {
 	tests := []struct {
 		name     string
-		items    []string
+		items    []item.Instance
 		wantHeld *string
 	}{
 		{
@@ -215,37 +215,48 @@ func TestInventoryHeldToolID(t *testing.T) {
 		},
 		{
 			name:     "single tool proves held tool",
-			items:    []string{"item-001"},
+			items:    []item.Instance{{ID: "a", DefinitionID: "item-001", Quantity: 1}},
 			wantHeld: ptr("item-001"),
 		},
 		{
 			name:     "single accessory proves held accessory",
-			items:    []string{"item-012"},
+			items:    []item.Instance{{ID: "a", DefinitionID: "item-012", Quantity: 1}},
 			wantHeld: ptr("item-012"),
 		},
 		{
 			name:     "single shield proves held item",
-			items:    []string{"item-071"},
+			items:    []item.Instance{{ID: "a", DefinitionID: "item-071", Quantity: 1}},
 			wantHeld: ptr("item-071"),
 		},
 		{
+			name:     "stacked tool row does not prove held tool",
+			items:    []item.Instance{{ID: "a", DefinitionID: "item-001", Quantity: 2}},
+			wantHeld: nil,
+		},
+		{
 			name:     "single weapon does not prove held tool",
-			items:    []string{"weapon-01"},
+			items:    []item.Instance{{ID: "a", DefinitionID: "weapon-01", Quantity: 1}},
 			wantHeld: nil,
 		},
 		{
 			name:     "single armor does not prove held tool",
-			items:    []string{"armor-01"},
+			items:    []item.Instance{{ID: "a", DefinitionID: "armor-01", Quantity: 1}},
 			wantHeld: nil,
 		},
 		{
-			name:     "multiple items remain ambiguous unknown",
-			items:    []string{"item-001", "item-002"},
+			name: "multiple items remain ambiguous unknown",
+			items: []item.Instance{
+				{ID: "a", DefinitionID: "item-001", Quantity: 1},
+				{ID: "b", DefinitionID: "item-002", Quantity: 1},
+			},
 			wantHeld: nil,
 		},
 		{
-			name:     "weapon plus tool remains ambiguous unknown",
-			items:    []string{"weapon-01", "item-001"},
+			name: "weapon plus tool remains ambiguous unknown",
+			items: []item.Instance{
+				{ID: "a", DefinitionID: "weapon-01", Quantity: 1},
+				{ID: "b", DefinitionID: "item-001", Quantity: 1},
+			},
 			wantHeld: nil,
 		},
 	}
@@ -255,8 +266,7 @@ func TestInventoryHeldToolID(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for i, defID := range tt.items {
-				inst := item.Instance{ID: string(rune('a' + i)), DefinitionID: defID, Quantity: 1}
+			for _, inst := range tt.items {
 				if err := inv.Add(inst); err != nil {
 					t.Fatal(err)
 				}

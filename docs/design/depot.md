@@ -61,9 +61,10 @@ To eliminate uninitialized depot records and stale capacity errors, a two-layer 
 - **Deposit Item**: Moves an item instance from character inventory to depot storage.
   - Invariant: Item exists in character inventory.
   - Invariant (Issues #452, #558, #563): Stacking is restricted to stackable items (`Definition.IsStackable() == true` / `Slot == SlotNone`) with `EnhancementLevel == 0`. If a stackable unenhanced item already exists in the depot with identical definition ID, it stacks into the existing slot without consuming an extra slot. Equipment items (weapons, armor, shields, accessories; `IsStackable() == false`) and enhanced items (`EnhancementLevel > 0`) represent discrete gear instances and must NEVER merge into a single slot even if unenhanced (+0), always occupying discrete slots ($\text{len}(Items) < Capacity$).
-- **Withdraw Item**: Moves an item instance from depot storage to character inventory.
+- **Withdraw Item**: Moves one unit of an item instance from depot storage to character inventory (`depot.cgi:258–268 hikidasu`).
   - Invariant: Item exists in depot storage.
   - Invariant: Character inventory has available space ($\text{len}(Inventory.Items) < Inventory.Capacity$).
+  - Stack splitting: Withdrawing from a depot stack of $N \ge 2$ consumes 1 unit (`ConsumeOne`), leaves $N - 1$ units in the same depot row, and places a quantity-1 instance with a new instance ID in the character's single-hand inventory. Withdrawing from a row of $N = 1$ removes the depot row and preserves its instance ID.
   - Side effect: Automatically registers the item in the character's Collection book upon withdrawal if configured.
 
 Depositing or sending an equipped instance unlinks its equipment slots before
@@ -140,8 +141,8 @@ storage or a later save error, rolls back equipment, customization and ownership
 - Standardized consumption method `dep.Consume(instanceID, quantity)` safely decrements `Quantity` by `quantity` when `existing.Quantity >= quantity`, returning a copy of the consumed instance with `Quantity = quantity`.
 - If the remaining quantity reaches 0, the item slot is removed from depot storage.
 - If `quantity <= 0` or `existing.Quantity < quantity`, returns `ErrInvalidQuantity` without mutating depot state.
-- `dep.ConsumeOne(instanceID)` delegates directly to `dep.Consume(instanceID, 1)`.
-- Intentional whole-slot removal (e.g., withdrawing an entire stack to inventory) must use `PurgeSlot(instanceID)` (or legacy `RemoveItem`, which delegates to `PurgeSlot`). `RemoveItem` is marked deprecated for consumption purposes to prevent accidental stack deletion.
+- `dep.ConsumeOne(instanceID)` delegates directly to `dep.Consume(instanceID, 1)` and is also used by `WithdrawItem` so withdrawing from a stack moves a single unit to the hand.
+- Intentional whole-slot removal (e.g., selling an entire depot stack) must use `PurgeSlot(instanceID)` (or legacy `RemoveItem`, which delegates to `PurgeSlot`). `RemoveItem` is marked deprecated for consumption purposes to prevent accidental stack deletion.
 
 ## Atomicity, Concurrency & Lock Hierarchy
 

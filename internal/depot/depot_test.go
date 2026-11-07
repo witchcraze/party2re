@@ -451,18 +451,50 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 		t.Fatalf("unexpected depot items: %#v", dep.Items)
 	}
 
-	// Withdraw potion (succeeds into empty inventory)
+	// Withdraw potion (succeeds into empty inventory: moves 1 unit to hand with a new ID, leaves 2 in depot)
 	dep, err = service.WithdrawItem(ctx, char.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem error: %v", err)
 	}
-	if len(dep.Items) != 0 {
-		t.Fatalf("expected depot items count = 0, got %d", len(dep.Items))
+	if len(dep.Items) != 1 || dep.Items[0].ID != potion.ID || dep.Items[0].Quantity != 2 {
+		t.Fatalf("expected 1 depot stack with ID=%s Quantity=2, got %#v", potion.ID, dep.Items)
+	}
+	currentInv, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID error: %v", err)
+	}
+	if len(currentInv.Items) != 1 || currentInv.Items[0].DefinitionID != "item-001" || currentInv.Items[0].Quantity != 1 || currentInv.Items[0].ID == potion.ID {
+		t.Fatalf("expected 1 inventory item with Quantity=1 and new ID, got %#v", currentInv.Items)
 	}
 
 	// Verify collection was recorded on withdrawal
 	if len(collector.recorded) != 1 || collector.recorded[0] != "item-001" {
 		t.Errorf("expected item-001 recorded in collection, got %v", collector.recorded)
+	}
+
+	// Redeposit the withdrawn unit, then withdraw the remaining 3 units one by one
+	dep, err = service.DepositItem(ctx, char.ID, currentInv.Items[0].ID)
+	if err != nil {
+		t.Fatalf("DepositItem redeposit error: %v", err)
+	}
+	if len(dep.Items) != 1 || dep.Items[0].ID != potion.ID || dep.Items[0].Quantity != 3 {
+		t.Fatalf("expected redeposited unit to merge into stack of 3, got %#v", dep.Items)
+	}
+
+	// Withdraw from stack of 1 moves the row keeping its ID
+	singleItem, _ := item.NewInstance("item-002", 1)
+	dep.Items = []item.Instance{singleItem}
+	_ = depotRepo.Save(ctx, dep)
+	dep, err = service.WithdrawItem(ctx, char.ID, singleItem.ID)
+	if err != nil {
+		t.Fatalf("WithdrawItem N=1 error: %v", err)
+	}
+	if len(dep.Items) != 0 {
+		t.Fatalf("expected depot items count = 0 for N=1, got %d", len(dep.Items))
+	}
+	currentInv, _ = invRepo.FindByCharacterID(ctx, char.ID)
+	if len(currentInv.Items) != 1 || currentInv.Items[0].ID != singleItem.ID || currentInv.Items[0].Quantity != 1 {
+		t.Fatalf("expected N=1 withdrawal to keep row ID=%s Quantity=1, got %#v", singleItem.ID, currentInv.Items)
 	}
 }
 

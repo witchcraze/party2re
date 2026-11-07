@@ -221,8 +221,8 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WithdrawItem error: %v", err)
 	}
-	if len(dep.Items) != 0 {
-		t.Errorf("depot items count = %d, want 0", len(dep.Items))
+	if len(dep.Items) != 1 || dep.Items[0].ID != potion.ID || dep.Items[0].Quantity != 1 {
+		t.Errorf("depot items after first withdraw = %#v, want 1 remaining unit", dep.Items)
 	}
 }
 

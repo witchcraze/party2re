@@ -5,12 +5,15 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/collection"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func TestDepotLifecycle_Integration(t *testing.T) {
@@ -84,13 +87,29 @@ func TestDepotLifecycle_Integration(t *testing.T) {
 		t.Errorf("depot ExDepot = %d, Capacity = %d, want 1, 10", dep.ExDepot, dep.Capacity)
 	}
 
-	// 4. Withdraw Item
+	// 4. Withdraw Item (stack of 3 -> 1 unit in hand with new ID, 2 remaining in depot)
 	dep, err = depotService.WithdrawItem(ctx, createdChar.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem error = %v", err)
 	}
-	if len(dep.Items) != 0 {
-		t.Fatalf("depot items count = %d, want 0", len(dep.Items))
+	if len(dep.Items) != 1 || dep.Items[0].ID != potion.ID || dep.Items[0].Quantity != 2 {
+		t.Fatalf("depot items after first withdraw = %#v, want 1 row with ID=%s Quantity=2", dep.Items, potion.ID)
+	}
+	restoredInv, err := invRepo.FindByCharacterID(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID inv error = %v", err)
+	}
+	if len(restoredInv.Items) != 1 || restoredInv.Items[0].DefinitionID != "item-001" || restoredInv.Items[0].Quantity != 1 || restoredInv.Items[0].ID == potion.ID {
+		t.Fatalf("inventory after first withdraw = %#v, want 1 unit with new ID", restoredInv.Items)
+	}
+
+	// 5. Redeposit the withdrawn unit (merges back into the depot stack of 3)
+	dep, err = depotService.DepositItem(ctx, createdChar.ID, restoredInv.Items[0].ID)
+	if err != nil {
+		t.Fatalf("DepositItem redeposit error = %v", err)
+	}
+	if len(dep.Items) != 1 || dep.Items[0].ID != potion.ID || dep.Items[0].Quantity != 3 {
+		t.Fatalf("depot items after redeposit = %#v, want 1 row with ID=%s Quantity=3", dep.Items, potion.ID)
 	}
 
 	// Verify database persistence
@@ -107,8 +126,109 @@ func TestDepotLifecycle_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByCharacterID error = %v", err)
 	}
-	if restoredDep.ExDepot != 1 || restoredDep.Capacity != 10 {
+	if restoredDep.ExDepot != 1 || restoredDep.Capacity != 10 || len(restoredDep.Items) != 1 || restoredDep.Items[0].Quantity != 3 {
 		t.Errorf("restored depot mismatch: %#v", restoredDep)
+	}
+}
+
+func TestDepotStackWithdrawRollbackAndConcurrent_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	colRepo, err := database.NewCollectionRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	inductor := &depotLegendInductor{err: errors.New("stack withdraw rollback")}
+	colSvc, err := collection.NewService(colRepo, 180, 1, collection.WithLegendInductor(inductor))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, txProvider,
+		depot.WithItemDefinitionProvider(catalog),
+		depot.WithCollectionRecorder(colSvc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := database.CreateTestCharacterWithFunds(ctx, db, "StackWithdraw", 10000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack, err := item.NewInstance("item-001", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateTestDepot(ctx, db, char.ID, 0, []item.Instance{stack}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Rollback on N>=2 stack withdrawal preserves all 3 units in depot and 0 in hand
+	if _, err := svc.WithdrawItem(ctx, char.ID, stack.ID); err == nil {
+		t.Fatal("expected WithdrawItem to fail on inductor error")
+	}
+	depAfterFail, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil || len(depAfterFail.Items) != 1 || depAfterFail.Items[0].ID != stack.ID || depAfterFail.Items[0].Quantity != 3 {
+		t.Fatalf("depot after rollback = %#v, err = %v", depAfterFail.Items, err)
+	}
+	invAfterFail, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil || len(invAfterFail.Items) != 0 {
+		t.Fatalf("inventory after rollback = %#v, err = %v", invAfterFail.Items, err)
+	}
+
+	// 2. Paired concurrent withdrawal of the same stack by the same character
+	inductor.err = nil
+	var successes atomic.Int64
+	res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
+		_, err := svc.WithdrawItem(ctx, char.ID, stack.ID)
+		if errors.Is(err, depot.ErrInventoryFull) {
+			return nil
+		}
+		if err == nil {
+			successes.Add(1)
+		}
+		return err
+	})
+	if res.Failures != 0 || successes.Load() != 1 {
+		t.Fatalf("stress results=%+v successes=%d", res, successes.Load())
+	}
+
+	depFinal, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil || len(depFinal.Items) != 1 || depFinal.Items[0].ID != stack.ID || depFinal.Items[0].Quantity != 2 {
+		t.Fatalf("depot after concurrent withdraw = %#v, err = %v", depFinal.Items, err)
+	}
+	invFinal, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil || len(invFinal.Items) != 1 || invFinal.Items[0].DefinitionID != "item-001" || invFinal.Items[0].Quantity != 1 || invFinal.Items[0].ID == stack.ID {
+		t.Fatalf("inventory after concurrent withdraw = %#v, err = %v", invFinal.Items, err)
 	}
 }
 
