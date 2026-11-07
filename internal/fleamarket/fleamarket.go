@@ -40,7 +40,6 @@ var (
 	ErrInvalidPrice             = errors.New("listing price must be between 1 and 999999 gold")
 	ErrItemNotInDepot           = errors.New("item not found in depot storage")
 	ErrDepotFull                = errors.New("depot storage is full")
-	ErrForbidden                = errors.New("access forbidden: character does not own this resource")
 	ErrInvalidInput             = errors.New("invalid flea market input parameters")
 )
 
@@ -51,6 +50,7 @@ type Listing struct {
 	ItemID            string        `json:"item_id"`
 	ItemName          string        `json:"item_name"`
 	ItemCategory      string        `json:"item_category"`
+	EnhancementLevel  int           `json:"enhancement_level"`
 	Price             int           `json:"price"`
 	Status            ListingStatus `json:"status"`
 	BuyerCharacterID  *string       `json:"buyer_character_id,omitempty"`
@@ -68,11 +68,11 @@ type PurchaseResult struct {
 
 type FleaMarketRepository interface {
 	CreateListing(ctx context.Context, listing Listing) error
-	GetListingByID(ctx context.Context, id string) (Listing, error)
 	GetListingByIDForUpdate(ctx context.Context, id string) (Listing, error)
 	ListActiveListings(ctx context.Context, limit, offset int) ([]Listing, int, error)
-	GetListingsBySeller(ctx context.Context, sellerCharacterID string) ([]Listing, error)
+	GetActiveListingsBySeller(ctx context.Context, sellerCharacterID string) ([]Listing, error)
 	CountActiveListingsBySeller(ctx context.Context, sellerCharacterID string) (int, error)
+	LockListingCapacityForUpdate(ctx context.Context) error
 	CountTotalActiveListings(ctx context.Context) (int, error)
 	UpdateListing(ctx context.Context, listing Listing) error
 }
@@ -163,6 +163,16 @@ func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) erro
 	return fn(ctx)
 }
 
+// lockCharacter reports only a true missing row as not found; other read
+// failures keep their cause so an unknown outcome is never a known rejection.
+func (s *Service) lockCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
+	char, err := s.charRepo.FindByIDForUpdate(ctx, characterID)
+	if errors.Is(err, corecharacter.ErrNotFound) {
+		return corecharacter.Character{}, ErrCharacterNotFound
+	}
+	return char, err
+}
+
 // CreateListing lists an item from the character's depot onto the flea market.
 func (s *Service) CreateListing(
 	ctx context.Context,
@@ -181,7 +191,11 @@ func (s *Service) CreateListing(
 	var created Listing
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		// 1. Check server-wide active listing count ceiling (120)
+		// 1. Serialize creators so the server-wide count cannot go stale (Rank 0).
+		// Purchase and cancel only free slots, so they do not take this lock.
+		if err := s.repo.LockListingCapacityForUpdate(txCtx); err != nil {
+			return err
+		}
 		totalActive, err := s.repo.CountTotalActiveListings(txCtx)
 		if err != nil {
 			return err
@@ -191,9 +205,9 @@ func (s *Service) CreateListing(
 		}
 
 		// 2. Lock seller character (Rank 2)
-		seller, err := s.charRepo.FindByIDForUpdate(txCtx, sellerCharacterID)
+		seller, err := s.lockCharacter(txCtx, sellerCharacterID)
 		if err != nil {
-			return ErrCharacterNotFound
+			return err
 		}
 
 		if err := s.checkMutation(txCtx, sellerCharacterID); err != nil {
@@ -259,6 +273,7 @@ func (s *Service) CreateListing(
 			ItemID:            consumedItem.DefinitionID,
 			ItemName:          itemName,
 			ItemCategory:      itemCategory,
+			EnhancementLevel:  consumedItem.EnhancementLevel,
 			Price:             price,
 			Status:            StatusActive,
 			CreatedAt:         now,
@@ -298,7 +313,7 @@ func (s *Service) PurchaseListing(
 		// 1. Lock listing first (CAS / P2P shared entity lock, Rank 0)
 		listing, err := s.repo.GetListingByIDForUpdate(txCtx, listingID)
 		if err != nil {
-			return ErrListingNotFound
+			return err
 		}
 		if listing.Status != StatusActive {
 			return ErrListingNotActive
@@ -310,13 +325,13 @@ func (s *Service) PurchaseListing(
 		// 2. Deterministic lock acquisition order for characters (ascending ID order, Rank 2)
 		firstID, secondID := id.Sort2(listing.SellerCharacterID, buyerCharacterID)
 
-		firstChar, err := s.charRepo.FindByIDForUpdate(txCtx, firstID)
+		firstChar, err := s.lockCharacter(txCtx, firstID)
 		if err != nil {
-			return ErrCharacterNotFound
+			return err
 		}
-		secondChar, err := s.charRepo.FindByIDForUpdate(txCtx, secondID)
+		secondChar, err := s.lockCharacter(txCtx, secondID)
 		if err != nil {
-			return ErrCharacterNotFound
+			return err
 		}
 
 		if err := s.checkMutation(txCtx, buyerCharacterID); err != nil {
@@ -352,7 +367,7 @@ func (s *Service) PurchaseListing(
 		}
 
 		// 6. Deliver Item to Buyer Depot (legacy &send_item)
-		itemInst, err := coreitem.NewInstance(listing.ItemID, 1)
+		itemInst, err := coreitem.NewInstanceWithEnhancement(listing.ItemID, 1, listing.EnhancementLevel)
 		if err != nil {
 			return err
 		}
@@ -416,7 +431,7 @@ func (s *Service) CancelListing(
 		// 1. Lock listing (Rank 0)
 		listing, err := s.repo.GetListingByIDForUpdate(txCtx, listingID)
 		if err != nil {
-			return ErrListingNotFound
+			return err
 		}
 		if listing.SellerCharacterID != sellerCharacterID {
 			return ErrUnauthorizedSeller
@@ -426,11 +441,8 @@ func (s *Service) CancelListing(
 		}
 
 		// 2. Lock seller character (Rank 2)
-		sellerChar, err := s.charRepo.FindByIDForUpdate(txCtx, sellerCharacterID)
+		sellerChar, err := s.lockCharacter(txCtx, sellerCharacterID)
 		if err != nil {
-			if errors.Is(err, corecharacter.ErrNotFound) {
-				return ErrCharacterNotFound
-			}
 			return err
 		}
 
@@ -446,7 +458,7 @@ func (s *Service) CancelListing(
 		sellerDepot.RefreshCapacity(sellerChar.JobLevel, sellerChar.OverDepot)
 
 		// 4. Return item instance to seller depot (legacy &send_item)
-		itemInst, err := coreitem.NewInstance(listing.ItemID, 1)
+		itemInst, err := coreitem.NewInstanceWithEnhancement(listing.ItemID, 1, listing.EnhancementLevel)
 		if err != nil {
 			return err
 		}

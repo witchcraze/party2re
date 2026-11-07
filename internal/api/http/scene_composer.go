@@ -88,6 +88,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "depot":
 			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_send_item", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}
 			adapter.read = h.depotSceneData
+		case "fleamarket":
+			adapter.title, adapter.commands = "フリーマーケット", []string{"fleamarket_list", "fleamarket_purchase", "fleamarket_cancel"}
+			adapter.read = h.fleaMarketSceneData
 		case "secretshop":
 			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase"}
 			adapter.read = h.secretShopSceneData
@@ -214,6 +217,12 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 				templates["scene_page"] = map[string]any{"destination": p.Destination, "offset": p.Offset, "limit": p.Limit}
 			}
 		case BlackMarketSceneData:
+			scene.Support.Observation = "details"
+			if p := data.Page.Next; p != nil {
+				choices = append(choices, "scene_page")
+				templates["scene_page"] = map[string]any{"destination": p.Destination, "offset": p.Offset, "limit": p.Limit}
+			}
+		case FleaMarketSceneData:
 			scene.Support.Observation = "details"
 			if p := data.Page.Next; p != nil {
 				choices = append(choices, "scene_page")

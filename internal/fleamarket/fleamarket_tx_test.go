@@ -274,29 +274,17 @@ func TestFleaMarketService_QueriesAndPagination(t *testing.T) {
 		t.Errorf("expected total 3, page length 2, got total %d, length %d", total, len(listings))
 	}
 
-	// 2. GetListing
-	single, err := svc.GetListing(ctx, createdIDs[0])
+	// 2. GetActiveCharacterListings
+	sellerListings, err := svc.GetActiveCharacterListings(ctx, sellerID)
 	if err != nil {
-		t.Fatalf("GetListing failed: %v", err)
-	}
-	if single.ID != createdIDs[0] {
-		t.Errorf("expected ID %s, got %s", createdIDs[0], single.ID)
-	}
-
-	// 3. GetCharacterListings
-	sellerListings, err := svc.GetCharacterListings(ctx, sellerID)
-	if err != nil {
-		t.Fatalf("GetCharacterListings failed: %v", err)
+		t.Fatalf("GetActiveCharacterListings failed: %v", err)
 	}
 	if len(sellerListings) != 3 {
 		t.Errorf("expected 3 listings for seller, got %d", len(sellerListings))
 	}
 
 	// 4. Invalid input checks
-	if _, err := svc.GetListing(ctx, ""); !errors.Is(err, fleamarket.ErrInvalidInput) {
-		t.Errorf("expected ErrInvalidInput for empty ID, got %v", err)
-	}
-	if _, err := svc.GetCharacterListings(ctx, ""); !errors.Is(err, fleamarket.ErrInvalidInput) {
+	if _, err := svc.GetActiveCharacterListings(ctx, ""); !errors.Is(err, fleamarket.ErrInvalidInput) {
 		t.Errorf("expected ErrInvalidInput for empty character ID, got %v", err)
 	}
 	if _, err := svc.CreateListing(ctx, "", "item-herb", 100, now); !errors.Is(err, fleamarket.ErrInvalidInput) {

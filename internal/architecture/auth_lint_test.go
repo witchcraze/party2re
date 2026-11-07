@@ -105,8 +105,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /challenges/hall-of-fame$`),
 		regexp.MustCompile(`^GET /challenges/hall-of-fame/\{tier_id\}$`),
 		regexp.MustCompile(`^GET /auction/hall$`),
-		regexp.MustCompile(`^GET /fleamarket/listings$`),
-		regexp.MustCompile(`^GET /fleamarket/listings/\{listing_id\}$`),
 		regexp.MustCompile(`^GET /pvp/rooms$`),
 		regexp.MustCompile(`^GET /pvp/rooms/\{room_id\}$`),
 		regexp.MustCompile(`^GET /gvg/rooms$`),
@@ -449,10 +447,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleAccessorySynthesize": "shop.go",
 		// Secret Shop
 		"handleSecretShopPuffPuff": "secretshop.go",
-		// Flea Market
-		"handleCreateFleaMarketListing":   "fleamarket.go",
-		"handlePurchaseFleaMarketListing": "fleamarket.go",
-		"handleCancelFleaMarketListing":   "fleamarket.go",
 		// Home
 		"handleBuildHouse":            "home_estate.go",
 		"handleSetCharacterColor":     "home_estate.go",

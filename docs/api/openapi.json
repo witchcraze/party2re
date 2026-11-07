@@ -4452,6 +4452,7 @@
                         "blacksmith",
                         "chapel",
                         "depot",
+                        "fleamarket",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -4575,6 +4576,7 @@
                         "blacksmith",
                         "chapel",
                         "depot",
+                        "fleamarket",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -6012,6 +6014,119 @@
                   },
                   "required": [
                     "prize_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "fleamarket_list",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "Owned depot instance or definition ID. A definition ID selects its first stored instance. One unit is listed; ownership stays service-owned.",
+                      "type": "string"
+                    },
+                    "price": {
+                      "description": "Listing price in gold. The 1 to 999999 range stays service-owned.",
+                      "format": "int64",
+                      "maximum": 9223372036854775807,
+                      "minimum": -9223372036854775808,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "item_id",
+                    "price"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "fleamarket_purchase",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "listing_id": {
+                      "description": "Explicit active listing from the observed listings. Funds and self-purchase stay service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "listing_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "fleamarket_cancel",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "listing_id": {
+                      "description": "Explicit listing from the observed owned_listings. Seller ownership stays service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "listing_id"
                   ],
                   "type": "object"
                 }
@@ -8586,6 +8701,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "enhancement_level": {
+            "minimum": 0,
+            "type": "integer"
+          },
           "id": {
             "type": "string"
           },
@@ -8625,6 +8744,7 @@
           "item_id",
           "item_name",
           "item_category",
+          "enhancement_level",
           "price",
           "status",
           "created_at"
@@ -8652,6 +8772,47 @@
           "buyer_gold",
           "seller_gold",
           "item_instance"
+        ],
+        "type": "object"
+      },
+      "FleaMarketSceneData": {
+        "additionalProperties": false,
+        "description": "Active market listings in legacy order, plus the actor's own active listings. Observation never lists, purchases or cancels. Listing candidates come from the depot scene.",
+        "properties": {
+          "listing_count": {
+            "description": "Total active listings before paging.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "listings": {
+            "description": "Current page of all active listings, ordered by item kind, item number, price, then age.",
+            "items": {
+              "$ref": "#/components/schemas/FleaMarketListing"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "owned_listings": {
+            "description": "All of the actor's active listings; the seller limit bounds this list.",
+            "items": {
+              "$ref": "#/components/schemas/FleaMarketListing"
+            },
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "listings",
+          "listing_count",
+          "owned_listings",
+          "page"
         ],
         "type": "object"
       },
@@ -11334,35 +11495,6 @@
         ],
         "type": "object"
       },
-      "PageFleaMarketListing": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/FleaMarketListing"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "Offset from beginning of result set",
-            "type": "integer"
-          },
-          "total": {
-            "description": "Total number of records matching the query",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
       "PageLetter": {
         "properties": {
           "items": {
@@ -13569,6 +13701,7 @@
                   "blacksmith",
                   "chapel",
                   "depot",
+                  "fleamarket",
                   "home",
                   "shop_weapon",
                   "shop_armor",
@@ -13752,6 +13885,7 @@
               "blacksmith",
               "chapel",
               "depot",
+              "fleamarket",
               "home",
               "shop_weapon",
               "shop_armor",
@@ -13857,6 +13991,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/AlchemySceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FleaMarketSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/BlackMarketSceneData"
@@ -14305,6 +14442,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/AlchemySceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "fleamarket"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/FleaMarketSceneData"
                 },
                 "support": {
                   "properties": {
@@ -22838,412 +23005,6 @@
         "summary": "Exchange character job using Job Exchange Ticket (item-168)",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/fleamarket/listings": {
-      "get": {
-        "operationId": "getCharacterFleaMarketListings",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/FleaMarketListing"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "Character's flea market listings"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List character's flea market listings",
-        "tags": [
-          "FleaMarket"
-        ]
-      },
-      "post": {
-        "operationId": "createFleaMarketListing",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_id": {
-                    "type": "string"
-                  },
-                  "price": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "item_id",
-                  "price"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FleaMarketListing"
-                }
-              }
-            },
-            "description": "Listing created successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create new flea market listing",
-        "tags": [
-          "FleaMarket"
-        ]
-      }
-    },
-    "/characters/{id}/fleamarket/listings/{listing_id}": {
-      "delete": {
-        "operationId": "cancelFleaMarketListing",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Listing ID",
-            "in": "path",
-            "name": "listing_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FleaMarketListing"
-                }
-              }
-            },
-            "description": "Listing cancelled successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Listing not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Cancel flea market listing",
-        "tags": [
-          "FleaMarket"
-        ]
-      }
-    },
-    "/characters/{id}/fleamarket/listings/{listing_id}/purchase": {
-      "post": {
-        "operationId": "purchaseFleaMarketListing",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Listing ID",
-            "in": "path",
-            "name": "listing_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FleaMarketPurchaseResult"
-                }
-              }
-            },
-            "description": "Listing purchased successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Listing not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Purchase flea market listing",
-        "tags": [
-          "FleaMarket"
         ]
       }
     },
@@ -32251,145 +32012,6 @@
         "summary": "Register character presence in Event Plaza",
         "tags": [
           "EventPlaza"
-        ]
-      }
-    },
-    "/fleamarket/listings": {
-      "get": {
-        "operationId": "listFleaMarketListings",
-        "parameters": [
-          {
-            "description": "Limit",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Offset",
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PageFleaMarketListing"
-                }
-              }
-            },
-            "description": "Active flea market listings"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List active flea market listings",
-        "tags": [
-          "FleaMarket"
-        ]
-      }
-    },
-    "/fleamarket/listings/{listing_id}": {
-      "get": {
-        "operationId": "getFleaMarketListing",
-        "parameters": [
-          {
-            "description": "Flea Market Listing ID",
-            "in": "path",
-            "name": "listing_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FleaMarketListing"
-                }
-              }
-            },
-            "description": "Flea market listing details"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Listing not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get flea market listing by ID",
-        "tags": [
-          "FleaMarket"
         ]
       }
     },

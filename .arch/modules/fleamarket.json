@@ -1,7 +1,7 @@
 {
   "module": "fleamarket",
   "domain": "フリーマーケット・プレイヤー露店取引",
-  "description": "Player-to-player direct fixed-price marketplace and item stall trading system (owns fleamarket_listings).",
+  "description": "Player-to-player direct fixed-price marketplace and item stall trading system (owns fleamarket_listings and fleamarket_capacity_lock).",
   "entrypoint": "internal/fleamarket/fleamarket.go",
   "dependencies": [
     {
@@ -47,12 +47,13 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/fleamarket/fleamarket.go#Service.CreateListing",
       "lock_sequence": [
-        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 1, "target": "fleamarket_capacity_lock", "lock_order": 0, "method": "FleaMarketRepository.LockListingCapacityForUpdate", "mode": "INSERT ... ON DUPLICATE KEY UPDATE"},
         {"step": 2, "target": "fleamarket_listings", "method": "FleaMarketRepository.CountTotalActiveListings", "mode": "SELECT"},
-        {"step": 3, "target": "fleamarket_listings", "method": "FleaMarketRepository.CountActiveListingsBySeller", "mode": "SELECT"},
-        {"step": 4, "target": "character_depots / depot_items", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
-        {"step": 5, "target": "character_depots / depot_items", "method": "DepotRepository.Save", "mode": "UPDATE"},
-        {"step": 6, "target": "fleamarket_listings", "method": "FleaMarketRepository.CreateListing", "mode": "INSERT"}
+        {"step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 4, "target": "fleamarket_listings", "method": "FleaMarketRepository.CountActiveListingsBySeller", "mode": "SELECT"},
+        {"step": 5, "target": "character_depots / depot_items", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 6, "target": "character_depots / depot_items", "method": "DepotRepository.Save", "mode": "UPDATE"},
+        {"step": 7, "target": "fleamarket_listings", "method": "FleaMarketRepository.CreateListing", "mode": "INSERT"}
       ]
     },
     {

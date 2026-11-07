@@ -66,6 +66,9 @@ func (r *ActionURLResolver) Resolve(characterID, actionID, label, category strin
 func defaultActionEndpoints() map[string]ActionEndpoint {
 	return map[string]ActionEndpoint{
 		"alchemy_synthesize":    {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"fleamarket_list":       {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"fleamarket_purchase":   {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"fleamarket_cancel":     {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"blackmarket_sacrifice": {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"blackmarket_trade":     {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"gemstore_sell":         {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},

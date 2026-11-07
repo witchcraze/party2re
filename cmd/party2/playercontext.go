@@ -19,6 +19,7 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		{ID: "blacksmith", Parent: "town"},
 		{ID: "chapel", Parent: "town"},
 		{ID: "depot", Parent: "town", Pageable: true},
+		{ID: "fleamarket", Parent: "town", Pageable: true},
 		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: secretshop.CheckEligibility,
 			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
 				status, err := misc.secretshop.GetShopStatus(ctx, actorID)
