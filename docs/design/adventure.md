@@ -370,7 +370,7 @@ to Battle settlement for enrolled real participants within their respective sett
 with no inference from stage 20, habitat, or monster defeat.
 Assignment, chest inspection and exit emit no unseal event; receipt replay cannot
 repeat its counter update. Each genuine treasure recreation is a new source event.
-Global sealing rooms/news/clock remain [separately owned](https://github.com/witchcraze/party2re/issues/1199);
+The unseal clock, sealing rooms and news follow the [Boss unseal lifecycle](boss.md#6-unseal-to-sealing-room-lifecycle);
 calling Boss's counter-writing unseal helper as well would double-count.
 Next advance from assigned floor 10 still executes the destination's EX flag
 path before creating floor 11 (`52–80,227–249`); existing EX files are not
