@@ -431,18 +431,14 @@ func (r *HomeRepository) DeleteLetter(ctx context.Context, id, characterID strin
 			return home.ErrForbidden
 		}
 
-		if characterID == senderID {
-			if isDeletedSender {
-				return home.ErrLetterNotFound
-			}
-			isDeletedSender = true
+		// A letter to oneself may remain in only one of the owner's boxes after eviction.
+		visibleToSender := characterID == senderID && !isDeletedSender
+		visibleToRecipient := characterID == recipientID && !isDeletedRecipient
+		if !visibleToSender && !visibleToRecipient {
+			return home.ErrLetterNotFound
 		}
-		if characterID == recipientID {
-			if isDeletedRecipient {
-				return home.ErrLetterNotFound
-			}
-			isDeletedRecipient = true
-		}
+		isDeletedSender = isDeletedSender || characterID == senderID
+		isDeletedRecipient = isDeletedRecipient || characterID == recipientID
 
 		if isDeletedSender && isDeletedRecipient {
 			_, err = executor.ExecContext(txCtx, `DELETE FROM character_letters WHERE id = ?`, id)

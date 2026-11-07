@@ -221,6 +221,46 @@ func TestLetterThrottleAndRetention(t *testing.T) {
 		}
 	})
 
+	t.Run("a self letter evicted from one box can be deleted from the other", func(t *testing.T) {
+		assertPurgedAfterDelete := func(t *testing.T, owner corecharacter.Character, letterID string) {
+			t.Helper()
+			if err := repo.DeleteLetter(ctx, letterID, owner.ID); err != nil {
+				t.Fatalf("DeleteLetter failed: %v", err)
+			}
+			if _, err := repo.GetLetterByID(ctx, letterID); !errors.Is(err, home.ErrLetterNotFound) {
+				t.Fatalf("expected purged letter, got %v", err)
+			}
+			if err := repo.DeleteLetter(ctx, letterID, owner.ID); !errors.Is(err, home.ErrLetterNotFound) {
+				t.Fatalf("expected ErrLetterNotFound on the second delete, got %v", err)
+			}
+		}
+
+		t.Run("evicted from the inbox", func(t *testing.T) {
+			a, b := newChar(t), newChar(t)
+			self := send(t, a, a, t0, limit)
+			other := send(t, b, a, t0.Add(time.Second), 1)
+			assertIDs(t, inboxIDs(t, a), other.ID)
+			assertIDs(t, outboxIDs(t, a), self.ID)
+
+			assertPurgedAfterDelete(t, a, self.ID)
+			assertIDs(t, inboxIDs(t, a), other.ID)
+			assertIDs(t, outboxIDs(t, a))
+		})
+
+		t.Run("evicted from the outbox", func(t *testing.T) {
+			a, b := newChar(t), newChar(t)
+			self := send(t, a, a, t0, limit)
+			other := send(t, a, b, t0.Add(time.Second), 1)
+			assertIDs(t, inboxIDs(t, a), self.ID)
+			assertIDs(t, outboxIDs(t, a), other.ID)
+
+			assertPurgedAfterDelete(t, a, self.ID)
+			assertIDs(t, inboxIDs(t, a))
+			assertIDs(t, outboxIDs(t, a), other.ID)
+			assertIDs(t, inboxIDs(t, b), other.ID)
+		})
+	})
+
 	t.Run("concurrent letters from one sender deliver once", func(t *testing.T) {
 		a, b := newChar(t), newChar(t)
 		fns := make([]func() error, 8)
