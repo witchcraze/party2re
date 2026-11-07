@@ -313,6 +313,8 @@ func (s *LifetimeState) applyNormalStrike(c *DamageContext, targetID string, rng
 
 // ApplyExtension201 uses the submitted damage target, then the post-damage
 // package cursor. A fully admitted reset hook may change that cursor (item159).
+// An absent cursor writes the source's empty-key record, which no participant
+// reads: the actor's own reset still runs and self is never substituted.
 func (s *LifetimeState) ValidateExtension201(c *DamageContext, targetID string, rng random.Generator) error {
 	if c == nil {
 		return ErrInvalidRequest
@@ -324,7 +326,10 @@ func (s *LifetimeState) ValidateExtension201(c *DamageContext, targetID string, 
 	if a.Agility <= a.BaseStats.Agility {
 		return nil
 	}
-	if (c.Cursor.Source != "item150" && c.Cursor.Source != "item159") || s.actor(c.Cursor.ActorID) == nil || s.actor(c.Cursor.ActorID).Gear == nil {
+	if err := s.validateToolCursor(c.Cursor); err != nil {
+		return err
+	}
+	if t := s.actor(c.Cursor.ActorID); t != nil && t.Gear == nil {
 		return ErrUnsupportedEffect
 	}
 	return s.ValidateDamage(c, TargetEffect{TargetID: targetID, Payload: CallbackPayload{Number: float64(a.Agility) * 1.6}, Arguments: []string{"1"}}, rng)
@@ -343,8 +348,9 @@ func (s *LifetimeState) ApplyExtension201(c *DamageContext, targetID string, rng
 	if err != nil {
 		return r, err
 	}
-	t := s.actor(c.Cursor.ActorID)
-	t.Agility = t.BaseStats.Agility - t.Gear.WeaponWeight - t.Gear.ArmorWeight
+	if t := s.actor(c.Cursor.ActorID); t != nil {
+		t.Agility = t.BaseStats.Agility - t.Gear.WeaponWeight - t.Gear.ArmorWeight
+	}
 	a = s.actor(c.ActorID)
 	if a.Agility > a.BaseStats.Agility {
 		a.Agility = a.BaseStats.Agility

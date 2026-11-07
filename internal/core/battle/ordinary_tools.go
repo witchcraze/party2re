@@ -16,11 +16,11 @@ type OrdinaryToolEntry struct {
 	UsageCategory item.UsageCategory
 }
 
-// OrdinaryToolEntries is the finite subset at ff97fc5:_data.cgi:623–1889.
+// OrdinaryToolEntries is the finite subset at ff97fc5:_data.cgi:623–1889,2013.
 // These identities require explicit callbacks, never the batch scalar mapper.
 func OrdinaryToolEntries() []OrdinaryToolEntry {
 	var entries []OrdinaryToolEntry
-	for _, source := range []int{1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 41, 42, 75, 76, 77, 79, 80, 81, 82, 86, 87, 101, 102, 103, 130, 151, 213} {
+	for _, source := range []int{1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 41, 42, 75, 76, 77, 79, 80, 81, 82, 86, 87, 101, 102, 103, 130, 151, 213, 248} {
 		id := fmt.Sprintf("tool-%d", source)
 		entries = append(entries, OrdinaryToolEntry{CallbackEntry: CallbackEntry{ID: id, Name: id}, DefinitionID: fmt.Sprintf("item-%03d", source), UsageCategory: item.UsageCategoryCombatOnly})
 	}
@@ -44,9 +44,11 @@ type OrdinaryToolContext struct {
 	DamageContext
 	OrdinaryToolInput
 	EquipmentReset *EquipmentResetContext
-	Arguments      []string
-	CureCalls      int
-	Results        []OrdinaryToolResult
+	// Death owns tool248's damage descendants; nil keeps them whole gates.
+	Death     *DefeatContext
+	Arguments []string
+	CureCalls int
+	Results   []OrdinaryToolResult
 }
 
 func (c *OrdinaryToolContext) shift() string {
@@ -240,6 +242,11 @@ func (s *LifetimeState) ApplyOrdinaryTool(c *OrdinaryToolContext, id string, rng
 				if *c.RequesterMaxHP > t.HP || float64(t.MaxHP)*.2 > float64(t.HP) {
 					t.Status = "capture"
 				}
+			}
+		case "tool-248":
+			defer s.bindNativeDamage(&c.DamageContext, c.Death, rng)()
+			if err := s.applyProjectile(&c.DamageContext, c.Death, c.toolTarget(), toolProjectile, rng); err != nil {
+				return err
 			}
 		}
 	}
