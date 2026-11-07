@@ -671,3 +671,45 @@ func TestValkeyRoomLock_LeaseSafetyAndContentionHoldTiming(t *testing.T) {
 	// hold durations and wait times. Per .agents/rules/01-development-workflow.md, wall-clock
 	// performance thresholds are omitted to prevent test flakiness under CI scheduling load.
 }
+
+func TestValkeyRoomLock_HonorsCallerDeadlineBeyondDefault(t *testing.T) {
+	raw := openIsolatedTestValkey(t, 11)
+	t.Cleanup(raw.Close)
+
+	repo, err := casino.NewValkeyRoomRepository(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomID := "long-deadline-room-" + id.New()[:8]
+	t.Cleanup(func() {
+		if err := raw.Do(context.Background(), raw.B().Del().Key(casino.DefaultRoomLockKeyPrefix+roomID).Build()).Error(); err != nil {
+			t.Errorf("cleanup lock key: %v", err)
+		}
+	})
+
+	held := make(chan struct{})
+	holderErr := make(chan error, 1)
+	go func() {
+		holderErr <- repo.WithRoomLock(context.Background(), roomID, func(context.Context) error {
+			close(held)
+			time.Sleep(casino.DefaultRoomLockTimeout + 300*time.Millisecond)
+			return nil
+		})
+	}()
+	select {
+	case <-held:
+	case err := <-holderErr:
+		t.Fatalf("holder returned before running its callback: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("holder did not acquire the lock")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := repo.WithRoomLock(ctx, roomID, func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("waiter with 30s deadline must outwait the default timeout, got: %v", err)
+	}
+	if err := <-holderErr; err != nil {
+		t.Fatalf("holder: %v", err)
+	}
+}

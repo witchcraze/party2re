@@ -16,7 +16,7 @@ const (
 	DefaultRoomLockTTL = 10 * time.Second
 	// DefaultRoomLockRetryWait is the backoff sleep between failed lock attempts.
 	DefaultRoomLockRetryWait = 10 * time.Millisecond
-	// DefaultRoomLockTimeout is the maximum time to wait to acquire a room lock.
+	// DefaultRoomLockTimeout is the fallback wait to acquire a room lock when the caller context has no deadline.
 	DefaultRoomLockTimeout = 5 * time.Second
 )
 
@@ -44,9 +44,9 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 		lockTTL = 1
 	}
 
-	deadline := time.Now().Add(DefaultRoomLockTimeout)
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(DefaultRoomLockTimeout)
 	}
 
 	acquired := false
