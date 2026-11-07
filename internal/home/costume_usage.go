@@ -39,7 +39,7 @@ func isCostumeItem(name string) bool {
 	}
 }
 
-func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacter.Character, itemName string) (string, bool, error) {
+func (s *Service) applyCostumeConsumable(char *corecharacter.Character, itemName string, look *pendingAppearance) (string, bool, error) {
 	if !isCostumeItem(itemName) {
 		return "", false, nil
 	}
@@ -138,13 +138,33 @@ func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacte
 		msg = fmt.Sprintf("%sは%sを読んだ！", char.Name, itemName)
 	}
 
-	if s.costumeApplier != nil {
-		now := s.nowFunc()
-		expiresAt := timer.NextMidnightJST(now).UTC()
-		if err := s.costumeApplier.ApplyCostume(ctx, char.ID, itemNo, itemName, icon, expiresAt); err != nil {
-			return "", false, err
-		}
-	}
-
+	look.set(s, itemNo, itemName, icon)
 	return msg, true, nil
+}
+
+// pendingAppearance is an appearance chosen by an item effect, applied only
+// after the item's database transaction commits.
+type pendingAppearance struct {
+	ok        bool
+	itemNo    int
+	itemName  string
+	icon      string
+	expiresAt time.Time
+}
+
+func (p *pendingAppearance) set(s *Service, itemNo int, itemName, icon string) {
+	*p = pendingAppearance{ok: true, itemNo: itemNo, itemName: itemName, icon: icon,
+		expiresAt: timer.NextMidnightJST(s.nowFunc()).UTC()}
+}
+
+// applyAppearance stores a committed item's appearance. The item use is already
+// committed, so a store failure is reported on the result instead of undoing it.
+func (s *Service) applyAppearance(ctx context.Context, characterID string, look pendingAppearance, res *UseHomeItemResult) *UseHomeItemResult {
+	if !look.ok || s.costumeApplier == nil {
+		return res
+	}
+	if err := s.costumeApplier.ApplyCostume(ctx, characterID, look.itemNo, look.itemName, look.icon, look.expiresAt); err != nil {
+		res.AppearanceNotApplied = true
+	}
+	return res
 }

@@ -226,7 +226,11 @@ callbacks. All **53 category-2 and 3 category-4** entries are accounted for belo
 - In Go a callback either rolls back with `no_effect` (nothing changes), commits
   and consumes one item (`consumed`), or, where legacy sets `mes` after mutating
   (237), commits its mutations, keeps the item and reports `no_effect` with
-  `consumed=false`. Storage failures roll back all of them.
+  `consumed=false`. Storage failures roll back all of them. Appearance changes
+  (costumes, 058) live outside the database, so they are applied only after the
+  item transaction commits; a rolled-back use never changes appearance, and an
+  appearance-store failure after commit keeps the committed use and sets
+  `appearance_not_applied`.
 
 | Legacy item IDs / callback (`lib/_data.cgi` lines) | Reachability, effect and non-consumption condition | Current boundary / remaining owner |
 | --- | --- | --- |
@@ -237,7 +241,7 @@ callbacks. All **53 category-2 and 3 category-4** entries are accounted for belo
 | 043, transformation staff (`789–799`) | H2/D2; uniform monster number 001–108, fallback appearance if its image is absent; consumes. | Missing; [APPEARANCE #1837](https://github.com/witchcraze/party2re/issues/1837). |
 | 044–056; 138–140, costumes (`800–919;1543–1569`) | H2/D2; fixed appearance, gender branches for 046/055/056/140; consumes. Sleep/job change resets it; callback sets no midnight expiry. | Existing Home/Store adapter; APPEARANCE owns expiry/fallback parity. Original assets are excluded. |
 | 057, fatigue elixir (`920–928`) | H2/D2; fatigue becomes 0, even if already 0; consumes. | Existing Home effect, including its current generic-name alias. |
-| 058, book (`929–955`) | H2/D2; gender-specific job-008 appearance, character message and profile personality change; other profile fields survive; public news on successful profile write; consumes. Legacy always has a (possibly empty) profile file, so the write and news are the normal path. | Existing Home effect for both sources: login message and personality/news join the Home transaction; an absent profile is created, profile/storage failures roll back without consuming; appearance uses the costume adapter last (placeholder job-08 art, IMG-004), so APPEARANCE owns its expiry/reset parity. |
+| 058, book (`929–955`) | H2/D2; gender-specific job-008 appearance, character message and profile personality change; other profile fields survive; public news on successful profile write; consumes. Legacy always has a (possibly empty) profile file, so the write and news are the normal path. | Existing Home effect for both sources: login message and personality/news join the Home transaction; an absent profile is created, profile/storage failures roll back without consuming; appearance uses the costume adapter after commit (gender-specific placeholder, IMG-006), so APPEARANCE owns its expiry/reset parity. |
 | 059; 262, reins (`956–964;2071–2077`) | H2/D2; enter `god` / `u_god`, respectively; consumes, no capacity gate. | [#1153](https://github.com/witchcraze/party2re/issues/1153) owns Home entry, both sources and durable realm admission. Scene selection alone grants no visit. |
 | 060–065, six orbs (`965–1054`) | H2/D2; append `s/r/b/g/y/p`; existing same rune sets `mes` and keeps item. Full Depot irrelevant. | [ORBS #1839](https://github.com/witchcraze/party2re/issues/1839); Altar.OfferOrb already handles inventory, not Depot/Home dispatch. |
 | 113/114, bracelets/rings (`1408–1429`) | H4/D4; local returned stats are discarded, so **no permanent HP/MP change; consumes one**. Full Depot irrelevant. | [NO-STAT #1840](https://github.com/witchcraze/party2re/issues/1840). Their separate quest equipment effect is not a Home +100 consumable. |

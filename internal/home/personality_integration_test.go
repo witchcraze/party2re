@@ -26,13 +26,39 @@ type bookCostume struct {
 	itemNo int
 	icon   string
 	calls  int
+	fail   bool
 }
 
 func (c *bookCostume) ApplyCostume(_ context.Context, _ string, itemNo int, _, icon string, _ time.Time) error {
-	c.itemNo, c.icon = itemNo, icon
 	c.calls++
+	if c.fail {
+		return errors.New("injected appearance store failure")
+	}
+	c.itemNo, c.icon = itemNo, icon
 	return nil
 }
+
+// bookFailures injects failures before commit (profile save, the runner's
+// character save, Depot consumption) and after commit (appearance store).
+type bookFailures struct {
+	profileSave, characterSave, depotConsume, appearance bool
+}
+
+var errInjectedBook = errors.New("injected failure")
+
+type failingEconomyCharacters struct {
+	*database.CharacterRepository
+}
+
+func (r failingEconomyCharacters) Update(context.Context, corecharacter.Character) error {
+	return errInjectedBook
+}
+
+type failingDepotConsume struct {
+	*testDepotManagerAdapter
+}
+
+func (failingDepotConsume) ConsumeOne(context.Context, string, string) error { return errInjectedBook }
 
 // failingProfiles makes the profile save fail after the login message was written.
 type failingProfiles struct {
@@ -57,10 +83,10 @@ type bookFixture struct {
 	presence *character.PresenceService
 }
 
-func newBookFixture(t *testing.T, failProfileSave bool) *bookFixture {
+func newBookFixture(t *testing.T, fail bookFailures) *bookFixture {
 	t.Helper()
 	db := homeIsolatedDB(t)
-	f := &bookFixture{db: db, costume: &bookCostume{}}
+	f := &bookFixture{db: db, costume: &bookCostume{fail: fail.appearance}}
 	var err error
 	if f.charRepo, err = database.NewCharacterRepository(db); err != nil {
 		t.Fatal(err)
@@ -84,7 +110,7 @@ func newBookFixture(t *testing.T, failProfileSave bool) *bookFixture {
 		t.Fatal(err)
 	}
 	tx := database.NewTransactionProvider(db)
-	chars, err := character.NewService(failingProfiles{f.charRepo, failProfileSave},
+	chars, err := character.NewService(failingProfiles{f.charRepo, fail.profileSave},
 		character.WithTransactionProvider(tx),
 		character.WithNewsPublisher(character.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, at time.Time) error {
 			_, err := news.PublishNews(ctx, cat, title, content, author, at)
@@ -100,7 +126,11 @@ func newBookFixture(t *testing.T, failProfileSave bool) *bookFixture {
 	if f.presence, err = character.NewPresenceService(presenceRepo, tx, nil); err != nil {
 		t.Fatal(err)
 	}
-	eco, err := economy.NewService(f.charRepo, f.invRepo, economy.WithTransactionProvider(tx))
+	var ecoChars economy.CharacterRepository = f.charRepo
+	if fail.characterSave {
+		ecoChars = failingEconomyCharacters{f.charRepo}
+	}
+	eco, err := economy.NewService(ecoChars, f.invRepo, economy.WithTransactionProvider(tx))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,10 +142,14 @@ func newBookFixture(t *testing.T, failProfileSave bool) *bookFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var depots home.DepotManager = &testDepotManagerAdapter{repo: f.depots}
+	if fail.depotConsume {
+		depots = failingDepotConsume{&testDepotManagerAdapter{repo: f.depots}}
+	}
 	f.svc, err = home.NewService(homeRepo, f.charRepo,
 		home.WithEconomy(eco),
 		home.WithInventoryManager(invService),
-		home.WithDepotManager(&testDepotManagerAdapter{repo: f.depots}),
+		home.WithDepotManager(depots),
 		home.WithItemCatalog(cat),
 		home.WithCostumeApplier(f.costume),
 	)
@@ -143,9 +177,13 @@ func (f *bookFixture) character(t *testing.T, gender string) corecharacter.Chara
 }
 
 func (f *bookFixture) stock(t *testing.T, c corecharacter.Character, source string) string {
+	return f.stockItem(t, c, source, bookDefinition)
+}
+
+func (f *bookFixture) stockItem(t *testing.T, c corecharacter.Character, source, definitionID string) string {
 	t.Helper()
 	ctx := context.Background()
-	inst := coreitem.Instance{ID: "book-" + source + "-" + c.ID[:8], DefinitionID: bookDefinition, Quantity: 1}
+	inst := coreitem.Instance{ID: "it-" + source + "-" + c.ID[:8], DefinitionID: definitionID, Quantity: 1}
 	if source == "inventory" {
 		inv, err := f.invRepo.FindByCharacterID(ctx, c.ID)
 		if err != nil {
@@ -207,7 +245,7 @@ func (f *bookFixture) newsCount(t *testing.T, c corecharacter.Character) int {
 }
 
 func TestPersonalityBook_BothSourcesAndProfiles(t *testing.T) {
-	f := newBookFixture(t, false)
+	f := newBookFixture(t, bookFailures{})
 	ctx := context.Background()
 	for _, tc := range []struct {
 		source, gender string
@@ -241,14 +279,14 @@ func TestPersonalityBook_BothSourcesAndProfiles(t *testing.T) {
 		if f.newsCount(t, c) != 1 {
 			t.Fatalf("%s: want exactly one news article, got %d", tc.source, f.newsCount(t, c))
 		}
-		if f.costume.itemNo != 58 || f.costume.icon != "assets/images/placeholders/job/job-default.svg#job-08-"+tc.gender {
+		if f.costume.itemNo != 58 || f.costume.icon != "assets/images/placeholders/job/appearance.svg#job-08-"+tc.gender {
 			t.Fatalf("%s: appearance %+v", tc.source, f.costume)
 		}
 	}
 }
 
 func TestPersonalityBook_ProfileFailureRollsBack(t *testing.T) {
-	f := newBookFixture(t, true)
+	f := newBookFixture(t, bookFailures{profileSave: true})
 	ctx := context.Background()
 	for _, source := range []string{"inventory", "depot"} {
 		c := f.character(t, "m")
@@ -263,5 +301,54 @@ func TestPersonalityBook_ProfileFailureRollsBack(t *testing.T) {
 	}
 	if f.costume.calls != 0 {
 		t.Fatal("appearance applied despite rollback")
+	}
+}
+
+// Database work that fails after the effect ran (runner character save for both
+// sources, Depot consumption) must leave no appearance, for the book and for an
+// ordinary costume sharing the same path.
+func TestItemAppearance_NotAppliedWhenTransactionFails(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		fail   bookFailures
+		source string
+	}{
+		{"character save/inventory", bookFailures{characterSave: true}, "inventory"},
+		{"character save/depot", bookFailures{characterSave: true}, "depot"},
+		{"depot consume", bookFailures{depotConsume: true}, "depot"},
+	} {
+		f := newBookFixture(t, tc.fail)
+		for _, def := range []string{bookDefinition, "item-044"} {
+			c := f.character(t, "f")
+			id := f.stockItem(t, c, tc.source, def)
+			if _, err := f.svc.UseHomeItem(ctx, c.ID, id, tc.source); !errors.Is(err, errInjectedBook) {
+				t.Fatalf("%s %s: want injected failure, got %v", tc.name, def, err)
+			}
+			st, err := f.presence.State(ctx, c.ID)
+			if err != nil || st.LoginMessage != "" || !f.held(t, c, tc.source, id) || f.newsCount(t, c) != 0 {
+				t.Fatalf("%s %s: partial commit message=%q held=%v", tc.name, def, st.LoginMessage, f.held(t, c, tc.source, id))
+			}
+		}
+		if f.costume.calls != 0 {
+			t.Fatalf("%s: appearance applied for a rolled-back use", tc.name)
+		}
+	}
+}
+
+// An appearance store failure after commit keeps the committed use and reports it.
+func TestPersonalityBook_AppearanceFailureAfterCommitIsReported(t *testing.T) {
+	f := newBookFixture(t, bookFailures{appearance: true})
+	ctx := context.Background()
+	for _, source := range []string{"inventory", "depot"} {
+		c := f.character(t, "m")
+		id := f.stock(t, c, source)
+		res, err := f.svc.UseHomeItem(ctx, c.ID, id, source)
+		if err != nil || !res.Consumed || !res.AppearanceNotApplied || f.held(t, c, source, id) {
+			t.Fatalf("%s: res=%+v err=%v", source, res, err)
+		}
+		if st, _ := f.presence.State(ctx, c.ID); st.LoginMessage != "性格：ムッツリスケベ" || f.newsCount(t, c) != 1 {
+			t.Fatalf("%s: committed effects missing", source)
+		}
 	}
 }

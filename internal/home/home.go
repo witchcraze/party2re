@@ -186,6 +186,8 @@ type UseHomeItemResult struct {
 	Kind      int                      `json:"kind"`
 	Consumed  bool                     `json:"consumed"`
 	Character *corecharacter.Character `json:"character,omitempty"`
+	// AppearanceNotApplied reports a committed use whose appearance could not be stored.
+	AppearanceNotApplied bool `json:"appearance_not_applied,omitempty"`
 }
 
 // ValidateLetter validates sender, recipient, and message content for a letter, returning the normalized content.

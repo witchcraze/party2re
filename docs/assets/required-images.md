@@ -114,6 +114,22 @@ overrides. Missing art uses an available placeholder rather than a broken URL.
   this art and supply gem100's108 candidate positions. Missing positions use the
   fallback without changing the uniform draw or rerolling persisted outcomes.
 
+### IMG-006: Job — Temporary Gender-Specific Appearances
+
+- Status: Placeholder available; **artwork will be replaced** during future image implementation.
+- Type: Character
+- Files: `assets/images/placeholders/job/appearance.svg` (128×64 sheet, two 64×64 views).
+- Used by: Home item 058 appearance (legacy `job/8_<sex>.gif`, `lib/_data.cgi:929–955`).
+- Purpose: Distinguish the male (`job-08-m`) and female (`job-08-f`) job-08 appearance
+  until individual job art exists; IMG-004 stays the gender-neutral job emblem.
+- Format: SVG; transparent background.
+- Provenance: Newly authored geometric drawing in this repository; no legacy
+  artwork, third-party source or generated bitmap was reused.
+- License status: Project-created placeholder, not a final asset.
+- Replacement contract: Stored appearance `Icon` values are identity references.
+  Preserve the `job-08-m` and `job-08-f` fragments or provide resolver aliases.
+- Follow-up: The image catalog/manifest/resolver (#140, #654, #729).
+
 ## Integration and final assets
 
 These files are original development placeholders, not completed production

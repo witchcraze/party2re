@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="64" viewBox="0 0 128 64">
+  <title>Temporary job appearances — artwork will be replaced</title>
+  <view id="job-08-m" viewBox="0 0 64 64"/>
+  <view id="job-08-f" viewBox="64 0 64 64"/>
+  <defs>
+    <g id="jester" stroke="#263238" stroke-width="2" stroke-linejoin="round">
+      <path d="M18 24 10 8l14 9 8-13 8 13 14-9-8 16z" fill="currentColor"/>
+      <circle cx="10" cy="8" r="3" fill="#fff"/>
+      <circle cx="32" cy="4" r="3" fill="#fff"/>
+      <circle cx="54" cy="8" r="3" fill="#fff"/>
+      <circle cx="32" cy="34" r="11" fill="#ffe0b2"/>
+      <path d="M27 32h2m6 0h2M27 39q5 4 10 0" fill="none"/>
+      <path d="M17 62q2-16 15-17 13 1 15 17z" fill="currentColor"/>
+    </g>
+  </defs>
+  <use href="#jester" color="#e57373"/>
+  <use href="#jester" x="64" color="#ba68c8"/>
+  <path d="M85 28q-4 10 2 16M107 28q4 10-2 16" stroke="#263238" stroke-width="2" fill="none"/>
+</svg>
