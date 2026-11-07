@@ -688,21 +688,28 @@ func TestValkeyRoomLock_HonorsCallerDeadlineBeyondDefault(t *testing.T) {
 	})
 
 	held := make(chan struct{})
-	holderDone := make(chan struct{})
+	holderErr := make(chan error, 1)
 	go func() {
-		defer close(holderDone)
-		_ = repo.WithRoomLock(context.Background(), roomID, func(context.Context) error {
+		holderErr <- repo.WithRoomLock(context.Background(), roomID, func(context.Context) error {
 			close(held)
 			time.Sleep(casino.DefaultRoomLockTimeout + 300*time.Millisecond)
 			return nil
 		})
 	}()
-	<-held
+	select {
+	case <-held:
+	case err := <-holderErr:
+		t.Fatalf("holder returned before running its callback: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("holder did not acquire the lock")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := repo.WithRoomLock(ctx, roomID, func(context.Context) error { return nil }); err != nil {
 		t.Fatalf("waiter with 30s deadline must outwait the default timeout, got: %v", err)
 	}
-	<-holderDone
+	if err := <-holderErr; err != nil {
+		t.Fatalf("holder: %v", err)
+	}
 }
