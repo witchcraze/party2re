@@ -52,7 +52,7 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, req Upd
 	}
 
 	if req.AvatarURL != nil {
-		if err := ValidateAvatarURL(strings.TrimSpace(*req.AvatarURL)); err != nil {
+		if err := ValidateAvatarURL(*req.AvatarURL); err != nil {
 			return Profile{}, err
 		}
 	}
@@ -100,7 +100,7 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, req Upd
 		}
 
 		if req.AvatarURL != nil {
-			currentProfile.AvatarURL = strings.TrimSpace(*req.AvatarURL)
+			currentProfile.AvatarURL = *req.AvatarURL
 		}
 
 		if req.AuraEffect != nil {

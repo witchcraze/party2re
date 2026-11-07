@@ -1186,3 +1186,37 @@ func TestService_ReadExistingLongerNames(t *testing.T) {
 		t.Fatalf("ListByPlayer() returned %+v, want name %q", list, longName)
 	}
 }
+
+// Avatars are validated exactly as submitted (#1921): only "" clears, anything
+// other than the canonical URL is rejected and keeps the stored avatar.
+func TestService_UpdateProfile_AvatarExactContract(t *testing.T) {
+	ctx := context.Background()
+	service, _ := NewService(newMockRepository())
+	char, _ := service.CreateWithOptions(ctx, "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
+	const saved = "https://i.imgur.com/abc12.gif"
+	set := func(v string) error {
+		_, err := service.UpdateProfile(ctx, char.ID, UpdateProfileRequest{AvatarURL: &v})
+		return err
+	}
+	stored := func() string {
+		view, err := service.GetProfile(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return view.Profile.AvatarURL
+	}
+	if err := set(saved); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"   ", "\t", " " + saved, saved + " ", saved + "\n"} {
+		if err := set(bad); !errors.Is(err, ErrInvalidAvatarURL) {
+			t.Fatalf("%q: got %v, want ErrInvalidAvatarURL", bad, err)
+		}
+		if got := stored(); got != saved {
+			t.Fatalf("%q: rejected input changed avatar to %q", bad, got)
+		}
+	}
+	if err := set(""); err != nil || stored() != "" {
+		t.Fatalf("explicit empty must clear: err=%v avatar=%q", err, stored())
+	}
+}
