@@ -1,6 +1,6 @@
 ---
 name: Architecture and Component Rules
-description: Guidelines for system architecture, modular monolith design, layer boundaries, and API connections.
+description: Guidelines for system architecture, modular monolith design, layer boundaries, API connections, and environment variable configuration.
 ---
 
 # Architecture Principles
@@ -54,7 +54,12 @@ To preserve testability, decouple packages from global runtime state, and preven
 - **Constructors Accept Config**: Service/repository constructors MUST accept config structs or explicit arguments (e.g., `NewService(cfg Config, ...)`), and MUST NOT call `os.Getenv` or load secrets/paths directly within constructors.
 - **Isolated Environment Loaders**: Environment variable parsing MUST be isolated to dedicated loader functions (e.g., `pkg.ConfigFromEnvironment()` or `pkg.DefaultConfig()`), or handled entirely at the composition root (`cmd/party2/config.go`).
 - **Test-Friendly Defaults**: Provide sane default values for local development and testing without requiring mandatory environment variables unless strictly necessary for secrets or external connection addresses.
-- **Deployment Documentation**: Changes to environment variables MUST follow [`05-database-and-caching.md`](05-database-and-caching.md#8-deployment-environment-variable-documentation).
+- **Deployment Documentation**: This applies to every environment variable read by production code.
+  - **Same-PR Update**: A PR that adds, renames or removes a variable, or changes its default, fallback alias or invalid-value behavior, MUST update the [`README.md` environment variable table](../../README.md#実行環境変数) and the [Docker Compose example](../../README.md#docker-compose-での起動例) in the same PR.
+  - **Required Content**: The table MUST state whether the variable is required, its default, its aliases and its invalid-value behavior when that behavior is not a startup error. The Compose example MUST show required variables as active lines and optional variables as commented lines.
+  - **Secrets**: Passwords and API keys MUST use placeholders such as `<admin-api-key>`. NEVER write a real secret.
+  - **Exclusions**: Variables read only by tests or development tooling (`_test.go`, `internal/testutil`, `PARTY2_TEST_*`, `GOFLAGS`) MUST NOT be listed.
+  - **Verification**: Before committing such a change, search non-test Go files under `cmd/` and `internal/` for environment reads, including keys passed through variables, and compare the names with the README.
 
 ## 9. File Sizing, Package Cohesion, and Mechanical Linting
 To keep files readable, maintainable, and within effective token limits for AI pair programming:
