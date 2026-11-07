@@ -274,6 +274,17 @@ func (c *Character) AddMoney(amount int) error {
 	return nil
 }
 
+// ConvertExperienceToMoney sets Experience to expCap and credits
+// trunc((Experience-expCap)*rate) gold, returning that signed amount. Gold is
+// capped at MaxMoney but not floored, so a negative difference may leave it
+// negative (legacy item 237, _data.cgi:1994).
+func (c *Character) ConvertExperienceToMoney(expCap int, rate float64) int {
+	gain := int(float64(c.Experience-expCap) * rate) // Perl int(): truncates toward zero
+	c.Money = min(c.Money+gain, MaxMoney)
+	c.Experience = expCap
+	return gain
+}
+
 // DeductMoney safely subtracts currency from the character, ensuring non-negative balance.
 func (c *Character) DeductMoney(amount int) error {
 	if amount < 0 {

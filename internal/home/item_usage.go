@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -44,105 +45,6 @@ func (s *Service) randomSource() corecharacter.RandomSource {
 		return nil
 	}
 	return homeRNGAdapter{gen: s.rng}
-}
-
-// ListHomeItems retrieves all usable and inspectable items from inventory and depot.
-func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]HomeUsableItem, error) {
-	var results []HomeUsableItem
-
-	if s.invMgr != nil {
-		inv, err := s.invMgr.FindByCharacterID(ctx, characterID)
-		if err == nil {
-			for _, inst := range inv.Items {
-				def, err := s.catalog.FindByID(inst.DefinitionID)
-				name := inst.DefinitionID
-				var slot item.Slot
-				price := 0
-				kind := 3
-				if err == nil {
-					name = def.Name
-					slot = def.Slot
-					price = def.Price
-					kind = def.Kind()
-				}
-				attack := 0
-				defense := 0
-				weight := 0
-				if kind == 1 {
-					attack, weight = def.Power, def.Weight
-					if attack == 0 && weight == 0 {
-						attack, weight = item.NominalWeaponStats(inst.DefinitionID)
-					}
-				} else if kind == 2 {
-					defense, weight = def.Power, def.Weight
-					if defense == 0 && weight == 0 {
-						defense, weight = item.NominalArmorStats(inst.DefinitionID)
-					}
-				}
-				results = append(results, HomeUsableItem{
-					InstanceID:   inst.ID,
-					DefinitionID: inst.DefinitionID,
-					Name:         name,
-					Kind:         kind,
-					Slot:         slot,
-					Attack:       attack,
-					Defense:      defense,
-					Weight:       weight,
-					Price:        price,
-					Quantity:     inst.Quantity,
-					Source:       "inventory",
-				})
-			}
-		}
-	}
-
-	if s.depotMgr != nil {
-		dp, err := s.depotMgr.FindByCharacterID(ctx, characterID)
-		if err == nil {
-			for _, inst := range dp.Items {
-				def, err := s.catalog.FindByID(inst.DefinitionID)
-				name := inst.DefinitionID
-				var slot item.Slot
-				price := 0
-				kind := 3
-				if err == nil {
-					name = def.Name
-					slot = def.Slot
-					price = def.Price
-					kind = def.Kind()
-				}
-				attack := 0
-				defense := 0
-				weight := 0
-				if kind == 1 {
-					attack, weight = def.Power, def.Weight
-					if attack == 0 && weight == 0 {
-						attack, weight = item.NominalWeaponStats(inst.DefinitionID)
-					}
-				} else if kind == 2 {
-					defense, weight = def.Power, def.Weight
-					if defense == 0 && weight == 0 {
-						defense, weight = item.NominalArmorStats(inst.DefinitionID)
-					}
-				}
-				results = append(results, HomeUsableItem{
-					InstanceID:   inst.ID,
-					DefinitionID: inst.DefinitionID,
-					Name:         name,
-					Kind:         kind,
-					Slot:         slot,
-					Attack:       attack,
-					Defense:      defense,
-					Weight:       weight,
-					Price:        price,
-					Quantity:     inst.Quantity,
-					Source:       "depot",
-				})
-			}
-		}
-	}
-
-	return results, nil
 }
 
 // UseHomeItem inspects or consumes an item from either the character's inventory or depot.
@@ -244,7 +146,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	// Validate supported consumable items before transaction
 	if _, isBag := rewardBags[def.Name]; !isBag && !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
 		switch def.Name {
-		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ":
+		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ", veteranRewardName:
 		default:
 			return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 		}
@@ -252,16 +154,24 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	if s.runner != nil {
 		var resMsg string
+		var kept bool
 		if source == "inventory" {
 			req := economy.TransactionRequest{
 				CharacterID:   characterID,
 				LockInventory: true,
-				Cost: economy.ResourceCost{
-					ItemInstanceID:  instanceID,
-					ItemInstanceQty: 1,
+				CostFunc: func(c corecharacter.Character) (economy.ResourceCost, error) {
+					if homeItemKept(def, c) {
+						return economy.ResourceCost{}, nil
+					}
+					return economy.ResourceCost{ItemInstanceID: instanceID, ItemInstanceQty: 1}, nil
 				},
 			}
 			txRes, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+				if kept = homeItemKept(def, tc.Character); kept {
+					if _, ok := tc.Inventory.Find(instanceID); !ok {
+						return ErrItemNotFound
+					}
+				}
 				msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
 				resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
 				if err != nil {
@@ -281,7 +191,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 						Character: &char,
 					}, nil
 				}
-				if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) {
+				if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) || errors.Is(err, ErrItemNotFound) {
 					return nil, ErrItemNotFound
 				}
 				if errors.Is(err, economy.ErrCharacterNotFound) {
@@ -289,14 +199,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 				}
 				return nil, err
 			}
-			return &UseHomeItemResult{
-				Action:    "consumed",
-				Message:   resMsg,
-				ItemName:  def.Name,
-				Kind:      3,
-				Consumed:  true,
-				Character: &txRes.Character,
-			}, nil
+			return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 		}
 
 		// source == "depot"
@@ -308,12 +211,24 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			if s.depotMgr == nil {
 				return ErrItemNotFound
 			}
+			if kept = homeItemKept(def, tc.Character); kept {
+				dp, err := s.depotMgr.FindByCharacterID(tc.Context, characterID)
+				if err != nil {
+					return err
+				}
+				if !slices.ContainsFunc(dp.Items, func(it item.Instance) bool { return it.ID == instanceID }) {
+					return ErrItemNotFound
+				}
+			}
 			// Apply effect before consuming so that a no-effect sentinel aborts
 			// the transaction without touching the depot.
 			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
 			resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
 			if err != nil {
 				return err
+			}
+			if kept {
+				return nil
 			}
 			if err := s.depotMgr.ConsumeOne(tc.Context, characterID, instanceID); err != nil {
 				if errors.Is(err, depot.ErrItemNotFound) || errors.Is(err, depot.ErrNotFound) {
@@ -344,14 +259,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			}
 			return nil, err
 		}
-		return &UseHomeItemResult{
-			Action:    "consumed",
-			Message:   resMsg,
-			ItemName:  def.Name,
-			Kind:      3,
-			Consumed:  true,
-			Character: &txRes.Character,
-		}, nil
+		return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 	}
 
 	// Fallback path for unit test mocks without runner configured
@@ -371,12 +279,12 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		return nil, err
 	}
 
-	// Consume 1 item
-	if source == "inventory" && s.invMgr != nil {
+	kept := homeItemKept(def, char)
+	if !kept && source == "inventory" && s.invMgr != nil {
 		if _, err := s.invMgr.Consume(ctx, characterID, instanceID, 1); err != nil {
 			return nil, err
 		}
-	} else if source == "depot" && s.depotMgr != nil {
+	} else if !kept && source == "depot" && s.depotMgr != nil {
 		if err := s.depotMgr.ConsumeOne(ctx, characterID, instanceID); err != nil {
 			return nil, err
 		}
@@ -389,14 +297,24 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		}
 	}
 
+	return committedHomeItemResult(def, msg, kept, &char), nil
+}
+
+// committedHomeItemResult reports a committed callback; a kept item reports
+// no_effect even though the callback's mutations were saved.
+func committedHomeItemResult(def item.Definition, msg string, kept bool, char *corecharacter.Character) *UseHomeItemResult {
+	action := "consumed"
+	if kept {
+		action = "no_effect"
+	}
 	return &UseHomeItemResult{
-		Action:    "consumed",
+		Action:    action,
 		Message:   msg,
 		ItemName:  def.Name,
 		Kind:      3,
-		Consumed:  true,
-		Character: &char,
-	}, nil
+		Consumed:  !kept,
+		Character: char,
+	}
 }
 
 func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error) {
@@ -476,7 +394,7 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 		if char.WeaponSeal <= 0 {
 			// No seal to remove: return the no-effect sentinel so the caller
 			// knows to skip consumption and rollback the transaction.
-			return "しかし、何も起こらなかった…", errNoEffect
+			return noEffectMessage, errNoEffect
 		} else {
 			refund := sealRefundCrystals(char.WeaponSeal)
 			char.WeaponSeal = 0
@@ -487,6 +405,8 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 		}
 	case "未来のカケラ":
 		return s.applyFutureMemoryConsumable(ctx, *char)
+	case veteranRewardName:
+		return s.applyVeteranReward(char)
 	default:
 		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}

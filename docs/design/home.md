@@ -223,6 +223,10 @@ callbacks. All **53 category-2 and 3 category-4** entries are accounted for belo
   `get_depot_c` (`1267–1291`) counts capacity; it does not reject delivery.
   Future Go implementations must retain these gameplay outcomes within the
   project's transactions and error handling, without reproducing unsafe file I/O.
+- In Go a callback either rolls back with `no_effect` (nothing changes), commits
+  and consumes one item (`consumed`), or, where legacy sets `mes` after mutating
+  (237), commits its mutations, keeps the item and reports `no_effect` with
+  `consumed=false`. Storage failures roll back all of them.
 
 | Legacy item IDs / callback (`lib/_data.cgi` lines) | Reachability, effect and non-consumption condition | Current boundary / remaining owner |
 | --- | --- | --- |
@@ -244,7 +248,7 @@ callbacks. All **53 category-2 and 3 category-4** entries are accounted for belo
 | 203, sacred mana (`1824`) | H2/D2; SP +200, including over-level; consumes once. | Missing; [MANA #1835](https://github.com/witchcraze/party2re/issues/1835). |
 | 207, future fragment (`1828–1873`) | H2/D2; save job/stat/gender/over-level snapshot and refresh existing job-point records; reject with `mes` for active ordinary/temporary job memory or exhausted slots (saved count > OverFuture). Rejection keeps item; no Depot capacity gate. | Existing Home→Job adapter for both sources; [Jobs](jobs-and-skills.md) owns the snapshot, slot and SP rules. |
 | 231–236;245, wallpapers (`1940–1993;2002–2010`) | H2/D2; replace own background with field 0/1/2/4/5/6/8 respectively; consumes, no gold or town lease prerequisite. | Missing; [WALLPAPER #1836](https://github.com/witchcraze/party2re/issues/1836). Store.BuyHomeWallpaper charges gold and uses a different catalog. |
-| 237, veteran reward (`1994`) | H2/D2; below level 99: unchanged, keep item. Otherwise let d=EXP−98010, credit trunc(d×U[1,1.5)), upper-cap gold at 999999, set EXP=98010. d≤0 sets `mes` **but still executes those mutations and keeps item**; d>0 consumes even at gold cap. | Missing; [VETERAN #1844](https://github.com/witchcraze/party2re/issues/1844); do not replace the d≤0 branch with pure validation. |
+| 237, veteran reward (`1994`) | H2/D2; below level 99: unchanged, keep item. Otherwise let d=EXP−98010, credit trunc(d×U[1,1.5)), upper-cap gold at 999999, set EXP=98010. d≤0 sets `mes` **but still executes those mutations and keeps item**; d>0 consumes even at gold cap. | Existing Home effect for both sources; gold has no lower clamp, so d<0 may leave it negative (approved retention of the legacy result). A kept item reports `no_effect` with its mutations committed. |
 | 257, seal crystal (`2022`) | H2/D2; remove seal/refund half its cost, consume; absent seal sets `mes`, keeps item. | Existing Home effect; [Blacksmith](blacksmith.md) owns seal/refund rules. |
 | 259, sealed key (`2024–2068`); 258 is the non-usable box | H4/D4; prefer held box, otherwise first Depot box. With box: remove it, deliver fixed 059 plus 2–4 weighted rewards (3–5 total), then consume key. Without box: H4 keeps key; D4 consumes key. Full Depot accepts every reward. | [KEY #1842](https://github.com/witchcraze/party2re/issues/1842); generic reward overflow/loss policies are not equivalent. |
 
@@ -259,8 +263,7 @@ duplicate submission neither loses rewards nor consumes a second bag.
 
 Boundary checks for those follow-ups cover both sources, Depot below/at/above
 capacity, duplicate matching instances, missing-box behavior, 113/114 unchanged
-stats, recipe exhaustion, orb duplication, future-memory rejection and veteran
-level/EXP/gold boundaries. Asset-based appearance/wallpaper follow-ups must use
+stats, recipe exhaustion, orb duplication and future-memory rejection. Asset-based appearance/wallpaper follow-ups must use
 independent assets and the [asset contract](https://github.com/witchcraze/party2re/issues/654)
 and [resolution boundary](https://github.com/witchcraze/party2re/issues/729), not legacy image files.
 
