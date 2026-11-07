@@ -169,6 +169,7 @@ ghcr.io/witchcraze/party2re:v1.0.0      # リリースタグ
 | `PARTY2_VALKEY_ADDR` | **必須** | Valkey 接続アドレス | `valkey:6379` |
 | `PARTY2_CORS_ORIGINS` | 任意 | 許可するCORS Origin一覧（カンマ区切り）。省略時は全クロスオリジンを拒否（同一オリジンのみ許可する安全なデフォルト）。<br>※ CORSはブラウザのクロスオリジン相互運用性ポリシーであり、認可制御ではありません。認証トークンや管理者キーの検証はCORSとは独立して実施されます。<br>※ Webフロントエンド（SPA等）をAPIサーバーとは別ドメイン（例: `https://app.party2.game`）やローカル開発用ポート（例: `http://localhost:3000`）から配信して通信を行う構成の場合は、当環境変数に対象オリジンの指定を推奨します。 | `https://app.party2.game,http://localhost:3000` |
 | `PARTY2_TRUSTED_PROXIES` | 任意 | 信頼するリバースプロキシのCIDR/IP一覧（カンマ区切り）。省略時（デフォルト）はフォワーディングヘッダー（`X-Forwarded-For`, `X-Real-IP`）を信用せず、`RemoteAddr` をクライアント識別子として採用するため直接公開時も安全です。<br>※ Nginx, AWS ALB, Cloudflare などのリバースプロキシ背後に配置する場合、プロキシのIP/CIDRを指定することで正当なクライアントIPによるレート制限が行われます。 | `127.0.0.1/32,10.0.0.0/8` |
+| `PARTY2_HOME_COMPANION_PHRASE_LIMIT` | 任意 | キャラクターごとに保持するペットのことばの件数（デフォルト: `30`）。上限を超えると最も古いことばから消えます。未設定・非整数・`0` 以下の値は `30` として扱います。 | `50` |
 
 ### Worker プロセスについて
 
@@ -185,6 +186,8 @@ services:
     environment:
       PARTY2_DB_DSN: party2:party2@tcp(mariadb:3306)/party2?parseTime=true
       PARTY2_VALKEY_ADDR: valkey:6379
+      # 任意: ペットのことばの保持件数（省略時は 30）
+      PARTY2_HOME_COMPANION_PHRASE_LIMIT: "30"
     depends_on:
       mariadb:
         condition: service_healthy
