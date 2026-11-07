@@ -1,15 +1,8 @@
 package character
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
-	"fmt"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 	"strings"
 	"time"
 )
@@ -107,7 +100,7 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, req Upd
 		}
 
 		if req.AvatarURL != nil {
-			currentProfile.AvatarURL = strings.TrimSpace(*req.AvatarURL)
+			currentProfile.AvatarURL = *req.AvatarURL
 		}
 
 		if req.AuraEffect != nil {
@@ -134,49 +127,4 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, req Upd
 	}
 
 	return result, nil
-}
-
-// UploadAvatar validates an image and sets the character's avatar URL to a safe data URI.
-func (s *Service) UploadAvatar(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error) {
-	if len(data) == 0 {
-		return "", ErrInvalidImageFormat
-	}
-	if len(data) > MaxAvatarSizeBytes {
-		return "", ErrImageTooLarge
-	}
-
-	// Validate content type & image header
-	normType := strings.ToLower(strings.TrimSpace(contentType))
-	var mimeType string
-	switch {
-	case strings.Contains(normType, "png") || bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
-		mimeType = "image/png"
-	case strings.Contains(normType, "jpeg") || strings.Contains(normType, "jpg") || (len(data) > 3 && data[0] == 0xFF && data[1] == 0xD8):
-		mimeType = "image/jpeg"
-	case strings.Contains(normType, "gif") || bytes.HasPrefix(data, []byte("GIF87a")) || bytes.HasPrefix(data, []byte("GIF89a")):
-		mimeType = "image/gif"
-	case strings.Contains(normType, "webp") || (len(data) > 12 && string(data[0:4]) == "RIFF" && string(data[8:12]) == "WEBP"):
-		mimeType = "image/webp"
-	case strings.Contains(normType, "svg") || bytes.Contains(data, []byte("<svg")):
-		mimeType = "image/svg+xml"
-	default:
-		// Attempt standard decode
-		_, _, err := image.Decode(bytes.NewReader(data))
-		if err != nil {
-			return "", ErrInvalidImageFormat
-		}
-		mimeType = "image/png"
-	}
-
-	dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data))
-
-	// Update avatar URL in profile
-	_, err := s.UpdateProfile(ctx, characterID, UpdateProfileRequest{
-		AvatarURL: &dataURI,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return dataURI, nil
 }

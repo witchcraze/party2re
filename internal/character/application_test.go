@@ -553,7 +553,7 @@ func TestService_ProfileOperations(t *testing.T) {
 
 	// 2. Update profile
 	comment := "I am a mighty adventurer."
-	avatarURL := "https://example.com/avatar.png"
+	avatarURL := "https://i.imgur.com/AvATest.gif"
 	auraEffect := 3
 	bio := map[string]string{
 		"hobby":     "Fishing",
@@ -617,34 +617,6 @@ func TestService_ProfileOperations(t *testing.T) {
 		}); !errors.Is(err, ErrInvalidAuraEffect) {
 			t.Errorf("expected ErrInvalidAuraEffect for %d, got %v", aura, err)
 		}
-	}
-}
-
-func TestService_UploadAvatar(t *testing.T) {
-	repo := newMockRepository()
-	service, _ := NewService(repo)
-
-	char, _ := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
-
-	// 1. Valid PNG upload
-	pngHeader := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4")
-	dataURI, err := service.UploadAvatar(context.Background(), char.ID, "avatar.png", "image/png", pngHeader)
-	if err != nil {
-		t.Fatalf("UploadAvatar() failed: %v", err)
-	}
-	if !strings.HasPrefix(dataURI, "data:image/png;base64,") {
-		t.Fatalf("expected data:image/png URI, got %s", dataURI)
-	}
-
-	// 2. Empty data rejection
-	if _, err := service.UploadAvatar(context.Background(), char.ID, "empty.png", "image/png", []byte{}); !errors.Is(err, ErrInvalidImageFormat) {
-		t.Fatalf("expected ErrInvalidImageFormat, got %v", err)
-	}
-
-	// 3. Oversized data rejection (> 2 MB)
-	hugeData := make([]byte, 2*1024*1024+1)
-	if _, err := service.UploadAvatar(context.Background(), char.ID, "large.png", "image/png", hugeData); !errors.Is(err, ErrImageTooLarge) {
-		t.Fatalf("expected ErrImageTooLarge, got %v", err)
 	}
 }
 
@@ -733,7 +705,7 @@ func TestService_Profile_ReadErrorPropagationAndPreservation(t *testing.T) {
 
 	// 1. Initial healthy profile with avatar and bio
 	initialComment := "Initial comment"
-	initialAvatar := "https://example.com/saved-avatar.png"
+	initialAvatar := "https://i.imgur.com/AvBTest.gif"
 	initialBio := map[string]string{"key": "saved bio"}
 	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
 		Comment:   &initialComment,
@@ -1212,5 +1184,39 @@ func TestService_ReadExistingLongerNames(t *testing.T) {
 	}
 	if len(list) != 1 || list[0].Name != longName {
 		t.Fatalf("ListByPlayer() returned %+v, want name %q", list, longName)
+	}
+}
+
+// Avatars are validated exactly as submitted (#1921): only "" clears, anything
+// other than the canonical URL is rejected and keeps the stored avatar.
+func TestService_UpdateProfile_AvatarExactContract(t *testing.T) {
+	ctx := context.Background()
+	service, _ := NewService(newMockRepository())
+	char, _ := service.CreateWithOptions(ctx, "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
+	const saved = "https://i.imgur.com/abc12.gif"
+	set := func(v string) error {
+		_, err := service.UpdateProfile(ctx, char.ID, UpdateProfileRequest{AvatarURL: &v})
+		return err
+	}
+	stored := func() string {
+		view, err := service.GetProfile(ctx, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return view.Profile.AvatarURL
+	}
+	if err := set(saved); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"   ", "\t", " " + saved, saved + " ", saved + "\n"} {
+		if err := set(bad); !errors.Is(err, ErrInvalidAvatarURL) {
+			t.Fatalf("%q: got %v, want ErrInvalidAvatarURL", bad, err)
+		}
+		if got := stored(); got != saved {
+			t.Fatalf("%q: rejected input changed avatar to %q", bad, got)
+		}
+	}
+	if err := set(""); err != nil || stored() != "" {
+		t.Fatalf("explicit empty must clear: err=%v avatar=%q", err, stored())
 	}
 }

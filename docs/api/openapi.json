@@ -18831,113 +18831,6 @@
         ]
       }
     },
-    "/characters/{id}/avatar": {
-      "post": {
-        "description": "Uploads an avatar image (multipart form or JSON) for the character (max 2 MB, PNG/JPEG/GIF/WebP/SVG).",
-        "operationId": "uploadCharacterAvatar",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "avatar_url": {
-                    "type": "string"
-                  },
-                  "content_type": {
-                    "type": "string"
-                  },
-                  "filename": {
-                    "type": "string"
-                  },
-                  "image_data": {
-                    "type": "string"
-                  }
-                },
-                "required": [],
-                "type": "object"
-              }
-            },
-            "multipart/form-data": {
-              "schema": {
-                "properties": {
-                  "avatar": {
-                    "format": "binary",
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "avatar_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "avatar_url"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Avatar uploaded and updated successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Invalid format or image exceeds size limit"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Upload character avatar image",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
     "/characters/{id}/bank/inspect": {
       "post": {
         "operationId": "postCharactersIdBankInspect",
@@ -27532,6 +27425,7 @@
                     "type": "integer"
                   },
                   "avatar_url": {
+                    "description": "Empty (no avatar) or https://i.imgur.com/\u003c5-10 alphanumerics\u003e.gif; anything else is rejected with 400.",
                     "type": "string"
                   },
                   "bio_data": {
@@ -27649,6 +27543,7 @@
                     "type": "integer"
                   },
                   "avatar_url": {
+                    "description": "Empty (no avatar) or https://i.imgur.com/\u003c5-10 alphanumerics\u003e.gif; anything else is rejected with 400.",
                     "type": "string"
                   },
                   "bio_data": {

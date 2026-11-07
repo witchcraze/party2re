@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,7 +23,6 @@ type stubCharacterServiceExtended struct {
 	changeGenderFn          func(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	getProfileFn            func(ctx context.Context, characterID string) (character.ProfileView, error)
 	updateProfileFn         func(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
-	uploadAvatarFn          func(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error)
 	getNamingHallDialogueFn func() character.NamingHallDialogue
 	deleteFn                func(ctx context.Context, playerID, characterID string) error
 }
@@ -73,7 +71,7 @@ func (s *stubCharacterServiceExtended) GetProfile(ctx context.Context, character
 		Profile: character.Profile{
 			CharacterID: characterID,
 			Comment:     "Mighty adventurer",
-			AvatarURL:   "https://example.com/avatar.png",
+			AvatarURL:   "https://i.imgur.com/AvATest.gif",
 			AuraEffect:  3,
 		},
 	}, nil
@@ -110,13 +108,6 @@ func (s *stubCharacterServiceExtended) UpdateProfile(ctx context.Context, charac
 		AuraEffect:  auraEffect,
 		BioData:     req.BioData,
 	}, nil
-}
-
-func (s *stubCharacterServiceExtended) UploadAvatar(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error) {
-	if s.uploadAvatarFn != nil {
-		return s.uploadAvatarFn(ctx, characterID, filename, contentType, data)
-	}
-	return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", nil
 }
 
 func (s *stubCharacterServiceExtended) GetNamingHallDialogue() character.NamingHallDialogue {
@@ -249,7 +240,7 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	// 6. PUT /characters/{id}/profile - Authenticated -> 200 OK
 	profBody, _ := json.Marshal(map[string]interface{}{
 		"comment":     "New bio comment",
-		"avatar_url":  "https://example.com/avatar2.png",
+		"avatar_url":  "https://i.imgur.com/AvCTest.gif",
 		"aura_effect": 4,
 	})
 	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(profBody))
@@ -330,20 +321,15 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// 7. POST /characters/{id}/avatar - Multipart Upload -> 200 OK
-	var buf bytes.Buffer
-	writer := multipart.NewWriter(&buf)
-	part, _ := writer.CreateFormFile("avatar", "test.png")
-	part.Write([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"))
-	writer.Close()
-
-	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/avatar", &buf)
+	// 7. The data-URI avatar upload route is retired (legacy has no upload).
+	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/avatar", bytes.NewReader([]byte(`{"image_data":"x"}`)))
 	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK for avatar upload, got %d (err: %v)", resp.StatusCode, err)
+	if err != nil || (resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusMethodNotAllowed) {
+		t.Fatalf("expected retired avatar route, got %d (err: %v)", resp.StatusCode, err)
 	}
+	resp.Body.Close()
 }
 
 func TestCreateCharacterEndpoint(t *testing.T) {

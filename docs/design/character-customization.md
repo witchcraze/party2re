@@ -54,14 +54,9 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 
 ### 5.1 Profile Attributes (`character_profiles`)
 - **Self-Introduction Comment**: Up to 160 characters (`MaxCommentLength = 160`).
-- **Avatar URL**: Up to 512 characters. May be a valid `http://` or `https://` URL, a relative path `/...`, or an inline data URI (`data:image/...;base64,...`).
+- **Avatar URL**: Empty (no avatar) or exactly `https://i.imgur.com/<ID>.gif`, where `<ID>` is 5–10 ASCII letters/digits. Legacy `lib/custom_image.cgi:65–70` accepts only that imgur ID and stores this URL; there is no image upload, data URI or other host. Profile updates reject any other value with 400 and leave the stored avatar unchanged. Other external services are deferred to [#1923](https://github.com/witchcraze/party2re/issues/1923). Known gap: the God new-world wish still writes `chr/052.gif` here although legacy changes the icon, not the avatar ([#1924](https://github.com/witchcraze/party2re/issues/1924)).
 - **Aura Effect (`aura_effect`)**: Selectable visual aura effect (integer `0` through `8`). Restored from legacy `custom_image.cgi` (`effect1` / `@effects` in `_data.cgi`). `0`: None (default), `1`: Flame, `2`: Dark/Wings 1, `3`: Light/Wings 2, `4`: Thunder/Blue Flame, `5`: Wind/Black Flame, `6`: Rainbow/Wings 3, `7`: Star/Mysterious Object 1, `8`: Cherry Blossom/Mysterious Object 2. Validated with `0 <= aura_effect <= 8`.
 - **Bio Data**: Optional structured key-value map (e.g. `hobby`, `dream`, `like_food`, `dislike_food`, `blood_type`, `birthday`) with keys $\le 32$ characters (`MaxBioKeyLength = 32`) and values $\le 160$ Unicode characters (`MaxBioFieldLength = 160`). In parity with legacy Party2 (`lib/profile.cgi`), bio field values preserve original whitespace without arbitrary trimming, and length limits (0–160 characters) are enforced directly against persisted values.
-
-### 5.2 Avatar Image Upload
-- **Maximum File Size**: 2 MB (`MaxAvatarSizeBytes = 2097152`).
-- **Supported Formats**: PNG, JPEG, GIF, WebP, SVG (`image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`).
-- Stored as a data URI or avatar URL in the character's profile.
 
 ---
 

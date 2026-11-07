@@ -81,7 +81,6 @@ type CharacterService interface {
 	ChangeGender(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	GetProfile(ctx context.Context, characterID string) (character.ProfileView, error)
 	UpdateProfile(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
-	UploadAvatar(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error)
 	GetNamingHallDialogue() character.NamingHallDialogue
 	Delete(ctx context.Context, playerID, characterID string) error
 }
@@ -345,7 +344,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("PUT /characters/{id}/profile", h.handleUpdateCharacterProfile)
 	mux.HandleFunc("POST /characters/{id}/name", h.handleChangeCharacterName)
 	mux.HandleFunc("POST /characters/{id}/gender", h.handleChangeCharacterGender)
-	mux.HandleFunc("POST /characters/{id}/avatar", h.handleUploadCharacterAvatar)
 	mux.HandleFunc("GET /naming-hall/dialogue", h.handleNamingHallDialogue)
 
 	mux.HandleFunc("POST /adventures", h.handleStartAdventure)

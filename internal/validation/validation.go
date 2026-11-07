@@ -47,22 +47,8 @@ func ValidateSingleLine(input string, maxRunes int) (string, error) {
 
 	consecutiveCombining := 0
 	for _, r := range sanitized {
-		if isC0OrC1Control(r) {
-			return "", ErrControlCharacter
-		}
-		if isZeroWidth(r) {
-			return "", ErrZeroWidth
-		}
-		if isBidiOverride(r) {
-			return "", ErrBidiOverride
-		}
-		if isCombiningMark(r) {
-			consecutiveCombining++
-			if consecutiveCombining > 2 {
-				return "", ErrZalgo
-			}
-		} else {
-			consecutiveCombining = 0
+		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
+			return "", err
 		}
 	}
 
@@ -114,26 +100,34 @@ func ValidateMultiLine(input string, maxRunes int) (string, error) {
 			consecutiveCombining = 0
 			continue
 		}
-		if isC0OrC1Control(r) {
-			return "", ErrControlCharacter
-		}
-		if isZeroWidth(r) {
-			return "", ErrZeroWidth
-		}
-		if isBidiOverride(r) {
-			return "", ErrBidiOverride
-		}
-		if isCombiningMark(r) {
-			consecutiveCombining++
-			if consecutiveCombining > 2 {
-				return "", ErrZalgo
-			}
-		} else {
-			consecutiveCombining = 0
+		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
+			return "", err
 		}
 	}
 
 	return sanitized, nil
+}
+
+// ValidateVerbatimLine validates text that is stored exactly as given: no trimming,
+// normalization or repair, and empty input is allowed. It applies the shared
+// safety checks plus malformed UTF-8 and Unicode line/paragraph separators.
+func ValidateVerbatimLine(input string, maxRunes int) error {
+	if !utf8.ValidString(input) {
+		return ErrControlCharacter
+	}
+	if utf8.RuneCountInString(input) > maxRunes {
+		return ErrTooLong
+	}
+	consecutiveCombining := 0
+	for _, r := range input {
+		if r == ' ' || r == ' ' {
+			return ErrControlCharacter
+		}
+		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ValidateCharacterName validates character names according to legacy Party2 rules and modern safety checks:
@@ -159,22 +153,8 @@ func ValidateCharacterName(name string) (string, error) {
 		if unicode.IsSpace(r) || r == '\u3000' {
 			return "", ErrInternalWhitespace
 		}
-		if isC0OrC1Control(r) {
-			return "", ErrControlCharacter
-		}
-		if isZeroWidth(r) {
-			return "", ErrZeroWidth
-		}
-		if isBidiOverride(r) {
-			return "", ErrBidiOverride
-		}
-		if isCombiningMark(r) {
-			consecutiveCombining++
-			if consecutiveCombining > 2 {
-				return "", ErrZalgo
-			}
-		} else {
-			consecutiveCombining = 0
+		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
+			return "", err
 		}
 	}
 
@@ -211,22 +191,8 @@ func ValidateGuildName(name string) (string, error) {
 		if unicode.IsSpace(r) || r == '\u3000' {
 			return "", ErrInternalWhitespace
 		}
-		if isC0OrC1Control(r) {
-			return "", ErrControlCharacter
-		}
-		if isZeroWidth(r) {
-			return "", ErrZeroWidth
-		}
-		if isBidiOverride(r) {
-			return "", ErrBidiOverride
-		}
-		if isCombiningMark(r) {
-			consecutiveCombining++
-			if consecutiveCombining > 2 {
-				return "", ErrZalgo
-			}
-		} else {
-			consecutiveCombining = 0
+		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
+			return "", err
 		}
 	}
 
@@ -274,6 +240,30 @@ func ValidateGender(gender string) (string, error) {
 	default:
 		return "", ErrInvalidGender
 	}
+}
+
+// checkSafeRune is the shared safety predicate: it rejects control, invisible,
+// bidi-override and excessive combining characters. combining carries the run
+// of consecutive combining marks across calls.
+func checkSafeRune(r rune, combining *int) error {
+	if isC0OrC1Control(r) {
+		return ErrControlCharacter
+	}
+	if isZeroWidth(r) {
+		return ErrZeroWidth
+	}
+	if isBidiOverride(r) {
+		return ErrBidiOverride
+	}
+	if isCombiningMark(r) {
+		*combining++
+		if *combining > 2 {
+			return ErrZalgo
+		}
+	} else {
+		*combining = 0
+	}
+	return nil
 }
 
 func isC0OrC1Control(r rune) bool {

@@ -265,11 +265,10 @@ spaces/legacy forbidden punctuation and retaining safe combining marks, while
 rejecting rather than stripping newlines, is the explicitly approved departure
 in #1104; its implementation prioritizes safe storage and output.
 
-Reuse [shared validation](../../internal/validation/validation.go) safety checks;
-its current single-line wrapper trims/normalizes and rejects empty text, so it
-cannot directly implement this message contract. Extract reusable safety checks
-while preserving existing callers' policies; do not duplicate sanitizers or
-silently change other text fields. Validate at the service boundary, use SQL
+[Shared validation](../../internal/validation/validation.go)'s `ValidateVerbatimLine`
+implements this contract over the same per-character safety predicate as the
+trimming/normalizing wrappers, whose policies are unchanged; do not duplicate
+sanitizers or silently change other text fields. Validate at the service boundary, use SQL
 parameters, serialize with the shared JSON writer, and render through escaped
 text nodes/framework text binding. HTML, script, attribute and URL contexts need
 their own safe encoders/validators; a single universal escaping function is not
@@ -277,16 +276,22 @@ a security boundary. Recheck stored public text and image URL safety before
 output; malformed data fails the observation instead of leaking unsafe/partial
 content. Never interpolate user text into executable markup or SQL.
 
-**Persistence and delivery.** MariaDB owns the character's message and bounded
-character-dependent presence snapshots and sampling clock; Valkey is unnecessary.
-A gameplay save, its retention event and any due sample commit in the same
-transaction. Entry message changes and entry publication also commit together. Initial deployment
+**Persistence and delivery.** MariaDB owns the character's message and sampling
+clock (`characters`) and at most one entry and one sample snapshot per character
+(`character_presence_snapshots`); Valkey is unnecessary. The Character
+[presence service](../../internal/character/presence.go) records entry and
+save-equivalent samples, observes the list/count and reads the current message
+and clock for cards. Its writes lock the owning character and join the caller's
+transaction, so a gameplay save, its retention event and any due sample commit
+together, as do entry message changes and entry publication. Publication copies
+display fields; an avatar outside the [profile avatar contract](character-customization.md#51-profile-attributes-character_profiles)
+is published as an empty icon rather than blocking presence. Observation rechecks
+each stored public field and fails as a whole on unsafe data. Initial deployment
 publishes no fabricated activity; restart preserves eligible records. Character
-cleanup owns these records. The [API boundary](../architecture/client-agent-api.md#public-presence-and-message-boundary)
-defines the planned whitelist and owned update path. These contracts are planned;
-the [storage/safe-text implementation](https://github.com/witchcraze/party2re/issues/1803)
-and [API/save-boundary integration](https://github.com/witchcraze/party2re/issues/1804)
-own executable security/boundary tests and runtime delivery.
+deletion removes these records. The [API boundary](../architecture/client-agent-api.md#public-presence-and-message-boundary)
+defines the planned whitelist and owned update path; the
+[API/save-boundary integration](https://github.com/witchcraze/party2re/issues/1804)
+owns runtime delivery and save-boundary wiring.
 
 ---
 

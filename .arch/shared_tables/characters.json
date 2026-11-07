@@ -16,7 +16,8 @@
     "internal/pvp/service.go#CharacterRepository",
     "internal/dungeon/dungeon.go#CharacterRepository",
     "internal/adventure/normal_run.go#RunCharacters",
-    "internal/customskill/custom_skill.go#CharacterProvider"
+    "internal/customskill/custom_skill.go#CharacterProvider",
+    "internal/character/presence.go#PresenceRepository"
   ],
   "callers": [
     {
@@ -221,6 +222,20 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock actor and check Adventure ownership before consuming gems or replacing the live skill"
+    },
+    {
+      "module": "character",
+      "caller_method": "internal/character/presence.go#PresenceService.Enter",
+      "lock_mode": "SELECT ... FOR UPDATE (LockPresenceOwner)",
+      "lock_order": 2,
+      "purpose": "Lock owner row, then update login message, due sampled clock and entry snapshot"
+    },
+    {
+      "module": "character",
+      "caller_method": "internal/character/presence.go#PresenceService.RecordSave",
+      "lock_mode": "SELECT ... FOR UPDATE (LockPresenceOwner)",
+      "lock_order": 2,
+      "purpose": "Lock owner row inside the caller's save transaction and advance the due sampled clock"
     }
   ]
 }

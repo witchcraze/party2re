@@ -99,7 +99,6 @@ type stubCharacterService struct {
 	changeGenderFn          func(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	getProfileFn            func(ctx context.Context, characterID string) (character.ProfileView, error)
 	updateProfileFn         func(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
-	uploadAvatarFn          func(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error)
 	getNamingHallDialogueFn func() character.NamingHallDialogue
 	deleteFn                func(ctx context.Context, playerID, characterID string) error
 }
@@ -149,12 +148,6 @@ func (s *stubCharacterService) UpdateProfile(ctx context.Context, characterID st
 		return s.updateProfileFn(ctx, characterID, req)
 	}
 	return character.Profile{CharacterID: characterID}, nil
-}
-func (s *stubCharacterService) UploadAvatar(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error) {
-	if s.uploadAvatarFn != nil {
-		return s.uploadAvatarFn(ctx, characterID, filename, contentType, data)
-	}
-	return "data:image/png;base64,placeholder", nil
 }
 func (s *stubCharacterService) GetNamingHallDialogue() character.NamingHallDialogue {
 	if s.getNamingHallDialogueFn != nil {

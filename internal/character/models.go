@@ -3,7 +3,7 @@ package character
 import (
 	"context"
 	"errors"
-	"net/url"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -13,13 +13,11 @@ import (
 )
 
 const (
-	NameChangeCost     = 500000          // 500,000 Gold
-	GenderChangeCost   = 10000           // 10,000 Gold
-	MaxCommentLength   = 160             // 160 runes
-	MaxBioFieldLength  = 160             // 160 runes
-	MaxBioKeyLength    = 32              // 32 runes
-	MaxAvatarURLLength = 512             // 512 chars
-	MaxAvatarSizeBytes = 2 * 1024 * 1024 // 2 MB
+	NameChangeCost    = 500000 // 500,000 Gold
+	GenderChangeCost  = 10000  // 10,000 Gold
+	MaxCommentLength  = 160    // 160 runes
+	MaxBioFieldLength = 160    // 160 runes
+	MaxBioKeyLength   = 32     // 32 runes
 )
 
 var (
@@ -35,9 +33,7 @@ var (
 	ErrCommentTooLong            = errors.New("profile comment exceeds maximum length of 160 characters")
 	ErrBioKeyTooLong             = errors.New("bio field key exceeds maximum length of 32 characters")
 	ErrBioValueTooLong           = errors.New("bio field value exceeds maximum length of 160 characters")
-	ErrInvalidAvatarURL          = errors.New("invalid avatar URL: must be http or https URL")
-	ErrInvalidImageFormat        = errors.New("invalid image format: allowed formats are PNG, JPEG, GIF, WebP, SVG")
-	ErrImageTooLarge             = errors.New("image size exceeds maximum allowed limit (2 MB)")
+	ErrInvalidAvatarURL          = errors.New("invalid avatar URL: must be https://i.imgur.com/<5-10 alphanumerics>.gif")
 	ErrForbidden                 = errors.New("forbidden: character does not belong to authenticated player")
 	ErrInvalidAuraEffect         = errors.New("invalid aura effect: must be between 0 and 8")
 )
@@ -115,32 +111,16 @@ func ValidateComment(comment string) error {
 	return nil
 }
 
-// ValidateAvatarURL checks avatar URL format.
+// avatarURLPattern is the only non-empty avatar: legacy stores an imgur image ID
+// (5–10 alphanumerics) as this URL (custom_image.cgi:65–70).
+var avatarURLPattern = regexp.MustCompile(`^https://i\.imgur\.com/[A-Za-z0-9]{5,10}\.gif$`)
+
+// ValidateAvatarURL accepts "" (no avatar) or the canonical imgur avatar URL, exactly.
 func ValidateAvatarURL(avatarURL string) error {
-	trimmed := strings.TrimSpace(avatarURL)
-	if trimmed == "" {
+	if avatarURL == "" || avatarURLPattern.MatchString(avatarURL) {
 		return nil
 	}
-	if strings.HasPrefix(trimmed, "data:image/") {
-		if len(trimmed) > 4*1024*1024 {
-			return ErrImageTooLarge
-		}
-		if !strings.Contains(trimmed, ";base64,") {
-			return ErrInvalidAvatarURL
-		}
-		return nil
-	}
-	if len(trimmed) > MaxAvatarURLLength {
-		return ErrInvalidAvatarURL
-	}
-	if strings.HasPrefix(trimmed, "/") {
-		return nil
-	}
-	parsed, err := url.Parse(trimmed)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return ErrInvalidAvatarURL
-	}
-	return nil
+	return ErrInvalidAvatarURL
 }
 
 // ValidateBioData validates bio keys and values.
