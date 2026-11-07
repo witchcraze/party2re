@@ -144,7 +144,7 @@ Asynchronous direct messaging between characters:
   - Line breaks are removed, joining the lines.
   - The limit applies to the length after legacy HTML escaping: `&`, `;` and `,` count as 5, `<` and `>` as 4, `"` as 6, and other characters as 1. Letters are stored unescaped, so this affects counting only.
   - Legacy also counts the `＠てがみをかく>宛先` command text. Go receives the recipient as a separate field, so this does not apply.
-- **Implementation gap**: legacy silently removes combining marks in several ranges, while Go keeps them after NFC normalization and rejects excessive sequences. A kept mark counts as one character.
+- **Approved difference** (#1126): legacy silently removes combining marks in several ranges, which also alters accented and Thai text. Go keeps them after NFC normalization and rejects excessive sequences. A kept mark counts as one character.
 
 ### 3. Companion Greeting Phrases & Resident Companions (`character_companion_phrases`, `home_members`)
 
