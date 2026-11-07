@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -153,7 +154,8 @@ func TestGvGExpectedRoundConcurrentIntegration(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newRewardFixture(t, tc.target, tc.round, tc.outcome)
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
 			stress := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(_, _ int) error {
 				result, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, tc.round)
 				if err != nil {
