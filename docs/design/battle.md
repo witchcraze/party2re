@@ -757,9 +757,12 @@ credits; the existing economy owner caps the final durable balance, matching
 held definition. The participant adapter can identify the single-hand projection
 from an empty inventory or a single tool/accessory row; inventories with
 equipped weapons, armor or ambiguous multiple rows stay unknown. Scavenging
-requires known combat/durable hands and helper-quest facts before any effect.
-Book transactions (#1370), stored-tool execution/history (#1371) and enhanced
-tools/purchase (#1372) retain their own gates. A registered body still requires
+and the enhanced-tool/purchase callback require only the facts their reachable
+branch reads, before any effect: the actor's combat hand always, the durable hand
+for a player actor, helper-quest facts for an empty hand, and for an enhanced
+tool the reset, defeat or roster owner its body reaches. An NPC actor never reads
+or writes the durable hand. Book transactions (#1370) and stored-tool
+execution/history (#1371) retain their own gates. A registered body still requires
 its actual transaction context and every reachable child before discovery or use.
 
 #### Random and delegated job closure

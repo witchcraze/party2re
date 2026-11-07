@@ -199,7 +199,7 @@ func (r *assetInventoryFailure) Save(ctx context.Context, inv coreinventory.Inve
 }
 
 func TestJobAssetsSQLPairedRetry(t *testing.T) {
-	for _, action := range []string{"job-28-entry-3", "job-78-entry-5"} {
+	for _, action := range []string{"job-28-entry-3", "job-78-entry-0", "job-78-entry-5"} {
 		t.Run(action, func(t *testing.T) {
 			f := newNormalFixture(t, 2)
 			c := installAssets(t, f)
@@ -240,6 +240,9 @@ func TestJobAssetsSQLPairedRetry(t *testing.T) {
 			wantGold, wantItems := 100, 0
 			if action == "job-78-entry-5" {
 				wantGold, wantItems = 200, 1
+			}
+			if action == "job-78-entry-0" {
+				wantGold, wantItems = 125, 1 // One winner pays floor(30×2.5).
 			}
 			if err != nil || r.Version != commands[0].Version+1 || total != wantGold || items != wantItems || c.calls.Load() != 1 {
 				t.Fatal("paired commands duplicated assets", r, total, items, c.calls.Load(), err)
@@ -299,5 +302,206 @@ func TestJobAssetsSQLNPCScavengingPreservesDurableHand(t *testing.T) {
 	inv, err := f.invs.FindByCharacterID(context.Background(), cmd.ActorID)
 	if err != nil || len(inv.Items) != 0 {
 		t.Fatal(inv, err)
+	}
+}
+
+func grantHeld(t *testing.T, f *normalFixture, id string) {
+	t.Helper()
+	_, err := f.cfg.JobAssetRunner.ExecuteTransaction(context.Background(), economy.TransactionRequest{CharacterID: f.actors[0].ID, Grant: economy.ResourceGrant{ItemDefinitionID: id, ItemQuantity: 1}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertAssets(t *testing.T, f *normalFixture, characterID string, money, items int) {
+	t.Helper()
+	char, err := f.chars.FindByID(context.Background(), characterID)
+	if err != nil || char.Money != money {
+		t.Fatal("wallet", char.Money, money, err)
+	}
+	inv, err := f.invs.FindByCharacterID(context.Background(), characterID)
+	if err != nil || len(inv.Items) != items {
+		t.Fatal("inventory", inv, items, err)
+	}
+}
+
+func TestEnhancedToolSQLRollbackReceiptAndRestart(t *testing.T) {
+	const action = "job-78-entry-0"
+	for _, scenario := range []struct {
+		name             string
+		held             string
+		money, items     int
+		wantHeld         string
+		wantMoney, wantN int
+	}{
+		{"purchase", "", 100, 0, "item-001", 25, 1},
+		{"use", "item-001", 100, 1, "", 100, 0},
+	} {
+		for _, failure := range []string{"effect", "receipt", "commit-unknown", "inventory"} {
+			t.Run(scenario.name+"/"+failure, func(t *testing.T) {
+				f := newNormalFixture(t, 1)
+				c := installAssets(t, f)
+				if scenario.held != "" {
+					grantHeld(t, f, scenario.held)
+				}
+				entry := f.enter(t, "normal")
+				run := entry.Command.RunID
+				seedAssetEncounter(t, f, run)
+				cmd := assetCommand(t, f, run, 0, action, "enhanced-command")
+				before, err := f.store.FindRun(context.Background(), run)
+				if err != nil {
+					t.Fatal(err)
+				}
+				originalRunner := f.cfg.JobAssetRunner
+				switch failure {
+				case "effect":
+					c.fail.Store(true)
+				case "receipt":
+					f.store.failWrite.Store(true)
+				case "commit-unknown":
+					f.store.loseCommit.Store(true)
+				case "inventory":
+					f.cfg.JobAssetRunner, err = economy.NewService(f.chars, &assetInventoryFailure{InventoryRepository: f.invs}, economy.WithTransactionProvider(database.NewTransactionProvider(f.db)))
+					if err != nil {
+						t.Fatal(err)
+					}
+					f.restart(t)
+				}
+				first, err := f.svc.Command(context.Background(), cmd)
+				if failure != "commit-unknown" {
+					if err == nil {
+						t.Fatal("injected failure committed")
+					}
+					after, e := f.store.FindRun(context.Background(), run)
+					if e != nil || !reflect.DeepEqual(before, after) {
+						t.Fatal("run escaped rollback", after, e)
+					}
+					assertAssets(t, f, cmd.ActorID, scenario.money, scenario.items)
+					c.fail.Store(false)
+					f.store.failWrite.Store(false)
+					f.cfg.JobAssetRunner = originalRunner
+					f.restart(t)
+					first, err = f.svc.Command(context.Background(), cmd)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				calls, draws := c.calls.Load(), f.rng.calls.Load()
+				f.restart(t)
+				again, err := f.svc.Command(context.Background(), cmd)
+				if err != nil || !reflect.DeepEqual(first, again) || c.calls.Load() != calls || f.rng.calls.Load() != draws {
+					t.Fatal("retry executed effects", first, again, err)
+				}
+				assertAssets(t, f, cmd.ActorID, scenario.wantMoney, scenario.wantN)
+				r, err := f.store.FindRun(context.Background(), run)
+				if err != nil || *r.Battle.Actors[0].HeldToolID != scenario.wantHeld {
+					t.Fatal(r, err)
+				}
+			})
+		}
+	}
+}
+
+// An NPC's tool lives only in combat; the commanding requester still pays.
+func TestEnhancedToolSQLNPCActorChargesRequesterOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		held                string
+		wantNPC             string
+		wantMoney, wantRows int
+	}{
+		{"purchase", "", "item-001", 25, 0},
+		{"use", "item-001", "", 100, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newNormalFixture(t, 1)
+			c := installAssets(t, f)
+			c.npc = true
+			if tc.held != "" {
+				grantHeld(t, f, tc.held)
+			}
+			entry := f.enter(t, "normal")
+			run := entry.Command.RunID
+			seedAssetEncounter(t, f, run)
+			cmd := assetCommand(t, f, run, 0, "job-78-entry-0", "npc-enhanced")
+			cmd.TargetID = cmd.ActorID
+			if _, err := f.svc.Command(context.Background(), cmd); err != nil {
+				t.Fatal(err)
+			}
+			assertAssets(t, f, cmd.ActorID, tc.wantMoney, tc.wantRows)
+			r, err := f.store.FindRun(context.Background(), run)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if npc := r.Battle.Actors[len(r.Battle.Actors)-1]; *npc.HeldToolID != tc.wantNPC || *r.Battle.Actors[0].HeldToolID != tc.held {
+				t.Fatal(*npc.HeldToolID, *r.Battle.Actors[0].HeldToolID)
+			}
+		})
+	}
+}
+
+// A weapon row cannot certify the hand, so nothing may be charged or consumed.
+func TestEnhancedToolSQLUnknownHandRejectsBeforeAssets(t *testing.T) {
+	f := newNormalFixture(t, 1)
+	c := installAssets(t, f)
+	grantHeld(t, f, "weapon-01")
+	entry := f.enter(t, "normal")
+	run := entry.Command.RunID
+	seedAssetEncounter(t, f, run)
+	cmd := assetCommand(t, f, run, 0, "job-78-entry-0", "unknown-hand")
+	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatal(err)
+	}
+	assertAssets(t, f, cmd.ActorID, 100, 1)
+	if c.fail.Load() || f.rng.calls.Load() != 0 {
+		t.Fatal("rejection drew", f.rng.calls.Load())
+	}
+}
+
+func TestEnhancedToolSQLHelperExclusionAndReload(t *testing.T) {
+	t.Run("fully excluded pool charges nothing", func(t *testing.T) {
+		f := newNormalFixture(t, 1)
+		installAssets(t, f)
+		f.cfg.JobAssetHelpers = func(context.Context) ([]int, error) {
+			return []int{1, 2, 9, 11, 14, 15, 41, 80, 81, 84}, nil
+		}
+		f.restart(t)
+		entry := f.enter(t, "normal")
+		run := entry.Command.RunID
+		seedAssetEncounter(t, f, run)
+		cmd := assetCommand(t, f, run, 0, "job-78-entry-0", "excluded")
+		if _, err := f.svc.Command(context.Background(), cmd); err != nil {
+			t.Fatal(err)
+		}
+		assertAssets(t, f, cmd.ActorID, 100, 0)
+	})
+	// Buy then use across a process restart must match the same two commands
+	// without one: the bought tool is durable and then consumed exactly once.
+	sequence := func(t *testing.T, restart bool) int {
+		f := newNormalFixture(t, 1)
+		installAssets(t, f)
+		entry := f.enter(t, "normal")
+		run := entry.Command.RunID
+		seedAssetEncounter(t, f, run)
+		if _, err := f.svc.Command(context.Background(), assetCommand(t, f, run, 0, "job-78-entry-0", "buy")); err != nil {
+			t.Fatal(err)
+		}
+		if restart {
+			f.restart(t)
+		}
+		cmd := assetCommand(t, f, run, 0, "job-78-entry-0", "use")
+		if _, err := f.svc.Command(context.Background(), cmd); err != nil {
+			t.Fatal(err)
+		}
+		assertAssets(t, f, cmd.ActorID, 25, 0)
+		r, err := f.store.FindRun(context.Background(), run)
+		if err != nil || *r.Battle.Actors[0].HeldToolID != "" {
+			t.Fatal(r, err)
+		}
+		return r.Battle.Actors[0].HP
+	}
+	straight, reloaded := sequence(t, false), sequence(t, true)
+	if straight != reloaded || straight != 5108 {
+		t.Fatal(straight, reloaded)
 	}
 }

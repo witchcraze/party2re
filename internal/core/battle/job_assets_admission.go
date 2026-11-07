@@ -15,6 +15,8 @@ func (s *LifetimeState) ValidateJobAssets(c *JobAssetContext, id string, rng ran
 		return ErrUnsupportedEffect
 	}
 	switch id {
+	case "job-78-entry-0":
+		return s.validateEnhancedTool(c, rng)
 	case "job-7-entry-0", "job-7-entry-2", "job-8-entry-0", "job-28-entry-3", "job-78-entry-5", "job-81-entry-2":
 	default:
 		return ErrUnsupportedEffect
@@ -22,11 +24,15 @@ func (s *LifetimeState) ValidateJobAssets(c *JobAssetContext, id string, rng ran
 	if (id == "job-7-entry-2" || id == "job-81-entry-2") && c.Assets.AddWallet == nil {
 		return ErrUnsupportedEffect
 	}
-	if id == "job-78-entry-5" && (s.actor(c.ActorID).HeldToolID == nil || c.Assets.HeldToolID == nil || c.Assets.HelperToolIDs == nil) {
-		return ErrUnsupportedEffect
-	}
-	if id == "job-78-entry-5" && !s.actor(c.ActorID).NPC && *s.actor(c.ActorID).HeldToolID == "" && *c.Assets.HeldToolID != "" {
-		return ErrUnsupportedEffect
+	if id == "job-78-entry-5" {
+		// Only a player actor writes the durable hand; only an empty hand draws.
+		a := s.actor(c.ActorID)
+		if a.HeldToolID == nil || (!a.NPC && c.Assets.HeldToolID == nil) || (*a.HeldToolID == "" && c.Assets.HelperToolIDs == nil) {
+			return ErrUnsupportedEffect
+		}
+		if !a.NPC && *a.HeldToolID == "" && *c.Assets.HeldToolID != "" {
+			return ErrUnsupportedEffect
+		}
 	}
 	p, child := s.callbackCopy(), *c
 	child.ActorNPC = p.actor(c.ActorID).NPC
