@@ -55,10 +55,18 @@ type Service struct {
 	petReader              HomePetReader
 	wakeClaimTTL           time.Duration
 	wakeClaimRenewInterval time.Duration
+	phraseLimit            int
 }
 
 func (s *Service) SetHomePetReader(r HomePetReader) {
 	s.petReader = r
+}
+
+// SetCompanionPhraseLimit overrides the phrase limit; a non-positive limit is ignored.
+func (s *Service) SetCompanionPhraseLimit(limit int) {
+	if limit > 0 {
+		s.phraseLimit = limit
+	}
 }
 
 func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOption) (*Service, error) {
@@ -73,6 +81,7 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 		charReader:        charReader,
 		rng:               random.Default(),
 		baseSleepDuration: DefaultBaseSleepDuration,
+		phraseLimit:       DefaultCompanionPhraseLimit,
 		nowFunc:           func() time.Time { return time.Now().UTC() },
 	}
 	for _, opt := range opts {
@@ -324,14 +333,6 @@ func (s *Service) TeachCompanionPhrase(ctx context.Context, characterID, phrase 
 		return CompanionPhrase{}, ErrNoPetsAtHome
 	}
 
-	phrases, err := s.repo.ListCompanionPhrases(ctx, characterID)
-	if err != nil {
-		return CompanionPhrase{}, err
-	}
-	if len(phrases) >= MaxPhrasesPerCompanion {
-		return CompanionPhrase{}, ErrMaxPhrasesReached
-	}
-
 	now := s.nowFunc().UTC()
 	cp := CompanionPhrase{
 		ID:          id.New(),
@@ -340,7 +341,7 @@ func (s *Service) TeachCompanionPhrase(ctx context.Context, characterID, phrase 
 		CreatedAt:   now,
 	}
 
-	if err := s.repo.AddCompanionPhrase(ctx, cp); err != nil {
+	if err := s.repo.AddCompanionPhrase(ctx, cp, s.phraseLimit); err != nil {
 		return CompanionPhrase{}, err
 	}
 

@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -27,6 +29,9 @@ type Config struct {
 	}
 	Player struct {
 		MaxPlayers int
+	}
+	Home struct {
+		CompanionPhraseLimit int
 	}
 }
 
@@ -78,7 +83,24 @@ func ConfigFromEnv() (Config, error) {
 		Player: struct{ MaxPlayers int }{
 			MaxPlayers: maxPlayers,
 		},
+		Home: struct{ CompanionPhraseLimit int }{
+			CompanionPhraseLimit: resolveCompanionPhraseLimit(),
+		},
 	}, nil
+}
+
+// resolveCompanionPhraseLimit falls back to the default instead of failing startup, as approved in #1125.
+func resolveCompanionPhraseLimit() int {
+	val := strings.TrimSpace(os.Getenv("PARTY2_HOME_COMPANION_PHRASE_LIMIT"))
+	if val == "" {
+		return home.DefaultCompanionPhraseLimit
+	}
+	limit, err := strconv.Atoi(val)
+	if err != nil || limit <= 0 {
+		slog.Warn("invalid PARTY2_HOME_COMPANION_PHRASE_LIMIT; using default", slog.String("value", val), slog.Int("default", home.DefaultCompanionPhraseLimit))
+		return home.DefaultCompanionPhraseLimit
+	}
+	return limit
 }
 
 func resolveServerAddr() string {

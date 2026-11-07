@@ -351,7 +351,7 @@ func (h *Handler) handleTeachCompanionPhrase(w http.ResponseWriter, r *http.Requ
 		phrase, err := h.homes.TeachCompanionPhrase(r.Context(), char.ID, req.Phrase)
 		if err != nil {
 			if errors.Is(err, home.ErrEmptyPhrase) || errors.Is(err, home.ErrPhraseTooLong) ||
-				errors.Is(err, home.ErrMaxPhrasesReached) || errors.Is(err, home.ErrNoPetsAtHome) ||
+				errors.Is(err, home.ErrNoPetsAtHome) ||
 				isTextValidationError(err) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return

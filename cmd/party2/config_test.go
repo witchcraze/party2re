@@ -144,6 +144,31 @@ func TestConfigFromEnv(t *testing.T) {
 		}
 	})
 
+	t.Run("PARTY2_HOME_COMPANION_PHRASE_LIMIT parsing", func(t *testing.T) {
+		t.Setenv("PARTY2_DB_DSN", "test:test@tcp(127.0.0.1:3306)/test_db")
+		t.Setenv("PARTY2_MAX_PLAYERS", "")
+		t.Setenv("PARTY2_TRUSTED_PROXIES", "")
+
+		for _, tc := range []struct {
+			envVal   string
+			expected int
+		}{
+			{"", 30}, {"abc", 30}, {"0", 30}, {"-1", 30}, {"1.5", 30},
+			{"99999999999999999999", 30}, {"1", 1}, {"999", 999}, {" 50 ", 50},
+		} {
+			t.Run(tc.envVal, func(t *testing.T) {
+				t.Setenv("PARTY2_HOME_COMPANION_PHRASE_LIMIT", tc.envVal)
+				cfg, err := ConfigFromEnv()
+				if err != nil {
+					t.Fatalf("invalid limit must not fail startup: %v", err)
+				}
+				if cfg.Home.CompanionPhraseLimit != tc.expected {
+					t.Errorf("expected limit %d, got %d", tc.expected, cfg.Home.CompanionPhraseLimit)
+				}
+			})
+		}
+	})
+
 	t.Run("invalid trusted proxies returns error", func(t *testing.T) {
 		_ = os.Setenv("PARTY2_DB_DSN", "test:test@tcp(127.0.0.1:3306)/test_db")
 		_ = os.Setenv("PARTY2_TRUSTED_PROXIES", "invalid-cidr/999")

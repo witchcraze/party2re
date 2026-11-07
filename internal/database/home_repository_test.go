@@ -279,7 +279,7 @@ func TestHomeRepository_Database(t *testing.T) {
 			CreatedAt:   now,
 		}
 
-		err = repo.AddCompanionPhrase(ctx, cp)
+		err = repo.AddCompanionPhrase(ctx, cp, home.DefaultCompanionPhraseLimit)
 		if err != nil {
 			t.Fatalf("AddCompanionPhrase failed: %v", err)
 		}

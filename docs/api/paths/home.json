@@ -391,7 +391,7 @@
   },
   "/homes/{id}/companion/phrases": {
     "get": {
-      "description": "Retrieve list of taught greeting phrases for the home companion",
+      "description": "Retrieve taught greeting phrases for the home companion, newest first",
       "operationId": "listCompanionPhrases",
       "parameters": [
         {
@@ -560,7 +560,7 @@
               }
             }
           },
-          "description": "Unprocessable entity - phrase invalid, max phrases reached, or no pets at home"
+          "description": "Unprocessable entity - phrase invalid or no pets at home"
         },
         "500": {
           "content": {

@@ -79,7 +79,7 @@ this delivery path under the existing [trajectory gap](../design/player-and-char
 - **Scope / Legacy**: `lib/home.cgi`の公開/本人表示、Home設定、`てがみをかく` / `てがみをよむ`、`からー`、`ことばをおしえる` / `ことばをわすれさせる`、ペット表示/会話、配送通知。`lib/park.cgi`の`うらない`、NPC会話・共通チャット。共有`lib/system.cgi`の手紙・ログ処理まで追う。
 - **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/park/`、`internal/api/http/home.go`、`internal/api/http/home_estate.go`の設定/色関連、`internal/api/http/park.go`。
 - **Contracts**: [design/home.md](../design/home.md)、[design/town_park.md](../design/town_park.md)、[api/paths/home.json](../api/paths/home.json)、[api/paths/letter.json](../api/paths/letter.json)、[api/paths/park.json](../api/paths/park.json)、[api/paths/character.json](../api/paths/character.json) (色設定)。
-- **Open follow-ups**: [#1094](https://github.com/witchcraze/party2re/issues/1094) (mailbox所有)、[#1110](https://github.com/witchcraze/party2re/issues/1110) (配送通知)、[#1115](https://github.com/witchcraze/party2re/issues/1115) (設定更新)、[#1116](https://github.com/witchcraze/party2re/issues/1116) (色更新)、[#1125](https://github.com/witchcraze/party2re/issues/1125) (ことば保持)、[#1126](https://github.com/witchcraze/party2re/issues/1126) (mail/park設定)。
+- **Open follow-ups**: [#1094](https://github.com/witchcraze/party2re/issues/1094) (mailbox所有)、[#1110](https://github.com/witchcraze/party2re/issues/1110) (配送通知)、[#1115](https://github.com/witchcraze/party2re/issues/1115) (設定更新)、[#1116](https://github.com/witchcraze/party2re/issues/1116) (色更新)、[#1126](https://github.com/witchcraze/party2re/issues/1126) (mail/park設定)。
 - **Boundary**: Homeからの図鑑・ジョブマスター・プロフィール・冒険記録・特技設定・画像設定は遷移先と対象identityを確認する。遷移先の全仕様はCL-01/04/06/07の担当範囲。壁紙等の表示はここ、使用による変更はCL-02E。
 
 #### CL-02B: Sleep & Recovery

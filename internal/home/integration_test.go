@@ -248,6 +248,20 @@ func TestHomeServiceIntegration(t *testing.T) {
 		t.Fatalf("ForgetCompanionPhrase failed: %v", err)
 	}
 
+	// An evicted phrase is never spoken.
+	svc.SetCompanionPhraseLimit(1)
+	for _, taught := range []string{"ふるい", "あたらしい"} {
+		if _, err := svc.TeachCompanionPhrase(ctx, char1.ID, taught); err != nil {
+			t.Fatalf("TeachCompanionPhrase(%s) failed: %v", taught, err)
+		}
+	}
+	for range 20 {
+		talk, err := svc.TalkToCompanion(ctx, char1.ID)
+		if err != nil || talk.Phrase != "あたらしい" {
+			t.Fatalf("expected only the retained phrase, got %+v, err=%v", talk, err)
+		}
+	}
+
 	// 5. Town House Estate (メケメケ村: 500G)
 	char1.Money = 1000
 	if err := charRepo.Update(ctx, char1); err != nil {
