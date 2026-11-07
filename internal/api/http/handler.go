@@ -593,14 +593,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /auction/hall", h.handleAuctionVenueInfo)
 	mux.HandleFunc("GET /characters/{id}/auction/inspect", h.handleAuctionInspect)
 
-	// Flea Market
-	mux.HandleFunc("GET /fleamarket/listings", h.handleListFleaMarketListings)
-	mux.HandleFunc("GET /fleamarket/listings/{listing_id}", h.handleGetFleaMarketListing)
-	mux.HandleFunc("GET /characters/{id}/fleamarket/listings", h.handleGetCharacterFleaMarketListings)
-	mux.HandleFunc("POST /characters/{id}/fleamarket/listings", h.handleCreateFleaMarketListing)
-	mux.HandleFunc("POST /characters/{id}/fleamarket/listings/{listing_id}/purchase", h.handlePurchaseFleaMarketListing)
-	mux.HandleFunc("DELETE /characters/{id}/fleamarket/listings/{listing_id}", h.handleCancelFleaMarketListing)
-
 	// Gem Store
 	mux.HandleFunc("GET /gemstore/catalog", h.handleGetGemStoreCatalog)
 	mux.HandleFunc("GET /gemstore/recipes", h.handleGetGemStoreRecipes)

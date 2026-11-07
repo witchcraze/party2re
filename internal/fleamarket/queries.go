@@ -19,18 +19,10 @@ func (s *Service) ListActiveListings(ctx context.Context, limit, offset int) ([]
 	return s.repo.ListActiveListings(ctx, limit, offset)
 }
 
-// GetListing retrieves a single listing by ID.
-func (s *Service) GetListing(ctx context.Context, listingID string) (Listing, error) {
-	if strings.TrimSpace(listingID) == "" {
-		return Listing{}, ErrInvalidInput
-	}
-	return s.repo.GetListingByID(ctx, listingID)
-}
-
-// GetCharacterListings retrieves all listings created by a specific character.
-func (s *Service) GetCharacterListings(ctx context.Context, characterID string) ([]Listing, error) {
+// GetActiveCharacterListings retrieves the seller's active listings, the set legacy offers for return.
+func (s *Service) GetActiveCharacterListings(ctx context.Context, characterID string) ([]Listing, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return nil, ErrInvalidInput
 	}
-	return s.repo.GetListingsBySeller(ctx, characterID)
+	return s.repo.GetActiveListingsBySeller(ctx, characterID)
 }

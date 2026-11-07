@@ -58,10 +58,14 @@ func (m *mockFleaMarketRepo) ListActiveListings(ctx context.Context, limit, offs
 	return active[offset:end], total, nil
 }
 
-func (m *mockFleaMarketRepo) GetListingsBySeller(ctx context.Context, sellerID string) ([]fleamarket.Listing, error) {
+func (m *mockFleaMarketRepo) LockListingCapacityForUpdate(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockFleaMarketRepo) GetActiveListingsBySeller(ctx context.Context, sellerID string) ([]fleamarket.Listing, error) {
 	var results []fleamarket.Listing
 	for _, l := range m.listings {
-		if l.SellerCharacterID == sellerID {
+		if l.SellerCharacterID == sellerID && l.Status == fleamarket.StatusActive {
 			results = append(results, l)
 		}
 	}

@@ -94,10 +94,10 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 		t.Errorf("expected at least 1 active listing, got total %d, count %d", total, len(activeList))
 	}
 
-	// 5. GetListingsBySeller
-	sellerListings, err := repo.GetListingsBySeller(ctx, seller.ID)
+	// 5. GetActiveListingsBySeller
+	sellerListings, err := repo.GetActiveListingsBySeller(ctx, seller.ID)
 	if err != nil {
-		t.Fatalf("GetListingsBySeller failed: %v", err)
+		t.Fatalf("GetActiveListingsBySeller failed: %v", err)
 	}
 	if len(sellerListings) != 1 {
 		t.Errorf("expected 1 seller listing, got %d", len(sellerListings))

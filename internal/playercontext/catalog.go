@@ -211,22 +211,9 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "fleamarket_list",
-		Label:          "フリーマーケット出品",
-		Category:       "economy",
-		OperationID:    "createFleaMarketListing",
-		RequiredParams: []string{"item_id", "price"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "fleamarket_purchase",
-		Label:          "フリーマーケット購入",
-		Category:       "economy",
-		OperationID:    "purchaseFleaMarketListing",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
-	},
+	{ID: "fleamarket_list", Label: "フリーマーケット出品", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "price"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "fleamarket_purchase", Label: "フリーマーケット購入", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
+	{ID: "fleamarket_cancel", Label: "フリーマーケット出品取消", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
 	// Category: shop (Commerce & Specialty Stores)

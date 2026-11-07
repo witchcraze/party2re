@@ -1359,35 +1359,6 @@
         ],
         "type": "object"
       },
-      "PageFleaMarketListing": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/FleaMarketListing"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "Offset from beginning of result set",
-            "type": "integer"
-          },
-          "total": {
-            "description": "Total number of records matching the query",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
       "PageLetter": {
         "properties": {
           "items": {
@@ -2360,6 +2331,9 @@
                       "$ref": "#/components/schemas/AlchemySceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/FleaMarketSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/BlackMarketSceneData"
                     },
                     {
@@ -2811,6 +2785,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/AlchemySceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "fleamarket"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/FleaMarketSceneData"
                 },
                 "support": {
                   "properties": {
@@ -3355,6 +3359,7 @@
                         "blacksmith",
                         "chapel",
                         "depot",
+                        "fleamarket",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -3450,6 +3455,7 @@
                         "blacksmith",
                         "chapel",
                         "depot",
+                        "fleamarket",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -4929,6 +4935,119 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "fleamarket_list"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "description": "Owned depot instance or definition ID. A definition ID selects its first stored instance. One unit is listed; ownership stays service-owned."
+                    },
+                    "price": {
+                      "type": "integer",
+                      "description": "Listing price in gold. The 1 to 999999 range stays service-owned.",
+                      "format": "int64",
+                      "minimum": -9223372036854775808,
+                      "maximum": 9223372036854775807
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id",
+                    "price"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "fleamarket_purchase"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "listing_id": {
+                      "type": "string",
+                      "description": "Explicit active listing from the observed listings. Funds and self-purchase stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "listing_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "fleamarket_cancel"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "listing_id": {
+                      "type": "string",
+                      "description": "Explicit listing from the observed owned_listings. Seller ownership stays service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "listing_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "gemstore_sell"
                 }
               },
@@ -5350,6 +5469,7 @@
               "blacksmith",
               "chapel",
               "depot",
+              "fleamarket",
               "home",
               "shop_weapon",
               "shop_armor",
@@ -5473,6 +5593,7 @@
                   "blacksmith",
                   "chapel",
                   "depot",
+                  "fleamarket",
                   "home",
                   "shop_weapon",
                   "shop_armor",
@@ -6972,6 +7093,10 @@
           },
           "status": {
             "type": "string"
+          },
+          "enhancement_level": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "required": [
@@ -6981,6 +7106,7 @@
           "item_id",
           "item_name",
           "item_category",
+          "enhancement_level",
           "price",
           "status",
           "created_at"
@@ -16256,6 +16382,47 @@
           "subject",
           "offset",
           "limit"
+        ]
+      },
+      "FleaMarketSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Active market listings in legacy order, plus the actor's own active listings. Observation never lists, purchases or cancels. Listing candidates come from the depot scene.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "listings": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Current page of all active listings, ordered by item kind, item number, price, then age.",
+            "items": {
+              "$ref": "#/components/schemas/FleaMarketListing"
+            }
+          },
+          "listing_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total active listings before paging."
+          },
+          "owned_listings": {
+            "type": "array",
+            "description": "All of the actor's active listings; the seller limit bounds this list.",
+            "items": {
+              "$ref": "#/components/schemas/FleaMarketListing"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          }
+        },
+        "required": [
+          "parent",
+          "listings",
+          "listing_count",
+          "owned_listings",
+          "page"
         ]
       }
     },

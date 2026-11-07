@@ -83,7 +83,6 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithBlackMarket(&stubBlackMarketService{}),
 		apihttp.WithSecretShop(&stubSecretShopService{}),
 		apihttp.WithBlacksmith(&stubBlacksmithService{}),
-		apihttp.WithFleaMarket(&stubFleaMarketService{}),
 		apihttp.WithStore(&stubStoreService{}),
 		apihttp.WithPark(&mockParkService{}),
 		apihttp.WithMonster(&stubMonsterService{}),
@@ -183,10 +182,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		// Black Market
 		// Secret Shop
 		{"secretshop_puffpuff", http.MethodPost, "/characters/char-1/secretshop/puffpuff", `{}`},
-		// Flea Market
-		{"fleamarket_create", http.MethodPost, "/characters/char-1/fleamarket/listings", `{"item_id":"item-1","price":100}`},
-		{"fleamarket_purchase", http.MethodPost, "/characters/char-1/fleamarket/listings/list-1/purchase", `{}`},
-		{"fleamarket_cancel", http.MethodDelete, "/characters/char-1/fleamarket/listings/list-1", ``},
 		// Home
 		{"home_build_house", http.MethodPost, "/towns/town1/houses", `{"character_id":"char-1","house_style":"001"}`},
 		{"home_set_character_color", http.MethodPost, "/characters/char-1/color", `{"color":"#ffffff"}`},
