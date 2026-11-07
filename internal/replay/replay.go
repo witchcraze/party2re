@@ -96,7 +96,12 @@ type Repository interface {
 }
 
 type Service struct {
-	repo       Repository
+	repo Repository
+	auth recipientAuth
+}
+
+// recipientAuth grants archive access only to the owner of the recipient character.
+type recipientAuth struct {
 	players    PlayerAuthenticator
 	characters CharacterRepository
 }
@@ -113,7 +118,7 @@ func NewService(repo Repository, players PlayerAuthenticator, characters Charact
 	if repo == nil || players == nil || characters == nil {
 		return nil, errors.New("replay repository, authentication and characters are required")
 	}
-	return &Service{repo: repo, players: players, characters: characters}, nil
+	return &Service{repo: repo, auth: recipientAuth{players: players, characters: characters}}, nil
 }
 
 func (s *Service) RecordBattle(ctx context.Context, req SaveReplayRequest) (string, error) {
@@ -172,7 +177,7 @@ func (s *Service) GetReplay(ctx context.Context, sessionID, id string) (*BattleR
 	var viewer coreplayer.Player
 	if sessionID != "" {
 		var err error
-		viewer, err = s.players.Authenticate(ctx, sessionID)
+		viewer, err = s.auth.players.Authenticate(ctx, sessionID)
 		if err != nil {
 			return nil, err
 		}
@@ -187,7 +192,7 @@ func (s *Service) GetReplay(ctx context.Context, sessionID, id string) (*BattleR
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authorizeRecipient(ctx, viewer.ID, recipient); err != nil {
+	if err := s.auth.recipient(ctx, viewer.ID, recipient); err != nil {
 		return nil, err
 	}
 	rep, err := s.repo.FindByID(ctx, id)
@@ -201,8 +206,8 @@ func (s *Service) GetReplay(ctx context.Context, sessionID, id string) (*BattleR
 	return rep, nil
 }
 
-func (s *Service) authorizeRecipient(ctx context.Context, playerID, characterID string) error {
-	char, err := s.characters.FindByID(ctx, characterID)
+func (a recipientAuth) recipient(ctx context.Context, playerID, characterID string) error {
+	char, err := a.characters.FindByID(ctx, characterID)
 	if errors.Is(err, corecharacter.ErrNotFound) {
 		return ErrReplayNotFound
 	}
@@ -215,16 +220,16 @@ func (s *Service) authorizeRecipient(ctx context.Context, playerID, characterID 
 	return nil
 }
 
-func (s *Service) authorizeHistory(ctx context.Context, sessionID, characterID string) error {
-	viewer, err := s.players.Authenticate(ctx, sessionID)
+func (a recipientAuth) history(ctx context.Context, sessionID, characterID string) error {
+	viewer, err := a.players.Authenticate(ctx, sessionID)
 	if err != nil {
 		return err
 	}
-	return s.authorizeRecipient(ctx, viewer.ID, characterID)
+	return a.recipient(ctx, viewer.ID, characterID)
 }
 
 func (s *Service) GetCharacterHistory(ctx context.Context, sessionID, characterID string, combatType string, limit int) ([]ReplayHeader, error) {
-	if err := s.authorizeHistory(ctx, sessionID, characterID); err != nil {
+	if err := s.auth.history(ctx, sessionID, characterID); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(characterID) == "" {
@@ -238,7 +243,7 @@ func (s *Service) GetCharacterHistory(ctx context.Context, sessionID, characterI
 
 // GetCharacterHistoryByCursor retrieves keyset / cursor-based paginated replay history for a character.
 func (s *Service) GetCharacterHistoryByCursor(ctx context.Context, sessionID, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[ReplayHeader], error) {
-	if err := s.authorizeHistory(ctx, sessionID, characterID); err != nil {
+	if err := s.auth.history(ctx, sessionID, characterID); err != nil {
 		return pagination.CursorPage[ReplayHeader]{}, err
 	}
 	if strings.TrimSpace(characterID) == "" {

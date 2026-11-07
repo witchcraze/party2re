@@ -242,9 +242,30 @@ The native receipt must retain the committed outcome independently of publicatio
 
 [`internal/replay`](../../internal/replay/replay.go) stores JSON initial-stat
 snapshots and engine turn logs in `battle_replays`. Its result adapters name several
-combat modes but have no production callers; they neither capture display scenes
-nor implement the latest slot. Storage/read work is tracked by
-[#1825](https://github.com/witchcraze/party2re/issues/1825).
+combat modes but have no production callers and never produce scene archives.
+
+The scene/latest-slot storage boundary above is implemented by
+[`ArchiveService`](../../internal/replay/archive.go), but no production producer
+calls it yet. [`Project`](../../internal/replay/scene.go) builds version-1 scenes
+from trusted capture facts. It rejects tag-like markup, control characters, unsafe
+presentation keys and non-hex colors, while plain `<`/`>` comment text stays text.
+Staging joins the caller's SQL transaction. Each run's source row serializes
+appends, deduplicates command IDs and counts exact encoded bytes. Exit staging
+freezes the current prefix as pending copy intent. Source and copy tables have no
+foreign key to run tables, so they outlive active-run disposal. Copy order per
+recipient is the staging insert order. The producer must therefore serialize a
+character's exits, as the existing run/character locks do. Publication runs after
+commit. It serializes on the recipient's slot row and moves the slot only forward, to
+the newest pending copy whose frozen scenes all decode as a supported version.
+Older pending copies become superseded. A newer copy with a missing, corrupt or
+unsupported scene stays pending and is reported as a failure; it does not block
+other exits, matching the original's independent per-exit copy. The owner
+`Recover` operation and the
+read-only `GetLatest` both authenticate recipient ownership before storage access.
+Neither path reruns gameplay. Superseded copies are reachable only through the
+slot, never through `battle_replays` detail/history or recent reads. Scene reads
+have no HTTP route; [#948](https://github.com/witchcraze/party2re/issues/948) owns
+observation, so OpenAPI declares no scene schema.
 
 The composition root wires session authentication and character persistence into
 Replay. Personal detail and history verify the authenticated player's ownership
