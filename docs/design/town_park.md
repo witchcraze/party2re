@@ -13,20 +13,25 @@ The Town Park Feature Module (`internal/park`) provides a central social gatheri
 Players can submit public bulletin board messages:
 - **Author Identity**: Each post is bound to a verified character owned by the authenticated player session.
 - **Content Validation & Sanitization**:
-  - Length constraint: 1 to 200 characters (UTF-8 runes).
+  - Length constraint: 1 to N characters (UTF-8 runes), defaulting to 500 from legacy `$max_comment`. `PARTY2_PARK_POST_MAX_LENGTH` overrides it (approved in #1126). Counting differs from legacy as described in the [letter settings](home.md#letter-settings).
   - Unicode NFC normalization & whitespace trimming via shared validator (`validation.ValidateMultiLine`).
   - Security guards: Rejection of C0/C1 control characters (except newlines `\n` and `\r`), zero-width formatting characters (e.g. `\u200B`), bidirectional override characters (e.g. `\u202E`), and excessive combining diacritical marks (Zalgo text).
   - HTML escaping: All HTML tags and special characters (`<`, `>`, `&`, `"`, `'`) are escaped (`SanitizeContent`).
 - **Color & Recipient Styling**:
   - Optional custom font color (e.g. HEX `#ff0000`, max 16 characters). Default: `#000000`.
   - Optional target recipient name (max 64 characters).
-- **Rate Limiting**:
-  - Rapid message spamming is prevented by a rate-limit interval (minimum 3 seconds between posts per character).
+- **No Post Interval**: Legacy has no interval for park posts, so consecutive posts are accepted. The former 3-second limit had no legacy basis and was removed in #1126. The general HTTP rate limit still applies.
 
 ### 2. Message Board Feed & Pagination
 
 - Recent messages are ordered in reverse chronological order (`created_at DESC`).
 - Supports limit and offset pagination (default limit: 20, max: 100).
+
+### 3. Board Retention
+
+- **Legacy rule** (`lib/system.cgi:660-680`): the park log keeps at most `$max_log` lines, and the oldest fall off when a line is written. See the [letter settings](home.md#letter-settings) for the value's provenance. Legacy also stores chat from other actions and NPC lines in this log, while `park_posts` holds posts only.
+- **Adopted contract** (approved in #1126): the board keeps the newest N posts, ordered by `created_at` then `id`. N defaults to 30, and `PARTY2_PARK_POST_LOG_LIMIT` overrides it. A post always succeeds at capacity.
+- A post commits first and the trim runs after it, so the last trim to run sees every committed post. A failed trim keeps the post and is repaired by the next post. Lowering N or upgrading shortens the board on its next post; there is no startup trim.
 
 ---
 

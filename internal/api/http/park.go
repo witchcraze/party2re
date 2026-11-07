@@ -82,10 +82,6 @@ func (h *Handler) handlePostParkMessage(w http.ResponseWriter, r *http.Request) 
 	}, func(_ coreplayer.Player, char corecharacter.Character, req postParkMessageRequest) {
 		post, err := h.park.PostMessage(r.Context(), char.ID, req.Content, req.Color, req.RecipientName)
 		if err != nil {
-			if errors.Is(err, park.ErrRateLimited) {
-				writeError(w, http.StatusTooManyRequests, err)
-				return
-			}
 			if errors.Is(err, park.ErrEmptyContent) || errors.Is(err, park.ErrContentTooLong) || errors.Is(err, park.ErrInvalidColor) || isTextValidationError(err) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return

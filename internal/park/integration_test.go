@@ -2,24 +2,87 @@ package park_test
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
+
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/park"
 )
 
-func TestParkServiceIntegration(t *testing.T) {
+func parkIsolatedDB(t *testing.T) *sql.DB {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated park tests")
+	}
 
-	db, err := database.OpenFromEnvironment()
+	ctx := context.Background()
+	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Errorf("failed to close source DB: %v", err)
+		}
+	})
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Errorf("failed to close admin DB: %v", err)
+		}
+	})
+
+	name := "party2_park_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Errorf("failed to drop isolated database %s: %v", name, err)
+		}
+	})
+
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close isolated DB: %v", err)
+		}
+	})
+
+	for _, table := range []string{"players", "characters", "character_depots", "depot_items", "news_articles", "park_posts"} {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return db
+}
+
+func TestParkServiceIntegration(t *testing.T) {
+	db := parkIsolatedDB(t)
 
 	ctx := context.Background()
 
@@ -42,7 +105,6 @@ func TestParkServiceIntegration(t *testing.T) {
 	svc, err := park.NewService(
 		parkRepo,
 		charRepo,
-		park.WithRateLimit(time.Second),
 		park.WithNowFunc(func() time.Time { return curTime }),
 	)
 	if err != nil {
@@ -58,16 +120,12 @@ func TestParkServiceIntegration(t *testing.T) {
 		t.Errorf("expected %s, got %s", char.Name, post.CharacterName)
 	}
 
-	// 2. Immediate post should trigger rate limit
-	_, err = svc.PostMessage(ctx, char.ID, "連投チェック", "", "")
-	if err != park.ErrRateLimited {
-		t.Errorf("expected ErrRateLimited, got %v", err)
+	// 2. An immediate second post is accepted
+	if _, err = svc.PostMessage(ctx, char.ID, "連投チェック", "", ""); err != nil {
+		t.Errorf("expected consecutive post to succeed, got %v", err)
 	}
 
-	// 3. Advance clock past rate limit window
-	curTime = curTime.Add(2 * time.Second)
-
-	// 4. Retrieve recent posts
+	// 3. Retrieve recent posts
 	posts, total, err := svc.GetRecentPosts(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetRecentPosts failed: %v", err)

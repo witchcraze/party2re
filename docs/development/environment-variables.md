@@ -10,6 +10,10 @@ services:
     environment:
       PARTY2_MAX_PLAYERS: "999"
       PARTY2_HOME_COMPANION_PHRASE_LIMIT: "30"
+      PARTY2_HOME_LETTER_LOG_LIMIT: "30"
+      PARTY2_HOME_LETTER_MAX_LENGTH: "500"
+      PARTY2_PARK_POST_LOG_LIMIT: "30"
+      PARTY2_PARK_POST_MAX_LENGTH: "500"
 ```
 
 | Variable | Description | Example |
@@ -28,3 +32,7 @@ services:
 | `PARTY2_TRUSTED_PROXIES` | Comma-separated trusted reverse proxy CIDRs or IPs. When unset, `X-Forwarded-For` and `X-Real-IP` are not trusted and `RemoteAddr` identifies the client, which is safe for direct exposure. Set this behind a proxy so rate limits use the real client IP. An invalid value is a startup error. | `127.0.0.1/32,10.0.0.0/8` |
 | `PARTY2_MAX_PLAYERS` | Player account limit (default `999`). `0` or a negative value means unlimited. A non-integer value is a startup error. See [registration limits](../design/player-and-character.md#28-registration-population-limit--capacity-reconciliation-1105). | `999` |
 | `PARTY2_HOME_COMPANION_PHRASE_LIMIT` | Companion phrases kept per character (default `30`). The oldest phrases are removed beyond the limit. An unset, empty, non-integer, overflowing, zero or negative value uses `30`, and an invalid value logs a warning. See [Home design](../design/home.md#3-companion-greeting-phrases--resident-companions-character_companion_phrases-home_members). | `50` |
+| `PARTY2_HOME_LETTER_LOG_LIMIT` | Letters kept in each inbox and outbox (default `30`). The oldest letters leave a box beyond the limit on its next send. An unset, empty, non-integer, overflowing, zero or negative value uses `30`, and an invalid value logs a warning. See [Home design](../design/home.md#letter-settings). | `50` |
+| `PARTY2_HOME_LETTER_MAX_LENGTH` | Maximum letter body in Unicode characters (default `500`). Guild notices must also fit. A stored body above about 64 KiB fails. An unset, empty, non-integer, overflowing, zero or negative value uses `500`, and an invalid value logs a warning. See [Home design](../design/home.md#letter-settings). | `1000` |
+| `PARTY2_PARK_POST_LOG_LIMIT` | Posts kept on the park board (default `30`). The oldest posts are removed beyond the limit on the next post. An unset, empty, non-integer, overflowing, zero or negative value uses `30`, and an invalid value logs a warning. See [Town Park design](../design/town_park.md#3-board-retention). | `50` |
+| `PARTY2_PARK_POST_MAX_LENGTH` | Maximum park post body in Unicode characters (default `500`). A stored body above about 64 KiB after HTML escaping fails. An unset, empty, non-integer, overflowing, zero or negative value uses `500`, and an invalid value logs a warning. See [Town Park design](../design/town_park.md#1-message-board-posting-park_posts). | `200` |

@@ -53,9 +53,9 @@ func TestHomeRepository_DeleteLetter_ConcurrentMutualDeletion(t *testing.T) {
 			RecipientName:        char2.Name,
 			Content:              fmt.Sprintf("Hello %d", i),
 			Color:                "#000000",
-			CreatedAt:            time.Now().UTC(),
+			CreatedAt:            time.Now().UTC().Add(time.Duration(i-letterCount) * time.Minute),
 		}
-		if err := repo.CreateLetter(ctx, l); err != nil {
+		if err := repo.CreateLetter(ctx, l, letterCount); err != nil {
 			t.Fatalf("failed to create test letter: %v", err)
 		}
 		letters[i] = l

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/park"
@@ -20,13 +21,35 @@ func NewParkRepository(db *sql.DB) (*ParkRepository, error) {
 	return &ParkRepository{db: db}, nil
 }
 
-func (r *ParkRepository) CreatePost(ctx context.Context, post park.Post) error {
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+// CreatePost commits a post, then trims the board to the newest logLimit posts. The trim runs after the
+// commit so the last trim to run sees every committed post, keeping the board within the limit without a
+// shared lock. A failed trim keeps the saved post; the next post trims again.
+func (r *ParkRepository) CreatePost(ctx context.Context, post park.Post, logLimit int) error {
+	if _, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO park_posts (
 			id, character_id, character_name, content, color, recipient_name, created_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, post.ID, post.CharacterID, post.CharacterName, post.Content, post.Color, post.RecipientName, post.CreatedAt.UTC())
-	return err
+	`, post.ID, post.CharacterID, post.CharacterName, post.Content, post.Color, post.RecipientName, post.CreatedAt.UTC()); err != nil {
+		return err
+	}
+
+	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		_, err := ExecutorFromContext(txCtx, r.db).ExecContext(txCtx, `
+			DELETE FROM park_posts
+			WHERE id NOT IN (
+				SELECT id FROM (
+					SELECT id FROM park_posts
+					ORDER BY created_at DESC, id DESC
+					LIMIT ?
+				) AS newest
+			)
+		`, logLimit)
+		return err
+	})
+	if err != nil {
+		slog.Warn("park board trim failed", slog.Any("error", err))
+	}
+	return nil
 }
 
 func (r *ParkRepository) GetRecentPosts(ctx context.Context, limit int, offset int) ([]park.Post, int, error) {
@@ -40,7 +63,7 @@ func (r *ParkRepository) GetRecentPosts(ctx context.Context, limit int, offset i
 	rows, err := executor.QueryContext(ctx, `
 		SELECT id, character_id, character_name, content, color, recipient_name, created_at
 		FROM park_posts
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 		LIMIT ? OFFSET ?
 	`, limit, offset)
 	if err != nil {
@@ -134,22 +157,4 @@ func (r *ParkRepository) GetRecentPostsByCursor(ctx context.Context, limit int, 
 	}
 
 	return posts, nil
-}
-
-func (r *ParkRepository) GetLatestPostTimeByCharacter(ctx context.Context, characterID string) (time.Time, error) {
-	var createdAt time.Time
-	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT created_at
-		FROM park_posts
-		WHERE character_id = ?
-		ORDER BY created_at DESC
-		LIMIT 1
-	`, characterID).Scan(&createdAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return time.Time{}, nil
-	}
-	if err != nil {
-		return time.Time{}, err
-	}
-	return createdAt, nil
 }

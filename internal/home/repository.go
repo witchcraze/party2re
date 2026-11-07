@@ -18,7 +18,7 @@ type EstateRepository interface {
 }
 
 type LetterRepository interface {
-	CreateLetter(ctx context.Context, letter Letter) error
+	CreateLetter(ctx context.Context, letter Letter, logLimit int) error
 	GetLetterByID(ctx context.Context, id string) (Letter, error)
 	ListInboxLetters(ctx context.Context, recipientID string, limit, offset int) ([]Letter, int, error)
 	ListInboxLettersByCursor(ctx context.Context, recipientID string, limit int, beforeTime time.Time, beforeID string) ([]Letter, error)

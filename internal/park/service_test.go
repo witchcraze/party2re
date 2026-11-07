@@ -11,25 +11,23 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/park"
-	"github.com/witchcraze/party2re/internal/ratelimit"
 	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type mockRepository struct {
-	posts          []park.Post
-	latestPostTime map[string]time.Time
+	posts    []park.Post
+	logLimit int
 }
 
 func newMockRepository() *mockRepository {
 	return &mockRepository{
-		posts:          make([]park.Post, 0),
-		latestPostTime: make(map[string]time.Time),
+		posts: make([]park.Post, 0),
 	}
 }
 
-func (m *mockRepository) CreatePost(ctx context.Context, post park.Post) error {
+func (m *mockRepository) CreatePost(ctx context.Context, post park.Post, logLimit int) error {
+	m.logLimit = logLimit
 	m.posts = append([]park.Post{post}, m.posts...)
-	m.latestPostTime[post.CharacterID] = post.CreatedAt
 	return nil
 }
 
@@ -70,14 +68,6 @@ func (m *mockRepository) GetRecentPostsByCursor(ctx context.Context, limit int, 
 	return result, nil
 }
 
-func (m *mockRepository) GetLatestPostTimeByCharacter(ctx context.Context, characterID string) (time.Time, error) {
-	t, ok := m.latestPostTime[characterID]
-	if !ok {
-		return time.Time{}, nil
-	}
-	return t, nil
-}
-
 type mockCharacterReader struct {
 	characters map[string]corecharacter.Character
 	err        error
@@ -107,7 +97,6 @@ func TestService_PostMessage(t *testing.T) {
 	svc, err := park.NewService(
 		repo,
 		charReader,
-		park.WithRateLimit(3*time.Second),
 		park.WithNowFunc(func() time.Time { return fixedTime }),
 	)
 	if err != nil {
@@ -130,21 +119,17 @@ func TestService_PostMessage(t *testing.T) {
 		}
 	})
 
-	t.Run("Rate limit enforced", func(t *testing.T) {
-		// Attempting immediate next post with same time
-		_, err := svc.PostMessage(ctx, "char-1", "連投テスト", "#000000", "")
-		if err != park.ErrRateLimited {
-			t.Fatalf("expected ErrRateLimited, got %v", err)
+	t.Run("Consecutive posts are accepted", func(t *testing.T) {
+		if _, err := svc.PostMessage(ctx, "char-1", "連投テスト", "#000000", ""); err != nil {
+			t.Fatalf("expected success, got %v", err)
 		}
 	})
 
-	t.Run("Post after rate limit window", func(t *testing.T) {
-		// Advance time by 4 seconds
+	t.Run("Recipient and default color", func(t *testing.T) {
 		laterTime := fixedTime.Add(4 * time.Second)
 		laterSvc, _ := park.NewService(
 			repo,
 			charReader,
-			park.WithRateLimit(3*time.Second),
 			park.WithNowFunc(func() time.Time { return laterTime }),
 		)
 
@@ -172,7 +157,6 @@ func TestService_PostMessage(t *testing.T) {
 		nfcSvc, _ := park.NewService(
 			repo,
 			charReader,
-			park.WithRateLimit(3*time.Second),
 			park.WithNowFunc(func() time.Time { return laterTime }),
 		)
 		post, err := nfcSvc.PostMessage(ctx, "char-1", "Ka\u0301llout", "", "")
@@ -189,7 +173,6 @@ func TestService_PostMessage(t *testing.T) {
 		nfcSvc, _ := park.NewService(
 			repo,
 			charReader,
-			park.WithRateLimit(3*time.Second),
 			park.WithNowFunc(func() time.Time { return laterTime }),
 		)
 		_, err := nfcSvc.PostMessage(ctx, "char-1", "bad\x00post", "", "")
@@ -203,7 +186,6 @@ func TestService_PostMessage(t *testing.T) {
 		nfcSvc, _ := park.NewService(
 			repo,
 			charReader,
-			park.WithRateLimit(3*time.Second),
 			park.WithNowFunc(func() time.Time { return laterTime }),
 		)
 		post, err := nfcSvc.PostMessage(ctx, "char-1", "1行目\n2行目", "", "")
@@ -214,45 +196,6 @@ func TestService_PostMessage(t *testing.T) {
 			t.Errorf("expected multiline preserved, got %q", post.Content)
 		}
 	})
-}
-
-func TestService_PostMessage_WithLimiter(t *testing.T) {
-	ctx := context.Background()
-	repo := newMockRepository()
-	charReader := &mockCharacterReader{
-		characters: map[string]corecharacter.Character{
-			"char-1": {ID: "char-1", Name: "アリス", JobID: "hero"},
-		},
-	}
-	limiter := ratelimit.NewMemoryLimiter()
-	svc, err := park.NewService(
-		repo,
-		charReader,
-		park.WithRateLimiter(limiter),
-		park.WithRateLimit(100*time.Millisecond),
-	)
-	if err != nil {
-		t.Fatalf("unexpected init error: %v", err)
-	}
-
-	// First post succeeds
-	_, err = svc.PostMessage(ctx, "char-1", "First post", "", "")
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-
-	// Immediate second post blocked by limiter
-	_, err = svc.PostMessage(ctx, "char-1", "Spam post", "", "")
-	if err != park.ErrRateLimited {
-		t.Fatalf("expected ErrRateLimited from limiter, got %v", err)
-	}
-
-	// Wait for window to expire
-	time.Sleep(120 * time.Millisecond)
-	_, err = svc.PostMessage(ctx, "char-1", "Post after window", "", "")
-	if err != nil {
-		t.Fatalf("expected post allowed after window, got %v", err)
-	}
 }
 
 func TestService_GetRecentPosts(t *testing.T) {
@@ -274,7 +217,7 @@ func TestService_GetRecentPosts(t *testing.T) {
 			CharacterName: "アリス",
 			Content:       "msg",
 			CreatedAt:     time.Now().Add(time.Duration(i) * time.Minute),
-		})
+		}, park.DefaultLogLimit)
 	}
 
 	posts, total, err := svc.GetRecentPosts(ctx, 2, 0)
@@ -431,7 +374,7 @@ func TestService_GetRecentPostsByCursor(t *testing.T) {
 			Color:         "#000000",
 			CreatedAt:     baseTime.Add(time.Duration(i) * time.Minute),
 		}
-		_ = repo.CreatePost(ctx, p)
+		_ = repo.CreatePost(ctx, p, park.DefaultLogLimit)
 	}
 
 	// First page (limit 2)

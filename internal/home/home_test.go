@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/validation"
 )
@@ -62,7 +63,7 @@ func TestValidateLetter(t *testing.T) {
 			name:                 "content too long",
 			senderCharacterID:    "char-1",
 			recipientCharacterID: "char-2",
-			content:              strings.Repeat("a", MaxLetterContentLength+1),
+			content:              strings.Repeat("a", DefaultLetterMaxLength+1),
 			expectErr:            ErrContentTooLong,
 		},
 		{
@@ -97,7 +98,7 @@ func TestValidateLetter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateLetter(tt.senderCharacterID, tt.recipientCharacterID, tt.content)
+			err := ValidateLetter(tt.senderCharacterID, tt.recipientCharacterID, tt.content, DefaultLetterMaxLength)
 			if tt.expectErr != nil {
 				if !errors.Is(err, tt.expectErr) {
 					t.Fatalf("expected error %v, got %v", tt.expectErr, err)
@@ -170,6 +171,30 @@ func TestValidatePhrase(t *testing.T) {
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestIsLetterThrottled(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 900_000_000, time.UTC)
+	tests := []struct {
+		name         string
+		latestSender string
+		now          time.Time
+		want         bool
+	}{
+		{"same second", "a", t0, true},
+		{"29 seconds", "a", t0.Add(29 * time.Second), true},
+		{"30 whole seconds with a sub-second difference", "a", t0.Add(29*time.Second + 200*time.Millisecond), false},
+		{"30 seconds", "a", t0.Add(30 * time.Second), false},
+		{"another latest sender", "b", t0, false},
+		{"latest letter in the future", "a", t0.Add(-time.Hour), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsLetterThrottled("a", tt.latestSender, t0, tt.now); got != tt.want {
+				t.Fatalf("expected %v, got %v", tt.want, got)
 			}
 		})
 	}

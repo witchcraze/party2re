@@ -215,27 +215,6 @@ func TestParkEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /park/posts - rate limited", func(t *testing.T) {
-		rateLimitedPark := &mockParkService{
-			postFn: func(ctx context.Context, charID, content, color, recipient string) (park.Post, error) {
-				return park.Post{}, park.ErrRateLimited
-			},
-		}
-		h, _ := apihttp.NewHandler(players, chars, adv, shopSvc, apihttp.WithPark(rateLimitedPark))
-		r := h.Router()
-
-		payload := []byte(`{"character_id":"char-1","content":"hello"}`)
-		req := httptest.NewRequest(http.MethodPost, "/park/posts", bytes.NewReader(payload))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer valid-session")
-		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusTooManyRequests {
-			t.Fatalf("expected 429, got %d", rec.Code)
-		}
-	})
-
 	t.Run("POST /park/posts - text validation error", func(t *testing.T) {
 		invalidPark := &mockParkService{
 			postFn: func(ctx context.Context, charID, content, color, recipient string) (park.Post, error) {

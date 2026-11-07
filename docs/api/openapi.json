@@ -33198,6 +33198,10 @@
             "$ref": "#/components/responses/Error",
             "description": "Unsupported Media Type"
           },
+          "429": {
+            "$ref": "#/components/responses/Error",
+            "description": "Too Many Requests - a recipient cannot receive another letter from this sender yet"
+          },
           "500": {
             "$ref": "#/components/responses/Error",
             "description": "Internal server error"
@@ -34885,7 +34889,7 @@
                     "type": "string"
                   },
                   "content": {
-                    "description": "Nonblank multiline text; validated after whitespace trimming and NFC normalization, with a maximum of 1000 Unicode characters. Disallowed controls, zero-width/bidi formatting and excessive combining marks return 422.",
+                    "description": "Nonblank multiline text; validated after whitespace trimming and NFC normalization, with a default maximum of 500 Unicode characters. Disallowed controls, zero-width/bidi formatting and excessive combining marks return 422.",
                     "minLength": 1,
                     "pattern": "[^\t-\r    - \u2028\u2029  　]",
                     "type": "string"
@@ -34975,6 +34979,10 @@
           "422": {
             "$ref": "#/components/responses/Error",
             "description": "Invalid recipient, self-send, blank or overlong normalized content, or text validation failure. Missing or blank sender ID is rejected earlier by the ownership wrapper with 400."
+          },
+          "429": {
+            "$ref": "#/components/responses/Error",
+            "description": "Too Many Requests - the sender must wait before following their latest letter in this inbox"
           },
           "500": {
             "content": {
@@ -36875,10 +36883,6 @@
           "422": {
             "$ref": "#/components/responses/Error",
             "description": "Unprocessable Content"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error",
-            "description": "Too Many Requests"
           },
           "500": {
             "content": {

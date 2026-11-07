@@ -4,26 +4,125 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/home"
 )
 
-// CreateLetter persists a new player-to-player letter.
-func (r *HomeRepository) CreateLetter(ctx context.Context, letter home.Letter) error {
+// CreateLetter delivers a letter unless the sender is throttled, then keeps the newest logLimit letters
+// in the recipient's inbox and the sender's outbox. Both character rows are locked in ascending ID order
+// (Rank 2), serializing the throttle check and both limits.
+func (r *HomeRepository) CreateLetter(ctx context.Context, letter home.Letter, logLimit int) error {
 	var readAt sql.NullTime
 	if letter.ReadAt != nil {
 		readAt = sql.NullTime{Time: letter.ReadAt.UTC(), Valid: true}
 	}
 
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
-		INSERT INTO character_letters (
-			id, sender_character_id, sender_name, recipient_character_id, recipient_name,
-			content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, letter.ID, letter.SenderCharacterID, letter.SenderName, letter.RecipientCharacterID, letter.RecipientName,
-		letter.Content, letter.Color, letter.IsRead, readAt, letter.IsDeletedBySender, letter.IsDeletedByRecipient, letter.CreatedAt.UTC())
-	return err
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		lockIDs := []string{letter.SenderCharacterID, letter.RecipientCharacterID}
+		slices.Sort(lockIDs)
+		for _, characterID := range lockIDs {
+			var lockedID string
+			err := executor.QueryRowContext(txCtx, `SELECT id FROM characters WHERE id = ? FOR UPDATE`, characterID).Scan(&lockedID)
+			if errors.Is(err, sql.ErrNoRows) {
+				return home.ErrCharacterNotFound
+			}
+			if err != nil {
+				return err
+			}
+		}
+
+		var latestSenderID string
+		var latestAt time.Time
+		err := executor.QueryRowContext(txCtx, `
+			SELECT sender_character_id, created_at
+			FROM character_letters
+			WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE
+			ORDER BY created_at DESC, id DESC
+			LIMIT 1
+		`, letter.RecipientCharacterID).Scan(&latestSenderID, &latestAt)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if err == nil && home.IsLetterThrottled(letter.SenderCharacterID, latestSenderID, latestAt, letter.CreatedAt) {
+			return home.ErrLetterThrottled
+		}
+
+		if _, err := executor.ExecContext(txCtx, `
+			INSERT INTO character_letters (
+				id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+				content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, letter.ID, letter.SenderCharacterID, letter.SenderName, letter.RecipientCharacterID, letter.RecipientName,
+			letter.Content, letter.Color, letter.IsRead, readAt, letter.IsDeletedBySender, letter.IsDeletedByRecipient, letter.CreatedAt.UTC()); err != nil {
+			return err
+		}
+
+		return evictOverflowLetters(txCtx, executor, letter.RecipientCharacterID, letter.SenderCharacterID, logLimit)
+	})
+}
+
+// evictOverflowLetters removes letters beyond logLimit from both boxes. One letter belongs to two boxes, so
+// evicted rows are locked in ascending ID order: index scans of the two boxes would otherwise deadlock
+// with sends between other characters that share a row.
+func evictOverflowLetters(ctx context.Context, executor sqlContextExecutor, recipientID, senderID string, logLimit int) error {
+	inbox, err := overflowLetterIDs(ctx, executor, `
+		SELECT id FROM character_letters
+		WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE
+		ORDER BY created_at DESC, id DESC
+		LIMIT 18446744073709551615 OFFSET ?
+	`, recipientID, logLimit)
+	if err != nil {
+		return err
+	}
+	outbox, err := overflowLetterIDs(ctx, executor, `
+		SELECT id FROM character_letters
+		WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE
+		ORDER BY created_at DESC, id DESC
+		LIMIT 18446744073709551615 OFFSET ?
+	`, senderID, logLimit)
+	if err != nil {
+		return err
+	}
+
+	ids := slices.Concat(inbox, outbox)
+	slices.Sort(ids)
+	for _, id := range slices.Compact(ids) {
+		if _, err := executor.ExecContext(ctx, `
+			UPDATE character_letters
+			SET is_deleted_by_recipient = is_deleted_by_recipient OR ?,
+				is_deleted_by_sender = is_deleted_by_sender OR ?
+			WHERE id = ?
+		`, slices.Contains(inbox, id), slices.Contains(outbox, id), id); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(ctx, `
+			DELETE FROM character_letters
+			WHERE id = ? AND is_deleted_by_recipient = TRUE AND is_deleted_by_sender = TRUE
+		`, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func overflowLetterIDs(ctx context.Context, executor sqlContextExecutor, query, ownerID string, logLimit int) ([]string, error) {
+	rows, err := executor.QueryContext(ctx, query, ownerID, logLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // GetLetterByID retrieves a single letter by ID.

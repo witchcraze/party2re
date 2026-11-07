@@ -572,6 +572,10 @@
           "$ref": "#/components/responses/Error",
           "description": "Unsupported Media Type"
         },
+        "429": {
+          "$ref": "#/components/responses/Error",
+          "description": "Too Many Requests - a recipient cannot receive another letter from this sender yet"
+        },
         "500": {
           "$ref": "#/components/responses/Error",
           "description": "Internal server error"

@@ -111,9 +111,9 @@ Characters can construct and maintain private town houses across the 4 towns (`t
 Asynchronous direct messaging between characters:
 - **Sender & Recipient Verification**:
   - Letters are addressed from a sender character to a recipient character.
-  - Sending to self is rejected (`ErrCannotSendToSelf`).
+  - Sending to self is rejected (`ErrCannotSendToSelf`). Legacy `send_letter` has no such check; this unresolved difference is not an approved rule.
 - **Letter Attributes**:
-  - `content`: 1 to 1,000 characters. Sanitized via `internal/validation.ValidateMultiLine`: Unicode NFC normalized, permits newlines (`\n`, `\r`), and rejects C0/C1 control characters, zero-width characters (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`), bidirectional text overrides (`\u202A`–`\u202E`, `\u2066`–`\u2069`), and excessive combining diacritics (Zalgo).
+  - `content`: 1 to N Unicode characters (see [Body length](#letter-settings)). Sanitized via `internal/validation.ValidateMultiLine`: Unicode NFC normalized, permits newlines (`\n`, `\r`), and rejects C0/C1 control characters, zero-width characters (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`), bidirectional text overrides (`\u202A`–`\u202E`, `\u2066`–`\u2069`), and excessive combining diacritics (Zalgo).
   - `color`: Custom font color HEX code (default: `#000000`).
   - `is_read`: Boolean status with timestamp `read_at`.
 - **Folder Navigation**:
@@ -123,8 +123,25 @@ Asynchronous direct messaging between characters:
 - **Authorization & Retention**:
   - Only the recipient may mark a letter as read.
   - **Independent Deletion Semantics**: The sender and recipient maintain independent deletion flags (`is_deleted_by_sender` and `is_deleted_by_recipient`). Deletion of a letter by one party does not remove the letter from the other party's view or alter the recipient's unread counter.
-  - **Physical Purge Lifecycle**: When both the sender and recipient have deleted the letter, the database record is physically removed.
+  - **Physical Purge Lifecycle**: When both the sender and recipient have deleted the letter, including by eviction from a full box, the database record is physically removed.
   - **Transactional Concurrency Guarantee**: Concurrent deletion by sender and recipient is serialized within `RunInTx` using pessimistic row-locking (`SELECT ... FOR UPDATE`), eliminating lost updates and ensuring reliable physical purging when both parties delete.
+
+<a id="letter-settings"></a>
+
+#### Letter throttling, retention and body length
+
+- **Legacy rule** (`lib/system.cgi:1055-1087`, `lib/home.cgi:379-402`): a letter is rejected when the newest letter in the recipient's box came from the same sender and `latest time + $bad_time > now`. Guild letters use the same routine. A letter from another sender therefore ends the wait. Each box keeps at most `$max_log` entries, and the recipient's box and the sender's log are trimmed separately.
+- **Value provenance**: the tracked `config.cgi` and the template `config.cgi_origin` agree on `$bad_time = 30` and `$max_comment = 500`. `$max_log` is 30 in the tracked file and 999 in the template, as explained under [Teaching Phrases](#3-companion-greeting-phrases--resident-companions-character_companion_phrases-home_members). The current live values are unverified.
+- **Adopted throttle** (approved in #1126):
+  - The check uses sender and recipient character IDs and the newest letter the recipient has not deleted, ordered by `created_at` then `id`. The recipient deleting that letter takes it out of the check, because legacy has no per-letter deletion and the rule reads the visible box. The sender deleting their copy has no effect.
+  - The wait is fixed at 30 seconds, compared in whole Unix seconds of the application clock: 29 seconds is rejected and 30 is allowed.
+  - Rejection returns `ErrLetterThrottled` (HTTP `429`) and writes nothing. A guild callout stops at that recipient as described in [Guild design](guild.md#broadcast-callouts-よびかける); other guild notices are best-effort and are dropped.
+  - Sends lock the sender and recipient character rows in ascending ID order, so concurrent letters cannot pass the check together.
+- **Adopted retention** (approved in #1126):
+  - Each inbox and outbox keeps the newest N letters. Delivery always succeeds at capacity. The oldest letters leave that box even when unread, through the owner's deletion flag, so the other party's copy remains.
+  - N defaults to 30. `PARTY2_HOME_LETTER_LOG_LIMIT` overrides it. Lowering N or upgrading shortens a box on its next send; there is no startup trim.
+- **Body length** (approved in #1126): N defaults to 500 Unicode characters. `PARTY2_HOME_LETTER_MAX_LENGTH` overrides it, and guild notices must also fit within it.
+- **Implementation gap**: legacy counts the body after HTML escaping, removes line breaks and counts the `＠てがみをかく>宛先` command text as part of the input. Go counts sanitized text before storage, keeps line breaks and receives the recipient separately. No approval supersedes the counting and line-break difference yet.
 
 ### 3. Companion Greeting Phrases & Resident Companions (`character_companion_phrases`, `home_members`)
 

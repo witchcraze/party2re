@@ -432,10 +432,6 @@
           "$ref": "#/components/responses/Error",
           "description": "Unprocessable Content"
         },
-        "429": {
-          "$ref": "#/components/responses/Error",
-          "description": "Too Many Requests"
-        },
         "500": {
           "content": {
             "application/json": {
