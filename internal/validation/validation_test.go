@@ -790,3 +790,40 @@ func TestValidateLegacyComment(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateVerbatimLine(t *testing.T) {
+	ok := []string{
+		"",
+		"  前後の空白　も保持 ",
+		`<script>alert("x")</script> & ' ; DROP TABLE x;--`,
+		"café à́",                      // decomposed accents, two marks
+		strings.Repeat("a", 60),          // ASCII boundary
+		strings.Repeat("あ", 60),          // 180 UTF-8 bytes
+		strings.Repeat("\U0001F600", 60), // supplementary plane, 240 bytes
+	}
+	for _, in := range ok {
+		if err := validation.ValidateVerbatimLine(in, 60); err != nil {
+			t.Errorf("%q: unexpected %v", in, err)
+		}
+	}
+	bad := map[string]error{
+		strings.Repeat("a", 61):          validation.ErrTooLong,
+		strings.Repeat("あ", 61):          validation.ErrTooLong,
+		strings.Repeat("\U0001F600", 61): validation.ErrTooLong,
+		"bad\xffutf8":                    validation.ErrControlCharacter,
+		"tab\there":                      validation.ErrControlCharacter,
+		"line\nbreak":                    validation.ErrControlCharacter,
+		"cr\rhere":                       validation.ErrControlCharacter,
+		"c1\u0085":                       validation.ErrControlCharacter,
+		"ls ":                            validation.ErrControlCharacter,
+		"ps ":                            validation.ErrControlCharacter,
+		"zw​":                            validation.ErrZeroWidth,
+		"bidi‮":                          validation.ErrBidiOverride,
+		"zalgo à́̂":                     validation.ErrZalgo,
+	}
+	for in, want := range bad {
+		if err := validation.ValidateVerbatimLine(in, 60); !errors.Is(err, want) {
+			t.Errorf("%q: got %v, want %v", in, err, want)
+		}
+	}
+}

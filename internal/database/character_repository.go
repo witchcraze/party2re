@@ -243,6 +243,7 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM character_job_masteries WHERE character_id = ?`,
 		`DELETE FROM character_job_history WHERE character_id = ?`,
 		`DELETE FROM character_jobs WHERE character_id = ?`,
+		`DELETE FROM character_presence_snapshots WHERE character_id = ?`,
 		`DELETE FROM character_profiles WHERE character_id = ?`,
 		`DELETE FROM characters WHERE id = ?`,
 	}
