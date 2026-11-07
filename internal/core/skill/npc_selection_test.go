@@ -253,3 +253,20 @@ func TestNPCCustomNameOverridesPriorBindingsWithoutLosingWeight(t *testing.T) {
 		t.Fatal(result, s.Actors[0], err)
 	}
 }
+
+// EX-only NPC jobs have no registered tables yet (#1914–#1916); their EX bosses
+// must reject the whole response before draws or mutation.
+func TestNPCEXOnlyJobsRemainWholeActionGates(t *testing.T) {
+	for _, job := range []string{"job-405", "job-406", "job-407"} {
+		s, _, f, d := npcSelectionFixture()
+		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: job, SP: 1000, OldJobID: "starter"}
+		before, _ := json.Marshal(s)
+		rng := &npcSelectionRNG{}
+		if _, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+			t.Fatal(job, err)
+		}
+		if after, _ := json.Marshal(s); string(after) != string(before) || rng.calls != 0 {
+			t.Fatal(job, "gate mutated or drew")
+		}
+	}
+}

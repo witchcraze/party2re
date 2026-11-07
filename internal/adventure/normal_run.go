@@ -185,6 +185,9 @@ type RunActionEffects struct {
 	UnsealDemonKing bool
 	// Excluded from this operation's enemy array, restored last for next request.
 	MemberOnlyIDs []string
+	// Encounter identities of defeats that reached the player reward path, in
+	// defeat order: no NPC killer, self-defeat or revival (_battle.cgi:28–51,142).
+	CreditedDefeats []string
 }
 
 // RunPenalty projects a committed absolute deadline. SQL ownership remains held

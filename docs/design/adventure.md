@@ -393,11 +393,11 @@ bounded implementation split below were approved on 2026-11-03 (#1191).
 
 | Marker producer | Condition and evidence |
 | --- | --- |
-| Stage 22 defeat hook | Defeating the source Royal Bee identity draws `rand(3) < 1`; use a server-owned native catalog identity, never client/display names (`_battle.cgi:277–280`) |
+| Stage 22 defeat hook | Each player-credited defeat of the source Royal Bee identity draws `rand(3) < 1`, in defeat order and even when the marker exists; NPC killers, self-defeat and revival never reach the hook. Use a server-owned native catalog identity, never client/display names (`_battle.cgi:28–51,142,277–280`). The combat port reports credited defeat identities; the run applies the draws |
 | Stage 23 explicit advance | Leaving assigned floor 10 with at least two ordered allies in active battle membership, including legitimate helpers/fallen allies (departed participants are removed on exit); no boss-victory requirement (`vs_monster.cgi:52,240–245`) |
 | Stage 24 encounter creation | Creating ordinary floor-10 enemies, including tool150; coordinate assignment alone does not qualify (`vs_monster.cgi:143–152`) |
 | Stage 25 explicit advance | Leaving assigned floor 10, without a party-size or victory requirement (`vs_monster.cgi:245–249`) |
-| Stage 26 room creation | After selecting the room season, draw `rand(3) < 1` exactly once (`quest.cgi:596–600`); later travel neither repeats nor repairs that draw |
+| Stage 26 room creation | After selecting the room season, draw `rand(3) < 1` exactly once (`quest.cgi:596–600`); later travel neither repeats nor repairs that draw. Party lobbies select the season at creation; solo admission selects it in the run's creation transaction (`quest.cgi:1246–1255`) |
 
 Explicit advance remains the only ordinary progression operation. With no
 living enemies, floor 10 enters ordinary treasure at 11, running the existing
@@ -417,15 +417,18 @@ also create fixed-item chests. Creation never grants or opens a chest;
 ordinary and fixed inspection allowances are separate and delivery uses
 the existing asset owner (`_npc_action.cgi:6–84,555–599,725–779`).
 
-Native delivery is split between travel-required marker preservation/hooks,
-[EX encounter/remaining marker producers](https://github.com/witchcraze/party2re/issues/1807),
-and [EX treasure/inspection](https://github.com/witchcraze/party2re/issues/1808). The
-last two require their own catalog and SQL continuation tests; ordinary
-encounter coverage does not certify EX skills. Until those owners supply the
-complete transition, entry to an EX encounter/treasure must reject before
-reset, random draws, costs or persisted effects. The retained batch crawl is
-not an EX fallback. The existing SQL run snapshot/receipt remains the only
-authority; no second EX store or background progression is introduced.
+Native explicit advance creates the EX encounter in the existing SQL command
+transaction. Restoration covers every active ally (helpers and fallen members,
+not banished/detached ones); the later cap lowers maxima but leaves current
+HP/MP above them, as the source does. EX defeat records floor 12 as the deepest
+defeated floor without clear credit. Ordinary encounter coverage does not
+certify EX skills: NPC-only EX jobs keep the whole-action gates named in
+[battle.md](battle.md#normal-adventure-action-and-target-matrix), and
+[EX treasure/inspection](https://github.com/witchcraze/party2re/issues/1808)
+still rejects 12→13 before reset, random draws, costs or persisted effects.
+The retained batch crawl is not an EX fallback. The SQL run snapshot/receipt
+remains the only authority; no second EX store or background progression is
+introduced.
 
 ### Remaining reconciliation gates
 

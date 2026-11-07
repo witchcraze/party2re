@@ -16,11 +16,15 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	if r.Floor == 0 && r.LeaderID != actorID {
 		return ErrLeaderOnly
 	}
-	if r.Floor == TreasureRoomFloor && r.HasEX() {
-		return corebattle.ErrUnsupportedEffect
-	}
-	if r.Floor >= TreasureRoomFloor || r.livingEnemies() {
+	switch {
+	case r.livingEnemies():
 		return ErrInvalidFloorAction
+	case r.Floor < TreasureRoomFloor:
+	case !r.HasEX() || r.Floor > EXBossFloor: // ordinary end at 11, terminal 13
+		return ErrInvalidFloorAction
+	case r.Floor == EXBossFloor || r.Stage.Ordinary == nil || len(r.Stage.Ordinary.EXRoster) == 0:
+		// 12→13 EX treasure belongs to #1808; reject before reset or draws.
+		return corebattle.ErrUnsupportedEffect
 	}
 	if s.cfg.Combat == nil {
 		return ErrRunUnavailable
@@ -69,7 +73,11 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 		for _, a := range encounter.Actors {
 			r.Enemies = append(r.Enemies, a.ID)
 		}
-		if r.Stage.ID == "stage-24" && r.Floor == BossFloor {
+		if r.Floor == EXBossFloor {
+			r.prepareEXAllies(actorID)
+		}
+		// Restoration precedes the cap, which leaves current HP/MP untouched (_battle.cgi:1485–1530).
+		if r.Stage.ID == "stage-24" && (r.Floor == BossFloor || r.Floor == EXBossFloor) || r.Stage.ID == "stage-25" && r.Floor == EXBossFloor {
 			if s.cfg.Combat == nil {
 				return ErrRunUnavailable
 			}

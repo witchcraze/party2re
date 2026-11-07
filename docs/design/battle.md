@@ -313,6 +313,13 @@ defaulting to spring. Reload never selects a branch or rolls stats again.
 Ordinary stage23 has the job21/SP10/MP30 boss; job406 is EX-only
 (`ff97fc5:stage/15.cgi:13–66;25.cgi:16–204;26.cgi:16–28,623–1218;
 23.cgi:15–55`; source-position provenance stays in the native catalog).
+The floor-12 EX tables (`@ex_bosses`, stages22–25 and each stage26 season) use
+the same template conventions, boss scaling and summon pool; colliding source
+names share the ordinary encounter identity. NPC-only jobs
+[405](https://github.com/witchcraze/party2re/issues/1914),
+[406](https://github.com/witchcraze/party2re/issues/1915) and
+[407 with `@exx_bosses`](https://github.com/witchcraze/party2re/issues/1916)
+have no registered table, so their choices remain whole-action gates.
 
 Initialization rolls each current stat as floor(base×(0.9+rand(0.3)+
 (party size−2)×0.1)); supplied nonzero maxima win. Hard ordinary monsters also

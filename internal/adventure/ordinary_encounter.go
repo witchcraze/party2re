@@ -15,6 +15,9 @@ type OrdinaryStage struct {
 	MonsterIDs  []string   `json:"monster_ids"`
 	Appears     []int      `json:"appears"`
 	PartyCopy   bool       `json:"party_copy,omitempty"`
+	// EXRoster is the floor-12 table; summons keep using MonsterIDs/Appears.
+	EXRoster []string `json:"ex_roster,omitempty"`
+	EXField  string   `json:"ex_field,omitempty"`
 }
 
 // OrdinaryEncounter retains the complete unrolled summon table as well as the
@@ -51,13 +54,19 @@ func (s Stage) OrdinarySeason(markers ...string) Stage {
 // includes helpers and fallen members in semantic order; requester is distinct
 // from the acting NPC and supplies stage15's generated monster baselines.
 func (s Stage) BuildOrdinaryEncounter(catalog *MonsterCatalog, party []corebattle.LifetimeActor, requester corebattle.LifetimeActor, floor int, mode, encounterID string, rng random.Generator) (OrdinaryEncounter, error) {
-	if rng == nil || len(party) == 0 || floor < 1 || floor > BossFloor || encounterID == "" {
+	if rng == nil || len(party) == 0 || floor < 1 || floor > EXBossFloor || floor == TreasureRoomFloor || encounterID == "" {
 		return OrdinaryEncounter{}, ErrInvalidMonster
 	}
-	if s.Ordinary == nil {
+	if s.Ordinary == nil || floor == EXBossFloor && len(s.Ordinary.EXRoster) == 0 {
 		return OrdinaryEncounter{}, corebattle.ErrUnsupportedEffect
 	}
 	table := s.Ordinary
+	if floor == EXBossFloor {
+		// add_ex_boss shares add_boss scaling and draws no branch.
+		cp := *table
+		cp.BossRosters, cp.PartyCopy = [][]string{table.EXRoster}, false
+		table = &cp
+	}
 	var pool, bosses []Monster
 	if table.PartyCopy {
 		for i, a := range party {
@@ -118,7 +127,7 @@ func (s Stage) BuildOrdinaryEncounter(catalog *MonsterCatalog, party []corebattl
 	actors := make([]corebattle.LifetimeActor, 0, len(chosen))
 	session := CrawlSession{Mode: mode, Rng: rng.Intn, RngFloat: rng.Float64}
 	for i, m := range chosen {
-		a := session.buildMonsterActor(fmt.Sprintf("%s-%d", encounterID, i), m, float64(len(party)-2)*.1, floor == BossFloor)
+		a := session.buildMonsterActor(fmt.Sprintf("%s-%d", encounterID, i), m, float64(len(party)-2)*.1, floor >= BossFloor)
 		if floor < BossFloor && i < 8 {
 			a.EncounterIdentity += string(rune('A' + i))
 		}

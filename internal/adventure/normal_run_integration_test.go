@@ -93,6 +93,25 @@ func (e *normalCombat) ExecuteRunAction(_ context.Context, r *adventure.NormalRu
 		r.Battle.Fields.AntiTurns = 2
 	case "merchant":
 		r.Battle.Actors[actor].Jobs.JobID = "job-07"
+	case "ex11": // a cleared EX treasure room with every chest opened
+		stages, err := adventure.InitialStageCatalog()
+		if err != nil {
+			return fx, err
+		}
+		stage, err := stages.FindByID(cmd.TargetID)
+		if err != nil {
+			return fx, err
+		}
+		r.Stage, r.Floor, r.EXUnlocked, r.Boxes = stage.OrdinarySeason(), adventure.TreasureRoomFloor, true, nil
+		for i := range r.Battle.Actors {
+			if slices.Contains(r.Enemies, r.Battle.Actors[i].ID) {
+				r.Battle.Actors[i].HP = 0
+			}
+		}
+		r.Battle.Actors[actor].HP, r.Battle.Actors[actor].MP = 1, 0
+	case "bee":
+		r.Stage.ID = cmd.TargetID
+		fx.CreditedDefeats = []string{"ordinary-22-boss-16", "ordinary-22-monster-175B"}
 	case "comment", "unknown_text", "ignored_skill":
 		fx.ActorActivity = false
 		fx.ReleaseStock = false

@@ -761,6 +761,11 @@
       3,
       3,
       4
+    ],
+    "ex_roster": [
+      "ex-22-boss-80",
+      "ex-22-boss-104",
+      "ex-22-boss-131"
     ]
   },
   "stage-23": {
@@ -792,7 +797,11 @@
       4,
       4,
       5
-    ]
+    ],
+    "ex_roster": [
+      "ex-23-boss-34"
+    ],
+    "ex_field": "snow"
   },
   "stage-24": {
     "boss_rosters": [
@@ -823,7 +832,11 @@
       4,
       4,
       5
-    ]
+    ],
+    "ex_roster": [
+      "ex-24-boss-97"
+    ],
+    "ex_field": "sanctuary"
   },
   "stage-25": {
     "boss_rosters": [
@@ -896,6 +909,11 @@
       10,
       10,
       11
+    ],
+    "ex_roster": [
+      "ex-25-boss-206",
+      "ex-25-boss-224",
+      "ex-25-boss-243"
     ]
   },
   "stage-26-spring": {
@@ -925,6 +943,11 @@
       3,
       3,
       4
+    ],
+    "ex_roster": [
+      "ex-26-boss-658",
+      "ex-26-boss-673",
+      "ex-26-boss-699"
     ]
   },
   "stage-26-summer": {
@@ -954,6 +977,11 @@
       3,
       3,
       4
+    ],
+    "ex_roster": [
+      "ex-26-boss-806",
+      "ex-26-boss-820",
+      "ex-26-boss-846"
     ]
   },
   "stage-26-autumn": {
@@ -983,6 +1011,11 @@
       3,
       3,
       4
+    ],
+    "ex_roster": [
+      "ex-26-boss-953",
+      "ex-26-boss-967",
+      "ex-26-boss-992"
     ]
   },
   "stage-26-winter": {
@@ -1011,6 +1044,11 @@
       2,
       2,
       3
+    ],
+    "ex_roster": [
+      "ex-26-boss-1100",
+      "ex-26-boss-1114",
+      "ex-26-boss-1140"
     ]
   },
   "stage-27": {

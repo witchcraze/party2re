@@ -113,6 +113,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				return err
 			}
 			request.UnsealDemonKing = effects.UnsealDemonKing
+			r.recordCreditedDefeats(effects.CreditedDefeats, s.cfg.RNG)
 			for _, id := range effects.MemberOnlyIDs {
 				a, actor := r.actor(id), r.actor(cmd.ActorID)
 				if a == nil || actor == nil || a.TeamID == actor.TeamID || slices.Contains(r.Enemies, id) {
@@ -123,7 +124,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				}
 			}
 			if effects.EncounterDefeated {
-				if r.livingEnemies() || r.EncounterFloor < 1 || r.EncounterFloor > BossFloor {
+				if r.livingEnemies() || r.EncounterFloor < 1 || r.EncounterFloor > EXBossFloor || r.EncounterFloor == TreasureRoomFloor {
 					return ErrRunConflict
 				}
 				r.FloorsCleared = max(r.FloorsCleared, r.EncounterFloor)
