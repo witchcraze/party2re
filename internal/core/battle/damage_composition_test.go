@@ -314,7 +314,7 @@ func TestExtension201CursorAfterDamage(t *testing.T) {
 			rng.done()
 		}
 	}
-	for _, cursor := range []TargetCursor{{}, {Source: "submitted", ActorID: "enemy"}, {Source: "item150", ActorID: "missing"}} {
+	for _, cursor := range []TargetCursor{{Source: "submitted", ActorID: "enemy"}, {Source: "item150", ActorID: "missing"}} {
 		s, c := damageFixture()
 		admitDamage(&s, &c)
 		c.Cursor = cursor

@@ -271,7 +271,7 @@ identify evidence only. Adventure owns [discovery and operation admission](adven
 | Normal attack | `_skill.cgi:106–113,863–884` → `kougeki` → `_damage` → `_check_enemy`. Missing/wrong-side target chooses a random enemy; seal 10 repeats the attack; equipment can add a strike | HP, MP for relevant seals, tension/hit, death/revival/drop facts; current `execute_action.go` is reusable only after explicit-target and effect verification. #1329 tests omitted/wrong-side targets and repeated hits |
 | Defend and tension | `_skill.cgi:115–122,942–978`: self, zero listed MP; tension blocked by binding, follows staged values and level/equipment conditions | Defend uses temporary state; tension is consumed by applicable helpers/reset, not a permanent attack buff. #1332 owns state/lifetime; test next action, intervening enemy hit and floor reset |
 | Current/previous-job skills | `set_action:35–104,260–283` dynamically calls `skill_<job>` then its callback. SP, extended-skill/equipment, curse and MP gates; previous-job SP is independent | #1188 supplies production wiring and the three representative player-job entries (5.3 single-ally heal30, 6.1 single-enemy magic20, 6.3 all-enemy magic25); this does not certify the remaining catalog (#1333 traces indirect effects and #1409 manages residual player-job catalog allocation). Previous-job SP gate is independent and duplicate candidates are deduplicated. Unlocked skills in participant building are ordered by RequiredSP descending (current job prioritized over old job) so advanced skills take precedence when affordable while falling back to basic skills upon low MP. Batch battle (`party_battle.go`) preserves sequential evaluation without universal area-skill overrides, protecting existing boss/NPC behaviors, and evaluates the combatant's live cursed state (`ctx.abilitiesMap`) during ordinary action selection so cursed actors (whether from initial participant state or mid-battle cursed revival such as `item-260`) skip current and previous-job skills without MP debit, falling back to usable items, defense, or normal attacks. Holding `item-249` applies explicit per-entry `_is_magician_skill` classification (`_battle.cgi:764–780, 1804–1825`, `_skill.cgi:68–77, 263–273`) to both batch selection and MP debit rather than halving all magic-category skills: `job-5-entry-3` (`heal-30`, base MP 3) is absent from the magician-name list and doubles to 6 MP, whereas `job-6-entry-1` (`magic-20`, base MP 2 → 1) and `job-6-entry-3` (`magic-wave-25`, base MP 5 → 2) halve with integer truncation. Magic skills check category seal (25% cure chance; on failure MP is debited, seal logged, and effect aborted without consuming tension). Magic attacks bypass enemy defense with direct base power without physical attack scaling: holding item-149 (1.1x direct) skips tension multiplication and retains tension, item-143 truncates `int(v*2)` when magic `v < 300`, target `kinju` scales 1.25x, item-144 scales area-attack hits by 1.3x when modified hit power `< 300`, tension is consumed on the first effective hit, and successive area targets decay by 15% (`0.85x`) unless holding item-144 with initial pre-evaluated power `<= 300` (`_skill.cgi:8811–8823, 9954–10129`). Magic healing applies item-146 (1.8x), item-256 (1.2x, plus living-ally splash capped at 30% of the primary target's MaxHP), caster `sabaku` (`0.7..0.9x`), and target `virulent_poison` (`劇毒`) truncation `int(v*0.1)` before variance and tension scaling, then resets tension to 1.0 regardless of item-149 (`_skill.cgi:9081–9135, 10138–10144`). Job mastery threshold evaluation preserves core job definitions independently of representative skill catalog entries |
-| Equipment extensions, books and weapon-seal commands | `_skill.cgi:124–145,219–224`, `@extend_skill_item:321`, `@booK_skill_item:479`; equipped-item/seal predicates add callbacks to the previous-job admission loop | Callback can change temporary effects, resources, roster or inventory. Book chaining (`6874–6895`) takes two targets, checks internal MP cost, stops on actor death and returns the book to storage. #1333 owns callback coverage; #1197 owns consumption identity |
+| Equipment extensions, books and weapon-seal commands | `_skill.cgi:124–145,219–224`, `@extend_skill_item:321`, `@booK_skill_item:479`; equipped-item/seal predicates add callbacks to the previous-job admission loop | Callback can change temporary effects, resources, roster or inventory. [Equipped extension](#equipped-extension-callbacks) discovery has neither SP nor curse gates. Book chaining (`6874–6895`) takes two targets, checks internal MP cost, stops on actor death and returns the book to storage. #1333 owns callback coverage; #1197 owns consumption identity |
 | Custom gem skill | `set_action:288–309`: unique custom name, at least one gem, sufficient CMP, not cursed. Missing target defaults to actor before gem callbacks; each gem uses its own target helpers | Ordered gem effects stop after actor death; `_battle.cgi:787–789` charges CMP. Batch battle (`party_battle.go`) skips custom skills when cursed (`ctx.abilitiesMap`), falling back to subsequent legal actions without CMP debit. #1333 traces `_data.cgi:@gems:2087` callbacks, #1332 owns recharge/field state, #1329 tests multi-gem order and restart |
 | Combat tool | `set_action:150–151` → `dougu:758–764` → `_data.cgi` item callback; combat usage category 1, missing target defaults to actor, callback-specific targeting | Successful callback clears held item; an error does not consume it. #1197 owns durable instances/consumption, #1333 owns missing effect coverage. Do not assume every tool is generic heal/buff/damage |
 | Between-encounter recovery, transformation and calling | `set_action:166–217,226–258`: no enemies, job/SP/curse/equipment gates; survival recovery costs 10 MP, forward transformation 10 MP, reverse 0; calling takes job callbacks | HP, transformed current/previous job, helper membership and randomized stats survive requests. #1333 owns effect/catalog certification; #1329 consumes certified choices. Generic reset is not permission to undo transformation |
@@ -1526,7 +1526,7 @@ then seal12 with its 3 MP charge. The magic-sword multiplier and replacement of
 trailing arguments with direct1 apply to every category on that whitelist; only
 its physical-to-magic conversion is category-dependent (`10171–10184`). Thus
 item166's untyped result still receives that multiplier. An elemental multiplier
-cannot replace these rules. The concrete status/death gem bodies certify
+cannot replace these rules. The concrete status/death gem and projectile bodies certify
 arithmetic conversion of symbolic payloads to zero, including seal12's3 MP
 charge before later helper gates. Other symbolic conversion callers retain
 their conservative gate until their complete tails are certified.
@@ -1703,10 +1703,11 @@ bag contents do not activate these modifiers.
 sources1–18,26,72–73 (`_data.cgi:2089–2106,2114,2160–2161`), including each
 multi-hit draw, successful-damage recoil3, drain26's original capped power for
 healing, and72's unconditional actor defeat call. Normal attack preserves
-seal10 and147 additional-hit predicates. `ApplyExtension201` requires represented
-item150/item159 cursor provenance; its write uses the cursor **after** damage,
-including a nested reset's cursor change, then restores actor agility. Its
-intrinsic agility guard requires no skipped cursor/damage context. These are
+seal10 and147 additional-hit predicates. `ApplyExtension201` requires an absent
+or represented item150/item159 cursor; its write uses the cursor **after** damage,
+including a nested reset's cursor change, then restores actor agility. An absent
+cursor writes no participant and is never self. Its intrinsic agility guard
+requires no skipped cursor/damage context. These are
 formula certifications with explicit prerequisites, not batch DTO or outer
 catalog certification. Fully admitted reset/defeat operations remain supplied
 by their existing owners; absence rejects reachable work before draws. Cosmic
@@ -2019,6 +2020,37 @@ the named binding gates. #1362–#1366 own target, damage, recovery/stat, status
 and field/composite implementations respectively. The detailed #1343 modifier
 and #1367 binding ledgers supply evidence; unsupported closure rejects the entire
 outer command through the existing admission boundary.
+
+### Equipped extension callbacks
+
+`EquippedExtensionEntries`, `RegisterEquippedExtensions` and
+`EquippedExtensionAction` own the eight bodies at `_skill.cgi:322–460`; positions
+244 and261 keep their roster and revival owners. Listing needs enemies, the equipped
+item and MP (doubled by item249, since no name here is on the magician list), but
+no SP or uncursed actor, and these entries never join NPC or job tables
+(`_skill.cgi:34,124–134,260–284`). The consumer debits the returned cost and owns
+durable state, receipts and retries; only the resulting actor facts persist, so a
+committed retry must not reexecute the callback.
+
+| Entry / MP | Rule |
+| --- | --- |
+| 165 / 30 | The previous calling job is read first without fallback. Its helper is found by exact identity, never by appearance, and must live. Draw AT/DF/AG, then damage (actor AT+stat)×.85 physically. Otherwise no effect and no draw |
+| 201 / 30 | Guard AG>baseAG; untyped direct AG×1.6, then the post-damage cursor rule of `ApplyExtension201` above |
+| 163 / 12 | Needs a reflection temporary. Copy it to the named participant of either side, including fallen, defaulting to self; then heal the party untyped by 50×members holding that temporary, counting fallen ones |
+| 212 / 5 | Interception for 7 |
+| 247 / 5 | While living, incense for 3..7 |
+| 248 / 2 | Projectile below |
+| 146 / 37 | A failed magic-seal cure ends the body. Otherwise resolve an ally untyped, heal base 50..99 as magic, then set regeneration on the first resolved target even if healing redirects |
+| 200 / 10 | Combat state for 2..4; already having it is a no-effect without a draw |
+
+The projectile has two bodies under one source ID. Equipped248 uses level×(2+rand0.5),
+AG×.75 and a 50% deadly-poison attempt; ordinary tool248 (`_data.cgi:2013`) uses
+level×(4+rand2), AG×1.5 and 70%. Both read the requesting player's level, even for
+an NPC or helper actor. Only a current (not previous) job26 adds agility and the
+tail, which uses the first enemy check's target rather than the damage's returned
+one. Tools default an omitted selector to self, while the extension's raw selector
+can draw a confused member. Under seal12 each of the three checks charges MP3, the
+hit becomes magic×.8 and the zeroed tail applies nothing (`_skill.cgi:10186–10191`).
 
 #### Callback context and failure admission
 

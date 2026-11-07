@@ -44,7 +44,7 @@ func (s *LifetimeState) ValidateOrdinaryTool(c *OrdinaryToolContext, id string, 
 		}
 		return p.validatePartyTarget(c.TargetContext, controlEffect(child.toolTarget(), power, CategoryTool), rng)
 	}
-	if id == "tool-41" || id == "tool-42" || id == "tool-75" || id == "tool-77" || id == "tool-82" || id == "tool-213" {
+	if id == "tool-41" || id == "tool-42" || id == "tool-75" || id == "tool-77" || id == "tool-82" || id == "tool-213" || id == "tool-248" {
 		if len(c.EnemyIDs) == 0 {
 			return ErrNoBattleTarget
 		}
@@ -146,6 +146,8 @@ func (s *LifetimeState) ValidateOrdinaryTool(c *OrdinaryToolContext, id string, 
 		}
 		_, err := p.controlTargets(&ControlClimaxContext{DamageContext: child.DamageContext}, controlSymbol(child.toolTarget(), "capture", CategoryTool), false)
 		return err
+	case "tool-248":
+		return p.validateProjectile(&child.DamageContext, c.Death, child.toolTarget(), toolProjectile, rng)
 	}
 	return ErrUnsupportedEffect
 }
