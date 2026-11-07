@@ -23,12 +23,12 @@ func NewAlchemyRepository(db *sql.DB) (*AlchemyRepository, error) {
 
 func (r *AlchemyRepository) GetSynthesisState(ctx context.Context, characterID string) (alchemy.Synthesis, error) {
 	executor := ExecutorFromContext(ctx, r.db)
-	return r.scanSynthesisState(ctx, executor, "SELECT recipe_id, state, started_at, matures_at, total_crafts, comp_alc FROM character_alchemy WHERE character_id = ?", characterID)
+	return r.scanSynthesisState(ctx, executor, "SELECT recipe_id, state, started_at, total_crafts, comp_alc FROM character_alchemy WHERE character_id = ?", characterID)
 }
 
 func (r *AlchemyRepository) GetSynthesisStateForUpdate(ctx context.Context, characterID string) (alchemy.Synthesis, error) {
 	executor := ExecutorFromContext(ctx, r.db)
-	return r.scanSynthesisState(ctx, executor, "SELECT recipe_id, state, started_at, matures_at, total_crafts, comp_alc FROM character_alchemy WHERE character_id = ? FOR UPDATE", characterID)
+	return r.scanSynthesisState(ctx, executor, "SELECT recipe_id, state, started_at, total_crafts, comp_alc FROM character_alchemy WHERE character_id = ? FOR UPDATE", characterID)
 }
 
 func (r *AlchemyRepository) scanSynthesisState(ctx context.Context, executor sqlContextExecutor, query string, characterID string) (alchemy.Synthesis, error) {
@@ -36,7 +36,6 @@ func (r *AlchemyRepository) scanSynthesisState(ctx context.Context, executor sql
 		recipeID    sql.NullString
 		state       string
 		startedAt   sql.NullTime
-		maturesAt   sql.NullTime
 		totalCrafts int
 		compAlc     bool
 	)
@@ -45,7 +44,6 @@ func (r *AlchemyRepository) scanSynthesisState(ctx context.Context, executor sql
 		&recipeID,
 		&state,
 		&startedAt,
-		&maturesAt,
 		&totalCrafts,
 		&compAlc,
 	)
@@ -63,14 +61,10 @@ func (r *AlchemyRepository) scanSynthesisState(ctx context.Context, executor sql
 	if recipeID.Valid {
 		recID = recipeID.String
 	}
-	var startPtr, maturePtr *time.Time
+	var startPtr *time.Time
 	if startedAt.Valid {
 		t := startedAt.Time.UTC()
 		startPtr = &t
-	}
-	if maturesAt.Valid {
-		t := maturesAt.Time.UTC()
-		maturePtr = &t
 	}
 
 	return alchemy.Synthesis{
@@ -78,7 +72,6 @@ func (r *AlchemyRepository) scanSynthesisState(ctx context.Context, executor sql
 		RecipeID:    recID,
 		State:       alchemy.SynthesisState(state),
 		StartedAt:   startPtr,
-		MaturesAt:   maturePtr,
 		TotalCrafts: totalCrafts,
 		CompAlc:     compAlc,
 	}, nil
@@ -90,22 +83,18 @@ func (r *AlchemyRepository) SaveSynthesisState(ctx context.Context, s alchemy.Sy
 	if s.RecipeID != "" {
 		recID = s.RecipeID
 	}
-	var startedAt, maturesAt any
+	var startedAt any
 	if s.StartedAt != nil {
 		startedAt = s.StartedAt.UTC()
 	}
-	if s.MaturesAt != nil {
-		maturesAt = s.MaturesAt.UTC()
-	}
 
 	query := `
-		INSERT INTO character_alchemy (character_id, recipe_id, state, started_at, matures_at, total_crafts, comp_alc)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO character_alchemy (character_id, recipe_id, state, started_at, total_crafts, comp_alc)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			recipe_id = VALUES(recipe_id),
 			state = VALUES(state),
 			started_at = VALUES(started_at),
-			matures_at = VALUES(matures_at),
 			total_crafts = VALUES(total_crafts),
 			comp_alc = VALUES(comp_alc)
 	`
@@ -114,7 +103,6 @@ func (r *AlchemyRepository) SaveSynthesisState(ctx context.Context, s alchemy.Sy
 		recID,
 		string(s.State),
 		startedAt,
-		maturesAt,
 		s.TotalCrafts,
 		s.CompAlc,
 	)

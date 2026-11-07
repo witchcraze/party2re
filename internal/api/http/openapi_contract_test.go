@@ -45,7 +45,7 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		gamehttp.WithCasino(&openAPICasinoService{}), gamehttp.WithBank(&stubBankService{}),
 		gamehttp.WithDepot(&stubDepotService{}), gamehttp.WithBlacksmith(&stubBlacksmithService{}),
 		gamehttp.WithPvP(&stubColosseumPvPService{}), gamehttp.WithGvG(&stubGvGService{}),
-		gamehttp.WithAlchemy(&stubAlchemyService{}), gamehttp.WithHome(&mockHomeService{}),
+		gamehttp.WithHome(&mockHomeService{}),
 		gamehttp.WithParty(&stubPartyService{}),
 	)
 	if err != nil {
@@ -75,9 +75,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		{"GET", "/parties/{id}", "", "", 200},
 		{"GET", "/towns/{town_id}/houses", "", "", 200},
 		{"POST", "/towns/{town_id}/houses", `{"character_id":"c1","house_style":"001"}`, "session", 201},
-		{"GET", "/characters/{id}/alchemy", "", "session", 200},
-		{"POST", "/characters/{id}/alchemy/synthesize", `{"recipe_id":"recipe"}`, "session", 200},
-		{"POST", "/characters/{id}/alchemy/claim", "", "session", 200},
 		{"POST", "/characters/{id}/home/wake", "", "session", 200},
 		{"GET", "/homes/{id}", "", "", 200},
 		{"GET", "/characters/{id}/casino", "", "", 401},

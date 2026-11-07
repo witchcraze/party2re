@@ -325,14 +325,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		RequiredParams: []string{"slot"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "alchemy_synthesize",
-		Label:          "錬金調合",
-		Category:       "crafting",
-		OperationID:    "postCharactersIdAlchemySynthesize",
-		RequiredParams: []string{"recipe_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "alchemy_synthesize", Label: "錬金調合", Category: "crafting", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{
 		ID:             "custom_skill_set",
 		Label:          "カスタムスキル作成",

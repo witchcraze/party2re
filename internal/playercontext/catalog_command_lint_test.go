@@ -58,6 +58,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"depot_sort", "", "", false},
 		{"gemstore_sort", "", "", false},
 		{"gemstore_sell", "item_id", "string", true},
+		{"alchemy_synthesize", "recipe_id", "string", true},
 		{"blackmarket_sacrifice", "item_instance_id", "string", true},
 		{"blackmarket_trade", "prize_id", "string", true},
 		{"depot_sell", "item_id", "string", true},
@@ -96,7 +97,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox", "getBlackMarketStatus", "getBlackMarketPoints", "sacrificeBlackMarketItem", "tradeBlackMarketPrize"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox", "getBlackMarketStatus", "getBlackMarketPoints", "sacrificeBlackMarketItem", "tradeBlackMarketPrize", "getCharactersIdAlchemy", "postCharactersIdAlchemySynthesize", "postCharactersIdAlchemyClaim"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {

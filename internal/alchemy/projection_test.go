@@ -104,7 +104,9 @@ func TestSynthesize_FirstCraftHidesProductUntilClaim(t *testing.T) {
 	assertNoneIn(t, "compendium while brewing", comp, []string{"Synthesize Super Herb", "item-002", "Super Herb"})
 
 	// Claim publishes the product.
-	simTime = time.Date(2026, 9, 13, 6, 0, 0, 0, timer.JST)
+	if err := svc.CompleteOngoingSynthesis(ctx, char.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.Claim(ctx, char.ID); err != nil {
 		t.Fatalf("Claim: %v", err)
 	}

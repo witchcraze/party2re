@@ -567,7 +567,7 @@ func TestSynthesize_FailsWhenSynthesisInProgress(t *testing.T) {
 	}
 }
 
-func TestSynthesize_OvernightMaturityAndClaim(t *testing.T) {
+func TestSynthesize_CompletesOnlyThroughSleep(t *testing.T) {
 	ctx := context.Background()
 	simTime := time.Date(2026, 9, 12, 20, 0, 0, 0, timer.JST)
 	svc, _, depotRepo, _, char := setupTestService(t, &simTime)
@@ -584,24 +584,28 @@ func TestSynthesize_OvernightMaturityAndClaim(t *testing.T) {
 		t.Fatalf("Synthesize failed: %v", err)
 	}
 
-	// Expected maturity is next midnight JST: 2026-09-13 00:00:00 JST
-	expectedMaturity := time.Date(2026, 9, 13, 0, 0, 0, 0, timer.JST)
-	if !res.MaturesAt.Equal(expectedMaturity) {
-		t.Errorf("matures at = %v, want %v", res.MaturesAt, expectedMaturity)
+	if res.State != StateOngoing {
+		t.Errorf("state = %v, want ongoing", res.State)
 	}
 
-	// Before midnight: Claim should fail
-	simTime = time.Date(2026, 9, 12, 23, 59, 0, 0, timer.JST)
-	_, err = svc.Claim(ctx, char.ID)
-	if !errors.Is(err, ErrSynthesisNotReady) {
-		t.Errorf("expected ErrSynthesisNotReady before midnight, got %v", err)
+	// lib/home.cgi:191 is the only completion path, so elapsed time changes nothing.
+	simTime = time.Date(2026, 9, 14, 6, 30, 0, 0, timer.JST)
+	if st, err := svc.GetStatus(ctx, char.ID); err != nil || st.State != StateOngoing {
+		t.Errorf("status after midnight = %+v, %v; want ongoing", st, err)
+	}
+	if _, err = svc.Claim(ctx, char.ID); !errors.Is(err, ErrSynthesisNotReady) {
+		t.Errorf("expected ErrSynthesisNotReady after midnight without sleep, got %v", err)
+	}
+	if _, err = svc.Synthesize(ctx, char.ID, "rec-super-herb"); !errors.Is(err, ErrSynthesisInProgress) {
+		t.Errorf("expected ErrSynthesisInProgress after midnight without sleep, got %v", err)
 	}
 
-	// After midnight: Claim succeeds and delivers product into Depot
-	simTime = time.Date(2026, 9, 13, 6, 30, 0, 0, timer.JST)
+	if err := svc.CompleteOngoingSynthesis(ctx, char.ID); err != nil {
+		t.Fatalf("CompleteOngoingSynthesis failed: %v", err)
+	}
 	claimRes, err := svc.Claim(ctx, char.ID)
 	if err != nil {
-		t.Fatalf("Claim failed after midnight: %v", err)
+		t.Fatalf("Claim failed after sleep: %v", err)
 	}
 	if claimRes.CreatedItem.DefinitionID != "item-002" {
 		t.Errorf("expected item-002, got %s", claimRes.CreatedItem.DefinitionID)

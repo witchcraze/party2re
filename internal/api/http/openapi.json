@@ -790,21 +790,41 @@
         ],
         "type": "object"
       },
+      "AlchemySceneData": {
+        "additionalProperties": false,
+        "description": "Owned synthesis status and the current page of learned combinations. Observation never claims; delivery happens in scene_enter.",
+        "properties": {
+          "compendium": {
+            "$ref": "#/components/schemas/AlchemyCompendium"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AlchemySynthesis"
+          }
+        },
+        "required": [
+          "parent",
+          "status",
+          "compendium",
+          "page"
+        ],
+        "type": "object"
+      },
       "AlchemySynthesis": {
         "additionalProperties": false,
+        "description": "state becomes completed only through home sleep; elapsed time never completes it.",
         "properties": {
           "character_id": {
             "type": "string"
           },
           "comp_alc": {
             "type": "boolean"
-          },
-          "matures_at": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "recipe_id": {
             "type": "string"
@@ -835,10 +855,6 @@
       "AlchemySynthesisResult": {
         "additionalProperties": false,
         "properties": {
-          "matures_at": {
-            "format": "date-time",
-            "type": "string"
-          },
           "message": {
             "type": "string"
           },
@@ -857,20 +873,7 @@
           "recipe",
           "state",
           "started_at",
-          "matures_at",
           "message"
-        ],
-        "type": "object"
-      },
-      "AlchemySynthesizeRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "recipe_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "recipe_id"
         ],
         "type": "object"
       },
@@ -4444,6 +4447,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "alchemy",
                         "blackmarket",
                         "blacksmith",
                         "chapel",
@@ -4566,6 +4570,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "alchemy",
                         "blackmarket",
                         "blacksmith",
                         "chapel",
@@ -5916,6 +5921,41 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "alchemy_synthesize",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "recipe_id": {
+                      "description": "Explicit learned recipe from the observed compendium entries. Learning and Depot materials stay service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "recipe_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "blackmarket_sacrifice",
                   "type": "string"
                 }
@@ -6093,22 +6133,6 @@
           "success",
           "result",
           "context"
-        ],
-        "type": "object"
-      },
-      "CharacterAlchemyResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "compendium": {
-            "$ref": "#/components/schemas/AlchemyCompendium"
-          },
-          "status": {
-            "$ref": "#/components/schemas/AlchemySynthesis"
-          }
-        },
-        "required": [
-          "status",
-          "compendium"
         ],
         "type": "object"
       },
@@ -13540,6 +13564,7 @@
                 "enum": [
                   "town",
                   "bank",
+                  "alchemy",
                   "blackmarket",
                   "blacksmith",
                   "chapel",
@@ -13580,6 +13605,49 @@
           "title",
           "supported",
           "enter_params"
+        ],
+        "type": "object"
+      },
+      "SceneEnterResult": {
+        "additionalProperties": false,
+        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis: alchemy_claim carries the delivery, and alchemy_claim_error reports a full Depot, which keeps the entry and the synthesis until re-entry.",
+        "properties": {
+          "alchemy_claim": {
+            "$ref": "#/components/schemas/AlchemyClaimResult"
+          },
+          "alchemy_claim_error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "subject": {
+            "additionalProperties": false,
+            "properties": {
+              "target_id": {
+                "type": "string"
+              },
+              "target_kind": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "destination",
+          "subject",
+          "offset",
+          "limit"
         ],
         "type": "object"
       },
@@ -13679,6 +13747,7 @@
             "enum": [
               "town",
               "bank",
+              "alchemy",
               "blackmarket",
               "blacksmith",
               "chapel",
@@ -13785,6 +13854,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/DepotSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AlchemySceneData"
                     },
                     {
                       "$ref": "#/components/schemas/BlackMarketSceneData"
@@ -14203,6 +14275,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/DepotSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "alchemy"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/AlchemySceneData"
                 },
                 "support": {
                   "properties": {
@@ -17990,227 +18092,6 @@
         "summary": "List character adventure history",
         "tags": [
           "Adventure"
-        ]
-      }
-    },
-    "/characters/{id}/alchemy": {
-      "get": {
-        "operationId": "getCharactersIdAlchemy",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CharacterAlchemyResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Character Alchemy",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/alchemy/claim": {
-      "post": {
-        "operationId": "postCharactersIdAlchemyClaim",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlchemyClaimResult"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Alchemy Claim",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/alchemy/synthesize": {
-      "post": {
-        "operationId": "postCharactersIdAlchemySynthesize",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AlchemySynthesizeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlchemySynthesisResult"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Alchemy Synthesize",
-        "tags": [
-          "Character"
         ]
       }
     },

@@ -6,8 +6,8 @@ The Alchemy system (錬金術 / 錬金堂, NPC @トロデ) provides overnight cr
 Unlike modern instant-crafting or fee-charging MMO systems, authentic Party2 synthesis adheres to the following principles:
 - **Zero Gold Fee**: Trode performs synthesis entirely free of charge (`lib/alchemy.cgi`).
 - **Depot-Linked Materials**: Ingredients are consumed directly from the player's Depot (`character_depots`, `depot_items`), rather than active inventory.
-- **Overnight Maturation & Home Rest**: Synthesis requires time to mature until the next morning (`timer.NextMidnightJST`) or completes instantly when resting at home (`internal/home/sleep.go` `Wake`).
-- **Depot-Direct Delivery**: Completed synthesized items are deposited directly into the player's Depot upon claim.
+- **Completion by Sleep Only**: A synthesis completes only when the character sleeps at home (`lib/home.cgi:191`). Elapsed time alone never completes it.
+- **Delivery on Entry**: Entering the facility delivers a completed synthesis directly into the player's Depot (`lib/alchemy.cgi:17,183-202`). There is no claim action.
 - **Recipe Compendium**: Players discover and learn recipes (via recipe books or base materials), tracking learned and crafted statuses across all 114 recipes.
 - **Title Award**: Achieving 100% compendium crafted completion awards the `comp_alc` title (`$title .= "comp_alc,"`).
 
@@ -34,7 +34,6 @@ A recipe consists of:
 - `RecipeID`: ID of the recipe currently being crafted (empty if none)
 - `State`: `none`, `ongoing`, or `completed`
 - `StartedAt`: Timestamp when synthesis commenced
-- `MaturesAt`: Next midnight JST timestamp (`timer.NextMidnightJST`)
 - `TotalCrafts`: Total number of successful synthesis claims
 - `CompAlc`: Boolean indicating whether the 100% compendium title has been awarded
 
@@ -48,7 +47,7 @@ A recipe consists of:
 
 ## Operations & Invariants
 
-### 1. Synthesize (`POST /characters/{id}/alchemy/synthesize`)
+### 1. Synthesize (`alchemy_synthesize`)
 1. **Lock Hierarchy**: Rank 2 `characters` -> Rank 5 `character_depots` -> Rank 8 `character_alchemy`.
 2. **Preconditions**:
    - No ongoing synthesis (`state == none` or existing synthesis claimed).
@@ -57,20 +56,21 @@ A recipe consists of:
 3. **Execution**:
    - Consume required ingredients directly from Depot storage (`depot.Consume`).
    - Save updated Depot.
-   - Record synthesis state with `state = ongoing`, `started_at = now`, `matures_at = NextMidnightJST(now)`.
+   - Record synthesis state with `state = ongoing`, `started_at = now`.
 
-### 2. Status & Maturity (`GET /characters/{id}/alchemy`)
-- Returns the current synthesis status, active recipe, maturity timestamp, and the Recipe Compendium observation projection (learned combinations only).
-- If `now >= matures_at`, the state is reported as `completed`.
+### 2. Observation (`alchemy` scene)
+- Returns the current synthesis status and the Recipe Compendium observation projection (learned combinations only), with entries paged at 20 by default.
+- Observation never claims or writes.
 
-### 3. Home Rest Acceleration (`internal/home/sleep.go`)
-- When a character rests and wakes up at home (`Wake`), `AlchemyCompleter.CompleteOngoingSynthesis` is invoked.
-- Any `ongoing` synthesis state is transitioned to `completed` immediately (`matures_at = now`).
+### 3. Completion by Home Sleep (`internal/home/wake.go`)
+- When a character wakes at home (`Wake`), `AlchemyCompleter.CompleteOngoingSynthesis` moves any `ongoing` synthesis to `completed`.
+- Legacy sets the flag when the character goes to bed. Go sets it at Wake, because a sleeping character cannot reach the facility.
 
-### 4. Claim (`POST /characters/{id}/alchemy/claim`)
+### 4. Delivery on Entry (`scene_enter` with `destination:alchemy`)
 1. **Lock Hierarchy**: Rank 2 `characters` -> Rank 5 `character_depots` -> Rank 8 `character_alchemy`.
 2. **Preconditions**:
-   - Synthesis must be in `completed` state (`matures_at <= now` or accelerated by home rest).
+   - Synthesis must be in `completed` state. With no synthesis, or one still `ongoing`, entry is an ordinary entry.
+   - The selection is saved first, so a rejected entry never claims.
 3. **Execution & Ambient Transaction Boundary**:
    - Runs within a single ambient database transaction (`RunInTx`):
      - Create item instance (`coreitem.NewInstance(recipe.ResultItemDefinitionID, recipe.ResultQuantity)`).
@@ -86,7 +86,8 @@ A recipe consists of:
 4. **Failure Propagation & Rollback Guarantees**:
    - If any step—including `LegendInductor` or `SynthesisHook`—returns an error, the error is propagated out of `Claim` and the entire transaction rolls back.
    - Rollback ensures depot item addition, crafted marks, `comp_alc` title flag, synthesis state clearing, and achievement progress never commit partially.
-   - The synthesis remains in `completed` state, allowing safe, idempotent retry without lost progress or duplicate items.
+   - The synthesis remains in `completed` state, allowing safe, idempotent retry without lost progress or duplicate items. The Gateway reports the unknown outcome without replay; re-entry retries.
+5. **Full Depot**: Entry still succeeds and the synthesis stays `completed`. The command result carries `alchemy_claim_error` (`ALCHEMY_DEPOT_FULL`), and re-entry after freeing a slot delivers. Legacy `send_item` does not check capacity; [#1139](https://github.com/witchcraze/party2re/issues/1139) owns that decision.
 
 ### 5. Learn Recipe & Recipe Scroll Books (`internal/home/recipe_usage.go`, `internal/alchemy/compendium.go`)
 - **Discovery Pool Membership**:
@@ -103,6 +104,28 @@ A recipe consists of:
 - **Clean-Room Display Guarantee**:
   - Recipe learning notifications via `alchemyRecipeLearnerAdapter` in `cmd/party2/wire.go` resolve ingredient definition IDs to their clean-room item definition names (`def.Name`). Renamed assets (e.g. `ヒノキの棒`, `神薙の剣`, `霊樹の葉`, `不死殺しの剣`, `不死者の鎧`) never leak legacy proprietary or distinctive names into product messages.
 - **No Direct HTTP Discovery**: Recipe discovery is exclusively driven by recipe scroll item consumption via Home item usage; no direct HTTP endpoint exists for recipe learning.
+
+---
+
+## Gateway and Observation
+
+| Former REST operation (retired) | Supported replacement |
+| --- | --- |
+| GET `/characters/{id}/alchemy` | POST `scene_enter` with `destination:alchemy`, then GET `/api/v1/characters/{id}/context` |
+| POST `.../alchemy/synthesize` | POST `/api/v1/characters/{id}/actions`, `action:alchemy_synthesize`, explicit `params.recipe_id` |
+| POST `.../alchemy/claim` | `scene_enter` with `destination:alchemy`; the command result carries `alchemy_claim` |
+
+### Scoped legacy action reconciliation
+
+| Legacy action (`lib/alchemy.cgi`) | Go disposition | Known difference |
+| --- | --- | --- |
+| Automatic `finish` on load (17, 183-202) | Delivery in `scene_enter` | GET never claims, so a saved selection delivers only on the next entry. |
+| `れしぴ` (46-94) | `compendium` in the scene | Legacy awards `comp_alc` when the list is viewed; Go awards it at delivery because observation does not write. |
+| `れんきん` without a target (99-144) | `compendium` in the scene | None for listing visibility. |
+| `れんきん` with a target (99-144) | `alchemy_synthesize` | Explicit recipe ID replaces the base and material names. Messages omit those names and rejections use structured codes. |
+| Shared `はなす` (`@words`, 22-26), `shiraberu_npc` (31-33) | No Go operation | NPC dialogue is unresolved under [#947](https://github.com/witchcraze/party2re/issues/947). |
+
+Legacy successful actions also apply the shared action cooldown and write `npc_com` to the facility log, while list views set `$act_time = 0`. Go applies neither effect; this is the same unresolved cooldown, presence and log reconciliation as other migrated facilities, and the Gateway connection does not certify parity for it.
 
 ---
 
