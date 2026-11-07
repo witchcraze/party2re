@@ -61,9 +61,10 @@ func (r *PresenceRepository) PresenceIconSource(ctx context.Context, characterID
 }
 
 // PublishPresence replaces the character's snapshot of this kind; REPLACE assigns a
-// new seq, preserving publication order for equal timestamps.
+// new seq, preserving publication order for equal timestamps. A stored snapshot
+// with a later time (another instance's clock) is kept, so recorded time never regresses.
 func (r *PresenceRepository) PublishPresence(ctx context.Context, characterID string, kind character.PresenceKind, at int64, iconURL string) error {
-	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		REPLACE INTO character_presence_snapshots
 			(character_id, kind, recorded_at, name, color, guild_id, guild_name, icon_url, aura_effect, login_message)
 		SELECT c.id, ?, ?, c.name, c.color, COALESCE(g.id, ''), COALESCE(g.name, ''), ?, COALESCE(p.aura_effect, 0), c.login_message
@@ -71,16 +72,11 @@ func (r *PresenceRepository) PublishPresence(ctx context.Context, characterID st
 		LEFT JOIN guild_members gm ON gm.character_id = c.id
 		LEFT JOIN guilds g ON g.id = gm.guild_id
 		LEFT JOIN character_profiles p ON p.character_id = c.id
-		WHERE c.id = ?`, string(kind), at, iconURL, characterID)
-	if err != nil {
-		return err
-	}
-	if n, err := res.RowsAffected(); err != nil {
-		return err
-	} else if n == 0 {
-		return character.ErrNotFound
-	}
-	return nil
+		WHERE c.id = ? AND NOT EXISTS (
+			SELECT 1 FROM character_presence_snapshots cur
+			WHERE cur.character_id = c.id AND cur.kind = ? AND cur.recorded_at > ?)`,
+		string(kind), at, iconURL, characterID, string(kind), at)
+	return err
 }
 
 func (r *PresenceRepository) ObservePresence(ctx context.Context, now, window int64) ([]character.PresenceSnapshot, error) {

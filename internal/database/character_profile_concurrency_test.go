@@ -68,7 +68,7 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 	txProvider := NewTransactionProvider(db)
 
 	// 1. Persist initial profile: AvatarURL and BioData
-	initialAvatar := "https://example.com/old.png"
+	initialAvatar := "https://i.imgur.com/AvDTest.gif"
 	initialBio := map[string]string{"key": "saved"}
 	err = charRepo.SaveProfile(ctx, character.Profile{
 		CharacterID: char.ID,
@@ -118,7 +118,7 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 	}
 
 	newComment := "New comment from svc1"
-	newAvatar := "https://example.com/new.png"
+	newAvatar := "https://i.imgur.com/AvETest.gif"
 
 	svc1ErrChan := make(chan error, 1)
 	go func() {
@@ -401,7 +401,7 @@ func TestCharacterService_ConcurrentAllOptionalFields(t *testing.T) {
 	bio1 := map[string]string{"hobby": "fishing", "food": "ramen"}
 
 	// Service 2 sets AvatarURL and AuraEffect
-	avatar2 := "https://example.com/avatar_all.png"
+	avatar2 := "https://i.imgur.com/AvFTest.gif"
 	aura2 := 7
 
 	svc1ErrChan := make(chan error, 1)
@@ -498,7 +498,7 @@ func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T)
 
 	// 1. Initial valid profile
 	initialComment := "Before corruption"
-	initialAvatar := "https://example.com/intact.png"
+	initialAvatar := "https://i.imgur.com/AvGTest.gif"
 	_, err = svc.UpdateProfile(ctx, char.ID, character.UpdateProfileRequest{
 		Comment:   &initialComment,
 		AvatarURL: &initialAvatar,

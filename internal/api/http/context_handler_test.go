@@ -64,7 +64,7 @@ func contextRouter(t *testing.T, readers *contextReaders, timers timer.Service, 
 			return readers.char, nil
 		},
 		getProfileFn: func(ctx context.Context, id string) (character.ProfileView, error) {
-			avatar := "https://example.com/avatar.png"
+			avatar := "https://i.imgur.com/AvATest.gif"
 			if readers.avatarURL != "" {
 				avatar = readers.avatarURL
 			}
@@ -121,7 +121,7 @@ func TestPlayerContextHTTP_States(t *testing.T) {
 				Money: tc.gold, Tired: tc.tired, Stats: corecharacter.Stats{HP: tc.hp, MaxHP: 100, MP: 20, MaxMP: 30}}}
 			readers.noAvatar = tc.name == "no gold"
 			got := fetchContext(t, contextRouter(t, readers, timer.NewService(nil), nil))
-			wantAvatar := "https://example.com/avatar.png"
+			wantAvatar := "https://i.imgur.com/AvATest.gif"
 			if readers.noAvatar {
 				wantAvatar = ""
 			}
@@ -257,15 +257,6 @@ func TestPlayerContextHTTP_AuthAndFailures(t *testing.T) {
 }
 
 type failingContextTimer struct{ timer.Service }
-
-func TestPlayerContextHTTP_PreservesUploadSizedAvatar(t *testing.T) {
-	avatar := "data:image/png;base64," + strings.Repeat("A", ((2*1024*1024+2)/3)*4)
-	readers := &contextReaders{char: corecharacter.Character{ID: "hero", PlayerID: "player-1"}, avatarURL: avatar}
-	got := fetchContext(t, contextRouter(t, readers, timer.NewService(nil), nil))
-	if got.Character.IconURL != avatar {
-		t.Fatal("avatar was truncated")
-	}
-}
 
 func (s failingContextTimer) GetRemainingLock(context.Context, string, string) (time.Duration, error) {
 	return 0, errors.New("timer unavailable")

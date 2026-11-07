@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/validation"
@@ -66,6 +65,7 @@ type PresenceRepository interface {
 	// AdvanceSampleClock sets the clock to now only when unset or now > clock+window,
 	// reporting whether it advanced.
 	AdvanceSampleClock(ctx context.Context, characterID string, now, window int64) (bool, error)
+	// PublishPresence replaces the snapshot of this kind unless the stored one is newer.
 	PublishPresence(ctx context.Context, characterID string, kind PresenceKind, at int64, iconURL string) error
 	PresenceIconSource(ctx context.Context, characterID string) (string, error)
 	// ObservePresence prunes expired, banned and entry-hidden records visible at now
@@ -111,11 +111,12 @@ func (s *PresenceService) Enter(ctx context.Context, playerID, characterID strin
 			return err
 		}
 	}
-	now := s.now().Unix()
 	return s.tx.RunInTx(ctx, func(ctx context.Context) error {
 		if err := s.lockOwned(ctx, playerID, characterID); err != nil {
 			return err
 		}
+		// Read the clock only after the lock so lock order and recorded time agree.
+		now := s.now().Unix()
 		if message != nil {
 			if err := s.repo.SetLoginMessage(ctx, characterID, *message); err != nil {
 				return err
@@ -133,12 +134,11 @@ func (s *PresenceService) Enter(ctx context.Context, playerID, characterID strin
 // Transaction: RunInTx (joins an ambient transaction)
 // Lock Order: characters(2) -> character_presence_snapshots
 func (s *PresenceService) RecordSave(ctx context.Context, playerID, characterID string) error {
-	now := s.now().Unix()
 	return s.tx.RunInTx(ctx, func(ctx context.Context) error {
 		if err := s.lockOwned(ctx, playerID, characterID); err != nil {
 			return err
 		}
-		return s.sample(ctx, characterID, now)
+		return s.sample(ctx, characterID, s.now().Unix())
 	})
 }
 
@@ -200,8 +200,8 @@ func (s *PresenceService) sample(ctx context.Context, characterID string, now in
 	return s.publish(ctx, characterID, PresenceSample, now)
 }
 
-// publish copies the current display fields; an icon that is not a safe image
-// URL is published empty rather than blocking presence.
+// publish copies the current display fields; an icon outside the avatar contract
+// is published empty rather than blocking presence.
 func (s *PresenceService) publish(ctx context.Context, characterID string, kind PresenceKind, now int64) error {
 	icon, err := s.repo.PresenceIconSource(ctx, characterID)
 	if err != nil {
@@ -215,21 +215,11 @@ func (s *PresenceService) publish(ctx context.Context, characterID string, kind 
 
 var (
 	presenceColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
-	presenceDataImage    = regexp.MustCompile(`^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$`)
 )
 
-// IsSafePresenceIcon accepts empty, http(s) URLs and base64 raster data images;
-// SVG and other schemes are excluded from public presence.
+// IsSafePresenceIcon accepts only the stored avatar contract (empty or canonical imgur URL).
 func IsSafePresenceIcon(icon string) bool {
-	if icon == "" {
-		return true
-	}
-	if strings.HasPrefix(icon, "data:") {
-		return presenceDataImage.MatchString(icon)
-	}
-	return icon == strings.TrimSpace(icon) &&
-		validation.ValidateVerbatimLine(icon, MaxAvatarURLLength) == nil &&
-		ValidateAvatarURL(icon) == nil
+	return ValidateAvatarURL(icon) == nil
 }
 
 func checkPublicSnapshot(row PresenceSnapshot) error {

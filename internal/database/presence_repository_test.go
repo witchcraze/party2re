@@ -21,7 +21,7 @@ type presenceFixture struct {
 	db    *sql.DB
 	repo  *database.PresenceRepository
 	svc   *character.PresenceService
-	clock int64 // seconds after presenceBase
+	clock atomic.Int64 // seconds after presenceBase
 }
 
 // Observation deletes expired rows table-wide, so every test owns a dedicated DB.
@@ -40,7 +40,7 @@ func newPresenceFixture(t *testing.T) *presenceFixture {
 func (f *presenceFixture) service(t *testing.T, repo character.PresenceRepository) *character.PresenceService {
 	t.Helper()
 	svc, err := character.NewPresenceService(repo, database.NewTransactionProvider(f.db), func() time.Time {
-		return time.Unix(presenceBase+f.clock, 0)
+		return time.Unix(presenceBase+f.clock.Load(), 0)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +57,7 @@ func (f *presenceFixture) character(t *testing.T, name string) corecharacter.Cha
 	return c
 }
 
-func (f *presenceFixture) at(clock int64) *presenceFixture { f.clock = clock; return f }
+func (f *presenceFixture) at(clock int64) *presenceFixture { f.clock.Store(clock); return f }
 
 func (f *presenceFixture) save(t *testing.T, c corecharacter.Character) {
 	t.Helper()
@@ -79,7 +79,7 @@ func (f *presenceFixture) observe(t *testing.T) []character.PresenceSnapshot {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if obs.OnlineCount != len(obs.Characters) || obs.ObservedAt.Unix() != presenceBase+f.clock {
+	if obs.OnlineCount != len(obs.Characters) || obs.ObservedAt.Unix() != presenceBase+f.clock.Load() {
 		t.Fatalf("inconsistent observation %+v", obs)
 	}
 	return obs.Characters
@@ -264,11 +264,11 @@ func TestPresenceProfileFieldsAndGuild(t *testing.T) {
 	if row.GuildID != guildID || row.GuildName != g.Name || row.AuraEffect != 3 || row.IconURL != "" {
 		t.Fatalf("unexpected public fields: %+v", row)
 	}
-	if _, err := f.db.Exec(`UPDATE character_profiles SET avatar_url = 'https://example.com/a.png' WHERE character_id = ?`, c.ID); err != nil {
+	if _, err := f.db.Exec(`UPDATE character_profiles SET avatar_url = 'https://i.imgur.com/AvHTest.gif' WHERE character_id = ?`, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	f.at(1).enter(t, c, nil)
-	if row := f.observe(t)[0]; row.IconURL != "https://example.com/a.png" {
+	if row := f.observe(t)[0]; row.IconURL != "https://i.imgur.com/AvHTest.gif" {
 		t.Fatalf("safe icon not published: %+v", row)
 	}
 }
@@ -442,4 +442,82 @@ func TestPresenceConcurrentSavesPublishOneSample(t *testing.T) {
 	if got := f.sampledAt(t, c); got != 1000 {
 		t.Fatalf("clock moved backwards to %d", got)
 	}
+}
+
+func (f *presenceFixture) recordedAt(t *testing.T, c corecharacter.Character, kind character.PresenceKind) int64 {
+	t.Helper()
+	var at int64
+	if err := f.db.QueryRow(`SELECT recorded_at FROM character_presence_snapshots WHERE character_id = ? AND kind = ?`, c.ID, string(kind)).Scan(&at); err != nil {
+		t.Fatal(err)
+	}
+	return at - presenceBase
+}
+
+func TestPresenceConcurrentEntriesNeverRegress(t *testing.T) {
+	f := newPresenceFixture(t)
+	c := f.character(t, "EntRace")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// An entry that started at t=10 but waits for the character lock is recorded
+	// at the time it acquires the lock, not when it was requested.
+	holder, err := f.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.ExecContext(ctx, `SELECT id FROM characters WHERE id = ? FOR UPDATE`, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.at(10)
+	locking := make(chan struct{})
+	svc := f.service(t, lockSignalRepo{f.repo, locking})
+	done := make(chan error, 1)
+	go func() { done <- svc.Enter(ctx, c.PlayerID, c.ID, nil) }()
+	select {
+	case <-locking: // requested at t=10; the lock is still held, so the call is blocked
+	case <-ctx.Done():
+		t.Fatal("entry never requested the character lock")
+	}
+	f.at(20)
+	if err := holder.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if got := f.recordedAt(t, c, character.PresenceEntry); got != 20 {
+		t.Fatalf("entry recorded at %d, want 20", got)
+	}
+
+	// Another instance with a lagging clock cannot replace the newer snapshot.
+	if err := f.repo.PublishPresence(ctx, c.ID, character.PresenceEntry, presenceBase+15, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.recordedAt(t, c, character.PresenceEntry); got != 20 {
+		t.Fatalf("older publication regressed entry to %d", got)
+	}
+	seq := func() (n int64) {
+		if err := f.db.QueryRow(`SELECT seq FROM character_presence_snapshots WHERE character_id = ? AND kind = 'entry'`, c.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	before := seq()
+	if err := f.repo.PublishPresence(ctx, c.ID, character.PresenceEntry, presenceBase+20, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.recordedAt(t, c, character.PresenceEntry); got != 20 || seq() <= before {
+		t.Fatal("equal-time republication must replace the entry and take a later publication order")
+	}
+}
+
+// lockSignalRepo reports when an operation is about to request the character lock.
+type lockSignalRepo struct {
+	character.PresenceRepository
+	locking chan struct{}
+}
+
+func (r lockSignalRepo) LockPresenceOwner(ctx context.Context, id string) (string, error) {
+	close(r.locking)
+	return r.PresenceRepository.LockPresenceOwner(ctx, id)
 }

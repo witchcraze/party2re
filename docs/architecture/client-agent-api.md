@@ -56,7 +56,7 @@ The four top-level fields are:
 
 - `character`: ID/name/job ID and name, level, HP/MP maxima and current values,
   wallet gold, fatigue, death and sleeping flags, and icon fields. `icon_url`
-  uses the existing profile AvatarURL (URL or data URI), or an empty string.
+  uses the existing profile AvatarURL (the imgur avatar URL), or an empty string.
   The asset ID remains empty until production mappings are specified.
 - `scene`: registered `kind`, selected `location_id`, optional `subject`, typed
   `data`, connection/eligibility `support`, and HTTP-owned presentation fields.
@@ -563,9 +563,7 @@ offset paging otherwise. Expose the mode and next-page inputs. Reject malformed,
 mixed or cross-scene/target/filter paging; include an ID tie-breaker in ordering.
 No cross-page snapshot consistency is promised. Lists/details use bounded typed
 fields and existing media bounds; never repeat large inline image blobs per row,
-silently truncate records, or load every facility into one observation. The
-existing actor avatar can contain a data URI from a 2 MiB upload, so a smaller
-blanket byte cap must not break it. Per-variant field/payload bounds are part of
+silently truncate records, or load every facility into one observation. Per-variant field/payload bounds are part of
 the implementation's schema and acceptance tests, not an excuse to remove data.
 
 A disappeared/expired saved subject produces a typed `selection_unavailable`

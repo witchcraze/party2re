@@ -2,9 +2,7 @@ package http
 
 import (
 	"errors"
-	"io"
 	"net/http"
-	"strings"
 
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -155,89 +153,5 @@ func (h *Handler) handleUpdateCharacterProfile(w http.ResponseWriter, r *http.Re
 		}
 
 		writeJSON(w, http.StatusOK, profile)
-	})
-}
-
-// handleUploadCharacterAvatar handles avatar image file or data upload.
-func (h *Handler) handleUploadCharacterAvatar(w http.ResponseWriter, r *http.Request) {
-	charID := r.PathValue("id")
-	if charID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "character id is required"})
-		return
-	}
-
-	h.withAuthenticatedCharacter(w, r, charID, func(player coreplayer.Player, char corecharacter.Character) {
-		contentType := r.Header.Get("Content-Type")
-		var filename string
-		var imageBytes []byte
-		var mimeType string
-
-		if strings.HasPrefix(contentType, "multipart/form-data") {
-			if err := r.ParseMultipartForm(character.MaxAvatarSizeBytes); err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid multipart form data"})
-				return
-			}
-			file, header, err := r.FormFile("avatar")
-			if err != nil {
-				file, header, err = r.FormFile("image")
-			}
-			if err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing avatar file in form data"})
-				return
-			}
-			defer file.Close()
-
-			filename = header.Filename
-			mimeType = header.Header.Get("Content-Type")
-			data, err := io.ReadAll(io.LimitReader(file, character.MaxAvatarSizeBytes+1))
-			if err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read uploaded file"})
-				return
-			}
-			imageBytes = data
-		} else {
-			var req struct {
-				Filename    string `json:"filename"`
-				ContentType string `json:"content_type"`
-				ImageData   string `json:"image_data"`
-				AvatarURL   string `json:"avatar_url"`
-			}
-			if !decodeJSON(w, r, &req) {
-				return
-			}
-
-			if req.AvatarURL != "" {
-				updatedProfile, err := h.characters.UpdateProfile(r.Context(), charID, character.UpdateProfileRequest{
-					AvatarURL: &req.AvatarURL,
-				})
-				if err != nil {
-					writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-					return
-				}
-				writeJSON(w, http.StatusOK, map[string]string{"avatar_url": updatedProfile.AvatarURL})
-				return
-			}
-
-			filename = req.Filename
-			mimeType = req.ContentType
-			imageBytes = []byte(req.ImageData)
-		}
-
-		avatarURL, err := h.characters.UploadAvatar(r.Context(), charID, filename, mimeType, imageBytes)
-		if err != nil {
-			switch {
-			case errors.Is(err, character.ErrInvalidImageFormat),
-				errors.Is(err, character.ErrImageTooLarge),
-				errors.Is(err, character.ErrInvalidAvatarURL):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, corecharacter.ErrNotFound):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "character not found"})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to upload avatar"})
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]string{"avatar_url": avatarURL})
 	})
 }

@@ -284,7 +284,7 @@ save-equivalent samples, observes the list/count and reads the current message
 and clock for cards. Its writes lock the owning character and join the caller's
 transaction, so a gameplay save, its retention event and any due sample commit
 together, as do entry message changes and entry publication. Publication copies
-display fields; an avatar that is not an http(s) URL or base64 raster data image
+display fields; an avatar outside the [profile avatar contract](character-customization.md#51-profile-attributes-character_profiles)
 is published as an empty icon rather than blocking presence. Observation rechecks
 each stored public field and fails as a whole on unsafe data. Initial deployment
 publishes no fabricated activity; restart preserves eligible records. Character

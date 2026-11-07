@@ -509,7 +509,7 @@ func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
 		profiles: map[string]character.Profile{
 			"hero": {
 				CharacterID: "hero",
-				AvatarURL:   "https://example.com/saved-avatar.png",
+				AvatarURL:   "https://i.imgur.com/AvBTest.gif",
 				BioData:     map[string]string{"key": "saved bio"},
 				Comment:     "initial comment",
 				UpdatedAt:   time.Now().UTC(),
@@ -584,7 +584,7 @@ func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
 		t.Fatalf("expected 0 SaveProfile calls during failed read, got %d", profileRepo.saveCalls)
 	}
 	storedProfile := profileRepo.profiles["hero"]
-	if storedProfile.AvatarURL != "https://example.com/saved-avatar.png" || storedProfile.BioData["key"] != "saved bio" {
+	if storedProfile.AvatarURL != "https://i.imgur.com/AvBTest.gif" || storedProfile.BioData["key"] != "saved bio" {
 		t.Fatalf("stored profile was corrupted or wiped during failed update: %+v", storedProfile)
 	}
 
@@ -605,7 +605,7 @@ func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
 	if err := json.Unmarshal(gotHealthy["context"], &observation); err != nil {
 		t.Fatal(err)
 	}
-	if observation.Character.IconURL != "https://example.com/saved-avatar.png" {
+	if observation.Character.IconURL != "https://i.imgur.com/AvBTest.gif" {
 		t.Fatalf("expected icon_url to match saved avatar, got %q", observation.Character.IconURL)
 	}
 
@@ -617,11 +617,11 @@ func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected healthy UpdateProfile to succeed, got %v", err)
 	}
-	if updated.Comment != healthyComment || updated.AvatarURL != "https://example.com/saved-avatar.png" || updated.BioData["key"] != "saved bio" {
+	if updated.Comment != healthyComment || updated.AvatarURL != "https://i.imgur.com/AvBTest.gif" || updated.BioData["key"] != "saved bio" {
 		t.Fatalf("healthy partial update lost fields: %+v", updated)
 	}
 	storedHealthy := profileRepo.profiles["hero"]
-	if storedHealthy.Comment != healthyComment || storedHealthy.AvatarURL != "https://example.com/saved-avatar.png" || storedHealthy.BioData["key"] != "saved bio" {
+	if storedHealthy.Comment != healthyComment || storedHealthy.AvatarURL != "https://i.imgur.com/AvBTest.gif" || storedHealthy.BioData["key"] != "saved bio" {
 		t.Fatalf("stored profile lost fields after healthy partial update: %+v", storedHealthy)
 	}
 }
