@@ -262,7 +262,9 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 	}
 
-	// Fallback path for unit test mocks without runner configured
+	// Fallback path for unit test mocks without runner configured.
+	// Decide consumption before the effect mutates the character.
+	kept := homeItemKept(def, char)
 	msg, err := s.applyConsumableEffect(ctx, &char, def)
 	if err != nil {
 		if errors.Is(err, errNoEffect) {
@@ -279,7 +281,6 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		return nil, err
 	}
 
-	kept := homeItemKept(def, char)
 	if !kept && source == "inventory" && s.invMgr != nil {
 		if _, err := s.invMgr.Consume(ctx, characterID, instanceID, 1); err != nil {
 			return nil, err

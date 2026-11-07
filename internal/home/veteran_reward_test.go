@@ -123,3 +123,43 @@ func newVeteranRewardService(t *testing.T, level, exp, gold int, rng float64) (*
 	}
 	return svc, runner, depots
 }
+
+// Without a TransactionRunner, consumption must still be decided from the
+// pre-effect EXP (the effect resets it to 98010).
+func TestUseHomeItem_VeteranReward_FallbackDecidesBeforeEffect(t *testing.T) {
+	for _, tc := range []struct {
+		exp          int
+		wantGold     int
+		wantConsumed bool
+	}{{98020, 110, true}, {98000, 90, false}} {
+		for _, source := range []string{"inventory", "depot"} {
+			_, runner, depots := newVeteranRewardService(t, 99, tc.exp, 100, 0)
+			cat, err := coreitem.InitialCatalog()
+			if err != nil {
+				t.Fatal(err)
+			}
+			updater := &mockCharUpdater{chars: runner.chars}
+			svc, err := NewService(newMockHomeRepo(runner.chars), &mockCharReader{chars: runner.chars},
+				WithInventoryManager(&mockInventoryManager{invs: runner.invs}),
+				WithDepotManager(depots),
+				WithItemCatalog(cat),
+				WithCharacterUpdater(updater),
+				WithRNG(floatRNG{}),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res, err := svc.UseHomeItem(context.Background(), "vet", "vet-"+source, source)
+			if err != nil {
+				t.Fatalf("exp %d/%s: %v", tc.exp, source, err)
+			}
+			got := updater.chars["vet"]
+			inv := runner.invs["vet"]
+			_, inInv := inv.Find("vet-inventory")
+			owned := map[string]bool{"inventory": inInv, "depot": len(depots.depots["vet"].Items) == depot.DefaultDepotCapacity}[source]
+			if res.Consumed != tc.wantConsumed || owned == tc.wantConsumed || got.Experience != 98010 || got.Money != tc.wantGold {
+				t.Fatalf("exp %d/%s: res=%+v owned=%v stored=%d/%d", tc.exp, source, res, owned, got.Experience, got.Money)
+			}
+		}
+	}
+}
