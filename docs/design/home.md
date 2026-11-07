@@ -198,7 +198,7 @@ Evidence is relative to `party2/`, revision
 `lib/_data.cgi` and `lib/system.cgi`. [#1124](https://github.com/witchcraze/party2re/issues/1124)
 records the decision to retain observable legacy behavior, including the
 no-stat consumption of 113/114 and the source-dependent missing-box result.
-This is an adopted specification; the missing dispatches remain unimplemented.
+This is an adopted specification; rows below whose boundary names an open Issue remain unimplemented.
 
 Own Home alone registers `つかう` → `thukau` (`home.cgi:26–39,73–105`).
 Without a target it lists held equipment/tool and Depot entries. By name it
@@ -237,10 +237,10 @@ callbacks. All **53 category-2 and 3 category-4** entries are accounted for belo
 | 059; 262, reins (`956–964;2071–2077`) | H2/D2; enter `god` / `u_god`, respectively; consumes, no capacity gate. | [#1153](https://github.com/witchcraze/party2re/issues/1153) owns Home entry, both sources and durable realm admission. Scene selection alone grants no visit. |
 | 060–065, six orbs (`965–1054`) | H2/D2; append `s/r/b/g/y/p`; existing same rune sets `mes` and keeps item. Full Depot irrelevant. | [ORBS #1839](https://github.com/witchcraze/party2re/issues/1839); Altar.OfferOrb already handles inventory, not Depot/Home dispatch. |
 | 113/114, bracelets/rings (`1408–1429`) | H4/D4; local returned stats are discarded, so **no permanent HP/MP change; consumes one**. Full Depot irrelevant. | [NO-STAT #1840](https://github.com/witchcraze/party2re/issues/1840). Their separate quest equipment effect is not a Home +100 consumable. |
-| 125/126, random bags (`1479–1505`) | H2/D2; one weighted random reward to Depot, including when full; then consume bag. | [BAGS #1841](https://github.com/witchcraze/party2re/issues/1841). |
+| 125/126, random bags (`1479–1505`) | H2/D2; one weighted random reward to Depot, including when full; then consume bag. | Existing Home effect for both sources. |
 | 127–129, recipe books (`1506–1526`) | H2/D2; learn an eligible base then material; exhausted book still consumes, no Depot capacity gate. | Existing Home→Alchemy adapter; membership/two-stage RNG correction [#1181](https://github.com/witchcraze/party2re/issues/1181). Names in a recipe pool establish no other item's dispatch. |
 | 141, appearance scroll (`1570–1580`) | H2/D2; uniform character number 001–040, fallback if image absent; consumes. | Existing adapter; APPEARANCE owns fallback/expiry parity. |
-| 199, ancient treasure (`1809–1820`) | H2/D2; 2–5 weighted random rewards, all to Depot even when full; consumes once. | [BAGS #1841](https://github.com/witchcraze/party2re/issues/1841). Inclusive loop bounds are significant. |
+| 199, ancient treasure (`1809–1820`) | H2/D2; 2–5 weighted random rewards, all to Depot even when full; consumes once. | Existing Home effect for both sources. Inclusive loop bounds are significant. |
 | 203, sacred mana (`1824`) | H2/D2; SP +200, including over-level; consumes once. | Missing; [MANA #1835](https://github.com/witchcraze/party2re/issues/1835). |
 | 207, future fragment (`1828–1873`) | H2/D2; save job/stat/gender/over-level snapshot and refresh existing job-point records; reject with `mes` for active ordinary/temporary job memory or exhausted slots (saved count > OverFuture). Rejection keeps item; no Depot capacity gate. | Existing Home→Job adapter for both sources; [Jobs](jobs-and-skills.md) owns the snapshot, slot and SP rules. |
 | 231–236;245, wallpapers (`1940–1993;2002–2010`) | H2/D2; replace own background with field 0/1/2/4/5/6/8 respectively; consumes, no gold or town lease prerequisite. | Missing; [WALLPAPER #1836](https://github.com/witchcraze/party2re/issues/1836). Store.BuyHomeWallpaper charges gold and uses a different catalog. |
@@ -251,9 +251,11 @@ callbacks. All **53 category-2 and 3 category-4** entries are accounted for belo
 For 125/126/199/259, each random reward selects a slot **1 through N−1**
 of the callback's N-slot list, uniformly; slot 0 is unreachable and repeated
 item slots retain their weight. Bag/key reward pools differ; neither a unique-ID
-pool nor a uniform choice over distinct items is equivalent. The owning follow-ups
-must verify pool membership/weights and both reward-count endpoints from these
-source ranges, rather than duplicate raw catalogs here.
+pool nor a uniform choice over distinct items is equivalent. Pool membership/weights
+and both reward-count endpoints are verified from these source ranges in the
+implementing tests, not duplicated here. Bag/treasure rewards and the bag's
+consumption commit in one transaction with the selected source, so a failure or a
+duplicate submission neither loses rewards nor consumes a second bag.
 
 Boundary checks for those follow-ups cover both sources, Depot below/at/above
 capacity, duplicate matching instances, missing-box behavior, 113/114 unchanged

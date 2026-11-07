@@ -5,6 +5,8 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 type EstateRepository interface {
@@ -47,4 +49,12 @@ type Repository interface {
 	LetterRepository
 	PhraseRepository
 	DeliveryNoticeRepository
+}
+
+type DepotManager interface {
+	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
+	Consume(ctx context.Context, characterID, itemInstanceID string, quantity int) error
+	ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error
+	// AppendDeliveries locks the Depot and appends separate instances even above capacity.
+	AppendDeliveries(ctx context.Context, characterID string, items []item.Instance) error
 }

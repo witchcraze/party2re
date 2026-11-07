@@ -19,12 +19,6 @@ import (
 // has no effect and must not be consumed (e.g. raw crystal with no weapon seal).
 var errNoEffect = errors.New("item had no effect")
 
-type DepotManager interface {
-	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
-	Consume(ctx context.Context, characterID, itemInstanceID string, quantity int) error
-	ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error
-}
-
 type InventoryManager interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	Consume(ctx context.Context, characterID, instanceID string, quantity int) (coreinventory.Inventory, error)
@@ -248,7 +242,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	}
 
 	// Validate supported consumable items before transaction
-	if !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
+	if _, isBag := rewardBags[def.Name]; !isBag && !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
 		switch def.Name {
 		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ":
 		default:
@@ -408,6 +402,9 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error) {
 	if isRecipeScrollItem(def.Name) {
 		return s.applyRecipeScrollConsumable(ctx, char, def.Name)
+	}
+	if bag, ok := rewardBags[def.Name]; ok {
+		return s.applyRewardBag(ctx, char, bag)
 	}
 	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name); ok {
 		return costumeMsg, err

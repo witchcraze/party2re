@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/contest"
+	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -46,6 +47,17 @@ func (a *depotManagerAdapter) Consume(ctx context.Context, characterID, itemInst
 
 func (a *depotManagerAdapter) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
 	return a.Consume(ctx, characterID, itemInstanceID, 1)
+}
+
+func (a *depotManagerAdapter) AppendDeliveries(ctx context.Context, characterID string, items []item.Instance) error {
+	dp, err := a.repo.FindByCharacterIDForUpdate(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	for _, inst := range items {
+		dp.AppendDelivery(inst)
+	}
+	return a.repo.Save(ctx, dp)
 }
 
 type homeLetterAdapter struct {
