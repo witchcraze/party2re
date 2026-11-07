@@ -149,17 +149,35 @@ invented; Chapel blessing remains Chapel's responsibility.
 
 ### Writer-side persistence and partial failure boundary
 
-Indian Poker, HighLow and Doppel stage the complete action, resets and removals
-under the room lock before one authoritative room/member payload write. A
-rejected pre-publication action rolls back its SQL wager without publishing an
-accepted turn. After confirmed publication, secondary index/mapping failures
-remain errors while SQL may commit; a failed response never authorizes blind
-replay. Failed active-index sync can hide a live payload from lobby discovery
-until successful renewal; idle expiry rechecks payload activity before deletion.
+Indian Poker, HighLow and Doppel synchronize room mutations under the Valkey
+room lock (`party2:casino:lock:room:<room_id>`, 5s acquisition budget with
+caller context cancellation, 10s lease TTL, token-verified Lua release) and
+stage the complete action, resets and removals before one authoritative
+room/member payload write (`UpdateRoomDetail`). The masked response snapshot is
+read reentrantly under that same room lock without releasing and re-acquiring
+the lock.
+
+- **Pre-publication failure**: A rejected action or primary payload write rolls
+  back SQL wagers, payouts and `CasinoWins` without publishing an accepted turn
+  or invoking `gamePlayedHook`.
+- **Post-publication secondary sync (`SecondarySyncError` / `ErrSecondarySync`)**:
+  Active-index or reverse-mapping cleanup failures after payload persistence
+  preserve committed coin/win settlement while returning the error. Failed
+  active-index sync can hide a live payload from lobby discovery until renewal;
+  idle expiry rechecks payload activity before deletion.
+- **Post-commit response observation failure**: Once the SQL settlement and
+  room publication succeed without a secondary-sync failure, any committed
+  winner progression hook (`gamePlayedHook` -> `medal.MetricCasinoGames`) runs
+  for all round winners even if the subsequent masked response read fails,
+  before returning the read error.
+- **No blind replay**: Clients must observe room/account state after an error
+  rather than replay the wager; repeated actions on a completed round or
+  already-submitted turn are rejected (`ErrGameNotInRound` or `ErrAlreadyActed`).
+
 The [persistence and lifetime contract](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging)
-owns publication ordering and cross-store limits.
-Room creation/start and admission retain their separate boundaries; this action
-contract does not establish reverse-mapping lifetime correctness for every writer.
+owns publication ordering and cross-store limits. Room creation/start and
+admission retain their separate boundaries; this action contract does not
+establish reverse-mapping lifetime correctness for every writer.
 
 ---
 
@@ -316,26 +334,7 @@ Rank 5: character_depots, depot_items (Depot Storage)
   ↓
 Rank 8: casino_accounts (Secondary Feature Records)
 ```
-In `ExchangePrize`, the configured character repository locks the character (Rank 2) before the Depot (Rank 5) and Casino account (Rank 8). This serializes exchanges for the same character before reading depot items. A character lock/read failure aborts the exchange before any asset mutation.
-
-### Room Coordination & Distributed Lock Lifecycle
-
-Multiplayer turn actions and room lifecycle operations synchronize through an exclusive distributed lock in Valkey Master (`party2:casino:lock:room:<room_id>`):
-- **Bounded Acquisition & Safety Lease TTL**: A 5-second acquisition budget (`DefaultRoomLockTimeout`) with a 10-second safety lease TTL (`DefaultRoomLockTTL`). Under tested concurrent workloads, critical sections complete in under 20ms (measured max hold time ~16ms, demonstrating substantial headroom relative to the 10s lease TTL). While distributed leases remain bounded by the 10s safety TTL against unbounded host or storage stalls, eliminating redundant secondary lock acquisitions keeps maximum contention wait under 50ms, comfortably within the 5s budget.
-- **Cancellation & Deadlines**: Competing contenders check caller context cancellation on each 10ms retry, aborting promptly on `ctx.Done()`. Shorter caller deadlines take precedence over the acquisition budget.
-- **Token-Verified Release**: Locks release via an atomic Lua script verifying token ownership, preventing accidental deletion of expired or re-acquired locks.
-- **Reentrant Observation**: `getRoomDetail` executes under the existing locked context (`lockedCtx`), reusing the acquired lock reentrantly to snapshot the room view without releasing and contending for a second lock acquisition.
-- **Atomic Staged Publication**: Game starts and player turns stage in-memory member changes and commit via `UpdateRoomDetail` in one authoritative Valkey payload write rather than multi-step per-member mutations.
-
-### Showdown Settlement Atomicity & Error Boundary
-
-The authoritative [Casino persistence and secondary-sync contract](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging)
-distinguishes payload failures from `SecondarySyncError` / `ErrSecondarySync`.
-Before authoritative payload persistence, financial failures abort SQL settlement.
-After payload success, a secondary-index failure preserves committed coin/win
-settlement while returning the error. Clients must observe state rather than
-blindly replay commands. Healthy and degraded settlements conserve coins;
-replay is rejected with `ErrGameNotInRound` or `ErrAlreadyActed`.
+In `ExchangePrize`, the configured character repository locks the character (Rank 2) before the Depot (Rank 5) and Casino account (Rank 8). This serializes exchanges for the same character before reading depot items. A character lock/read failure aborts the exchange before any asset mutation. Room lock coordination, staged publication and settlement error boundaries are specified in [Writer-side persistence and partial failure boundary](#writer-side-persistence-and-partial-failure-boundary).
 
 ## 9. Casino Wins (`cas_c`) & Job Advancement
 

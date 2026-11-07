@@ -152,6 +152,7 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 	}
 
 	var detail *RoomDetail
+	var readErr error
 	var showdownWinners []string
 	var secondarySyncErr error
 
@@ -405,9 +406,8 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 		if secondarySyncErr != nil {
 			return secondarySyncErr
 		}
-		var err error
-		detail, err = s.getRoomDetail(lockedCtx, roomID, characterID)
-		return err
+		detail, readErr = s.getRoomDetail(lockedCtx, roomID, characterID)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -417,6 +417,9 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 		for _, w := range showdownWinners {
 			_ = s.gamePlayedHook(ctx, w, "highlow")
 		}
+	}
+	if readErr != nil {
+		return nil, readErr
 	}
 
 	return detail, nil

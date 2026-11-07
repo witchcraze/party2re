@@ -137,6 +137,7 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 	}
 
 	var detail *RoomDetail
+	var readErr error
 	var showdownWinner string
 	var secondarySyncErr error
 
@@ -336,9 +337,8 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 		if secondarySyncErr != nil {
 			return secondarySyncErr
 		}
-		var err error
-		detail, err = s.getRoomDetail(lockedCtx, roomID, characterID)
-		return err
+		detail, readErr = s.getRoomDetail(lockedCtx, roomID, characterID)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -346,6 +346,9 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 
 	if showdownWinner != "" && s.gamePlayedHook != nil {
 		_ = s.gamePlayedHook(ctx, showdownWinner, "indian_poker")
+	}
+	if readErr != nil {
+		return nil, readErr
 	}
 
 	return detail, nil
