@@ -497,12 +497,8 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/plantation/harvest", h.handlePlantationHarvest)
 
 	// Black Market
-	mux.HandleFunc("GET /characters/{id}/blackmarket", h.handleGetBlackMarketStatus)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/talk", h.handleBlackMarketTalk)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/inspect", h.handleBlackMarketInspect)
-	mux.HandleFunc("GET /characters/{id}/blackmarket/points", h.handleGetBlackMarketPoints)
-	mux.HandleFunc("POST /characters/{id}/blackmarket/sacrifice", h.handleBlackMarketSacrifice)
-	mux.HandleFunc("POST /characters/{id}/blackmarket/trade", h.handleBlackMarketTrade)
 
 	// Collections
 	mux.HandleFunc("GET /characters/{id}/collections/monsters", h.handleGetMonsterBook)

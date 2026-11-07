@@ -11,64 +11,13 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-// BlackMarketService defines the black market underground trade operations exposed over HTTP.
+// BlackMarketService defines the black market observation, commands and retained NPC reads.
 type BlackMarketService interface {
 	GetStatus(ctx context.Context, characterID string) (*blackmarket.Status, error)
 	Talk(ctx context.Context, characterID string) (*blackmarket.TalkResult, error)
 	Inspect(ctx context.Context, characterID string) (*blackmarket.TalkResult, error)
 	SacrificeItem(ctx context.Context, characterID string, itemInstanceID string) (*blackmarket.SacrificeResult, error)
 	TradePrize(ctx context.Context, characterID string, prizeID string) (*blackmarket.TradeResult, error)
-}
-
-// WithBlackMarket configures the BlackMarketService for the HTTP handler.
-func WithBlackMarket(service BlackMarketService) Option {
-	return func(h *Handler) {
-		h.blackmarket = service
-	}
-}
-
-type blackMarketSacrificeRequest struct {
-	ItemInstanceID string `json:"item_instance_id"`
-}
-
-type blackMarketTradeRequest struct {
-	PrizeID string `json:"prize_id"`
-}
-
-func (h *Handler) handleGetBlackMarketStatus(w http.ResponseWriter, r *http.Request) {
-	if h.blackmarket == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("black market service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		status, err := h.blackmarket.GetStatus(r.Context(), char.ID)
-		if err != nil {
-			h.writeBlackMarketError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, status)
-	})
-}
-
-func (h *Handler) handleGetBlackMarketPoints(w http.ResponseWriter, r *http.Request) {
-	if h.blackmarket == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("black market service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		status, err := h.blackmarket.GetStatus(r.Context(), char.ID)
-		if err != nil {
-			h.writeBlackMarketError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, status)
-	})
 }
 
 var blackMarketTalkDialogues = []string{
@@ -137,67 +86,12 @@ func (h *Handler) handleBlackMarketInspect(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (h *Handler) handleBlackMarketSacrifice(w http.ResponseWriter, r *http.Request) {
-	if h.blackmarket == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("black market service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req blackMarketSacrificeRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		result, err := h.blackmarket.SacrificeItem(r.Context(), char.ID, req.ItemInstanceID)
-		if err != nil {
-			h.writeBlackMarketError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, result)
-	})
-}
-
-func (h *Handler) handleBlackMarketTrade(w http.ResponseWriter, r *http.Request) {
-	if h.blackmarket == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("black market service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req blackMarketTradeRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		result, err := h.blackmarket.TradePrize(r.Context(), char.ID, req.PrizeID)
-		if err != nil {
-			h.writeBlackMarketError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, result)
-	})
-}
-
 func (h *Handler) writeBlackMarketError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, blackmarket.ErrAccessDenied):
 		writeError(w, http.StatusForbidden, err)
-	case errors.Is(err, blackmarket.ErrCharacterNotFound),
-		errors.Is(err, blackmarket.ErrPrizeNotFound):
+	case errors.Is(err, blackmarket.ErrCharacterNotFound):
 		writeError(w, http.StatusNotFound, err)
-	case errors.Is(err, blackmarket.ErrUnownedItem),
-		errors.Is(err, blackmarket.ErrNotSacrificeEligible),
-		errors.Is(err, blackmarket.ErrInsufficientRarePoints),
-		errors.Is(err, blackmarket.ErrInsufficientURarePoints),
-		errors.Is(err, blackmarket.ErrDepotFull):
-		writeError(w, http.StatusBadRequest, err)
-	case errors.Is(err, blackmarket.ErrDepotNotConfigured):
-		writeError(w, http.StatusInternalServerError, err)
 	default:
 		writeError(w, http.StatusInternalServerError, err)
 	}

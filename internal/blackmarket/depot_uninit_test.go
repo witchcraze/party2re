@@ -42,7 +42,7 @@ func TestSacrificeItem_UninitializedDepot(t *testing.T) {
 	bmRepo := newMockBlackMarketRepo()
 	catalog, _ := blackmarket.LoadDefaultCatalog()
 
-	char := corecharacter.Character{ID: "char-uninit", Name: "Tester", JobLevel: 5}
+	char := corecharacter.Character{ID: "char-uninit", Name: "Tester", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 
 	// Add sacrifice-eligible item to inventory
@@ -80,7 +80,7 @@ func TestTradePrize_UninitializedDepot(t *testing.T) {
 	bmRepo := newMockBlackMarketRepo()
 	catalog, _ := blackmarket.LoadDefaultCatalog()
 
-	char := corecharacter.Character{ID: "char-uninit-trade", Name: "Trader", JobLevel: 3}
+	char := corecharacter.Character{ID: "char-uninit-trade", Name: "Trader", JobLevel: blackmarket.MinAccessJobLevel}
 	_ = charRepo.Update(ctx, char)
 
 	// Give enough rare points for bm_prize_087 (cost 1)
