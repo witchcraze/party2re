@@ -140,11 +140,18 @@ The resident home companion/pet pool aggregates both monster pets brought home f
   - `TalkToCompanion` and `ListCompanionPhrases` validate character existence upfront, returning `ErrCharacterNotFound` (HTTP `404 Not Found`) if the character ID does not exist.
   - If a character exists but has 0 pets or companions residing at Home (`ListHomePets`), talking or teaching phrases is rejected with `ErrNoPetsAtHome` (HTTP `422 Unprocessable Entity`), matching legacy CGI behavior ("教える相手がいません" / "しかし、誰もいなかった…").
 - **Teaching Phrases (`ことばをおしえる`)**:
-  - Up to 30 unique phrases per companion (original CGI specification).
+  - **Legacy rule** (`lib/home.cgi:443-477`): the phrase list belongs to the character, not to one pet. A new phrase is added at the head and the list keeps at most `$max_log` entries, so the oldest entries fall off and teaching is never rejected for capacity. Duplicates are kept as separate entries.
+  - **Capacity provenance**: the legacy `config.cgi` tracked until commit `0713fcc` (2023-03-09) sets `$max_log = 30`. That commit removed it from version control and added the template `config.cgi_origin`, which changes only `max_entry`, `max_login` and `max_log` to `999` among numeric limits, so `999` is treated as a distribution default. The current live value is unverified.
+  - **Adopted contract** (approved in #1125):
+    - Keep at most N phrases per character, newest first. At capacity, teaching succeeds and removes the oldest entries in the same transaction, serialized per character, so concurrent teaching never exceeds N.
+    - N defaults to 30. `PARTY2_HOME_COMPANION_PHRASE_LIMIT` overrides it through the process or Compose environment. An unset, empty, non-integer, overflowing, zero or negative value means 30 and does not stop startup. This is an approved deployment override of the legacy configuration value.
+    - Lowering N shortens a character's list on that character's next teach, as the legacy rewrite does; there is no startup trim.
+    - Phrase lists are ordered by `created_at` descending, then `id` descending for ties.
+    - Removal by ID removes one entry. Legacy removal by text removes only the first match, which is the newest duplicate.
   - Length: 1 to 120 characters per phrase (original CGI specification). Sanitized via `internal/validation.ValidateSingleLine`: Unicode NFC normalized, single-line (newlines rejected), and rejects C0/C1 control characters, zero-width characters (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`), bidirectional text overrides (`\u202A`–`\u202E`, `\u2066`–`\u2069`), and excessive combining diacritics (Zalgo).
   - Owner can remove individual phrases by ID.
 - **Talking (`＠はなす`)**:
-  - Randomly selects one speaker pet from resident home pets and picks one of the taught phrases.
+  - Randomly selects one speaker pet from resident home pets and picks one retained phrase entry uniformly, so duplicates weigh by their entry count (`lib/home.cgi:422-439`).
   - Returns `CompanionTalkResult` containing `PetName` (display name of the chosen pet) and `Phrase` (selected phrase, empty string if none taught).
   - The HTTP transport layer formats presentation dialogue: if `Phrase` is empty, fallback greeting (`"クエッ？（何か言いたそうにこちらを見つめている）"`) is presented in `companionTalkResponse.Dialogue`.
 

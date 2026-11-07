@@ -18,7 +18,6 @@ var (
 	ErrContentTooLong            = errors.New("letter content exceeds maximum length of 1000 characters")
 	ErrEmptyPhrase               = errors.New("phrase cannot be empty")
 	ErrPhraseTooLong             = errors.New("phrase exceeds maximum length of 120 characters")
-	ErrMaxPhrasesReached         = errors.New("companion has reached the maximum phrase capacity of 30")
 	ErrLetterNotFound            = errors.New("letter not found")
 	ErrPhraseNotFound            = errors.New("companion phrase not found")
 	ErrForbidden                 = errors.New("forbidden: letter or home belongs to another character")
@@ -64,9 +63,10 @@ const (
 	DefaultCompanionName   = "ペット"
 	MaxLetterContentLength = 1000
 	MaxPhraseLength        = 120
-	MaxPhrasesPerCompanion = 30
 	MaxCompanionNameLength = 64
-	MaxColorLength         = 7
+	// DefaultCompanionPhraseLimit is the number of phrases kept per character.
+	DefaultCompanionPhraseLimit = 30
+	MaxColorLength              = 7
 )
 
 // CharacterHome represents private home estate settings for a character.

@@ -30,7 +30,8 @@ type LetterRepository interface {
 }
 
 type PhraseRepository interface {
-	AddCompanionPhrase(ctx context.Context, phrase CompanionPhrase) error
+	// AddCompanionPhrase stores the phrase and atomically keeps only the newest limit entries.
+	AddCompanionPhrase(ctx context.Context, phrase CompanionPhrase, limit int) error
 	DeleteCompanionPhrase(ctx context.Context, id, characterID string) error
 	ListCompanionPhrases(ctx context.Context, characterID string) ([]CompanionPhrase, error)
 }

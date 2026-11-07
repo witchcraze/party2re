@@ -49,6 +49,7 @@ func wireApp(
 	if err != nil {
 		return nil, err
 	}
+	soc.home.SetCompanionPhraseLimit(cfg.Home.CompanionPhraseLimit)
 	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
 	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, referrals.DeliverReferral, cfg.Player.MaxPlayers, logger); err != nil {
 		return nil, err

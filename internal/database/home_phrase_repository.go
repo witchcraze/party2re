@@ -8,13 +8,38 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 )
 
-// AddCompanionPhrase adds a taught phrase for a character's companion.
-func (r *HomeRepository) AddCompanionPhrase(ctx context.Context, phrase home.CompanionPhrase) error {
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
-		INSERT INTO character_companion_phrases (id, character_id, phrase, created_at)
-		VALUES (?, ?, ?, ?)
-	`, phrase.ID, phrase.CharacterID, phrase.Phrase, phrase.CreatedAt.UTC())
-	return err
+// AddCompanionPhrase adds a taught phrase and removes entries beyond the newest limit.
+// The character row lock serializes concurrent teaching so the limit always holds.
+func (r *HomeRepository) AddCompanionPhrase(ctx context.Context, phrase home.CompanionPhrase, limit int) error {
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		var lockedID string
+		err := executor.QueryRowContext(txCtx, `SELECT id FROM characters WHERE id = ? FOR UPDATE`, phrase.CharacterID).Scan(&lockedID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return home.ErrCharacterNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(txCtx, `
+			INSERT INTO character_companion_phrases (id, character_id, phrase, created_at)
+			VALUES (?, ?, ?, ?)
+		`, phrase.ID, phrase.CharacterID, phrase.Phrase, phrase.CreatedAt.UTC()); err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(txCtx, `
+			DELETE FROM character_companion_phrases
+			WHERE character_id = ? AND id NOT IN (
+				SELECT id FROM (
+					SELECT id FROM character_companion_phrases
+					WHERE character_id = ?
+					ORDER BY created_at DESC, id DESC
+					LIMIT ?
+				) AS newest
+			)
+		`, phrase.CharacterID, phrase.CharacterID, limit)
+		return err
+	})
 }
 
 // DeleteCompanionPhrase removes a taught phrase belonging to a character.
@@ -48,13 +73,13 @@ func (r *HomeRepository) DeleteCompanionPhrase(ctx context.Context, id, characte
 	return nil
 }
 
-// ListCompanionPhrases returns all taught phrases for a character's companion.
+// ListCompanionPhrases returns a character's taught phrases, newest first.
 func (r *HomeRepository) ListCompanionPhrases(ctx context.Context, characterID string) ([]home.CompanionPhrase, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, character_id, phrase, created_at
 		FROM character_companion_phrases
 		WHERE character_id = ?
-		ORDER BY created_at ASC
+		ORDER BY created_at DESC, id DESC
 	`, characterID)
 	if err != nil {
 		return nil, err

@@ -58,6 +58,7 @@ type mockHomeRepo struct {
 	chars       map[string]corecharacter.Character
 	getHomeErr  error
 	saveHomeErr error
+	phraseLimit int
 }
 
 func newMockHomeRepo(chars ...map[string]corecharacter.Character) *mockHomeRepo {
@@ -322,7 +323,8 @@ func (m *mockHomeRepo) DeleteLetter(ctx context.Context, id, characterID string)
 	return nil
 }
 
-func (m *mockHomeRepo) AddCompanionPhrase(ctx context.Context, phrase CompanionPhrase) error {
+func (m *mockHomeRepo) AddCompanionPhrase(ctx context.Context, phrase CompanionPhrase, limit int) error {
+	m.phraseLimit = limit
 	m.phrases[phrase.CharacterID] = append(m.phrases[phrase.CharacterID], phrase)
 	return nil
 }
@@ -844,6 +846,42 @@ func TestUpdateHomeKeepsHouseBuiltBeforeWrite(t *testing.T) {
 	}
 	if stored.CompanionName != "スライム" {
 		t.Errorf("companion name not saved: got %q, want %q", stored.CompanionName, "スライム")
+	}
+}
+
+func TestTeachCompanionPhraseLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		set  int
+		want int
+	}{
+		{"default when never set", 0, DefaultCompanionPhraseLimit},
+		{"positive override", 5, 5},
+		{"negative is ignored", -1, DefaultCompanionPhraseLimit},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			chars := &mockCharReader{chars: map[string]corecharacter.Character{"char-1": {ID: "char-1"}}}
+			repo := newMockHomeRepo()
+			petReader := &mockPetReader{pets: map[string][]HomePet{"char-1": {{ID: "pet-1"}}}}
+			service, err := NewService(repo, chars, WithHomePetReader(petReader))
+			if err != nil {
+				t.Fatal(err)
+			}
+			service.SetCompanionPhraseLimit(tc.set)
+
+			// Capacity is enforced by eviction in the repository, so teaching is never rejected.
+			for range DefaultCompanionPhraseLimit + 1 {
+				if _, err := service.TeachCompanionPhrase(context.Background(), "char-1", "クエッ"); err != nil {
+					t.Fatalf("teach rejected: %v", err)
+				}
+			}
+			if repo.phraseLimit != tc.want {
+				t.Errorf("limit = %d, want %d", repo.phraseLimit, tc.want)
+			}
+		})
 	}
 }
 
