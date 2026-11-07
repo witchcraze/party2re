@@ -390,6 +390,12 @@ func (s *Service) randomInt(max int) int {
 	return s.rng.Intn(max)
 }
 
+func (s *Service) randomFloat() float64 {
+	s.rngMu.Lock()
+	defer s.rngMu.Unlock()
+	return s.rng.Float64()
+}
+
 // TalkToCompanion returns a greeting phrase spoken by the companion.
 func (s *Service) TalkToCompanion(ctx context.Context, characterID string) (CompanionTalkResult, error) {
 	_, err := s.charReader.FindByID(ctx, characterID)

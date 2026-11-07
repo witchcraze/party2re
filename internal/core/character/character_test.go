@@ -517,3 +517,22 @@ func TestCharacterColor(t *testing.T) {
 		}
 	}
 }
+
+func TestConvertExperienceToMoney(t *testing.T) {
+	for _, tc := range []struct {
+		exp, money int
+		rate       float64
+		wantGain   int
+		wantMoney  int
+	}{
+		{98020, 100, 1.4999, 14, 114},
+		{98000, 100, 1.4999, -14, 86}, // truncates toward zero
+		{96040, 100, 1.4999, -2954, -2854},
+		{98020, MaxMoney, 1, 10, MaxMoney},
+	} {
+		c := Character{Experience: tc.exp, Money: tc.money}
+		if gain := c.ConvertExperienceToMoney(98010, tc.rate); gain != tc.wantGain || c.Money != tc.wantMoney || c.Experience != 98010 {
+			t.Errorf("%+v: gain=%d money=%d exp=%d", tc, gain, c.Money, c.Experience)
+		}
+	}
+}

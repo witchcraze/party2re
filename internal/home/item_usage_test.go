@@ -595,6 +595,13 @@ func (m *mockTransactionRunner) ExecuteTransaction(ctx context.Context, req econ
 		return nil, economy.ErrCharacterNotFound
 	}
 	charCopy := char
+	if req.CostFunc != nil {
+		cost, err := req.CostFunc(charCopy)
+		if err != nil {
+			return nil, err
+		}
+		req.Cost = cost
+	}
 
 	if req.Cost.Gold > 0 {
 		if charCopy.Money < req.Cost.Gold {
