@@ -49,6 +49,7 @@ type Service struct {
 	futureMemory           FutureMemorySaver
 	costume                CostumeResetter
 	costumeApplier         CostumeApplier
+	personality            PersonalityRecorder
 	jobRestorer            JobStateRestorer
 	onlineCounter          OnlineCounter
 	baseSleepDuration      time.Duration

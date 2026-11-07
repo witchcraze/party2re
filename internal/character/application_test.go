@@ -1220,3 +1220,31 @@ func TestService_UpdateProfile_AvatarExactContract(t *testing.T) {
 		t.Fatalf("explicit empty must clear: err=%v avatar=%q", err, stored())
 	}
 }
+
+// SetPersonality distinguishes an absent profile (created) from a read failure
+// (propagated without saving or announcing).
+func TestService_SetPersonality(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockRepository()
+	news := 0
+	service, _ := NewService(repo, WithNewsPublisher(NewsPublisherFunc(func(context.Context, string, string, string, string, time.Time) error {
+		news++
+		return nil
+	})))
+	char, _ := service.Create(ctx, "player-1", "Hero")
+	news = 0
+
+	if err := service.SetPersonality(ctx, char.ID, "ムッツリスケベ"); err != nil {
+		t.Fatal(err)
+	}
+	if got := repo.profiles[char.ID].BioData[PersonalityBioKey]; got != "ムッツリスケベ" || news != 1 {
+		t.Fatalf("absent profile: personality=%q news=%d", got, news)
+	}
+
+	storageErr := errors.New("database connection lost")
+	repo.getProfileErr = storageErr
+	repo.saveProfileCalls = 0
+	if err := service.SetPersonality(ctx, char.ID, "other"); !errors.Is(err, storageErr) || repo.saveProfileCalls != 0 || news != 1 {
+		t.Fatalf("read failure: err=%v saves=%d news=%d", err, repo.saveProfileCalls, news)
+	}
+}

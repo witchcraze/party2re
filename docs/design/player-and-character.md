@@ -254,7 +254,7 @@ server's injected UTC clock with retention, but keep separate presence records:
   under its [sleep duration, acquisition and failure contract](home.md#6-resting--sleeping-sleepcgi-homecgi),
   without redefining presence.
 
-**Message and safety.** Default to `""`; an explicit empty string clears it.
+**Message and safety.** Default to `""`; an explicit empty string clears it. Besides entry, Home item 058 sets it inside its own transaction without publishing a snapshot ([Home dispatch](home.md#legacy-dispatch-and-consumption-contract)).
 Accept 0–60 Unicode code points, preserving spaces, punctuation and ordinary
 combining marks without trimming, normalization or HTML-entity storage. A combined
 glyph/emoji may consume multiple code points. Reject invalid UTF-8/unpaired JSON

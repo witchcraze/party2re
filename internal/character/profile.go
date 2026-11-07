@@ -3,6 +3,7 @@ package character
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -127,4 +128,41 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, req Upd
 	}
 
 	return result, nil
+}
+
+// SetPersonality sets the profile's personality field (legacy profile key
+// "character") while preserving other fields, creating the profile when absent,
+// and announces it publicly in the same transaction.
+// Transaction: RunInTx (joins an ambient transaction)
+// Lock Order: characters(2) -> character_profiles
+func (s *Service) SetPersonality(ctx context.Context, characterID, personality string) error {
+	return s.runInTx(ctx, func(ctx context.Context) error {
+		char, err := s.findForUpdate(ctx, characterID)
+		if err != nil {
+			return err
+		}
+		if s.profileRepo == nil {
+			return errors.New("profile repository is not configured")
+		}
+		profile, err := s.profileRepo.GetProfile(ctx, characterID)
+		if errors.Is(err, ErrNotFound) || (err == nil && profile.CharacterID == "") {
+			profile, err = Profile{CharacterID: characterID}, nil
+		}
+		if err != nil {
+			return err
+		}
+		if profile.BioData == nil {
+			profile.BioData = make(map[string]string)
+		}
+		profile.BioData[PersonalityBioKey] = personality
+		profile.UpdatedAt = time.Now().UTC()
+		if err := s.profileRepo.SaveProfile(ctx, profile); err != nil {
+			return err
+		}
+		if s.news == nil {
+			return nil
+		}
+		msg := fmt.Sprintf("%sが%sになりました！", char.Name, personality)
+		return s.news.PublishNews(ctx, "character", msg, msg, char.Name, time.Now().UTC())
+	})
 }

@@ -33,6 +33,7 @@ type coreServices struct {
 	jobCatalog         *corejob.Catalog
 	skillCatalog       *coreskill.Catalog
 	charService        *character.Service
+	presence           *character.PresenceService
 	playerService      *player.Service
 	economy            *economy.Service
 	navigation         *playercontext.ValkeyNavigationRepository
@@ -58,6 +59,14 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 		return nil, err
 	}
 	txProvider := database.NewTransactionProvider(db)
+	presenceRepo, err := database.NewPresenceRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	presence, err := character.NewPresenceService(presenceRepo, txProvider, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	invRepo, err := database.NewInventoryRepository(db)
 	if err != nil {
@@ -85,6 +94,7 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 	return &coreServices{
 		navigation:         playercontext.NewValkeyNavigationRepository(valkeyClient),
 		txProvider:         txProvider,
+		presence:           presence,
 		charRepo:           charRepo,
 		invRepo:            invRepo,
 		charJobRepo:        charJobRepo,
