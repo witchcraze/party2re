@@ -40,6 +40,15 @@ type gemStoreSynthesizeRequest struct {
 	RecipeID string `json:"recipe_id"`
 }
 
+// gemStoreSendResponse keeps the recipient's private character and gem-box
+// state out of the sender's result; only its public identity is returned.
+type gemStoreSendResponse struct {
+	GemBox                 gemstore.GemBox `json:"gem_box"`
+	Gem                    gemstore.Gem    `json:"gem"`
+	RecipientCharacterID   string          `json:"recipient_character_id"`
+	RecipientCharacterName string          `json:"recipient_character_name"`
+}
+
 // WithGemStore configures the gemstore scene observation and its commands.
 func WithGemStore(service GemStoreService) Option {
 	return func(h *Handler) {
@@ -60,7 +69,12 @@ func WithGemStore(service GemStoreService) Option {
 			return service.SellGem(ctx, actor, p.ItemID)
 		}, gemStoreActionRejection)(h)
 		withActionCommand("gemstore_send", func(ctx context.Context, actor string, p gemStoreSendRequest) (any, error) {
-			return service.SendGem(ctx, actor, p.RecipientCharacterID, p.ItemID)
+			res, err := service.SendGem(ctx, actor, p.RecipientCharacterID, p.ItemID)
+			if err != nil {
+				return nil, err
+			}
+			return gemStoreSendResponse{GemBox: res.SenderGemBox, Gem: res.Gem,
+				RecipientCharacterID: res.RecipientCharacter.ID, RecipientCharacterName: res.RecipientCharacter.Name}, nil
 		}, gemStoreActionRejection)(h)
 		withActionCommand("gemstore_synthesize", func(ctx context.Context, actor string, p gemStoreSynthesizeRequest) (any, error) {
 			return service.SynthesizeGem(ctx, actor, p.RecipeID)

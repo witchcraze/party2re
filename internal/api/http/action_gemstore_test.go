@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/gemstore"
@@ -54,7 +56,10 @@ func (f *gemStoreGatewayFixture) BuyGem(ctx context.Context, actor, gemID string
 func (f *gemStoreGatewayFixture) SendGem(ctx context.Context, actor, recipientID, itemID string) (gemstore.SendResult, error) {
 	f.inputs = []string{recipientID, itemID}
 	_, err := f.execute(ctx, actor, 0)
-	return gemstore.SendResult{SenderGemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Gem: gemstore.Gem{ID: "gem_atk_1"}}, err
+	return gemstore.SendResult{SenderGemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Gem: gemstore.Gem{ID: "gem_atk_1"},
+		SenderCharacter:    corecharacter.Character{ID: actor, PlayerID: "sender-player", Money: 12345},
+		RecipientCharacter: corecharacter.Character{ID: recipientID, Name: "Friend", PlayerID: "private-player", Money: 987654, Deposit: 555777},
+		RecipientGemBox:    gemstore.GemBox{CharacterID: recipientID, Capacity: 99, Items: []coreitem.Instance{{ID: "private-gem", DefinitionID: "gem_atk_9"}}}}, err
 }
 
 func (f *gemStoreGatewayFixture) SynthesizeGem(ctx context.Context, actor, recipeID string) (gemstore.SynthesizeResult, error) {
@@ -141,27 +146,41 @@ func TestGemStoreGatewayOutcomes(t *testing.T) {
 						assertGatewayError(t, got, "GEMSTORE_ITEM_NOT_OWNED")
 					} else {
 						var result struct {
-							Payout       int
-							Cost         int
-							Gem          gemstore.Gem
-							CreatedGem   gemstore.Gem    `json:"created_gem"`
-							GemBox       gemstore.GemBox `json:"gem_box"`
-							SenderGemBox gemstore.GemBox `json:"sender_gem_box"`
-							IsGem        bool            `json:"is_gem"`
-							Message      string
+							Payout      int
+							Cost        int
+							Gem         gemstore.Gem
+							CreatedGem  gemstore.Gem    `json:"created_gem"`
+							GemBox      gemstore.GemBox `json:"gem_box"`
+							IsGem       bool            `json:"is_gem"`
+							Message     string
+							Recipient   string `json:"recipient_character_id"`
+							RecipientNm string `json:"recipient_character_name"`
 						}
 						if err := json.Unmarshal(got["result"], &result); err != nil {
 							t.Fatal(err)
 						}
 						box := result.GemBox
-						if input.action == "gemstore_send" {
-							box = result.SenderGemBox
-						}
 						if string(got["success"]) != "true" || box.CharacterID != "hero" || box.Capacity != 5 {
 							t.Fatalf("missing facts: %s", got)
 						}
 						if want := map[string][]string{"gemstore_buy": {"gem_atk_1"}, "gemstore_send": {"friend", "owned-gem"}, "gemstore_synthesize": {"recipe-1"}, "gemstore_appraise": {"orb"}}[input.action]; want != nil && !slices.Equal(f.inputs, want) {
 							t.Fatalf("explicit inputs lost: %v", f.inputs)
+						}
+						if input.action == "gemstore_send" {
+							// Only the recipient's public identity may cross the boundary.
+							var fields map[string]json.RawMessage
+							if err := json.Unmarshal(got["result"], &fields); err != nil {
+								t.Fatal(err)
+							}
+							keys := slices.Sorted(maps.Keys(fields))
+							if !slices.Equal(keys, []string{"gem", "gem_box", "recipient_character_id", "recipient_character_name"}) || result.Recipient != "friend" || result.RecipientNm != "Friend" {
+								t.Fatalf("send result fields: %s", got["result"])
+							}
+							for _, private := range []string{"private-player", "sender-player", "987654", "555777", "12345", "private-gem", "PlayerID"} {
+								if strings.Contains(string(got["result"]), private) {
+									t.Fatalf("send result leaked %q: %s", private, got["result"])
+								}
+							}
 						}
 						if (input.action == "gemstore_buy" && result.Cost != 300) || (input.action == "gemstore_send" && result.Gem.ID != "gem_atk_1") ||
 							(input.action == "gemstore_synthesize" && result.CreatedGem.ID != "gem_atk_2") || (input.action == "gemstore_appraise" && (!result.IsGem || result.Message != "appraised")) {
