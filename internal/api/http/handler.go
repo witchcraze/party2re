@@ -591,16 +591,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /auction/hall", h.handleAuctionVenueInfo)
 	mux.HandleFunc("GET /characters/{id}/auction/inspect", h.handleAuctionInspect)
 
-	// Gem Store
-	mux.HandleFunc("GET /gemstore/catalog", h.handleGetGemStoreCatalog)
-	mux.HandleFunc("GET /gemstore/recipes", h.handleGetGemStoreRecipes)
-	mux.HandleFunc("GET /gemstore/dialogue", h.handleGetGemStoreDialogue)
-	mux.HandleFunc("GET /characters/{id}/gembox", h.handleGetGemBox)
-	mux.HandleFunc("POST /characters/{id}/gemstore/buy", h.handleGemStoreBuy)
-	mux.HandleFunc("POST /characters/{id}/gemstore/send", h.handleGemStoreSend)
-	mux.HandleFunc("POST /characters/{id}/gemstore/synthesize", h.handleGemStoreSynthesize)
-	mux.HandleFunc("POST /characters/{id}/gemstore/appraise", h.handleGemStoreAppraise)
-
 	// Player Store (Bazaar & Boutique)
 	mux.HandleFunc("POST /towns/{town_id}/stores", h.handleBuildStore)
 	mux.HandleFunc("GET /towns/{town_id}/stores", h.handleListTownStores)

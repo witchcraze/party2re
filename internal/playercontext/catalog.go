@@ -258,14 +258,10 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "gemstore_buy",
-		Label:          "宝石購入",
-		Category:       "shop",
-		OperationID:    "buyGem",
-		RequiredParams: []string{"gem_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
-	},
+	{ID: "gemstore_buy", Label: "宝石購入", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"gem_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
+	{ID: "gemstore_send", Label: "宝石を送る", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipient_character_id", "item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "gemstore_synthesize", Label: "宝石加工", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "gemstore_appraise", Label: "宝珠鑑定", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{
 		ID:             "secretshop_purchase",
 		Label:          "ヒミツの店で購入",

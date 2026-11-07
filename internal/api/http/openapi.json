@@ -4453,6 +4453,7 @@
                         "chapel",
                         "depot",
                         "fleamarket",
+                        "gemstore",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -4577,6 +4578,7 @@
                         "chapel",
                         "depot",
                         "fleamarket",
+                        "gemstore",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -6157,6 +6159,151 @@
                   "properties": {
                     "item_id": {
                       "description": "Owned gem-box instance ID or gem definition ID; the service selects one matching gem.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "gemstore_buy",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "gem_id": {
+                      "description": "Gem definition ID or name from the observed catalog. Job level, funds (catalog price x5) and gem-box capacity stay service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "gem_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "gemstore_send",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "Owned gem-box instance ID or gem definition ID; the service selects one matching gem.",
+                      "type": "string"
+                    },
+                    "recipient_character_id": {
+                      "description": "Explicit recipient character ID; self-transfer, existence and recipient gem-box capacity stay service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "recipient_character_id",
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "gemstore_synthesize",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "recipe_id": {
+                      "description": "Explicit recipe ID from the observed recipes. Material ownership across gem box, inventory and depot plus gem-box capacity stay service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "recipe_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "gemstore_appraise",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "Owned inventory or depot item instance ID, definition ID or name. One unit is consumed; the identified gem enters the gem box.",
                       "type": "string"
                     }
                   },
@@ -8880,81 +9027,6 @@
         ],
         "type": "object"
       },
-      "GemStoreAppraiseResult": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotDepot"
-          },
-          "gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "identified_gem": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GemStoreGem"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "identified_name": {
-            "type": "string"
-          },
-          "inventory": {
-            "$ref": "#/components/schemas/InventoryInventory"
-          },
-          "is_gem": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character",
-          "gem_box",
-          "is_gem",
-          "identified_name",
-          "message"
-        ],
-        "type": "object"
-      },
-      "GemStoreBuyResult": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "cost": {
-            "type": "integer"
-          },
-          "gem": {
-            "$ref": "#/components/schemas/GemStoreGem"
-          },
-          "gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "inventory": {
-            "$ref": "#/components/schemas/InventoryInventory"
-          },
-          "item_instance": {
-            "$ref": "#/components/schemas/ItemInstance"
-          }
-        },
-        "required": [
-          "character",
-          "gem_box",
-          "gem",
-          "cost",
-          "item_instance"
-        ],
-        "type": "object"
-      },
       "GemStoreGem": {
         "additionalProperties": false,
         "properties": {
@@ -9044,89 +9116,44 @@
         ],
         "type": "object"
       },
-      "GemStoreSellResult": {
+      "GemStoreSceneData": {
         "additionalProperties": false,
+        "description": "Owned gem box plus the gem catalog for the actor's job level, every synthesis recipe and the shopkeeper's dialogue. Observation never buys, sends, synthesizes or appraises. Appraisal candidates come from the depot scene.",
         "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
+          "catalog": {
+            "description": "Gems purchasable at the actor's job level. price is the base price; a purchase charges five times it.",
+            "items": {
+              "$ref": "#/components/schemas/GemStoreGem"
+            },
+            "type": "array"
           },
-          "gem": {
-            "$ref": "#/components/schemas/GemStoreGem"
+          "dialogue": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "gem_box": {
             "$ref": "#/components/schemas/GemStoreGemBox"
           },
-          "inventory": {
-            "$ref": "#/components/schemas/InventoryInventory"
+          "parent": {
+            "const": "town",
+            "type": "string"
           },
-          "payout": {
-            "type": "integer"
+          "recipes": {
+            "description": "Every synthesis recipe.",
+            "items": {
+              "$ref": "#/components/schemas/GemStoreRecipe"
+            },
+            "type": "array"
           }
         },
         "required": [
-          "character",
+          "parent",
           "gem_box",
-          "gem",
-          "payout"
-        ],
-        "type": "object"
-      },
-      "GemStoreSendResult": {
-        "additionalProperties": false,
-        "properties": {
-          "gem": {
-            "$ref": "#/components/schemas/GemStoreGem"
-          },
-          "recipient_character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "recipient_gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "sender_character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "sender_gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          }
-        },
-        "required": [
-          "sender_character",
-          "recipient_character",
-          "sender_gem_box",
-          "recipient_gem_box",
-          "gem"
-        ],
-        "type": "object"
-      },
-      "GemStoreSynthesizeResult": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "created_gem": {
-            "$ref": "#/components/schemas/GemStoreGem"
-          },
-          "gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "inventory": {
-            "$ref": "#/components/schemas/InventoryInventory"
-          },
-          "item_instance": {
-            "$ref": "#/components/schemas/ItemInstance"
-          },
-          "recipe": {
-            "$ref": "#/components/schemas/GemStoreRecipe"
-          }
-        },
-        "required": [
-          "character",
-          "gem_box",
-          "created_gem",
-          "recipe",
-          "item_instance"
+          "catalog",
+          "recipes",
+          "dialogue"
         ],
         "type": "object"
       },
@@ -13702,6 +13729,7 @@
                   "chapel",
                   "depot",
                   "fleamarket",
+                  "gemstore",
                   "home",
                   "shop_weapon",
                   "shop_armor",
@@ -13886,6 +13914,7 @@
               "chapel",
               "depot",
               "fleamarket",
+              "gemstore",
               "home",
               "shop_weapon",
               "shop_armor",
@@ -13994,6 +14023,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/FleaMarketSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GemStoreSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/BlackMarketSceneData"
@@ -14472,6 +14504,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/FleaMarketSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "gemstore"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GemStoreSceneData"
                 },
                 "support": {
                   "properties": {
@@ -16978,7 +17040,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned."
           },
           "400": {
             "content": {
@@ -23083,563 +23145,6 @@
         "summary": "Save character state snapshot using Future Fragment (item-207)",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/gembox": {
-      "get": {
-        "operationId": "getCharacterGemBox",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GemStoreGemBox"
-                }
-              }
-            },
-            "description": "Character gem box storage"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character gem box storage",
-        "tags": [
-          "GemStore"
-        ]
-      }
-    },
-    "/characters/{id}/gemstore/appraise": {
-      "post": {
-        "operationId": "appraiseGemStoreItem",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "item_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GemStoreAppraiseResult"
-                }
-              }
-            },
-            "description": "Item appraised successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Appraise unidentified item or inspect equipment",
-        "tags": [
-          "GemStore"
-        ]
-      }
-    },
-    "/characters/{id}/gemstore/buy": {
-      "post": {
-        "operationId": "buyGem",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "gem_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "gem_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GemStoreBuyResult"
-                }
-              }
-            },
-            "description": "Gem purchased successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Buy gem from gem store",
-        "tags": [
-          "GemStore"
-        ]
-      }
-    },
-    "/characters/{id}/gemstore/send": {
-      "post": {
-        "operationId": "sendGem",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_id": {
-                    "type": "string"
-                  },
-                  "recipient_character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "recipient_character_id",
-                  "item_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GemStoreSendResult"
-                }
-              }
-            },
-            "description": "Gem sent successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Send gem to another player character",
-        "tags": [
-          "GemStore"
-        ]
-      }
-    },
-    "/characters/{id}/gemstore/synthesize": {
-      "post": {
-        "operationId": "synthesizeGem",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "recipe_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "recipe_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GemStoreSynthesizeResult"
-                }
-              }
-            },
-            "description": "Gem synthesized successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Synthesize advanced gem",
-        "tags": [
-          "GemStore"
         ]
       }
     },
@@ -31907,186 +31412,6 @@
         "summary": "Register character presence in Event Plaza",
         "tags": [
           "EventPlaza"
-        ]
-      }
-    },
-    "/gemstore/catalog": {
-      "get": {
-        "operationId": "getGemStoreCatalog",
-        "parameters": [
-          {
-            "description": "Compatibility alias used only when job_level is absent.",
-            "in": "query",
-            "name": "level",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Job level used to filter the catalog.",
-            "in": "query",
-            "name": "job_level",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "gems": {
-                      "items": {
-                        "$ref": "#/components/schemas/GemStoreGem"
-                      },
-                      "type": [
-                        "array",
-                        "null"
-                      ]
-                    },
-                    "job_level": {
-                      "type": "integer"
-                    },
-                    "level": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "gems",
-                    "job_level",
-                    "level"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Available gem catalog"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get gem catalog by level",
-        "tags": [
-          "GemStore"
-        ]
-      }
-    },
-    "/gemstore/dialogue": {
-      "get": {
-        "operationId": "getGemStoreDialogue",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "dialogue": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": [
-                        "array",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "dialogue"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Shopkeeper dialogue"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get gem shopkeeper dialogue",
-        "tags": [
-          "GemStore"
-        ]
-      }
-    },
-    "/gemstore/recipes": {
-      "get": {
-        "operationId": "getGemStoreRecipes",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "recipes": {
-                      "items": {
-                        "$ref": "#/components/schemas/GemStoreRecipe"
-                      },
-                      "type": [
-                        "array",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "recipes"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Gem synthesis recipes"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List all gem synthesis recipes",
-        "tags": [
-          "GemStore"
         ]
       }
     },

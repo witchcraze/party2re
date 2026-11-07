@@ -2334,6 +2334,9 @@
                       "$ref": "#/components/schemas/FleaMarketSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/GemStoreSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/BlackMarketSceneData"
                     },
                     {
@@ -2815,6 +2818,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/FleaMarketSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "gemstore"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GemStoreSceneData"
                 },
                 "support": {
                   "properties": {
@@ -3360,6 +3393,7 @@
                         "chapel",
                         "depot",
                         "fleamarket",
+                        "gemstore",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -3456,6 +3490,7 @@
                         "chapel",
                         "depot",
                         "fleamarket",
+                        "gemstore",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -5083,6 +5118,151 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "gemstore_buy"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "gem_id": {
+                      "type": "string",
+                      "description": "Gem definition ID or name from the observed catalog. Job level, funds (catalog price x5) and gem-box capacity stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "gem_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "gemstore_send"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "recipient_character_id": {
+                      "type": "string",
+                      "description": "Explicit recipient character ID; self-transfer, existence and recipient gem-box capacity stay service-owned."
+                    },
+                    "item_id": {
+                      "type": "string",
+                      "description": "Owned gem-box instance ID or gem definition ID; the service selects one matching gem."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "recipient_character_id",
+                    "item_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "gemstore_synthesize"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "recipe_id": {
+                      "type": "string",
+                      "description": "Explicit recipe ID from the observed recipes. Material ownership across gem box, inventory and depot plus gem-box capacity stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "recipe_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "gemstore_appraise"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "description": "Owned inventory or depot item instance ID, definition ID or name. One unit is consumed; the identified gem enters the gem box."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "gemstore_sort"
                 }
               },
@@ -5470,6 +5650,7 @@
               "chapel",
               "depot",
               "fleamarket",
+              "gemstore",
               "home",
               "shop_weapon",
               "shop_armor",
@@ -5594,6 +5775,7 @@
                   "chapel",
                   "depot",
                   "fleamarket",
+                  "gemstore",
                   "home",
                   "shop_weapon",
                   "shop_armor",
@@ -12709,50 +12891,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "GemStoreAppraiseResult": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotDepot"
-          },
-          "gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "identified_gem": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GemStoreGem"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "identified_name": {
-            "type": "string"
-          },
-          "inventory": {
-            "$ref": "#/components/schemas/InventoryInventory"
-          },
-          "is_gem": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character",
-          "gem_box",
-          "is_gem",
-          "identified_name",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "DepotDepot": {
         "properties": {
           "capacity": {
@@ -12840,123 +12978,6 @@
         "required": [
           "CharacterID",
           "Items"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GemStoreBuyResult": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "cost": {
-            "type": "integer"
-          },
-          "gem": {
-            "$ref": "#/components/schemas/GemStoreGem"
-          },
-          "gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "inventory": {
-            "$ref": "#/components/schemas/InventoryInventory"
-          },
-          "item_instance": {
-            "$ref": "#/components/schemas/ItemInstance"
-          }
-        },
-        "required": [
-          "character",
-          "gem_box",
-          "gem",
-          "cost",
-          "item_instance"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GemStoreSellResult": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "gem": {
-            "$ref": "#/components/schemas/GemStoreGem"
-          },
-          "gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "inventory": {
-            "$ref": "#/components/schemas/InventoryInventory"
-          },
-          "payout": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character",
-          "gem_box",
-          "gem",
-          "payout"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GemStoreSendResult": {
-        "properties": {
-          "gem": {
-            "$ref": "#/components/schemas/GemStoreGem"
-          },
-          "recipient_character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "recipient_gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "sender_character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "sender_gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          }
-        },
-        "required": [
-          "sender_character",
-          "recipient_character",
-          "sender_gem_box",
-          "recipient_gem_box",
-          "gem"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GemStoreSynthesizeResult": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "created_gem": {
-            "$ref": "#/components/schemas/GemStoreGem"
-          },
-          "gem_box": {
-            "$ref": "#/components/schemas/GemStoreGemBox"
-          },
-          "inventory": {
-            "$ref": "#/components/schemas/InventoryInventory"
-          },
-          "item_instance": {
-            "$ref": "#/components/schemas/ItemInstance"
-          },
-          "recipe": {
-            "$ref": "#/components/schemas/GemStoreRecipe"
-          }
-        },
-        "required": [
-          "character",
-          "gem_box",
-          "created_gem",
-          "recipe",
-          "item_instance"
         ],
         "type": "object",
         "additionalProperties": false
@@ -16423,6 +16444,47 @@
           "listing_count",
           "owned_listings",
           "page"
+        ]
+      },
+      "GemStoreSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Owned gem box plus the gem catalog for the actor's job level, every synthesis recipe and the shopkeeper's dialogue. Observation never buys, sends, synthesizes or appraises. Appraisal candidates come from the depot scene.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "gem_box": {
+            "$ref": "#/components/schemas/GemStoreGemBox"
+          },
+          "catalog": {
+            "type": "array",
+            "description": "Gems purchasable at the actor's job level. price is the base price; a purchase charges five times it.",
+            "items": {
+              "$ref": "#/components/schemas/GemStoreGem"
+            }
+          },
+          "recipes": {
+            "type": "array",
+            "description": "Every synthesis recipe.",
+            "items": {
+              "$ref": "#/components/schemas/GemStoreRecipe"
+            }
+          },
+          "dialogue": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "gem_box",
+          "catalog",
+          "recipes",
+          "dialogue"
         ]
       }
     },

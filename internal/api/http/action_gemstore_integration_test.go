@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 
 type gemStoreGatewayBoxes struct {
 	*database.GemBoxRepository
+	db   *sql.DB
 	fail bool
 }
 
@@ -84,7 +86,7 @@ func gemStoreDBRouter(t *testing.T, ctx context.Context) (http.Handler, corechar
 	if err := boxes.Save(ctx, gemstore.GemBox{CharacterID: actor.ID, Capacity: 5, Items: items}); err != nil {
 		t.Fatal(err)
 	}
-	storage := &gemStoreGatewayBoxes{GemBoxRepository: boxes}
+	storage := &gemStoreGatewayBoxes{GemBoxRepository: boxes, db: db}
 	svc, err := gemstore.NewService(catalog, chars, inv, gemstore.WithGemBoxRepository(storage), gemstore.WithTransactionProvider(database.NewTransactionProvider(db)))
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +104,7 @@ func gemStoreDBRouter(t *testing.T, ctx context.Context) (http.Handler, corechar
 }
 
 func TestGemStoreGatewayPersistenceAndRollback(t *testing.T) {
-	for _, input := range gemStoreInputs {
+	for _, input := range []struct{ action string }{{"gemstore_sell"}, {"gemstore_sort"}} {
 		for _, fail := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/fail=%t", input.action, fail), func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -193,5 +195,92 @@ func TestGemStoreGatewayConcurrentSaleAndSort(t *testing.T) {
 	}
 	if char.Money != 50 || len(box.Items) != 1 || box.Items[0].ID != items[1].ID {
 		t.Fatalf("assets not conserved: %+v %+v", char, box)
+	}
+}
+
+func TestGemStoreGatewayBuyPersistsAndRejectsWithoutFunds(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	router, actor, chars, boxes, _ := gemStoreDBRouter(t, ctx)
+	// One gold passes the wallet gate, so the service owns the price rejection.
+	poor := actor
+	poor.Money = 1
+	if err := chars.Update(ctx, poor); err != nil {
+		t.Fatal(err)
+	}
+	body := saleGatewayBody("gemstore_buy", `{"gem_id":"gem_atk_1"}`)
+	status, got := gatewayRequest(t, router, actor.ID, "session", "application/json", body, ctx)
+	assertGatewayError(t, got, "GEMSTORE_INSUFFICIENT_FUNDS")
+	if box, err := boxes.FindByCharacterID(ctx, actor.ID); status != 400 || err != nil || len(box.Items) != 2 {
+		t.Fatalf("rejected purchase mutated: %d %+v %v", status, box, err)
+	}
+	funded := actor
+	funded.Money = 1000
+	if err := chars.Update(ctx, funded); err != nil {
+		t.Fatal(err)
+	}
+	status, got = gatewayRequest(t, router, actor.ID, "session", "application/json", body, ctx)
+	var result gemstore.BuyResult
+	if err := json.Unmarshal(got["result"], &result); status != 200 || err != nil {
+		t.Fatalf("purchase failed: %d %s %v", status, got, err)
+	}
+	char, err := chars.FindByID(ctx, actor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	box, err := boxes.FindByCharacterID(ctx, actor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if char.Money != 1000-result.Cost || result.Cost <= 0 || len(box.Items) != 3 || box.Items[2].ID != result.ItemInstance.ID {
+		t.Fatalf("purchase not persisted: money=%d cost=%d %+v", char.Money, result.Cost, box)
+	}
+}
+
+func TestGemStoreGatewayConcurrentSendConservesGem(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	router, actor, chars, boxes, items := gemStoreDBRouter(t, ctx)
+	recipient, err := database.CreateTestCharacterWithFunds(ctx, boxes.db, "Gem Recipient", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := chars.Delete(cleanupCtx, recipient.ID); err != nil {
+			t.Error(err)
+		}
+	})
+	body := saleGatewayBody("gemstore_send", fmt.Sprintf(`{"recipient_character_id":%q,"item_id":%q}`, recipient.ID, items[0].ID))
+	statuses := make([]int, 2)
+	request := func(index int) func() error {
+		return func() error {
+			status, got := gatewayRequest(t, router, actor.ID, "session", "application/json", body, ctx)
+			statuses[index] = status
+			if status != 200 && status != 400 {
+				return fmt.Errorf("send: %d %s", status, got)
+			}
+			return nil
+		}
+	}
+	for _, err := range testutil.RunRace(request(0), request(1)) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !((statuses[0] == 200 && statuses[1] == 400) || (statuses[0] == 400 && statuses[1] == 200)) {
+		t.Fatalf("duplicate send: %v", statuses)
+	}
+	sender, err := boxes.FindByCharacterID(ctx, actor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	received, err := boxes.FindByCharacterID(ctx, recipient.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.Items) != 1 || sender.Items[0].ID != items[1].ID || len(received.Items) != 1 || received.Items[0].DefinitionID != "gem_atk_2" {
+		t.Fatalf("gem not conserved: %+v %+v", sender, received)
 	}
 }

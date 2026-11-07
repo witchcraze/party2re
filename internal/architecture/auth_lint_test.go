@@ -113,9 +113,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /gvg/leaderboard$`),
 		regexp.MustCompile(`^GET /replays/\{id\}$`),
 		regexp.MustCompile(`^GET /replays/recent$`),
-		regexp.MustCompile(`^GET /gemstore/catalog$`),
-		regexp.MustCompile(`^GET /gemstore/recipes$`),
-		regexp.MustCompile(`^GET /gemstore/dialogue$`),
 		regexp.MustCompile(`^GET /god/dialogue$`),
 		regexp.MustCompile(`^GET /monster/dialogue$`),
 		regexp.MustCompile(`^GET /naming-hall/dialogue$`),
@@ -401,11 +398,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleVoteContest":          "contest.go",
 		"handleSaveCharacterPhoto":   "contest.go",
 		"handleDeleteCharacterPhoto": "contest.go",
-		// Gemstore
-		"handleGemStoreBuy":        "gemstore.go",
-		"handleGemStoreSend":       "gemstore.go",
-		"handleGemStoreSynthesize": "gemstore.go",
-		"handleGemStoreAppraise":   "gemstore.go",
 		// Lottery
 		"handlePlayRaffle":          "lottery.go",
 		"handleBuyTakarakujiTicket": "lottery.go",

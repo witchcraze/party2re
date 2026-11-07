@@ -9,24 +9,24 @@
 
 ## 2. Legacy 1:1 `@actions` 照合表
 
-| Legacy Action | Legacy サブルーチン | Modern Go ドメインメソッド | Modern HTTP エンドポイント | 動作と不変条件 |
+| Legacy Action | Legacy サブルーチン | Modern Go ドメインメソッド | Gateway | 動作と不変条件 |
 |---|---|---|---|---|
-| `みる (宝珠箱)` | `gem_box.cgi` | `GemStoreService.GetGemBox` | `GET /characters/{id}/gembox` | 宝珠箱内容取得（動的容量、所持宝珠リスト） |
-| `せいとん` | `gem_store.cgi:266–281` / `seiton` | `GemStoreService.SortGemBox` | Gateway（下記） | 現行Goはカタログ順で宝珠箱を整頓・永続化。旧実装は保存kind・番号の数値順 |
-| `かう` | `&kau` | `GemStoreService.BuyGem` | `POST /characters/{id}/gemstore/buy` | レベル要件検証 $\rightarrow$ 価格計算（定価 $\times$ 5） $\rightarrow$ 所持金減算 $\rightarrow$ 宝珠箱 (`GemBox`) 追加（満杯時拒否） |
-| `うる` | `gem_store.cgi:177–214` / `uru` | `GemStoreService.SellGem` | Gateway（下記） | 宝珠箱から1個を消費し定価の半額を加算。現行Goの最低1Gは旧実装にない差分 |
-| `おくる` | `&okuru` | `GemStoreService.SendGem` | `POST /characters/{id}/gemstore/send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与（満杯時拒否） |
-| `かこう` | `&kako` | `GemStoreService.SynthesizeGem` | `POST /characters/{id}/gemstore/synthesize` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
-| `かんてい` | `&kantei` | `GemStoreService.AppraiseItem` | `POST /characters/{id}/gemstore/appraise` | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
-| `みる` / `はなす` | `words` / メニュー | `GemStoreService.GetCatalog`<br>`GemStoreService.GetRecipes`<br>`GemStoreService.GetDialogue` | `GET /gemstore/catalog`<br>`GET /gemstore/recipes`<br>`GET /gemstore/dialogue` | 転職・レベル別購入可能宝石、全合成レシピ、店主 `@ジェマ` 会話メッセージの取得 |
+| 入店時の宝珠箱表示 | `gem_store.cgi:88,111–126` | `GemStoreService.GetGemBox` | `gemstore` scene の `gem_box` | 宝珠箱内容（転職回数から導く容量、所持宝珠リスト） |
+| `せいとん` | `gem_store.cgi:266–281` / `seiton` | `GemStoreService.SortGemBox` | `gemstore_sort` | 現行Goはカタログ順で宝珠箱を整頓・永続化。旧実装は保存kind・番号の数値順 |
+| `かう` | `gem_store.cgi:129–171` / `kau` | `GemStoreService.BuyGem` | `gemstore_buy`、候補は scene の `catalog` | レベル要件検証 $\rightarrow$ 価格計算（定価 $\times$ 5） $\rightarrow$ 所持金減算 $\rightarrow$ 宝珠箱 (`GemBox`) 追加（満杯時拒否） |
+| `うる` | `gem_store.cgi:177–214` / `uru` | `GemStoreService.SellGem` | `gemstore_sell`、候補は scene の `gem_box` | 宝珠箱から1個を消費し定価の半額を加算。現行Goの最低1Gは旧実装にない差分 |
+| `おくる` | `gem_store.cgi:219–261` / `okuru` | `GemStoreService.SendGem` | `gemstore_send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与（満杯時拒否）。旧実装の受信者は名前指定 |
+| `かこう` | `gem_store.cgi:286–332` / `kako` | `GemStoreService.SynthesizeGem` | `gemstore_synthesize`、候補は scene の `recipes` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
+| `かんてい` | `gem_store.cgi:337–398` / `kantei` | `GemStoreService.AppraiseItem` | `gemstore_appraise`、候補は depot scene | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
+| `はなす` | `gem_store.cgi:89–95` / `@words` | `GemStoreService.GetDialogue` | scene の `dialogue` | 店主 `@ジェマ` の会話文。旧実装は1行を無作為に選び、5行目に販売中の宝石名を埋め込む。Goは固定5行を返す |
 
 ### Gatewayと参照・未移行操作
 
-売却・整頓は共通の[コマンド境界](../architecture/client-agent-api.md#input-and-execution-boundary)で実行し、旧売却・整頓POSTは登録しない。入力・結果の正本は[OpenAPI](../api/base.json)と[HTTPアダプター](../../internal/api/http/action_gemstore.go)。操作者は認証済みパスの所有キャラクターに限定し、売却対象には宝珠箱のインスタンスIDまたは定義IDを明示する。定義IDの場合はサービスが最初の一致を1個選ぶ。所有確認、価格、整頓順とトランザクションは既存サービスが担う。
+6操作はすべて共通の[コマンド境界](../architecture/client-agent-api.md#input-and-execution-boundary)で実行し、`gemstore` scene が参照を担う。宝石店のREST（購入・売却・配送・合成・鑑定・整頓POST、宝珠箱GET、匿名のカタログ・レシピ・会話GET）は登録しない。入力・結果の正本は[OpenAPI](../api/base.json)と[HTTPアダプター](../../internal/api/http/action_gemstore.go)。操作者は認証済みパスの所有キャラクターに限定し、対象は明示する。売却・配送は宝珠箱のインスタンスIDまたは定義ID（定義IDならサービスが最初の一致を1個選ぶ）、購入は宝石ID、合成はレシピID、配送先は受信者のキャラクターID。所有確認、価格、容量、整頓順とトランザクションは既存サービスが担う。配送結果は送信者自身の宝珠箱、送った宝石、受信者のIDと名前だけを返し、受信者のキャラクター状態と宝珠箱は返さない。
 
-`GET /characters/{id}/gembox` は所有者用の参照として保持する。購入・配送・合成・鑑定POST、カタログ・レシピ・会話GETは、対応するコマンド・観測の検証まで保持する。宝石店の選択scene観測は未接続であり、ナビゲーション登録だけで公開しない。
+scene は所有者の宝珠箱、操作者の転職回数で購入できる宝石、全レシピ、会話文を返す。いずれも固定カタログか容量上限のある一覧なのでページングしない。`catalog` の `price` は定価で、購入時はその5倍を支払う。観測は購入・配送・合成・鑑定を行わない。旧カタログGETは任意の転職回数を指定できたが、scene は旧店頭と同じく操作者の段階だけを表示する。
 
-旧dispatchは `party2/lib/gem_store.cgi:100–106`。対象未指定時の売却候補表示は、保持する宝珠箱GETと明示入力で代替する。旧名指定はGoのID指定に置き換える。最低売却価格、数値順とカタログ順の一致、旧NPC会話・cooldown・presence・logの再現は [#947](https://github.com/witchcraze/party2re/issues/947) の残存照合事項とし、transport移行を完全なゲーム仕様互換の根拠にしない。購入条件は #1135、レシピ解決は #1134、満杯時配送・受信上限は #1139 が扱う。
+旧dispatchは `party2/lib/gem_store.cgi:100–106`。対象未指定時の候補表示は scene と明示入力で代替する。旧名指定はGoのID指定に置き換える。最低売却価格、数値順とカタログ順の一致、会話の無作為選択、旧NPC `しらべる`・cooldown・presence・logの再現は [#947](https://github.com/witchcraze/party2re/issues/947) の残存照合事項とし、transport移行を完全なゲーム仕様互換の根拠にしない。購入条件は #1135、レシピ解決は #1134、満杯時配送・受信上限は #1139 が扱う。
 
 ---
 
