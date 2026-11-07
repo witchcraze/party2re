@@ -4,7 +4,7 @@
 
 The King Sealing Battle Feature Module (`internal/boss`) provides high-tier endgame cooperative sealing battles (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`) using the shared Multi-Participant Core Battle engine (`internal/core/battle`).
 
-Up to 6 players (4 for `king99`) form a party in the Multiplayer Party System (`internal/party`) under quest mode "封印戦" (quest type 6) to challenge ancient sealed kings and calamitous deities. Characters face devastating enemy skills like **Dejon** (デジョン; dimensional banishment of unconscious members with severe fatigue penalties). Victorious adventurers achieve resealing via **`@ふういん`**, gaining Hero Count (勇者カウント / `$m{hero_c}`), rare treasures, clear-time scaled crystals (刻印晶), worldwide server news broadcasts, and adding a temporary celebration crowd in the town Event Plaza (`internal/eventplaza`).
+Up to 6 players (4 for `king99`) join a system-opened sealing room (quest type 6; see [§6](#6-unseal-to-sealing-room-lifecycle)) to challenge ancient sealed kings and calamitous deities. Characters face devastating enemy skills like **Dejon** (デジョン; dimensional banishment of unconscious members with severe fatigue penalties). Victorious adventurers achieve resealing via **`@ふういん`**, gaining Hero Count (勇者カウント / `$m{hero_c}`), rare treasures, crystals (刻印晶) scaled by time since the unseal, worldwide server news broadcasts, and adding a temporary celebration crowd in the town Event Plaza (`internal/eventplaza`).
 
 ---
 
@@ -12,9 +12,10 @@ Up to 6 players (4 for `king99`) form a party in the Multiplayer Party System (`
 
 - **Multi-Participant Battle Engine**: Encounters are resolved through `corebattle.PartyBattleResolver` (`corebattle.Engine{}`), handling party vs. multi-enemy boss formations, agility turn-order, MP/CMP skills, and revive/banishment rules.
 - **Stage Catalog**: The Go catalog represents 11 legacy stages (`stage/king1.cgi` through `stage/king10.cgi`, and dynamic clone stage `king99.cgi`). The original definitions remain authoritative; catalog presence alone does not certify all mechanics.
-- **Capacity Parity**: `king1` through `king10` support parties of up to **6 players** (`MaxMembers: 6`), whereas `king99` retains a **4-player limit** (`MaxMembers: 4`).
+- **Capacity Parity**: `king1` through `king10` admit up to **6 players** (`MaxMembers: 6`), whereas `king99` admits **4** (`MaxMembers: 4`). In legacy the boss NPC takes one extra slot (`p_join+1`, counted from 1), so the player capacity equals `p_join`.
+- **No Solo Entry**: Legacy enters `vs_king` only by joining a sealing room (`quest.cgi:1071`). The Go solo operation `fightBoss` (`ChallengeBoss`) has no legacy counterpart. #1199 decided to remove it ([#1928](https://github.com/witchcraze/party2re/issues/1928)).
 - **No Fictional Daily Limits**: Legacy Party2 has no daily attempt caps (the previously fabricated 3-entry solo raid limit has been completely removed). Entrance is governed solely by character fatigue (`tired < 100`) and stage-specific `need_join` conditions (e.g. `hp_400_o`).
-- **Transactional Consistency**: Solo and party settlement run as one SQL Unit of Work: rewards (HeroCount, EXP, gold, crystals, participant-specific loot instances), entry fatigue +20%, dejon fatigue +30%, participant state, boss challenge records, and mandatory Monster Book / Hall of Fame records, including any triggered completion. Required failures roll back all of these and propagate. Party sealing also commits a room receipt; cleanup failures after commit retain rewards and retry only room/index deletion. See [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery) for the persistence boundary. News and celebration hooks remain best-effort: their failures do not abort settlement, the Valkey crowd append cannot roll back with SQL, and no separate banquet record is saved.
+- **Transactional Consistency**: Solo and party settlement run as one SQL Unit of Work: rewards (HeroCount, EXP, gold, crystals, participant-specific loot instances), dejon fatigue +30%, participant state, boss challenge records, and mandatory Monster Book / Hall of Fame records, including any triggered completion. Required failures roll back all of these and propagate. The +20% join fatigue is not part of this settlement: it belongs to the room-join transaction ([§1](#1-entry--fatigue-cost)). Current Go still charges it at the start of the sealing battle. Party sealing also commits a room receipt; cleanup failures after commit retain rewards and retry only room/index deletion. See [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery) for the persistence boundary. News and celebration hooks remain best-effort: their failures do not abort settlement, the Valkey crowd append cannot roll back with SQL, and no separate banquet record is saved.
 
 ---
 
@@ -36,7 +37,7 @@ The following names, leaders, capacities, and gates were checked against lines
 | **king8** | @闇でおおいつくす者@ | 魔人のツボ | 6 | `hp_400_u` |
 | **king9** | @悪の城@ | 悪の城 | 6 | `hp_200_u` |
 | **king10** | @無限に増殖する者@ | スライムボックス | 6 | `hp_100_u` |
-| **king99** | @罪と罰@ | Party leader / player clones | 4 | `hp_200_o` |
+| **king99** | @罪と罰@ | Leader of the unsealing party (clone) | 4 | `hp_200_o` |
 
 Detailed enemy stats and weighted treasures belong to each original CGI's
 `@bosses`/`@treasures`, represented by `internal/boss/catalog.go`. Repeated
@@ -52,7 +53,8 @@ parity. The CGI exposes `＠ふういん` after enemies are defeated; Go current
 combines resolution and settlement in the service operation.
 
 ### 1. Entry & Fatigue Cost
-- Each participating character incurs **+20% Tired** upon entering the sealing battle (`$m{tired} += 20`).
+- Each participating character incurs **+20% Tired** when joining the room (`quest.cgi:add_member`, `$m{tired} += 20`, written immediately and independently of the battle outcome). Watching charges nothing. The charge commits with the join, exactly once per successful join; a rejected join charges nothing; battle settlement does not charge it again.
+- Go currently charges it at the start of the sealing battle. [#1927](https://github.com/witchcraze/party2re/issues/1927) moves it to the join and removes the settlement charge in the same change, so there is no period with a double charge or no charge.
 - Characters with `tired >= 100` or `hp <= 0` cannot enter.
 
 ### 2. Defensive Traits (TMP Abilities)
@@ -65,8 +67,10 @@ Bosses and clones feature specialized passive defensive abilities processed by `
 ### 3. Boss Skills & Clones
 - **Authentic Job Skills**: Normal bosses (`king1`..`king10`) are assigned skills mapped to their `Job` and `OldJob` based on their `SP` and `OldSP` thresholds in addition to `dejon`.
 - **`king99` Player Clones**:
-  - Clones possess 50× HP and MP, and 2× offensive/defensive stats of the participating players.
-  - Inherit all combat skills from the player's active Job and OldJob.
+  - Clones are created **at unseal time** from every member of the unsealing party (`@partys`, NPC companions included) and stored in the room (`stage/king99.cgi` is loaded by `make_vs_king`). Later joiners do not change them; the room leader is the clone of the unsealing party's leader. If a king99 room already exists, a new unseal does not replace its clones.
+  - Each clone takes the member's battle state at that treasure creation (after the per-advance status reset): 50× Max HP and Max MP, 2× AT/DF/AG, icon, Job/SP and OldJob/SP; EXP = (Level + JobLevel) × 30, gold = ⌊Level × 0.5⌋ × 30 (`quest.cgi:1177–1178`), 20 crystals.
+  - Inherit all combat skills from that member's Job and OldJob.
+  - Go currently builds clones from the sealing battle participants ([#1927](https://github.com/witchcraze/party2re/issues/1927)).
   - Clones possess the **`大防御`** defensive trait.
 
 ### 4. Dejon (デジョン) Banishment
@@ -79,18 +83,17 @@ Bosses and clones feature specialized passive defensive abilities processed by `
 Upon defeating all enemy boss participants:
 1. **Hero Count**: All party members receive **+1 Hero Count** (`characters.hero_count` / `$m{hero_c}`).
 2. **Crystals (刻印晶)**:
-   - Base crystals: Sum of `GetCrystal` for defeated bosses in normal stages; $\text{len(allies)} \times 20$ in `king99`.
-   - **Clear-Time Multiplier**:
+   - Base crystals: Sum of `GetCrystal` for defeated enemies; in `king99`, 20 per defeated clone (Go currently uses 20 × the number of participants).
+   - **Unseal-Clock Multiplier** (per defeated enemy, `_battle.cgi:145–173`): elapsed time since the [unseal clock](#6-unseal-to-sealing-room-lifecycle), not since the battle or room start:
      - $\le 10$ minutes (600s): **3.0×**
      - $\le 30$ minutes (1800s): **2.0×**
-     - $\le 60$ minutes (3600s): **1.5×**
+     - $\le 60$ minutes (3600s): **1.5×** (truncated)
      - $> 60$ minutes: **1.0×**
+   - Go currently measures from the room creation (party) or request start (solo); [#1201](https://github.com/witchcraze/party2re/issues/1201) persists the clock and applies it.
    - Directly credited to each member's crystal balance (`characters.crystal`).
 3. **Experience & Gold**:
    - For `king1`..`king10`: Sum of boss definitions.
-   - For `king99`: Scaling formula based on party levels:
-     $$\text{EXP} = \sum (\text{Level} + \text{JobLevel}) \times 30$$
-     $$\text{Gold} = \sum \lfloor \text{Level} \times 0.5 \rfloor \times 30$$
+   - For `king99`: Sum over defeated clones of the values fixed at unseal ([§3](#3-boss-skills--clones)). Go currently computes them from the participants' levels.
 4. **Treasure Drop & Weekday Orbs**:
    - A random item from the stage's `treasure_item_ids` augmented with the current weekday orb (evaluated in Japan Standard Time / JST matching authentic legacy Party2 `_npc_action.cgi:541-543`):
      - Monday: `item-060` (月光の玉)
@@ -104,22 +107,88 @@ Upon defeating all enemy boss participants:
    - Reward delivery uses `coreinventory.Inventory` capacity enforcement; overflow items route to `depot.Depot` storage (Rank 5 lock); items overflowing a full depot are treated as lost drops (`_npc_action.cgi:74-75`).
 5. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
 6. **Victory Celebration**: Adds a temporary crowd to Event Plaza (`_win_vs_king.cgi`). [Event Plaza design §3](eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) owns generation, presence retention, merchant-selection order and runtime boundaries; there is no independent fixed two-hour banquet window.
-7. **Lobby Disbandment**: The temporary staging party is deleted upon conclusion.
+7. **Room after sealing**: The room becomes watch-only and is deleted when its last member exits ([§6](#6-unseal-to-sealing-room-lifecycle)). Go currently deletes the lobby at settlement.
 
 ---
 
-## 6. Demon King Unsealing (`UnsealDemonKing`)
+## 6. Unseal-to-Sealing-Room Lifecycle
 
-Legacy `make_vs_king` fires at stage **19** ordinary floor11 treasure creation,
-outside the clear predicate (`lib/vs_monster.cgi:91–110,159–225`). It increments
-every real participant's MaoCount, creates missing sealing rooms, announces the
-event and updates the global unseal clock. Boss victory or exit is not its trigger.
+This section is the native contract decided in #1199. It follows the legacy behavior;
+the remaining implementation gaps are listed at the end.
 
-Both the [normal-run event](adventure.md#combat-travel-and-encounter-replacement)
-and batch crawl sessions (solo and party) use Battle settlement for the counter
-under their respective transaction and character locks. Batch crawl settlement conveys
-the explicit stage 19 floor 11 treasure-creation event (`DungeonCrawlResult.UnsealDemonKing`),
-with no inference from stage 20, habitat, or monster defeat. Do not additionally call
-`boss.Service.UnsealDemonKing`, which also writes counters. Global room/news/clock integration
-remains [#1199](https://github.com/witchcraze/party2re/issues/1199) and its clock consumer
-[#1201](https://github.com/witchcraze/party2re/issues/1201).
+**Trigger.** Every stage **19** ordinary floor-11 treasure creation, outside the clear
+predicate (`lib/vs_monster.cgi:91–110`, `make_vs_king` at `159–225`). This applies to
+normal runs ([event](adventure.md#combat-travel-and-encounter-replacement)) and to solo
+and party batch crawls (`DungeonCrawlResult.UnsealDemonKing`). Boss victory, chest
+inspection, exit and receipt replay are not triggers. Each genuine treasure recreation is
+a new trigger. Nothing else is inferred (stage 20, habitat, monster defeat).
+
+**In the settlement transaction** (commit or roll back together with rewards):
+
+- Battle settlement adds MaoCount +1 for each real participant (`mao_c`, line 218). It is
+  the only counter owner; never also call `boss.Service.UnsealDemonKing`, which writes the
+  counter too and has no production caller.
+- The unseal clock is a single SQL row (`unsealed_at`), overwritten with the settlement time
+  on **every** trigger, even when all rooms already exist (legacy rewrites `king_start.cgi`
+  each time, line 224). A battle already in progress therefore sees the restarted clock.
+  With no row, the multiplier is 1×.
+
+**After commit** (best effort; failure keeps the committed state, and replay never repeats
+the counter):
+
+- For each king stage (`king1`–`king10`, `king99`) without an existing room, open one
+  system-owned sealing room with its initial enemy roster. A stage never has two rooms
+  (legacy skips an existing quest directory, line 168). The king99 roster is the clone
+  snapshot of the unsealing party ([§3](#3-boss-skills--clones)), so settlement passes the
+  participants' battle state to this step; the other stages use their catalog bosses.
+- Publish news: `<party name>(<participant names>) によって封印されし者達の封印が解かれました！`
+  (line 221).
+
+**Room.** A party-lobby kind owned by the system. The boss NPC is the leader, so there is
+no character leader. Name = stage name, no password, speed 12, `need_join` and capacity
+from the stage ([table](#authentic-king-stages)). Ordinary parties keep their 4-player
+limit and cannot use king stages.
+
+**Join** (`quest.cgi:928–1080`): allowed while the room is unsealed (battle round 1), even
+mid-battle, and below capacity. Requires `need_join` (Max HP), HP > 0, Tired < 100 and no
+other active room. Joining adds +20 Tired. The listing offers join for an open room and
+watch-only for a full or sealed one (`quest.cgi:149–153`).
+
+**Lifecycle:**
+
+| State | Enters when | Leaves when |
+|---|---|---|
+| open | trigger opens the room | `＠ふういん` after all enemies are defeated → sealed; deletion below |
+| sealed | `＠ふういん` (`vs_king.cgi:fuuin`): Hero Count, news, chest, celebration | deletion below |
+
+Deletion (any state):
+
+- **Exit check** (`_battle.cgi:1331`, only when a member exits with `＠にげる`): the room is
+  deleted if no players remain **and** the leader boss is defeated. Defeated NPCs are dropped
+  from the room roster (`_battle.cgi:523`), so a defeated leader counts as HP ≤ 0. This
+  applies before sealing too: once the leader boss falls, the last exit deletes the room even
+  while other enemies remain. After sealing every enemy is defeated, so the last exit
+  always deletes it.
+- Otherwise the room survives with no players and keeps its enemy state (remaining enemies'
+  HP and statuses) for later joiners. Players removed by Dejon leave without the exit check,
+  so a room emptied that way is never deleted by it.
+- **Idle deletion**: 30 minutes without room activity (`quest.cgi:86–90`, all room types).
+
+The room's enemy state belongs to that room's encounter. It is not the withdrawn shared
+world-boss HP ([transient-boss-hp.md](../architecture/transient-boss-hp.md)).
+
+**Validation matrix for the implementation Issues:** before/after unseal, 6/7 and 4/5
+capacity, repeated unseal (clock restart, no duplicate room, king99 clones kept), king99
+clones from the unsealing party unaffected by joiners, join fatigue charged once (none on
+rejection or at settlement), last exit with leader alive/defeated before sealing and after
+sealing, Dejon emptying, sealing, party crawl and normal-run triggers, clock origin, and
+rollback of a failed settlement.
+
+**Current gaps:**
+
+- No sealing room is opened, no unseal news is published, the party lobby has no
+  system-owned kind, king99 clones come from the participants and join fatigue is charged
+  at battle start ([#1927](https://github.com/witchcraze/party2re/issues/1927)).
+- The clock is not persisted and the multiplier uses room or request start ([#1201](https://github.com/witchcraze/party2re/issues/1201)).
+- The solo entry exists ([#1928](https://github.com/witchcraze/party2re/issues/1928)).
+- The battle resolves at start, keeps no per-room enemy state, has no leader-defeat exit check and needs a character leader ([#1864](https://github.com/witchcraze/party2re/issues/1864)).
