@@ -378,10 +378,7 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	setupFixture := func(t *testing.T, leadMP, leadMaxMP, allyMP, allyMaxMP int) (corecharacter.Character, corecharacter.Character) {
+	setupFixture := func(t *testing.T, ctx context.Context, leadMP, leadMaxMP, allyMP, allyMaxMP int) (corecharacter.Character, corecharacter.Character) {
 		t.Helper()
 		lead, err := database.CreateTestCharacterWithFunds(ctx, db, "MP audit", 500)
 		if err != nil {
@@ -425,7 +422,9 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 	}
 
 	t.Run("non_combat_escape_preserves_legacy_2_member_mp", func(t *testing.T) {
-		lead, ally := setupFixture(t, 50, 50, 35, 40)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		lead, ally := setupFixture(t, ctx, 50, 50, 35, 40)
 		battleSvc := battle.NewService(battle.WithCharacterRepository(charRepo))
 		svc, err := dungeon.NewService(
 			dungeonRepo,
@@ -475,7 +474,9 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 	})
 
 	t.Run("new_explicit_zero_mp_persists_zero_on_escape", func(t *testing.T) {
-		lead, ally := setupFixture(t, 50, 50, 35, 40)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		lead, ally := setupFixture(t, ctx, 50, 50, 35, 40)
 		battleSvc := battle.NewService(battle.WithCharacterRepository(charRepo))
 		svc, err := dungeon.NewService(
 			dungeonRepo,
@@ -524,7 +525,9 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 	})
 
 	t.Run("combat_start_and_escape_from_legacy_2_member_payload", func(t *testing.T) {
-		lead, ally := setupFixture(t, 50, 50, 35, 40)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		lead, ally := setupFixture(t, ctx, 50, 50, 35, 40)
 		battleSvc := battle.NewService(battle.WithCharacterRepository(charRepo))
 		resolver := &mpSpendingResolver{
 			mpCost: map[string]int{
@@ -603,7 +606,9 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 	})
 
 	t.Run("concurrent_mp_update_before_finalize_lock_is_preserved_for_legacy_members", func(t *testing.T) {
-		lead, ally := setupFixture(t, 30, 50, 20, 40)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		lead, ally := setupFixture(t, ctx, 30, 50, 20, 40)
 		battleSvc := battle.NewService(battle.WithCharacterRepository(charRepo))
 		attempt := 0
 		transientErr := errors.New("transient SQL contention before lock")
@@ -681,7 +686,9 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 	})
 
 	t.Run("read_failure_preserves_db_mp_and_active_expedition", func(t *testing.T) {
-		lead, ally := setupFixture(t, 50, 50, 35, 40)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		lead, ally := setupFixture(t, ctx, 50, 50, 35, 40)
 		injectedErr := errors.New("simulated character repository read outage")
 		flakyCharRepo := &failingFindCharRepo{
 			inner:   charRepo,
