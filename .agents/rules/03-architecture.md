@@ -55,11 +55,11 @@ To preserve testability, decouple packages from global runtime state, and preven
 - **Isolated Environment Loaders**: Environment variable parsing MUST be isolated to dedicated loader functions (e.g., `pkg.ConfigFromEnvironment()` or `pkg.DefaultConfig()`), or handled entirely at the composition root (`cmd/party2/config.go`).
 - **Test-Friendly Defaults**: Provide sane default values for local development and testing without requiring mandatory environment variables unless strictly necessary for secrets or external connection addresses.
 - **Deployment Documentation**: This applies to every environment variable read by production code.
-  - **Same-PR Update**: A PR that adds, renames or removes a variable, or changes its default, fallback alias or invalid-value behavior, MUST update the [`README.md` environment variable table](../../README.md#実行環境変数) and the [Docker Compose example](../../README.md#docker-compose-での起動例) in the same PR.
-  - **Required Content**: The table MUST state whether the variable is required, its default, its aliases and its invalid-value behavior when that behavior is not a startup error. The Compose example MUST show required variables as active lines and optional variables as commented lines.
+  - **Same-PR Update**: A PR that adds, renames or removes a variable, or changes its default, fallback alias or invalid-value behavior, MUST update its entry in the same PR. Required variables belong in the [`README.md` table](../../README.md#実行環境変数) and its [Docker Compose example](../../README.md#docker-compose-での起動例). Optional variables belong only in [`docs/development/environment-variables.md`](../../docs/development/environment-variables.md).
+  - **Required Content**: Each entry MUST state its default, its aliases and its invalid-value behavior.
   - **Secrets**: Passwords and API keys MUST use placeholders such as `<admin-api-key>`. NEVER write a real secret.
   - **Exclusions**: Variables read only by tests or development tooling (`_test.go`, `internal/testutil`, `PARTY2_TEST_*`, `GOFLAGS`) MUST NOT be listed.
-  - **Verification**: Before committing such a change, search non-test Go files under `cmd/` and `internal/` for environment reads, including keys passed through variables, and compare the names with the README.
+  - **Continuous Mechanical Verification**: Variable names and placement are enforced by Go AST static analysis (`internal/architecture/env_docs_lint_test.go`) during `make check` and CI. Reads with a dynamic name MUST use a string literal or be annotated with `//lint:ignore env-docs <reason>`.
 
 ## 9. File Sizing, Package Cohesion, and Mechanical Linting
 To keep files readable, maintainable, and within effective token limits for AI pair programming:
