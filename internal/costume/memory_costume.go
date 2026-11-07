@@ -79,3 +79,19 @@ func (r *MemoryCostumeRepository) ClearActiveCostumeWithClaim(ctx context.Contex
 		return nil
 	})
 }
+
+// RestoreActiveCostume restores previous only while applied is still stored.
+func (r *MemoryCostumeRepository) RestoreActiveCostume(_ context.Context, applied ActiveCostume, previous *ActiveCostume) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current, ok := r.costumes[applied.CharacterID]
+	if !ok || current != applied {
+		return false, nil
+	}
+	if previous == nil {
+		delete(r.costumes, applied.CharacterID)
+	} else {
+		r.costumes[applied.CharacterID] = *previous
+	}
+	return true, nil
+}

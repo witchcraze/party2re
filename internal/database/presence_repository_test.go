@@ -521,3 +521,22 @@ func (r lockSignalRepo) LockPresenceOwner(ctx context.Context, id string) (strin
 	close(r.locking)
 	return r.PresenceRepository.LockPresenceOwner(ctx, id)
 }
+
+func TestPresenceSetLoginMessagePublishesNothing(t *testing.T) {
+	f := newPresenceFixture(t)
+	c := f.character(t, "MsgOnly")
+	ctx := context.Background()
+	if err := f.svc.SetLoginMessage(ctx, "someone-else", c.ID, "x"); !errors.Is(err, character.ErrForbidden) {
+		t.Fatalf("foreign player: %v", err)
+	}
+	if err := f.svc.SetLoginMessage(ctx, c.PlayerID, c.ID, "a\nb"); !errors.Is(err, character.ErrInvalidLoginMessage) {
+		t.Fatalf("invalid message: %v", err)
+	}
+	if err := f.svc.SetLoginMessage(ctx, c.PlayerID, c.ID, "性格：ムッツリスケベ"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := f.svc.State(ctx, c.ID)
+	if err != nil || st.LoginMessage != "性格：ムッツリスケベ" || !st.SampledAt.IsZero() || f.snapshotCount(t, c) != 0 {
+		t.Fatalf("message-only update: %+v snapshots=%d err=%v", st, f.snapshotCount(t, c), err)
+	}
+}

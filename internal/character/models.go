@@ -18,6 +18,8 @@ const (
 	MaxCommentLength  = 160    // 160 runes
 	MaxBioFieldLength = 160    // 160 runes
 	MaxBioKeyLength   = 32     // 32 runes
+	// PersonalityBioKey is the legacy profile key for 性格・特徴 (lib/profile.cgi:18).
+	PersonalityBioKey = "character"
 )
 
 var (

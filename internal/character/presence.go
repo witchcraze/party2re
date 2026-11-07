@@ -129,6 +129,22 @@ func (s *PresenceService) Enter(ctx context.Context, playerID, characterID strin
 	})
 }
 
+// SetLoginMessage changes only the saved message inside the caller's transaction;
+// it publishes no entry or sample snapshot.
+// Transaction: RunInTx (joins an ambient transaction)
+// Lock Order: characters(2)
+func (s *PresenceService) SetLoginMessage(ctx context.Context, playerID, characterID, message string) error {
+	if err := ValidateLoginMessage(message); err != nil {
+		return err
+	}
+	return s.tx.RunInTx(ctx, func(ctx context.Context) error {
+		if err := s.lockOwned(ctx, playerID, characterID); err != nil {
+			return err
+		}
+		return s.repo.SetLoginMessage(ctx, characterID, message)
+	})
+}
+
 // RecordSave participates in a gameplay save: it joins the caller's transaction
 // and publishes a sample only when the sampled-save clock is due.
 // Transaction: RunInTx (joins an ambient transaction)

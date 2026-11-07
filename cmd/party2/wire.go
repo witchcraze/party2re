@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
+	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/contest"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
@@ -218,6 +219,11 @@ func wireHooks(
 			misc.job.SetCostumeResetter(econ.store)
 		}
 	}
+	// Item 058: login message from presence, profile personality and news from the character service.
+	soc.home.SetPersonalityRecorder(struct {
+		*character.PresenceService
+		*character.Service
+	}{core.presence, core.charService})
 	if misc.job != nil {
 		soc.home.SetJobStateRestorer(misc.job)
 		soc.home.SetFutureMemorySaver(misc.job)

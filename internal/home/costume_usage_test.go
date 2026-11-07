@@ -23,7 +23,7 @@ type appliedCostume struct {
 	expiresAt   time.Time
 }
 
-func (m *mockCostumeApplier) ApplyCostume(_ context.Context, charID string, itemNo int, itemName, icon string, exp time.Time) error {
+func (m *mockCostumeApplier) ApplyCostume(_ context.Context, charID string, itemNo int, itemName, icon string, exp time.Time) (func(context.Context) error, error) {
 	m.applied = append(m.applied, appliedCostume{
 		characterID: charID,
 		itemNo:      itemNo,
@@ -31,7 +31,7 @@ func (m *mockCostumeApplier) ApplyCostume(_ context.Context, charID string, item
 		icon:        icon,
 		expiresAt:   exp,
 	})
-	return nil
+	return func(context.Context) error { return nil }, nil
 }
 
 func TestUseHomeItem_CostumeConsumption(t *testing.T) {

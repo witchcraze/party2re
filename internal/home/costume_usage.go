@@ -2,6 +2,7 @@ package home
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,7 +13,9 @@ import (
 
 // CostumeApplier applies active costume state for a character.
 type CostumeApplier interface {
-	ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, expiresAt time.Time) error
+	// ApplyCostume stores the costume and returns an undo that restores the
+	// previous one only while this costume is still current.
+	ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, expiresAt time.Time) (func(context.Context) error, error)
 }
 
 // SetCostumeApplier registers a cross-domain costume application hook.
@@ -39,7 +42,7 @@ func isCostumeItem(name string) bool {
 	}
 }
 
-func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacter.Character, itemName string) (string, bool, error) {
+func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacter.Character, itemName string, look *appearanceUndo) (string, bool, error) {
 	if !isCostumeItem(itemName) {
 		return "", false, nil
 	}
@@ -138,13 +141,42 @@ func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacte
 		msg = fmt.Sprintf("%sは%sを読んだ！", char.Name, itemName)
 	}
 
-	if s.costumeApplier != nil {
-		now := s.nowFunc()
-		expiresAt := timer.NextMidnightJST(now).UTC()
-		if err := s.costumeApplier.ApplyCostume(ctx, char.ID, itemNo, itemName, icon, expiresAt); err != nil {
-			return "", false, err
-		}
+	if err := s.wearAppearance(ctx, char.ID, itemNo, itemName, icon, look); err != nil {
+		return "", false, err
 	}
-
 	return msg, true, nil
+}
+
+// appearanceUndo collects compensations for appearance writes made inside an
+// item transaction. Appearance lives in Valkey, so it is written under the
+// character lock (keeping DB commit order) and undone if the transaction fails.
+type appearanceUndo struct {
+	undo func(context.Context) error
+}
+
+func (s *Service) wearAppearance(ctx context.Context, characterID string, itemNo int, itemName, icon string, look *appearanceUndo) error {
+	if s.costumeApplier == nil {
+		return nil
+	}
+	undo, err := s.costumeApplier.ApplyCostume(ctx, characterID, itemNo, itemName, icon, timer.NextMidnightJST(s.nowFunc()).UTC())
+	if err != nil {
+		return err
+	}
+	// A retried callback undoes its own write before the earlier attempt's.
+	if prev := look.undo; prev != nil {
+		look.undo = func(ctx context.Context) error { return errors.Join(undo(ctx), prev(ctx)) }
+	} else {
+		look.undo = undo
+	}
+	return nil
+}
+
+// rollback runs the compensation even if the request was cancelled.
+func (l *appearanceUndo) rollback(ctx context.Context) error {
+	if l.undo == nil {
+		return nil
+	}
+	err := l.undo(context.WithoutCancel(ctx))
+	l.undo = nil
+	return err
 }

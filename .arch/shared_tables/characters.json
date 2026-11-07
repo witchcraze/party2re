@@ -236,6 +236,20 @@
       "lock_mode": "SELECT ... FOR UPDATE (LockPresenceOwner)",
       "lock_order": 2,
       "purpose": "Lock owner row inside the caller's save transaction and advance the due sampled clock"
+    },
+    {
+      "module": "character",
+      "caller_method": "internal/character/presence.go#PresenceService.SetLoginMessage",
+      "lock_mode": "SELECT ... FOR UPDATE (LockPresenceOwner)",
+      "lock_order": 2,
+      "purpose": "Lock owner row inside the caller's transaction and change only the login message"
+    },
+    {
+      "module": "character",
+      "caller_method": "internal/character/profile.go#Service.SetPersonality",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character, merge the personality profile field and publish its news"
     }
   ]
 }

@@ -48,7 +48,7 @@ func (s *Service) randomSource() corecharacter.RandomSource {
 }
 
 // UseHomeItem inspects or consumes an item from either the character's inventory or depot.
-func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, source string) (*UseHomeItemResult, error) {
+func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, source string) (_ *UseHomeItemResult, retErr error) {
 	char, err := s.charReader.FindByID(ctx, characterID)
 	if err != nil {
 		return nil, err
@@ -146,12 +146,20 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	// Validate supported consumable items before transaction
 	if _, isBag := rewardBags[def.Name]; !isBag && !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
 		switch def.Name {
-		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ", veteranRewardName:
+		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ", veteranRewardName, personalityBookName:
 		default:
 			return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 		}
 	}
 
+	// Appearance is written inside the transaction; undo it unless the use committed.
+	var look appearanceUndo
+	committed := false
+	defer func() {
+		if !committed {
+			retErr = errors.Join(retErr, look.rollback(ctx))
+		}
+	}()
 	if s.runner != nil {
 		var resMsg string
 		var kept bool
@@ -172,7 +180,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 						return ErrItemNotFound
 					}
 				}
-				msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
+				msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def, &look)
 				resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
 				if err != nil {
 					return err
@@ -199,6 +207,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 				}
 				return nil, err
 			}
+			committed = true
 			return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 		}
 
@@ -222,7 +231,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			}
 			// Apply effect before consuming so that a no-effect sentinel aborts
 			// the transaction without touching the depot.
-			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
+			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def, &look)
 			resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
 			if err != nil {
 				return err
@@ -259,13 +268,14 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			}
 			return nil, err
 		}
+		committed = true
 		return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 	}
 
 	// Fallback path for unit test mocks without runner configured.
 	// Decide consumption before the effect mutates the character.
 	kept := homeItemKept(def, char)
-	msg, err := s.applyConsumableEffect(ctx, &char, def)
+	msg, err := s.applyConsumableEffect(ctx, &char, def, &look)
 	if err != nil {
 		if errors.Is(err, errNoEffect) {
 			// Item had no effect; skip consumption and return early.
@@ -298,6 +308,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		}
 	}
 
+	committed = true
 	return committedHomeItemResult(def, msg, kept, &char), nil
 }
 
@@ -318,14 +329,14 @@ func committedHomeItemResult(def item.Definition, msg string, kept bool, char *c
 	}
 }
 
-func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error) {
+func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition, look *appearanceUndo) (string, error) {
 	if isRecipeScrollItem(def.Name) {
 		return s.applyRecipeScrollConsumable(ctx, char, def.Name)
 	}
 	if bag, ok := rewardBags[def.Name]; ok {
 		return s.applyRewardBag(ctx, char, bag)
 	}
-	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name); ok {
+	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name, look); ok {
 		return costumeMsg, err
 	}
 
@@ -408,6 +419,8 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 		return s.applyFutureMemoryConsumable(ctx, *char)
 	case veteranRewardName:
 		return s.applyVeteranReward(char)
+	case personalityBookName:
+		return s.applyPersonalityBook(ctx, char, look)
 	default:
 		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}
