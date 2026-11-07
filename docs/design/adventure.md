@@ -684,7 +684,7 @@ Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons
   - When the inventory is full, items automatically route to the character's depot (`_npc_action.cgi:60-80`).
   - If the depot is also full, drops are tracked in `LostDrops` without silent phantom delivery or data loss.
   - Surviving HP and MP are persisted to `characters` in MariaDB. If defeated, fallen characters survive with 1 HP.
-  - **Exit Fatigue (`CalculateExitFatigue`, `_battle.cgi:1187-1188, 1216`)**: `CrawlSession.Round` tracks the current/exit floor (`$round`, starting at `0` on room creation, updated on floor entry `1..11` or travel floor transitions, distinct from `TotalTurns`, `FloorsCleared`, and `len(FloorResults)`). At crawl conclusion, each participating character gains `add_tired = round * 3 + 1` fatigue (halved with integer truncation `int(add_tired * 0.5)` when `mode == "calm"`), clamped to `MaxTired = 100`.
+  - **Exit Fatigue (`CalculateExitFatigue`, `_battle.cgi:1187-1188, 1216`)**: `CrawlSession.Round` tracks the current/exit floor (`$round`, starting at `0` on room creation, updated on floor entry `1..11` or travel floor transitions, distinct from `TotalTurns`, `FloorsCleared`, and `len(FloorResults)`). At crawl conclusion, each participating character gains `add_tired = round * 3 + 1` fatigue (halved with integer truncation `int(add_tired * 0.5)` when `mode == "calm"`), with no upper bound.
   - Standard job progression, EXP with job mastery triggers, gold, and crystal rewards are applied atomically.
 
 ---

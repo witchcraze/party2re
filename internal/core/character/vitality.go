@@ -52,15 +52,12 @@ func (c *Character) ResetTired() {
 	}
 }
 
-// AddTired adds fatigue percentage to character, capping at 100%.
+// AddTired adds fatigue percentage to character. Legacy has no upper bound.
 func (c *Character) AddTired(delta int) {
 	if c == nil || delta <= 0 {
 		return
 	}
 	c.Tired += delta
-	if c.Tired > 100 {
-		c.Tired = 100
-	}
 }
 
 // ReduceTired decreases character fatigue by delta percentage (e.g. celestial wishes).

@@ -285,13 +285,9 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 		t.Errorf("expected small medals 25, got %d", resMedals.Character.SmallMedals)
 	}
 
-	// 4. Full recovery
-	resRec, err := svc.GrantWish(ctx, "char_hero", "wish_full_recovery", god.RealmHeaven)
-	if err != nil {
-		t.Fatalf("GrantWish recovery failed: %v", err)
-	}
-	if resRec.Character.Stats.HP != resRec.Character.Stats.MaxHP || resRec.Character.Stats.MP != resRec.Character.Stats.MaxMP {
-		t.Errorf("expected full HP/MP recovery, got %+v", resRec.Character.Stats)
+	// 4. The non-legacy refresh alias is rejected
+	if _, err := svc.GrantWish(ctx, "char_hero", "wish_full_recovery", god.RealmHeaven); !errors.Is(err, god.ErrWishNotFound) {
+		t.Errorf("expected ErrWishNotFound for wish_full_recovery, got %v", err)
 	}
 
 	// 5. Limit break level (fail if < 99)

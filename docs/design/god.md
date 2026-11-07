@@ -40,7 +40,7 @@ The Heaven catalog comprises 18 standard wishes plus 1 conditional level-cap wis
 | `wish_lottery_tickets` | 福引券がほしい | 1000 枚 | None | Lottery Tickets $+ 1,000$ (via `lottery.AddRaffleTickets`) |
 | `wish_guild_rank` | ギルドランクをあげたい | 1000 ポイント | Must belong to a guild | Guild EXP $+ 1,000$ (recalculates guild level) |
 | `wish_guild_gorgeous` | ギルドをゴージャスにしたい | ギルドが… | Must belong to a guild | Guild `bgimg` set to `"god.gif"` |
-| `wish_refresh` / `wish_full_recovery` | 元気いっぱいになりたい | 疲労度 -150 % (HP・MP完全回復) | None | $\text{Tired} = \text{Tired} - 150, \text{HP} = \text{MaxHP}, \text{MP} = \text{MaxMP}$ |
+| `wish_refresh` | 元気いっぱいになりたい | 疲労度 -150 % | None | $\text{Tired} = \text{Tired} - 150$ (現在HP・MPは維持) |
 | `wish_all_orbs` | 新しい冒険場所に行きたい | 全オーブ | None | Replaces orb state with all 6 standard orbs (`byrpgs` / `ValidOrbRunes`), overwriting any prior orbs or awakened 'G' state |
 | `wish_celestial_dragon` | 天竜人になりたい | 転職 (空竜の民) | `JobID != "job-70" && OldJobID != "job-70"` | Job changed to `"job-70"` (Job reset & base stats applied; `OverLevel` flag preserved) |
 | `wish_god_of_new_world` | 新世界の神になりたい | 自分の家が… | None | Avatar set to `"chr/052.gif"`, home `bgimg` set to `"god.gif"` |
@@ -73,8 +73,9 @@ In legacy Party2 (`party2/lib/god.cgi:57`):
 ```perl
 ['元気いっぱいになりたい', '疲労度 -150 %', sub { $m{tired} -= 150; }]
 ```
-- In Party2Re, `wish_refresh` (`wish_full_recovery`) deducts 150 from `Character.Tired` (`char.ReduceTired(150)`), fully matching the legacy behavior where fatigue can drop below 0 to provide a buffer against subsequent combat fatigue.
-- In addition to fatigue reduction, HP and MP are fully restored to their respective maximum values (`MaxHP` and `MaxMP`).
+- `wish_refresh` deducts 150 from `Character.Tired` with no lower bound, so fatigue can drop below 0 and buffer later fatigue. Current HP and MP do not change. Example: Tired 80, HP 10/300, MP 0/150 becomes Tired -70, HP 10/300, MP 0/150.
+- The HP/MP restoration at `god.cgi:213-214` belongs to `job_change` and is not reached by this wish.
+- `wish_refresh` is the only public ID. `wish_full_recovery` had no legacy origin and is rejected like any other unknown wish ID (project owner decision, #1167).
 
 ### 3.4 All Orbs Grant (全オーブ付与) Parity
 

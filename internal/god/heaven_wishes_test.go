@@ -300,7 +300,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 	})
 
-	t.Run("wish_refresh recovers full HP and MP and reduces fatigue by 150%", func(t *testing.T) {
+	t.Run("wish_refresh only reduces fatigue by 150% and keeps HP and MP", func(t *testing.T) {
 		svc, charRepo, _, _, _, _, _, _, _ := setupHeavenService()
 		char := corecharacter.Character{
 			ID: "char-refresh", Name: "Tired",
@@ -313,13 +313,16 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if res.Character.Stats.HP != 300 || res.Character.Stats.MP != 150 {
-			t.Errorf("expected full HP/MP (300/150), got %d/%d", res.Character.Stats.HP, res.Character.Stats.MP)
+		if res.Character.Stats.HP != 10 || res.Character.Stats.MP != 0 {
+			t.Errorf("expected unchanged HP/MP (10/0), got %d/%d", res.Character.Stats.HP, res.Character.Stats.MP)
 		}
 		if res.Character.Tired != -70 {
 			t.Errorf("expected Tired -70 (80 - 150), got %d", res.Character.Tired)
 		}
-		expectedMsg := "疲労度が 150% 回復し、HPとMPが完全に回復しました！"
+		if stored := charRepo.characters[char.ID]; stored.Stats.HP != 10 || stored.Stats.MP != 0 || stored.Tired != -70 {
+			t.Errorf("expected persisted Tired -70 and HP/MP 10/0, got %d and %d/%d", stored.Tired, stored.Stats.HP, stored.Stats.MP)
+		}
+		expectedMsg := "疲労度が 150% 回復しました！"
 		if res.Message != expectedMsg {
 			t.Errorf("expected Message %q, got %q", expectedMsg, res.Message)
 		}

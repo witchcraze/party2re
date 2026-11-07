@@ -67,7 +67,7 @@ func buildHeavenWishes(char corecharacter.Character, inGuild bool, hasMaid bool)
 			ID:          WishRefresh,
 			Name:        "元気いっぱいになりたい",
 			Realm:       RealmHeaven,
-			Description: "疲労度 -150 % (HP・MP完全回復)",
+			Description: "疲労度 -150 %",
 			Available:   true,
 		},
 		{

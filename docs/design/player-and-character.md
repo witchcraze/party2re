@@ -33,9 +33,9 @@ Every `Character` belongs to exactly one `Player`. A `Player` may own multiple c
 - `Character.SmallMedals` is capped at `999,999,999` (`corecharacter.MaxSmallMedals`).
 
 ### 2.5 Vitality & Fatigue Invariants
-- **Vitality Bounds**: HP and MP are strictly bounded within `[0, MaxHP]` and `[0, MaxMP]` via `Stats.ClampVitality`. Restorative actions (sleeping, celestial recovery, job changes) restore full vitality via `Character.RecoverVitality`.
+- **Vitality Bounds**: HP and MP are strictly bounded within `[0, MaxHP]` and `[0, MaxMP]` via `Stats.ClampVitality`. Restorative actions (sleeping, job changes) restore full vitality via `Character.RecoverVitality`.
 - **Combat Survival Floor**: In combat settlement (`battle/apply.go`, `boss/battle.go`), fallen combatants (`HP <= 0` or fallen flag) survive with an authentic minimum floor of `1 HP` via `Character.ApplyCombatSurvival`. Surviving MP is updated and clamped within `[0, MaxMP]`.
-- **Fatigue Clamping**: Standard fatigue percentage is capped at `100%` (`AddTired`). Reaching `100%` triggers exhaustion (`IsExhausted() == true`), blocking adventures and fatigue-generating mini-games. Celestial wishes (`god.WishRefresh`, `ReduceTired(150)`) bypass the standard 0% floor to provide an authentic negative fatigue buffer against subsequent combat. Resting at home clears fatigue to 0 (`ResetTired`).
+- **Fatigue Range**: Fatigue percentage has no upper or lower bound, matching legacy additions (`lib/_battle.cgi:1211-1213`, `lib/quest.cgi:1073`, `lib/_casino.cgi:217`, `lib/vs_king.cgi:88`) and subtraction (`lib/god.cgi:57`). `AddTired` can exceed `100%`, and `god.WishRefresh` (`ReduceTired(150)`) can go below `0%`, buffering later fatigue. At `100%` or more, exhaustion (`IsExhausted() == true`) blocks adventures and fatigue-generating mini-games. Resting at home clears fatigue to 0 (`ResetTired`).
 
 ### 2.6 Player Account Lifecycle & Ban Invariant
 - **Account State**: Each `Player` record tracks `created_at`, `updated_at`, `last_ip`, and an optional `banned_at` timestamp.
