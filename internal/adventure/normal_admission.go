@@ -211,8 +211,15 @@ func (s *NormalRunService) enter(ctx context.Context, player string, a NormalAdm
 		if err != nil {
 			return err
 		}
-		r.Stage = stage.OrdinarySeason(a.Season)
+		season := a.Season
+		if a.PartyID == "" && season == "" {
+			// Solo room creation selects its season here; Party selected it at lobby creation.
+			season = stage.SelectSeason(s.cfg.RNG.Intn).Season
+		}
+		r.Stage = stage.OrdinarySeason(season)
 		r.RecordSeason = r.Stage.Season
+		// quest.cgi:596–600: one EX draw after season selection, never repeated by travel.
+		r.EXUnlocked = r.Stage.ID == "stage-26" && s.cfg.RNG.Intn(3) == 0
 		for _, id := range a.CharacterIDs {
 			actor, err := s.cfg.Builder.BuildLifetimeActor(ctx, id, "")
 			if err != nil {

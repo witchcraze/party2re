@@ -16,6 +16,7 @@ import (
 const (
 	BossFloor         = 10
 	TreasureRoomFloor = 11
+	EXBossFloor       = 12
 	//lint:ignore unused legacy floor limit constant
 	MaxDungeonFloors = 11
 )
