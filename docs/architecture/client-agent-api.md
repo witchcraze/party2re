@@ -597,6 +597,9 @@ remains visible after its deadline. Sleep and pending Wake retain their explicit
 Wake/Rescue rules. Contradictory exclusive activity facts produce an authorized
 recovery/conflict scene, suppress new entries and expose verified recovery/leave
 choices; do not select an arbitrary winner or discard unfinished sessions.
+Entry itself is a command and may carry a feature-owned effect only where legacy
+requires it: [Alchemy delivery](../design/alchemy.md#4-delivery-on-entry-scene_enter-with-destinationalchemy)
+is the current case. GET never performs it.
 
 Legacy dispatch evidence is `quest.cgi:189–199,1047–1075`,
 `vs_dungeon.cgi:33–48`, `vs_challenge.cgi:24–30`, and `_casino.cgi:10–32`.
@@ -669,7 +672,7 @@ facility operation has a replacement.
 
 | Migration owner | Responsibility and contract sources |
 | --- | --- |
-| [Economy #947](https://github.com/witchcraze/party2re/issues/947) | Shop, Bank, Depot, SecretShop and markets/crafting. Feature-owned retained-operation mappings: [Shops](../design/shops.md#retained-routes), [Bank](../design/bank.md#observation-and-retained-routes), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [Auction](../design/auction.md#gateway-and-retained-reads), [Black Market](../design/black-market.md#5-gateway-and-retained-routes), [Blacksmith](../design/blacksmith.md#5-gateway-commands-and-observation), [Gem Store](../design/gemstore.md#gatewayと参照未移行操作). |
+| [Economy #947](https://github.com/witchcraze/party2re/issues/947) | Shop, Bank, Depot, SecretShop and markets/crafting. Feature-owned retained-operation mappings: [Shops](../design/shops.md#retained-routes), [Bank](../design/bank.md#observation-and-retained-routes), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [Auction](../design/auction.md#gateway-and-retained-reads), [Black Market](../design/black-market.md#5-gateway-and-retained-routes), [Blacksmith](../design/blacksmith.md#5-gateway-commands-and-observation), [Alchemy](../design/alchemy.md#gateway-and-observation), [Gem Store](../design/gemstore.md#gatewayと参照未移行操作). |
 | [Combat/Adventure #948](https://github.com/witchcraze/party2re/issues/948) | Run/room/Party commands, owned observations, monsters and Replay. Adopt [run authority and recovery](transient-run-state.md), [Adventure](../design/adventure.md) and [Replay visibility](../design/replay.md); generic activity facts do not replace maps, explicit battle choices or receipt reads. |
 | [Town/Faith/Social #949](https://github.com/witchcraze/party2re/issues/949) | Home, Casino, faith and social facilities. [Home](../design/home.md#retained-rest-and-deferred-detail-ownership) and [Casino](../design/casino.md#scoped-legacy-dispatch-reconciliation) own their visibility/action mappings; observation does not connect mutations. |
 | [Final cleanup #950](https://github.com/witchcraze/party2re/issues/950) | Final router/OpenAPI cleanup, deliberate exceptions and otherwise unassigned core profile/inventory/equipment, Event Plaza, ranking/news/notification surfaces. Assign remaining gameplay replacements to bounded children before deleting them. |

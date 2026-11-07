@@ -14,7 +14,7 @@ import (
 
 func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, cmbt *cmbtServices, misc *miscServices) *playercontext.Service {
 	scenes := []playercontext.SceneDefinition{
-		{ID: "town", Pageable: true}, {ID: "bank", Parent: "town"},
+		{ID: "town", Pageable: true}, {ID: "alchemy", Parent: "town", Pageable: true}, {ID: "bank", Parent: "town"},
 		{ID: "blackmarket", Parent: "town", Pageable: true, CanEnter: blackmarket.CheckEligibility},
 		{ID: "blacksmith", Parent: "town"},
 		{ID: "chapel", Parent: "town"},

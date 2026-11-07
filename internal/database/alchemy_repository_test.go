@@ -48,13 +48,11 @@ func TestAlchemyRepositoryLifecycle(t *testing.T) {
 
 	// 2. Save ongoing synthesis state
 	now := time.Now().UTC().Truncate(time.Second)
-	matures := now.Add(12 * time.Hour)
 	savedState := alchemy.Synthesis{
 		CharacterID: char.ID,
 		RecipeID:    "recipe-001",
 		State:       alchemy.StateOngoing,
 		StartedAt:   &now,
-		MaturesAt:   &matures,
 		TotalCrafts: 0,
 		CompAlc:     false,
 	}

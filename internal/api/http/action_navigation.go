@@ -16,7 +16,7 @@ type sceneEnterParams struct {
 }
 
 // navigationCommand supplies the authenticated owner separately from typed params.
-func navigationCommand[P any](h *Handler, id string, execute func(context.Context, string, string, P) (playercontext.Selection, error)) {
+func navigationCommand[P, R any](h *Handler, id string, execute func(context.Context, string, string, P) (R, error)) {
 	def, ok := playercontext.GetAction(id)
 	if !ok {
 		panic("unregistered navigation command: " + id)
@@ -72,8 +72,12 @@ func (h *Handler) registerNavigation(service *playercontext.Service) {
 	if service == nil || !service.NavigationConfigured() {
 		return
 	}
-	navigationCommand(h, "scene_enter", func(ctx context.Context, owner, actor string, p sceneEnterParams) (playercontext.Selection, error) {
-		return service.Enter(ctx, owner, actor, p.Destination)
+	navigationCommand(h, "scene_enter", func(ctx context.Context, owner, actor string, p sceneEnterParams) (sceneEnterResult, error) {
+		selection, err := service.Enter(ctx, owner, actor, p.Destination)
+		if err != nil {
+			return sceneEnterResult{}, err
+		}
+		return h.deliverOnEntry(ctx, actor, selection)
 	})
 	navigationCommand(h, "scene_select", service.Select)
 	navigationCommand(h, "scene_page", service.Page)

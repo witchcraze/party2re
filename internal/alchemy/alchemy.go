@@ -11,7 +11,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
-	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
@@ -38,7 +37,6 @@ type Synthesis struct {
 	RecipeID    string         `json:"recipe_id"`
 	State       SynthesisState `json:"state"`
 	StartedAt   *time.Time     `json:"started_at,omitempty"`
-	MaturesAt   *time.Time     `json:"matures_at,omitempty"`
 	TotalCrafts int            `json:"total_crafts"`
 	CompAlc     bool           `json:"comp_alc"`
 }
@@ -47,7 +45,6 @@ type SynthesisResult struct {
 	Recipe    RecipeView     `json:"recipe"`
 	State     SynthesisState `json:"state"`
 	StartedAt time.Time      `json:"started_at"`
-	MaturesAt time.Time      `json:"matures_at"`
 	Message   string         `json:"message"`
 }
 
@@ -230,12 +227,6 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 			return err
 		}
 
-		now := s.now()
-		if state.State == StateOngoing {
-			if state.MaturesAt != nil && !now.Before(*state.MaturesAt) {
-				state.State = StateCompleted
-			}
-		}
 		if state.State == StateOngoing || state.State == StateCompleted {
 			return ErrSynthesisInProgress
 		}
@@ -292,11 +283,10 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 			return fmt.Errorf("save depot: %w", err)
 		}
 
-		maturesAt := timer.NextMidnightJST(now)
+		now := s.now()
 		state.RecipeID = recipeID
 		state.State = StateOngoing
 		state.StartedAt = &now
-		state.MaturesAt = &maturesAt
 
 		if err := s.repo.SaveSynthesisState(txCtx, state); err != nil {
 			return fmt.Errorf("save synthesis state: %w", err)
@@ -314,7 +304,6 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 			Recipe:    viewRecipe(recipe, targetDiscovered.IsCrafted),
 			State:     StateOngoing,
 			StartedAt: now,
-			MaturesAt: maturesAt,
 			Message:   msg,
 		}
 		_ = char
@@ -331,15 +320,7 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (Synthesis,
 	if characterID == "" {
 		return Synthesis{}, ErrInvalidCharacterID
 	}
-	st, err := s.repo.GetSynthesisState(ctx, characterID)
-	if err != nil {
-		return Synthesis{}, err
-	}
-	now := s.now()
-	if st.State == StateOngoing && st.MaturesAt != nil && !now.Before(*st.MaturesAt) {
-		st.State = StateCompleted
-	}
-	return st, nil
+	return s.repo.GetSynthesisState(ctx, characterID)
 }
 
 func (s *Service) CompleteOngoingSynthesis(ctx context.Context, characterID string) error {
@@ -378,13 +359,8 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 			return err
 		}
 
-		now := s.now()
 		if state.State == StateOngoing {
-			if state.MaturesAt != nil && !now.Before(*state.MaturesAt) {
-				state.State = StateCompleted
-			} else {
-				return ErrSynthesisNotReady
-			}
+			return ErrSynthesisNotReady
 		}
 		if state.State != StateCompleted || state.RecipeID == "" {
 			return ErrNoActiveSynthesis
@@ -437,7 +413,6 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 		state.State = StateNone
 		state.RecipeID = ""
 		state.StartedAt = nil
-		state.MaturesAt = nil
 
 		if err := s.repo.SaveSynthesisState(txCtx, state); err != nil {
 			return fmt.Errorf("save synthesis state: %w", err)

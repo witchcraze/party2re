@@ -80,7 +80,6 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithCustomSkill(&stubCustomSkillService{}),
 		apihttp.WithGuild(&stubGuildService{}),
 		apihttp.WithMedal(&mockMedalService{}),
-		apihttp.WithAlchemy(&stubAlchemyService{}),
 		apihttp.WithBlackMarket(&stubBlackMarketService{}),
 		apihttp.WithSecretShop(&stubSecretShopService{}),
 		apihttp.WithBlacksmith(&stubBlacksmithService{}),
@@ -181,9 +180,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"shop_accessory_buy", http.MethodPost, "/characters/char-1/shop/accessory/buy", `{"item_definition_id":"acc-1","quantity":1}`},
 		{"shop_accessory_sell", http.MethodPost, "/characters/char-1/shop/accessory/sell", `{"item_instance_id":"item-1","quantity":1}`},
 		{"shop_accessory_synthesize", http.MethodPost, "/characters/char-1/shop/accessory/synthesize", `{"recipe_target":"acc-2"}`},
-		// Alchemy
-		{"alchemy_synthesize", http.MethodPost, "/characters/char-1/alchemy/synthesize", `{"recipe_id":"rec-1"}`},
-		{"alchemy_claim", http.MethodPost, "/characters/char-1/alchemy/claim", `{}`},
 		// Black Market
 		// Secret Shop
 		{"secretshop_puffpuff", http.MethodPost, "/characters/char-1/secretshop/puffpuff", `{}`},
