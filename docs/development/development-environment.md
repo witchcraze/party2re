@@ -120,15 +120,7 @@ A `200 OK` response with `{"status":"ok"}` confirms that the daemon is listening
 
 ## Application configuration
 
-The application daemon supports the following core environment variables:
-- `PARTY2_DB_DSN`: MariaDB connection DSN (required).
-- `PARTY2_VALKEY_ADDR`: Valkey endpoint address (required, e.g. `valkey:6379` or `127.0.0.1:6379`).
-- `PARTY2_PORT` / `PARTY2_ADDR`: Server listen port or address (default `8080` / `:8080`).
-- `PARTY2_MAX_PLAYERS`: Server-wide player account population limit (default `999`; `0` or negative for unlimited). Active player accounts (`WHERE banned_at IS NULL`) are evaluated at registration time; when capacity is reached, `POST /players` rejects with `409 Conflict`.
-- `PARTY2_HOME_COMPANION_PHRASE_LIMIT`: Companion phrases kept per character (default `30`). An unset, empty, non-integer, overflowing, zero or negative value uses the default, and an invalid value logs a warning. See [Home design](../design/home.md#3-companion-greeting-phrases--resident-companions-character_companion_phrases-home_members).
-- `PARTY2_ADMIN_API_KEY`: API key for administrative endpoints.
-- `PARTY2_CORS_ORIGINS`: Comma-separated list of allowed CORS origins.
-- `PARTY2_TRUSTED_PROXIES`: Comma-separated CIDR blocks for reverse proxy client IP resolution.
+`PARTY2_DB_DSN` and `PARTY2_VALKEY_ADDR` are required; see the [README](../../README.md#実行環境変数). Optional settings are listed in [Optional Environment Variables](environment-variables.md).
 
 ## Database configuration
 

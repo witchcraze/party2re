@@ -24,6 +24,7 @@ Authentication and logging contracts live in [architecture/interfaces.md](archit
 scheduling lifecycles in [architecture/valkey-keyspace.md](architecture/valkey-keyspace.md#scheduled-work-lifecycle),
 and maintenance controls in [design/admin.md](design/admin.md#system-maintenance-mode).
 [development/testing.md](development/testing.md) owns local/CI verification and benchmarking;
+[development/environment-variables.md](development/environment-variables.md) owns optional runtime settings;
 [assets/required-images.md](assets/required-images.md) owns asset-type guidance and placeholder provenance.
 
 Use the [documentation maintenance rule](../.agents/rules/02-documentation-sync.md) for updates, additions and scoped consolidation. Permanent documents explain contracts and decisions; Issues/PRs and Git preserve detailed work history. Keep meaningful evidence and unresolved gaps with their owning explanation or linked Issue. A frozen inventory is not current coverage certification.

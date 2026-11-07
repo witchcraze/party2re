@@ -199,6 +199,7 @@ func WithAdminAPIKey(key string) Option {
 func WithAdminAPIKeyFromEnv(envKey string) Option {
 	return func(h *Handler) {
 		if envKey != "" {
+			//lint:ignore env-docs caller-supplied override; the default names below are documented
 			if val := os.Getenv(envKey); val != "" {
 				h.adminAPIKey = strings.TrimSpace(val)
 				return
