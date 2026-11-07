@@ -439,7 +439,7 @@ func TestFutureMemory_StalePreflightRevalidation(t *testing.T) {
 		}
 
 		_, err = svc.SaveFutureMemory(ctx, baseChar.ID)
-		if !errors.Is(err, job.ErrFutureMemorySlotLimit) {
+		if !errors.Is(err, corecharacter.ErrFutureMemorySlotLimit) {
 			t.Fatalf("expected ErrFutureMemorySlotLimit, got %v", err)
 		}
 		// Verify item-207 was NOT consumed (rollback)

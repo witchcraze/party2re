@@ -220,6 +220,7 @@ func wireHooks(
 	}
 	if misc.job != nil {
 		soc.home.SetJobStateRestorer(misc.job)
+		soc.home.SetFutureMemorySaver(misc.job)
 		if soc.ranking != nil {
 			misc.job.SetJobChangeTracker(soc.ranking)
 			misc.job.SetJobPopularityTracker(soc.ranking)

@@ -69,6 +69,10 @@ func (c *Character) ApplyJobMemory(jobID string, sp int, oldJobID string, oldSP 
 	return nil
 }
 
+// ErrFutureMemorySlotLimit is returned when a character attempts to save a future
+// memory snapshot beyond their OverFuture capacity limit.
+var ErrFutureMemorySlotLimit = errors.New("future memory slot limit reached")
+
 // CanSaveFutureMemory checks whether a future memory snapshot can be saved.
 // It requires that no temporary or persistent job exchange is active, and that existing snapshots
 // do not exceed the OverFuture capacity limit (0 allows 1 snapshot).

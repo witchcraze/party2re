@@ -25,10 +25,6 @@ func WithFutureMemoryRepository(repo FutureMemoryRepository) Option {
 	}
 }
 
-// ErrFutureMemorySlotLimit is returned when a character attempts to save a future
-// memory snapshot beyond their OverFuture capacity limit.
-var ErrFutureMemorySlotLimit = errors.New("future memory slot limit reached")
-
 // SaveFutureMemory creates a future memory snapshot of the character's state,
 // consuming item-207 (未来のカケラ) and enforcing the OverFuture slot limit.
 func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (corecharacter.FutureMemory, error) {
@@ -50,7 +46,7 @@ func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (cor
 		return corecharacter.FutureMemory{}, err
 	}
 	if !char.CanSaveFutureMemory(len(existing)) {
-		return corecharacter.FutureMemory{}, ErrFutureMemorySlotLimit
+		return corecharacter.FutureMemory{}, corecharacter.ErrFutureMemorySlotLimit
 	}
 
 	const requiredItem = "item-207"
@@ -65,30 +61,9 @@ func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (cor
 		}
 		var snapshot corecharacter.FutureMemory
 		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			if tc.Character.JobMemory != nil {
-				return corejob.ErrJobUnavailable
-			}
-			lockedExisting, err := s.futureMemories.FindByCharacterID(tc.Context, characterID)
-			if err != nil {
-				return err
-			}
-			if !tc.Character.CanSaveFutureMemory(len(lockedExisting)) {
-				return ErrFutureMemorySlotLimit
-			}
-
-			now := time.Now().UTC()
-			snapshot = tc.Character.CreateFutureMemory(id.New(), now)
-			if err := s.futureMemories.Save(tc.Context, snapshot); err != nil {
-				return err
-			}
-			state, err := s.loadState(tc.Context, tc.Character)
-			if err != nil {
-				return err
-			}
-			if err := refreshFutureMemoryPoints(&state, tc.Character); err != nil {
-				return err
-			}
-			return s.repository.Save(tc.Context, state)
+			var err error
+			snapshot, err = s.SaveFutureMemorySnapshot(tc.Context, tc.Character)
+			return err
 		})
 		if err != nil {
 			if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) {
@@ -131,6 +106,40 @@ func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (cor
 		if err := s.repository.Save(ctx, state); err != nil {
 			return corecharacter.FutureMemory{}, err
 		}
+	}
+	return snapshot, nil
+}
+
+// SaveFutureMemorySnapshot re-checks the save conditions for char, which the
+// caller holds locked inside its transaction, then stores the snapshot and
+// refreshes recorded job SP. Item consumption belongs to the caller.
+func (s *Service) SaveFutureMemorySnapshot(ctx context.Context, char corecharacter.Character) (corecharacter.FutureMemory, error) {
+	if s.futureMemories == nil {
+		return corecharacter.FutureMemory{}, errors.New("future memory repository is nil")
+	}
+	if char.JobMemory != nil {
+		return corecharacter.FutureMemory{}, corejob.ErrJobUnavailable
+	}
+	existing, err := s.futureMemories.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		return corecharacter.FutureMemory{}, err
+	}
+	if !char.CanSaveFutureMemory(len(existing)) {
+		return corecharacter.FutureMemory{}, corecharacter.ErrFutureMemorySlotLimit
+	}
+	snapshot := char.CreateFutureMemory(id.New(), time.Now().UTC())
+	if err := s.futureMemories.Save(ctx, snapshot); err != nil {
+		return corecharacter.FutureMemory{}, err
+	}
+	state, err := s.loadState(ctx, char)
+	if err != nil {
+		return corecharacter.FutureMemory{}, err
+	}
+	if err := refreshFutureMemoryPoints(&state, char); err != nil {
+		return corecharacter.FutureMemory{}, err
+	}
+	if err := s.repository.Save(ctx, state); err != nil {
+		return corecharacter.FutureMemory{}, err
 	}
 	return snapshot, nil
 }
