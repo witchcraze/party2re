@@ -91,8 +91,10 @@ func (r *ReplayRepository) PublishPending(ctx context.Context, recipientID strin
 		`INSERT IGNORE INTO replay_latest_slots (recipient_id, copy_id, copy_seq) VALUES (?, '', 0)`, recipientID); err != nil {
 		return err
 	}
-	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+	var unreadable error
+	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		exec := ExecutorFromContext(txCtx, r.db)
+		unreadable = nil
 		var slotSeq int64
 		if err := exec.QueryRowContext(txCtx,
 			`SELECT copy_seq FROM replay_latest_slots WHERE recipient_id = ? FOR UPDATE`, recipientID).Scan(&slotSeq); err != nil {
@@ -102,28 +104,73 @@ func (r *ReplayRepository) PublishPending(ctx context.Context, recipientID strin
 		if err != nil || len(list) == 0 {
 			return err
 		}
-		ids := make([]any, 0, len(list))
-		for _, p := range list {
-			var n int
-			if err := exec.QueryRowContext(txCtx, `SELECT COUNT(*) FROM replay_scenes WHERE run_id = ? AND seq <= ?`, p.runID, p.prefixLen).Scan(&n); err != nil {
-				return err
+		// Like the original per-exit copy, each copy stands alone: the newest readable copy newer than
+		// the slot wins, and newer unreadable copies stay pending without blocking it.
+		chosen := -1
+		for i := len(list) - 1; i >= 0 && list[i].seq > slotSeq; i-- {
+			if err := r.checkPrefix(txCtx, list[i]); err != nil {
+				if !errors.Is(err, replay.ErrArchiveSourceUnavailable) {
+					return err
+				}
+				if unreadable == nil {
+					unreadable = err
+				}
+				continue
 			}
-			if n != p.prefixLen {
-				return fmt.Errorf("%w: copy %s", replay.ErrArchiveSourceUnavailable, p.id)
-			}
-			ids = append(ids, p.id)
+			chosen = i
+			break
 		}
-		// Late older work never replaces a newer published copy.
-		if last := list[len(list)-1]; last.seq > slotSeq {
+		superseded := list
+		if chosen >= 0 {
+			c := list[chosen]
 			if _, err := exec.ExecContext(txCtx,
-				`UPDATE replay_latest_slots SET copy_id = ?, copy_seq = ? WHERE recipient_id = ?`, last.id, last.seq, recipientID); err != nil {
+				`UPDATE replay_latest_slots SET copy_id = ?, copy_seq = ? WHERE recipient_id = ?`, c.id, c.seq, recipientID); err != nil {
 				return err
 			}
+			if err := r.setCopyStatus(txCtx, "published", list[chosen:chosen+1]); err != nil {
+				return err
+			}
+			superseded = list[:chosen]
+		} else {
+			n := 0
+			for n < len(list) && list[n].seq <= slotSeq {
+				n++
+			}
+			superseded = list[:n] // late older work never replaces a newer published copy
 		}
-		_, err = exec.ExecContext(txCtx,
-			`UPDATE replay_archive_copies SET status = 'published' WHERE id IN (?`+strings.Repeat(",?", len(ids)-1)+`)`, ids...)
-		return err
+		return r.setCopyStatus(txCtx, "superseded", superseded)
 	})
+	if err != nil {
+		return err
+	}
+	return unreadable
+}
+
+// checkPrefix verifies that every frozen scene of the copy decodes as a supported version.
+func (r *ReplayRepository) checkPrefix(ctx context.Context, p pendingCopy) error {
+	scenes, err := r.framePrefix(ctx, p.runID, p.prefixLen)
+	if err != nil {
+		return fmt.Errorf("copy %s: %w", p.id, err)
+	}
+	for _, raw := range scenes {
+		if _, err := replay.DecodeStoredScene(raw); err != nil {
+			return fmt.Errorf("copy %s: %w", p.id, err)
+		}
+	}
+	return nil
+}
+
+func (r *ReplayRepository) setCopyStatus(ctx context.Context, status string, copies []pendingCopy) error {
+	if len(copies) == 0 {
+		return nil
+	}
+	args := []any{status}
+	for _, c := range copies {
+		args = append(args, c.id)
+	}
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx,
+		`UPDATE replay_archive_copies SET status = ? WHERE id IN (?`+strings.Repeat(",?", len(copies)-1)+`)`, args...)
+	return err
 }
 
 type pendingCopy struct {
@@ -173,24 +220,33 @@ func (r *ReplayRepository) FindLatest(ctx context.Context, recipientID string) (
 	if err != nil {
 		return replay.StoredArchive{}, err
 	}
-	// Scenes are immutable, so the slot's frozen prefix reads coherently without a snapshot.
-	rows, err := exec.QueryContext(ctx, `SELECT scene_json FROM replay_scenes WHERE run_id = ? AND seq <= ? ORDER BY seq`, runID, prefixLen)
-	if err != nil {
+	if out.Scenes, err = r.framePrefix(ctx, runID, prefixLen); err != nil {
 		return replay.StoredArchive{}, err
 	}
+	return out, nil
+}
+
+// framePrefix reads a copy's frozen scenes oldest first; scenes are immutable, so no snapshot is needed.
+func (r *ReplayRepository) framePrefix(ctx context.Context, runID string, prefixLen int) ([]string, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx,
+		`SELECT scene_json FROM replay_scenes WHERE run_id = ? AND seq <= ? ORDER BY seq`, runID, prefixLen)
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
+	var scenes []string
 	for rows.Next() {
 		var scene string
 		if err := rows.Scan(&scene); err != nil {
-			return replay.StoredArchive{}, err
+			return nil, err
 		}
-		out.Scenes = append(out.Scenes, scene)
+		scenes = append(scenes, scene)
 	}
 	if err := rows.Err(); err != nil {
-		return replay.StoredArchive{}, err
+		return nil, err
 	}
-	if len(out.Scenes) != prefixLen {
-		return replay.StoredArchive{}, replay.ErrArchiveSourceUnavailable
+	if len(scenes) != prefixLen {
+		return nil, replay.ErrArchiveSourceUnavailable
 	}
-	return out, nil
+	return scenes, nil
 }

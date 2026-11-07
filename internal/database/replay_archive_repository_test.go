@@ -388,3 +388,120 @@ func TestReplayArchiveConcurrentPublicationKeepsNewestSlot(t *testing.T) {
 		t.Fatalf("copies=%d staged=%d pending=%d slot=%s newest=%s scenes=%d", copies, staged, pending, got.CopyID, newest, len(got.Scenes))
 	}
 }
+
+func TestReplayArchivePublicationRejectsUndecodableScenes(t *testing.T) {
+	f := newArchiveFixture(t)
+	ctx := context.Background()
+	for name, bad := range map[string]string{
+		"corrupt json":        `{"v":1,"title":`,
+		"unsupported version": `{"v":2,"title":"future","members":[],"comments":[]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := f.rec()
+			good := f.run()
+			f.scene(good, "c1", "good")
+			f.exit(good, "c2", rec)
+			if err := f.svc.Publish(ctx, rec); err != nil {
+				t.Fatal(err)
+			}
+			broken := f.run()
+			f.scene(broken, "c1", "first")
+			f.scene(broken, "c2", "second")
+			f.exit(broken, "c3", rec)
+			if _, err := f.db.ExecContext(ctx, `UPDATE replay_scenes SET scene_json = ? WHERE run_id = ? AND seq = 2`, bad, broken); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.svc.Publish(ctx, rec); !errors.Is(err, replay.ErrArchiveSourceUnavailable) {
+				t.Fatalf("publish err = %v", err)
+			}
+			if got := f.latest(rec); titles(got) != "good" || !got.Pending {
+				t.Fatalf("old slot not kept: %+v", got)
+			}
+			// Once the source is readable again, owner recovery publishes the same frozen copy.
+			fixed, err := replay.EncodeScene(replay.Scene{Version: replay.SceneVersion, Title: "second", Members: []replay.SceneMember{}, Comments: []replay.SceneComment{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.ExecContext(ctx, `UPDATE replay_scenes SET scene_json = ? WHERE run_id = ? AND seq = 2`, fixed, broken); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.svc.Recover(ctx, "owner", rec); err != nil {
+				t.Fatal(err)
+			}
+			if got := f.latest(rec); titles(got) != "first,second" || got.Pending {
+				t.Fatalf("after recovery = %+v", got)
+			}
+		})
+	}
+}
+
+func (f *archiveFixture) corrupt(run string) {
+	f.t.Helper()
+	if _, err := f.db.ExecContext(context.Background(), `UPDATE replay_scenes SET scene_json = '{' WHERE run_id = ?`, run); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+func (f *archiveFixture) status(copyID string) string {
+	f.t.Helper()
+	var s string
+	if err := f.db.QueryRowContext(context.Background(), `SELECT status FROM replay_archive_copies WHERE id = ?`, copyID).Scan(&s); err != nil {
+		f.t.Fatal(err)
+	}
+	return s
+}
+
+// Each exit copy stands alone, as the original per-exit file copy does (#1913).
+func TestReplayArchiveUnreadableCopiesDoNotBlockOtherExits(t *testing.T) {
+	f := newArchiveFixture(t)
+	ctx := context.Background()
+
+	t.Run("broken older, valid newer", func(t *testing.T) {
+		rec, older, newer := f.rec(), f.run(), f.run()
+		f.scene(older, "c1", "older")
+		olderCopy := f.exit(older, "c2", rec)
+		f.corrupt(older)
+		f.scene(newer, "c1", "newer")
+		newerCopy := f.exit(newer, "c2", rec)
+		if err := f.svc.Publish(ctx, rec); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.latest(rec); titles(got) != "newer" || got.Pending || got.CopyID != newerCopy {
+			t.Fatalf("latest = %+v", got)
+		}
+		if s := f.status(olderCopy); s != "superseded" {
+			t.Fatalf("older status = %s", s)
+		}
+	})
+
+	t.Run("valid older, broken newer", func(t *testing.T) {
+		rec, older, newer := f.rec(), f.run(), f.run()
+		f.scene(older, "c1", "older")
+		olderCopy := f.exit(older, "c2", rec)
+		f.scene(newer, "c1", "newer")
+		newerCopy := f.exit(newer, "c2", rec)
+		f.corrupt(newer)
+		if err := f.svc.Publish(ctx, rec); !errors.Is(err, replay.ErrArchiveSourceUnavailable) {
+			t.Fatalf("publish err = %v", err)
+		}
+		if got := f.latest(rec); titles(got) != "older" || !got.Pending || got.CopyID != olderCopy {
+			t.Fatalf("latest = %+v", got)
+		}
+		if s := f.status(newerCopy); s != "pending" {
+			t.Fatalf("newer status = %s", s)
+		}
+		// A later valid exit supersedes the still-unreadable copy.
+		later := f.run()
+		f.scene(later, "c1", "later")
+		f.exit(later, "c2", rec)
+		if err := f.svc.Recover(ctx, "owner", rec); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.latest(rec); titles(got) != "later" || got.Pending {
+			t.Fatalf("after later exit = %+v", got)
+		}
+		if s := f.status(newerCopy); s != "superseded" {
+			t.Fatalf("broken copy status = %s", s)
+		}
+	})
+}

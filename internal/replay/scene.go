@@ -157,6 +157,16 @@ func EncodeScene(s Scene) (string, error) {
 	return string(bytes.TrimSuffix(buf.Bytes(), []byte("\n"))), nil
 }
 
+// DecodeStoredScene is the single read/publish check for a persisted scene: corrupt or
+// unsupported encodings are source failures, never an empty or partial archive.
+func DecodeStoredScene(raw string) (Scene, error) {
+	s, err := DecodeJSON[Scene](raw)
+	if err != nil || s.Version != SceneVersion {
+		return Scene{}, ErrArchiveSourceUnavailable
+	}
+	return s, nil
+}
+
 func shown(n int) *int {
 	if n > hiddenNumberAbove {
 		return nil

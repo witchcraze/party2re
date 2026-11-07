@@ -255,8 +255,12 @@ freezes the current prefix as pending copy intent. Source and copy tables have n
 foreign key to run tables, so they outlive active-run disposal. Copy order per
 recipient is the staging insert order. The producer must therefore serialize a
 character's exits, as the existing run/character locks do. Publication runs after
-commit. It serializes on the recipient's slot row, verifies the frozen prefix and
-moves the slot only to a newer copy. The owner `Recover` operation and the
+commit. It serializes on the recipient's slot row and moves the slot only forward, to
+the newest pending copy whose frozen scenes all decode as a supported version.
+Older pending copies become superseded. A newer copy with a missing, corrupt or
+unsupported scene stays pending and is reported as a failure; it does not block
+other exits, matching the original's independent per-exit copy. The owner
+`Recover` operation and the
 read-only `GetLatest` both authenticate recipient ownership before storage access.
 Neither path reruns gameplay. Superseded copies are reachable only through the
 slot, never through `battle_replays` detail/history or recent reads. Scene reads

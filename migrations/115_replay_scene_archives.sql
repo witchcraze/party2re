@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS replay_scenes (
 ) ENGINE=InnoDB;
 
 -- Frozen exit-prefix copy intent; seq orders accepted exits per recipient across runs.
+-- status: pending, published (became the slot) or superseded (older than a published copy).
 CREATE TABLE IF NOT EXISTS replay_archive_copies (
     seq BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id VARCHAR(64) NOT NULL,

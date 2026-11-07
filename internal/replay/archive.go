@@ -17,7 +17,9 @@ type ArchiveRepository interface {
 	AppendScene(ctx context.Context, runID, commandID, actorID, encoded string, limit int64) (bool, error)
 	// StageCopy freezes the run's current scene prefix for recipientID; "" means an empty source.
 	StageCopy(ctx context.Context, runID, commandID, recipientID string) (string, error)
-	// PublishPending materializes the recipient's pending copies; the latest slot only moves forward.
+	// PublishPending moves the slot to the newest pending copy newer than it whose frozen scenes all
+	// pass DecodeStoredScene, superseding older pending copies. Newer unreadable copies stay pending
+	// and are reported as ErrArchiveSourceUnavailable after the committed progress.
 	PublishPending(ctx context.Context, recipientID string) error
 	FindLatest(ctx context.Context, recipientID string) (StoredArchive, error)
 }
@@ -99,9 +101,9 @@ func (s *ArchiveService) GetLatest(ctx context.Context, sessionID, characterID s
 	}
 	out := LatestArchive{CopyID: stored.CopyID, Pending: stored.Pending}
 	for _, raw := range stored.Scenes {
-		scene, err := DecodeJSON[Scene](raw)
-		if err != nil || scene.Version != SceneVersion {
-			return LatestArchive{}, ErrArchiveSourceUnavailable
+		scene, err := DecodeStoredScene(raw)
+		if err != nil {
+			return LatestArchive{}, err
 		}
 		out.Scenes = append(out.Scenes, scene)
 	}
