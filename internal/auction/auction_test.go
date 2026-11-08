@@ -425,6 +425,34 @@ func TestSendItem_DepotFull(t *testing.T) {
 	}
 }
 
+// auction.cgi:57-60 checks the recipient's full flag before gold and items alike.
+func TestSend_FullRecipientDepotRejectsGoldAndStackableItem(t *testing.T) {
+	ctx := context.Background()
+	svc, charRepo, _, invRepo, depotRepo := setupAuctionService(t)
+	charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 1000}
+	charRepo.chars["char-2"] = corecharacter.Character{ID: "char-2", Name: "Bob", Money: 500}
+
+	aliceInv, _ := coreinventory.New("char-1")
+	_ = aliceInv.Add(coreitem.Instance{ID: "herb", DefinitionID: "item-0", Quantity: 1})
+	_ = invRepo.Save(ctx, aliceInv)
+	bobDepot, _ := depot.NewDepot("char-2")
+	for i := 0; i < 5; i++ {
+		_ = bobDepot.AddItem(coreitem.Instance{ID: fmt.Sprintf("existing-%d", i), DefinitionID: fmt.Sprintf("item-%d", i), Quantity: 1})
+	}
+	_ = depotRepo.Save(ctx, bobDepot)
+
+	if _, err := svc.Send(ctx, auction.SendRequest{SenderCharacterID: "char-1", TargetCharacterID: "char-2", Gold: 300}); !errors.Is(err, auction.ErrDepotFull) {
+		t.Fatalf("gold to full depot: %v", err)
+	}
+	if _, err := svc.Send(ctx, auction.SendRequest{SenderCharacterID: "char-1", TargetCharacterID: "char-2", InstanceID: "herb"}); !errors.Is(err, auction.ErrDepotFull) {
+		t.Fatalf("stackable item to full depot: %v", err)
+	}
+	bob := depotRepo.depots["char-2"]
+	if charRepo.chars["char-1"].Money != 1000 || charRepo.chars["char-2"].Money != 500 || bob.Quantity("item-0") != 1 {
+		t.Fatal("rejected sends must not move assets")
+	}
+}
+
 func TestSendItem_HighJobLevel_ExceedsInitialCapacity(t *testing.T) {
 	ctx := context.Background()
 	svc, charRepo, equipRepo, invRepo, depotRepo := setupAuctionService(t)

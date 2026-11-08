@@ -133,9 +133,7 @@ func (s *Service) ExchangePrize(ctx context.Context, characterID string, costCoi
 			if err != nil {
 				return fmt.Errorf("failed to create prize item instance %s: %w", prize.ItemID, err)
 			}
-			if err := dep.AddItem(itemInst); err != nil {
-				return err
-			}
+			dep.Deliver(itemInst)
 		}
 
 		if err := s.depotRepo.Save(txCtx, dep); err != nil {

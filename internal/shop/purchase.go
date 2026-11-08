@@ -187,12 +187,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 		if err != nil {
 			return err
 		}
-		if err := dep.AddItem(inst); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		dep.Deliver(inst)
 
 		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
 			CharacterID: characterID,
@@ -311,14 +306,9 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 			return err
 		}
 
-		// Pre-validate & add all items to depot
+		// send_item never checks capacity (system.cgi:818-837).
 		for _, inst := range instances {
-			if err := dep.AddItem(inst); err != nil {
-				if errors.Is(err, depot.ErrDepotFull) {
-					return ErrDepotFull
-				}
-				return err
-			}
+			dep.Deliver(inst)
 		}
 
 		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{

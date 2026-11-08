@@ -74,8 +74,6 @@ func fleaMarketActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "FLEAMARKET_SERVER_MAX_LISTINGS", Message: "The market listing limit has been reached."}
 	case errors.Is(err, fleamarket.ErrItemNotInDepot):
 		return http.StatusBadRequest, ErrorDetail{Code: "FLEAMARKET_ITEM_NOT_IN_DEPOT", Message: "Item is not in your depot."}
-	case errors.Is(err, fleamarket.ErrDepotFull):
-		return http.StatusBadRequest, ErrorDetail{Code: "FLEAMARKET_DEPOT_FULL", Message: "Depot is full."}
 	default:
 		return 0, ErrorDetail{}
 	}

@@ -254,7 +254,7 @@
               }
             }
           },
-          "description": "Insufficient gold, unavailable costume item, active helper quest conflict, or depot full"
+          "description": "Insufficient gold, unavailable costume item, or active helper quest conflict"
         },
         "401": {
           "content": {

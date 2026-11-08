@@ -125,9 +125,7 @@ func (s *Service) Harvest(ctx context.Context, characterID string) (HarvestResul
 			if err != nil {
 				return fmt.Errorf("create harvested item instance: %w", err)
 			}
-			if err := dep.AddItem(inst); err != nil {
-				return fmt.Errorf("add item to depot: %w", err)
-			}
+			dep.Deliver(inst)
 		}
 
 		if err := s.depots.Save(txCtx, dep); err != nil {

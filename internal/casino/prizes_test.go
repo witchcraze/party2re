@@ -226,7 +226,7 @@ func TestExchangePrize_InsufficientCoins(t *testing.T) {
 	}
 }
 
-func TestExchangePrize_DepotFull(t *testing.T) {
+func TestExchangePrize_DepotFullDeliversOverCapacity(t *testing.T) {
 	repo := newMockPrizeCasinoRepo()
 	depotMock := newMockDepotRepo()
 
@@ -241,18 +241,17 @@ func TestExchangePrize_DepotFull(t *testing.T) {
 	// Pre-fill depot to capacity (5 items for lv 0)
 	d, _ := depot.NewDepot(charID)
 	for i := 0; i < 5; i++ {
-		_ = d.AddItem(item.Instance{ID: "dummy", DefinitionID: "weapon-31", Quantity: 1})
+		_ = d.AddItem(item.Instance{ID: fmt.Sprintf("dummy-%d", i), DefinitionID: "weapon-31", Quantity: 1})
 	}
 	depotMock.depots[charID] = d
 
-	_, err = svc.ExchangePrize(context.Background(), charID, 2000, 1)
-	if !errors.Is(err, depot.ErrDepotFull) {
-		t.Errorf("expected depot.ErrDepotFull, got %v", err)
+	// casino.cgi send_item appends prizes without a capacity check.
+	if _, err = svc.ExchangePrize(context.Background(), charID, 2000, 1); err != nil {
+		t.Fatalf("exchange into full depot: %v", err)
 	}
-	// Verify coins not deducted
 	acc, _ := repo.GetAccount(context.Background(), charID)
-	if acc.Coins != 5000 {
-		t.Errorf("expected coins preserved at 5000, got %d", acc.Coins)
+	if acc.Coins != 3000 || len(depotMock.depots[charID].Items) != 6 {
+		t.Errorf("want 2000 coins spent and a 6th slot, got coins=%d slots=%d", acc.Coins, len(depotMock.depots[charID].Items))
 	}
 }
 
@@ -319,7 +318,7 @@ func TestExchangePrize_BulkEquipmentDistinctIDs(t *testing.T) {
 	}
 }
 
-func TestExchangePrize_DepotCapacityRollbackForBulkEquipment(t *testing.T) {
+func TestExchangePrize_BulkEquipmentPastCapacity(t *testing.T) {
 	repo := newMockPrizeCasinoRepo()
 	depotMock := newMockDepotRepo()
 
@@ -338,22 +337,13 @@ func TestExchangePrize_DepotCapacityRollbackForBulkEquipment(t *testing.T) {
 	}
 	depotMock.depots[charID] = d
 
-	// Attempt to exchange 2 weapons (needs 2 slots, only 1 available)
-	_, err = svc.ExchangePrize(context.Background(), charID, 30000, 2)
-	if !errors.Is(err, depot.ErrDepotFull) {
-		t.Errorf("expected depot.ErrDepotFull, got %v", err)
+	// Two weapons need two slots with one free; both are delivered.
+	if _, err = svc.ExchangePrize(context.Background(), charID, 30000, 2); err != nil {
+		t.Fatalf("bulk exchange past capacity: %v", err)
 	}
-
-	// Verify coins preserved at 100,000
 	acc, _ := repo.GetAccount(context.Background(), charID)
-	if acc.Coins != 100000 {
-		t.Errorf("expected coins preserved at 100000, got %d", acc.Coins)
-	}
-
-	// Verify depot items preserved at 4
-	savedDepot := depotMock.depots[charID]
-	if len(savedDepot.Items) != 4 {
-		t.Errorf("expected depot items preserved at 4, got %d", len(savedDepot.Items))
+	if acc.Coins != 40000 || len(depotMock.depots[charID].Items) != 6 {
+		t.Errorf("want 60000 coins spent and 6 slots, got coins=%d slots=%d", acc.Coins, len(depotMock.depots[charID].Items))
 	}
 }
 

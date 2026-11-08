@@ -412,7 +412,7 @@ func TestCompleteQuest_MonsterTurnIn_IgnoresHomePets(t *testing.T) {
 	}
 }
 
-func TestCompleteQuest_DepotFullRollback(t *testing.T) {
+func TestCompleteQuest_DepotFullDeliversReward(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 
@@ -463,17 +463,13 @@ func TestCompleteQuest_DepotFullRollback(t *testing.T) {
 	}
 	_ = questRepo.Save(ctx, quest)
 
-	_, err := svc.CompleteQuest(ctx, "char-1", "q-depot-full", now)
-	if err == nil {
-		t.Fatal("expected error when depot is full, got nil")
+	// helper.cgi:115 sends the reward with send_item, which ignores capacity.
+	if _, err := svc.CompleteQuest(ctx, "char-1", "q-depot-full", now); err != nil {
+		t.Fatalf("complete with full depot: %v", err)
 	}
-
-	if !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, helperquest.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got: %v", err)
-	}
-
-	if !txProvider.rollbackCalled {
-		t.Error("expected transaction rollback to be triggered")
+	got, _ := depotRepo.FindByCharacterIDForUpdate(ctx, "char-1")
+	if len(got.Items) != cap+1 || got.Quantity("item-128") != 1 {
+		t.Fatalf("expected reward as slot %d, got %+v", cap+1, got.Items)
 	}
 }
 

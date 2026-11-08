@@ -757,7 +757,7 @@ func TestTradePrize_ToDepot(t *testing.T) {
 	}
 }
 
-func TestTradePrize_DepotFull(t *testing.T) {
+func TestTradePrize_DepotFullDeliversOverCapacity(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
@@ -794,10 +794,16 @@ func TestTradePrize_DepotFull(t *testing.T) {
 	}
 	_ = depotRepo.Save(ctx, dep)
 
-	// Trade should fail with ErrDepotFull
-	_, err := svc.TradePrize(ctx, "char-full-depot", "bm_prize_087")
-	if err != blackmarket.ErrDepotFull {
-		t.Errorf("expected ErrDepotFull, got %v", err)
+	// Prizes are appended past capacity (black_market.cgi:118, send_item).
+	if _, err := svc.TradePrize(ctx, "char-full-depot", "bm_prize_087"); err != nil {
+		t.Fatalf("trade into full depot: %v", err)
+	}
+	after, _ := depotRepo.FindByCharacterID(ctx, "char-full-depot")
+	if len(after.Items) != dep.Capacity+1 {
+		t.Errorf("expected %d slots, got %d", dep.Capacity+1, len(after.Items))
+	}
+	if bmRepo.points["char-full-depot"].RarePoints >= 10 {
+		t.Error("prize points must be spent")
 	}
 }
 

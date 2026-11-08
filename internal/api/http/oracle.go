@@ -143,8 +143,7 @@ func (h *Handler) handleOracleBuyCostume(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			if errors.Is(err, store.ErrCostumeNotAvailable) ||
 				errors.Is(err, store.ErrInsufficientFunds) ||
-				errors.Is(err, store.ErrItemUnavailableInHelperQuest) ||
-				errors.Is(err, depot.ErrDepotFull) {
+				errors.Is(err, store.ErrItemUnavailableInHelperQuest) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}

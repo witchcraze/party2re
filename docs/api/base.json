@@ -16460,7 +16460,7 @@
       "SceneEnterResult": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis: alchemy_claim carries the delivery, and alchemy_claim_error reports a full Depot, which keeps the entry and the synthesis until re-entry.",
+        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis to the Depot regardless of its capacity; alchemy_claim carries the delivery.",
         "properties": {
           "destination": {
             "type": "string"
@@ -16488,9 +16488,6 @@
           },
           "alchemy_claim": {
             "$ref": "#/components/schemas/AlchemyClaimResult"
-          },
-          "alchemy_claim_error": {
-            "$ref": "#/components/schemas/ActionErrorDetail"
           }
         },
         "required": [

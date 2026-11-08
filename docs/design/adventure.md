@@ -507,8 +507,8 @@ reload. Missing native context or capacity policy rejects the whole entry;
 native storage and callback implementation prerequisites remain cutover gates.
 Persist nested effects, histories, debit, item transfer and command receipt in
 one transaction. A committed retry observes its prior draw/result; GET cannot
-execute a purchase, mark a stored tool used or return a book. #1139 owns the
-unresolved capacity-unchecked return policy, and #1197 owns consumed instances.
+execute a purchase, mark a stored tool used or return a book. Book return delivers past
+capacity and exchange swaps in place ([delivery capacity](depot.md#delivery-capacity-by-caller)); #1197 owns consumed instances.
 
 [`NormalRunService.WithJobAssets`](../../internal/adventure/job_assets.go) supplies
 the requesting command owner's locked wallet and durable single-hand facts to
@@ -696,7 +696,7 @@ Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons
 - Post-battle settlement delegates to `battle.Service.ApplyPostBattleResult` (`PostBattleSettler`), enforcing atomic single-transaction persistence obeying the global lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`):
   - Obtained treasure items are added to the character's inventory (`coreinventory.Inventory`).
   - When the inventory is full, items automatically route to the character's depot (`_npc_action.cgi:60-80`).
-  - If the depot is also full, drops are tracked in `LostDrops` without silent phantom delivery or data loss.
+  - If the Depot is already full, the item is lost and reported in `LostDrops`, even when a matching stack exists ([delivery capacity](depot.md#delivery-capacity-by-caller)).
   - Surviving HP and MP are persisted to `characters` in MariaDB. If defeated, fallen characters survive with 1 HP.
   - **Exit Fatigue (`CalculateExitFatigue`, `_battle.cgi:1187-1188, 1216`)**: `CrawlSession.Round` tracks the current/exit floor (`$round`, starting at `0` on room creation, updated on floor entry `1..11` or travel floor transitions, distinct from `TotalTurns`, `FloorsCleared`, and `len(FloorResults)`). At crawl conclusion, each participating character gains `add_tired = round * 3 + 1` fatigue (halved with integer truncation `int(add_tired * 0.5)` when `mode == "calm"`), with no upper bound.
   - Standard job progression, EXP with job mastery triggers, gold, and crystal rewards are applied atomically.

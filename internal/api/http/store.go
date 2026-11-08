@@ -237,10 +237,6 @@ func (h *Handler) handleWithdrawListing(w http.ResponseWriter, r *http.Request) 
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
-			if errors.Is(err, store.ErrDepotFull) {
-				writeError(w, http.StatusConflict, err)
-				return
-			}
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -265,10 +261,6 @@ func (h *Handler) handleBuyStoreItem(w http.ResponseWriter, r *http.Request) {
 			}
 			if errors.Is(err, store.ErrListingNotFound) {
 				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, store.ErrDepotFull) {
-				writeError(w, http.StatusConflict, err)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)
@@ -296,10 +288,6 @@ func (h *Handler) handleTradeStoreItem(w http.ResponseWriter, r *http.Request) {
 			}
 			if errors.Is(err, store.ErrListingNotFound) {
 				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, store.ErrDepotFull) {
-				writeError(w, http.StatusConflict, err)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)

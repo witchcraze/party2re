@@ -178,9 +178,6 @@ func TestHandlePostEventPlazaMerchantPurchase(t *testing.T) {
 			if itemID == "helper_item" {
 				return eventplaza.BazaarPurchaseResult{}, eventplaza.ErrItemUnavailable
 			}
-			if itemID == "depot_full_item" {
-				return eventplaza.BazaarPurchaseResult{}, eventplaza.ErrDepotFull
-			}
 			return eventplaza.BazaarPurchaseResult{
 				CharacterID:         characterID,
 				Quantity:            quantity,
@@ -245,21 +242,6 @@ func TestHandlePostEventPlazaMerchantPurchase(t *testing.T) {
 		t.Errorf("expected status 409, got %d", recHelper.Code)
 	}
 
-	// 4. Depot full -> 409
-	depotBody, _ := json.Marshal(map[string]any{
-		"character_id": "char-1",
-		"item_id":      "depot_full_item",
-		"quantity":     1,
-	})
-	reqDepot := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(depotBody))
-	reqDepot.Header.Set("Content-Type", "application/json")
-	reqDepot.Header.Set("Authorization", "Bearer valid-session")
-	recDepot := httptest.NewRecorder()
-	handler.Router().ServeHTTP(recDepot, reqDepot)
-
-	if recDepot.Code != http.StatusConflict {
-		t.Errorf("expected status 409, got %d", recDepot.Code)
-	}
 }
 
 func TestHandlePostEventPlazaPresence(t *testing.T) {

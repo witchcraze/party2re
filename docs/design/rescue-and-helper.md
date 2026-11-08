@@ -38,7 +38,7 @@ Normal rewards have **10 slots**: `item-128` ×3, `item-130`–`item-133` ×1 ea
 - **Turn-in Sourcing & Reward Delivery**:
   - **Equipment & Items (Kinds 1–3)**: Required turn-in items are deducted from the player's **Depot** (`check_depot`, `character_depots`, `depot_items`). Character bag inventory is not touched.
   - **Companion Monsters (Kind 4)**: Required monsters are deducted from the **Monster Ranch** box (`check_farm`, `character_monsters` where `location = 'box'`).
-  - **Reward Delivery**: Rewards are delivered directly into the player's **Depot** (`send_item`). If the reward cannot be stored in the depot (for example, when a new slot is required beyond capacity), the operation aborts with `ErrDepotFull`, rolling back the entire transaction with zero asset loss.
+  - **Reward Delivery**: Rewards are delivered directly into the player's **Depot** (`send_item`), past capacity if needed ([delivery capacity](depot.md#delivery-capacity-by-caller)).
   - **Completion Effects**: Increments `characters.help_count`, awards **+100 GP** to the guild (Guild Quests only), updates quest completion metadata, and generates a fresh replacement quest.
 - **Expired Target Completion**: Legacy `party2/lib/helper.cgi:92–145` (`kaiketsu`) validates the target's materials and conditions before checking deadlines. A player with sufficient materials and required guild membership can therefore complete a target quest even after its expiration.
 - **Expired Non-Target Exchange**: When completing a target quest, any expired **non-target** requests currently on the board are exchanged one-for-one for newly generated requests.

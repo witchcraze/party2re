@@ -33,7 +33,6 @@ var (
 	ErrItemNotFound       = errors.New("bazaar item not found in catalog")
 	ErrItemTierLocked     = errors.New("bazaar item requires higher town population merchant tier")
 	ErrItemUnavailable    = errors.New("item is currently unavailable (active helper quest)")
-	ErrDepotFull          = errors.New("depot storage is full")
 	ErrDepotNotConfigured = errors.New("depot repository not configured")
 	ErrInvalidQuantity    = errors.New("invalid purchase quantity")
 	ErrPriceOverflow      = economy.ErrGoldOverflow

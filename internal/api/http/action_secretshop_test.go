@@ -195,11 +195,6 @@ func TestSecretShopGatewayValidationAndRejectionRecovery(t *testing.T) {
 		{"access", `{"item_id":"secret_item_herbal_root","quantity":1}`, "SECRETSHOP_ACCESS_DENIED", 403, func(f *secretShopGatewayFixture) { f.char.JobLevel = 6 }},
 		{"funds", `{"item_id":"secret_item_herbal_root","quantity":1}`, "SECRETSHOP_INSUFFICIENT_FUNDS", 400, func(f *secretShopGatewayFixture) { f.char.Money = 749 }},
 		{"helper", `{"item_id":"secret_item_herbal_root","quantity":1}`, "SECRETSHOP_ITEM_UNAVAILABLE", 409, func(f *secretShopGatewayFixture) { f.active = []string{"item-010"} }},
-		{"full depot", `{"item_id":"secret_item_herbal_root","quantity":2}`, "SECRETSHOP_DEPOT_FULL", 400, func(f *secretShopGatewayFixture) {
-			for i := 0; i < 40; i++ {
-				f.dep.Items = append(f.dep.Items, item.Instance{ID: fmt.Sprint(i), DefinitionID: "weapon-01", Quantity: 1})
-			}
-		}},
 	} {
 		for _, failRefresh := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/%t", tc.name, failRefresh), func(t *testing.T) {

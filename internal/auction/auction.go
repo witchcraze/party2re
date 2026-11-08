@@ -167,6 +167,14 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 			if req.Gold <= 0 {
 				return ErrInvalidSendAmount
 			}
+			// okuru rejects a full recipient Depot before gold too (auction.cgi:57-60).
+			receiverDepot, err := depot.FindOrCreate(txCtx, s.depotRepo, *receiverChar)
+			if err != nil {
+				return err
+			}
+			if receiverDepot.IsFull() {
+				return ErrDepotFull
+			}
 			if err := senderChar.DeductMoney(req.Gold); err != nil {
 				return ErrInsufficientMoney
 			}
@@ -242,14 +250,8 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 			return ErrTabooItem
 		}
 
-		hasSlot := false
-		for _, existing := range receiverDepot.Items {
-			if existing.DefinitionID == inst.DefinitionID {
-				hasSlot = true
-				break
-			}
-		}
-		if !hasSlot && len(receiverDepot.Items) >= receiverDepot.Capacity {
+		// An existing stack does not bypass the full check (auction.cgi:57-60).
+		if receiverDepot.IsFull() {
 			return ErrDepotFull
 		}
 
@@ -280,12 +282,7 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 			Quantity:         1,
 			EnhancementLevel: inst.EnhancementLevel,
 		}
-		if err := receiverDepot.AddItem(transferredInst); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		receiverDepot.Deliver(transferredInst)
 		if err := s.depotRepo.Save(txCtx, receiverDepot); err != nil {
 			return err
 		}

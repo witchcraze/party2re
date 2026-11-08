@@ -511,7 +511,7 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 		t.Errorf("expected ErrInsufficientGold, got %v", err)
 	}
 
-	// 6. Depot Full -> ErrDepotFull
+	// 6. Full depot still receives the purchase (event.cgi:94, send_item)
 	char.Money = 50000
 	_ = charRepo.Update(ctx, char)
 	// Fill depot to max capacity for char's job level
@@ -523,9 +523,11 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 	}
 	_ = depotRepo.Save(ctx, fullDepot)
 
-	_, err = svc.PurchaseBazaarItem(ctx, charID, "item-082", 1)
-	if !errors.Is(err, ErrDepotFull) {
-		t.Errorf("expected ErrDepotFull, got %v", err)
+	if _, err = svc.PurchaseBazaarItem(ctx, charID, "item-082", 1); err != nil {
+		t.Errorf("purchase into full depot: %v", err)
+	}
+	if got, _ := depotRepo.FindByCharacterIDForUpdate(ctx, charID); len(got.Items) != fullDepot.Capacity+1 {
+		t.Errorf("expected %d slots, got %d", fullDepot.Capacity+1, len(got.Items))
 	}
 
 	// 7. Collection error propagation (inventory delivery)

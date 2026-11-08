@@ -15,9 +15,9 @@
 | `せいとん` | `gem_store.cgi:266–281` / `seiton` | `GemStoreService.SortGemBox` | `gemstore_sort` | 現行Goはカタログ順で宝珠箱を整頓・永続化。旧実装は保存kind・番号の数値順 |
 | `かう` | `gem_store.cgi:129–171` / `kau` | `GemStoreService.BuyGem` | `gemstore_buy`、候補は scene の `catalog` | レベル要件検証 $\rightarrow$ 価格計算（定価 $\times$ 5） $\rightarrow$ 所持金減算 $\rightarrow$ 宝珠箱 (`GemBox`) 追加（満杯時拒否） |
 | `うる` | `gem_store.cgi:177–214` / `uru` | `GemStoreService.SellGem` | `gemstore_sell`、候補は scene の `gem_box` | 宝珠箱から1個を消費し定価の半額を加算。現行Goの最低1Gは旧実装にない差分 |
-| `おくる` | `gem_store.cgi:219–261` / `okuru` | `GemStoreService.SendGem` | `gemstore_send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与（満杯時拒否）。旧実装の受信者は名前指定 |
-| `かこう` | `gem_store.cgi:286–332` / `kako` | `GemStoreService.SynthesizeGem` | `gemstore_synthesize`、候補は scene の `recipes` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
-| `かんてい` | `gem_store.cgi:337–398` / `kantei` | `GemStoreService.AppraiseItem` | `gemstore_appraise`、候補は depot scene | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
+| `おくる` | `gem_store.cgi:219–261` / `okuru` | `GemStoreService.SendGem` | `gemstore_send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与。受信者の所持数が**送信者**の転職回数から求めた容量以上なら拒否（旧 `get_you_gem_box_c`）。旧実装の受信者は名前指定 |
+| `かこう` | `gem_store.cgi:286–332` / `kako` | `GemStoreService.SynthesizeGem` | `gemstore_synthesize`、候補は scene の `recipes` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯でも容量を超えて追加）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
+| `かんてい` | `gem_store.cgi:337–398` / `kantei` | `GemStoreService.AppraiseItem` | `gemstore_appraise`、候補は depot scene | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯でも容量を超えて追加）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
 | `はなす`, NPC `しらべる` | `gem_store.cgi:89–95` / `@words`, `system.cgi` 共通 | 共通 `npc_talk` / `npc_inspect` | なし | `@ジェマ` の会話を1行無作為に選んで施設ログへ書き、行動ウェイトを始める。しらべるは既定文を本人にだけ返す。旧5行目（販売中の宝石名入り）は未接続のため省く |
 
 ### Gatewayと参照・未移行操作
@@ -26,7 +26,7 @@
 
 scene は所有者の宝珠箱、操作者の転職回数で購入できる宝石、全レシピ、会話文を返す。いずれも固定カタログか容量上限のある一覧なのでページングしない。`catalog` の `price` は定価で、購入時はその5倍を支払う。観測は購入・配送・合成・鑑定を行わない。旧カタログGETは任意の転職回数を指定できたが、scene は旧店頭と同じく操作者の段階だけを表示する。
 
-旧dispatchは `party2/lib/gem_store.cgi:100–106`。対象未指定時の候補表示は scene と明示入力で代替する。旧名指定はGoのID指定に置き換える。最低売却価格、数値順とカタログ順の一致、各コマンドの施設ログ書き込み、presenceの再現は [#947](https://github.com/witchcraze/party2re/issues/947) の残存照合事項とし、transport移行を完全なゲーム仕様互換の根拠にしない。購入条件は #1135、レシピ解決は #1134、満杯時配送・受信上限は #1139 が扱う。
+旧dispatchは `party2/lib/gem_store.cgi:100–106`。対象未指定時の候補表示は scene と明示入力で代替する。旧名指定はGoのID指定に置き換える。最低売却価格、数値順とカタログ順の一致、各コマンドの施設ログ書き込み、presenceの再現は [#947](https://github.com/witchcraze/party2re/issues/947) の残存照合事項とし、transport移行を完全なゲーム仕様互換の根拠にしない。購入条件は #1135、レシピ解決は #1134 が扱う。満杯時の配送と受信上限は[配送容量](depot.md#delivery-capacity-by-caller)に従う。
 
 ---
 
@@ -47,6 +47,8 @@ scene は所有者の宝珠箱、操作者の転職回数で購入できる宝�
 - **初期容量 (未転職 / `job_lv <= 0`)**: 5 スロット
 - **転職進行時 (`1 <= job_lv < 20`)**: `job_lv * 5 + 5` スロット
 - **最大容量 (`job_lv >= 20`)**: 100 スロット
+
+容量で拒否するのは購入（自分の宝珠箱）と配送（受信者の所持数を送信者の容量と比較）だけ。鑑定・合成は旧 `send_gem` と同じく容量を確認しないので、宝珠箱は容量を超えうる（[配送容量](depot.md#delivery-capacity-by-caller)）。
 
 ### 3.3 合成レシピ (`Recipe`)
 - `ID`: レシピ識別子 (e.g. `recipe_atk_2`, `recipe_combo_sky`, `recipe_awakening_sky`)

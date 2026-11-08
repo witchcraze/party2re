@@ -109,9 +109,8 @@ contract preserves the verified delivery and winner counts:
   player-to-player sender's Depot-full rejection.
 - Medals are `item-023` delivered to each recipient's Depot, not direct counter
   increments. Merge an existing eligible stack, or append a new slot even when
-  full or already over capacity. This is a contest-award policy; the broader
-  caller-specific capacity decision remains
-  [#1139](https://github.com/witchcraze/party2re/issues/1139).
+  full or already over capacity. This matches the shared
+  [delivery capacity rule](depot.md#delivery-capacity-by-caller) (`Depot.Deliver`).
 - Settlement must durably create all awards and commit the round transition
   atomically. Storage errors, retry and concurrent settlement/receipt must not
   lose or duplicate awards. A separate delivery queue is not implied.

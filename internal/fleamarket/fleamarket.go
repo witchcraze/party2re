@@ -39,7 +39,6 @@ var (
 	ErrServerMaxListingsReached = errors.New("server-wide maximum active listings limit (120) reached")
 	ErrInvalidPrice             = errors.New("listing price must be between 1 and 999999 gold")
 	ErrItemNotInDepot           = errors.New("item not found in depot storage")
-	ErrDepotFull                = errors.New("depot storage is full")
 	ErrInvalidInput             = errors.New("invalid flea market input parameters")
 )
 
@@ -371,12 +370,7 @@ func (s *Service) PurchaseListing(
 		if err != nil {
 			return err
 		}
-		if err := buyerDepot.AddItem(itemInst); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		buyerDepot.Deliver(itemInst)
 
 		// 7. Update listing status
 		listing.Status = StatusSold
@@ -462,12 +456,7 @@ func (s *Service) CancelListing(
 		if err != nil {
 			return err
 		}
-		if err := sellerDepot.AddItem(itemInst); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		sellerDepot.Deliver(itemInst)
 		if err := s.depotRepo.Save(txCtx, sellerDepot); err != nil {
 			return err
 		}

@@ -231,7 +231,7 @@ func TestAlchemyGatewayEntryRollsBackWhenClaimFails(t *testing.T) {
 	}
 }
 
-func TestAlchemyGatewayEntryFullDepotKeepsSynthesis(t *testing.T) {
+func TestAlchemyGatewayEntryFullDepotDeliversOverCapacity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	f := newAlchemyDB(t, ctx)
@@ -256,16 +256,17 @@ func TestAlchemyGatewayEntryFullDepotKeepsSynthesis(t *testing.T) {
 	if err := f.depots.Save(ctx, dep); err != nil {
 		t.Fatal(err)
 	}
+	// alchemy.cgi:183-201 finishes through send_item, which ignores capacity.
 	status, got, result := f.enter(t, ctx)
-	if status != 200 || result.AlchemyClaim != nil || result.AlchemyClaimError == nil || result.AlchemyClaimError.Code != "ALCHEMY_DEPOT_FULL" || f.state(t, ctx).State != alchemy.StateCompleted {
+	if status != 200 || result.AlchemyClaim == nil || f.quantity(t, ctx, f.product) != 1 {
 		t.Fatalf("full depot: %d %s", status, got)
 	}
-	dep.Items = dep.Items[1:]
-	if err := f.depots.Save(ctx, dep); err != nil {
+	after, err := f.depots.FindByCharacterID(ctx, f.actor.ID)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if status, got, result := f.enter(t, ctx); status != 200 || result.AlchemyClaim == nil || f.quantity(t, ctx, f.product) != 1 {
-		t.Fatalf("re-entry: %d %s", status, got)
+	if len(after.Items) <= dep.Capacity {
+		t.Fatalf("product must be stored above capacity %d, got %d slots", dep.Capacity, len(after.Items))
 	}
 }
 

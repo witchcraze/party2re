@@ -10,7 +10,6 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/depot"
 )
 
 const (
@@ -27,7 +26,6 @@ var (
 	ErrRoundNotFound    = errors.New("takarakuji round not found")
 	ErrAlreadyDrawn     = errors.New("takarakuji round already drawn")
 	ErrNotReadyToDraw   = errors.New("takarakuji round not yet ready to draw")
-	ErrDepotFull        = depot.ErrDepotFull
 )
 
 // Legacy prize candidates from party2/lib/takarakuzi.cgi:23-53

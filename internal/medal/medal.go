@@ -204,9 +204,7 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 		if err != nil {
 			return err
 		}
-		if err := dep.AddItem(inst); err != nil {
-			return err
-		}
+		dep.Deliver(inst)
 
 		if err := char.DeductSmallMedals(targetReward.Cost); err != nil {
 			return err

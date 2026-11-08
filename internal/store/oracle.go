@@ -318,7 +318,7 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 			return err
 		}
 
-		deliveryRes, err := depot.DeliverRewardItemInstance(txCtx, s.invRepo, s.depotRepo, char, inst, depot.PolicyAbortOnDepotFull)
+		deliveryRes, err := depot.DeliverRewardItemInstance(txCtx, s.invRepo, s.depotRepo, char, inst, depot.PolicyDeliverOverCapacity)
 		if err != nil {
 			return err
 		}

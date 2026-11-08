@@ -22,7 +22,6 @@ var (
 	ErrInvalidShopType       = errors.New("invalid shop type")
 	ErrItemUnavailable       = errors.New("item is currently unavailable (active helper quest)")
 	ErrEmptyPurchaseList     = errors.New("purchase list cannot be empty")
-	ErrDepotFull             = errors.New("depot is full")
 	ErrDepotNotConfigured    = errors.New("depot repository is not configured")
 	ErrSecretShopRequirement = errors.New("insufficient job level to access secret shop")
 )

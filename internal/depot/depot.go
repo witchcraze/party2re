@@ -163,11 +163,24 @@ func (d *Depot) AddItem(instance item.Instance, stackable ...bool) error {
 	if isStack && d.mergeStack(instance) {
 		return nil
 	}
-	if len(d.Items) >= d.Capacity {
+	if d.IsFull() {
 		return ErrDepotFull
 	}
 	d.Items = append(d.Items, instance)
 	return nil
+}
+
+// IsFull reports whether the slot count has reached capacity (get_depot_c is_full).
+func (d *Depot) IsFull() bool {
+	return len(d.Items) >= d.Capacity
+}
+
+// Deliver is the NPC delivery path (system.cgi send_item): it never checks
+// capacity, merging an eligible stack or appending a slot even at/above capacity.
+func (d *Depot) Deliver(instance item.Instance) {
+	if !d.isStackable(instance.DefinitionID) || !d.mergeStack(instance) {
+		d.AppendDelivery(instance)
+	}
 }
 
 // AppendDelivery preserves an unconditional delivery as a separate instance,

@@ -17,7 +17,7 @@ The Lottery and Raffle Feature Module (`internal/lottery`) implements the Party2
 - **Item Delivery Routing**:
   - If the character's consumable item hand slot is empty: delivered directly to the character's Inventory (`transferred_to_depot = false`).
   - If the character's consumable item hand slot is occupied: automatically forwarded to Depot storage (`character_depots` / `depot_items`) (`transferred_to_depot = true`).
-  - If Depot storage is full: returns `depot.ErrDepotFull` (HTTP 409 Conflict), rolling back ticket consumption to protect player assets.
+  - A full Depot still receives the prize, past capacity if needed (`lot.cgi:134`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
 - **Automatic Mode Selection & Transactional Boundary**:
   - In parity with legacy Party2 (`party2/lib/lot.cgi`), players execute a single raffle draw action without selecting a tier.
   - Mode selection and ticket consumption occur atomically inside the transaction under Character pessimistic locking (Rank 2):
@@ -151,7 +151,7 @@ When a drawing occurs (via background scheduler `takarakuji_draw` or scheduled h
    - Deliveries to real winners are sorted in ascending order of `winnerID` to guarantee deterministic Rank 5 lock ordering and prevent deadlocks.
    - Prize items are instantiated (`coreitem.NewInstance`) and delivered directly into the character's Depot (`character_depots` / `depot_items`).
    - Delivered prizes are recorded into the winner's collection (`CollectionRecorder.RecordItemDiscovered`) categorized by their equipment slot (`weapon` for weapons such as `weapon-40`, `armor` for armors such as `armor-40`, and `item` for standard consumables), ensuring equipment prizes do not count toward item collection completions.
-   - If any winner's Depot is at capacity (`depot.ErrDepotFull`), the entire drawing transaction rolls back immediately: no tickets are marked won, the round remains unsettled, and rare items are never dropped or silently lost.
+   - A winner's full Depot still receives the prizes, past capacity if needed (`takarakuzi.cgi:237`; [delivery capacity](depot.md#delivery-capacity-by-caller)). Any storage failure rolls back the whole drawing.
 5. **Round Renewal**:
    - Upon successful delivery, the completed round is marked as drawn (`is_drawn = TRUE`, `drawn_at = now`) and tickets are settled with winning ranks and item IDs.
    - The next round is immediately created with newly randomized prizes and the next 10-day draw date.

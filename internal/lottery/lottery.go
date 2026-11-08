@@ -302,9 +302,7 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string) (RaffleRes
 				}
 				transferredToDepot = false
 			} else {
-				if err := dep.AddItem(inst); err != nil {
-					return err
-				}
+				dep.Deliver(inst)
 				if err := s.depotRepo.Save(txCtx, dep); err != nil {
 					return err
 				}

@@ -3,6 +3,7 @@ package depot
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -755,6 +756,42 @@ func TestSendMoneyAndItem(t *testing.T) {
 	recDep, _ := depotRepo.FindByCharacterID(ctx, recipient.ID)
 	if len(recDep.Items) != 1 || recDep.Items[0].DefinitionID != "wea-01" {
 		t.Errorf("expected sword in recipient depot, got %#v", recDep.Items)
+	}
+}
+
+// depot.cgi:349-353 rejects a full recipient before gold and items alike.
+func TestSendToFullRecipientDepotIsRejected(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := newMemoryDepotRepo()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+	sender, _ := corecharacter.New("Sender")
+	sender.Money = 1000
+	charRepo.characters[sender.ID] = sender
+	recipient, _ := corecharacter.New("Recip")
+	charRepo.characters[recipient.ID] = recipient
+	inv, _ := coreinventory.New(sender.ID)
+	herb := item.Instance{ID: "herb", DefinitionID: "item-001", Quantity: 1}
+	_ = inv.Add(herb)
+	invRepo.inventories[sender.ID] = inv
+	full, _ := NewDepot(recipient.ID)
+	for i := 0; i < full.Capacity; i++ {
+		full.Items = append(full.Items, item.Instance{ID: "row-" + strconv.Itoa(i), DefinitionID: "item-00" + strconv.Itoa(i+1), Quantity: 1})
+	}
+	_ = depotRepo.Save(ctx, full)
+	service, _ := NewService(depotRepo, charRepo, invRepo, WithTransactionProvider(&memoryTxProvider{}))
+
+	if _, err := service.SendMoney(ctx, sender.ID, recipient.ID, 100); !errors.Is(err, ErrRecipientDepotFull) {
+		t.Fatalf("gold to full depot: %v", err)
+	}
+	// item-001 already has a stack, which does not bypass the check.
+	if _, err := service.SendItem(ctx, sender.ID, recipient.ID, herb.ID); !errors.Is(err, ErrRecipientDepotFull) {
+		t.Fatalf("stackable item to full depot: %v", err)
+	}
+	upSender, _ := charRepo.FindByID(ctx, sender.ID)
+	recDep, _ := depotRepo.FindByCharacterID(ctx, recipient.ID)
+	if upSender.Money != 1000 || recDep.Quantity("item-001") != 1 {
+		t.Fatal("rejected sends must not move assets")
 	}
 }
 

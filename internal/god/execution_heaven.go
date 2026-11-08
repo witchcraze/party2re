@@ -230,9 +230,7 @@ func (s *Service) executeHeavenWish(
 		if err != nil {
 			return err
 		}
-		if err := dep.AddItem(inst); err != nil {
-			return err
-		}
+		dep.Deliver(inst)
 		if err := s.depots.Save(ctx, dep); err != nil {
 			return err
 		}
@@ -262,9 +260,7 @@ func (s *Service) executeHeavenWish(
 		if err != nil {
 			return err
 		}
-		if err := dep.AddItem(inst); err != nil {
-			return err
-		}
+		dep.Deliver(inst)
 		if err := s.depots.Save(ctx, dep); err != nil {
 			return err
 		}

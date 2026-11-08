@@ -14,7 +14,6 @@ import (
 	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -183,15 +182,13 @@ func enterScene(t *testing.T, router http.Handler, destination string) (int, map
 
 func TestAlchemyEntryDelivery(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		claimErr  error
-		claimed   bool
-		errorCode string
+		name     string
+		claimErr error
+		claimed  bool
 	}{
 		{name: "completed", claimed: true},
 		{name: "nothing started", claimErr: alchemy.ErrNoActiveSynthesis},
 		{name: "unfinished", claimErr: fmt.Errorf("wrapped: %w", alchemy.ErrSynthesisNotReady)},
-		{name: "full depot keeps entry", claimErr: fmt.Errorf("wrapped: %w", depot.ErrDepotFull), errorCode: "ALCHEMY_DEPOT_FULL"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			service := alchemyTestService(0)
@@ -210,9 +207,6 @@ func TestAlchemyEntryDelivery(t *testing.T) {
 			}
 			if tc.claimed && result.AlchemyClaim.Message != "delivered" {
 				t.Fatalf("lost claim facts: %s", got["result"])
-			}
-			if (result.AlchemyClaimError == nil) != (tc.errorCode == "") || (tc.errorCode != "" && result.AlchemyClaimError.Code != tc.errorCode) {
-				t.Fatalf("claim rejection: %s", got["result"])
 			}
 			assertGatewayContext(t, got)
 		})

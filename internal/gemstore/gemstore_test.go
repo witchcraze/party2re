@@ -664,7 +664,7 @@ func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
 		t.Errorf("expected depot sword to remain unconsumed")
 	}
 
-	// 3. Test GemBoxFull: fill Gem Box to max capacity
+	// 3. A full Gem Box still receives the appraised gem (gem_store.cgi:374 send_gem)
 	curBox, _ := svc.GetGemBox(ctx, char.ID)
 	// Add dummy items until box is full
 	for len(curBox.Items) < curBox.Capacity {
@@ -673,19 +673,16 @@ func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
 	}
 	_ = boxRepo.Save(ctx, curBox)
 
-	// Attempt appraisal when Gem Box is full -> returns ErrGemBoxFull
-	_, err = svc.AppraiseItem(ctx, char.ID, "depot_orb_stack")
-	if !errors.Is(err, gemstore.ErrGemBoxFull) {
-		t.Errorf("expected ErrGemBoxFull, got %v", err)
+	if _, err = svc.AppraiseItem(ctx, char.ID, "depot_orb_stack"); err != nil {
+		t.Fatalf("appraisal into full gem box: %v", err)
 	}
-
-	// Verify depot quantity remains 2 (not consumed)
+	if overBox, _ := svc.GetGemBox(ctx, char.ID); len(overBox.Items) != curBox.Capacity+1 {
+		t.Errorf("gem box = %d gems, want %d", len(overBox.Items), curBox.Capacity+1)
+	}
 	depotAfterFull, _ := depotRepo.FindByCharacterID(ctx, char.ID)
 	for _, it := range depotAfterFull.Items {
-		if it.ID == "depot_orb_stack" {
-			if it.Quantity != 2 {
-				t.Errorf("expected quantity 2 to remain unchanged on ErrGemBoxFull, got %d", it.Quantity)
-			}
+		if it.ID == "depot_orb_stack" && it.Quantity != 1 {
+			t.Errorf("expected one orb consumed, got quantity %d", it.Quantity)
 		}
 	}
 

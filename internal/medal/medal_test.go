@@ -161,7 +161,7 @@ func TestMedalService(t *testing.T) {
 		}
 	})
 
-	t.Run("depot full error", func(t *testing.T) {
+	t.Run("full depot still receives the reward", func(t *testing.T) {
 		char := corecharacter.Character{ID: "char-1", SmallMedals: 10}
 		d := depot.Depot{
 			CharacterID: "char-1",
@@ -183,9 +183,10 @@ func TestMedalService(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, _, err = svc.Claim(context.Background(), "char-1", "armor-32")
-		if !errors.Is(err, depot.ErrDepotFull) {
-			t.Errorf("expected ErrDepotFull, got %v", err)
+		// medal.cgi:80 sends the prize with send_item, which ignores capacity.
+		_, got, err := svc.Claim(context.Background(), "char-1", "armor-32")
+		if err != nil || len(got.Items) != 6 || got.Quantity("armor-32") != 1 {
+			t.Errorf("want armor-32 as a 6th slot, got %+v, %v", got.Items, err)
 		}
 	})
 

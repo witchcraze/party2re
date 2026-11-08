@@ -35,7 +35,6 @@ var (
 	ErrStoreExpired         = errors.New("store has expired")
 	ErrCannotBuyOwnItem     = errors.New("cannot purchase from your own store")
 	ErrCannotTradeOwnItem   = errors.New("cannot trade with your own store")
-	ErrDepotFull            = errors.New("depot is full")
 	ErrListingNotFound      = errors.New("listing not found")
 	ErrTradeItemMissing     = errors.New("required barter item not found in depot")
 	ErrMaxInteriorsReached  = errors.New("maximum interiors reached")

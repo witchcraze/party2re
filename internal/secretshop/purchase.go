@@ -155,12 +155,7 @@ func (s *Service) PurchaseItem(
 		if err != nil {
 			return err
 		}
-		if err := dep.AddItem(inst); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		dep.Deliver(inst)
 
 		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
 			CharacterID: characterID,

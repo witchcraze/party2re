@@ -29,21 +29,60 @@ Where:
 - Absolute minimum capacity: 5 slots.
 - Absolute maximum capacity: 500 slots.
 
-Current `Depot.AddItem` rejects a new slot at or above capacity, while an
-eligible existing stack may still accept items.
-[Registration referral delivery](player-and-character.md#210-registration-referral-delivery)
-uses `Depot.AppendDelivery` to append a separate reward instance even at/above
-capacity, matching `new_entry.cgi:214–217` and `system.cgi:818–835`.
-The approved, not-yet-implemented
-[contest-award delivery contract](photo-contest.md#approved-delivery-contract-and-implementation-gap)
-permits medal delivery even at full/over-capacity storage. Its slot count may
-therefore exceed the calculated capacity; it does not increase the capacity
-itself. Referral delivery likewise leaves capacity unchanged. The adopted
+### Delivery Capacity by Caller
+
+Capacity limits what a player may deposit or another player may send. It does
+not limit what an NPC delivers. Legacy `system.cgi:818–837` (`send_item`) and
+`1463–1480` (`send_gem`) append to the recipient's file without counting it. Only
+callers that call `get_depot_c`, read a stored `is_full` flag or call
+`get_you_gem_box_c` (`1482–1493`) beforehand ever reject. In Go, "full" means the
+slot count at that moment is at or above the calculated capacity (`Depot.IsFull`).
+The legacy `is_full` flag can be out of date; Go does not copy that.
+Decided in [#1139](https://github.com/witchcraze/party2re/issues/1139)
+on 2026-11-08 under the project owner's standing direction to reproduce what
+original players experienced. Apart from the current-count and stack notes here,
+no caller below departs from legacy behavior.
+
+| Caller | Legacy check | Rule |
+|---|---|---|
+| Purchases from weapon, armor, item, accessory and secret shops, including batch buying and quantity > 1 (`weapon.cgi:65,148`, `armor.cgi:62`, `item.cgi:84,171`, `accessory.cgi:119`, `secret.cgi:55`) | none | Deliver |
+| Accessory synthesis product (`accessory.cgi:200`) | none | Deliver after the materials are consumed |
+| Black Market prizes (`black_market.cgi:118,137`), medal (`medal.cgi:80`) and casino (`casino.cgi:609–623`, one row per unit) prizes | none | Deliver |
+| Flea Market purchase and cancel (`free.cgi:161–171,257–271`); Player Store purchase, barter (both sides) and withdrawal (`store.cgi:386–394,468–476,544–555`) | none | Deliver |
+| Costume goods (`goods.cgi:72`), altar wish (`reborn.cgi:104`), god wishes (`god.cgi:102–103`), event bazaar (`event.cgi:94`), helper quest reward (`helper.cgi:115`), raffle and lottery (`lot.cgi:134`, `takarakuzi.cgi:237`) | none | Hand when the existing path fills an empty hand, otherwise Deliver |
+| Alchemy completion (`alchemy.cgi:183–201`) and Plantation harvest (`plantation.cgi:197–204,249–262`) | none | Deliver |
+| Combat book return (`_skill.cgi:6829–6840,6868–6899`) | none | Deliver |
+| Combat book exchange (`_skill.cgi:10489–10536`) | none | Swap the requested row in place (`InsertDelivery`); an empty hand removes the row. No slot is added. |
+| Gem appraisal and synthesis (`gem_store.cgi:309,374`) | none | Deliver to the Gem Box |
+| Treasure inspection (`_npc_action.cgi:6–84`) | own `is_full` | A tool found with an empty tool hand goes to the hand. Otherwise, a full Depot forfeits the item (`DeliveredToLost`), even when a matching stack exists; a Depot with space receives it. |
+| Auction (`auction.cgi:57–60`) and Depot (`depot.cgi:349–353`) send of gold or an item | recipient `is_full` | Reject before any change when the recipient is full, even when a matching stack exists; otherwise Deliver |
+| Gem send (`gem_store.cgi:231–235`) | recipient count vs **sender** maximum | Reject when the recipient's gem count is at or above the gem capacity for the **sender's** job level; otherwise append |
+| Gem purchase (`gem_store.cgi:143`) and Depot deposit (`depot.cgi:172`) | own capacity | Keep the existing rejection |
+
+**Deliver** (`Depot.Deliver`, `GemBox.Deliver`, `PolicyDeliverOverCapacity`)
+merges an eligible stack. Otherwise it appends a slot, even when that pushes the
+Depot past capacity. Quantity stacks and the inventory/equipment split remain
+modern representations. Delivery never raises `Capacity`, so later deposits stay
+blocked until the slot count drops below it. The gem-send limit keeps the
+sender-based quirk because players lived with it. A box can therefore exceed its
+own capacity, and a low-level sender can be rejected by a box that still has room.
+
+Each delivery commits atomically with what was paid for it: currency, points,
+materials, listing state, plot or synthesis state. A storage failure rolls all of
+it back. Because capacity never rejects, there is no partial delivery. Plantation
+draws once and clears the plot, so a retry cannot reroll the harvest.
+
+Callers that pin a different representation keep their own owner:
+[registration referral](player-and-character.md#210-registration-referral-delivery)
+and the
 [Home bag/treasure/key contract](home.md#legacy-dispatch-and-consumption-contract)
-also requires direct, separate Depot reward instances at/above capacity; the
-125/126/199 bags use this path, while the sealed key remains unimplemented. Other caller policies remain under
-[#1139](https://github.com/witchcraze/party2re/issues/1139); this exception does
-not authorize changing ordinary deposits or player transfers.
+append separate instances without stacking (`AppendDelivery`).
+[Contest awards](photo-contest.md#approved-delivery-contract-and-implementation-gap)
+follow the Deliver rule. Still open: held-field placement on acquisition
+([#1948](https://github.com/witchcraze/party2re/issues/1948)), Auction gold
+destination ([#1815](https://github.com/witchcraze/party2re/issues/1815)) and
+native combat book execution
+([#1370](https://github.com/witchcraze/party2re/issues/1370)).
 
 ### Dynamic Capacity Recalculation (`RefreshCapacity`)
 
@@ -157,7 +196,8 @@ storage or a later save error, rolls back equipment, customization and ownership
   - Invariant: `sender.Money >= amount` and `amount > 0` and `sender != recipient`.
 - **Send Item (`SendItem`)**: Transits an item directly from sender's inventory into the recipient's depot storage.
   - Invariant: Item exists in sender inventory.
-  - Invariant: Recipient depot has available capacity (respecting stack merging).
+- Both reject a full recipient Depot before any change, even when a matching
+  stack exists ([delivery capacity](#delivery-capacity-by-caller)).
 
 ### 6. Storage Item Consumption (`Consume`, `ConsumeOne`, `PurgeSlot`)
 - Town facilities and trade actions (e.g., Home consumable item usage, Black Market rare item sacrifices, Gem Store synthesis crafting, Flea Market and Player Store listings) consume items directly from Depot storage.

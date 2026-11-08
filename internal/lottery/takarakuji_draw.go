@@ -190,9 +190,7 @@ func (s *Service) deliverPrizeToDepot(ctx context.Context, characterID, itemID s
 		return err
 	}
 
-	if err := dep.AddItem(inst); err != nil {
-		return err
-	}
+	dep.Deliver(inst)
 
 	if err := s.depotRepo.Save(ctx, dep); err != nil {
 		return err

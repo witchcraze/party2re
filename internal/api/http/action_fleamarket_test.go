@@ -144,7 +144,6 @@ func TestFleaMarketGatewayErrors(t *testing.T) {
 		{fleamarket.ErrMaxListingsReached, "FLEAMARKET_MAX_LISTINGS", 400},
 		{fleamarket.ErrServerMaxListingsReached, "FLEAMARKET_SERVER_MAX_LISTINGS", 400},
 		{fleamarket.ErrItemNotInDepot, "FLEAMARKET_ITEM_NOT_IN_DEPOT", 400},
-		{fleamarket.ErrDepotFull, "FLEAMARKET_DEPOT_FULL", 400},
 		{errors.New("private storage failure"), "EXECUTION_FAILED", 500},
 		{context.Canceled, "EXECUTION_FAILED", 500},
 	} {

@@ -464,7 +464,7 @@ func TestPurchaseItemQuantityGreaterThanOneTransfersToDepot(t *testing.T) {
 	}
 }
 
-func TestPurchaseItemDepotFull(t *testing.T) {
+func TestPurchaseItemDepotFullDeliversOverCapacity(t *testing.T) {
 	depotRepo := newMockDepotRepo()
 	cap := depot.CalculateCapacity(7, 0, 0)
 	fullDepot, _ := depot.NewDepotWithCapacity("char-high", 7, 0, 0)
@@ -480,10 +480,13 @@ func TestPurchaseItemDepotFull(t *testing.T) {
 	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
 	_ = charRepo.Update(ctx, eligible)
 
-	// Quantity 2 triggers depot route, but depot is full
-	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_ruby_of_protection", 2)
-	if !errors.Is(err, secretshop.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got %v", err)
+	// Quantity 2 triggers the depot route; send_item ignores capacity (secret.cgi:55).
+	if _, err := svc.PurchaseItem(ctx, "char-high", "secret_item_ruby_of_protection", 2); err != nil {
+		t.Fatalf("purchase into full depot: %v", err)
+	}
+	dep, _ := depotRepo.FindByCharacterIDForUpdate(ctx, "char-high")
+	if len(dep.Items) != cap+1 {
+		t.Fatalf("expected %d slots after over-capacity delivery, got %d", cap+1, len(dep.Items))
 	}
 }
 

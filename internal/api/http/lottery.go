@@ -9,7 +9,6 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
 
@@ -86,10 +85,6 @@ func (h *Handler) handlePlayRaffle(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if errors.Is(err, lottery.ErrInsufficientTickets) {
 				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			if errors.Is(err, depot.ErrDepotFull) {
-				writeError(w, http.StatusConflict, err)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)
