@@ -34,7 +34,7 @@ Features (Adventure, Guild, Casino, Alchemy, etc.) own their feature-specific ru
 - **Client/Agent Gateway & CQRS Interaction Model:** New interactive clients MUST target the two-pillar Gateway (`get_character_context`, `execute_character_action`) described in [`docs/architecture/client-agent-api.md`](../../docs/architecture/client-agent-api.md).
   - Clients MUST consult the [current OpenAPI specification](../../docs/api/openapi.json) for registered routes and documented responses; MUST NOT infer command connection from `available_actions` entry eligibility.
   - Existing REST routes MUST be retired only through the tracked migration, after their replacement command coverage is implemented and verified.
-  - MUST keep current implementation status in [`STATUS.md`](../../STATUS.md), planned work in [`ROADMAP.md`](../../ROADMAP.md), and enduring API contracts in the architecture document linked above. MUST NOT duplicate issue completion or rollout status in this rule.
+  - MUST keep current gaps and planned work in GitHub Issues and enduring API contracts in the architecture document linked above. MUST NOT duplicate issue completion or rollout status in this rule.
 
 ## 6. Architecture Review Triggers
 Do not silently make substantial architectural decisions. Create an Issue if the work would change: Core responsibilities, component boundaries, dependency direction, public contracts, persistence architecture, or external API architecture.

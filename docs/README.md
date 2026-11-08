@@ -5,14 +5,13 @@ During Version 1.0 reconstruction, the original Party2 project defines game beha
 | Location | Owns | How to verify |
 | --- | --- | --- |
 | [`AGENTS.md`](../AGENTS.md), [agent rules](../.agents/rules/) | Mandatory constraints and decision criteria | Check applicable rules before edits |
-| [`STATUS.md`](../STATUS.md) | Major current capabilities, limitations and immediate gaps | Source, wiring, and current issue state |
-| [`ROADMAP.md`](../ROADMAP.md) | Remaining milestones and planned direction | Open issues; distinguish plans from running features |
 | [`architecture/`](architecture/) | Component boundaries and persistence contracts | Composition roots, public interfaces, migrations |
 | [`design/README.md`](design/README.md) | Game rules, formulas, and state transitions | Original CGI behavior and explicitly approved changes |
 | [`development/`](development/) | Repository workflows and validation | Makefile, scripts, hooks, CI |
 | [`migration/legacy-cgi-mapping.md`](migration/legacy-cgi-mapping.md) | Navigation from legacy behavior to reconstruction targets | Legacy script, current source, and owning design documents |
-| [`migration/feature-inventory.md`](migration/feature-inventory.md) | Frozen reconstruction snapshot at its stated date/revision | Historical evidence; consult STATUS and open Issues for current gaps |
-| GitHub Issues / PRs and Git history | Task progress and detailed change history | Current ticket state, merged PRs and commits |
+| [`migration/feature-inventory.md`](migration/feature-inventory.md) | Frozen reconstruction snapshot at its stated date/revision | Historical evidence; consult open Issues for current gaps |
+| GitHub Issues, labels and milestones | Current gaps, limitations and planned work | Open ticket state and native dependencies |
+| GitHub PRs and Git history | Detailed change history | Merged PRs and commits |
 | [`migration/documentation-audit.md`](migration/documentation-audit.md) | Known differences and unresolved reconstruction findings | Linked specifications, legacy evidence and current source |
 | [`assets/`](assets/) | Original placeholder provenance and visual guidelines | Files and asset planning issues |
 | [`api/base.json`](api/base.json), [`api/paths/`](api/paths/) | Current transport specification sources | Registered routes and `make openapi-check` |

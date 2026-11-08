@@ -247,8 +247,6 @@ docker run --rm \
 プロジェクトの設計・開発方針は以下にまとめています。
 
 - [`AGENTS.md`](AGENTS.md) — AIエージェントを含む開発者向けの基本方針
-- [`ROADMAP.md`](ROADMAP.md) — 開発フェーズと今後の計画
-- [`STATUS.md`](STATUS.md) — 現在の状態と決定事項
 - [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) — 再構築時の機能・画像棚卸し記録（固定スナップショット）
 - [`docs/design/game-overview.md`](docs/design/game-overview.md) — ゲームの概要・設計上の理解
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — アーキテクチャ概要
@@ -295,7 +293,7 @@ docker run --rm \
 - 依存ソフトウェアとライセンスの管理
 - 小さくテスト可能な単位での継続的な開発
 
-詳細は [`STATUS.md`](STATUS.md)、[`ROADMAP.md`](ROADMAP.md)、[`AGENTS.md`](AGENTS.md) を参照してください。
+残作業・既知の制約・今後の計画は [GitHub Issues](https://github.com/witchcraze/party2re/issues) とそのラベル・マイルストーンで管理します。開発ルールは [`AGENTS.md`](AGENTS.md) を参照してください。
 
 ## Origin
 

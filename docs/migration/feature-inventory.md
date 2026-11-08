@@ -4,8 +4,7 @@
 > The inventory below preserves the reconstruction record at that revision, including
 > its then-open work and checklist. It is not maintained for subsequent Issue/PR
 > completions and is not a current coverage or parity certification.
-> See [STATUS](../../STATUS.md) for current capabilities/gaps, [ROADMAP](../../ROADMAP.md)
-> and [open Issues](https://github.com/witchcraze/party2re/issues) for remaining work,
+> See [open Issues](https://github.com/witchcraze/party2re/issues) for remaining work,
 > and [known differences](documentation-audit.md) for unresolved findings.
 
 > Temporary Version 1 reconstruction document.
@@ -190,8 +189,6 @@ All groups below are Version 1.0 reconstruction requirements.
 
 ## Related Documents
 
-- [`../../STATUS.md`](../../STATUS.md)
-- [`../../ROADMAP.md`](../../ROADMAP.md)
 - [`../architecture/components.md`](../architecture/components.md)
 - [`../design/game-overview.md`](../design/game-overview.md)
 - [`../assets/required-images.md`](../assets/required-images.md)

@@ -248,8 +248,8 @@ HTTP handlers standardize API responses following pragmatic REST conventions and
 `GET /api/v1/characters/{id}/context` observes the owned character and available
 commands; `POST /api/v1/characters/{id}/actions` validates and dispatches typed
 commands, then composes refreshed context. See [client-agent-api.md](client-agent-api.md)
-for admission, partial outcomes and recovery. Connected coverage remains in
-[STATUS](../../STATUS.md), and request/response schemas in OpenAPI.
+for admission, partial outcomes and recovery. Registered routes and request/response schemas are in OpenAPI;
+remaining coverage is tracked in GitHub Issues.
 
 ## Application logging contract
 
