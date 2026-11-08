@@ -1,8 +1,8 @@
 # Place log, action wait and NPC interaction
 
 > **Status:** approved on 2026-11-08 under
-> [#1937](https://github.com/witchcraze/party2re/issues/1937). Storage and facility
-> observation run; the writers, the action wait and members are planned, and each
+> [#1937](https://github.com/witchcraze/party2re/issues/1937). Storage, facility
+> observation and the action wait run; the writers and members are planned, and each
 > section names the issue that implements it.
 
 Legacy Party2 is a conversation screen. Every place has a short shared log. A player's
@@ -76,7 +76,11 @@ logs stay with their own features.
   - A successful command whose legacy counterpart keeps a non-zero `act_time` sets a per-character wait in the existing timer family.
   - The wait defaults to 4 s and is configurable.
 - **What the wait blocks**
-  - While the wait is active, Gateway commands are rejected with a structured `action_wait` code and the remaining time. Context shows the remaining time so a client can draw the gauge.
+  - While the wait is active, Gateway commands are rejected with `409 ACTION_WAIT` and the context shows `character.action_wait_ms`, so a client can draw the gauge. The per-action dispositions are listed in [action preconditions](../design/action-preconditions.md).
+  - A wait-starting command claims the wait atomically (`SET NX EX` with a token) before it runs, so concurrent commands cannot all pass; the loser gets `ACTION_WAIT`. As in legacy (`$m{wt} = $time + $act_time`, with `$time` taken at request start), the wait counts from the request start.
+  - A rejected or unknown outcome releases its own claim by token, so it never keeps the wait. A failed release is logged and the claim expires with its TTL. A failed timer read or claim fails the preflight.
+  - The remaining time is read in whole seconds, so `action_wait_ms` and the gate for non-starting actions may open up to about a second early. Legacy counted whole seconds too (`int($m{wt} - $time)`). Wait-starting commands are decided by the claim key itself, so they are not affected.
+  - Legacy reads and writes the user file without a lock (`read_user`/`write_user`), so concurrent legacy requests could both pass. That is a legacy defect, not a rule, and the claim intentionally closes it.
   - Rescue and wake are exempt, because legacy serves them outside the `party.cgi` action path.
   - Speech is not an action and is never blocked.
 - **Relation to the cooldown gate**

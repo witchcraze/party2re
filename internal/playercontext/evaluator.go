@@ -20,6 +20,8 @@ type Snapshot struct {
 	SleepRemaining time.Duration
 	LocationID     string
 	Activities     []Activity
+	// ActionWait is the remaining legacy action wait; zero when none.
+	ActionWait time.Duration
 }
 
 // Evaluator applies one availability rule, honoring action-specific exemptions.
@@ -41,6 +43,9 @@ func evaluate(catalog []ActionDefinition, snapshot *Snapshot, evaluators []Evalu
 	ids := make([]string, 0, len(catalog))
 	location := activityLocation(snapshot.ActiveActivities())
 	for _, action := range catalog {
+		if !(ActionWaitGate{}).Allows(action, snapshot) {
+			continue
+		}
 		if action.ActivityKind != "" {
 			if continuationAllowed(action, snapshot, location) {
 				ids = append(ids, action.ID)

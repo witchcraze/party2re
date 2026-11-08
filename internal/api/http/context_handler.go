@@ -50,6 +50,8 @@ type CharacterSnapshot struct {
 	IsSleeping bool   `json:"is_sleeping"`
 	Icon       string `json:"icon"`
 	IconURL    string `json:"icon_url"`
+	// ActionWaitMS is the remaining legacy action wait for the client gauge.
+	ActionWaitMS int64 `json:"action_wait_ms"`
 }
 
 type SceneSnapshot struct {
@@ -144,7 +146,7 @@ func (h *Handler) playerContextResponse(ctx context.Context, result playercontex
 	response := PlayerContextResponse{
 		Character: CharacterSnapshot{ID: c.ID, Name: c.Name, JobID: c.JobID, Level: c.Level,
 			HP: c.Stats.HP, MaxHP: c.Stats.MaxHP, MP: c.Stats.MP, MaxMP: c.Stats.MaxMP,
-			Gold: c.Money, Tired: c.Tired, IsDead: c.Stats.HP <= 0, IsSleeping: s.Sleeping, IconURL: profile.Profile.AvatarURL},
+			Gold: c.Money, Tired: c.Tired, IsDead: c.Stats.HP <= 0, IsSleeping: s.Sleeping, IconURL: profile.Profile.AvatarURL, ActionWaitMS: s.ActionWait.Milliseconds()},
 		Scene: SceneSnapshot{LocationID: s.LocationID, Title: "始まりの街", Bgimg: "bg_town",
 			BgimgURL: "data:image/svg+xml," + url.PathEscape(townBackgroundPlaceholder),
 			Dialogue: "広場へようこそ。次の行動を選んでください。", Speaker: &SceneSpeaker{Name: "広場の案内人"}, PlaceLog: []PlaceLogEntry{}},

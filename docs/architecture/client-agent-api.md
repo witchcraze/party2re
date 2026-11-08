@@ -743,7 +743,10 @@ operation therefore does not remove its migrated command's validation; route
 retirement still requires the tracked replacement verification.
 
 Re-read current entry eligibility before execution; reject an ineligible entry
-with `409 ACTION_UNAVAILABLE`. Scheduled/timer read errors stop execution with
+with `409 ACTION_UNAVAILABLE`. While the legacy [action wait](place-log.md#action-wait-1939)
+runs, every command except rescue and wake is rejected first with
+`409 ACTION_WAIT` and no execution; `character.action_wait_ms` reports the
+remaining time. Scheduled/timer read errors stop execution with
 `500 ACTION_PREFLIGHT_FAILED`, without execution or context. An earlier
 `available_actions` list is never execution authorization.
 Preserve the shared Sleep/CanWake guard for ordinary commands and explicit

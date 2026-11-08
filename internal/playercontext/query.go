@@ -42,6 +42,8 @@ type Service struct {
 	navigation     NavigationRepository
 	scenes         map[string]SceneDefinition
 	readActivities ActivityReader
+	waitWriter     ActionWaitWriter
+	waitDuration   time.Duration
 }
 
 // NewService requires character, scheduled-action and sleep-timer readers.
@@ -90,7 +92,14 @@ func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, er
 		}
 		asleep = locked
 	}
+	var wait time.Duration
+	if s.waitWriter != nil {
+		if wait, err = s.timers.GetRemainingLock(ctx, timer.CategoryActionWait, charID); err != nil {
+			return Result{}, fmt.Errorf("load context action wait: %w", err)
+		}
+	}
 	snapshot := Snapshot{
+		ActionWait:     wait,
 		Character:      char,
 		OngoingActions: actions,
 		SleepRemaining: remaining,

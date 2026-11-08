@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -122,6 +123,12 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
 			return
 		}
+		def, _ := actionDefinition(req.Action)
+		// Legacy rejects every registered action while $m{wt} runs (lib/system.cgi:641-644).
+		if current.Snapshot.ActionWait > 0 && !(playercontext.ActionWaitGate{}).Allows(def, &current.Snapshot) {
+			h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_WAIT", Message: "まだ行動することはできません"})
+			return
+		}
 		// A premature Wake reaches the service for its recognized rejection.
 		// GET still offers Wake only when recovery is ready; an awake actor
 		// remains subject to entry eligibility.
@@ -140,7 +147,6 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		def, _ := actionDefinition(req.Action)
 		if req.Action != "home_wake" && req.Action != "rescue_request" && !def.Recovery {
 			message, err := h.sleepingCharacterMessage(r.Context(), char.ID)
 			if err != nil {
@@ -152,8 +158,27 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
+		// Claim the wait atomically before running, so concurrent commands cannot
+		// all pass the read-only check above.
+		var claim playercontext.ActionWaitClaim
+		if playercontext.StartsActionWait(def) {
+			var claimed bool
+			claim, claimed, err = h.playerContext.ClaimActionWait(r.Context(), char.ID)
+			if err != nil {
+				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify the action wait.")
+				return
+			}
+			if !claimed {
+				h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_WAIT", Message: "まだ行動することはできません"})
+				return
+			}
+		}
 		result, err := execute(r.Context(), player.ID, char.ID)
 		if err != nil {
+			// Rejected and unknown outcomes never keep the wait.
+			if releaseErr := claim.Release(r.Context()); releaseErr != nil {
+				slog.WarnContext(r.Context(), "action wait not released", slog.String("action", req.Action), slog.String("error", releaseErr.Error()))
+			}
 			if command.reject != nil {
 				status, detail := command.reject(err)
 				if status >= 400 && status < 500 {

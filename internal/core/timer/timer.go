@@ -34,6 +34,8 @@ const (
 	CategoryHouse       = "house"
 	CategoryStore       = "store"
 	CategoryDungeonOnce = "dungeon_once"
+	// CategoryActionWait is the legacy per-action wait ($m{wt}, lib/system.cgi:637-655).
+	CategoryActionWait = "action_wait"
 )
 
 var (
