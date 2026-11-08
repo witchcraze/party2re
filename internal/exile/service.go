@@ -26,6 +26,14 @@ type Repository interface {
 	AddVote(ctx context.Context, petitionID string, v Vote) error
 	DeletePetition(ctx context.Context, petitionID string) error
 	IsInvolved(ctx context.Context, characterID string) (bool, error)
+	SentenceStore
+}
+
+// SentenceStore keeps committed sleep deadlines until the timer confirms them.
+type SentenceStore interface {
+	SaveSentence(ctx context.Context, s Sentence) error
+	ListSentences(ctx context.Context) ([]Sentence, error)
+	DeleteSentence(ctx context.Context, s Sentence) error
 }
 
 type CharacterReader interface {
@@ -35,9 +43,7 @@ type CharacterReader interface {
 }
 
 type SleepTimer interface {
-	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
-	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
-	ReleaseLock(ctx context.Context, category, targetID string) error
+	SetLockUntil(ctx context.Context, category, targetID string, until time.Time) error
 }
 
 type TransactionProvider interface {
@@ -159,6 +165,7 @@ func (s *Service) Petition(ctx context.Context, actorID, targetName, reason stri
 	if err != nil {
 		return Petition{}, err
 	}
+	s.projectSentences(ctx, now)
 	return p, nil
 }
 
@@ -177,9 +184,8 @@ func (s *Service) Vote(ctx context.Context, actorID, targetName string, approve 
 		return VoteResult{}, ErrJobLevelTooLow
 	}
 	var result VoteResult
-	var sentence *sleepChange
 	err = s.tx.RunInTx(ctx, func(ctx context.Context) error {
-		result, sentence = VoteResult{Withdrawn: []Petition{}}, nil
+		result = VoteResult{Withdrawn: []Petition{}}
 		updatedAt, err := s.repo.LockBoard(ctx)
 		if err != nil {
 			return err
@@ -223,42 +229,32 @@ func (s *Service) Vote(ctx context.Context, actorID, targetName string, approve 
 		if len(result.Withdrawn) == 0 && result.Petition == nil {
 			return ErrPetitionNotFound
 		}
-		sleeper, sleep, err := s.apply(ctx, actor, result, now)
-		if err != nil || sleeper == "" {
-			return err
-		}
-		// Valkey cannot join the transaction: write it last and undo it if the commit fails.
-		prior, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, sleeper)
-		if err != nil {
-			return err
-		}
-		if err := s.timer.SetLock(ctx, timer.CategorySleep, sleeper, sleep); err != nil {
-			return err
-		}
-		sentence = &sleepChange{characterID: sleeper, prior: prior}
-		return nil
+		return s.apply(ctx, actor, result, now)
 	})
 	if err != nil {
-		if sentence != nil {
-			err = errors.Join(err, sentence.undo(context.WithoutCancel(ctx), s.timer))
-		}
 		return VoteResult{}, err
 	}
+	s.projectSentences(ctx, now)
 	return result, nil
 }
 
-// sleepChange restores the sleep a rolled-back verdict replaced.
-// shortcut: a sleep written by another feature between the verdict and the undo is overwritten; acceptable for a failed-commit path.
-type sleepChange struct {
-	characterID string
-	prior       time.Duration
-}
-
-func (c sleepChange) undo(ctx context.Context, t SleepTimer) error {
-	if c.prior <= 0 {
-		return t.ReleaseLock(ctx, timer.CategorySleep, c.characterID)
+// projectSentences confirms committed deadlines in the Valkey sleep timer.
+// SQL is authoritative: a failed or interrupted projection leaves the row,
+// and the next board command projects the same absolute deadline again.
+func (s *Service) projectSentences(ctx context.Context, now time.Time) {
+	sentences, err := s.repo.ListSentences(ctx)
+	if err != nil {
+		return
 	}
-	return t.SetLock(ctx, timer.CategorySleep, c.characterID, c.prior)
+	for _, sentence := range sentences {
+		if sentence.SleepUntil.After(now) {
+			if err := s.timer.SetLockUntil(ctx, timer.CategorySleep, sentence.CharacterID, sentence.SleepUntil); err != nil {
+				continue
+			}
+		}
+		//lint:ignore error-swallow the row stays and is retried by the next board command
+		_ = s.repo.DeleteSentence(ctx, sentence)
+	}
 }
 
 // lockCharacters locks rows in ascending ID order after the board, so renames
@@ -276,37 +272,34 @@ func (s *Service) lockCharacters(ctx context.Context, ids ...string) (map[string
 	return locked, nil
 }
 
-// apply writes the board and returns the sleep a verdict sentences, if any.
-func (s *Service) apply(ctx context.Context, actor corecharacter.Character, r VoteResult, now time.Time) (string, time.Duration, error) {
+func (s *Service) apply(ctx context.Context, actor corecharacter.Character, r VoteResult, now time.Time) error {
 	for _, p := range r.Withdrawn {
 		if err := s.repo.DeletePetition(ctx, p.ID); err != nil {
-			return "", 0, err
+			return err
 		}
 		if err := s.publish(ctx, fmt.Sprintf("%sが%sの追放申請を取り消しました", actor.Name, p.TargetName), "追放申請は取り消されました。", now); err != nil {
-			return "", 0, err
+			return err
 		}
 	}
-	var sleeper string
-	var sleep time.Duration
 	if p := r.Petition; p != nil {
 		var err error
 		if r.Verdict == "" {
 			err = s.repo.AddVote(ctx, p.ID, p.Votes[0])
 		} else {
-			sleeper, sleep, err = s.resolve(ctx, *p, r, now)
+			err = s.resolve(ctx, *p, r, now)
 		}
 		if err != nil {
-			return "", 0, err
+			return err
 		}
 	}
-	return sleeper, sleep, s.repo.TouchBoard(ctx, now)
+	return s.repo.TouchBoard(ctx, now)
 }
 
-// resolve removes the petition and returns the sleep that replaces the
-// sentenced character's remaining sleep (legacy regist_you_data).
-func (s *Service) resolve(ctx context.Context, p Petition, r VoteResult, now time.Time) (string, time.Duration, error) {
+// resolve removes the petition and records the sleep deadline that replaces
+// the sentenced character's remaining sleep (legacy regist_you_data).
+func (s *Service) resolve(ctx context.Context, p Petition, r VoteResult, now time.Time) error {
 	if err := s.repo.DeletePetition(ctx, p.ID); err != nil {
-		return "", 0, err
+		return err
 	}
 	tally := fmt.Sprintf("賛成 %d 票 / 反対 %d 票", r.Approvals, r.Oppositions)
 	sleeper, sleep := p.TargetID, GuiltySleep
@@ -318,15 +311,18 @@ func (s *Service) resolve(ctx context.Context, p Petition, r VoteResult, now tim
 		if _, err := s.characters.FindByID(ctx, sleeper); errors.Is(err, corecharacter.ErrNotFound) {
 			sleeper = ""
 		} else if err != nil {
-			return "", 0, err
+			return err
 		} else {
 			content += fmt.Sprintf("申請者の%sは5日間の眠りの刑となりました。", p.ApplicantName)
 		}
 	}
 	if err := s.publish(ctx, title, content, now); err != nil {
-		return "", 0, err
+		return err
 	}
-	return sleeper, sleep, nil
+	if sleeper == "" {
+		return nil
+	}
+	return s.repo.SaveSentence(ctx, Sentence{CharacterID: sleeper, SleepUntil: now.Add(sleep)})
 }
 
 func (s *Service) publish(ctx context.Context, title, content string, now time.Time) error {

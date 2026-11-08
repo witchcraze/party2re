@@ -115,3 +115,35 @@ func (r *ExileRepository) IsInvolved(ctx context.Context, characterID string) (b
 		characterID, characterID, characterID).Scan(&involved)
 	return involved, err
 }
+
+// SaveSentence records a committed sleep deadline, replacing an earlier one.
+func (r *ExileRepository) SaveSentence(ctx context.Context, s exile.Sentence) error {
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT INTO exile_sentences (character_id, sleep_until) VALUES (?, ?)
+		ON DUPLICATE KEY UPDATE sleep_until = VALUES(sleep_until)`, s.CharacterID, s.SleepUntil.UTC())
+	return err
+}
+
+func (r *ExileRepository) ListSentences(ctx context.Context) ([]exile.Sentence, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `SELECT character_id, sleep_until FROM exile_sentences`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []exile.Sentence
+	for rows.Next() {
+		var s exile.Sentence
+		if err := rows.Scan(&s.CharacterID, &s.SleepUntil); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// DeleteSentence removes the row only if it still holds the projected deadline.
+func (r *ExileRepository) DeleteSentence(ctx context.Context, s exile.Sentence) error {
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx,
+		`DELETE FROM exile_sentences WHERE character_id = ? AND sleep_until = ?`, s.CharacterID, s.SleepUntil.UTC())
+	return err
+}

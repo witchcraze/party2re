@@ -74,6 +74,12 @@ func (p Petition) hasVoter(characterID string) bool {
 	return false
 }
 
+// Sentence is a committed verdict sleep deadline awaiting timer projection.
+type Sentence struct {
+	CharacterID string
+	SleepUntil  time.Time
+}
+
 // Verdict is empty while voting continues.
 type Verdict string
 

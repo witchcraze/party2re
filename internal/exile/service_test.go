@@ -17,6 +17,19 @@ type memRepo struct {
 	updated   time.Time
 	petitions []exile.Petition
 	touchErr  error
+	sentences []exile.Sentence
+}
+
+func (m *memRepo) SaveSentence(_ context.Context, s exile.Sentence) error {
+	m.sentences = append(slices.DeleteFunc(m.sentences, func(o exile.Sentence) bool { return o.CharacterID == s.CharacterID }), s)
+	return nil
+}
+func (m *memRepo) ListSentences(context.Context) ([]exile.Sentence, error) {
+	return slices.Clone(m.sentences), nil
+}
+func (m *memRepo) DeleteSentence(_ context.Context, s exile.Sentence) error {
+	m.sentences = slices.DeleteFunc(m.sentences, func(o exile.Sentence) bool { return o == s })
+	return nil
 }
 
 func (m *memRepo) LockBoard(context.Context) (time.Time, error) { return m.updated, nil }
@@ -68,7 +81,7 @@ type memTx struct {
 }
 
 func (t memTx) RunInTx(ctx context.Context, fn func(context.Context) error) error {
-	saved := memRepo{updated: t.repo.updated, touchErr: t.repo.touchErr}
+	saved := memRepo{updated: t.repo.updated, touchErr: t.repo.touchErr, sentences: slices.Clone(t.repo.sentences)}
 	saved.petitions, _ = t.repo.ListPetitions(ctx)
 	err := fn(ctx)
 	if err == nil && t.commitErr != nil {
@@ -102,28 +115,21 @@ func (c chars) FindByName(_ context.Context, name string) (corecharacter.Charact
 	return corecharacter.Character{}, corecharacter.ErrNotFound
 }
 
+// sleeps records each deadline as the remaining sleep at the fixture time.
 type sleeps struct {
 	set map[string]time.Duration
+	now time.Time
 	err error
 }
 
-func (s *sleeps) GetRemainingLock(_ context.Context, _, id string) (time.Duration, error) {
-	return s.set[id], nil
-}
-
-func (s *sleeps) ReleaseLock(_ context.Context, _, id string) error {
-	delete(s.set, id)
-	return nil
-}
-
-func (s *sleeps) SetLock(_ context.Context, category, id string, d time.Duration) error {
+func (s *sleeps) SetLockUntil(_ context.Context, category, id string, until time.Time) error {
 	if category != timer.CategorySleep {
 		return fmt.Errorf("unexpected category %s", category)
 	}
 	if s.err != nil {
 		return s.err
 	}
-	s.set[id] = d
+	s.set[id] = until.Sub(s.now)
 	return nil
 }
 
@@ -154,6 +160,7 @@ func newFixture(t *testing.T, voters int) *fixture {
 		f.news = append(f.news, title)
 		return nil
 	})
+	f.sleeps.now = f.now
 	f.svc = exile.NewService(f.repo, f.chars, f.sleeps, memTx{f.repo, &f.commit}, news)
 	return f
 }
@@ -244,7 +251,7 @@ func TestVoteGuiltyAfterTenApprovals(t *testing.T) {
 		t.Fatalf("double vote: %v", err)
 	}
 	r, err := f.svc.Vote(ctx, "v08", "bad", true, f.now)
-	if err != nil || r.Verdict != exile.VerdictGuilty || r.Approvals != 10 || len(f.repo.petitions) != 0 || f.sleeps.set["bad"] != time.Hour || len(f.sleeps.set) != 1 {
+	if err != nil || r.Verdict != exile.VerdictGuilty || r.Approvals != 10 || len(f.repo.petitions) != 0 || f.sleeps.set["bad"] != time.Hour || len(f.sleeps.set) != 1 || len(f.repo.sentences) != 0 {
 		t.Fatalf("guilty verdict: %+v %v %v", r, err, f.sleeps.set)
 	}
 }
@@ -277,17 +284,31 @@ func TestVoteAcquittalSentencesApplicant(t *testing.T) {
 	}
 }
 
-func TestVerdictTimerFailureRollsBack(t *testing.T) {
+// SQL is authoritative: a timer failure (or a stop before projection) keeps
+// the committed verdict and its sentence row, and the next board command
+// projects the same deadline. Expired sentences are dropped unprojected.
+func TestVerdictSurvivesTimerFailureAndIsProjectedLater(t *testing.T) {
 	f := newFixture(t, 9)
-	f.petition(t, "app", "bad")
-	for i := range 8 {
-		if _, err := f.svc.Vote(context.Background(), fmt.Sprintf("v%02d", i), "bad", true, f.now); err != nil {
-			t.Fatal(err)
-		}
-	}
+	f.approveUntilLast(t)
 	f.sleeps.err = errors.New("valkey down")
-	if _, err := f.svc.Vote(context.Background(), "v08", "bad", true, f.now); err == nil || len(f.repo.petitions) != 1 || len(f.repo.petitions[0].Votes) != 9 {
-		t.Fatalf("failed verdict was kept: %v %+v", err, f.repo.petitions)
+	r, err := f.svc.Vote(context.Background(), "v08", "bad", true, f.now)
+	if err != nil || r.Verdict != exile.VerdictGuilty || len(f.repo.petitions) != 0 || len(f.repo.sentences) != 1 || len(f.sleeps.set) != 0 {
+		t.Fatalf("committed verdict lost: %+v %v %+v", r, err, f.repo.sentences)
+	}
+	f.sleeps.err = nil
+	f.chars["v09"] = corecharacter.Character{ID: "v09", Name: "v09", JobLevel: 50}
+	f.chars["other"] = corecharacter.Character{ID: "other", Name: "other"}
+	f.now = f.now.Add(10 * time.Minute)
+	f.petition(t, "v09", "other")
+	if f.sleeps.set["bad"] != time.Hour || len(f.repo.sentences) != 0 {
+		t.Fatalf("sentence not projected on next command: %v %+v", f.sleeps.set, f.repo.sentences)
+	}
+	f.repo.sentences = []exile.Sentence{{CharacterID: "app", SleepUntil: f.now.Add(-time.Second)}}
+	if _, err := f.svc.Vote(context.Background(), "v00", "other", true, f.now); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.sleeps.set["app"]; ok || len(f.repo.sentences) != 0 {
+		t.Fatalf("expired sentence projected or kept: %v %+v", f.sleeps.set, f.repo.sentences)
 	}
 }
 
@@ -340,8 +361,8 @@ func (f *fixture) approveUntilLast(t *testing.T) {
 	}
 }
 
-// Valkey cannot join the SQL transaction: a verdict whose board write or
-// commit fails must leave the sentenced character's sleep as it was.
+// A verdict whose board write or commit fails never touches the timer and
+// leaves no sentence, so the sentenced character's sleep stays as it was.
 func TestVerdictFailureAfterTimerKeepsPriorSleep(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -362,7 +383,7 @@ func TestVerdictFailureAfterTimerKeepsPriorSleep(t *testing.T) {
 			if _, err := f.svc.Vote(context.Background(), "v08", "bad", true, f.now); err == nil {
 				t.Fatal("failed verdict reported success")
 			}
-			if got, ok := f.sleeps.set["bad"]; got != tc.prior || ok != (tc.prior > 0) {
+			if got, ok := f.sleeps.set["bad"]; got != tc.prior || ok != (tc.prior > 0) || len(f.repo.sentences) != 0 {
 				t.Fatalf("sleep after rollback = %v (set=%v), want %v", got, ok, tc.prior)
 			}
 			if len(f.repo.petitions) != 1 || len(f.repo.petitions[0].Votes) != 9 {

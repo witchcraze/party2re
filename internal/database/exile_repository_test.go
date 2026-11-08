@@ -107,6 +107,10 @@ func TestExileBoard_Integration(t *testing.T) {
 	if remaining, err := sleeps.GetRemainingLock(ctx, timer.CategorySleep, target.ID); err != nil || remaining <= 59*time.Minute {
 		t.Fatalf("guilty sleep: %v %v", remaining, err)
 	}
+	var pending int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM exile_sentences WHERE character_id = ?", target.ID).Scan(&pending); err != nil || pending != 0 {
+		t.Fatalf("projected sentence row kept: %d %v", pending, err)
+	}
 	for _, c := range []corecharacter.Character{applicant, target, voters[0]} {
 		if involved, err := repo.IsInvolved(ctx, c.ID); err != nil || involved {
 			t.Fatalf("resolved petition still involves %s: %v", c.Name, err)
