@@ -2,19 +2,14 @@
 
 ## Reconstruction authority
 
-Replay reconstruction follows the original observable recording and personal
-archive boundary, not universal sharing of Go battle results. The direction was
-explicitly selected in [#1251](https://github.com/witchcraze/party2re/issues/1251).
+**Decision (#1251):** Replay follows the original observable recording and personal archive boundary, not universal sharing of Go battle results.
 Automatic recording of every combat mode and universal participant sharing are
 not established legacy requirements.
 
 Legacy references below are relative to `party2/` in the reference repository at
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Source inspection and isolated execution
 of original routines establish the requirements below. They do not certify a
-complete CGI installation or browser playback. The user selected restoration of
-interactive Adventure under [#1323](https://github.com/witchcraze/party2re/issues/1323);
-the native Replay decisions below are owned by
-[#1320](https://github.com/witchcraze/party2re/issues/1320).
+complete CGI installation or browser playback.
 
 ## Original recording and archive lifecycle
 
@@ -132,9 +127,7 @@ verified public scene contract.
 
 ## Native scene and latest-slot contract
 
-These are implementation targets, not existing producer capabilities. On
-2026-11-04 the user approved counting structured UTF-8 scene bytes instead of
-legacy HTML bytes, and requested the failure behavior closest to the original.
+**Decision (2026-11-04):** count structured UTF-8 scene bytes instead of legacy HTML bytes, with the failure behavior closest to the original. These are targets; no production producer exists yet.
 Preserve actual scenes and exit-copy order; do not silently drop failed captures.
 The durable recovery below adapts persistence to the approved SQL command boundary.
 
@@ -238,95 +231,10 @@ atomicity. Legacy file open/copy errors abort the response
 (`system.cgi:1507–1508,1540–1543`), without a rollback of earlier gameplay writes.
 The native receipt must retain the committed outcome independently of publication.
 
-## Current Go implementation and remaining gaps
+## Current state and remaining gaps
 
-[`internal/replay`](../../internal/replay/replay.go) stores JSON initial-stat
-snapshots and engine turn logs in `battle_replays`. Its result adapters name several
-combat modes but have no production callers and never produce scene archives.
-
-The scene/latest-slot storage boundary above is implemented by
-[`ArchiveService`](../../internal/replay/archive.go), but no production producer
-calls it yet. [`Project`](../../internal/replay/scene.go) builds version-1 scenes
-from trusted capture facts. It rejects tag-like markup, control characters, unsafe
-presentation keys and non-hex colors, while plain `<`/`>` comment text stays text.
-Staging joins the caller's SQL transaction. Each run's source row serializes
-appends, deduplicates command IDs and counts exact encoded bytes. Exit staging
-freezes the current prefix as pending copy intent. Source and copy tables have no
-foreign key to run tables, so they outlive active-run disposal. Copy order per
-recipient is the staging insert order. The producer must therefore serialize a
-character's exits, as the existing run/character locks do. Publication runs after
-commit. It serializes on the recipient's slot row and moves the slot only forward, to
-the newest pending copy whose frozen scenes all decode as a supported version.
-Older pending copies become superseded. A newer copy with a missing, corrupt or
-unsupported scene stays pending and is reported as a failure; it does not block
-other exits, matching the original's independent per-exit copy. The owner
-`Recover` operation and the
-read-only `GetLatest` both authenticate recipient ownership before storage access.
-Neither path reruns gameplay. Superseded copies are reachable only through the
-slot, never through `battle_replays` detail/history or recent reads. Scene reads
-have no HTTP route; [#948](https://github.com/witchcraze/party2re/issues/948) owns
-observation, so OpenAPI declares no scene schema.
-
-The composition root wires session authentication and character persistence into
-Replay. Personal detail and history verify the authenticated player's ownership
-of the persisted archive recipient at the service boundary; history retains the
-HTTP ownership wrapper as well. Detail checks metadata and ownership before
-loading the raw payload. Unauthorized personal IDs and nonexistent IDs share the
-same not-found result. Supplied invalid credentials retain authentication errors.
-Combat identities, current membership and combat type never grant archive access.
-
-`battle_replays.provenance = personal_archive` with a nonempty
-`archive_recipient_id` identifies an explicitly classified personal copy. Empty
-or unsupported provenance is unavailable. The trusted internal recording request
-can carry this pair; existing result adapters supply neither and remain
-unclassified. No production combat feature calls those adapters. Personal history
-selects only this classification and recipient, before limits and cursor creation;
-equal timestamps use descending replay ID as the tie-breaker. This retained
-archive index remains distinct from the scene latest-slot target above.
-
-Migration `102_replay_archive_provenance.sql` adds metadata with empty defaults
-and a recipient index, preserving existing payloads without deriving ownership
-from combat headers. Deploy the additive migration first, then replace **all** old
-reader instances with guarded readers before enabling any classified producer.
-During a rolling deployment, old readers still expose data; use a maintenance
-window or disable Replay routing until all old instances have drained. Do not
-revert to the old readers as a rollback while Replay routes remain reachable.
-Historical rows remain unavailable unless independent trustworthy archive-copy
-evidence establishes their recipient; this issue supplies no reclassification or
-public import endpoint.
-
-The current raw-stat/turn-log representation has no supported global provenance
-or safe public display payload. Detail denies all non-personal records and both
-recent SQL forms reject every row before pagination, including rows manually
-marked public/global. Recent therefore returns an empty feed regardless of login.
-A verified publisher and structured scene implementation are prerequisites for
-public display support; a visibility flag alone must never enable it.
-
-The [current OpenAPI sources](../api/paths/replays.json) describe guarded replay
-detail and the empty recent feed; owned recipient history is in
-[`character.json`](../api/paths/character.json). No automatic retention is enabled;
-the available pruning method is not an approved scene/latest retention policy.
-
-[`NormalRunService.Command`](../../internal/adventure/normal_command.go) serializes
-explicit lifecycle/individual settlement with SQL state and actor-owned receipts,
-but has no Replay hook or captured room-comment/display facts. Exit removes the
-recipient from the roster; the repository clears live state when the roster is
-empty. Neither receipt nor recipient data currently retains scenes/copy intent.
-Thus existing transaction atomicity does not establish Replay ordering/recovery.
-
-Production solo/party starts still use `ExecuteCrawl` / `StartPartyAdventure`;
-the explicit combat consumer
-[#1329](https://github.com/witchcraze/party2re/issues/1329) and production cutover
-[#1330](https://github.com/witchcraze/party2re/issues/1330) remain prerequisites for
-real operation facts. A closed interactive-restoration tracking issue is not
-evidence of that wiring. Shared solo/party capture adoption is tracked by
-[#1826](https://github.com/witchcraze/party2re/issues/1826); it must preserve actual
-active-side removal after exit rather than render stale departed actors.
-
-[Adventure](adventure.md#original-interaction-contract-and-reconstruction-target)
-owns progression and [Party](party-system.md) owns waiting admission.
-[#948](https://github.com/witchcraze/party2re/issues/948) owns Replay observation,
-navigation and scoped route replacement: retain guarded detail/recent/history
-routes until their actual fields, visibility and navigation replacements pass.
-Do not predeclare proposed scene schemas in OpenAPI or fabricate missing commands,
-chat, exit times, spectators or all-mode recording from batch results.
+- The scene and latest-slot storage boundary exists, but no production producer calls it; production starts still use the batch crawl. Explicit combat (#1329) and the Gateway cutover (#1330) are prerequisites for real operation facts, and solo/party capture adoption is #1826, which must reflect actual removal after exit.
+- The older `battle_replays` raw-stat/turn-log records have no safe public display payload. Only rows explicitly classified as a personal archive with a recipient are readable, by that recipient's owner. Detail denies everything else, and the recent feed is empty regardless of login. A visibility flag alone must never enable public display.
+- **Decision:** historical rows stay unavailable unless independent, trustworthy archive-copy evidence establishes their recipient; ownership is never guessed from combat headers or current membership.
+- **Deployment:** guarded readers must replace every old reader before any classified producer is enabled. Old readers still expose data, so use a maintenance window or disable Replay routing during a rolling deployment.
+- Observation, navigation and route replacement are open (#948). Do not predeclare scene schemas in OpenAPI or fabricate commands, chat, exit times, spectators or all-mode recording from batch results.

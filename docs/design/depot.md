@@ -2,32 +2,11 @@
 
 ## Overview
 
-The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. The reconstruction models dynamic capacity, storage expansion, item sorting, direct item selling, inter-character mailing and collection discovery from `system.cgi:get_depot_c` and `depot.cgi`. Withdrawal swaps with the legacy hand fields. Gold is kept in character purses and the bank.
-
-## Domain Model
-
-### `Depot`
-- **`CharacterID`** (`string`): Unique identifier of the character owning the depot.
-- **`Capacity`** (`int`): Dynamic maximum item capacity slots (range: 5–500).
-- **`ExDepot`** (`int`): Purchased depot expansion count (0–20).
-- **`Items`** (`[]item.Instance`): Stored item instances (each with unique instance ID, definition ID, and quantity).
+The Depot (預かり所) stores item instances outside the inventory (`depot.cgi`, `system.cgi:get_depot_c`). Withdrawal swaps with the legacy hand fields; gold stays in purses and the bank. Shapes, prices and transport are owned by code and [OpenAPI](../api/openapi.json).
 
 ## Capacity Formula
 
-Depot capacity dynamically reflects character progression, purchased expansions, and god limit breaks:
-
-$$\text{Capacity} = \min(500, \text{Base}(jobLv) + (ex\_depot \times 5) + (over\_depot \times 50))$$
-
-Where:
-- **`Base(jobLv)`**:
-  - If $jobLv \ge 29$: $150$ slots
-  - If $jobLv > 0$: $jobLv \times 5 + 5$ slots
-  - Default / minimum base: $5$ slots
-  *(In Party2Re, $jobLv$ corresponds to the character's effective job level)*
-- **`ex_depot`**: Number of paid depot expansions (0 to 20, granting +5 slots each, up to +100 slots).
-- **`over_depot`**: Number of god limit breaks applied to depot capacity (0 to 5, granting +50 slots each, up to +250 slots).
-- Absolute minimum capacity: 5 slots.
-- Absolute maximum capacity: 500 slots.
+Capacity grows with job level, paid expansions (+5 each, at most 20) and god limit breaks (+50 each, at most 5), between 5 and 500 slots (`system.cgi:1267–1291`). Capacity is computed from current values, not the value stored at character creation.
 
 ### Delivery Capacity by Caller
 
@@ -78,28 +57,15 @@ and the
 [Home bag/treasure/key contract](home.md#legacy-dispatch-and-consumption-contract)
 append separate instances without stacking (`AppendDelivery`).
 [Contest awards](photo-contest.md#approved-delivery-contract-and-implementation-gap)
-follow the Deliver rule. Still open: held-field placement on acquisition
-([#1948](https://github.com/witchcraze/party2re/issues/1948)), Auction gold
+follow the Deliver rule. Still open: Auction gold
 destination ([#1815](https://github.com/witchcraze/party2re/issues/1815)) and
 native combat book execution
 ([#1370](https://github.com/witchcraze/party2re/issues/1370)).
 
-### Dynamic Capacity Recalculation (`RefreshCapacity`)
-
-Because `character_depots.capacity` is initialized at character creation and character job levels advance dynamically over time, commerce and delivery modules (`shop`, `secretshop`, `blackmarket`, `fleamarket`, `auction`, `store`, `god`, `altar`, `medal`, `plantation`) MUST synchronize the in-memory depot capacity using `dep.RefreshCapacity(char.JobLevel, char.OverDepot)` before performing capacity boundary checks. This guarantees that high-level characters enjoy their full dynamic depot capacity (up to 500 slots) across all trade and item receipt operations.
-
-### Root Initialization Guarantee & Centralized Retrieval (`FindOrCreate`)
-
-To eliminate uninitialized depot records and stale capacity errors, a two-layer defense-in-depth architecture is enforced:
-1. **Root Guarantee (Character Creation Auto-Initialization)**: Character creation initializes `character_depots` with `capacity = 5` and `ex_depot = 0` alongside the character and joining news. The [character creation contract](player-and-character.md#29-transactional-character-creation--joining-news) owns their shared commit/rollback guarantee.
-2. **Centralized Retrieval (`FindOrCreate`)**: Across all commerce and reward domain callers (`store`, `blackmarket`, `plantation`, `casino`, `medal`, `auction`, `alchemy`, `depot/delivery`), services retrieve depots via `depot.FindOrCreate(ctx, repo, char)`. Under pessimistic lock (`FindByCharacterIDForUpdate`), if no record exists it initializes a new `Depot` with dynamic capacity reflecting the character's `JobLevel` and `OverDepot`; if a record already exists, it refreshes the capacity via `dep.RefreshCapacity(char.JobLevel, char.OverDepot)`. This permanently eliminates uninitialized `ErrNotFound` bugs and eliminates repetitive hand-rolled boilerplate across domains.
-
 ## Operations & Invariants
 
 ### 1. Item Deposit & Withdrawal
-- **Deposit Item**: Moves an item instance from character inventory to depot storage.
-  - Invariant: Item exists in character inventory.
-  - Invariant (Issues #452, #558, #563): Stacking is restricted to stackable items (`Definition.IsStackable() == true` / `Slot == SlotNone`) with `EnhancementLevel == 0`. If a stackable unenhanced item already exists in the depot with identical definition ID, it stacks into the existing slot without consuming an extra slot. Equipment items (weapons, armor, shields, accessories; `IsStackable() == false`) and enhanced items (`EnhancementLevel > 0`) represent discrete gear instances and must NEVER merge into a single slot even if unenhanced (+0), always occupying discrete slots ($\text{len}(Items) < Capacity$).
+- **Deposit** (`depot.cgi:167–207`) is rejected at capacity. Only unenhanced stackable items merge into an existing stack; equipment and enhanced items always occupy their own slot.
 - **Withdraw Item (`hikidasu`)**: Swaps one unit of the selected depot row into
   the matching [legacy hand field](items-and-equipment.md#legacy-hand-fields)
   (`depot.cgi:208–288`).
@@ -140,147 +106,30 @@ clear customization for empty weapon/armor fields. Failure, including full
 storage or a later save error, rolls back equipment, customization and ownership.
 
 ### 2. Depot Expansion (`かくちょう`)
-- Characters can purchase up to 20 expansions (`MaxExDepot = 20`), each granting +5 capacity slots.
-- Tiered expansion cost table:
-  - Expansions 0, 1: 200,000 gold each
-  - Expansions 2, 3: 400,000 gold each
-  - Expansions 4, 5: 600,000 gold each
-  - Expansions 6, 7: 800,000 gold each
-  - Expansions 8..19: 999,999 gold each
-- Invariant: `ExDepot < 20` and `Character.Money >= cost`.
-- Legacy evidence: `depot.cgi:23–46,521–542` quotes the current tier before an
-  explicit affirmative purchase. Observation never purchases; the explicit
-  command requests one expansion, charging the service's current tier atomically
-  with incrementing the purchased count. A displayed quote is not a reservation.
-  Insufficient funds or the maximum count leaves both funds and count unchanged.
+
+`depot.cgi:23–46,521–542` quotes the current tier before an explicit purchase. A displayed quote is not a reservation: the command charges the tier current at execution, atomically with incrementing the count.
 
 ### 3. Depot Item Sales (`うる` / `まとめてうる`)
-- Stored items can be sold directly from the depot without withdrawing them first.
-- Sale price is 50% of the item definition base price per unit: $\lfloor \text{Price} \times 0.5 \rfloor \times \text{Quantity}$.
-- Supports atomic batch selling (`SellItems`) for multiple selected depot item instances.
-- `SellItem` delegates to the same batch implementation. Before removing any
-  instance, every selected ID must exist exactly once in the request, its catalog
-  lookup must succeed, its base price must be nonnegative and its quantity positive.
-  A missing catalog provider or failed lookup aborts the sale; a successfully read
-  0G definition remains sellable. Integer division computes the per-unit half-price;
-  shared checked multiplication/addition reject overflow before mutation.
-- Sales remove whole selected instances, including all units in a stack, and ignore
-  enhancement when valuing the base price. Existing wallet saturation at `MaxMoney`
-  remains in force. This stack representation is the reconstruction contract;
-  legacy `depot.cgi:105–164,420–519` operates on individual stored rows.
-- Missing/repeated IDs, invalid valuation and persistence failures leave the wallet
-  and Depot unchanged in the production transaction. Catalog failures retain their
-  original error for callers rather than becoming successful zero-price sales.
+
+Stored items sell at floor(base price × 0.5) per unit without withdrawal. Legacy `depot.cgi:105–164,420–519` sells individual stored rows; the reconstruction sells whole selected instances, including every unit of a stack, ignoring enhancement. A batch validates every selected item first and changes nothing if any is missing, repeated or unpriceable; a successfully read 0G definition stays sellable.
 
 ### 4. Depot Sorting (`せいとん`)
 - Legacy `depot.cgi:313–332` sorts each stored row by its kind, then by its numeric
   item number. `azukeru` (`167–207`) stores weapons as kind 1, armor as kind 2 and
   every entry of the item catalog as kind 3, so shields and accessories sort with
   consumables by catalog number, not with armor.
-- Go derives the same key from canonical catalog identity
-  (`item.Definition.LegacyStorageKey`): `weapon-NN` → (1, NN), `armor-NN` → (2, NN),
-  `item-NNN` → (3, NNN). This is independent of `Slot.Kind()`'s slot grouping.
-  Instances with equal keys keep their existing relative order.
+- Go uses the same key from catalog identity (`weapon-NN` → (1, NN), `armor-NN` → (2, NN), `item-NNN` → (3, NNN)), independent of slot grouping; equal keys keep their relative order.
 - Legacy rows always carry a kind and number, so a definition that is missing from
   the catalog, is not a canonical identity, or has no configured definition provider
   has no legacy behavior. By approved decision (#1288) the sort then fails with the
   wrapped catalog error and the transaction leaves the depot unchanged; no
   classification is guessed.
-- Explicit sorting persists the resulting instance order. Ordinary saves preserve
-  slice order, including appended items; reads never implicitly sort by definition.
-  Both normal and locked reads use stored position with instance ID as a tie-breaker.
-  Rows predating the position migration retain their former ID order until saved.
+- Only an explicit sort reorders the Depot; reads and ordinary saves keep stored order.
 
 ### 5. Mailing Items and Money (`おくる`)
-- **Send Money (`SendMoney`)**: Transits gold directly from the sender's purse to the recipient's purse.
-  - Invariant: `sender.Money >= amount` and `amount > 0` and `sender != recipient`.
-- **Send Item (`SendItem`)**: Transits an item directly from sender's inventory into the recipient's depot storage.
-  - Invariant: Item exists in sender inventory.
-- Both reject a full recipient Depot before any change, even when a matching
-  stack exists ([delivery capacity](#delivery-capacity-by-caller)).
 
-### 6. Storage Item Consumption (`Consume`, `ConsumeOne`, `PurgeSlot`)
-- Town facilities and trade actions (e.g., Home consumable item usage, Black Market rare item sacrifices, Gem Store synthesis crafting, Flea Market and Player Store listings) consume items directly from Depot storage.
-- Standardized consumption method `dep.Consume(instanceID, quantity)` safely decrements `Quantity` by `quantity` when `existing.Quantity >= quantity`, returning a copy of the consumed instance with `Quantity = quantity`.
-- If the remaining quantity reaches 0, the item slot is removed from depot storage.
-- If `quantity <= 0` or `existing.Quantity < quantity`, returns `ErrInvalidQuantity` without mutating depot state.
-- `dep.ConsumeOne(instanceID)` delegates directly to `dep.Consume(instanceID, 1)` and is also used by `WithdrawItem` so withdrawing from a stack moves a single unit to the hand.
-- Intentional whole-slot removal (e.g., selling an entire depot stack) must use `PurgeSlot(instanceID)` (or legacy `RemoveItem`, which delegates to `PurgeSlot`). `RemoveItem` is marked deprecated for consumption purposes to prevent accidental stack deletion.
-
-## Atomicity, Concurrency & Lock Hierarchy
-
-Production single-character mutations use `economy.TransactionRunner`: character
-locks (Rank 2), inventory/equipment locks when needed (Rank 3), then Depot root/item locks
-(Rank 5). Sales lock no inventory. The runner credits the wallet after the Depot
-save in the same transaction; a later character-save failure rolls both back.
-Concurrent single/batch sales of an overlapping instance can settle only once.
-Cross-character transfers (`SendMoney`, `SendItem`) use the injected transaction
-provider and enforce global lock hierarchy ordering:
-1. **Rank 2 (`characters`)**: Both sender and recipient row locks acquired via `id.Sort2(fromID, toID)` in ascending lexicographical order to prevent deadlocks.
-2. **Rank 3 (`inventory_items`, `equipment_slots`)**: Sender inventory, then equipment locked for item transfers. Equipment references are saved before inventory deletion.
-3. **Rank 5 (`character_depots`)**: Target depot locked with `FOR UPDATE`.
-
-The [Depot navigation index](../../.arch/modules/depot.json) records the verified
-boundaries, including SendItem's subsequent sender-Depot read under lock. Tests
-may explicitly inject adapters without a database transaction; that configuration
-does not provide production rollback guarantees.
+Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Open: recipient Home delivery notices (#1110).
 
 ## Gateway Observation and Retained Operations
 
-The owned `depot` facility is a pageable town destination. Its typed context
-projection reads the existing `GetDepot` service and returns dynamic capacity,
-purchased expansion count, the next expansion's gold cost (null at the cap),
-total occupied slots and a bounded page of item
-instances (ID, definition ID, quantity, enhancement level). Slot count refers
-to all stored instances before paging; a stack still occupies one slot.
-Legacy `depot.cgi:49–99` reports owned count/capacity/expansions, and
-`system.cgi:1267–1288` supplies the capacity and occupied-row rule.
-
-Offset pages use the shared default20/max100 bounds and preserve the public
-reader's persisted instance order, with ID breaking position ties. They do not
-promise a snapshot across concurrent changes. The adapter does not call
-`SortItems` or add a separate ordering rule. Missing storage produces an empty
-in-memory view with calculated capacity; GET never persists that view or creates
-a depot. Required character/storage errors fail observation, and actual
-activities/conflicts take priority over ordinary selection. The
-[navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery)
-owns input, ownership and GET-only refresh recovery behavior.
-
-Owned status uses explicit `scene_enter` for Depot followed by GET context;
-the mapping below owns individual route dispositions. Connected Gateway
-commands delegate to the listed services and retain their Depot result,
-including gold earned for sales and trimmed recipient/item IDs for sending.
-`depot_expand` and `depot_sort` accept omitted params or an empty object.
-`depot_deposit`, `depot_withdraw` and `depot_sell` require a non-null string `item_id`;
-`depot_sell_batch` requires an explicit array of string `item_ids`.
-`depot_send_item` requires non-null string `item_id` and
-`recipient_character_id`; the actor remains the authenticated path owner.
-Discovery never selects items or recipients. Exact ownership, capacity,
-stacking and equipment detachment remain service-owned. The shared
-[command contract](../architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)
-owns explicit intent, guards and outcome recovery. Observation does not execute
-NPC, delivery, collection or scheduling effects. Legacy `depot.cgi:68–81` dispatch
-maps to the existing services as follows:
-
-| Legacy routine | Existing service | Transport |
-| --- | --- | --- |
-| Listing/header, `get_depot_c` | GetDepot | Selected Depot GET context; whole-list REST retired |
-| `azukeru` | DepositItem | Gateway `depot_deposit`; deposit REST retired |
-| `hikidasu` | WithdrawItem | Gateway `depot_withdraw`; withdrawal REST retired |
-| `uru` | SellItem | Gateway `depot_sell`; sale REST retired |
-| `matomete_uru` | SellItems | Gateway `depot_sell_batch`; batch-sale REST retired |
-| `seiton` | SortItems | Gateway `depot_sort`; sort REST retired |
-| `okuru` (item) | SendItem | Gateway `depot_send_item`; item-send REST retired |
-| `okuru` (money) | SendMoney | POST `/characters/{id}/depot/send-money` |
-| `expansion_depot` | Expand | Gateway `depot_expand`; expansion REST retired |
-
-This mapping records transport coverage, not full legacy parity. Sorting and
-equipped-item movement use the domain contracts above.
-Withdrawal follows the swap contract above; equipped item deposit/send uses the
-atomic equipment-detachment contract. Shared
-NPC/presence/log effects and remaining command/route migration stay under #947.
-Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item
-lists, all empty in the reference checkout. Current `SendItem` has no such
-configuration; nonempty deployment-specific lists are unverified. Recipient
-Home delivery notices remain under
-[#1110](https://github.com/witchcraze/party2re/issues/1110).
+Depot is a pageable town destination observed through character context (`depot.cgi:49–99`; capacity and occupied-row rule `system.cgi:1267–1288`). A stack occupies one slot. GET never creates or saves a Depot, sorts it or moves items. All Depot operations use Gateway commands except send-money, which stays on REST. The remaining migration, shared NPC/presence/log effects and legacy parity are open (#947).

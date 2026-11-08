@@ -1,361 +1,46 @@
-# Casino Architecture & Multi-Player Facility Design
+# Casino Design
 
 ## Overview
 
-The Casino (カジノ) in Party2 is an entertainment and wagering facility based faithfully on `party2/lib/casino.cgi`, `party2/lib/_casino.cgi`, `party2/lib/casino_indian.cgi`, `party2/lib/casino_highlow.cgi`, and `party2/lib/casino_doppel.cgi`.
+The Casino follows `party2/lib/casino.cgi`, `_casino.cgi`, `casino_indian.cgi`, `casino_highlow.cgi`, `casino_doppel.cgi` and `casino_slot.cgi`: one-way coin exchange, a prize exchange, the solo slot machine and multiplayer Indian poker, High & Low and Doppelganger rooms. Formulas, catalogs and transport live in code and [OpenAPI](../api/openapi.json); live rooms are Valkey state ([transient run state](../architecture/transient-run-state.md)).
 
-It provides:
-1. **Casino Currency Exchange**: One-way exchange from character gold to casino coins (1 Coin = 20 Gold; cashing out coins back to gold is prohibited per legacy clean-room specification).
-2. **Multi-Player Room Lobby**: Real-time room recruitment and turn-based games for 2 to 8 players.
-3. **Authentic Mini-Games**:
-   - Multi-Player Indian Poker (`indian`) — 13-card blind bluffing game with forehead placement and pot distribution.
-   - Multi-Player High & Low (`highlow`) — 13-card rank prediction and split pot showdown.
-   - Multi-Player Doppelganger (`doppel`) — 8-symbol dealer matching and leadership transfer.
-   - Slot Machine (`slot`) — Solo 3-reel, 5-symbol paytable with 100x jackpot.
-4. **Prize Exchange & Depot Routing**: 18 authentic prizes delivered directly into long-term Depot storage (`character_depots`).
+## Currency
 
----
+- Exchange is one way: 1 coin = 20 gold (`casino.cgi:651–665`). Coins never convert back to gold.
+- Prizes are delivered to the Depot, past capacity if needed (`casino.cgi:609–623`; [delivery capacity](depot.md#delivery-capacity-by-caller)); coin deduction and delivery commit together.
 
-## 1. Currency & Account Invariants
+## Rooms
 
-- **Exchange Rate**: `1 Casino Coin = 20 Gold`.
-- **Exchange Bounds & Overflow Protection**:
-  - Exchanging coins (`ExchangeGoldToCoins` / `@りょうがえ`) requires positive coin amounts (`coins > 0`) within representable bounds (`coins <= math.MaxInt / 20`, `MaxExchangeCoins`). Calculations exceeding representable bounds (e.g. `2^62`, `MaxInt64`) are rejected with `ErrCoinOverflow` (HTTP 400 Bad Request) without mutating character wallet gold or casino coin balance (`party2/lib/casino.cgi:651–665`).
-  - Prize exchange costs (`prize.CostCoins * count` / `@こうかん`) guard against integer overflow using safe arithmetic (`economy.SafeMultiply`), rejecting unrepresentable counts without coin deduction.
-- **Wallet vs. Bank Balance**:
-  - Buying coins deducts from character wallet gold (`characters.money`).
-  - Selling coins is strictly prohibited per legacy clean-room specification (one-way exchange only).
-- **Non-negative Balance**:
-  - `casino_accounts.coins >= 0` enforced by table schema and transactional checks.
-
----
-
-## 2. Multi-Player Room Lobby (Candidate C: Ephemeral Valkey Master)
-
-Rooms serialize multi-player games using Valkey Master (`ValkeyRoomRepository`, Candidate C Ephemeral Turn & Session Lobby Architecture, SSOT: [`docs/architecture/transient-run-state.md`](../architecture/transient-run-state.md)). Legacy MariaDB tables `casino_rooms` and `casino_members` were dropped in Migration 085.
-
-### Creation Rules (`@つくる` / `POST /characters/{id}/casino/rooms`)
-- **Name**: 1–50 runes, unique among non-disbanded rooms, cannot contain spaces, tabs, newlines, or delimiters (`,;\&<>\\/@＠`).
-- **Game Types**: `indian`, `highlow`, `doppel`.
-- **Turn Speed**:
-  - `12` seconds (さくさく / Fast)
-  - `18` seconds (まったり / Normal)
-  - `28` seconds (じっくり / Slow)
-- **Capacity**: 2 to 8 players.
-- **Base Rate**:
-  - Standard (`indian`, `highlow`): `1`, `5`, `10`, `20`, `50`, `100`, `500`, `1000`, `5000` coins.
-  - Doppelganger (`doppel`): Minimum 10 coins.
-  - Creator minimum balance: `rate * 5` coins (`rate` for doppel).
-- **Aikotoba (Password)**: Optional plaintext password hashed via SHA-256.
-- **Spectator Mode**: Optional boolean flag.
-
-### Participant Lifecycle
-- **Join (`@さんか`)**: Gated by `tired < 100`, `coins >= rate`, and available capacity.
-- **Spectate (`@けんがく`)**: Gated by room spectator allowance. Spectators cannot act or receive pot rewards.
-- **Leave (`@にげる`)**: Removes player. Participating players incur a +1 fatigue penalty (`char.AddTired(1)` per `party2/lib/_casino.cgi:216-218`). Spectators leave freely without fatigue penalty. Automatically reassigns room leader to next active member; disbands room if 0 active members remain.
-- **Kick (`@きっく`)**: Leader-only eviction of non-leader members prior to game start (`round == 0`).
-- **Unified Game Dispatch**:
-  - `POST /characters/{id}/casino/rooms/{roomId}/start`: Starts the game according to configured `game_type`.
-  - `POST /characters/{id}/casino/rooms/{roomId}/action`: Dispatches player actions according to configured `game_type`.
+- Leaving as a participant adds 1 fatigue (`_casino.cgi:216–218`); spectators leave freely and never act or win. Leadership passes to the next active member; the room disbands with no active members. Kick is leader-only before the game starts.
+- Casino owns a 30-minute idle lifetime. Open: legacy expiry also applied a sleep penalty (`casino.cgi:178–190`), not yet reconciled (#949).
+- After an error, clients observe room and account state instead of replaying a wager; repeated actions on a finished round or an already-submitted turn are rejected. Publication ordering and cross-store limits are owned by [Valkey keyspace](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging).
 
 ### Observation and visibility
 
-The anonymous lobby is a window of at most 100 active rooms containing identity,
-game, speed, capacity, base rate, password requirement, spectator allowance,
-status and participant/spectator counts. It excludes member identities, cards,
-marks, actions, pot and private timestamps. Empty lists are non-null arrays.
-Gateway ordinary selection uses the existing shared navigation record. Lobby
-pages contain at most 100 rooms from that public window, ordered by room ID,
-with explicit offset/limit and next-page parameters. This is not discovery of
-all rooms or a cross-page snapshot. A selected room exposes only its public
-summary and explicit join/spectate target parameters; it grants no admission.
-
-Detail requires a session and an owned `character_id`, verified again at the
-Casino service boundary, plus actual participant or admitted spectator
-membership. Anonymous requests return 401, nonowned/nonmember characters 403,
-and absent/disbanded/expired rooms 404. Selection never grants admission: join
-and spectate remain explicit mutations enforcing password; spectate also checks
-spectator allowance.
+The anonymous lobby is a window of at most 100 active rooms with public summary facts only (no members, cards, marks, actions, pot or private timestamps). Selecting a room grants no admission: join and spectate stay explicit mutations that enforce the password and spectator allowance. Detail requires an owned character that is an actual participant or admitted spectator. Reads never start, advance, wager, settle or renew the idle lifetime.
 
 | Game / phase | Participant | Admitted spectator |
 | --- | --- | --- |
 | Indian, active | Own card hidden unless folded or waiting; other cards and declarations visible | Participant cards/declarations visible |
-| Highlow, active | Own card/action visible; other cards hidden except waiting members; competitive declarations hidden, continue/wait visible | Same rules without an own participant card |
-| Doppel, active | Own mark visible; other marks hidden | All participant marks hidden |
-| Before start / after settlement (`round <= 0`) | Remaining cards/marks and declarations visible | Same visibility |
+| Highlow, active | Own card/action visible; other cards hidden except waiting members; competitive declarations hidden, continue/wait visible | Same, without an own card |
+| Doppel, active | Own mark visible; other marks hidden | All marks hidden |
+| Before start / after settlement (`round <= 0`) | Remaining cards/marks and declarations visible | Same |
 
-Spectator records expose no playable cards/actions. Hidden cards/marks use
-`card: -1` and `card_display: "？"`. Go Doppel actions encode the selected mark
-itself, so other participants' mark actions are masked as `"？？？"`; the legacy
-routine displays actions separately from hidden cards. Evidence is
-`lib/casino_indian.cgi:22–33`, `lib/casino_highlow.cgi:33–50`,
-`lib/casino_doppel.cgi:23–36`, admission in `lib/casino.cgi:382–516`, and common
-dispatch in `lib/_casino.cgi:10–32,100–111`. Current settlement returns to
-waiting with round zero; there is no separate finished room status. Formula
-parity and settlement history are outside this read-boundary inspection.
-
-Reads never start, advance, wager or settle.
-
-Gateway activity discovers the owned actor's existing character-room mapping
-through `GetCharacterRoomView`, then applies `GetRoomView` authorization/masking.
-Stale mappings pointing to rooms that are missing, disbanded, idle-expired or no
-longer admit the actor in their live roster resolve as absent (`nil, nil`)
-without mutating Valkey, whereas unreadable or blank mapping records return an
-error rather than reporting false idle state.
-Context adds the authorized masked room view, the actor's coin balance and
-service-owned role/phase controls to the activity facts, including conflicts.
-Actual admission overrides ordinary selection, even if the selector cannot be
-read. Spectators get leave only. Waiting leaders get start and kick targets;
-active participants get game action values, with Low only for more than two
-participants and Doppel marks bounded by participant count. Conflicts or sleep
-retain room facts and leave recovery while suppressing start/kick/play choices.
-If admission/phase/turn eligibility changes between the activity and detail
-reads, context fails rather than presenting mixed facts; retry observation with
-GET. These are unconnected Gateway controls until mutation migration; retained
-REST operations remain available. Lobby menus expose existing account coins,
-one-way exchange rate, prize catalog and job-gated slot rates without executing
-any of those operations.
-
-Detail uses the existing room lock
-for a consistent phase/member snapshot and does not renew activity/TTL. Casino
-owns the 30-minute idle lifetime: lobby reads invoke expiry, which rechecks
-activity under that lock before deletion, then prune stale index entries.
-Expiry, store and required detail-name enrichment failures propagate instead
-of becoming empty observations. Lobby counts require no name enrichment.
-Valkey TTL remains the live-state lifetime authority; no cross-store settlement
-guarantee is added. Legacy expiry also applied a sleep penalty
-(`lib/casino.cgi:178–190`); that side effect remains reconciliation work under
-[#949](https://github.com/witchcraze/party2re/issues/949).
+Evidence: `lib/casino_indian.cgi:22–33`, `lib/casino_highlow.cgi:33–50`, `lib/casino_doppel.cgi:23–36`, admission `lib/casino.cgi:382–516`, dispatch `lib/_casino.cgi:10–32,100–111`. Settlement returns the room to waiting with round zero; there is no separate finished status. Go Doppel stores the selected mark in the action too, so other participants' mark actions are masked; legacy displays actions separately from hidden cards.
 
 ### Scoped legacy dispatch reconciliation
 
-This maps the inspected observation/admission/choice paths, not wager or
-settlement formulas. Paths are relative to the original `party2` distribution.
-All operational REST routes remain until their mutation replacements are verified.
+All room, slot, exchange and prize operations still run through REST; their Gateway connection is open (#949). Screenshot (`すくしょ`) and invitation (`さそう`) (`_casino.cgi:124–145`) have no replacement and are deferred to #949/#140. Known differences, reconciled under #949:
 
-| Legacy action / call path | Observation / retained service and transport / remaining owner |
-| --- | --- |
-| `lib/casino.cgi:94–113,195–381`: `つくる`, `インディアン`, `ハイロウ`, `ドッペル` creation selectors | Lobby navigation is separate from `CreateRoom` with explicit `game_type`; retained POST `/characters/{id}/casino/rooms`. Gateway `casino_room_create` candidate is unconnected; adapter belongs to #949. |
-| `lib/casino.cgi:95–96,382–518`: `さんか`, `けんがく`, optional `あいことば` | Public selected summary supplies explicit room targets; `JoinRoom`/`SpectateRoom` enforce password, capacity/balance/fatigue or spectator allowance. Retained join/spectate POST routes; Gateway admission candidates remain unconnected under #949. |
-| `lib/casino.cgi:97–113,523–594`: `＄1/10/50/100/200すろっと` | Read menu uses existing wager rates and Job 46's 200-coin gate. `SpinSlot` and retained POST `/characters/{id}/casino/slot`; Gateway connection remains #949. |
-| `lib/casino.cgi:97–113,596–688`: `こうかん`, `りょうがえ` | Account, prize catalog and `GoldPerCoin` facts; `ExchangePrize`/`ExchangeGoldToCoins` remain prize-exchange/exchange POST operations. Explicit costs/counts/coins are command inputs; reading never exchanges. Gateway adapters remain #949. |
-| `lib/_casino.cgi:10–32,100–111,148–239`: `にげる`, `かいし`, leader `きっく` | Owned admitted activity controls map to `LeaveRoom`/`StartGame`/`KickMember`, retaining leave/start/kick POST routes. Selection/location cannot block leave or ongoing play. Mutation connection and progression-on-leave reconciliation remain #949. |
-| `lib/_casino.cgi:10–32,124–145`: `すくしょ`, `さそう` | No Casino service/route replacements. Screenshot is presentation and invitation is social reconciliation; explicitly deferred to #949/#140. |
-| `lib/casino_indian.cgi:10–33`: `つづける`, `しょうぶ`, `おりる` and forehead masking | `call`/`showdown`/`fold` candidates and authorized masked `GetRoomView`; retained room action POST → `PlayRoomAction` → Indian service. Gateway adapter remains #949. |
-| `lib/casino_highlow.cgi:10–50`: `つづける`, `ハイ`, conditional `ロウ`, `おりる` and own-card/action masking | Current room `call`/`high`/`low`/`fold` candidates and masked view; retained room action POST → Highlow service. Legacy hides continue at maximum bet or insufficient coins; current service accepts all-in calls. That menu/service difference remains #949 reconciliation, not a formula change here. |
-| `lib/casino_doppel.cgi:10–99`: generated marks and own-mark masking | Participant-count mark choices and masked view; retained room action POST → Doppel service. Legacy clears declarations on start and stores mark changes in the card field, permitting reselection before all cards are selected. Go stores marks in Action too, so its viewer masks other mark actions. Waiting entrants' eligibility remains existing service behavior for #949 reconciliation. |
-| `lib/casino.cgi:118–190`, game `member_html`, `_casino.cgi:48–97` | Lobby/selected summary and authorized activity detail replace observation through context, without advancing or settling. Idle expiry remains feature-owned; its legacy sleep penalty is deferred to #949. |
+- High & Low: legacy hides “continue” at the maximum bet or with insufficient coins (`casino_highlow.cgi:10–50`); the service accepts all-in calls.
+- Doppel: legacy clears declarations on start and stores mark changes in the card field, allowing reselection before all cards are selected (`casino_doppel.cgi:10–99`). Eligibility of waiting entrants follows the existing service.
 
-The former OpenAPI singles-play Highlow/Doppel POST paths had no registered
-handlers and are removed along with their fictional solo catalog entries.
-Both games use explicit room creation/start/action commands. No new handler is
-invented; Chapel blessing remains Chapel's responsibility.
+## Game rules
 
-### Writer-side persistence and partial failure boundary
+Non-obvious rules (deck, pot and round mechanics live in code):
 
-Indian Poker, HighLow and Doppel synchronize room mutations under the Valkey
-room lock (`party2:casino:lock:room:<room_id>`, 5s acquisition budget with
-caller context cancellation, 10s lease TTL, token-verified Lua release) and
-stage the complete action, resets and removals before one authoritative
-room/member payload write (`UpdateRoomDetail`). The masked response snapshot is
-read reentrantly under that same room lock without releasing and re-acquiring
-the lock.
-
-- **Pre-publication failure**: A rejected action or primary payload write rolls
-  back SQL wagers, payouts and `CasinoWins` without publishing an accepted turn
-  or invoking `gamePlayedHook`. Room admission (`CreateRoom`, `AddMember`)
-  holds the target room lock (`WithRoomLock`), verifies before publishing the
-  room payload that the character is not already admitted in another live room
-  (`ErrAlreadyInRoom`), and rolls back the room/roster write under that room
-  lock (joining any compensatory cleanup error) if a concurrent cross-room
-  admission wins the atomic single-key mapping claim
-  (`claim_character_room.lua`).
-- **Post-publication secondary sync (`SecondarySyncError` / `ErrSecondarySync`)**:
-  Active-index renewal/removal and reverse-mapping synchronization/cleanup
-  failures after payload persistence preserve committed coin/win settlement
-  while returning the error. Live room mutations (`saveRoomDetail`,
-  `UpdateRoom`, `UpdateRoomDetail`, `AddMember`, `UpdateMember`, `RemoveMember`)
-  atomically renew (`renew_character_room.lua`) or delete
-  (`delete_character_room.lua`) reverse mappings conditioned on the current
-  mapping still matching that room, without resurrecting absent mappings or
-  overwriting/deleting a different live room's mapping. Failed active-index sync
-  can hide a live payload from lobby discovery until renewal; idle expiry
-  rechecks payload activity before deletion.
-- **Post-commit response observation failure**: Once the SQL settlement and
-  room publication succeed without a secondary-sync failure, any committed
-  winner progression hook (`gamePlayedHook` -> `medal.MetricCasinoGames`) runs
-  for all round winners even if the subsequent masked response read fails,
-  before returning the read error.
-- **No blind replay**: Clients must observe room/account state after an error
-  rather than replay the wager; repeated actions on a completed round or
-  already-submitted turn are rejected (`ErrGameNotInRound` or `ErrAlreadyActed`).
-
-The [persistence and lifetime contract](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging)
-owns publication ordering and cross-store limits.
-
----
-
-## 3. Multi-Player Indian Poker (`party2/lib/casino_indian.cgi`)
-
-### Rules & Mechanics
-- **Deck**: 13 unique cards (`Ａ`, `２`, `３`, `４`, `５`, `６`, `７`, `８`, `９`, `10`, `Ｊ`, `Ｑ`, `Ｋ`).
-- **Forehead Card Rule**: Each player cannot view their own dealt card (masked as `？` / `-1` in API client views), but sees all opponent cards.
-- **Actions**:
-  - `call` (`つづける`): Pay current round bet into pot and stay in the hand.
-  - `showdown` (`しょうぶ`): Pay current round bet into pot and vote to conclude.
-  - `fold` (`おりる`): Forfeit hand and pay current round bet into pot (`party2/lib/casino_indian.cgi:102`); reveals card immediately.
-- **Round Flow & Settlement**:
-  - When all active members declare actions:
-    - If all but one fold $\rightarrow$ remaining player wins.
-    - If $\ge 50\%$ vote showdown, or maximum bet reached, or a player exhausts coins $\rightarrow$ Showdown triggers.
-    - Otherwise $\rightarrow$ `round++`, `current_bet += rate`.
-  - Highest card among surviving non-folded players wins entire pot.
-  - Ties split the pot equally.
-  - Members with 0 coins remaining are automatically ejected.
-
----
-
-## 4. Multi-Player High & Low (`party2/lib/casino_highlow.cgi`)
-
-### Rules & Mechanics
-- **Deck**: 13 unique cards (`Ａ`..`Ｋ`), dealt 1 per player secretly.
-- **Card & Action Visibility**:
-  - During an active round, player sees their **own** card; opponents' cards are masked as `？` / `-1`, except waiting members whose cards remain visible (`lib/casino_highlow.cgi:45`). At round zero, remaining cards are revealed to admitted viewers.
-  - Opponents' declared competitive actions (`high`, `low`, `fold`) are masked as `？？？` during active round to prevent information leakage, while `call`/`tsuzukeru` and `待機中` remain visible.
-- **Actions**:
-  - `call` (`つづける`): Match current round bet into pot and stay in the hand.
-  - `high` (`ハイ`): Bet current round bet that own card is highest.
-  - `low` (`ロウ`): Bet current round bet that own card is lowest (requires $> 2$ participants).
-  - `fold` (`おりる`): Forfeit hand and pay current bet into pot.
-- **Round Flow & Progression**:
-  - When all active participants have acted in the round:
-    - Showdown triggers if:
-      - Active non-folded players $\le 1$, OR
-      - Any non-folded player exhausts coins (`coins <= 0`), OR
-      - Current bet reaches maximum (`current_bet >= rate * 5`), OR
-      - Number of High + Low declarations $\ge 50\%$ of active non-folded players.
-    - Otherwise: `round++`, `current_bet += rate`. Non-folded participants reset action to `""` and keep cards.
-- **Showdown Resolution**:
-  - Determine highest card among `high` callers (`higher`) and lowest card among `low` callers (`lower`).
-  - **Split Pot (3+ players)**: If both `higher` and `lower` exist and room has $> 2$ players, the pot is divided 50/50 (`pot / 2`) between both winners.
-  - **Single Winner**: If only `higher` exists, `higher` wins full pot. If only `lower` exists, `lower` wins full pot.
-  - **All Fold**: If all players folded, game ends with no winner ("お流れ") and pot clears.
-  - Members with 0 coins remaining are ejected from room; survivors reset to `待機中`.
-
----
-
-## 5. Multi-Player Doppelganger (`party2/lib/casino_doppel.cgi`)
-
-### Rules & Mechanics
-- **Marks**: 8 symbols (`★`, `●`, `◆`, `♪`, `■`, `▲`, `†`, `▼`).
-- **Selectable Pool**: `0..min(len(participants), 7)`. For 2 players: 3 marks (`★`, `●`, `◆`); for 3 players: 4 marks; for 7+ players: all 8 marks.
-- **Mark Visibility**: Each player sees only their **own** chosen mark; all opponents' marks and actions are masked as `？` / `？？？` during the round.
-- **Wager & Selection**:
-  - Bet rate is fixed (minimum 10 coins).
-  - Coin deduction occurs on a player's **first** mark selection in the round.
-  - Active players may change their selected mark before the other players
-    finish selecting, without another coin deduction. Legacy clears declarations
-    at start and changes only the card field (`lib/casino_doppel.cgi:41–99`).
-- **Showdown Resolution**:
-  - Triggers immediately when all active participants have chosen a mark.
-  - The room leader is the "親" (dealer / target).
-  - Any non-leader participant ("子") whose mark matches the leader's mark is a winner:
-    - **Children Win**: If $\ge 1$ children match the leader, they split the entire pot equally (`pot / len(winners)`).
-    - **Leadership Transfer**: A winner chosen at random becomes the new room leader.
-    - **Parent Wins**: If 0 children match the leader, the leader wins the entire pot and retains room leadership.
-  - Members with 0 coins remaining are ejected from room; survivors reset to `待機中`.
-
----
-
-## 6. Solo 3-Reel Slot Machine (`party2/lib/casino_slot.cgi`)
-
-### Rules & Paytable
-The Slot Machine (スロットマシン) is a single-player casino wagering game. Players wager casino coins to spin 3 reels containing 5 distinct symbols. Symbol combinations along the payline award multipliers and coin payouts.
-
-- **Reels & Symbols**: 3 reels ($R_1, R_2, R_3$) with 5 symbols:
-  - **Seven (`SymbolSeven` / ７)**
-  - **Star (`SymbolStar` / ★)**
-  - **Dagger (`SymbolDagger` / †)**
-  - **Note (`SymbolNote` / ♪)**
-  - **Cherry (`SymbolCherry` / ∞)**
-
-### Payout Multipliers
-
-| Combination | Multiplier | Payout on Bet $B$ | Description |
-| :--- | :---: | :---: | :--- |
-| **７ ７ ７** | **100x** | $100 \times B$ | 777 Jackpot |
-| **★ ★ ★** | **70x** | $70 \times B$ | Super Win |
-| **† † †** | **50x** | $50 \times B$ | Big Win |
-| **♪ ♪ ♪** | **20x** | $20 \times B$ | Standard Win |
-| **∞ ∞ ∞** | **10x** | $10 \times B$ | Triple Cherry |
-| **∞ ∞ [Any]** | **3x** | $3 \times B$ | Double Cherry (First 2 reels) |
-| Any other | **0x** | $0$ | Miss (Loss of wagered bet $B$) |
-
-### Betting Rates & Job Restrictions
-- Allowed Bet Rates: **1**, **10**, **50**, **100**, **200** coins.
-- **Job 46 Gate**: The 200-coin slot bet is restricted to characters in Job 46 (Gambler / ギャンブラー) (`party2/lib/casino.cgi:98, 109-111`). Other jobs attempting a 200-coin bet are rejected with `ErrJobNotEligibleForSlot200`.
-
-### Fatigue & Rest Interaction
-- **Fatigue Gate**: Spinning is blocked if character fatigue `Tired >= 100` (`ErrCharacterExhausted`).
-- **Fatigue Penalty on Miss**: When a spin results in a Miss, character fatigue increases by +1 (`char.AddTired(1)` per `party2/lib/casino.cgi:583, 588`).
-
-### Celestial Wish 5 Bonus
-- Characters with the celestial Casino Blessing (Wish 5 from `internal/god`) receive a 25% chance of a +50% payout bonus on winning spins (`party2/lib/casino.cgi:565-568, 577-580`).
-
----
-
-## 7. Authentic Prize Catalog & Depot Routing
-
-### 18 Authentic Prizes (`party2/lib/casino.cgi:41-65`)
-
-| Coins | Item ID | Item Name | Category |
-| :---: | :--- | :--- | :---: |
-| **100** | `item-004` | 賢者の石 | Consumable |
-| **300** | `item-012` | 祈りの指輪 | Accessory |
-| **700** | `item-006` | 霊樹の葉 | Consumable |
-| **2,000** | `item-032` | 物真似の心 | Consumable |
-| **4,000** | `item-038` | 幻獣の実 | Consumable |
-| **5,000** | `item-039` | ギャンブルハート | Consumable |
-| **8,000** | `armor-34` | 危ない水着 | Armor |
-| **30,000** | `weapon-31` | 必殺のピアス | Weapon |
-| **70,000** | `weapon-40` | 流銀の剣 | Weapon |
-| **80,000** | `weapon-38` | 茨の霊鞭 | Weapon |
-| **180,000** | `item-106` | 金の鶏 | Consumable |
-| **200,000** | `item-105` | 幸せのくつ | Consumable |
-| **1,000,000** | `item-231` | 宇宙の壁紙 | Consumable |
-| **1,000,001** | `item-232` | 蟻地獄の壁紙 | Consumable |
-| **1,000,002** | `item-233` | 炎の壁紙 | Consumable |
-| **1,000,003** | `item-234` | 墓場の壁紙 | Consumable |
-| **1,000,004** | `item-235` | 図書館の壁紙 | Consumable |
-| **1,000,005** | `item-236` | 要塞の壁紙 | Consumable |
-
-### Atomic Depot Storage Routing
-- Items are deposited directly into character depot storage (`character_depots`, `depot_items`).
-- A full Depot still receives every prize unit, past capacity if needed (`casino.cgi:609–623`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
-- Depot persistence and coin deduction share one transaction; a failure after either write rolls both back, preserving existing instance IDs and quantities.
-- Non-stackable equipment items receive distinct instance IDs per unit and occupy separate depot slots.
-- Stackable items are automatically merged with existing inventory slots.
-
----
-
-## 8. Concurrency & Lock Acquisition Hierarchy
- 
-Multi-player room lobbies and in-flight turns reside exclusively in Valkey Master (Candidate C Ephemeral Turn & Session Lobby Architecture). MariaDB transactional operations strictly follow the global lock acquisition hierarchy for financial settlements and prize exchange:
-```text
-Rank 2: characters (Character Primary Entity)
-  ↓
-Rank 5: character_depots, depot_items (Depot Storage)
-  ↓
-Rank 8: casino_accounts (Secondary Feature Records)
-```
-In `ExchangePrize`, the configured character repository locks the character (Rank 2) before the Depot (Rank 5) and Casino account (Rank 8). This serializes exchanges for the same character before reading depot items. A character lock/read failure aborts the exchange before any asset mutation. Room lock coordination, staged publication and settlement error boundaries are specified in [Writer-side persistence and partial failure boundary](#writer-side-persistence-and-partial-failure-boundary).
-
-## 9. Casino Wins (`cas_c`) & Job Advancement
-
-- **Casino Wins Tracking**:
-  - Showdown winners in Indian Poker (`party2/lib/casino_indian.cgi:165`), High & Low (`party2/lib/casino_highlow.cgi:216`), and Doppelganger (`party2/lib/casino_doppel.cgi:120,138`) increment their character's `CasinoWins` (`cas_c`) by 1.
-  - Tracked persistently in `characters.casino_wins`.
-- **Gambler Job Advancement (Job 46)**:
-  - Advancing to Job 46 (Gambler / ギャンブラー) requires `CasinoWins >= 10` alongside holding `item-039` (ギャンブルハート) (`party2/lib/_data.cgi:134`). Characters with `< 10` casino wins cannot unlock Job 46 (`ErrJobUnavailable`).
-- **Rankings**:
-  - `characters.casino_wins` feeds into the 勝負師ランキング leaderboard (`ranking.cgi:16`).
+- Indian and High & Low fold still pay the current bet into the pot (`casino_indian.cgi:102`). Players with zero coins are ejected after settlement.
+- High & Low splits the pot between the highest High and lowest Low only with more than two players; with every player folded the pot is void (“お流れ”). Low requires more than two participants.
+- Doppel offers `min(participants, 7) + 1` marks. Coins are taken on a player's first selection in the round only. Matching children split the pot and one of them, chosen at random, becomes the leader; with no match the leader takes the pot and keeps leadership.
+- Slot: the 200-coin bet is limited to job46 (`casino.cgi:98,109–111`); a miss adds 1 fatigue (`casino.cgi:583,588`); the Wish 5 blessing gives a 25% chance of +50% on winning spins (`casino.cgi:565–568,577–580`).
+- Showdown winners increment casino wins (`casino_indian.cgi:165`, `casino_highlow.cgi:216`, `casino_doppel.cgi:120,138`), which feed the gambler ranking (`ranking.cgi:16`) and, with item039, unlock job46 at 10 wins (`_data.cgi:134`).
