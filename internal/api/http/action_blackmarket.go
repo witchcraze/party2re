@@ -51,8 +51,6 @@ func blackMarketActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "BLACKMARKET_INSUFFICIENT_RARE_POINTS", Message: "Insufficient rare points."}
 	case errors.Is(err, blackmarket.ErrInsufficientURarePoints):
 		return http.StatusBadRequest, ErrorDetail{Code: "BLACKMARKET_INSUFFICIENT_U_RARE_POINTS", Message: "Insufficient U-rare points."}
-	case errors.Is(err, blackmarket.ErrDepotFull):
-		return http.StatusBadRequest, ErrorDetail{Code: "BLACKMARKET_DEPOT_FULL", Message: "Depot is full."}
 	default:
 		return 0, ErrorDetail{}
 	}

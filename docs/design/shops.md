@@ -91,8 +91,7 @@ Legacy Party2 routes purchased goods based on current inventory occupancy and qu
 2. **Auto-Transfer to Depot**:
    - The character's target inventory slot is **already occupied**, OR purchase quantity is **greater than 1** ($\text{quantity} > 1$).
    - The purchased item(s) are automatically diverted to `character_depots`.
-   - The depot capacity is calculated via `depot.CalculateCapacity(job_lv, ex_depot, over_depot)`.
-   - If the depot has insufficient remaining capacity, the purchase fails with `ErrDepotFull` and the entire transaction rolls back.
+   - Delivery ignores Depot capacity and may exceed it (`send_item`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
    - Shopkeeper delivers depot delivery message informing the player that goods have been sent to their depot.
 
 3. **Batch Purchase (`handleShopBatchPurchase` / `まとめて買う`)**:
@@ -188,8 +187,7 @@ effects remain separate reconciliation. Puff-puff's private log row and its rout
 replacement remain pending. Legacy `kau` buys one item; current
 Go permits 1..99 and routes bulk quantities to depot. That existing implementation difference is not an
 approved replacement for the legacy single-purchase rule or changed by this
-transport adapter. Depot overflow behavior remains an independent specification
-gap in #1139.
+transport adapter.
 
 ---
 

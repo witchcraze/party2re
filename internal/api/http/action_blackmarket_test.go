@@ -140,7 +140,6 @@ func TestBlackMarketGatewayErrors(t *testing.T) {
 		{blackmarket.ErrNotSacrificeEligible, "BLACKMARKET_ITEM_NOT_ELIGIBLE", 400},
 		{blackmarket.ErrInsufficientRarePoints, "BLACKMARKET_INSUFFICIENT_RARE_POINTS", 400},
 		{blackmarket.ErrInsufficientURarePoints, "BLACKMARKET_INSUFFICIENT_U_RARE_POINTS", 400},
-		{blackmarket.ErrDepotFull, "BLACKMARKET_DEPOT_FULL", 400},
 		{blackmarket.ErrDepotNotConfigured, "EXECUTION_FAILED", 500},
 		{errors.New("private storage failure"), "EXECUTION_FAILED", 500},
 		{context.Canceled, "EXECUTION_FAILED", 500},

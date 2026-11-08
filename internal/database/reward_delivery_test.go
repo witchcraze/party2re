@@ -52,7 +52,7 @@ func TestDeliverRewardItems_Integration(t *testing.T) {
 		Quantity:     1,
 	}
 
-	res1, err := database.DeliverRewardItems(ctx, db, char, []coreitem.Instance{item1}, depot.PolicyAbortOnDepotFull)
+	res1, err := database.DeliverRewardItems(ctx, db, char, []coreitem.Instance{item1}, depot.PolicyDeliverOverCapacity)
 	if err != nil {
 		t.Fatalf("DeliverRewardItems failed: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestDeliverRewardItems_Integration(t *testing.T) {
 		Quantity:     1,
 	}
 
-	res2, err := database.DeliverRewardItems(ctx, db, char, []coreitem.Instance{item2}, depot.PolicyAbortOnDepotFull)
+	res2, err := database.DeliverRewardItems(ctx, db, char, []coreitem.Instance{item2}, depot.PolicyDeliverOverCapacity)
 	if err != nil {
 		t.Fatalf("DeliverRewardItems overflow to depot failed: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestDeliverRewardItems_Integration(t *testing.T) {
 		DefinitionID: "item-inv-full",
 		Quantity:     1,
 	}
-	_, err = database.DeliverRewardItems(ctx, db, char2, []coreitem.Instance{fillInvItem}, depot.PolicyAbortOnDepotFull)
+	_, err = database.DeliverRewardItems(ctx, db, char2, []coreitem.Instance{fillInvItem}, depot.PolicyDeliverOverCapacity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,9 +152,16 @@ func TestDeliverRewardItems_Integration(t *testing.T) {
 		t.Fatalf("expected delivery to lost, got %+v", res3)
 	}
 
-	// Case 4: Full depot with rollback/error policy
-	_, err = database.DeliverRewardItems(ctx, db, char2, []coreitem.Instance{lostItem}, depot.PolicyAbortOnDepotFull)
-	if !errors.Is(err, depot.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull on abort policy, got: %v", err)
+	// Case 4: NPC delivery appends above capacity and persists the extra slot
+	res4, err := database.DeliverRewardItems(ctx, db, char2, []coreitem.Instance{lostItem}, depot.PolicyDeliverOverCapacity)
+	if err != nil || len(res4) != 1 || res4[0].DeliveredTo != depot.DeliveredToDepot {
+		t.Fatalf("expected over-capacity depot delivery, got %+v, %v", res4, err)
+	}
+	reloaded, err := depotRepo.FindByCharacterID(ctx, char2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.Items) != 6 || reloaded.Quantity("item-rare-drop") != 1 {
+		t.Fatalf("expected 6 persisted slots including the delivery, got %+v", reloaded.Items)
 	}
 }

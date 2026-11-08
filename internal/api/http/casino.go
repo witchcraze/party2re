@@ -8,7 +8,6 @@ import (
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/depot"
 )
 
 type CasinoAccountService interface {
@@ -209,7 +208,7 @@ func (h *Handler) handleCasinoExchangePrize(w http.ResponseWriter, r *http.Reque
 
 		res, err := h.casino.ExchangePrize(r.Context(), char.ID, req.CostCoins, req.Count)
 		if err != nil {
-			if errors.Is(err, casino.ErrInsufficientCoins) || errors.Is(err, depot.ErrDepotFull) {
+			if errors.Is(err, casino.ErrInsufficientCoins) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

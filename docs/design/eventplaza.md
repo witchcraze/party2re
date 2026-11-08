@@ -64,7 +64,7 @@ Authentic delivery mechanics based on hand item slot occupancy:
   `"はい、$nameです"`
 - **Depot Storage Delivery**: If the player already holds a consumable item in hand, or if `quantity > 1`, items are routed directly to Depot storage (`預かり所`) with authentic NPC message:
   `"$nameは$charさんの預かり所に送っておきましたよ"`
-- If the character's Depot is at capacity, the purchase is safely rejected with HTTP 409 Conflict (`ErrDepotFull`).
+- A full Depot still receives the purchase, past capacity if needed (`event.cgi:94`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
 - Discovered items are recorded into the player's Item Collection (`internal/collection`).
 
 ---

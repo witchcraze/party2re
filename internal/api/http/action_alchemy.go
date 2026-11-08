@@ -7,7 +7,6 @@ import (
 
 	"github.com/witchcraze/party2re/internal/alchemy"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -59,8 +58,7 @@ func alchemyActionRejection(err error) (int, ErrorDetail) {
 // sceneEnterResult keeps the selection fields and adds what entry itself delivered.
 type sceneEnterResult struct {
 	playercontext.Selection
-	AlchemyClaim      *alchemy.ClaimResult `json:"alchemy_claim,omitempty"`
-	AlchemyClaimError *ErrorDetail         `json:"alchemy_claim_error,omitempty"`
+	AlchemyClaim *alchemy.ClaimResult `json:"alchemy_claim,omitempty"`
 }
 
 // deliverOnEntry runs after the selection is saved, so a rejected entry never
@@ -76,8 +74,6 @@ func (h *Handler) deliverOnEntry(ctx context.Context, actor string, selection pl
 		result.AlchemyClaim = &claim
 	case errors.Is(err, alchemy.ErrNoActiveSynthesis), errors.Is(err, alchemy.ErrSynthesisNotReady):
 		// Nothing to deliver: an ordinary entry.
-	case errors.Is(err, depot.ErrDepotFull):
-		result.AlchemyClaimError = &ErrorDetail{Code: "ALCHEMY_DEPOT_FULL", Message: "Depot is full. Free a slot and enter again to receive the item."}
 	default:
 		return sceneEnterResult{}, err
 	}

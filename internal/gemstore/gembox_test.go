@@ -173,7 +173,7 @@ func TestGemStore_BuyGem_GemBoxFull(t *testing.T) {
 	}
 }
 
-func TestGemStore_SendGem_RecipientGemBoxFull(t *testing.T) {
+func TestGemStore_SendGem_UsesSenderJobLevelLimit(t *testing.T) {
 	catalog, err := gemstore.DefaultCatalog()
 	if err != nil {
 		t.Fatalf("failed to load catalog: %v", err)
@@ -207,9 +207,35 @@ func TestGemStore_SendGem_RecipientGemBoxFull(t *testing.T) {
 		t.Fatalf("sender buy failed: %v", err)
 	}
 
-	// Attempt to send to full recipient
-	_, err = svc.SendGem(ctx, sender.ID, recipient.ID, buyRes.ItemInstance.ID)
-	if err != gemstore.ErrRecipientGemBoxFull {
-		t.Errorf("expected ErrRecipientGemBoxFull, got %v", err)
+	// The sender's job level sets the limit (system.cgi:1482-1493): 5 < 10 accepts,
+	// leaving the recipient above its own capacity 5.
+	if _, err = svc.SendGem(ctx, sender.ID, recipient.ID, buyRes.ItemInstance.ID); err != nil {
+		t.Fatalf("send under sender limit: %v", err)
+	}
+	if box, _ := svc.GetGemBox(ctx, recipient.ID); len(box.Items) != 6 {
+		t.Fatalf("recipient box = %d, want 6", len(box.Items))
+	}
+
+	// A job level 0 sender (limit 5) is rejected even though the recipient's own cap is larger.
+	low := corecharacter.Character{ID: "low", JobLevel: 0, Money: 10000}
+	charRepo.characters[low.ID] = low
+	lowBuy, err := svc.BuyGem(ctx, low.ID, "gem_atk_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.SendGem(ctx, low.ID, sender.ID, lowBuy.ItemInstance.ID); err != nil {
+		t.Fatalf("send to empty box: %v", err)
+	}
+	for i := 0; i < 4; i++ {
+		if _, err := svc.BuyGem(ctx, sender.ID, "gem_atk_1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lowBuy, err = svc.BuyGem(ctx, low.ID, "gem_atk_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.SendGem(ctx, low.ID, sender.ID, lowBuy.ItemInstance.ID); err != gemstore.ErrRecipientGemBoxFull {
+		t.Errorf("expected ErrRecipientGemBoxFull from sender limit, got %v", err)
 	}
 }

@@ -62,7 +62,7 @@ In authentic Party2, the Black Market is not a gold shop. It operates purely as 
     - `bm_uprize_262` (黒い天馬のたづな, `item-262`): 20 U-Rare Points
 - **Depot Delivery & Capacity Verification**:
   - Prizes are delivered directly into the character's Depot (`預かり所`), NOT character inventory.
-  - Depot capacity is verified via `depot.CalculateCapacity(char.JobLevel, dep.ExDepot, char.OverDepot)`. If depot capacity is exceeded, the trade is rejected with `ErrDepotFull`.
+  - A full Depot still receives the prize, past capacity if needed (`black_market.cgi:118,137`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
   - Transaction lock sequence: Tier 2 `characters` -> Tier 5 `character_depots` -> Tier 8 `blackmarket_character_points`.
 
 ---
@@ -99,7 +99,7 @@ Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and
 | --- | --- | --- |
 | `header_html` (97–106) | `rare_points`, `u_rare_points` | Equipped names are not repeated in the scene. |
 | `とりひき` without a target (132–152) | `prizes`, `u_prizes`; `u_prizes` is empty while U-Rare points are zero | None for listing visibility. |
-| `とりひき` with a target (116–125, 135–144) | `blackmarket_trade` | Explicit prize ID replaces the name. A U-Rare trade at zero points rejects instead of redisplaying the list; neither moves assets. Full-Depot delivery remains #1139's specification. |
+| `とりひき` with a target (116–125, 135–144) | `blackmarket_trade` | Explicit prize ID replaces the name. A U-Rare trade at zero points rejects instead of redisplaying the list; neither moves assets. A full Depot still receives the prize ([delivery capacity](depot.md#delivery-capacity-by-caller)). |
 | `ささげる` without a target (168–172, 200–250, 310) | `sacrifice_candidates` | Lists eligible instances only, inventory then Depot; legacy lists every owned item and rejects common ones when offered. The empty-handed message is an empty array. |
 | `ささげる` with a target (179–300) | `blackmarket_sacrifice` | Explicit instance ID replaces legacy's Depot-first name match. Sacrificing an equipped item is still blocked by #1140, and the candidate list does not mark equipped rows. |
 | Shared `はなす` (`lib/system.cgi:240–246`), `shiraberu_npc` (81–83) | `npc_talk`, `npc_inspect` | None: talk logs the word and starts the wait; inspect is private. |

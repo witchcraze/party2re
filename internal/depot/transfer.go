@@ -54,6 +54,14 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 			sender, recipient = c2, c1
 		}
 
+		// okuru rejects a full recipient Depot before gold too (depot.cgi:349-353).
+		recDepot, err := s.findOrCreateDepot(txCtx, toCharacterID, recipient)
+		if err != nil {
+			return err
+		}
+		if recDepot.IsFull() {
+			return ErrRecipientDepotFull
+		}
 		if sender.Money < amount {
 			return ErrInsufficientFunds
 		}
@@ -153,9 +161,11 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 		if err != nil {
 			return err
 		}
-		if err := recDepot.AddItem(itemInst); err != nil {
+		// An existing stack does not bypass the full check (depot.cgi:349-353).
+		if recDepot.IsFull() {
 			return ErrRecipientDepotFull
 		}
+		recDepot.Deliver(itemInst)
 
 		if err := senderInv.Consume(itemInstanceID, itemInst.Quantity); err != nil {
 			return err

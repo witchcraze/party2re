@@ -2,7 +2,6 @@ package plantation_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -149,7 +148,7 @@ func TestHarvest_InitializesNewDepotWhenNotFound(t *testing.T) {
 	}
 }
 
-func TestHarvest_DepotFullWithRefreshedCapacity(t *testing.T) {
+func TestHarvest_FullDepotWithRefreshedCapacityStillDelivers(t *testing.T) {
 	charRepo := newMockCharRepo()
 	invRepo := newMockInvRepo()
 	depotRepo := newMockDepotRepo()
@@ -194,9 +193,13 @@ func TestHarvest_DepotFullWithRefreshedCapacity(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	_, err = svc.Harvest(context.Background(), charID)
-	if !errors.Is(err, depot.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got %v", err)
+	// plantation.cgi:249-262 sends the harvest with send_item, ignoring capacity.
+	if _, err = svc.Harvest(context.Background(), charID); err != nil {
+		t.Fatalf("harvest into full depot: %v", err)
+	}
+	got, _ := depotRepo.FindByCharacterID(context.Background(), charID)
+	if len(got.Items) <= 10 {
+		t.Fatalf("harvest must be stored above capacity 10, got %d slots", len(got.Items))
 	}
 }
 

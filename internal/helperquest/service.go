@@ -300,9 +300,7 @@ func (s *Service) completeQuest(ctx context.Context, characterID string, q Quest
 		if err != nil {
 			return CompletionResult{}, err
 		}
-		if err := dep.AddItem(rewardInst); err != nil {
-			return CompletionResult{}, err
-		}
+		dep.Deliver(rewardInst)
 	}
 
 	if err := s.depotRepo.Save(ctx, dep); err != nil {

@@ -171,7 +171,7 @@ func TestPurchase_SlotOccupied_AutoTransferToDepot(t *testing.T) {
 	}
 }
 
-func TestPurchase_DepotFull(t *testing.T) {
+func TestPurchase_DepotFullDeliversOverCapacity(t *testing.T) {
 	svc, charRepo, invRepo, depotRepo, _, _ := setupParityTest(t)
 	char := createTestCharacter(t, charRepo, "Hero", 1000)
 
@@ -191,16 +191,14 @@ func TestPurchase_DepotFull(t *testing.T) {
 	}
 	_ = depotRepo.Save(context.Background(), dep)
 
-	// Attempt to purchase weapon-02 (will route to depot, but depot is full)
-	_, err := svc.Purchase(context.Background(), char.ID, "weapon-02", 1)
-	if !errors.Is(err, shop.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got %v", err)
+	// send_item appends to a full depot (system.cgi:818-837).
+	if _, err := svc.Purchase(context.Background(), char.ID, "weapon-02", 1); err != nil {
+		t.Fatalf("purchase into full depot: %v", err)
 	}
-
-	// Ensure atomic rollback: money must remain untouched
 	charAfter, _ := charRepo.FindByID(context.Background(), char.ID)
-	if charAfter.Money != 1000 {
-		t.Errorf("charAfter.Money = %d, want 1000 (atomic rollback)", charAfter.Money)
+	depAfter, _ := depotRepo.FindByCharacterID(context.Background(), char.ID)
+	if charAfter.Money >= 1000 || len(depAfter.Items) != 6 || depAfter.Quantity("weapon-02") != 1 {
+		t.Errorf("want paid delivery as a 6th slot, got money=%d depot=%+v", charAfter.Money, depAfter.Items)
 	}
 }
 
@@ -388,7 +386,7 @@ func TestBatchPurchase_HelperExclusion(t *testing.T) {
 	}
 }
 
-func TestBatchPurchase_DepotFull(t *testing.T) {
+func TestBatchPurchase_DepotFullDeliversOverCapacity(t *testing.T) {
 	svc, charRepo, _, depotRepo, _, _ := setupParityTest(t)
 	char := createTestCharacter(t, charRepo, "Hero", 2000)
 
@@ -407,16 +405,14 @@ func TestBatchPurchase_DepotFull(t *testing.T) {
 		{ItemDefinitionID: "weapon-02", Quantity: 1},
 	}
 
-	// 2 items cannot fit into depot with 4 items (limit 5)
-	_, err := svc.BatchPurchase(context.Background(), char.ID, shop.ShopTypeWeapon, req)
-	if !errors.Is(err, shop.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got %v", err)
+	// Both items are delivered even though the second exceeds capacity 5.
+	if _, err := svc.BatchPurchase(context.Background(), char.ID, shop.ShopTypeWeapon, req); err != nil {
+		t.Fatalf("batch purchase past capacity: %v", err)
 	}
-
-	// Rollback check: money unchanged
 	savedChar, _ := charRepo.FindByID(context.Background(), char.ID)
-	if savedChar.Money != 2000 {
-		t.Errorf("savedChar.Money = %d, want 2000 (atomic rollback)", savedChar.Money)
+	depAfter, _ := depotRepo.FindByCharacterID(context.Background(), char.ID)
+	if savedChar.Money >= 2000 || len(depAfter.Items) != 6 {
+		t.Errorf("want both weapons delivered (6 slots) and paid, got money=%d slots=%d", savedChar.Money, len(depAfter.Items))
 	}
 }
 

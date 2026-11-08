@@ -13856,13 +13856,10 @@
       },
       "SceneEnterResult": {
         "additionalProperties": false,
-        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis: alchemy_claim carries the delivery, and alchemy_claim_error reports a full Depot, which keeps the entry and the synthesis until re-entry.",
+        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis to the Depot regardless of its capacity; alchemy_claim carries the delivery.",
         "properties": {
           "alchemy_claim": {
             "$ref": "#/components/schemas/AlchemyClaimResult"
-          },
-          "alchemy_claim_error": {
-            "$ref": "#/components/schemas/ActionErrorDetail"
           },
           "cursor": {
             "type": "string"
@@ -25653,7 +25650,7 @@
                 }
               }
             },
-            "description": "Insufficient gold, unavailable costume item, active helper quest conflict, or depot full"
+            "description": "Insufficient gold, unavailable costume item, or active helper quest conflict"
           },
           "401": {
             "content": {
@@ -28296,7 +28293,7 @@
                 }
               }
             },
-            "description": "Unprocessable entity - insufficient funds or depot full"
+            "description": "Unprocessable entity - insufficient funds"
           },
           "500": {
             "content": {
@@ -30555,7 +30552,7 @@
                 }
               }
             },
-            "description": "Item unavailable (requested by active helper quest) or depot storage full"
+            "description": "Item unavailable (requested by active helper quest)"
           },
           "415": {
             "$ref": "#/components/responses/Error",

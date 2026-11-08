@@ -24,7 +24,6 @@ var (
 	ErrInsufficientRarePoints  = errors.New("insufficient rare points for prize trade")
 	ErrInsufficientURarePoints = errors.New("insufficient u-rare points for prize trade")
 	ErrPrizeNotFound           = errors.New("prize item not found in trade catalog")
-	ErrDepotFull               = errors.New("depot is full, cannot receive prize item")
 	ErrDepotNotConfigured      = errors.New("depot repository is not configured")
 )
 

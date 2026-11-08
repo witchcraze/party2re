@@ -10,7 +10,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/core/random"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/plantation"
 )
 
@@ -190,8 +189,6 @@ func (h *Handler) writePlantationError(w http.ResponseWriter, err error) {
 		errors.Is(err, plantation.ErrInsufficientGold),
 		errors.Is(err, plantation.ErrMissingFertilizerItem):
 		writeError(w, http.StatusUnprocessableEntity, err)
-	case errors.Is(err, depot.ErrDepotFull):
-		writeError(w, http.StatusConflict, err)
 	default:
 		writeError(w, http.StatusInternalServerError, err)
 	}

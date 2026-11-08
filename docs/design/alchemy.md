@@ -87,7 +87,7 @@ A recipe consists of:
    - If any step—including `LegendInductor` or `SynthesisHook`—returns an error, the error is propagated out of `Claim` and the entire transaction rolls back.
    - Rollback ensures depot item addition, crafted marks, `comp_alc` title flag, synthesis state clearing, and achievement progress never commit partially.
    - The synthesis remains in `completed` state, allowing safe, idempotent retry without lost progress or duplicate items. The Gateway reports the unknown outcome without replay; re-entry retries.
-5. **Full Depot**: Entry still succeeds and the synthesis stays `completed`. The command result carries `alchemy_claim_error` (`ALCHEMY_DEPOT_FULL`), and re-entry after freeing a slot delivers. Legacy `send_item` does not check capacity; [#1139](https://github.com/witchcraze/party2re/issues/1139) owns that decision.
+5. **Full Depot**: The product is delivered past capacity, like legacy `send_item` ([delivery capacity](depot.md#delivery-capacity-by-caller)).
 
 ### 5. Learn Recipe & Recipe Scroll Books (`internal/home/recipe_usage.go`, `internal/alchemy/compendium.go`)
 - **Discovery Pool Membership**:

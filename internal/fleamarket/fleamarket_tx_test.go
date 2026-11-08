@@ -95,7 +95,7 @@ func TestFleaMarketService_PurchaseListing(t *testing.T) {
 	}
 }
 
-func TestFleaMarketService_PurchaseListing_DepotFull(t *testing.T) {
+func TestFleaMarketService_PurchaseListing_DepotFullDeliversOverCapacity(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockFleaMarketRepo()
 	charRepo := newMockCharRepo()
@@ -131,9 +131,13 @@ func TestFleaMarketService_PurchaseListing_DepotFull(t *testing.T) {
 		t.Fatalf("CreateListing failed: %v", err)
 	}
 
-	_, err = svc.PurchaseListing(ctx, buyerID, listing.ID, now)
-	if !errors.Is(err, fleamarket.ErrDepotFull) {
-		t.Errorf("expected ErrDepotFull when buyer depot is full, got %v", err)
+	// free.cgi:161-171 delivers through send_item without a capacity check.
+	if _, err = svc.PurchaseListing(ctx, buyerID, listing.ID, now); err != nil {
+		t.Fatalf("purchase into full depot: %v", err)
+	}
+	got, _ := depotRepo.FindByCharacterID(ctx, buyerID)
+	if len(got.Items) != 6 || got.Quantity("wea-sword") != 1 {
+		t.Errorf("expected the sword as a 6th slot, got %+v", got.Items)
 	}
 }
 
@@ -200,7 +204,7 @@ func TestFleaMarketService_CancelListing(t *testing.T) {
 	}
 }
 
-func TestFleaMarketService_CancelListing_DepotFull(t *testing.T) {
+func TestFleaMarketService_CancelListing_DepotFullReturnsOverCapacity(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockFleaMarketRepo()
 	charRepo := newMockCharRepo()
@@ -232,9 +236,13 @@ func TestFleaMarketService_CancelListing_DepotFull(t *testing.T) {
 	}
 	_ = depotRepo.Save(ctx, fillDepot)
 
-	_, err = svc.CancelListing(ctx, sellerID, listing.ID)
-	if !errors.Is(err, fleamarket.ErrDepotFull) {
-		t.Errorf("expected ErrDepotFull on CancelListing when depot is full, got %v", err)
+	// free.cgi:257-271 returns the item through send_item without a capacity check.
+	if _, err = svc.CancelListing(ctx, sellerID, listing.ID); err != nil {
+		t.Fatalf("cancel into full depot: %v", err)
+	}
+	got, _ := depotRepo.FindByCharacterID(ctx, sellerID)
+	if len(got.Items) != 6 || got.Quantity("item-herb") != 1 {
+		t.Errorf("expected the herb as a 6th slot, got %+v", got.Items)
 	}
 }
 

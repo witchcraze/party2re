@@ -397,9 +397,7 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 		if err != nil {
 			return err
 		}
-		if err := dep.AddItem(prizeItem); err != nil {
-			return ErrDepotFull
-		}
+		dep.Deliver(prizeItem)
 
 		if err := s.depotRepo.Save(txCtx, dep); err != nil {
 			return err

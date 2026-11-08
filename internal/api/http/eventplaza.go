@@ -140,8 +140,6 @@ func (h *Handler) handlePostEventPlazaMerchantPurchase(w http.ResponseWriter, r 
 				writeError(w, http.StatusBadRequest, err)
 			case errors.Is(err, eventplaza.ErrItemUnavailable):
 				writeError(w, http.StatusConflict, err)
-			case errors.Is(err, eventplaza.ErrDepotFull):
-				writeError(w, http.StatusConflict, err)
 			case errors.Is(err, eventplaza.ErrDepotNotConfigured):
 				writeError(w, http.StatusInternalServerError, err)
 			case errors.Is(err, eventplaza.ErrInvalidQuantity):

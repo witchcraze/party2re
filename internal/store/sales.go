@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -233,17 +232,12 @@ func (s *Service) WithdrawListing(ctx context.Context, characterID, saleID strin
 			return err
 		}
 
-		if err := dep.AddItem(coreitem.Instance{
+		dep.Deliver(coreitem.Instance{
 			ID:               s.idGen(),
 			DefinitionID:     sale.ItemDefinitionID,
 			Quantity:         sale.Quantity,
 			EnhancementLevel: sale.EnhancementLevel,
-		}); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		})
 		if err := s.depotRepo.Save(txCtx, dep); err != nil {
 			return err
 		}
@@ -329,17 +323,12 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 			return err
 		}
 
-		if err := buyerDepot.AddItem(coreitem.Instance{
+		buyerDepot.Deliver(coreitem.Instance{
 			ID:               s.idGen(),
 			DefinitionID:     sale.ItemDefinitionID,
 			Quantity:         sale.Quantity,
 			EnhancementLevel: sale.EnhancementLevel,
-		}); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		})
 		if err := s.depotRepo.Save(txCtx, *buyerDepot); err != nil {
 			return err
 		}
@@ -441,30 +430,20 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 		}
 
 		// Add traded item to seller depot
-		if err := sellerDepot.AddItem(coreitem.Instance{
+		sellerDepot.Deliver(coreitem.Instance{
 			ID:               s.idGen(),
 			DefinitionID:     tradedItem.DefinitionID,
 			Quantity:         1,
 			EnhancementLevel: tradedItem.EnhancementLevel,
-		}); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		})
 
 		// Add sale item to buyer depot
-		if err := buyerDepot.AddItem(coreitem.Instance{
+		buyerDepot.Deliver(coreitem.Instance{
 			ID:               s.idGen(),
 			DefinitionID:     sale.ItemDefinitionID,
 			Quantity:         sale.Quantity,
 			EnhancementLevel: sale.EnhancementLevel,
-		}); err != nil {
-			if errors.Is(err, depot.ErrDepotFull) {
-				return ErrDepotFull
-			}
-			return err
-		}
+		})
 
 		if err := s.depotRepo.Save(txCtx, *buyerDepot); err != nil {
 			return err

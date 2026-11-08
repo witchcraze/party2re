@@ -2,7 +2,6 @@ package depot_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -78,7 +77,7 @@ func TestDeliverRewardItem_EmptyInventory(t *testing.T) {
 	invRepo := &mockInvRepo{inv: inv}
 	depotRepo := &mockDepotRepo{findErr: depot.ErrNotFound}
 
-	res, err := depot.DeliverRewardItem(ctx, invRepo, depotRepo, char, "item-herb", 1, depot.PolicyAbortOnDepotFull)
+	res, err := depot.DeliverRewardItem(ctx, invRepo, depotRepo, char, "item-herb", 1, depot.PolicyDeliverOverCapacity)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -125,7 +124,7 @@ func TestDeliverRewardItem_FullInventory_DepotOverflow_WithRefreshedCapacity(t *
 
 	depotRepo := &mockDepotRepo{depot: existingDepot}
 
-	res, err := depot.DeliverRewardItem(ctx, invRepo, depotRepo, char, "item-potion", 1, depot.PolicyAbortOnDepotFull)
+	res, err := depot.DeliverRewardItem(ctx, invRepo, depotRepo, char, "item-potion", 1, depot.PolicyDeliverOverCapacity)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -184,18 +183,16 @@ func TestDeliverRewardItem_FullDepot_PolicyTreatOverflowAsLost(t *testing.T) {
 	}
 }
 
-func TestDeliverRewardItem_FullDepot_PolicyAbortOnDepotFull(t *testing.T) {
+func TestDeliverRewardItem_FullDepot_PolicyDeliverOverCapacity(t *testing.T) {
 	ctx := context.Background()
 	charID := "char-1"
 	char := corecharacter.Character{ID: charID, JobLevel: 0} // cap = 5
 
-	// Full inventory
 	inv, _ := coreinventory.New(charID)
 	existingInst, _ := item.NewInstance("item-shield", 1)
 	_ = inv.Add(existingInst)
 	invRepo := &mockInvRepo{inv: inv}
 
-	// Truly full depot (5 items, capacity 5)
 	fullDepot, _ := depot.NewDepotWithCapacity(charID, 0, 0, 0)
 	for i := 0; i < 5; i++ {
 		dummy, _ := item.NewInstance(fmt.Sprintf("item-dummy-%d", i), 1)
@@ -203,9 +200,30 @@ func TestDeliverRewardItem_FullDepot_PolicyAbortOnDepotFull(t *testing.T) {
 	}
 	depotRepo := &mockDepotRepo{depot: fullDepot}
 
-	_, err := depot.DeliverRewardItem(ctx, invRepo, depotRepo, char, "item-quest-reward", 1, depot.PolicyAbortOnDepotFull)
-	if !errors.Is(err, depot.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got %v", err)
+	res, err := depot.DeliverRewardItem(ctx, invRepo, depotRepo, char, "weapon-01", 1, depot.PolicyDeliverOverCapacity)
+	if err != nil || res.DeliveredTo != depot.DeliveredToDepot {
+		t.Fatalf("NPC delivery must append above capacity: %+v, %v", res, err)
+	}
+	if len(depotRepo.depot.Items) != 6 || depotRepo.depot.Capacity != 5 {
+		t.Fatalf("expected 6 slots at capacity 5, got %d / %d", len(depotRepo.depot.Items), depotRepo.depot.Capacity)
+	}
+}
+
+func TestDeliverRewardItem_FullDepot_TreasureLostEvenWithStack(t *testing.T) {
+	ctx := context.Background()
+	char := corecharacter.Character{ID: "char-1", JobLevel: 0} // cap = 5
+	fullDepot, _ := depot.NewDepotWithCapacity(char.ID, 0, 0, 0)
+	for i := 0; i < 5; i++ {
+		_ = fullDepot.AddItem(item.Instance{ID: fmt.Sprintf("row-%d", i), DefinitionID: fmt.Sprintf("item-00%d", i+1), Quantity: 1})
+	}
+	depotRepo := &mockDepotRepo{depot: fullDepot}
+
+	res, err := depot.DeliverRewardItem(ctx, nil, depotRepo, char, "item-001", 1, depot.PolicyTreatOverflowAsLost)
+	if err != nil || res.DeliveredTo != depot.DeliveredToLost {
+		t.Fatalf("full-depot treasure is forfeited even with a stack: %+v, %v", res, err)
+	}
+	if depotRepo.saved || fullDepot.Quantity("item-001") != 1 {
+		t.Fatal("forfeited treasure must not change the depot")
 	}
 }
 
@@ -262,7 +280,7 @@ func TestDeliverRewardItems_NilInvRepo_DirectToDepot(t *testing.T) {
 	depotRepo := &mockDepotRepo{findErr: depot.ErrNotFound}
 
 	inst, _ := item.NewInstance("item-direct", 1)
-	results, err := depot.DeliverRewardItems(ctx, nil, depotRepo, char, []item.Instance{inst}, depot.PolicyAbortOnDepotFull)
+	results, err := depot.DeliverRewardItems(ctx, nil, depotRepo, char, []item.Instance{inst}, depot.PolicyDeliverOverCapacity)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -305,7 +323,7 @@ func TestDeliverRewardItems_EmptyList(t *testing.T) {
 	charID := "char-1"
 	char := corecharacter.Character{ID: charID}
 
-	results, err := depot.DeliverRewardItems(ctx, nil, nil, char, nil, depot.PolicyAbortOnDepotFull)
+	results, err := depot.DeliverRewardItems(ctx, nil, nil, char, nil, depot.PolicyDeliverOverCapacity)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

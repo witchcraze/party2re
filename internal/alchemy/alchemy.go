@@ -376,9 +376,7 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 			return fmt.Errorf("create item instance: %w", err)
 		}
 
-		if err := dep.AddItem(createdInstance); err != nil {
-			return err
-		}
+		dep.Deliver(createdInstance)
 
 		if err := s.depots.Save(txCtx, dep); err != nil {
 			return fmt.Errorf("save depot: %w", err)

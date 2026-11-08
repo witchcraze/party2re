@@ -66,10 +66,7 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 		}
 
 		// Consume material 1 (try GemBox first, then inventory, then depot)
-		consumedFromGemBox := 0
-		if _, err := removeMaterialFromGemBox(&box, recipe.Material1, s.catalog, s.items); err == nil {
-			consumedFromGemBox++
-		} else {
+		if _, err := removeMaterialFromGemBox(&box, recipe.Material1, s.catalog, s.items); err != nil {
 			mat1Query := depot.QueryByMatch(func(inst coreitem.Instance) bool {
 				name := resolveItemName(inst.DefinitionID, s.catalog, s.items)
 				return name == recipe.Material1 || inst.DefinitionID == recipe.Material1
@@ -80,9 +77,7 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 		}
 
 		// Consume material 2 (try GemBox first, then inventory, then depot)
-		if _, err := removeMaterialFromGemBox(&box, recipe.Material2, s.catalog, s.items); err == nil {
-			consumedFromGemBox++
-		} else {
+		if _, err := removeMaterialFromGemBox(&box, recipe.Material2, s.catalog, s.items); err != nil {
 			mat2Query := depot.QueryByMatch(func(inst coreitem.Instance) bool {
 				name := resolveItemName(inst.DefinitionID, s.catalog, s.items)
 				return name == recipe.Material2 || inst.DefinitionID == recipe.Material2
@@ -92,19 +87,11 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 			}
 		}
 
-		// Capacity check: if net gem box count increases
-		if consumedFromGemBox == 0 && box.IsFull() {
-			return ErrGemBoxFull
-		}
-
 		newInstance, err := coreitem.NewInstance(resultGem.ID, 1)
 		if err != nil {
 			return err
 		}
-
-		if err := box.AddItem(newInstance); err != nil {
-			return err
-		}
+		box.Deliver(newInstance) // gem_store.cgi:309 send_gem ignores capacity
 
 		if err := s.inventories.Save(txCtx, inv); err != nil {
 			return err
@@ -202,10 +189,6 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 		if gem, isUnidentified, err := s.catalog.AppraiseUnidentifiedItem(itemName, s.randomSource); err != nil {
 			return err
 		} else if isUnidentified {
-			if box.IsFull() {
-				return ErrGemBoxFull
-			}
-
 			consumeRes, err := depot.ConsumeItem(&inv, &dep, depot.QueryByInstanceID(targetItem.ID), depot.PriorityInventoryFirst, 1)
 			if err != nil {
 				return err
@@ -216,9 +199,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 				return err
 			}
 
-			if err := box.AddItem(gemInstance); err != nil {
-				return err
-			}
+			box.Deliver(gemInstance) // gem_store.cgi:374 send_gem ignores capacity
 
 			if err := depot.SaveConsumptionResult(txCtx, s.inventories, s.depots, consumeRes, inv, dep); err != nil {
 				return err

@@ -636,7 +636,7 @@ func TestHarvest_SuccessAndDepotDeposit(t *testing.T) {
 	}
 }
 
-func TestHarvest_DepotFull(t *testing.T) {
+func TestHarvest_FullDepotDeliversAndClearsPlot(t *testing.T) {
 	charRepo := newMockCharRepo()
 	invRepo := newMockInvRepo()
 	depotRepo := newMockDepotRepo()
@@ -671,13 +671,15 @@ func TestHarvest_DepotFull(t *testing.T) {
 		plantation.WithRNG(rng),
 	)
 
-	_, err := svc.Harvest(context.Background(), charID)
-	if !errors.Is(err, depot.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got %v", err)
+	// The whole harvest is delivered and the plot cleared, so no retry reroll exists.
+	if _, err := svc.Harvest(context.Background(), charID); err != nil {
+		t.Fatalf("harvest into full depot: %v", err)
 	}
-
-	// Plot must NOT be deleted when depot is full
-	if _, exists := plotRepo.plots[charID]; !exists {
-		t.Fatal("plot should be preserved if depot is full")
+	if _, exists := plotRepo.plots[charID]; exists {
+		t.Fatal("plot must be cleared after delivery")
+	}
+	got, _ := depotRepo.FindByCharacterID(context.Background(), charID)
+	if len(got.Items) <= 5 {
+		t.Fatalf("harvest must be stored above capacity 5, got %d slots", len(got.Items))
 	}
 }

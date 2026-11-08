@@ -29,7 +29,7 @@ Players negotiate auction terms in real-time chat and settle trades via direct t
   - If equipped, the item is unequipped from the sender's active equipment and consumed from the sender's inventory.
   - Taboo/restricted items cannot be sent (`ErrTabooItem`).
   - The item is deposited directly into the recipient's **depot** (`depot.Depot`).
-  - If the recipient's depot is at capacity, the transfer is rejected with `ErrDepotFull` before deducting any items from the sender.
+  - If the recipient's Depot is full, gold and item sends are both rejected with `ErrDepotFull` before any change, even when a matching stack exists (`auction.cgi:57–60`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
 - **Constraints**:
   - Sending to self is rejected (`ErrCannotSendToSelf`).
   - Target must exist (`ErrTargetNotFound`).
@@ -75,11 +75,10 @@ under [the Economy migration](https://github.com/witchcraze/party2re/issues/947)
 
 ### Legacy differences still requiring reconciliation
 
-Legacy `okuru` checks the recipient's full-depot flag before gold as well as item
-delivery (`auction.cgi:58–63`); Go checks item capacity only. Legacy gold is queued
-through `system.cgi:842–855` (`send_money`), whereas Go credits the wallet in the
-transfer transaction and clamps at its limit. The queue/destination, capacity and
-overflow policy are tracked in [the remittance specification issue](https://github.com/witchcraze/party2re/issues/1815);
+Legacy gold is queued through `system.cgi:842–855` (`send_money`), whereas Go
+credits the wallet in the transfer transaction and clamps at its limit. The
+queue/destination and wallet-overflow policy are tracked in
+[the remittance specification issue](https://github.com/witchcraze/party2re/issues/1815);
 this transport change does not resolve them. Go additionally accepts explicit
 inventory instances and shield slots; legacy offers the currently equipped weapon,
 armor or accessory.

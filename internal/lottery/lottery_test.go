@@ -662,7 +662,7 @@ func TestDrawTakarakuji_Premature(t *testing.T) {
 	}
 }
 
-func TestDrawTakarakuji_DepotFull(t *testing.T) {
+func TestDrawTakarakuji_FullDepotStillReceivesPrize(t *testing.T) {
 	jst := time.FixedZone("JST", 9*60*60)
 	drawTime := time.Date(2026, 9, 11, 0, 0, 0, 0, jst)
 
@@ -738,29 +738,16 @@ func TestDrawTakarakuji_DepotFull(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = svc.DrawTakarakuji(context.Background(), drawTime)
-	if err == nil {
-		t.Fatal("expected error due to full depot, got nil")
+	// takarakuzi.cgi:237 delivers prizes with send_item, which ignores capacity.
+	if _, err = svc.DrawTakarakuji(context.Background(), drawTime); err != nil {
+		t.Fatalf("draw with a full winner depot: %v", err)
 	}
-	if !errors.Is(err, depot.ErrDepotFull) {
-		t.Fatalf("expected error wrapping depot.ErrDepotFull, got: %v", err)
+	if !txProv.committed || !settled || !nextRoundCreated {
+		t.Errorf("draw must settle: committed=%v settled=%v next=%v", txProv.committed, settled, nextRoundCreated)
 	}
-
-	// Assert transaction rollback and no round settlement / next round creation
-	if !txProv.called {
-		t.Error("expected transaction provider to be invoked")
-	}
-	if !txProv.rolledBack {
-		t.Error("expected transaction to be rolled back")
-	}
-	if txProv.committed {
-		t.Error("expected transaction NOT to be committed")
-	}
-	if settled {
-		t.Error("round should NOT have been settled when depot delivery failed")
-	}
-	if nextRoundCreated {
-		t.Error("next round should NOT have been created when depot delivery failed")
+	// 5 fillers + item-129 + two weapon-40 rows + one item-126 stack of 3.
+	if got := depotRepo.depot["char-full"]; len(got.Items) != 9 || got.Quantity("item-126") != 3 {
+		t.Errorf("winner depot = %+v, want 9 slots with 3 item-126", got.Items)
 	}
 }
 

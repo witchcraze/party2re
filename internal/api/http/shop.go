@@ -41,7 +41,6 @@ func mapShopHTTPError(w http.ResponseWriter, err error) {
 		return
 	}
 	if errors.Is(err, shop.ErrInsufficientFunds) ||
-		errors.Is(err, shop.ErrDepotFull) ||
 		errors.Is(err, shop.ErrItemUnavailable) ||
 		errors.Is(err, shop.ErrMaterialsNotFound) {
 		writeError(w, http.StatusUnprocessableEntity, err)

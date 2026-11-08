@@ -621,7 +621,7 @@
               }
             }
           },
-          "description": "Unprocessable entity - insufficient funds or depot full"
+          "description": "Unprocessable entity - insufficient funds"
         },
         "500": {
           "content": {

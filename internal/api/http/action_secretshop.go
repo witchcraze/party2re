@@ -48,8 +48,6 @@ func secretShopActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "SECRETSHOP_INSUFFICIENT_FUNDS", Message: "Insufficient wallet funds."}
 	case errors.Is(err, secretshop.ErrPriceOverflow):
 		return http.StatusBadRequest, ErrorDetail{Code: "SECRETSHOP_PRICE_OVERFLOW", Message: "Secret shop total price exceeds the supported range."}
-	case errors.Is(err, secretshop.ErrDepotFull):
-		return http.StatusBadRequest, ErrorDetail{Code: "SECRETSHOP_DEPOT_FULL", Message: "Depot is full."}
 	default:
 		return 0, ErrorDetail{}
 	}

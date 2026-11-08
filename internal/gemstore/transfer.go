@@ -66,7 +66,9 @@ func (s *Service) SendGem(ctx context.Context, senderID, recipientID, itemInstan
 			recipientBox = box1
 		}
 
-		if recipientBox.IsFull() {
+		// get_you_gem_box_c counts the recipient's box against the sender's
+		// job-level maximum (system.cgi:1482-1493, gem_store.cgi:231-235).
+		if recipientBox.Count() >= CalculateGemBoxCapacity(senderChar.JobLevel) {
 			return ErrRecipientGemBoxFull
 		}
 
@@ -93,9 +95,7 @@ func (s *Service) SendGem(ctx context.Context, senderID, recipientID, itemInstan
 			return err
 		}
 
-		if err := recipientBox.AddItem(transferInstance); err != nil {
-			return err
-		}
+		recipientBox.Deliver(transferInstance)
 
 		if err := s.gemBoxes.Save(txCtx, senderBox); err != nil {
 			return err

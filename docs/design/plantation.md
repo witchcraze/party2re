@@ -87,6 +87,6 @@ Unlike modern farming mini-games with tile-grids or watering schedules, authenti
      - If high: item index = `seed.HighBase + rand(seed.HighRand)`.
      - If low: item index = `seed.LowBase + rand(seed.LowRand)`.
      - Map index to `item-%03d`.
-   - Add all yielded item instances to character Depot (`depot.AddItem`). If Depot is full, return `depot.ErrDepotFull` and preserve plot.
+   - Deliver all yielded items to the Depot, past capacity if needed (`send_item`; [delivery capacity](depot.md#delivery-capacity-by-caller)). The single draw is final, so no retry can reroll it.
    - Delete plot from `plantation_plots`.
    - Return harvest summary and message `"収穫したよ！<br>...倉庫に送っておいたよ"`.

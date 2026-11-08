@@ -172,16 +172,20 @@ func assertPrizeItems(t *testing.T, before, after depot.Depot, prize casino.Priz
 	}
 }
 
-func TestExchangePrizeDatabaseCapacityRollback(t *testing.T) {
+func TestExchangePrizeDatabaseDeliversPastCapacity(t *testing.T) {
 	for _, cost := range []int64{30000, 8000, 100} {
 		t.Run(fmt.Sprint(cost), func(t *testing.T) {
-			var items []item.Instance
-			fill := depot.DefaultDepotCapacity - 1
-			if cost == 100 {
-				fill++ // A new stack needs a free slot; existing stacks can grow at capacity.
+			prize, err := casino.GetPrizeByCost(cost)
+			if err != nil {
+				t.Fatal(err)
 			}
-			for i := 0; i < fill; i++ {
-				inst, err := item.NewInstance("weapon-31", 1)
+			var items []item.Instance
+			for i := 0; i < depot.DefaultDepotCapacity; i++ {
+				defID := "weapon-31"
+				if i == 0 && prize.Category == 3 {
+					defID = prize.ItemID // a consumable merges into its stack at capacity
+				}
+				inst, err := item.NewInstance(defID, 1)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -189,14 +193,15 @@ func TestExchangePrizeDatabaseCapacityRollback(t *testing.T) {
 			}
 			f := newPrizeDatabaseTest(t, 100000, 0, items)
 			beforeAcc, beforeDep := f.readAssets(t)
-			_, err := f.svc.ExchangePrize(context.Background(), f.charID, cost, 2)
-			if !errors.Is(err, depot.ErrDepotFull) {
-				t.Fatalf("ExchangePrize error = %v, want ErrDepotFull", err)
+			// casino.cgi send_item appends each prize to a full Depot.
+			if _, err := f.svc.ExchangePrize(context.Background(), f.charID, cost, 2); err != nil {
+				t.Fatalf("ExchangePrize into full depot: %v", err)
 			}
 			afterAcc, afterDep := f.readAssets(t)
-			if afterAcc.Coins != beforeAcc.Coins || !reflect.DeepEqual(afterDep, beforeDep) {
-				t.Fatalf("capacity rejection changed assets: coins=%d, depot=%+v", afterAcc.Coins, afterDep)
+			if afterAcc.Coins != beforeAcc.Coins-2*cost {
+				t.Fatalf("coins = %d, want %d", afterAcc.Coins, beforeAcc.Coins-2*cost)
 			}
+			assertPrizeItems(t, beforeDep, afterDep, prize, 2)
 		})
 	}
 }
@@ -279,15 +284,13 @@ func TestConcurrencyStressCasinoPrizeConservation(t *testing.T) {
 				t.Fatal(err)
 			}
 			const bulkCount = 2
-			initialCoins := int64(cfg.Workers*cfg.OpsPerWorker*bulkCount) * cost
-			if prize.Category == 3 {
-				initialCoins = 7 * bulkCount * cost
-			}
+			// Coins, not Depot capacity, bound successes (send_item ignores capacity).
+			initialCoins := 7 * bulkCount * cost
 			f := newPrizeDatabaseTest(t, initialCoins, depot.MaxExDepot, prizeExistingItems(t))
 			beforeAcc, beforeDep := f.readAssets(t)
 			stats := testutil.RunConcurrentStressTest(t, cfg, func(workerID, op int) error {
 				res, err := f.svc.ExchangePrize(context.Background(), f.charID, cost, bulkCount)
-				if err != nil && !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, casino.ErrInsufficientCoins) {
+				if err != nil && !errors.Is(err, casino.ErrInsufficientCoins) {
 					t.Errorf("unexpected exchange failure: %v", err)
 				}
 				if err == nil && (res.TotalCostCoins != cost*bulkCount || res.Count != bulkCount || !res.TransferredToDepot) {
@@ -295,10 +298,7 @@ func TestConcurrencyStressCasinoPrizeConservation(t *testing.T) {
 				}
 				return err
 			})
-			wantSuccesses := int64((beforeDep.Capacity - len(beforeDep.Items)) / bulkCount)
-			if prize.Category == 3 {
-				wantSuccesses = beforeAcc.Coins / (cost * bulkCount)
-			}
+			wantSuccesses := beforeAcc.Coins / (cost * bulkCount)
 			if stats.Successes != wantSuccesses || stats.Failures != stats.TotalOps-wantSuccesses {
 				t.Fatalf("unexpected successes/rejections: %+v, want %d successes", stats, wantSuccesses)
 			}

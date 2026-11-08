@@ -104,7 +104,7 @@ Upon defeating all enemy boss participants:
      - Saturday: `item-065` (白銀の玉)
      - Sunday: Random choice among `item-060`..`item-065`.
    - Legacy loads the stage's `@treasures` before the battle acts (`lib/vs_king.cgi:19–23`), so Job 78 `トレハンのいじ` (`lib/_skill.cgi:6200`) regenerates sealing chests from the same table plus the weekday orb. The legacy comment records this loading as a later fix inferred from related behavior. The retry is not reachable while the sealing battle resolves in one request ([#1862](https://github.com/witchcraze/party2re/issues/1862)).
-   - Reward delivery uses `coreinventory.Inventory` capacity enforcement; overflow items route to `depot.Depot` storage (Rank 5 lock); items overflowing a full depot are treated as lost drops (`_npc_action.cgi:74-75`).
+   - Reward delivery uses `coreinventory.Inventory` capacity enforcement; overflow items route to `depot.Depot` storage (Rank 5 lock); a treasure found while the Depot is already full is lost, even when a matching stack exists (`_npc_action.cgi:73–75`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
 5. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
 6. **Victory Celebration**: Adds a temporary crowd to Event Plaza (`_win_vs_king.cgi`). [Event Plaza design §3](eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) owns generation, presence retention, merchant-selection order and runtime boundaries; there is no independent fixed two-hour banquet window.
 7. **Room after sealing**: The room becomes watch-only and is deleted when its last member exits ([§6](#6-unseal-to-sealing-room-lifecycle)). Go currently deletes the lobby at settlement.

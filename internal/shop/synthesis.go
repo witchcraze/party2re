@@ -133,9 +133,7 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeTarg
 			if err != nil {
 				return err
 			}
-			if err := dep.AddItem(inst); err != nil {
-				return err
-			}
+			dep.Deliver(inst)
 			createdInstance = &inst
 		}
 

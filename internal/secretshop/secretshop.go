@@ -30,7 +30,6 @@ var (
 	ErrInsufficientFunds            = errors.New("insufficient funds to purchase secret shop item")
 	ErrInvalidQuantity              = errors.New("invalid purchase quantity")
 	ErrPriceOverflow                = economy.ErrGoldOverflow
-	ErrDepotFull                    = depot.ErrDepotFull
 	ErrDepotNotConfigured           = errors.New("depot repository not configured")
 )
 

@@ -737,9 +737,9 @@ this does not approve exposing arbitrary names (`10538–10557`).
 exists; absent file silently skips delivery, but the caller still clears held
 items (`system.cgi:818–837`). Exchange instead rewrites the requesting player's
 existing depot and needs no extra slot for a nonempty swap. The native depot's
-capacity-checked delivery policies do not implement capacity-unchecked return.
-[#1139](https://github.com/witchcraze/party2re/issues/1139) owns full/over-capacity
-decisions; no strict rejection, loss or new pending queue is approved here.
+return must use the Deliver rule and exchange the in-place swap from the
+[delivery capacity contract](depot.md#delivery-capacity-by-caller); no rejection,
+loss or pending queue is allowed.
 Missing/mismatched recipient or held projections remain unsupported contexts,
 not permission to destroy a player's book or transfer an unrelated item.
 
@@ -2671,7 +2671,7 @@ Production adoption still requires #1188 supply, #1332 resumable lifetimes,
 #1337 MP resources, #1338 revival, #1339 summons, #1340 transformation and #1342
 ordinary NPC payloads. Book/purchase effects require the
 [combat asset contract](#combat-books-stored-tools-and-purchases), including
-#1139's independent capacity decision, and the [shared modifier follow-ups](#shared-modifiers-and-callback-outcomes)
+its [delivery capacity rule](depot.md#delivery-capacity-by-caller), and the [shared modifier follow-ups](#shared-modifiers-and-callback-outcomes)
 from #1343, including #1367's context and failure-admission contract. The transitive job
 reconciliation in #1344 also requires #1357 invocation execution, #1358
 arithmetic selectors, #1359 wallet/held-tool effects and #1360 job-driven room

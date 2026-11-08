@@ -56,6 +56,12 @@ func (b *GemBox) AddItem(instance coreitem.Instance) error {
 	return nil
 }
 
+// Deliver appends a gem without a capacity check (system.cgi send_gem), so
+// appraisal, synthesis and accepted sends may leave the box over capacity.
+func (b *GemBox) Deliver(instance coreitem.Instance) {
+	b.Items = append(b.Items, instance)
+}
+
 // RemoveItem removes a gem from the gem box by instance ID or definition ID.
 func (b *GemBox) RemoveItem(target string) (coreitem.Instance, error) {
 	for i, inst := range b.Items {

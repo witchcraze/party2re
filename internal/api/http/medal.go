@@ -58,7 +58,7 @@ func (h *Handler) handleClaimMedalReward(w http.ResponseWriter, r *http.Request)
 	}, func(_ coreplayer.Player, char corecharacter.Character, req claimMedalRewardRequest) {
 		updatedChar, updatedDepot, err := h.medals.Claim(r.Context(), char.ID, req.ItemID)
 		if err != nil {
-			if errors.Is(err, medal.ErrInsufficientMedals) || errors.Is(err, depot.ErrDepotFull) {
+			if errors.Is(err, medal.ErrInsufficientMedals) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

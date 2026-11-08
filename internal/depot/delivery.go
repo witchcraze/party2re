@@ -13,13 +13,13 @@ import (
 type DeliveryPolicy int
 
 const (
-	// PolicyTreatOverflowAsLost treats items that exceed depot capacity as lost drops without failing the transaction.
-	// Matches legacy Party2 Perl CGI combat and exploration rules (_npc_action.cgi:74-75).
+	// PolicyTreatOverflowAsLost forfeits an item when the depot is already full, even if
+	// an eligible stack exists (treasure, _npc_action.cgi:73-75).
 	PolicyTreatOverflowAsLost DeliveryPolicy = iota
 
-	// PolicyAbortOnDepotFull returns ErrDepotFull when an item cannot fit into the depot,
-	// causing the enclosing transaction to abort/rollback (e.g. quests, purchases, wishes).
-	PolicyAbortOnDepotFull
+	// PolicyDeliverOverCapacity routes overflow through Depot.Deliver, never rejecting for
+	// capacity (NPC delivery, system.cgi send_item).
+	PolicyDeliverOverCapacity
 )
 
 // DeliveredTo represents the destination of a delivered reward item.
@@ -97,13 +97,11 @@ func DeliverRewardItemInstance(
 // It strictly enforces the lock hierarchy: Rank 3 (Inventory) -> Rank 5 (Depot).
 //
 // Lifecycle:
-// 1. Deliver items to the character's inventory up to coreinventory.DefaultMaxCapacity (if invRepo is provided).
-// 2. Any items overflowing inventory are routed to the character's depot.
-// 3. Load or initialize the depot, refreshing capacity via dep.RefreshCapacity(char.JobLevel, char.OverDepot).
-// 4. If the depot has space, add items and persist the depot.
-// 5. If the depot is full:
-//   - PolicyTreatOverflowAsLost: mark remaining items as DeliveredToLost.
-//   - PolicyAbortOnDepotFull: return ErrDepotFull to abort/rollback the ambient transaction.
+//  1. Deliver items to the character's inventory up to coreinventory.DefaultMaxCapacity (if invRepo is provided).
+//  2. Any items overflowing inventory are routed to the character's depot.
+//  3. Load or initialize the depot, refreshing capacity via dep.RefreshCapacity(char.JobLevel, char.OverDepot).
+//  4. PolicyDeliverOverCapacity delivers every overflow item; PolicyTreatOverflowAsLost
+//     marks an item DeliveredToLost when the depot is full before it, otherwise delivers it.
 func DeliverRewardItems(
 	ctx context.Context,
 	invRepo InventoryDeliveryRepository,
@@ -156,8 +154,8 @@ func DeliverRewardItems(
 
 	// Rank 5: Depot overflow routing
 	if depotRepo == nil {
-		if policy == PolicyAbortOnDepotFull {
-			return nil, ErrDepotFull
+		if policy == PolicyDeliverOverCapacity {
+			return nil, errors.New("depot delivery requires a depot repository")
 		}
 		for _, inst := range overflow {
 			results = append(results, DeliveryResult{
@@ -175,21 +173,13 @@ func DeliverRewardItems(
 
 	depotChanged := false
 	for _, inst := range overflow {
-		if err := dep.AddItem(inst); err == nil {
-			depotChanged = true
-			results = append(results, DeliveryResult{
-				DeliveredTo: DeliveredToDepot,
-				Item:        inst,
-			})
-		} else {
-			if policy == PolicyAbortOnDepotFull {
-				return nil, ErrDepotFull
-			}
-			results = append(results, DeliveryResult{
-				DeliveredTo: DeliveredToLost,
-				Item:        inst,
-			})
+		if policy == PolicyTreatOverflowAsLost && dep.IsFull() {
+			results = append(results, DeliveryResult{DeliveredTo: DeliveredToLost, Item: inst})
+			continue
 		}
+		dep.Deliver(inst)
+		depotChanged = true
+		results = append(results, DeliveryResult{DeliveredTo: DeliveredToDepot, Item: inst})
 	}
 
 	if depotChanged {

@@ -19,3 +19,16 @@ func TestAppendDeliveryKeepsSeparateInstancesAboveCapacity(t *testing.T) {
 		t.Fatalf("ordinary addition above capacity: %v", err)
 	}
 }
+
+func TestDeliverIgnoresCapacityAndMergesEligibleStack(t *testing.T) {
+	dep := Depot{CharacterID: "buyer", Capacity: 1, Items: []item.Instance{{ID: "potions", DefinitionID: "item-001", Quantity: 2}}}
+	dep.Deliver(item.Instance{ID: "more-potions", DefinitionID: "item-001", Quantity: 3})
+	dep.Deliver(item.Instance{ID: "sword", DefinitionID: "weapon-01", Quantity: 1})
+	dep.Deliver(item.Instance{ID: "sword-2", DefinitionID: "weapon-01", Quantity: 1})
+	if dep.Capacity != 1 || len(dep.Items) != 3 || dep.Items[0].Quantity != 5 || dep.Quantity("weapon-01") != 2 {
+		t.Fatalf("delivery must stack consumables and append gear above capacity: %+v", dep)
+	}
+	if !dep.IsFull() {
+		t.Fatal("over-capacity depot must report full")
+	}
+}
