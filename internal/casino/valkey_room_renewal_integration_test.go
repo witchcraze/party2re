@@ -51,12 +51,14 @@ func (c *faultValkeyClient) DoMulti(ctx context.Context, multi ...valkeygo.Compl
 
 type hookValkeyClient struct {
 	valkeygo.Client
-	beforeDo func(cmds []string)
+	beforeDo func(cmds []string) (override error)
 }
 
 func (c *hookValkeyClient) Do(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
 	if c.beforeDo != nil {
-		c.beforeDo(cmd.Commands())
+		if err := c.beforeDo(cmd.Commands()); err != nil {
+			return valkeygo.NewErrorResult(err)
+		}
 	}
 	return c.Client.Do(ctx, cmd)
 }
@@ -933,7 +935,7 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 
 	hookClient := &hookValkeyClient{
 		Client: rawClient,
-		beforeDo: func(cmds []string) {
+		beforeDo: func(cmds []string) error {
 			if barrierPreClaim.Load() && len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+mover {
 				preClaimArrived <- struct{}{}
 				<-preClaimRelease
@@ -944,6 +946,7 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 					<-deleteRelease
 				}
 			}
+			return nil
 		},
 	}
 	hookRepo, err := casino.NewValkeyRoomRepository(hookClient, casino.WithValkeyCharacterRepository(chars))
@@ -1117,5 +1120,224 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 		if err := assertRosterAndMappingInvariant(); err != nil {
 			t.Fatalf("iter %d after final leave race: %v", i, err)
 		}
+	}
+}
+
+func TestValkeyRoomRenewal_ConcurrentCreateRoomRollbackBlocksJoinAndPropagatesErrors(t *testing.T) {
+	rawClient := openIsolatedTestValkey(t, 0)
+	defer rawClient.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	prefix := "createrace1091-" + id.New()[:8]
+	creatorC := prefix + "-creatorC"
+	joinerD := prefix + "-joinerD"
+	leaderOther := prefix + "-leaderOther"
+	allActors := []string{creatorC, joinerD, leaderOther}
+
+	chars := &inMemoryCharRepo{chars: map[string]corecharacter.Character{}}
+	casinoRepo := newMockPrizeCasinoRepo()
+	for _, actor := range allActors {
+		chars.chars[actor] = corecharacter.Character{ID: actor, Name: actor, PlayerID: "owner-" + actor}
+		casinoRepo.accounts[actor] = casino.Account{CharacterID: actor, Coins: 5000}
+	}
+
+	var createClaimCount atomic.Int32
+	var winnerRoomID atomic.Value
+	var loserRoomID atomic.Value
+	bothPublished := make(chan struct{})
+	loserHoldRelease := make(chan struct{})
+	joinerAttemptedLock := make(chan struct{})
+	var notifyJoinerLock atomic.Bool
+	var injectRollbackErr atomic.Bool
+	errCompensatoryFault := errors.New("injected compensatory rollback failure")
+
+	hookClient := &hookValkeyClient{
+		Client: rawClient,
+		beforeDo: func(cmds []string) error {
+			// Detect creatorC's claim_character_room.lua calls during concurrent CreateRoom.
+			if len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+creatorC {
+				n := createClaimCount.Add(1)
+				switch n {
+				case 1:
+					winnerRoomID.Store(cmds[4])
+					<-bothPublished
+				case 2:
+					loserRoomID.Store(cmds[4])
+					close(bothPublished)
+					<-loserHoldRelease
+				}
+			}
+			// Detect joinerD's room lock acquisition attempt on loserRoom while CreateRoom holds loserRoom's lock.
+			if notifyJoinerLock.Load() && len(cmds) >= 3 && cmds[0] == "SET" {
+				if lID, ok := loserRoomID.Load().(string); ok && lID != "" && cmds[1] == casino.DefaultRoomLockKeyPrefix+lID {
+					if notifyJoinerLock.CompareAndSwap(true, false) {
+						close(joinerAttemptedLock)
+					}
+				}
+			}
+			// Inject compensatory rollback failure when requested.
+			if injectRollbackErr.Load() && len(cmds) >= 2 && cmds[0] == "DEL" && strings.HasPrefix(cmds[1], casino.DefaultRoomKeyPrefix) {
+				return errCompensatoryFault
+			}
+			if injectRollbackErr.Load() && len(cmds) >= 2 && cmds[0] == "SET" && strings.HasPrefix(cmds[1], casino.DefaultRoomKeyPrefix) {
+				return errCompensatoryFault
+			}
+			return nil
+		},
+	}
+
+	repo, err := casino.NewValkeyRoomRepository(hookClient, casino.WithValkeyCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var createdRooms []string
+	t.Cleanup(func() {
+		bg := context.Background()
+		for _, rID := range createdRooms {
+			_ = rawClient.Do(bg, rawClient.B().Del().Key(casino.DefaultRoomKeyPrefix+rID).Build())
+			_ = rawClient.Do(bg, rawClient.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(rID).Build())
+		}
+		for _, cID := range allActors {
+			_ = rawClient.Do(bg, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+cID).Build())
+		}
+	})
+
+	// 1. Concurrent CreateRoom(Room 1) and CreateRoom(Room 2) by creatorC while joinerD attempts
+	// JoinRoom(loserRoom) after loserRoom's payload and active index have been written to Valkey.
+	joinDone := make(chan error, 1)
+	go func() {
+		<-bothPublished
+		lID := loserRoomID.Load().(string)
+		notifyJoinerLock.Store(true)
+		go func() {
+			_, jErr := svc.JoinRoom(ctx, lID, joinerD, "", 0)
+			joinDone <- jErr
+		}()
+		<-joinerAttemptedLock
+		close(loserHoldRelease)
+	}()
+
+	createErrs := testutil.RunRace(
+		func() error {
+			_, cErr := svc.CreateRoom(ctx, creatorC, casino.CreateRoomRequest{
+				Name: "Create1-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
+			})
+			return cErr
+		},
+		func() error {
+			_, cErr := svc.CreateRoom(ctx, creatorC, casino.CreateRoomRequest{
+				Name: "Create2-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
+			})
+			return cErr
+		},
+	)
+
+	wID := winnerRoomID.Load().(string)
+	lID := loserRoomID.Load().(string)
+	createdRooms = append(createdRooms, wID, lID)
+
+	createWins := 0
+	for idx, cErr := range createErrs {
+		if cErr == nil {
+			createWins++
+		} else if !errors.Is(cErr, casino.ErrAlreadyInRoom) {
+			t.Fatalf("CreateRoom goroutine %d unexpected error: %v", idx, cErr)
+		}
+	}
+	if createWins != 1 {
+		t.Fatalf("expected exactly 1 CreateRoom winner, got %d (errs=%v)", createWins, createErrs)
+	}
+
+	joinErr := <-joinDone
+	if !errors.Is(joinErr, casino.ErrRoomNotFound) {
+		t.Fatalf("expected joinerD JoinRoom(loserRoom) to fail with ErrRoomNotFound after locked rollback, got %v", joinErr)
+	}
+
+	// Verify loserRoom has no payload, no members, and no active index entry.
+	if _, err := repo.GetRoom(ctx, lID); !errors.Is(err, casino.ErrRoomNotFound) {
+		t.Fatalf("expected loserRoom payload deleted, got err=%v", err)
+	}
+	if mems, err := repo.ListMembers(ctx, lID); err != nil || len(mems) != 0 {
+		t.Fatalf("expected loserRoom members empty, got %+v err=%v", mems, err)
+	}
+	zscoreErr := rawClient.Do(ctx, rawClient.B().Zscore().Key(casino.DefaultRoomsActiveIndexKey).Member(lID).Build()).Error()
+	if !valkeygo.IsValkeyNil(zscoreErr) {
+		t.Fatalf("expected loserRoom removed from active index, got zscore err=%v", zscoreErr)
+	}
+
+	// Verify joinerD has no orphaned character mapping and nil room view.
+	if mapped, err := repo.GetCharacterRoom(ctx, joinerD); !errors.Is(err, casino.ErrRoomNotFound) {
+		t.Fatalf("expected joinerD to have no character mapping, got %q err=%v", mapped, err)
+	}
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+joinerD, joinerD); err != nil || view != nil {
+		t.Fatalf("expected joinerD room view nil, got %+v err=%v", view, err)
+	}
+
+	// Verify creatorC is mapped to winnerRoom and winnerRoom has only creatorC.
+	if mapped, err := repo.GetCharacterRoom(ctx, creatorC); err != nil || mapped != wID {
+		t.Fatalf("expected creatorC mapped to winnerRoom %s, got %q err=%v", wID, mapped, err)
+	}
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+creatorC, creatorC); err != nil || view == nil || view.Room.ID != wID {
+		t.Fatalf("expected creatorC view in winnerRoom %s, got %+v err=%v", wID, view, err)
+	}
+
+	// 2. Verify compensatory rollback failures in CreateRoom and AddMember are not silently discarded
+	// and do not masquerade as ErrSecondarySync.
+	otherRoomDetail, err := svc.CreateRoom(ctx, leaderOther, casino.CreateRoomRequest{
+		Name: "Other-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherRoomID := otherRoomDetail.Room.ID
+	createdRooms = append(createdRooms, otherRoomID)
+
+	// Force joinerD's pre-check to see nil, then set joinerD's mapping to wID before claim_character_room.lua,
+	// and fail the compensatory DEL/SET during rollback.
+	failRollbackRoomID := prefix + "-failrollback"
+	createdRooms = append(createdRooms, failRollbackRoomID)
+	hookClient.beforeDo = func(cmds []string) error {
+		if len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+joinerD {
+			// Concurrent admission into wID won the race right before claim_character_room.lua:
+			_ = rawClient.Do(ctx, rawClient.B().Set().Key(casino.DefaultCharacterKeyPrefix+joinerD).Value(wID).Ex(casino.DefaultLobbyTTL).Build()).Error()
+			injectRollbackErr.Store(true)
+		}
+		if injectRollbackErr.Load() && len(cmds) >= 2 && cmds[0] == "DEL" && cmds[1] == casino.DefaultRoomKeyPrefix+failRollbackRoomID {
+			return errCompensatoryFault
+		}
+		if injectRollbackErr.Load() && len(cmds) >= 2 && cmds[0] == "SET" && cmds[1] == casino.DefaultRoomKeyPrefix+otherRoomID {
+			return errCompensatoryFault
+		}
+		return nil
+	}
+
+	now := time.Now().UTC()
+	createRollbackErr := repo.CreateRoom(ctx, casino.Room{
+		ID: failRollbackRoomID, Name: "FailRB-" + prefix, GameType: casino.GameTypeIndian, LeaderCharacterID: joinerD,
+		Speed: casino.SpeedFast, MaxPlayers: 2, Rate: 10, Status: casino.RoomStatusWaiting, CreatedAt: now, UpdatedAt: now,
+	}, casino.RoomMember{RoomID: failRollbackRoomID, CharacterID: joinerD, JoinedAt: now, UpdatedAt: now})
+	injectRollbackErr.Store(false)
+	if !errors.Is(createRollbackErr, casino.ErrAlreadyInRoom) || !errors.Is(createRollbackErr, errCompensatoryFault) {
+		t.Fatalf("expected CreateRoom rollback error to join ErrAlreadyInRoom and compensatory fault, got %v", createRollbackErr)
+	}
+	if errors.Is(createRollbackErr, casino.ErrSecondarySync) {
+		t.Fatalf("expected CreateRoom rollback error not to match ErrSecondarySync, got %v", createRollbackErr)
+	}
+
+	_ = rawClient.Do(ctx, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+joinerD).Build())
+	addRollbackErr := repo.AddMember(ctx, casino.RoomMember{RoomID: otherRoomID, CharacterID: joinerD, JoinedAt: now, UpdatedAt: now})
+	injectRollbackErr.Store(false)
+	if !errors.Is(addRollbackErr, casino.ErrAlreadyInRoom) || !errors.Is(addRollbackErr, errCompensatoryFault) {
+		t.Fatalf("expected AddMember rollback error to join ErrAlreadyInRoom and compensatory fault, got %v", addRollbackErr)
+	}
+	if errors.Is(addRollbackErr, casino.ErrSecondarySync) {
+		t.Fatalf("expected AddMember rollback error not to match ErrSecondarySync, got %v", addRollbackErr)
 	}
 }

@@ -74,36 +74,46 @@ func TestValkeyRoomRepository_CreateRoom(t *testing.T) {
 	}
 
 	cmds := client.RecordedCommandStrings()
-	if len(cmds) != 4 {
-		t.Fatalf("expected 4 commands (GET char, SET room, ZADD index, EVALSHA claim char), got %d: %v", len(cmds), cmds)
+	if len(cmds) != 6 {
+		t.Fatalf("expected 6 commands (SET lock, GET char, SET room, ZADD index, EVALSHA claim char, EVALSHA unlock), got %d: %v", len(cmds), cmds)
 	}
 
-	// 1. GET character mapping before publishing room payload
-	if cmds[0][0] != "GET" || cmds[0][1] != casino.DefaultCharacterKeyPrefix+leader.CharacterID {
-		t.Errorf("unexpected GET char command: %v", cmds[0])
+	// 1. Acquire room lock
+	if cmds[0][0] != "SET" || cmds[0][1] != casino.DefaultRoomLockKeyPrefix+room.ID {
+		t.Errorf("unexpected SET lock command: %v", cmds[0])
 	}
 
-	// 2. SET room key
-	if cmds[1][0] != "SET" || cmds[1][1] != casino.DefaultRoomKeyPrefix+room.ID {
-		t.Errorf("unexpected SET room command: %v", cmds[1])
+	// 2. GET character mapping before publishing room payload
+	if cmds[1][0] != "GET" || cmds[1][1] != casino.DefaultCharacterKeyPrefix+leader.CharacterID {
+		t.Errorf("unexpected GET char command: %v", cmds[1])
+	}
+
+	// 3. SET room key
+	if cmds[2][0] != "SET" || cmds[2][1] != casino.DefaultRoomKeyPrefix+room.ID {
+		t.Errorf("unexpected SET room command: %v", cmds[2])
 	}
 	// Verify JSON contains password hash
 	var data map[string]any
-	if err := json.Unmarshal([]byte(cmds[1][2]), &data); err != nil {
+	if err := json.Unmarshal([]byte(cmds[2][2]), &data); err != nil {
 		t.Fatalf("invalid json payload: %v", err)
 	}
 	if data["password_hash"] != "secret-sha256-hash" {
 		t.Errorf("expected password_hash in stored json, got: %v", data["password_hash"])
 	}
 
-	// 3. ZADD to active rooms index
-	if cmds[2][0] != "ZADD" || cmds[2][1] != casino.DefaultRoomsActiveIndexKey || cmds[2][3] != room.ID {
-		t.Errorf("unexpected ZADD command: %v", cmds[2])
+	// 4. ZADD to active rooms index
+	if cmds[3][0] != "ZADD" || cmds[3][1] != casino.DefaultRoomsActiveIndexKey || cmds[3][3] != room.ID {
+		t.Errorf("unexpected ZADD command: %v", cmds[3])
 	}
 
-	// 4. Atomic claim character to room mapping
-	if (cmds[3][0] != "EVALSHA" && cmds[3][0] != "EVAL") || len(cmds[3]) < 5 || cmds[3][3] != casino.DefaultCharacterKeyPrefix+leader.CharacterID || cmds[3][4] != room.ID {
-		t.Errorf("unexpected claim char command: %v", cmds[3])
+	// 5. Atomic claim character to room mapping
+	if (cmds[4][0] != "EVALSHA" && cmds[4][0] != "EVAL") || len(cmds[4]) < 5 || cmds[4][3] != casino.DefaultCharacterKeyPrefix+leader.CharacterID || cmds[4][4] != room.ID {
+		t.Errorf("unexpected claim char command: %v", cmds[4])
+	}
+
+	// 6. Release room lock
+	if (cmds[5][0] != "EVALSHA" && cmds[5][0] != "EVAL") || len(cmds[5]) < 4 || cmds[5][3] != casino.DefaultRoomLockKeyPrefix+room.ID {
+		t.Errorf("unexpected release lock command: %v", cmds[5])
 	}
 }
 

@@ -164,10 +164,12 @@ the lock.
 - **Pre-publication failure**: A rejected action or primary payload write rolls
   back SQL wagers, payouts and `CasinoWins` without publishing an accepted turn
   or invoking `gamePlayedHook`. Room admission (`CreateRoom`, `AddMember`)
-  verifies before publishing the room payload that the character is not already
-  admitted in another live room (`ErrAlreadyInRoom`), and rolls back the roster
-  write if a concurrent cross-room admission wins the atomic single-key mapping
-  claim (`claim_character_room.lua`).
+  holds the target room lock (`WithRoomLock`), verifies before publishing the
+  room payload that the character is not already admitted in another live room
+  (`ErrAlreadyInRoom`), and rolls back the room/roster write under that room
+  lock (joining any compensatory cleanup error) if a concurrent cross-room
+  admission wins the atomic single-key mapping claim
+  (`claim_character_room.lua`).
 - **Post-publication secondary sync (`SecondarySyncError` / `ErrSecondarySync`)**:
   Active-index renewal/removal and reverse-mapping synchronization/cleanup
   failures after payload persistence preserve committed coin/win settlement

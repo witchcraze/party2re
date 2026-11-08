@@ -40,6 +40,17 @@ func mapCharacterScriptError(err error) error {
 	}
 }
 
+func unwrapSecondarySync(err error) error {
+	if err == nil {
+		return nil
+	}
+	var secErr *SecondarySyncError
+	if errors.As(err, &secErr) {
+		return secErr.Err
+	}
+	return err
+}
+
 func (v *ValkeyRoomRepository) isCharacterAdmittedInLiveRoom(ctx context.Context, roomID, characterID string) (bool, error) {
 	dto, err := v.getRoomDetail(ctx, roomID)
 	if errors.Is(err, ErrRoomNotFound) {
