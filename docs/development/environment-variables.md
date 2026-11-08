@@ -14,6 +14,8 @@ services:
       PARTY2_HOME_LETTER_MAX_LENGTH: "500"
       PARTY2_PARK_POST_LOG_LIMIT: "30"
       PARTY2_PARK_POST_MAX_LENGTH: "500"
+      PARTY2_PLACE_LOG_LIMIT: "30"
+      PARTY2_PLACE_LOG_TTL_HOURS: "168"
 ```
 
 | Variable | Description | Example |
@@ -36,3 +38,5 @@ services:
 | `PARTY2_HOME_LETTER_MAX_LENGTH` | Maximum letter body length, counted after legacy HTML escaping (default `500`). Guild notices must also fit. A stored body above about 64 KiB fails. An unset, empty, non-integer, overflowing, zero or negative value uses `500`, and an invalid value logs a warning. See [Home design](../design/home.md#letter-settings). | `1000` |
 | `PARTY2_PARK_POST_LOG_LIMIT` | Posts kept on the park board (default `30`). The oldest posts are removed beyond the limit on the next post. An unset, empty, non-integer, overflowing, zero or negative value uses `30`, and an invalid value logs a warning. See [Town Park design](../design/town_park.md#3-board-retention). | `50` |
 | `PARTY2_PARK_POST_MAX_LENGTH` | Maximum park post body length, counted after legacy HTML escaping (default `500`). A stored body above about 64 KiB after HTML escaping fails. An unset, empty, non-integer, overflowing, zero or negative value uses `500`, and an invalid value logs a warning. See [Town Park design](../design/town_park.md#1-message-board-posting-park_posts). | `200` |
+| `PARTY2_PLACE_LOG_LIMIT` | Rows kept in each place log (default `30`, legacy `$max_log`). Older rows are trimmed on the next append. An unset, empty, non-integer, overflowing, zero or negative value uses `30`, and an invalid value logs a warning. See [place log](../architecture/place-log.md#place-log-1938). | `100` |
+| `PARTY2_PLACE_LOG_TTL_HOURS` | Hours a place log is kept after its last append (default `168`, 7 days). Idle home, guild and room logs expire. An unset, empty, non-integer, overflowing, zero or negative value uses `168`, and an invalid value logs a warning. See [place log](../architecture/place-log.md#place-log-1938). | `72` |

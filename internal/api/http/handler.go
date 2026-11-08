@@ -124,6 +124,7 @@ type RescueService interface {
 type Handler struct {
 	playerContext  *playercontext.Service
 	sceneAdapters  map[string]sceneAdapter
+	placeLog       PlaceLogReader
 	actionCommands map[string]actionCommand
 	players        PlayerService
 	characters     CharacterService

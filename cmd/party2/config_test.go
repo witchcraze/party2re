@@ -183,6 +183,8 @@ func TestConfigFromEnv(t *testing.T) {
 			{"PARTY2_HOME_LETTER_MAX_LENGTH", 500, func(c Config) int { return c.Home.LetterMaxLength }},
 			{"PARTY2_PARK_POST_LOG_LIMIT", 30, func(c Config) int { return c.Park.PostLogLimit }},
 			{"PARTY2_PARK_POST_MAX_LENGTH", 500, func(c Config) int { return c.Park.PostMaxLength }},
+			{"PARTY2_PLACE_LOG_LIMIT", 30, func(c Config) int { return c.PlaceLog.Limit }},
+			{"PARTY2_PLACE_LOG_TTL_HOURS", 168, func(c Config) int { return int(c.PlaceLog.TTL / time.Hour) }},
 		} {
 			for _, tc := range []struct {
 				envVal   string

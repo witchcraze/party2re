@@ -33,7 +33,7 @@ func (s *bankSceneService) GetState(ctx context.Context, actor string) (bank.Sta
 	return s.service.GetState(ctx, actor)
 }
 
-func bankSceneRouter(t *testing.T) (*bankGatewayFixture, *gatewayNavigationStore, *bankSceneService, http.Handler) {
+func bankSceneRouter(t *testing.T, opts ...Option) (*bankGatewayFixture, *gatewayNavigationStore, *bankSceneService, http.Handler) {
 	t.Helper()
 	f := newBankGatewayFixture(t)
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "bank"}}
@@ -41,7 +41,7 @@ func bankSceneRouter(t *testing.T) (*bankGatewayFixture, *gatewayNavigationStore
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
 		playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "bank", Parent: "town"}))
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{},
-		WithBank(reads), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture })
+		append([]Option{WithBank(reads), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}

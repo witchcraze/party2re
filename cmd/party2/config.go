@@ -6,11 +6,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/park"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -40,6 +42,7 @@ type Config struct {
 		PostLogLimit  int
 		PostMaxLength int
 	}
+	PlaceLog placelog.Config
 }
 
 // ConfigFromEnv loads the complete configuration from environment variables.
@@ -105,6 +108,10 @@ func ConfigFromEnv() (Config, error) {
 		}{
 			PostLogLimit:  resolvePositiveInt("PARTY2_PARK_POST_LOG_LIMIT", os.Getenv("PARTY2_PARK_POST_LOG_LIMIT"), park.DefaultLogLimit),
 			PostMaxLength: resolvePositiveInt("PARTY2_PARK_POST_MAX_LENGTH", os.Getenv("PARTY2_PARK_POST_MAX_LENGTH"), park.DefaultMaxContentLength),
+		},
+		PlaceLog: placelog.Config{
+			Limit: resolvePositiveInt("PARTY2_PLACE_LOG_LIMIT", os.Getenv("PARTY2_PLACE_LOG_LIMIT"), placelog.DefaultLimit),
+			TTL:   time.Duration(resolvePositiveInt("PARTY2_PLACE_LOG_TTL_HOURS", os.Getenv("PARTY2_PLACE_LOG_TTL_HOURS"), int(placelog.DefaultTTL/time.Hour))) * time.Hour,
 		},
 	}, nil
 }

@@ -1,8 +1,9 @@
 # Place log, action wait and NPC interaction
 
-> **Status: planned contract.** Approved for the reconstruction on 2026-11-08 under
-> [#1937](https://github.com/witchcraze/party2re/issues/1937). Nothing described here
-> runs yet; each section names the issue that implements it.
+> **Status:** approved on 2026-11-08 under
+> [#1937](https://github.com/witchcraze/party2re/issues/1937). Storage and facility
+> observation run; the writers, the action wait and members are planned, and each
+> section names the issue that implements it.
 
 Legacy Party2 is a conversation screen. Every place has a short shared log. A player's
 command and the NPC's reply are both written to it, and a short wait follows each
@@ -46,9 +47,10 @@ logs stay with their own features.
   - Each row holds the time, the speaker kind (character or NPC), the speaker's name and colour as they were when the row was written, the text, and an optional private recipient.
   - Private rows count toward the shared cap, as in legacy.
 - **Observation**
-  - Facility scenes expose the viewer-filtered log, newest first.
+  - Facility scenes with a legacy log expose `scene.place_log`, viewer-filtered and newest first. It is `[]` for other scenes. Rows carry no character IDs; `private` marks a whisper the viewer sent or received.
   - A store failure fails the observation.
   - A GET never writes.
+  - Owner-scoped places (home, store, guild) are observed once those scenes connect.
 
 ### Writers ([#1940](https://github.com/witchcraze/party2re/issues/1940), [#1941](https://github.com/witchcraze/party2re/issues/1941), [#1942](https://github.com/witchcraze/party2re/issues/1942))
 

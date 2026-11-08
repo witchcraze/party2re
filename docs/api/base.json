@@ -2246,6 +2246,13 @@
           "data": {},
           "support": {
             "$ref": "#/components/schemas/SceneSupport"
+          },
+          "place_log": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaceLogEntry"
+            },
+            "description": "Viewer-filtered shared log of the current facility, newest first (docs/architecture/place-log.md). Empty outside facilities with a log; a required read failure fails the observation."
           }
         },
         "required": [
@@ -2256,7 +2263,8 @@
           "dialogue",
           "kind",
           "data",
-          "support"
+          "support",
+          "place_log"
         ],
         "additionalProperties": false,
         "description": "Registered selected or feature-owned activity scene. Actual sleep, unfinished work, membership and runs override ordinary selection; conflicting exclusive facts are preserved. GET never joins, advances, settles or recovers gameplay.",
@@ -2950,6 +2958,45 @@
             }
           }
         ]
+      },
+      "PlaceLogEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "speaker_kind": {
+            "type": "string",
+            "enum": [
+              "character",
+              "npc"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "private": {
+            "type": "boolean",
+            "description": "A whisper the viewer sent or received."
+          }
+        },
+        "required": [
+          "occurred_at",
+          "speaker_kind",
+          "name",
+          "color",
+          "text",
+          "private"
+        ],
+        "description": "One rendered place-log row. Name and colour are snapshots at write time; character IDs are never exposed."
       },
       "OngoingActionSnapshot": {
         "type": "object",
