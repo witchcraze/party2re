@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -155,6 +158,19 @@ func TestFleaMarketGatewayListPurchaseThroughRealService(t *testing.T) {
 	status, got := f.request(t, ctx, f.buyer, fmt.Sprintf(`{"action":"fleamarket_purchase","params":{"listing_id":%q}}`, listing.ID))
 	if status != 200 {
 		t.Fatalf("purchase: %d %s", status, got)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(got["result"], &fields); err != nil {
+		t.Fatal(err)
+	}
+	keys := slices.Sorted(maps.Keys(fields))
+	if !slices.Equal(keys, []string{"buyer_gold", "item_instance", "listing"}) {
+		t.Fatalf("purchase result fields: %s", got["result"])
+	}
+	for _, private := range []string{"seller_gold", "1300"} {
+		if strings.Contains(string(got["result"]), private) {
+			t.Fatalf("purchase leaked seller balance %q: %s", private, got["result"])
+		}
 	}
 	dep, err := f.depots.FindByCharacterID(ctx, f.buyer.ID)
 	if err != nil {

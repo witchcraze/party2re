@@ -2,8 +2,10 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	nethttp "net/http"
 	"net/http/httptest"
 	"slices"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/fleamarket"
@@ -44,7 +47,12 @@ func (f *fleaMarketGatewayFixture) PurchaseListing(ctx context.Context, actor, l
 	if _, err := f.execute(ctx, actor, 0); err != nil {
 		return fleamarket.PurchaseResult{}, err
 	}
-	return fleamarket.PurchaseResult{Listing: fleamarket.Listing{ID: listingID, Status: fleamarket.StatusSold}, BuyerGold: 700}, nil
+	return fleamarket.PurchaseResult{
+		Listing:      fleamarket.Listing{ID: listingID, Status: fleamarket.StatusSold},
+		BuyerGold:    700,
+		SellerGold:   9999,
+		ItemInstance: coreitem.Instance{ID: "item-1", DefinitionID: "weapon-01"},
+	}, nil
 }
 
 func (f *fleaMarketGatewayFixture) CancelListing(ctx context.Context, actor, listingID string) (fleamarket.Listing, error) {
@@ -110,6 +118,21 @@ func TestFleaMarketGatewayOutcomes(t *testing.T) {
 						assertGatewayError(t, got, "FLEAMARKET_LISTING_NOT_ACTIVE")
 					} else if string(got["success"]) != "true" || (f.target != "owned-item" && f.target != "listing-1") || (input.action == "fleamarket_list" && f.price != 300) {
 						t.Fatalf("lost explicit target: %+v %s", f, got)
+					}
+					if !rejected && input.action == "fleamarket_purchase" {
+						var fields map[string]json.RawMessage
+						if err := json.Unmarshal(got["result"], &fields); err != nil {
+							t.Fatal(err)
+						}
+						keys := slices.Sorted(maps.Keys(fields))
+						if !slices.Equal(keys, []string{"buyer_gold", "item_instance", "listing"}) {
+							t.Fatalf("fleamarket_purchase result fields: %s", got["result"])
+						}
+						for _, private := range []string{"seller_gold", "9999"} {
+							if strings.Contains(string(got["result"]), private) {
+								t.Fatalf("fleamarket_purchase leaked seller balance %q: %s", private, got["result"])
+							}
+						}
 					}
 					if refreshFailure {
 						assertLoopRefreshFailure(t, got)
