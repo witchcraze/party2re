@@ -63,17 +63,7 @@ func (r *ParkRepository) CreatePost(ctx context.Context, post park.Post, logLimi
 			if r.trimFn != nil {
 				return r.trimFn(txCtx, logLimit)
 			}
-			_, err := ExecutorFromContext(txCtx, r.db).ExecContext(txCtx, `
-				DELETE FROM park_posts
-				WHERE id NOT IN (
-					SELECT id FROM (
-						SELECT id FROM park_posts
-						ORDER BY created_at DESC, id DESC
-						LIMIT ?
-					) AS newest
-				)
-			`, logLimit)
-			return err
+			return r.trimBoard(txCtx, logLimit)
 		})
 		if trimErr == nil {
 			break
@@ -96,6 +86,20 @@ func (r *ParkRepository) CreatePost(ctx context.Context, post park.Post, logLimi
 		slog.Warn("park board trim failed", slog.Any("error", trimErr))
 	}
 	return nil
+}
+
+func (r *ParkRepository) trimBoard(ctx context.Context, logLimit int) error {
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		DELETE FROM park_posts
+		WHERE id NOT IN (
+			SELECT id FROM (
+				SELECT id FROM park_posts
+				ORDER BY created_at DESC, id DESC
+				LIMIT ?
+			) AS newest
+		)
+	`, logLimit)
+	return err
 }
 
 func (r *ParkRepository) GetRecentPosts(ctx context.Context, limit int, offset int) ([]park.Post, int, error) {

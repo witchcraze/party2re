@@ -299,6 +299,16 @@ func TestParkBoardTrimDeadlockRecovery(t *testing.T) {
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	t.Run("retries on deadlock and trims successfully", func(t *testing.T) {
+		for i := 0; i < 4; i++ {
+			p := park.Post{
+				ID: id.New(), CharacterID: char.ID, CharacterName: char.Name,
+				Content: fmt.Sprintf("initial %d", i), Color: "#000000", CreatedAt: t0.Add(time.Duration(i) * time.Minute),
+			}
+			if err := repo.CreatePost(ctx, p, 10); err != nil {
+				t.Fatalf("seeding initial post failed: %v", err)
+			}
+		}
+
 		var attempts int
 		deadlockErr := &mysql.MySQLError{Number: 1213, Message: "Deadlock found when trying to get lock"}
 		repo.SetTrimFnForTesting(func(txCtx context.Context, logLimit int) error {
@@ -306,20 +316,34 @@ func TestParkBoardTrimDeadlockRecovery(t *testing.T) {
 			if attempts < 3 {
 				return deadlockErr
 			}
-			repo.SetTrimFnForTesting(nil)
-			return nil
+			return repo.TrimBoardForTesting(txCtx, logLimit)
 		})
 		defer repo.SetTrimFnForTesting(nil)
 
-		p := park.Post{
+		newestPost := park.Post{
 			ID: id.New(), CharacterID: char.ID, CharacterName: char.Name,
-			Content: "retry test", Color: "#000000", CreatedAt: t0.Add(time.Minute),
+			Content: "retry test", Color: "#000000", CreatedAt: t0.Add(10 * time.Minute),
 		}
-		if err := repo.CreatePost(ctx, p, 3); err != nil {
+		const targetLimit = 2
+		if err := repo.CreatePost(ctx, newestPost, targetLimit); err != nil {
 			t.Fatalf("CreatePost failed: %v", err)
 		}
 		if attempts != 3 {
 			t.Errorf("expected 3 trim attempts, got %d", attempts)
+		}
+
+		posts, total, err := repo.GetRecentPosts(ctx, 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != targetLimit {
+			t.Errorf("expected total %d posts after trim, got %d", targetLimit, total)
+		}
+		if len(posts) != targetLimit {
+			t.Fatalf("expected len %d posts after trim, got %d", targetLimit, len(posts))
+		}
+		if posts[0].ID != newestPost.ID {
+			t.Errorf("expected newest post %s, got %s", newestPost.ID, posts[0].ID)
 		}
 	})
 
@@ -381,25 +405,49 @@ func TestParkBoardTrimDeadlockRecovery(t *testing.T) {
 		}
 	})
 
-	t.Run("aborts retry when context is canceled", func(t *testing.T) {
-		canceledCtx, cancel := context.WithCancel(ctx)
-		cancel()
+	t.Run("aborts retry when context is canceled during backoff", func(t *testing.T) {
+		runCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
 
 		var attempts int
 		deadlockErr := &mysql.MySQLError{Number: 1213, Message: "Deadlock found when trying to get lock"}
 		repo.SetTrimFnForTesting(func(txCtx context.Context, logLimit int) error {
 			attempts++
+			if attempts == 1 {
+				go func() {
+					time.Sleep(1 * time.Millisecond)
+					cancel()
+				}()
+			}
 			return deadlockErr
 		})
 		defer repo.SetTrimFnForTesting(nil)
 
+		postID := id.New()
 		p := park.Post{
-			ID: id.New(), CharacterID: char.ID, CharacterName: char.Name,
+			ID: postID, CharacterID: char.ID, CharacterName: char.Name,
 			Content: "canceled context test", Color: "#000000", CreatedAt: t0.Add(4 * time.Minute),
 		}
-		_ = repo.CreatePost(canceledCtx, p, 3)
-		if attempts > 1 {
-			t.Errorf("expected at most 1 trim attempt when context is canceled, got %d", attempts)
+		if err := repo.CreatePost(runCtx, p, 3); err != nil {
+			t.Fatalf("CreatePost should succeed even when trim is canceled: %v", err)
+		}
+		if attempts != 1 {
+			t.Errorf("expected exactly 1 trim attempt when canceled during backoff, got %d", attempts)
+		}
+
+		posts, _, err := repo.GetRecentPosts(ctx, 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found bool
+		for _, post := range posts {
+			if post.ID == postID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("post %s was not persisted after canceled retry", postID)
 		}
 	})
 }
