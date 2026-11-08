@@ -13,7 +13,7 @@ Starting a party currently resolves every floor and inspects treasure automatica
 - A character belongs to at most one waiting or running party. Waiting lobbies idle out after 30 minutes (`quest.cgi`).
 - Every member must be ready and alive before the leader starts.
 - In the batch treasure room, an item goes to the opening character's inventory, else the Depot; with the Depot full it is lost (`vs_monster.cgi:91–137`, `_npc_action.cgi:60–80`).
-- **Departure:** legacy gives fallen members no victory rewards (`_battle.cgi:209`: `next if $ms{$name}{hp} <= 0;`). The batch crawl gives every participant of a victorious run the full rewards and revives fallen members at 1 HP, as a cooperative quality-of-life change.
+- Only allies alive at each enemy defeat earn that defeat's EXP, gold and crystals (`_battle.cgi:208–214`: `next if $ms{$name}{hp} <= 0;`). **Open difference (#1991):** the batch crawl gives every participant the full run earnings, including fallen members; no decision approves this.
 
 ## Known limits
 
