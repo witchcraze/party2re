@@ -1,120 +1,20 @@
-# Party & Multiplayer Co-op System Design Specification
+# Party System Design
 
 ## Overview
 
-The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is one of the foundational multiplayer mechanics in Party2. It allows up to 4 players to form a cooperative adventuring party to tackle stages and dungeons together, sharing experience, gold, and item drops, enhanced by cooperative synergy bonuses.
+Parties (`quest.cgi`, `party.cgi`) let up to four characters form a waiting lobby and run a stage together. Lobby fields, states, endpoints and reward formulas are owned by code and [OpenAPI](../api/openapi.json); the lobby lives in Valkey ([transient run state](../architecture/transient-run-state.md)).
 
-The following lifecycle/combat descriptions reflect the current Go batch
-implementation, not full legacy parity. Starting currently resolves every floor
-and automatically inspects treasure. Restoration of player-selected actions,
-per-actor intervals, explicit advances/inspections and individual exits is owned
-by [Adventure's interaction contract](adventure.md#original-interaction-contract-and-reconstruction-target)
-and [#1323](https://github.com/witchcraze/party2re/issues/1323). A lobby leave is
-not the original active-combat exit, and a lobby roster/readiness record is not
-a resumable battle state.
+Starting a party currently resolves every floor and inspects treasure automatically (the batch crawl). Player-selected actions, per-actor intervals, explicit advances and inspection, and individual exits belong to [Adventure's interaction contract](adventure.md#original-interaction-contract-and-reconstruction-target). A lobby leave is not the original active-combat exit, and a lobby roster is not resumable battle state.
 
----
+## Rules
 
-## Game Rules & Domain Concepts
+- The room speed (3/18/25 seconds) is the original per-actor action interval (`_battle.cgi:468,641–644`); the batch crawl stores but does not enforce it.
+- Join conditions (`need_join`, `{key}_{val}_{u|o}` for max HP or job level) apply to the creator at creation and to each joining member; the stage's job-level gate (`$job_lv[$stage]`) also applies.
+- A character belongs to at most one waiting or running party. Waiting lobbies idle out after 30 minutes (`quest.cgi`).
+- Every member must be ready and alive before the leader starts.
+- In the batch treasure room, an item goes to the opening character's inventory, else the Depot; with the Depot full it is lost (`vs_monster.cgi:91–137`, `_npc_action.cgi:60–80`).
+- Only allies alive at each enemy defeat earn that defeat's EXP, gold and crystals (`_battle.cgi:208–214`: `next if $ms{$name}{hp} <= 0;`). **Open difference (#1991):** the batch crawl gives every participant the full run earnings, including fallen members; no decision approves this.
 
-### 1. Party Formation & Settings
-- **Party Leader**: The creator of the party is designated as leader.
-- **Name / Title**: 1 to 50 runes, descriptive of the expedition.
-- **Capacity**: 1 to 4 characters (`max_members`).
-- **Speed**: Original per-actor action interval in seconds (`_battle.cgi:468,641–644`), currently stored but not enforced by the batch crawl:
-  - `3`: さくさく (Fast)
-  - `18`: まったり (Relaxed) [Default]
-  - `25`: じっくり (Deliberate)
-- **Join Requirements (Conditions)** (`need_join` / `quest.cgi`):
-  - Level bounds (`min_level`, `max_level`)
-  - HP threshold (`min_hp`)
-  - Condition string: `{key}_{val}_{u|o}` where `key` is `hp` (MaxHP) or `joblv` (JobLevel), `u` is under (`< val`), `o` is over (`>= val`). Validated on both creation (leader) and join (member).
-  - Stage Access Gate: Character job level must satisfy the stage's required job level (`$job_lv[$stage]`).
-  - Optional secret passphrase (`合言葉` / `password_hash`).
-- **Single Active Party Constraint**: A character may participate in only one active/recruiting party at a time. This invariant is enforced atomically in Valkey Master via reverse lookup key `party2:party:character:<character_id>`.
-- **Lobby Expiration & Readiness TTL**:
-  - Waiting lobbies have a natural TTL of 30 minutes (`1800s`), refreshed on member activity, preventing zombie lobbies if a leader disconnects (`quest.cgi` 30-minute idle auto-disband).
-  - Member readiness state has a 60-second countdown TTL (`60s`), after which unconfirmed readiness automatically expires to prevent stall locks.
+## Known limits
 
-### 2. Party Lifecycle & States
-- `recruiting`: Open for members to join, leave, toggle readiness, or be kicked by leader (stored authoritatively in Valkey Master).
-- `in_progress` / `in_adventure`: Co-op battle execution in progress.
-- `completed`: Adventure finished and rewards distributed in MariaDB; members can ready up for subsequent runs or leave.
-- `disbanded`: Party closed by the leader or automatically upon leader departure / adventure completion.
-- *Note*: Ephemeral wait lobby state is completely decoupled from relational storage. Legacy MariaDB `parties` and `party_members` tables were dropped in Migration 052.
-
-### 3. Readiness & Start Requirements
-- All party members must toggle their ready state (`ready_state = true`) before the leader can trigger `POST /parties/{id}/start`.
-- All participants must have `HP > 0` (unconscious characters cannot embark on adventures).
-
-### 4. Multiplayer Combat & Synergy Bonus
-- **Multi-participant Turn Engine**:
-  - Allied party members and stage monsters take turns attacking opponents.
-  - Active allies target enemies with lowest HP to coordinate takedowns.
-- **Synergy Multipliers**:
-  - `synergyBonus = min(30, max(0, (len(activeAllies) - 1) * 10))`
-  - 1 Player: 0% bonus (base rewards)
-  - 2 Players: +10% bonus EXP and Gold
-  - 3 Players: +20% bonus EXP and Gold
-  - 4 Players: +30% bonus EXP and Gold
-  - Scaling Formula on Victory:
-    - $\text{TotalReward.Experience} = \text{int}\left(\text{BaseReward.Experience} \times \frac{100 + \text{synergyBonus}}{100}\right)$
-    - $\text{TotalReward.Currency} = \text{int}\left(\text{BaseReward.Currency} \times \frac{100 + \text{synergyBonus}}{100}\right)$
-  - **Single Source of Truth & Ownership**: The combat engine (`corebattle.Engine.ResolvePartyBattle`) owns party synergy scaling per battle based on participating living allies. Crawl sessions accumulate floor battle `TotalReward` into `DungeonCrawlResult.TotalEXP` and `TotalGold`. Adventure settlement applies rewards directly without double-scaling.
-  - Recorded in `PartyAdventureResult.SynergyBonusPercent`, `PartyAdventureLog.SynergyBonusPercent`, and distributed to all participating character reward settlements.
-
-- **Participant Identity & Turn Resolution**:
-  - Combat participants are strictly indexed and tracked by their canonical entity `ID` (`Participant.ID`), eliminating name collisions when multiple characters share the same display name.
-  - Display names (`Participant.Name`) are maintained for combat turn log output and user presentation.
-- **Combat Item Consumption Across Floors**: A crawl run (solo or party) removes each floor's consumed combat items from the owner's carried battle state, so later floors cannot reuse the same instance, and accumulates the consumption (`DungeonCrawlResult.ConsumedItems`). Post-battle settlement debits it from each owner exactly once, including defeat; stage/floor-travel and other callback-specific consumption remain owned by the Adventure interaction contract.
-- **Reward Distribution & Damage Persistence**:
-  - On Victory: Each participating member receives full boosted EXP and Gold, monster crystal drops (`TotalCrystals`, 刻印晶) are credited to character crystal reserves (`character.Crystal`, clamped to 999,999), character level-ups are evaluated using canonical progression rules (`progression.ApplyExperience`, properly supporting OverLevel limit breaks up to Lv 150), surviving members have their remaining battle HP persisted to `Stats.HP` (fallen members survive with 1 HP), and surviving battle MP from `RemainingMP` is clamped to `Stats.MaxMP` and persisted to `Stats.MP`.
-  - **Floor 11 Treasure Room Drops & Depot Fallback (`vs_monster.cgi:91-137`, `_npc_action.cgi:60-80`)**:
-    - When a party clears Floor 10 (Boss), they advance to Floor 11 (Treasure Room) where living members examine and open treasure chests.
-    - Drops are recipient-targeted to the opening character (preventing party member item cloning).
-    - If the character's inventory has capacity, the item is added to inventory (`DeliveredTo = "inventory"`).
-    - If the character's inventory is full, the item automatically falls back to their Depot (`DeliveredTo = "depot"`).
-    - If the Depot is also at maximum capacity, the item is dropped/lost (`DeliveredTo = "lost"`), recorded in `LostDrops`, and excluded from acquired drops.
-  - **Lifetime Milestone Progress Tracking (`VictoryHook`)**: Upon successful expedition victory, `party.Service.StartPartyAdventure` invokes the registered `VictoryHook(ctx, characterIDs, monstersDefeated, goldEarned)` callback. In `cmd/party2/main.go`, this is wired to `medalService.RecordProgress`, incrementing `adventure_victories` (+1), `monsters_slain` (+defeated monsters count), and `gold_earned` (+earned gold) for all participating characters, maintaining progression parity with solo adventures.
-  - **Cooperative QoL Policy vs Legacy CGI**: In legacy Party2 Perl CGI (`_battle.cgi:209`), fallen party members received 0 rewards (`next if $ms{$name}{hp} <= 0;`). In `party2re`, this behavior was intentionally revised: all participants who took part in a victorious expedition receive full synergy-boosted EXP/Gold/Crystals and revive with 1 HP. This deliberate modern cooperative QoL design fosters teamplay and prevents penalizing tanks/support characters who sacrifice themselves for the party's victory.
-  - On Defeat: Half base EXP, 0 Gold, 0 Crystals, surviving MP is persisted, and characters survive with 1 HP.
-
----
-
-## Endpoints
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/parties` | Public | List recruiting parties with query filters (`status`, `limit`, `offset`) |
-| `POST` | `/parties` | Bearer Session | Create a new party with creator as leader |
-| `GET` | `/parties/{id}` | Public | Retrieve party detail and member roster |
-| `POST` | `/parties/{id}/join` | Bearer Session | Join an existing recruiting party |
-| `POST` | `/parties/{id}/leave` | Bearer Session | Leave the party (disbands if leader) |
-| `POST` | `/parties/{id}/kick` | Bearer Session | Kick a member (leader only) |
-| `DELETE` | `/parties/{id}` | Bearer Session | Disband the party (leader only) |
-| `POST` | `/parties/{id}/ready` | Bearer Session | Set member readiness state |
-| `POST` | `/parties/{id}/start` | Bearer Session | Initiate multiplayer co-op adventure (leader only) |
-
----
-
-## Transaction & Concurrency Boundaries
-
-The Party architecture implements a two-tier storage boundary (RFC #356, Issue #368, Issue #380):
-
-1. **Ephemeral Wait Lobbies (Valkey Master Authoritative Tier)**:
-   - Lobby metadata (`party2:party:lobby:<party_id>`), member rosters, index sets (`party2:party:lobbies`), and reverse membership lookups (`party2:party:character:<character_id>`) reside exclusively in Valkey Master.
-   - Join, leave, ready, and capacity operations use atomic Valkey Lua scripts and multi/exec pipelines to prevent race conditions and membership double-booking without relational database locking contention.
-   - During lobby mutations, MariaDB `runInTx` is utilized strictly for individual character row verification (`SELECT ... FOR UPDATE`, Rank 2).
-
-2. **Durable Quest Resolution & Settlement (MariaDB Master Canonical Tier)**:
-   - When the leader starts the expedition (`POST /parties/{id}/start`), the party status is locked in Valkey Master.
-   - A MariaDB transaction (`runInTx`) acquires deterministic pessimistic locks (`SELECT ... FOR UPDATE`, Rank 2) on all participating character records sorted in ascending canonical ID order to eliminate deadlock risks.
-   - Co-op battle simulation is executed in memory.
-   - Character progression updates (EXP, level-ups, OverLevel), remaining HP, Gold, and inventory item rewards are atomically committed in MariaDB.
-   - Durable audit records are persisted in `party_adventure_logs` (retained permanently for expedition history and audit trails).
-   - Current execution resets the Valkey lobby to `recruiting` and clears readiness inside the transaction callback, before SQL commit. It does not disband the lobby or persist an interactive battle session.
-
-3. **Settlement Reward & Lifecycle Error Propagation**:
-   - Currency and reward applications in `settlePostBattle` and `settleFallback` validate all rewards (guarding against invalid negative gold or crystal amounts).
-   - Failures during post-battle persistence, log saving or lobby/readiness mutations propagate from the transaction callback. SQL rollback protects SQL writes; it does not roll back preceding Valkey mutations or guarantee synchronized lobby state.
-   - The compensatory `defer` attempts to reset status only while `result.Outcome` is empty. It is best-effort and cannot guarantee recovery after every failure or SQL commit error.
+Lobby status and readiness are reset inside the settlement transaction callback but live in Valkey, so an SQL rollback does not undo them; the compensating reset is best effort.

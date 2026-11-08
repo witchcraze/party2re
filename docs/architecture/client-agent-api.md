@@ -897,7 +897,7 @@ action-entry and Sleep/CanWake gates. Empty/whitespace reasons reach service
 validation (`422 RESCUE_INVALID_REASON`). It calls the owned actor's Rescue
 service once; it does not guarantee removal of sleep.
 The command replaces the legacy request POST; retained observations and recovery
-limits belong to the [Rescue contract](../design/rescue-and-helper.md#gateway-execution-and-retained-observation).
+limits belong to the [Rescue contract](../design/rescue-and-helper.md#emergency-rescue).
 Known service rejections and unexpected errors keep the common outcome boundary.
 
 ### Home sleep and wake command contract

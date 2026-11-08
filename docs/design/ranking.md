@@ -1,131 +1,24 @@
-# Player Leaderboards & Rankings Design
+# Rankings Design
 
 ## Overview
 
-The Leaderboards and Rankings Feature Module (`internal/ranking`) provides competitive progression tracking, player rankings, and popularity statistics across multiple gameplay dimensions (`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`).
+Rankings (`internal/ranking`; legacy `ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`, `legend.cgi`) cover leaderboards, the hall of fame and the weekly job-change ranking. Categories, ordering, pagination and caching are owned by code and [OpenAPI](../api/openapi.json); schemas by the migrations.
 
----
+## Weekly job-change ranking
 
-## Domain Rules & Categories
+**Legacy timing.** `party2/login.cgi:14,112–120` rotates on a login when `log/week_ranking.cgi` is at least seven elapsed days old, and only when neither daily maintenance branch runs; `login.cgi:482–487` publishes and clears the active counts; `week_ranking.cgi:17–36` reads them. There is no calendar anchor, and delayed logins or maintenance extend the period beyond seven days.
 
-### 1. Leaderboard Categories
+**Decision (#1252, 2026-10-11): JST Sunday midnight with one consolidated delayed rotation.** This deliberately departs from the drifting login-dependent rule; scheduling seven days after each actual rotation was considered and rejected.
 
-The ranking engine calculates standings across 14 distinct game metrics:
+- Weeks are `[Sunday 00:00 JST, next Sunday 00:00 JST)`, independent of host or player timezone.
+- The effective cutoff is when the rotation takes its exclusive lock, not individual event times; writes admitted before it close in the old week. Exact event-time partitioning is not claimed.
+- After downtime, all active counts are finalized once at recovery, including writes after the missed boundary. Separate results for missed weeks are never fabricated, and the next rotation is the first Sunday strictly after recovery.
+- A restart, duplicate action or retry for a settled boundary never rotates again. A failed rotation keeps its counts and the previous snapshot. A rotation with empty counts keeps a nonempty previous snapshot and still advances the deadline. The atomic rotation and writer isolation of #1242 apply.
 
-| Category | Identifier | Metric / Ordering | Scope |
-| --- | --- | --- | --- |
-| **Level Ranking** | `level` | `level DESC, experience DESC, id ASC` | Characters |
-| **Player Wealth Ranking** | `player_wealth` | `(bank_balance + sum(characters.money)) DESC, id ASC` | Players |
-| **Character Held Gold Ranking** | `character_wealth` | `money DESC, level DESC, id ASC` | Characters |
-| **Monster Kills Ranking (`kill_m`)** | `monster_kills` | `monster_kills DESC, level DESC, id ASC` | Characters |
-| **Demon King Defeats Ranking (`mao_c`)** | `mao_count` | `mao_count DESC, level DESC, id ASC` | Characters |
-| **Hero Achievements Ranking (`hero_c`)** | `hero_count` | `hero_count DESC, level DESC, id ASC` | Characters |
-| **PvP Arena Victory Ranking (`kill_p`)** | `pvp_victory` | `pvp_wins DESC, rating DESC, level DESC, id ASC` | Characters |
-| **World Boss Defeat Ranking** | `boss_defeat` | `boss_defeats DESC, highest_tier DESC, level DESC, id ASC` | Characters |
-| **Adventure Victory Ranking** | `adventure_victory` | `adventure_wins DESC, level DESC, id ASC` | Characters |
-| **Job Mastery Ranking** | `job_mastery` | `count(mastered_jobs) DESC, level DESC, id ASC` | Characters |
-| **Job Popularity Ranking** | `job_popularity` | `total_points DESC, job_id ASC` (cumulative points from job changes with male/female breakdown) | Job Classes |
-| **Helper Quests Ranking** | `helper` | `help_count DESC, level DESC, id ASC` | Characters |
-| **Small Medals Ranking** | `small_medals` | `small_medals DESC, level DESC, id ASC` | Characters |
-| **Casino Wins Ranking (`cas_c`)** | `casino_wins` | `casino_wins DESC, level DESC, id ASC` | Characters |
-| **Alchemy Syntheses Ranking (`alc_c`)** | `alchemy` | `total_crafts DESC, level DESC, id ASC` | Characters |
-| **Weekly Job Change Ranking (`week_ranking`)** | `weekly_job_change` | `change_count DESC, level DESC, id ASC` | Characters |
+## Job popularity
 
-### 2. Hall of Fame (`legend.cgi`)
+Each job change credits floor(previous level × 0.5) points to the **previous** job and the character's gender (`lib/job_change.cgi:319`), inside the job-change transaction. **Decision:** past job changes cannot be reconstructed, so popularity starts at zero and accumulates only from changes after migration 097.
 
-The permanent Hall of Fame honors all players who have achieved complete 100% mastery across 6 game domains:
+## Hall of fame
 
-| Category Identifier | Title | Achievement Criterion |
-| --- | --- | --- |
-| `comp_job` | ジョブマスター | All jobs mastered (ジョブコンプリート) |
-| `comp_mon` | モンスターマスター | Monster Book completed (モンスター図鑑コンプリート) |
-| `comp_wea` | ウェポンキラー | Weapon Encyclopedia completed (武器図鑑コンプリート) |
-| `comp_arm` | アーマーキング | Armor Encyclopedia completed (防具図鑑コンプリート) |
-| `comp_ite` | アイテムニスト | Item Encyclopedia completed (アイテム図鑑コンプリート) |
-| `comp_alc` | アルケミスト | All alchemy recipes completed (錬金レシピコンプリート) |
-
-- **Automatic Completion Induction**: Progression milestones automatically trigger `RecordLegend` via decoupled `LegendInductor` hooks:
-  - `comp_mon`: Reaching 180 defeated monsters in `internal/collection` invokes `RecordLegend("comp_mon", characterID)`.
-  - `comp_ite`: Reaching 141 discovered items in `internal/collection` invokes `RecordLegend("comp_ite", characterID)`.
-  - `comp_job`: Mastering all 72 completion jobs in `internal/job` invokes `RecordLegend("comp_job", characterID)`.
-  - `comp_alc`: Crafting all compendium recipes in `internal/alchemy` invokes `RecordLegend("comp_alc", characterID)`.
-- **Permanent & Idempotent**: Inductees are stored permanently in MariaDB (`legend_records`). Duplicate inductions for the same character in a category are ignored (`INSERT IGNORE`, guarded by `uk_legend_category_character`).
-- **Profile Auto-Enrichment**: When induction is triggered from domain completion hooks, missing character details (`name`, `color`, `guild_name`, `avatar_url`, `comment`) are enriched directly from `characters`, `character_profiles`, `guild_members`, and `guilds` tables in MariaDB.
-- **Chronological Ordering**: Hall of Fame queries return inductees in chronological order of achievement (`inducted_at ASC, id ASC`).
-
-### 3. Weekly Job Change Ranking (`week_ranking.cgi`)
-
-#### Legacy timing and current implementation
-
-- **Legacy behavior**: `party2/login.cgi:14,112–120` checks whether the modification time of `log/week_ranking.cgi` is at least seven elapsed days old. Rotation runs on a login only when neither preceding daily maintenance branch runs. `login.cgi:482–487` copies the active job-change file into the published ranking and clears the active file; `week_ranking.cgi:17–36` reads and sorts the published result. There is no Sunday or midnight calendar anchor, and this elapsed-time condition does not depend on a calendar timezone. Delayed logins or daily maintenance can extend the accumulation period beyond seven days.
-- **Dispatch reconciliation**: Neither `login.cgi` nor `week_ranking.cgi` has an action dispatch table. The former's weekly maintenance branch maps to `RotateWeeklyJobChangeRanking`; the latter's read-only `run` maps to `GET /rankings/weekly-job-change`. Login-triggered maintenance is replaced by background scheduling; the calendar anchor remains a separate game-rule decision.
-- **Current Go behavior**: Startup and `RotateWeeklyHandler` reconcile the durable deadline in MariaDB, settle overdue counters once, and reserve the next Sunday wake-up through the existing scheduler. The action's timestamp is a wake-up hint; SQL progress determines whether settlement is needed. Counters have no event timestamps from which missed calendar weeks could be reconstructed.
-
-#### Approved calendar and recovery policy
-
-The project owner explicitly approved **JST Sunday midnight with one consolidated delayed rotation** in the #1252 kickoff conversation on 2026-10-11. This is an intentional departure from the legacy elapsed-seven-day/login rule: a predictable shared calendar is preferred to a drifting login-dependent schedule. The alternative of scheduling seven days after each actual rotation was considered and not selected.
-
-- **Timezone and anchor**: Fixed JST (`UTC+09:00`), every Sunday at 00:00:00, independent of host or player timezone. Store timestamps in UTC. Nominal weeks are half-open intervals `[Sunday 00:00 JST, next Sunday 00:00 JST)`; a timestamp exactly at the boundary belongs to the new nominal week. For example, 2026-10-11 00:00 JST is 2026-10-10 15:00 UTC.
-- **Effective cutoff**: Membership is determined by transaction lock ordering, not individual event timestamps. Writers admitted before the rotation obtains its exclusive lock are included in the closing snapshot; writers admitted after it go into the new active counters. Even during normal operation, the actual cutoff is the lock acquisition, which may lag the nominal boundary. Do not claim exact event-time calendar partitioning.
-- **Delay and downtime**: If one or more boundaries pass before successful rotation, finalize all still-active counters once at recovery. Include writes admitted before that recovery cutoff, even if their calendar timestamps are after the missed boundary. Do not fabricate separate historical weekly results or repeatedly clear counters for missed Sundays. Resume at the first Sunday 00:00 JST strictly after recovery; do not drift to seven days after the delayed execution.
-- **Restart and replay**: Preserve an existing future reservation. Reconcile an overdue or missing reservation with durable rotation progress; if a boundary has passed since the last successful cutoff, perform one consolidated recovery rotation. With no previous rotation, preserve existing counters and establish the first future Sunday boundary. A restart, duplicate action or retry for an already-settled boundary must not rotate again or consume counters belonging to the next interval. Failed rotations retain their counters and previous snapshot; failure to enqueue the next action after a committed rotation must be recoverable without repeating that rotation.
-- **Independent atomicity contract**: This policy retains the atomic rotation/writer isolation fixed by [#1242](https://github.com/witchcraze/party2re/issues/1242) (CL-07 F11). It does not require the configurable timezone proposal in #904.
-
-#### Durable progress and scheduling recovery
-
-`ranking_snapshots.weekly_rotation_due` stores the next unsettled boundary separately from snapshot refresh timestamps. A NULL value initializes the first future Sunday without clearing counters. Under the exclusive weekly snapshot lock, a future deadline is preserved; an overdue deadline advances to the first future Sunday in the same transaction as snapshot persistence and counter reset. Several missed weeks therefore produce one settlement, and concurrent or duplicate deliveries see the already-advanced deadline. Ordinary snapshot refreshes do not modify this column. When empty counters preserve a nonempty prior snapshot, the deadline still advances.
-
-After SQL commit, the handler preserves an existing Pending reservation for the same deadline, or enqueues it with a JST-date prefix, a fresh attempt suffix and actor `ranking:weekly`. Discovery and enqueue are separate operations; fresh IDs prevent concurrent repair from overwriting another worker's Processing payload. Duplicate wake-ups are harmless because SQL serializes settlement. Startup runs the same reconciliation and propagates errors. Failed SQL transactions leave progress, counters and snapshot intact. Queue discovery/enqueue failures after commit are reported separately; repeating reconciliation restores the reservation without consuming new counters. The worker logs errors and marks failed actions terminal; automatic generic worker replay is not assumed. Restart or an explicit reconciliation retry is required after a queue failure interrupts recurrence. An uncertain old Processing action is not replayed by the worker: startup reconciles SQL directly and reserves the next deadline independently.
-
-#### Counter rotation and isolation
-
-- **Active Tracking**: Character job changes (`ChangeJob`) automatically increment active counters in `weekly_job_changes(character_id, change_count)`.
-  - Mutating writers execute within an ambient or dedicated transaction acquiring `LOCK IN SHARE MODE` on the `ranking_snapshots` record for `weekly_job_change`. Multiple concurrent job changes can acquire shared locks simultaneously without blocking one another.
-- **Atomic Reset**: The scheduled background action (`party2:ranking:rotate_weekly`) executes within a single database transaction (`RunInTx`):
-  1. **Lock Mediation**: A no-op `INSERT ... ON DUPLICATE KEY UPDATE` creates or exclusively locks the `ranking_snapshots` row (`weekly_job_change`), draining ongoing job changes and serializing incoming ones. It avoids the shared-to-exclusive lock upgrade deadlock caused by `INSERT IGNORE` followed by `FOR UPDATE` when multiple rotations compete.
-  2. **Snapshot Calculation & Re-rotation Guard**: Reads active job changer counters. If active counters are zero, the existing snapshot is inspected; prerequisite read errors abort rotation to preserve existing snapshot state and active counters, while absence (`ErrSnapshotNotFound`) allows initial empty snapshot persistence. If an existing finalized snapshot contains records, re-rotation preserves the finalized snapshot and avoids overwriting it with empty data. Otherwise, a frozen snapshot is persisted to `ranking_snapshots`.
-  3. **Counter Reset**: Deletes active counter rows (`DELETE FROM weekly_job_changes`).
-  4. **Post-Commit Cache Update**: Only after transaction commit succeeds are memory and Valkey caches invalidated/published. If the transaction rolls back, active counters and the previous snapshot remain intact.
-- **Concurrent Writer Isolation**: Job changes attempting to commit while rotation is in flight wait on the shared lock, then proceed to write into the newly reset counter table for the new week, guaranteeing zero lost updates and zero duplicate counting.
-
-### 4. Job Popularity Ranking (`job_ranking.cgi`)
-
-- **Cumulative Points from Job Changes**:
-  Upon each job change (`ChangeJob`), popularity points are credited to the character's *former* (pre-change) job class and gender:
-  `points = floor(old_level * 0.5)` (`lib/job_change.cgi:319`).
-  These points are permanently accumulated into `job_popularity_stats(job_id, male_points, female_points, total_points)`:
-  - If male (`'m'`, `'male'`, `'男'`), `male_points += points` and `total_points += points`.
-  - If female (`'f'`, `'female'`, `'女'`), `female_points += points` and `total_points += points`.
-  - The invariant `male_points + female_points == total_points` is strictly maintained.
-- **Atomic Transaction Integration**:
-  Point recording executes within the existing job-change transaction (`ExecuteTransaction`). If the job change transaction rolls back (e.g. inventory/equipment/persistence failure), no popularity points are credited.
-- **Ranking Order & Distribution**:
-  Standings are ordered by `total_points DESC, job_id ASC`.
-  The popularity percentage of each job is `float64(job.total_points) / float64(sum(all_jobs.total_points)) * 100.0` (or `0.0` if no points have been accumulated yet).
-- **Existing Environment Initialization Policy**:
-  Because past job changes (pre-change levels and jobs) were not tracked historically prior to the introduction of `job_popularity_stats`, exact past job-change points cannot be retroactively reconstructed. Therefore, `job_popularity_stats` starts fresh at 0 points (empty table), and cumulative points accumulate strictly from subsequent job changes performed after migration application (`migrations/097_job_popularity_stats.sql`).
-
-### 5. Deterministic Tie-Breaking & Pagination
-
-- Tie-breaks are predictably resolved using secondary progression metrics (`level`, `experience`, `rating`) followed by deterministic primary keys (`id ASC`).
-- All leaderboard queries support standard pagination parameters:
-  - `limit`: Number of entries per page (default: 20, max: 100).
-  - `offset`: Starting index (0-indexed).
-  - Responses include `total` count for total pagination calculations.
-
-### 6. Caching & Snapshot Strategy
-
-- **In-Memory Cache (TTL)**: Ranking queries default to checking in-memory cached results with configurable TTL (default: 5 minutes).
-- **Persistent Snapshots (`ranking_snapshots`)**: Snapshots can be pre-calculated, persisted to MariaDB, and refreshed on demand or on a scheduled basis (`POST /rankings/refresh`).
-- **Live vs Snapshot**: Queries can opt out of snapshot caching using `snapshot=false` to execute direct database aggregation.
-
----
-
-Transport operations and schemas: [OpenAPI](../api/openapi.json).
-
-## Persistence
-
-MariaDB owns ranking snapshots, Hall of Fame uniqueness, weekly counters and
-durable weekly rotation progress. [Migrations](../../migrations/) own schemas and
-indexes; [Valkey keyspace](../architecture/valkey-keyspace.md) owns cache keys.
-Rotation/recovery semantics remain in the owning section above.
+Completion of all jobs, the monster book, the weapon, armor and item encyclopedias, or all alchemy recipes inducts a character permanently and once per category, in induction order.

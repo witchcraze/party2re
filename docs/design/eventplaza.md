@@ -1,75 +1,17 @@
-# Event Plaza, Traveling Merchant Bazaar, and Victory Celebrations Design
+# Event Plaza Design
 
 ## Overview
 
-The Event Plaza Feature Module (`internal/eventplaza`) owns the town gathering plaza (`イベント広場`), traveling merchant bazaar and the temporary crowd added after King Boss sealing. Ordinary presence uses a 5-minute window (`party2/config.cgi_origin:81–82`). The adopted celebration contract and its runtime boundary are described in [§3](#3-victory-celebrations-legacy-contract-and-implementation-gaps). Historical banquet records and previously awarded toast Gold are preserved without runtime listing or claims.
+The Event Plaza (`internal/eventplaza`, legacy `lib/event.cgi`) is the town plaza with its traveling merchant and the crowd added after a king sealing. Presence uses the ordinary 5-minute window (`party2/config.cgi_origin:81–82`). Catalog, prices and transport are owned by code and [OpenAPI](../api/openapi.json).
 
----
+## Merchant
 
-## Domain Rules & Systems
+- The merchant's catalog depends on 10/20/30 plaza members; a higher tier **replaces** the lower catalog (`@sales` is reassigned), and items cost three times their base price (`$ites[$i][2] *= 3`).
+- **Pitfall:** the tier is selected from the raw stored rows **before** presence cleanup, then the merchant row is added; the displayed headcount is computed afterward, so a later request can select a different tier (see below).
+- Items requested by ongoing helper quests (`get_helper_item(3)`) are not listed or sold.
+- A purchase goes to the hand when the consumable hand is empty and the quantity is 1, otherwise to the Depot, past capacity if needed (`event.cgi:94`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
 
-### 1. Real-Time Concurrency Tracking & Merchant Tiers
-
-The traveling merchant's inventory uses thresholds of 10/20/30 plaza members. Legacy merchant selection counts stored rows before presence cleanup; displayed headcount is calculated afterward. Status, catalog and purchase each take this snapshot, add the merchant when the selected tier is positive, then clean expired and duplicate records. A subsequent request can select a different tier. `merchant_selection_count` exposes the snapshot; `active_participants` exposes the cleaned display count, including a retained merchant row. GET observations do not create a real visitor heartbeat or rewards.
-
-- **Presence Window (`PresenceWindow = 5 * time.Minute`)**: Adventurers who visited or refreshed the plaza within the last 5 minutes are counted as active participants.
-- **Current Storage**: The injected Valkey tracker retains display names (shared by real and virtual guests), insertion order and per-record time markers; heartbeats use the character name and victories append records. Its [keyspace contract](../architecture/valkey-keyspace.md) owns migration and observation-based cleanup. Without that tracker, the MariaDB `eventplaza_presences (character_id, last_seen_at)` adapter counts active real characters only and does not reproduce crowd/merchant ordering. Production injects Valkey and never automatically falls back on a tracker error.
-- **Heartbeat (`POST /eventplaza/presence`)**: Adventurers emit presence heartbeats upon entering or interacting with the plaza. Purchases also update presence. Victory crowds are appended through the sealing hook; there is no toast action.
-
-| Tier | Merchant Selection Count | Merchant Title | Catalog Unlocks (Legacy `lib/event.cgi`) |
-| :--- | :--- | :--- | :--- |
-| **Tier 0** | `< 10` | Traveling Merchant On Journey (行商人巡回中) | None (Merchant is on the road) |
-| **Tier 1** | `10 – 19` | Bronze Traveling Merchant (旅の行商人バザー) | 6 Tier 1 items (item-72, 81, 82, 83, 84, 86) |
-| **Tier 2** | `20 – 29` | Silver Traveling Merchant (熟練の行商人バザー) | 6 Tier 2 items (item-73, 74, 77, 5, 75, 85) |
-| **Tier 3** | `>= 30` | Gold Traveling Merchant (至高の行商人バザー) | 14 Tier 3 items (item-90..100, 108, 142, 217) |
-
-*Note: Per authentic legacy `lib/event.cgi`, higher tiers strictly replace earlier tier inventories (`@sales` array re-assigned).*
-
----
-
-### 2. Traveling Merchant Bazaar (`internal/eventplaza/data/bazaar.json`)
-
-The bazaar offers 26 canonical items spanning tiers 1 to 3:
-
-#### 3x Pricing Markup
-All items are sold at exactly **3× base price** (`$ites[$i][2] *= 3`), reflecting the traveling merchant's premium markup:
-- **Tier 1 Items (6 items)**:
-  - `item-72`: 力の種 (Seed of Strength) - 6,000 Gold
-  - `item-81`: 賢者の石 (Philosopher's Stone) - 30,000 Gold
-  - `item-82`: 天使の聖水 (Angel's Holy Water) - 3,000 Gold
-  - `item-83`: 蘇生薬 (Revival Elixir) - 6,000 Gold
-  - `item-84`: 魔法の小瓶 (Magic Vial) - 1,500 Gold
-  - `item-86`: 聖なるしずく (Holy Droplet) - 30,000 Gold
-- **Tier 2 Items (6 items)**:
-  - `item-73`: 素早さの種 (Seed of Agility) - 6,000 Gold
-  - `item-74`: 守りの種 (Seed of Protection) - 6,000 Gold
-  - `item-77`: クモの糸 (Spider Web) - 3,000 Gold
-  - `item-5`: 魔法の聖水 (Magic Holy Water) - 600 Gold
-  - `item-75`: 幸せの種 (Seed of Fortune) - 15,000 Gold
-  - `item-85`: 不死鳥の涙 (Phoenix Tear) - 6,000 Gold
-- **Tier 3 Items (14 items)**:
-  - `item-90`–`item-100`: Scroll collection (炎の巻物, 氷の巻物, 聖なる巻物, etc.) - 60,000 Gold each
-  - `item-108`: 光のヴェール (Veil of Light) - 150,000 Gold
-  - `item-142`: ソロモンの指輪 (Solomon's Ring) - 300,000 Gold
-  - `item-217`: 仙人の薬草 (Hermit's Medicinal Herb) - 30,000 Gold
-
-#### Helper Quest Exclusion
-Items currently requested by ongoing Town Helper Quests (`get_helper_item(3)`) are strictly omitted from listing and cannot be purchased (returns HTTP 409 Conflict).
-
-#### Hand Occupancy & Depot Routing
-Purchase results contain structured item, payment, and delivery facts. The HTTP response DTO formats `npc_message` using the item name, authenticated character name, and depot delivery flag; the domain service contains no NPC dialogue.
-
-Authentic delivery mechanics based on hand item slot occupancy:
-- **Direct Hand Delivery**: If the player's consumable item slot is empty and `quantity == 1`, the item is added directly to character inventory with NPC message:
-  `"はい、$nameです"`
-- **Depot Storage Delivery**: If the player already holds a consumable item in hand, or if `quantity > 1`, items are routed directly to Depot storage (`預かり所`) with authentic NPC message:
-  `"$nameは$charさんの預かり所に送っておきましたよ"`
-- A full Depot still receives the purchase, past capacity if needed (`event.cgi:94`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
-- Discovered items are recorded into the player's Item Collection (`internal/collection`).
-
----
-
-### 3. Victory Celebrations: Legacy Contract and Implementation Gaps
+## 3. Victory Celebrations: Legacy Contract and Implementation Gaps
 
 #### Legacy evidence
 
@@ -88,32 +30,5 @@ Decision: [#1248](https://github.com/witchcraze/party2re/issues/1248). The maint
 
 The celebration is represented by the remaining plaza crowd. There is no independent banquet display period to keep at 24 hours or reset to a fixed two hours. Remove the separate banquet listing, toast action and its Gold reward entirely; keeping a zero-Gold toast would still retain an action absent from the original. Preserve the sealing announcement and the crowd hook. Do not claw back previously awarded Gold or destroy historical records as part of retiring their runtime use.
 
-Reconstruct the behavior within current feature/storage boundaries; do not copy the old file architecture, names, images or source. A possible source mistake is evidence to document, not authority to silently substitute a preferred behavior. Merchant prices, item catalog and existing purchase validation remain as specified in §2.
 
-#### Action and call-path reconciliation
-
-| Legacy path/action | Current Go service / transport | Adopted treatment |
-| :--- | :--- | :--- |
-| `vs_king.cgi` `ふういん` → `_win_vs_king.cgi` | Boss victory hook → `RecordVictoryCrowd` through `cmd/party2/wire_adapters.go`; no standalone celebration command | Sealing appends independently drawn guests/props and per-record markers through the existing hook, regardless of boss tier. Other Boss actions remain owned by [Boss design](boss.md). |
-| `event.cgi` load → raw count, merchant row → `system.cgi` `read_member` | `GetPlazaStatus`, `ListAvailableBazaarItems`, purchase tier checks; `GET /eventplaza`, `GET /eventplaza/merchant/items` | Each entry point selects from the stored snapshot, appends the merchant when present, then performs display cleanup. Status exposes both counts. HTTP transport does not justify changing the game rule. |
-| `event.cgi` `かう` → `kau(target)` | `ListAvailableBazaarItems` / `PurchaseBazaarItem`; `GET /eventplaza/merchant/items`, `POST /eventplaza/merchant/purchase` | Retain list/buy behavior and §2 safeguards. No toast is part of this action. |
-| No legacy counterpart | Former `GET /eventplaza/banquets` and `active_banquets*` fields | Unregistered (404); status has no independent banquet fields or SQL read path. |
-| No legacy counterpart | Former `POST /eventplaza/banquets/{id}/toast` | Unregistered (404), with no service call, reward or presence update. No replacement command. |
-
-#### Runtime boundary
-
-The Boss sealing hook calls `RecordVictoryCrowd` directly. It appends guests/props through the injected presence tracker, using the service clock and the independent draws above; no SQL banquet record is needed. Tracker errors propagate to the Boss hook, whose existing best-effort handling and sealing news remain unchanged. Production supplies Valkey; the crowd side effect is not rolled back with SQL if a later sealing operation fails.
-
-Status, catalog and purchase retain the crowd/merchant snapshot semantics in §1. The separate banquet listing, toast action, Gold payout and related DTO/repository contracts have no runtime implementation. Crowd and merchant restoration does not certify unexamined Event Plaza behavior; the action mapping above bounds this reconciliation.
-
----
-
-## Database Persistence
-
-`eventplaza_presences` (`migrations/080_eventplaza_presences.sql`) remains the SQL adapter for ordinary character presence when no tracker is injected. Production injects the authoritative Valkey tracker described in §1.
-
-`celebration_banquets` and `banquet_toasts` (`migrations/038_eventplaza.sql`) are historical storage only: runtime no longer creates, lists, reads or claims these records. Existing migrations, records and previously awarded Gold remain intact. Existing foreign-key deletion behavior still applies when a character is deleted. SQL definitions are owned by [migrations](../../migrations/).
-
----
-
-Transport operations and schemas: [OpenAPI](../api/openapi.json).
+Historical `celebration_banquets` and `banquet_toasts` records and previously awarded toast gold are preserved; nothing reads, lists or claims them at runtime.

@@ -136,7 +136,7 @@ Event Plaza owns ordinary presence and the temporary sealing crowd through its
 injected presence tracker. The composition root connects the Boss celebration
 hook directly to that public crowd operation; it has no banquet/toast SQL
 repository dependency. Historical banquet tables remain untouched. See
-[Event Plaza design](../design/eventplaza.md#database-persistence) for storage boundaries.
+[Event Plaza design](../design/eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) for storage boundaries.
 
 Game rules and legacy action mappings are indexed in [design/README.md](../design/README.md).
 Transport schemas belong to [OpenAPI](../api/openapi.json), SQL definitions to
