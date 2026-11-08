@@ -72,6 +72,13 @@ func WithFleaMarketChecker(checker FleaMarketChecker) Option {
 	}
 }
 
+// WithExileChecker refuses renames while involved in an exile vote.
+func WithExileChecker(checker ExileChecker) Option {
+	return func(s *Service) {
+		s.exileChecker = checker
+	}
+}
+
 // WithProfileRepository sets the profile repository.
 func WithProfileRepository(repo ProfileRepository) Option {
 	return func(s *Service) {
@@ -101,6 +108,7 @@ type Service struct {
 	news             NewsPublisher
 	guildChecker     GuildMembershipChecker
 	fleaChecker      FleaMarketChecker
+	exileChecker     ExileChecker
 	profileRepo      ProfileRepository
 	cleanupHooks     []CleanupHook
 	jobProvider      corejob.DefinitionProvider
@@ -268,6 +276,17 @@ func (s *Service) ChangeName(ctx context.Context, characterID, newName string) (
 			}
 			if inGuild {
 				return ErrInGuildDisallowed
+			}
+		}
+
+		// Legacy lib/name_change.cgi checks exile involvement between guild and flea market.
+		if s.exileChecker != nil {
+			involved, err := s.exileChecker.IsInvolved(txCtx, characterID)
+			if err != nil {
+				return fmt.Errorf("check exile involvement: %w", err)
+			}
+			if involved {
+				return ErrExileInvolvedDisallowed
 			}
 		}
 

@@ -57,6 +57,23 @@ func TestCatalog_FleaMarketListGatewayContract(t *testing.T) {
 	}
 }
 
+func TestCatalog_ExilePetitionGatewayContract(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	action, ok := playercontext.GetAction("exile_petition")
+	if !ok || action.OperationID != "executeCharacterAction" || !slices.Equal(action.RequiredParams, []string{"target_name", "reason"}) {
+		t.Fatalf("incorrect command: %+v", action)
+	}
+	then, params := gatewayContract(t, spec, action.ID)
+	if !slices.Contains(then.Required, "params") || string(params.AdditionalProperties) != "false" || len(params.Properties) != 2 || len(params.Required) != 2 {
+		t.Fatalf("incorrect params: %+v / %+v", then, params)
+	}
+	for _, name := range action.RequiredParams {
+		if params.Properties[name].Type != "string" || !slices.Contains(params.Required, name) {
+			t.Fatalf("incorrect %s schema: %+v", name, params)
+		}
+	}
+}
+
 func TestCatalog_GemStoreSendGatewayContract(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	action, ok := playercontext.GetAction("gemstore_send")
@@ -85,6 +102,8 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"adventure_start", "stage_id", "string", true},
 		{"rescue_request", "reason", "string", true},
 		{"chapel_pray", "blessing", "string", true},
+		{"exile_approve", "target_name", "string", true},
+		{"exile_oppose", "target_name", "string", true},
 		{"home_sleep", "target_home_id", "string", false},
 		{"home_wake", "", "", false},
 		{"depot_expand", "", "", false},

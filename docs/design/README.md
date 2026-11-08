@@ -120,6 +120,7 @@ graph TD
 
 ### 6. Social, Community & Gambling
 - [`guild.md`](guild.md) — Guild founding, dynamic GP, custom roles, hex colors, broadcast callouts, and 20-day inactivity auto-disbandment.
+- [`exile.md`](exile.md) — Player-run exile petitions (50+ job changes, 10-vote verdicts with 1-hour or 5-day sleep), reproduced with the original's quirks.
 - [`eventplaza.md`](eventplaza.md) — Real-time 5-minute concurrency presence tracking, 3x markup traveling merchant bazaar, and victory celebration crowds.
 - [`casino.md`](casino.md) — Multi-player room lobby (2..8 players), Indian Poker, High & Low, Doppelganger, solo 3-reel slot machine, and 18 authentic prizes routed to depot.
 - [`lottery.md`](lottery.md) — Server-wide 20-ticket Takarakuji lottery with rollover jackpot, and Tavern Fukubiki raffle.

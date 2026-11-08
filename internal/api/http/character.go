@@ -46,7 +46,8 @@ func (h *Handler) handleChangeCharacterName(w http.ResponseWriter, r *http.Reque
 				errors.Is(err, character.ErrSameName),
 				errors.Is(err, character.ErrInsufficientGold),
 				errors.Is(err, character.ErrInGuildDisallowed),
-				errors.Is(err, character.ErrActiveMarketDisallowed):
+				errors.Is(err, character.ErrActiveMarketDisallowed),
+				errors.Is(err, character.ErrExileInvolvedDisallowed):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			case errors.Is(err, corecharacter.ErrNotFound):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "character not found"})

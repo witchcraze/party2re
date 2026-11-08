@@ -28,6 +28,7 @@ var (
 	ErrNameAlreadyTaken          = errors.New("character name is already taken")
 	ErrInGuildDisallowed         = errors.New("cannot change name while belonging to a guild")
 	ErrActiveMarketDisallowed    = errors.New("cannot change name with active flea market listings")
+	ErrExileInvolvedDisallowed   = errors.New("cannot change name while involved in an exile vote")
 	ErrSameName                  = errors.New("new name is identical to current name")
 	ErrSameGender                = errors.New("new gender is identical to current gender")
 	ErrInvalidGender             = errors.New("invalid gender: must be m or f")
@@ -177,6 +178,11 @@ type FleaMarketCheckerFunc func(ctx context.Context, characterID string) (bool, 
 
 func (f FleaMarketCheckerFunc) HasActiveListings(ctx context.Context, characterID string) (bool, error) {
 	return f(ctx, characterID)
+}
+
+// ExileChecker reports participation in an open exile petition.
+type ExileChecker interface {
+	IsInvolved(ctx context.Context, characterID string) (bool, error)
 }
 
 // NewsPublisher defines announcement publication contract.

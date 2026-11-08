@@ -96,7 +96,7 @@ func newReferralFixture(t *testing.T) referralFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := core.initPlayerAndChar(guildRepo, nil, fleaRepo, news, adapter.DeliverReferral, 0, logging.Nop()); err != nil {
+	if err := core.initPlayerAndChar(guildRepo, nil, fleaRepo, news, nil, adapter.DeliverReferral, 0, logging.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()

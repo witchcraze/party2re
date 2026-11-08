@@ -67,7 +67,7 @@ const (
 
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
 // Granular item or skill selections are handled within individual endpoints/sub-commands.
-var DefaultCatalog = append(append([]ActionDefinition{
+var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "scene_enter", Label: "施設を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
 	{ID: "scene_select", Label: "対象を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"target_kind", "target_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
 	{ID: "scene_page", Label: "ページを選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
@@ -474,7 +474,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		// Note: Emergency rescue can be invoked while dead or asleep to unstick state.
 		RequiredGates: 0,
 	},
-}, casinoCatalog...), continuationCatalog...)
+}, casinoCatalog...), exileCatalog...), continuationCatalog...)
 
 // AllActions returns a slice copy of the canonical default action catalog.
 func AllActions() []ActionDefinition {
