@@ -2,6 +2,7 @@ package casino
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,9 +27,36 @@ func NewMemoryRoomRepository() *MemoryRoomRepository {
 	}
 }
 
+func (m *MemoryRoomRepository) isCharacterAdmittedInLiveRoomLocked(roomID, characterID string) bool {
+	r, ok := m.rooms[roomID]
+	if !ok || r.Status == RoomStatusDisbanded || (!r.UpdatedAt.IsZero() && r.UpdatedAt.Before(time.Now().UTC().Add(-DefaultLobbyTTL))) {
+		return false
+	}
+	_, admitted := m.members[roomID][characterID]
+	return admitted
+}
+
+func (m *MemoryRoomRepository) checkCharacterAdmissionAvailableLocked(roomID, characterID string) error {
+	existing, ok := m.charRooms[characterID]
+	if !ok {
+		return nil
+	}
+	if strings.TrimSpace(existing) == "" {
+		return ErrInvalidRoomMapping
+	}
+	if existing != roomID && m.isCharacterAdmittedInLiveRoomLocked(existing, characterID) {
+		return ErrAlreadyInRoom
+	}
+	return nil
+}
+
 func (m *MemoryRoomRepository) CreateRoom(_ context.Context, room Room, leader RoomMember) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.checkCharacterAdmissionAvailableLocked(room.ID, leader.CharacterID); err != nil {
+		return err
+	}
 
 	m.rooms[room.ID] = room
 	if m.members[room.ID] == nil {
@@ -142,6 +170,9 @@ func (m *MemoryRoomRepository) AddMember(_ context.Context, member RoomMember) e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.checkCharacterAdmissionAvailableLocked(member.RoomID, member.CharacterID); err != nil {
+		return err
+	}
 	if m.members[member.RoomID] == nil {
 		m.members[member.RoomID] = make(map[string]RoomMember)
 	}
@@ -206,7 +237,9 @@ func (m *MemoryRoomRepository) RemoveMember(_ context.Context, roomID string, ch
 	if m.members[roomID] != nil {
 		delete(m.members[roomID], characterID)
 	}
-	delete(m.charRooms, characterID)
+	if m.charRooms[characterID] == roomID {
+		delete(m.charRooms, characterID)
+	}
 	return nil
 }
 
@@ -214,7 +247,14 @@ func (m *MemoryRoomRepository) GetCharacterRoom(_ context.Context, characterID s
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.charRooms[characterID], nil
+	roomID, ok := m.charRooms[characterID]
+	if !ok {
+		return "", ErrRoomNotFound
+	}
+	if strings.TrimSpace(roomID) == "" {
+		return "", ErrInvalidRoomMapping
+	}
+	return roomID, nil
 }
 
 // WithRoomLock executes fn inside an exclusive lock for roomID.

@@ -59,6 +59,9 @@ func TestValkeyRoomRepository_CreateRoom(t *testing.T) {
 	}
 
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		if cmd.Commands()[0] == "GET" {
+			return valkeytest.MakeNilResult()
+		}
 		return valkeytest.MakeOKResult()
 	}))
 	repo, err := casino.NewValkeyRoomRepository(client)
@@ -71,31 +74,46 @@ func TestValkeyRoomRepository_CreateRoom(t *testing.T) {
 	}
 
 	cmds := client.RecordedCommandStrings()
-	if len(cmds) != 3 {
-		t.Fatalf("expected 3 commands (SET room, ZADD index, SET char), got %d: %v", len(cmds), cmds)
+	if len(cmds) != 6 {
+		t.Fatalf("expected 6 commands (SET lock, GET char, SET room, ZADD index, EVALSHA claim char, EVALSHA unlock), got %d: %v", len(cmds), cmds)
 	}
 
-	// 1. SET room key
-	if cmds[0][0] != "SET" || cmds[0][1] != casino.DefaultRoomKeyPrefix+room.ID {
-		t.Errorf("unexpected SET room command: %v", cmds[0])
+	// 1. Acquire room lock
+	if cmds[0][0] != "SET" || cmds[0][1] != casino.DefaultRoomLockKeyPrefix+room.ID {
+		t.Errorf("unexpected SET lock command: %v", cmds[0])
+	}
+
+	// 2. GET character mapping before publishing room payload
+	if cmds[1][0] != "GET" || cmds[1][1] != casino.DefaultCharacterKeyPrefix+leader.CharacterID {
+		t.Errorf("unexpected GET char command: %v", cmds[1])
+	}
+
+	// 3. SET room key
+	if cmds[2][0] != "SET" || cmds[2][1] != casino.DefaultRoomKeyPrefix+room.ID {
+		t.Errorf("unexpected SET room command: %v", cmds[2])
 	}
 	// Verify JSON contains password hash
 	var data map[string]any
-	if err := json.Unmarshal([]byte(cmds[0][2]), &data); err != nil {
+	if err := json.Unmarshal([]byte(cmds[2][2]), &data); err != nil {
 		t.Fatalf("invalid json payload: %v", err)
 	}
 	if data["password_hash"] != "secret-sha256-hash" {
 		t.Errorf("expected password_hash in stored json, got: %v", data["password_hash"])
 	}
 
-	// 2. ZADD to active rooms index
-	if cmds[1][0] != "ZADD" || cmds[1][1] != casino.DefaultRoomsActiveIndexKey || cmds[1][3] != room.ID {
-		t.Errorf("unexpected ZADD command: %v", cmds[1])
+	// 4. ZADD to active rooms index
+	if cmds[3][0] != "ZADD" || cmds[3][1] != casino.DefaultRoomsActiveIndexKey || cmds[3][3] != room.ID {
+		t.Errorf("unexpected ZADD command: %v", cmds[3])
 	}
 
-	// 3. SET character to room mapping
-	if cmds[2][0] != "SET" || cmds[2][1] != casino.DefaultCharacterKeyPrefix+leader.CharacterID || cmds[2][2] != room.ID {
-		t.Errorf("unexpected SET char command: %v", cmds[2])
+	// 5. Atomic claim character to room mapping
+	if (cmds[4][0] != "EVALSHA" && cmds[4][0] != "EVAL") || len(cmds[4]) < 5 || cmds[4][3] != casino.DefaultCharacterKeyPrefix+leader.CharacterID || cmds[4][4] != room.ID {
+		t.Errorf("unexpected claim char command: %v", cmds[4])
+	}
+
+	// 6. Release room lock
+	if (cmds[5][0] != "EVALSHA" && cmds[5][0] != "EVAL") || len(cmds[5]) < 4 || cmds[5][3] != casino.DefaultRoomLockKeyPrefix+room.ID {
+		t.Errorf("unexpected release lock command: %v", cmds[5])
 	}
 }
 
@@ -192,6 +210,9 @@ func TestValkeyRoomRepository_UpdateRoom(t *testing.T) {
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		cmdStr := cmd.Commands()
 		if cmdStr[0] == "GET" {
+			if len(cmdStr) > 1 && cmdStr[1] == casino.DefaultCharacterKeyPrefix+"c1" {
+				return valkeytest.MakeStringResult("casino-room-3")
+			}
 			return valkeytest.MakeStringResult(string(rawJSON))
 		}
 		if cmdStr[0] == "SET" && cmdStr[1] == casino.DefaultRoomKeyPrefix+"casino-room-3" {
@@ -234,7 +255,11 @@ func TestValkeyRoomRepository_DeleteRoom(t *testing.T) {
 	rawJSON, _ := json.Marshal(dto{Room: room, Members: []casino.RoomMember{member}})
 
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		if cmd.Commands()[0] == "GET" {
+		cmdStr := cmd.Commands()
+		if cmdStr[0] == "GET" {
+			if len(cmdStr) > 1 && cmdStr[1] == casino.DefaultCharacterKeyPrefix+"char-del-1" {
+				return valkeytest.MakeStringResult("casino-del-1")
+			}
 			return valkeytest.MakeStringResult(string(rawJSON))
 		}
 		return valkeytest.MakeOKResult()
@@ -249,7 +274,7 @@ func TestValkeyRoomRepository_DeleteRoom(t *testing.T) {
 	deletedRoom := false
 	zremRoom := false
 	for _, cmd := range client.RecordedCommandStrings() {
-		if cmd[0] == "DEL" && cmd[1] == casino.DefaultCharacterKeyPrefix+"char-del-1" {
+		if (cmd[0] == "EVAL" || cmd[0] == "EVALSHA") && len(cmd) == 5 && cmd[3] == casino.DefaultCharacterKeyPrefix+"char-del-1" && cmd[4] == "casino-del-1" {
 			deletedChar = true
 		}
 		if cmd[0] == "DEL" && cmd[1] == casino.DefaultRoomKeyPrefix+"casino-del-1" {
@@ -479,6 +504,12 @@ func TestValkeyRoomRepository_SaveRoomDetail_PropagatesActiveIndexErrors(t *test
 		cmdStr := cmd.Commands()
 		switch cmdStr[0] {
 		case "GET":
+			if len(cmdStr) > 1 && cmdStr[1] == casino.DefaultCharacterKeyPrefix+"char-1" {
+				return valkeytest.MakeStringResult("room-err-1")
+			}
+			if len(cmdStr) > 1 && cmdStr[1] == casino.DefaultCharacterKeyPrefix+"char-2" {
+				return valkeytest.MakeNilResult()
+			}
 			return valkeytest.MakeStringResult(string(rawJSON))
 		case "SET":
 			return valkeytest.MakeOKResult()
@@ -542,6 +573,9 @@ func TestValkeyRoomRepository_SaveRoomDetail_DisbandedAndRemoveErrors(t *testing
 			cmdStr := cmd.Commands()
 			switch cmdStr[0] {
 			case "GET":
+				if len(cmdStr) > 1 && cmdStr[1] == casino.DefaultCharacterKeyPrefix+"char-1" {
+					return valkeytest.MakeStringResult("room-err-2")
+				}
 				return valkeytest.MakeStringResult(string(rawJSON))
 			case "SET":
 				return valkeytest.MakeOKResult()
@@ -569,8 +603,11 @@ func TestValkeyRoomRepository_SaveRoomDetail_DisbandedAndRemoveErrors(t *testing
 				return valkeytest.MakeOKResult()
 			case "ZREM":
 				return valkeytest.MakeOKResult()
-			case "DEL":
-				return valkeytest.MakeErrorResult(expectedErr)
+			case "EVAL", "EVALSHA":
+				if len(cmdStr) == 5 && cmdStr[3] == casino.DefaultCharacterKeyPrefix+"char-1" {
+					return valkeytest.MakeErrorResult(expectedErr)
+				}
+				return valkeytest.MakeOKResult()
 			default:
 				return valkeytest.MakeOKResult()
 			}
@@ -602,8 +639,11 @@ func TestValkeyRoomRepository_SaveRoomDetail_DisbandedAndRemoveErrors(t *testing
 				return valkeytest.MakeOKResult()
 			case "ZADD":
 				return valkeytest.MakeOKResult()
-			case "DEL":
-				return valkeytest.MakeErrorResult(expectedErr)
+			case "EVAL", "EVALSHA":
+				if len(cmdStr) == 5 && cmdStr[3] == casino.DefaultCharacterKeyPrefix+"char-1" {
+					return valkeytest.MakeErrorResult(expectedErr)
+				}
+				return valkeytest.MakeOKResult()
 			default:
 				return valkeytest.MakeOKResult()
 			}

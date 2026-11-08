@@ -199,11 +199,13 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID string, characterID stri
 
 			if len(activeMembers) == 0 {
 				room.Status = RoomStatusDisbanded
+				room.UpdatedAt = time.Now().UTC()
 				return s.roomRepo.UpdateRoom(txCtx, *room)
 			}
 
 			if room.LeaderCharacterID == characterID {
 				room.LeaderCharacterID = activeMembers[0].CharacterID
+				room.UpdatedAt = time.Now().UTC()
 				if err := s.roomRepo.UpdateRoom(txCtx, *room); err != nil {
 					return err
 				}

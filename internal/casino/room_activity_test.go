@@ -73,4 +73,13 @@ func TestCharacterRoomObservationPropagatesIndexFailure(t *testing.T) {
 	if got, err := svc.GetCharacterRoomView(context.Background(), "owner", "actor"); got != nil || !errors.Is(err, want) || repo.calls != 1 {
 		t.Fatalf("hidden index failure: %+v %v", got, err)
 	}
+
+	blankRepo := &failedActivityIndex{RoomRepository: casino.NewMemoryRoomRepository(), err: nil}
+	blankSvc, err := casino.NewService(newMockPrizeCasinoRepo(), casino.WithRoomRepository(blankRepo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := blankSvc.GetCharacterRoomView(context.Background(), "owner", "actor"); got != nil || !errors.Is(err, casino.ErrInvalidRoomMapping) {
+		t.Fatalf("blank mapping treated as absence: %+v %v", got, err)
+	}
 }

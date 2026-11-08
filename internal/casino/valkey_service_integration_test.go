@@ -2,8 +2,10 @@ package casino_test
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strconv"
+	stdstrings "strings"
 	"sync"
 	"testing"
 
@@ -48,16 +50,51 @@ func newInMemoryValkeyClient() valkey.Client {
 			delete(zsets, args[1])
 			return valkeytest.MakeOKResult()
 		case "EVAL", "EVALSHA":
-			if len(args) >= 5 {
+			switch len(args) {
+			case 5:
 				key := args[3]
-				token := args[4]
-				if strings[key] == token {
+				cur, exists := strings[key]
+				if !exists {
+					return valkeytest.MakeIntResult(0)
+				}
+				if stdstrings.TrimSpace(cur) == "" {
+					return valkeytest.MakeErrorResult(errors.New("ERR casino character room mapping is invalid"))
+				}
+				if cur == args[4] {
 					delete(strings, key)
 					return valkeytest.MakeIntResult(1)
 				}
 				return valkeytest.MakeIntResult(0)
+			case 6:
+				key := args[3]
+				cur, exists := strings[key]
+				if !exists {
+					return valkeytest.MakeIntResult(0)
+				}
+				if stdstrings.TrimSpace(cur) == "" {
+					return valkeytest.MakeErrorResult(errors.New("ERR casino character room mapping is invalid"))
+				}
+				if cur == args[4] {
+					strings[key] = args[4]
+					return valkeytest.MakeOKResult()
+				}
+				return valkeytest.MakeIntResult(0)
+			case 7:
+				key := args[3]
+				cur, exists := strings[key]
+				if exists && stdstrings.TrimSpace(cur) == "" {
+					return valkeytest.MakeErrorResult(errors.New("ERR casino character room mapping is invalid"))
+				}
+				roomID := args[4]
+				expectedPrev := args[5]
+				if !exists || cur == roomID || (expectedPrev != "" && cur == expectedPrev) {
+					strings[key] = roomID
+					return valkeytest.MakeOKResult()
+				}
+				return valkeytest.MakeErrorResult(errors.New("ERR casino character already in room"))
+			default:
+				return valkeytest.MakeIntResult(1)
 			}
-			return valkeytest.MakeIntResult(1)
 		case "ZADD":
 			key := args[1]
 			if zsets[key] == nil {

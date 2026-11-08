@@ -3,15 +3,20 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/challenge"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/gvg"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 type activityFixtures struct {
@@ -288,5 +293,166 @@ func TestChallengeExitActivityForEveryParticipant(t *testing.T) {
 				t.Fatalf("leader=%s round=%d: %+v %v", leader, round, facts, err)
 			}
 		}
+	}
+}
+
+type casinoActivityAccountStub struct {
+	casino.Repository
+	accounts map[string]casino.Account
+}
+
+func (s *casinoActivityAccountStub) GetAccount(_ context.Context, charID string) (casino.Account, error) {
+	return s.accounts[charID], nil
+}
+
+func (s *casinoActivityAccountStub) DeductBetAndCreditPayout(_ context.Context, charID string, bet, payout int64) (casino.Account, error) {
+	acc := s.accounts[charID]
+	acc.Coins = acc.Coins - bet + payout
+	s.accounts[charID] = acc
+	return acc, nil
+}
+
+type casinoActivityCharStub struct {
+	casino.CharacterRepository
+	chars map[string]corecharacter.Character
+}
+
+func (s *casinoActivityCharStub) FindByID(_ context.Context, charID string) (corecharacter.Character, error) {
+	c, ok := s.chars[charID]
+	if !ok {
+		return corecharacter.Character{}, errors.New("character not found")
+	}
+	return c, nil
+}
+
+func (s *casinoActivityCharStub) FindByIDForUpdate(ctx context.Context, charID string) (corecharacter.Character, error) {
+	return s.FindByID(ctx, charID)
+}
+
+func (s *casinoActivityCharStub) Update(_ context.Context, ch corecharacter.Character) error {
+	s.chars[ch.ID] = ch
+	return nil
+}
+
+func TestCasinoActivityReaderPreservesDiscoveryAcrossRoomRenewal(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+	client, err := vk.NewClientWithConfig(vk.ConfigFromEnvironment())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	prefix := "act1091-" + id.New()[:8]
+	leader := prefix + "-leader"
+	peer := prefix + "-peer"
+	spec := prefix + "-spec"
+
+	chars := &casinoActivityCharStub{
+		chars: map[string]corecharacter.Character{
+			leader: {ID: leader, Name: "Leader", PlayerID: "owner-" + leader},
+			peer:   {ID: peer, Name: "Peer", PlayerID: "owner-" + peer},
+			spec:   {ID: spec, Name: "Spec", PlayerID: "owner-" + spec},
+		},
+	}
+	accounts := &casinoActivityAccountStub{
+		accounts: map[string]casino.Account{
+			leader: {CharacterID: leader, Coins: 500},
+			peer:   {CharacterID: peer, Coins: 500},
+			spec:   {CharacterID: spec, Coins: 500},
+		},
+	}
+	roomRepo, err := casino.NewValkeyRoomRepository(client, casino.WithValkeyCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	casinoSvc, err := casino.NewService(accounts, casino.WithRoomRepository(roomRepo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	created, err := casinoSvc.CreateRoom(ctx, leader, casino.CreateRoomRequest{
+		Name: "Act-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomID := created.Room.ID
+	t.Cleanup(func() {
+		bg := context.Background()
+		_ = client.Do(bg, client.B().Del().Key(casino.DefaultRoomKeyPrefix+roomID).Build())
+		_ = client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build())
+		for _, actor := range []string{leader, peer, spec} {
+			_ = client.Do(bg, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+actor).Build())
+		}
+	})
+
+	if _, err := casinoSvc.JoinRoom(ctx, roomID, peer, "", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := casinoSvc.SpectateRoom(ctx, roomID, spec, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Shorten leader and spectator mappings to 60s, then let peer drive room renewal via UpdateMember.
+	for _, actor := range []string{leader, peer, spec} {
+		if err := client.Do(ctx, client.B().Expire().Key(casino.DefaultCharacterKeyPrefix+actor).Seconds(60).Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	peerMem, err := roomRepo.GetMember(ctx, roomID, peer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerMem.UpdatedAt = time.Now().UTC()
+	if err := roomRepo.UpdateMember(ctx, *peerMem); err != nil {
+		t.Fatal(err)
+	}
+
+	f, pv, gv := &activityFixtures{}, &pvpActivityFixture{}, &gvgActivityFixture{}
+	readers := contextActivityReaders{party: f, pvp: pv, gvg: gv, dungeon: f, challenge: f, casino: casinoSvc}
+
+	for _, actor := range []string{leader, peer, spec} {
+		charKey := casino.DefaultCharacterKeyPrefix + actor
+		ttl, err := client.Do(ctx, client.B().Ttl().Key(charKey).Build()).AsInt64()
+		if err != nil || ttl <= 60 {
+			t.Fatalf("expected renewed TTL > 60 for %s, got %d err=%v", actor, ttl, err)
+		}
+		if err := client.Do(ctx, client.B().Expire().Key(charKey).Seconds(ttl-61).Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
+		facts, err := readers.read(ctx, "owner-"+actor, actor)
+		if err != nil || len(facts) != 1 || facts[0].Kind != "casino" || facts[0].ID != roomID {
+			t.Fatalf("activity for %s across original deadline: %+v err=%v", actor, facts, err)
+		}
+	}
+
+	// Kick spectator and disband by leaving remaining members -> activity returns empty.
+	if err := casinoSvc.KickMember(ctx, roomID, leader, spec); err != nil {
+		t.Fatal(err)
+	}
+	if facts, err := readers.read(ctx, "owner-"+spec, spec); err != nil || len(facts) != 0 {
+		t.Fatalf("kicked spectator activity: %+v err=%v", facts, err)
+	}
+	if err := casinoSvc.LeaveRoom(ctx, roomID, peer); err != nil {
+		t.Fatal(err)
+	}
+	if err := casinoSvc.LeaveRoom(ctx, roomID, leader); err != nil {
+		t.Fatal(err)
+	}
+	for _, actor := range []string{leader, peer} {
+		if facts, err := readers.read(ctx, "owner-"+actor, actor); err != nil || len(facts) != 0 {
+			t.Fatalf("post-disband activity(%s): %+v err=%v", actor, facts, err)
+		}
+	}
+
+	// Unreadable blank mapping must return an error, not false idle.
+	if err := client.Do(ctx, client.B().Set().Key(casino.DefaultCharacterKeyPrefix+leader).Value("").Ex(casino.DefaultLobbyTTL).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	if facts, err := readers.read(ctx, "owner-"+leader, leader); facts != nil || !errors.Is(err, casino.ErrInvalidRoomMapping) {
+		t.Fatalf("blank mapping should error, got facts=%+v err=%v", facts, err)
 	}
 }

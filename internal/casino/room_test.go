@@ -238,6 +238,9 @@ func TestRoom_UnifiedStartAndActionDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlayRoomAction(HL high) failed: %v", err)
 	}
+	if err := roomRepo.DeleteRoom(ctx, hlRoom.Room.ID); err != nil {
+		t.Fatalf("DeleteRoom(HL) failed: %v", err)
+	}
 
 	// 2. Doppel via unified StartGame & PlayRoomAction
 	dpRoom, _ := svc.CreateRoom(ctx, p1, casino.CreateRoomRequest{

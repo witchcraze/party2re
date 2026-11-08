@@ -400,6 +400,9 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 	if count := countingClient.lockSetNXCount.Load(); count != 1 {
 		t.Fatalf("expected exactly 1 lock acquisition for PlayHighLowAction, got %d", count)
 	}
+	if err := roomRepo.DeleteRoom(ctx, hlRoom.Room.ID); err != nil {
+		t.Fatalf("cleanup hlRoom before indRoom: %v", err)
+	}
 
 	// Test Indian Poker Start and Play single lock acquisition
 	indRoom, err := svc.CreateRoom(ctx, charA.ID, casino.CreateRoomRequest{
@@ -441,6 +444,9 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 	}
 	if count := countingClient.lockSetNXCount.Load(); count != 1 {
 		t.Fatalf("expected exactly 1 lock acquisition for PlayIndianPokerAction, got %d", count)
+	}
+	if err := roomRepo.DeleteRoom(ctx, indRoom.Room.ID); err != nil {
+		t.Fatalf("cleanup indRoom before dpRoom: %v", err)
 	}
 
 	// Test Doppel Start and Play single lock acquisition

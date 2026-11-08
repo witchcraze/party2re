@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
@@ -58,48 +60,59 @@ func NewValkeyRoomRepository(client valkey.Client, opts ...ValkeyRoomRepositoryO
 
 // CreateRoom registers a new room and its leader in Valkey with 1800s sliding TTL.
 func (v *ValkeyRoomRepository) CreateRoom(ctx context.Context, room Room, leaderMember RoomMember) error {
-	now := time.Now().UTC()
-	if room.CreatedAt.IsZero() {
-		room.CreatedAt = now
-	}
-	if room.UpdatedAt.IsZero() {
-		room.UpdatedAt = now
-	}
-	if leaderMember.JoinedAt.IsZero() {
-		leaderMember.JoinedAt = now
-	}
-	if leaderMember.UpdatedAt.IsZero() {
-		leaderMember.UpdatedAt = now
-	}
+	return v.WithRoomLock(ctx, room.ID, func(lockedCtx context.Context) error {
+		now := time.Now().UTC()
+		if room.CreatedAt.IsZero() {
+			room.CreatedAt = now
+		}
+		if room.UpdatedAt.IsZero() {
+			room.UpdatedAt = now
+		}
+		if leaderMember.JoinedAt.IsZero() {
+			leaderMember.JoinedAt = now
+		}
+		if leaderMember.UpdatedAt.IsZero() {
+			leaderMember.UpdatedAt = now
+		}
 
-	dto := &valkeyRoomDetailDTO{
-		Room:         room,
-		PasswordHash: room.PasswordHash,
-		Members:      []RoomMember{leaderMember},
-	}
-	data, err := json.Marshal(dto)
-	if err != nil {
-		return err
-	}
+		expectedPrevRoomID, err := v.checkCharacterAdmissionAvailable(lockedCtx, room.ID, leaderMember.CharacterID)
+		if err != nil {
+			return err
+		}
 
-	roomKey := DefaultRoomKeyPrefix + room.ID
-	setCmd := v.client.B().Set().Key(roomKey).Value(string(data)).Ex(DefaultLobbyTTL).Build()
-	if err := v.client.Do(ctx, setCmd).Error(); err != nil {
-		return err
-	}
+		dto := &valkeyRoomDetailDTO{
+			Room:         room,
+			PasswordHash: room.PasswordHash,
+			Members:      []RoomMember{leaderMember},
+		}
+		data, err := json.Marshal(dto)
+		if err != nil {
+			return err
+		}
 
-	zaddCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
-		ScoreMember(float64(room.UpdatedAt.Unix()), room.ID).Build()
-	if err := v.client.Do(ctx, zaddCmd).Error(); err != nil {
-		return &SecondarySyncError{Err: err}
-	}
+		roomKey := DefaultRoomKeyPrefix + room.ID
+		setCmd := v.client.B().Set().Key(roomKey).Value(string(data)).Ex(DefaultLobbyTTL).Build()
+		if err := v.client.Do(lockedCtx, setCmd).Error(); err != nil {
+			return err
+		}
 
-	charKey := DefaultCharacterKeyPrefix + leaderMember.CharacterID
-	charCmd := v.client.B().Set().Key(charKey).Value(room.ID).Ex(DefaultLobbyTTL).Build()
-	if err := v.client.Do(ctx, charCmd).Error(); err != nil {
-		return &SecondarySyncError{Err: err}
-	}
-	return nil
+		var syncErr error
+		zaddCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
+			ScoreMember(float64(room.UpdatedAt.Unix()), room.ID).Build()
+		if err := v.client.Do(lockedCtx, zaddCmd).Error(); err != nil {
+			syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
+		}
+
+		if err := v.claimAdmittedMemberMapping(lockedCtx, room.ID, leaderMember.CharacterID, expectedPrevRoomID); err != nil {
+			if errors.Is(err, ErrAlreadyInRoom) {
+				delErr := v.client.Do(lockedCtx, v.client.B().Del().Key(roomKey).Build()).Error()
+				zremErr := v.client.Do(lockedCtx, v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(room.ID).Build()).Error()
+				return errors.Join(ErrAlreadyInRoom, delErr, zremErr)
+			}
+			syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
+		}
+		return syncErr
+	})
 }
 
 func (v *ValkeyRoomRepository) getRoomDetail(ctx context.Context, roomID string) (*valkeyRoomDetailDTO, error) {
@@ -137,6 +150,10 @@ func (v *ValkeyRoomRepository) getRoomDetail(ctx context.Context, roomID string)
 // Callers must not assume payload rollback and clients must not perform blind command retries; partial state
 // remains observable by room ID (GetRoom), while lobby discovery reflects the index state until a subsequent renewal succeeds.
 func (v *ValkeyRoomRepository) saveRoomDetail(ctx context.Context, dto *valkeyRoomDetailDTO) error {
+	return v.saveRoomDetailExcluding(ctx, dto, "")
+}
+
+func (v *ValkeyRoomRepository) saveRoomDetailExcluding(ctx context.Context, dto *valkeyRoomDetailDTO, skipCharacterID string) error {
 	dto.PasswordHash = dto.Room.PasswordHash
 	data, err := json.Marshal(dto)
 	if err != nil {
@@ -149,25 +166,36 @@ func (v *ValkeyRoomRepository) saveRoomDetail(ctx context.Context, dto *valkeyRo
 		return err
 	}
 
+	var syncErr error
 	if dto.Room.Status == RoomStatusDisbanded {
 		zremCmd := v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(dto.Room.ID).Build()
 		if err := v.client.Do(ctx, zremCmd).Error(); err != nil {
-			return &SecondarySyncError{Err: err}
+			syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
 		}
 		for _, m := range dto.Members {
-			charKey := DefaultCharacterKeyPrefix + m.CharacterID
-			if err := v.client.Do(ctx, v.client.B().Del().Key(charKey).Build()).Error(); err != nil {
-				return &SecondarySyncError{Err: err}
+			if err := v.deleteMemberMapping(ctx, dto.Room.ID, m.CharacterID); err != nil {
+				syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
 			}
 		}
-	} else {
-		zaddCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
-			ScoreMember(float64(dto.Room.UpdatedAt.Unix()), dto.Room.ID).Build()
-		if err := v.client.Do(ctx, zaddCmd).Error(); err != nil {
-			return &SecondarySyncError{Err: err}
+		return syncErr
+	}
+
+	zaddCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
+		ScoreMember(float64(dto.Room.UpdatedAt.Unix()), dto.Room.ID).Build()
+	if err := v.client.Do(ctx, zaddCmd).Error(); err != nil {
+		syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
+	}
+	if !dto.Room.UpdatedAt.Before(time.Now().UTC().Add(-DefaultLobbyTTL)) {
+		for _, m := range dto.Members {
+			if m.CharacterID == skipCharacterID {
+				continue
+			}
+			if err := v.renewMemberMapping(ctx, dto.Room.ID, m.CharacterID); err != nil {
+				syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
+			}
 		}
 	}
-	return nil
+	return syncErr
 }
 
 // GetRoom retrieves a room by ID.
@@ -200,21 +228,23 @@ func (v *ValkeyRoomRepository) UpdateRoom(ctx context.Context, room Room) error 
 
 // DeleteRoom removes a room and associated member mappings from Valkey.
 func (v *ValkeyRoomRepository) DeleteRoom(ctx context.Context, roomID string) error {
-	dto, err := v.getRoomDetail(ctx, roomID)
-	if err != nil && !errors.Is(err, ErrRoomNotFound) {
-		return err
-	}
-	if dto != nil {
-		for _, m := range dto.Members {
-			if err := v.client.Do(ctx, v.client.B().Del().Key(DefaultCharacterKeyPrefix+m.CharacterID).Build()).Error(); err != nil {
-				return err
+	return v.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		dto, err := v.getRoomDetail(lockedCtx, roomID)
+		if err != nil && !errors.Is(err, ErrRoomNotFound) {
+			return err
+		}
+		if dto != nil {
+			for _, m := range dto.Members {
+				if err := v.deleteMemberMapping(lockedCtx, roomID, m.CharacterID); err != nil {
+					return err
+				}
 			}
 		}
-	}
-	if err := v.client.Do(ctx, v.client.B().Del().Key(DefaultRoomKeyPrefix+roomID).Build()).Error(); err != nil {
-		return err
-	}
-	return v.client.Do(ctx, v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(roomID).Build()).Error()
+		if err := v.client.Do(lockedCtx, v.client.B().Del().Key(DefaultRoomKeyPrefix+roomID).Build()).Error(); err != nil {
+			return err
+		}
+		return v.client.Do(lockedCtx, v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(roomID).Build()).Error()
+	})
 }
 
 // GetRoomByName searches for an active room with the given name.
@@ -239,6 +269,12 @@ func (v *ValkeyRoomRepository) AddMember(ctx context.Context, member RoomMember)
 		if err != nil {
 			return err
 		}
+		expectedPrevRoomID, err := v.checkCharacterAdmissionAvailable(lockedCtx, member.RoomID, member.CharacterID)
+		if err != nil {
+			return err
+		}
+		prevMembers := slices.Clone(dto.Members)
+		prevUpdatedAt := dto.Room.UpdatedAt
 		now := time.Now().UTC()
 		if member.JoinedAt.IsZero() {
 			member.JoinedAt = now
@@ -260,16 +296,21 @@ func (v *ValkeyRoomRepository) AddMember(ctx context.Context, member RoomMember)
 		}
 
 		dto.Room.UpdatedAt = now
-		if err := v.saveRoomDetail(lockedCtx, dto); err != nil {
-			return err
+		syncErr := v.saveRoomDetailExcluding(lockedCtx, dto, member.CharacterID)
+		if syncErr != nil && !errors.Is(syncErr, ErrSecondarySync) {
+			return syncErr
 		}
 
-		charKey := DefaultCharacterKeyPrefix + member.CharacterID
-		charCmd := v.client.B().Set().Key(charKey).Value(member.RoomID).Ex(DefaultLobbyTTL).Build()
-		if err := v.client.Do(lockedCtx, charCmd).Error(); err != nil {
-			return &SecondarySyncError{Err: err}
+		if err := v.claimAdmittedMemberMapping(lockedCtx, member.RoomID, member.CharacterID, expectedPrevRoomID); err != nil {
+			if errors.Is(err, ErrAlreadyInRoom) {
+				dto.Members = prevMembers
+				dto.Room.UpdatedAt = prevUpdatedAt
+				rollbackErr := unwrapSecondarySync(v.saveRoomDetail(lockedCtx, dto))
+				return errors.Join(ErrAlreadyInRoom, rollbackErr)
+			}
+			syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
 		}
-		return nil
+		return syncErr
 	})
 }
 
@@ -358,18 +399,19 @@ func (v *ValkeyRoomRepository) RemoveMember(ctx context.Context, roomID string, 
 				break
 			}
 		}
+		var syncErr error
 		if idx >= 0 {
 			dto.Members = append(dto.Members[:idx], dto.Members[idx+1:]...)
 			dto.Room.UpdatedAt = time.Now().UTC()
-			if err := v.saveRoomDetail(lockedCtx, dto); err != nil {
-				return err
+			syncErr = v.saveRoomDetail(lockedCtx, dto)
+			if syncErr != nil && !errors.Is(syncErr, ErrSecondarySync) {
+				return syncErr
 			}
 		}
-		charKey := DefaultCharacterKeyPrefix + characterID
-		if err := v.client.Do(lockedCtx, v.client.B().Del().Key(charKey).Build()).Error(); err != nil {
-			return &SecondarySyncError{Err: err}
+		if err := v.deleteMemberMapping(lockedCtx, roomID, characterID); err != nil {
+			syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
 		}
-		return nil
+		return syncErr
 	})
 }
 
@@ -384,5 +426,12 @@ func (v *ValkeyRoomRepository) GetCharacterRoom(ctx context.Context, characterID
 		}
 		return "", err
 	}
-	return res.ToString()
+	roomID, err := res.ToString()
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(roomID) == "" {
+		return "", ErrInvalidRoomMapping
+	}
+	return roomID, nil
 }
