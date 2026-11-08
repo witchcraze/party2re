@@ -241,20 +241,30 @@ func (s *Service) Vote(ctx context.Context, actorID, targetName string, approve 
 // projectSentences confirms committed deadlines in the Valkey sleep timer.
 // SQL is authoritative: a failed or interrupted projection leaves the row,
 // and the next board command projects the same absolute deadline again.
+// Holding the board lock orders projections after every committed verdict,
+// so an older deadline cannot overwrite a newer one.
 func (s *Service) projectSentences(ctx context.Context, now time.Time) {
-	sentences, err := s.repo.ListSentences(ctx)
-	if err != nil {
-		return
-	}
-	for _, sentence := range sentences {
-		if sentence.SleepUntil.After(now) {
-			if err := s.timer.SetLockUntil(ctx, timer.CategorySleep, sentence.CharacterID, sentence.SleepUntil); err != nil {
-				continue
+	//lint:ignore error-swallow unprojected rows stay and are retried by the next board command
+	_ = s.tx.RunInTx(ctx, func(ctx context.Context) error {
+		if _, err := s.repo.LockBoard(ctx); err != nil {
+			return err
+		}
+		sentences, err := s.repo.ListSentences(ctx)
+		if err != nil {
+			return err
+		}
+		for _, sentence := range sentences {
+			if sentence.SleepUntil.After(now) {
+				if err := s.timer.SetLockUntil(ctx, timer.CategorySleep, sentence.CharacterID, sentence.SleepUntil); err != nil {
+					continue
+				}
+			}
+			if err := s.repo.DeleteSentence(ctx, sentence); err != nil {
+				return err
 			}
 		}
-		//lint:ignore error-swallow the row stays and is retried by the next board command
-		_ = s.repo.DeleteSentence(ctx, sentence)
-	}
+		return nil
+	})
 }
 
 // lockCharacters locks rows in ascending ID order after the board, so renames

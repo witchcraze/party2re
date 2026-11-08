@@ -18,6 +18,7 @@ type memRepo struct {
 	petitions []exile.Petition
 	touchErr  error
 	sentences []exile.Sentence
+	events    []string
 }
 
 func (m *memRepo) SaveSentence(_ context.Context, s exile.Sentence) error {
@@ -25,6 +26,7 @@ func (m *memRepo) SaveSentence(_ context.Context, s exile.Sentence) error {
 	return nil
 }
 func (m *memRepo) ListSentences(context.Context) ([]exile.Sentence, error) {
+	m.events = append(m.events, "list")
 	return slices.Clone(m.sentences), nil
 }
 func (m *memRepo) DeleteSentence(_ context.Context, s exile.Sentence) error {
@@ -32,7 +34,10 @@ func (m *memRepo) DeleteSentence(_ context.Context, s exile.Sentence) error {
 	return nil
 }
 
-func (m *memRepo) LockBoard(context.Context) (time.Time, error) { return m.updated, nil }
+func (m *memRepo) LockBoard(context.Context) (time.Time, error) {
+	m.events = append(m.events, "lock")
+	return m.updated, nil
+}
 func (m *memRepo) TouchBoard(_ context.Context, at time.Time) error {
 	if m.touchErr != nil {
 		return m.touchErr
@@ -81,7 +86,9 @@ type memTx struct {
 }
 
 func (t memTx) RunInTx(ctx context.Context, fn func(context.Context) error) error {
-	saved := memRepo{updated: t.repo.updated, touchErr: t.repo.touchErr, sentences: slices.Clone(t.repo.sentences)}
+	t.repo.events = append(t.repo.events, "begin")
+	defer func() { t.repo.events = append(t.repo.events, "end") }()
+	saved := memRepo{updated: t.repo.updated, touchErr: t.repo.touchErr, sentences: slices.Clone(t.repo.sentences), events: t.repo.events}
 	saved.petitions, _ = t.repo.ListPetitions(ctx)
 	err := fn(ctx)
 	if err == nil && t.commitErr != nil {
@@ -412,5 +419,32 @@ func TestPetitionRejectsTargetRenamedBeforeLock(t *testing.T) {
 	svc := exile.NewService(f.repo, renamingChars{f.chars}, f.sleeps, memTx{f.repo, &f.commit}, nil)
 	if _, err := svc.Petition(context.Background(), "app", "bad", "x", f.now); !errors.Is(err, exile.ErrTargetNotFound) || len(f.repo.petitions) != 0 {
 		t.Fatalf("petition kept a stale name: %v %+v", err, f.repo.petitions)
+	}
+}
+
+// Projection reads pending sentences only under the board lock, so it is
+// ordered after every committed verdict and cannot write an older deadline.
+func TestSentenceProjectionHoldsBoardLock(t *testing.T) {
+	f := newFixture(t, 10)
+	f.approveUntilLast(t)
+	f.repo.events = nil
+	if _, err := f.svc.Vote(context.Background(), "v08", "bad", true, f.now); err != nil {
+		t.Fatal(err)
+	}
+	locked := false
+	for _, e := range f.repo.events {
+		switch e {
+		case "begin", "end":
+			locked = false
+		case "lock":
+			locked = true
+		case "list":
+			if !locked {
+				t.Fatalf("sentences read outside the board lock: %v", f.repo.events)
+			}
+		}
+	}
+	if !slices.Contains(f.repo.events, "list") || f.sleeps.set["bad"] != time.Hour {
+		t.Fatalf("verdict not projected: %v %v", f.repo.events, f.sleeps.set)
 	}
 }
