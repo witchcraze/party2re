@@ -259,7 +259,7 @@ GET and command refresh share the HTTP selected-scene composer, which produces `
 - GET and refresh never invoke NPC talk/inspect, purchases, deliveries, collection writes, scheduling or other mutations, and never renew selection.
 - Actual activity overrides ordinary selection before any facility read.
 - Known command and navigation outcomes survive a failed refresh and recover through GET only, without another selection write.
-- Offset pages keep the owner's persisted order with an ID tie-breaker and promise no cross-page snapshot. A displayed quote or catalog entry is not a reservation or an affordability guarantee.
+- Offset pages keep the order each feature defines (its design document owns the order and tie-breaker) and promise no cross-page snapshot. A displayed quote or catalog entry is not a reservation or an affordability guarantee.
 
 Town's primary collection is `data.destinations`, ordered by destination ID,
 with explicit `enter_params`, observation support and offset page/next inputs.
