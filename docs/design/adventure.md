@@ -455,7 +455,7 @@ The operation matrix establishes the family boundary. Production cutover still
 requires #1188 job supply, #1332 effect lifetimes and the effects/transactions
 decomposed by [#1333](https://github.com/witchcraze/party2re/issues/1333) into
 #1337–#1346. Ordinary NPC payloads, conditional rosters, frozen summon tables and
-stage24's special field follow the [shared battle contract](battle.md#dynamic-effects-and-catalog-admission). The
+stage24's special field follow the [shared battle contract](battle.md#normal-adventure-action-and-target-matrix). The
 [entry ownership reconciliation](battle.md#dynamic-effects-and-catalog-admission)
 distinguishes those payloads from their concrete callback bodies, descendant
 closure, registration and production wiring. Its implementation owners remain
