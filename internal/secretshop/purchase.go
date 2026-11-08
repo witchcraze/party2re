@@ -84,21 +84,7 @@ func (s *Service) PurchaseItem(
 			return err
 		}
 
-		occupied := false
-		for _, inst := range inv.Items {
-			if s.itemDefProvider != nil {
-				def, err := s.itemDefProvider.FindByID(inst.DefinitionID)
-				if err == nil && (def.Slot == coreitem.SlotNone || def.Slot == "") {
-					occupied = true
-					break
-				}
-			} else {
-				if _, ok := s.catalog.FindByDefinitionID(inst.DefinitionID); ok || strings.HasPrefix(inst.DefinitionID, "item-") {
-					occupied = true
-					break
-				}
-			}
-		}
+		occupied := inv.IsFull(shopItem.ItemDefinitionID)
 
 		if !occupied && quantity == 1 {
 			res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{

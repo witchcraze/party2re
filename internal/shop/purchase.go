@@ -63,7 +63,7 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 	if err != nil {
 		return PurchaseResult{}, ErrItemNotFound
 	}
-	return s.PurchaseInShop(ctx, characterID, shopTypeFromKind(definition.Kind()), itemDefinitionID, quantity)
+	return s.PurchaseInShop(ctx, characterID, shopTypeFromKind(definition.LegacyHandKind()), itemDefinitionID, quantity)
 }
 
 // PurchaseInShop buys an item from a specific shop type, applying shop-specific pricing and messages.
@@ -129,15 +129,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 			return err
 		}
 
-		kind := definition.Kind()
-		occupied := false
-		for _, inst := range inv.Items {
-			def, err := s.catalog.FindByID(inst.DefinitionID)
-			if err == nil && def.Kind() == kind {
-				occupied = true
-				break
-			}
-		}
+		occupied := inv.IsFull(itemDefinitionID)
 
 		// Slot empty and single quantity -> Add to inventory
 		if !occupied && quantity == 1 {
@@ -157,6 +149,38 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 				return err
 			}
 
+			updatedChar := res.Character
+			if s.equipment != nil && definition.Slot != item.SlotNone {
+				eq, err := s.equipment.FindByCharacterIDForUpdate(txCtx, characterID)
+				if err != nil {
+					return err
+				}
+				charChanged := false
+				switch definition.Slot {
+				case item.SlotMainHand:
+					if updatedChar.WeaponCustomName != "" || updatedChar.WeaponSeal != 0 {
+						updatedChar.ClearWeaponCustomization()
+						charChanged = true
+					}
+				case item.SlotBody:
+					if updatedChar.ArmorCustomName != "" {
+						updatedChar.ClearArmorCustomization()
+						charChanged = true
+					}
+				}
+				if charChanged {
+					if err := s.characters.Update(txCtx, updatedChar); err != nil {
+						return err
+					}
+				}
+				if _, err := eq.Equip(&res.Inventory, definition, res.GrantedItem.ID); err != nil {
+					return err
+				}
+				if err := s.equipment.Save(txCtx, eq); err != nil {
+					return err
+				}
+			}
+
 			if s.recorder != nil {
 				if err := s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, definition.Category()); err != nil {
 					return err
@@ -164,7 +188,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 			}
 
 			result = PurchaseResult{
-				Character:          res.Character,
+				Character:          updatedChar,
 				Inventory:          res.Inventory,
 				ItemInstance:       *res.GrantedItem,
 				TotalPrice:         totalPrice,

@@ -146,7 +146,7 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 		deliveredTo := "inventory"
 		var mes string
 
-		if len(inv.Items) < s.maxInvCap {
+		if !inv.IsFull(itemID) {
 			inst, err := coreitem.NewInstance(itemID, 1)
 			if err != nil {
 				return err

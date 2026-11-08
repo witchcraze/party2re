@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -44,6 +45,11 @@ type DepotRepository interface {
 	Save(ctx context.Context, value depot.Depot) error
 }
 
+type EquipmentRepository interface {
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreequipment.Equipment, error)
+	Save(ctx context.Context, value coreequipment.Equipment) error
+}
+
 type HelperProvider interface {
 	GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]string, error)
 }
@@ -72,6 +78,12 @@ func WithTransactionProvider(txProvider TransactionProvider) Option {
 func WithDepotRepository(depotRepo DepotRepository) Option {
 	return func(s *Service) {
 		s.depots = depotRepo
+	}
+}
+
+func WithEquipmentRepository(equipRepo EquipmentRepository) Option {
+	return func(s *Service) {
+		s.equipment = equipRepo
 	}
 }
 
@@ -104,6 +116,7 @@ type Service struct {
 	characters  CharacterRepository
 	inventories InventoryRepository
 	depots      DepotRepository
+	equipment   EquipmentRepository
 	helper      HelperProvider
 	recorder    CollectionRecorder
 	txProvider  TransactionProvider
@@ -303,6 +316,40 @@ func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID s
 		totalPayout, err := safeMultiply(sellUnitPrice, quantity)
 		if err != nil {
 			return err
+		}
+
+		if s.equipment != nil {
+			eq, err := s.equipment.FindByCharacterIDForUpdate(txCtx, characterID)
+			if err != nil {
+				return err
+			}
+			unlinked := false
+			for slot, eqID := range eq.Slots {
+				if eqID == itemInstanceID {
+					if _, err := eq.Unequip(slot); err != nil {
+						return err
+					}
+					unlinked = true
+					char, err := s.findCharacter(txCtx, characterID)
+					if err != nil {
+						return err
+					}
+					switch slot {
+					case item.SlotMainHand:
+						char.ClearWeaponCustomization()
+					case item.SlotBody:
+						char.ClearArmorCustomization()
+					}
+					if err := s.characters.Update(txCtx, char); err != nil {
+						return err
+					}
+				}
+			}
+			if unlinked {
+				if err := s.equipment.Save(txCtx, eq); err != nil {
+					return err
+				}
+			}
 		}
 
 		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{

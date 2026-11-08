@@ -83,3 +83,35 @@ func TestDefinitionIsToolAndIsToolID(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyHandKind(t *testing.T) {
+	tests := []struct {
+		name     string
+		def      Definition
+		defID    string
+		wantKind int
+	}{
+		{"canonical weapon", Definition{ID: "weapon-01", Slot: SlotMainHand}, "weapon-01", 1},
+		{"canonical armor", Definition{ID: "armor-01", Slot: SlotBody}, "armor-01", 2},
+		{"canonical consumable item", Definition{ID: "item-001", Slot: SlotNone}, "item-001", 3},
+		{"canonical shield item", Definition{ID: "item-071", Slot: SlotOffHand}, "item-071", 3},
+		{"canonical accessory item", Definition{ID: "item-012", Slot: SlotAccessory}, "item-012", 3},
+		{"synthetic sword by slot", Definition{ID: "bronze_sword", Slot: SlotMainHand}, "", 1},
+		{"synthetic armor by slot", Definition{ID: "iron_armor", Slot: SlotBody}, "", 2},
+		{"synthetic shield by slot", Definition{ID: "wood_shield", Slot: SlotOffHand}, "", 3},
+		{"synthetic accessory by slot", Definition{ID: "ring", Slot: SlotAccessory}, "", 3},
+		{"synthetic consumable", Definition{ID: "herb", Slot: SlotNone}, "herb", 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.def.LegacyHandKind(); got != tt.wantKind {
+				t.Errorf("def.LegacyHandKind() = %d, want %d", got, tt.wantKind)
+			}
+			if tt.defID != "" {
+				if got := LegacyHandKindByID(tt.defID); got != tt.wantKind {
+					t.Errorf("LegacyHandKindByID(%q) = %d, want %d", tt.defID, got, tt.wantKind)
+				}
+			}
+		})
+	}
+}

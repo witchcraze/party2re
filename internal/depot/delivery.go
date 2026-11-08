@@ -126,7 +126,7 @@ func DeliverRewardItems(
 
 		invChanged := false
 		for _, inst := range items {
-			if !inv.IsFull() {
+			if !inv.IsFull(inst.DefinitionID) {
 				if err := inv.Add(inst); err == nil {
 					invChanged = true
 					results = append(results, DeliveryResult{

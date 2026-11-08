@@ -198,12 +198,14 @@ func createReadyParty(
 func fillInventory(t *testing.T, invRepo *mockInventoryRepository, charID string) {
 	t.Helper()
 	inv, _ := coreinventory.New(charID)
-	inst, err := coreitem.NewInstance("item-001", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := inv.Add(inst); err != nil {
-		t.Fatal(err)
+	for _, id := range []string{"weapon-01", "armor-01", "item-001"} {
+		inst, err := coreitem.NewInstance(id, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := inv.Add(inst); err != nil {
+			t.Fatal(err)
+		}
 	}
 	_ = invRepo.Save(context.Background(), inv)
 }

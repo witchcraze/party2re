@@ -457,3 +457,52 @@ func TestExchange(t *testing.T) {
 		}
 	})
 }
+
+func TestGrantItemHandOccupancy(t *testing.T) {
+	t.Parallel()
+
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	txProv := &mockTxProvider{}
+	svc, _ := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+
+	ctx := context.Background()
+	char := corecharacter.Character{ID: "char-hand-test", Money: 1000}
+	_ = charRepo.Update(ctx, char)
+
+	// 1. Grant weapon-01
+	_, _, err := svc.GrantItem(ctx, char.ID, "weapon-01", 1)
+	if err != nil {
+		t.Fatalf("unexpected GrantItem error for weapon-01: %v", err)
+	}
+
+	// 2. Granting another weapon fails because weapon hand is occupied
+	_, _, err = svc.GrantItem(ctx, char.ID, "weapon-02", 1)
+	if !errors.Is(err, economy.ErrInventoryFull) {
+		t.Fatalf("expected ErrInventoryFull for second weapon, got %v", err)
+	}
+
+	// 3. Granting item-001 (tool hand) succeeds even though weapon is held
+	_, _, err = svc.GrantItem(ctx, char.ID, "item-001", 1)
+	if err != nil {
+		t.Fatalf("unexpected GrantItem error for tool item-001: %v", err)
+	}
+
+	// 4. Granting another tool (shield item-071) fails because tool hand is occupied
+	_, _, err = svc.GrantItem(ctx, char.ID, "item-071", 1)
+	if !errors.Is(err, economy.ErrInventoryFull) {
+		t.Fatalf("expected ErrInventoryFull for shield when tool hand is occupied, got %v", err)
+	}
+
+	// 5. Granting armor-01 succeeds because armor hand is empty
+	_, _, err = svc.GrantItem(ctx, char.ID, "armor-01", 1)
+	if err != nil {
+		t.Fatalf("unexpected GrantItem error for armor-01: %v", err)
+	}
+
+	// 6. Now all 3 hand fields are occupied; granting anything fails
+	_, _, err = svc.GrantItem(ctx, char.ID, "armor-02", 1)
+	if !errors.Is(err, economy.ErrInventoryFull) {
+		t.Fatalf("expected ErrInventoryFull when all hands are full, got %v", err)
+	}
+}
