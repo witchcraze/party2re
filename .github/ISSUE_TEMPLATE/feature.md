@@ -62,6 +62,11 @@ labels: ["feature"]
 - [ ] No documentation update expected — explain why
 - [ ] Update affected explanations/contracts in implementation PR — list documents below
 
+Documentation content check ([rule 02](https://github.com/witchcraze/party2re/blob/main/.agents/rules/02-documentation-sync.md)):
+
+- [ ] Documents keep only enduring information their owner is responsible for under the AGENTS.md document hierarchy: necessary contracts, decisions and rationale, procedures and unresolved specifications; `docs/design/` keeps only what rule 02 §2's design document content criteria allow
+- [ ] Documents contain no implementation detail already expressed by source, tests or generated specifications, no second copy of a rule (link its owner), no reproducible inventories, and no status, progress or completion history owned by GitHub
+
 ## Dependencies / licenses
 
 <!-- Identify new external dependencies or assets. If none, write "None". -->

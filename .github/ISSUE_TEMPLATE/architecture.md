@@ -42,6 +42,11 @@ labels: ["architecture"]
 
 <!-- Which architecture/design documents need to be updated? -->
 
+Documentation content check ([rule 02](https://github.com/witchcraze/party2re/blob/main/.agents/rules/02-documentation-sync.md)):
+
+- [ ] Documents keep only enduring information their owner is responsible for under the AGENTS.md document hierarchy: necessary contracts, decisions and rationale, procedures and unresolved specifications; `docs/design/` keeps only what rule 02 §2's design document content criteria allow
+- [ ] Documents contain no implementation detail already expressed by source, tests or generated specifications, no second copy of a rule (link its owner), no reproducible inventories, and no status, progress or completion history owned by GitHub
+
 ## Relationships & Dependencies
 
 <!-- Manage dependencies and parent/sub-issue relationships natively:
