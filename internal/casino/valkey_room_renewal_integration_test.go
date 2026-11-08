@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -52,15 +53,22 @@ func (c *faultValkeyClient) DoMulti(ctx context.Context, multi ...valkeygo.Compl
 type hookValkeyClient struct {
 	valkeygo.Client
 	beforeDo func(cmds []string) (override error)
+	afterDo  func(cmds []string, err error)
 }
 
 func (c *hookValkeyClient) Do(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
+	// Copy before Do: valkey-go recycles the command's buffer once it is sent.
+	cmds := append([]string(nil), cmd.Commands()...)
 	if c.beforeDo != nil {
-		if err := c.beforeDo(cmd.Commands()); err != nil {
+		if err := c.beforeDo(cmds); err != nil {
 			return valkeygo.NewErrorResult(err)
 		}
 	}
-	return c.Client.Do(ctx, cmd)
+	res := c.Client.Do(ctx, cmd)
+	if c.afterDo != nil {
+		c.afterDo(cmds, res.Error())
+	}
+	return res
 }
 
 func openIsolatedTestValkey(t *testing.T, dbIndex int) valkeygo.Client {
@@ -1147,6 +1155,8 @@ func TestValkeyRoomRenewal_ConcurrentCreateRoomRollbackBlocksJoinAndPropagatesEr
 	var winnerRoomID atomic.Value
 	var loserRoomID atomic.Value
 	bothPublished := make(chan struct{})
+	winnerClaimed := make(chan struct{})
+	var winnerClaimedOnce sync.Once
 	loserHoldRelease := make(chan struct{})
 	joinerAttemptedLock := make(chan struct{})
 	var notifyJoinerLock atomic.Bool
@@ -1186,6 +1196,14 @@ func TestValkeyRoomRenewal_ConcurrentCreateRoomRollbackBlocksJoinAndPropagatesEr
 			}
 			return nil
 		},
+		// The loser is released only after the winner's claim succeeds; otherwise it could claim first and become live.
+		afterDo: func(cmds []string, err error) {
+			if err == nil && len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+creatorC {
+				if wID, ok := winnerRoomID.Load().(string); ok && cmds[4] == wID {
+					winnerClaimedOnce.Do(func() { close(winnerClaimed) })
+				}
+			}
+		},
 	}
 
 	repo, err := casino.NewValkeyRoomRepository(hookClient, casino.WithValkeyCharacterRepository(chars))
@@ -1221,6 +1239,7 @@ func TestValkeyRoomRenewal_ConcurrentCreateRoomRollbackBlocksJoinAndPropagatesEr
 			joinDone <- jErr
 		}()
 		<-joinerAttemptedLock
+		<-winnerClaimed
 		close(loserHoldRelease)
 	}()
 
