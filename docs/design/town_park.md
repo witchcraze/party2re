@@ -31,7 +31,7 @@ Players can submit public bulletin board messages:
 
 - **Legacy rule** (`lib/system.cgi:660-680`): the park log keeps at most `$max_log` lines, and the oldest fall off when a line is written. See the [letter settings](home.md#letter-settings) for the value's provenance. Legacy also stores chat from other actions and NPC lines in this log, while `park_posts` holds posts only.
 - **Adopted contract** (approved in #1126): the board keeps the newest N posts, ordered by `created_at` then `id`. N defaults to 30, and `PARTY2_PARK_POST_LOG_LIMIT` overrides it. A post always succeeds at capacity.
-- A post commits first and the trim runs after it, so the last trim to run sees every committed post. A failed trim keeps the post and is repaired by the next post. Lowering N or upgrading shortens the board on its next post; there is no startup trim.
+- A post commits first and the trim runs after it in a separate transaction. If concurrent trims deadlock or encounter lock wait timeouts, the trim is retried up to a bounded number of attempts so the board stays within the limit without a shared lock. A failed trim keeps the saved post and is repaired by the next post. Lowering N or upgrading shortens the board on its next post; there is no startup trim.
 
 ---
 

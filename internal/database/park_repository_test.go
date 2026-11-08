@@ -3,6 +3,7 @@ package database_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -255,6 +256,150 @@ func TestParkBoardRetention(t *testing.T) {
 		}
 		if got := listIDs(t); len(got) != limit {
 			t.Fatalf("expected %d posts, got %d", limit, len(got))
+		}
+	})
+}
+
+func TestParkRepository_IsDeadlockError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil error", nil, false},
+		{"mysql 1213 deadlock", &mysql.MySQLError{Number: 1213, Message: "Deadlock found when trying to get lock"}, true},
+		{"mysql 1205 lock wait timeout", &mysql.MySQLError{Number: 1205, Message: "Lock wait timeout exceeded"}, true},
+		{"mysql 1062 duplicate key", &mysql.MySQLError{Number: 1062, Message: "Duplicate entry"}, false},
+		{"string 1213 deadlock", errors.New("Error 1213 (40001): Deadlock found when trying to get lock; try restarting transaction"), true},
+		{"string 1205 lock wait", errors.New("Error 1205 (HY000): Lock wait timeout exceeded; try restarting transaction"), true},
+		{"generic deadlock text", errors.New("transaction aborted due to deadlock"), true},
+		{"generic lock timeout text", errors.New("query failed: lock wait timeout"), true},
+		{"unrelated error", errors.New("syntax error in SQL statement"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := database.IsDeadlockForTesting(tt.err); got != tt.want {
+				t.Errorf("IsDeadlock(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParkBoardTrimDeadlockRecovery(t *testing.T) {
+	db := parkIsolatedDB(t)
+	ctx := context.Background()
+	char, err := database.CreateTestCharacter(ctx, db, "TrimRetryChar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := database.NewParkRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("retries on deadlock and trims successfully", func(t *testing.T) {
+		var attempts int
+		deadlockErr := &mysql.MySQLError{Number: 1213, Message: "Deadlock found when trying to get lock"}
+		repo.SetTrimFnForTesting(func(txCtx context.Context, logLimit int) error {
+			attempts++
+			if attempts < 3 {
+				return deadlockErr
+			}
+			repo.SetTrimFnForTesting(nil)
+			return nil
+		})
+		defer repo.SetTrimFnForTesting(nil)
+
+		p := park.Post{
+			ID: id.New(), CharacterID: char.ID, CharacterName: char.Name,
+			Content: "retry test", Color: "#000000", CreatedAt: t0.Add(time.Minute),
+		}
+		if err := repo.CreatePost(ctx, p, 3); err != nil {
+			t.Fatalf("CreatePost failed: %v", err)
+		}
+		if attempts != 3 {
+			t.Errorf("expected 3 trim attempts, got %d", attempts)
+		}
+	})
+
+	t.Run("persists post even if all trim retries fail with deadlock", func(t *testing.T) {
+		var attempts int
+		deadlockErr := &mysql.MySQLError{Number: 1213, Message: "Deadlock found when trying to get lock"}
+		repo.SetTrimFnForTesting(func(txCtx context.Context, logLimit int) error {
+			attempts++
+			return deadlockErr
+		})
+		defer repo.SetTrimFnForTesting(nil)
+
+		postID := id.New()
+		p := park.Post{
+			ID: postID, CharacterID: char.ID, CharacterName: char.Name,
+			Content: "persisted despite trim failure", Color: "#000000", CreatedAt: t0.Add(2 * time.Minute),
+		}
+		if err := repo.CreatePost(ctx, p, 3); err != nil {
+			t.Fatalf("CreatePost should succeed even when trim fails: %v", err)
+		}
+		if attempts != 4 {
+			t.Errorf("expected 4 trim attempts (1 initial + 3 retries), got %d", attempts)
+		}
+
+		posts, _, err := repo.GetRecentPosts(ctx, 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found bool
+		for _, post := range posts {
+			if post.ID == postID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("post %s was not persisted after trim failure", postID)
+		}
+	})
+
+	t.Run("does not retry on non-deadlock error", func(t *testing.T) {
+		var attempts int
+		syntaxErr := errors.New("Error 1064 (42000): You have an error in your SQL syntax")
+		repo.SetTrimFnForTesting(func(txCtx context.Context, logLimit int) error {
+			attempts++
+			return syntaxErr
+		})
+		defer repo.SetTrimFnForTesting(nil)
+
+		p := park.Post{
+			ID: id.New(), CharacterID: char.ID, CharacterName: char.Name,
+			Content: "non-retry error test", Color: "#000000", CreatedAt: t0.Add(3 * time.Minute),
+		}
+		if err := repo.CreatePost(ctx, p, 3); err != nil {
+			t.Fatalf("CreatePost should succeed even when trim fails: %v", err)
+		}
+		if attempts != 1 {
+			t.Errorf("expected exactly 1 trim attempt for non-deadlock error, got %d", attempts)
+		}
+	})
+
+	t.Run("aborts retry when context is canceled", func(t *testing.T) {
+		canceledCtx, cancel := context.WithCancel(ctx)
+		cancel()
+
+		var attempts int
+		deadlockErr := &mysql.MySQLError{Number: 1213, Message: "Deadlock found when trying to get lock"}
+		repo.SetTrimFnForTesting(func(txCtx context.Context, logLimit int) error {
+			attempts++
+			return deadlockErr
+		})
+		defer repo.SetTrimFnForTesting(nil)
+
+		p := park.Post{
+			ID: id.New(), CharacterID: char.ID, CharacterName: char.Name,
+			Content: "canceled context test", Color: "#000000", CreatedAt: t0.Add(4 * time.Minute),
+		}
+		_ = repo.CreatePost(canceledCtx, p, 3)
+		if attempts > 1 {
+			t.Errorf("expected at most 1 trim attempt when context is canceled, got %d", attempts)
 		}
 	})
 }
