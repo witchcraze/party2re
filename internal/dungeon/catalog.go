@@ -176,5 +176,6 @@ func DefaultDungeonCatalog() []Dungeon {
 				},
 			},
 		},
+		nativeMap0(),
 	}
 }

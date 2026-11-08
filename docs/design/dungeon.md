@@ -73,7 +73,7 @@ ordinary chest abandonment by movement would require an approved departure.
 
 ## Current implementation and remaining reconciliation
 
-Go currently dispatches generic `T/X/D/B/E` events in `expedition.go`, uses
+Catalog dungeons dispatch generic `T/X/D/B/E` events in `expedition.go`, uses
 Valkey working state/rewards (including `consumed_events` so each `T` tile event
 grants treasure at most once per expedition and subsequent visits resolve as
 normal movement), and finalizes durable records in MariaDB. Unresolved battles
@@ -84,7 +84,8 @@ The leader can resume the shared resolver against that enemy or escape; a new
 encounter is not generated on resume. This remains batch combat, rather than
 legacy per-character action dispatch: per-batch tension, stat-buff and action
 scheduling internals are not a full legacy lifetime snapshot.
-That generic event model does not reproduce all legacy map-owned events.
+That generic event model does not reproduce legacy map-owned events; native
+maps (below) replace it map by map.
 Its turn-limit wipeout, trap bases and treasure generation
 need comparison with the behavior above; they are implementation differences,
 not canonical rules inferred from the Go catalog.
@@ -110,11 +111,11 @@ See [run-state architecture](../architecture/transient-run-state.md),
 [current API](../api/paths/dungeon.json), and
 [documented differences](../migration/documentation-audit.md).
 
-## Native map contract target
+## Native map contract
 
-This is the proposed design decision in
-[#1202](https://github.com/witchcraze/party2re/issues/1202), to be approved before
-runtime adoption. It extends the existing Dungeon owner and ports, without a
+This is the design decision approved in
+[#1202](https://github.com/witchcraze/party2re/issues/1202); map0 implements it
+(see [Map0 implementation](#map0-implementation)). It extends the existing Dungeon owner and ports, without a
 script engine, legacy runtime or a second run store. The existing `dungeon-01`
 through `dungeon-03` catalog remains available; adding native maps does not
 authorize deletion, reinterpretation of saved runs, or automatic catalog cutover.
@@ -156,7 +157,7 @@ visibility is a different map rule.
 
 [The modular Dungeon OpenAPI](../api/paths/dungeon.json) owns current transport
 schemas. Runtime follow-ups update it and regenerate artifacts when their
-public contract changes; this decision adds no working route or schema field.
+public contract changes. Native maps reuse the existing routes.
 Current actor scouting and Gateway observations are described above. Native
 map reads must extend the selected map's projection rather than infer event
 types from catalog letters. Existing leader-only commands stay
@@ -196,48 +197,41 @@ variant, selected enemy/treasure data and enclosing dispatch before coding.
 Numeric and letter identifiers here are evidence pointers, not native enums.
 Legacy grids, dialogue and monster/asset names are not implementation inputs.
 
-### Map0 acceptance criteria
+### Map0 implementation
 
-[Map0 implementation #1760](https://github.com/witchcraze/party2re/issues/1760) adds map0 movement and event triggers together with the
-minimum schema/port changes needed to save them; splitting those would leave an
-untestable unused framework. It does not replace the existing catalog.
+`native-map-0` adds six independently authored 5×5 layouts beside the
+unchanged catalog (`internal/dungeon/native_map.go`); the legacy has six
+initial variants, two without a hidden passage (`map/0/1.cgi`–`6.cgi`). Start
+picks and saves one layout, places the party on its start and sets round 1
+without a tile event. A successful move advances the round and dispatches the
+destination; at round 20 every move rejects with no state, RNG or settlement
+change, while the run stays active for Escape and keeps its stock. Walls and
+bounds reject without spending a round. Resumed combat batches spend no round.
+The run stores the remaining budget (`turns_remaining = limit − round`);
+observation reports `round`/`round_limit`.
 
-- Independently author 5×5 native layouts with start, passage, wall, hidden
-  passage, one-time treasure and boss triggers. Legacy has six initial variants
-  (`map/0/1.cgi` through `6.cgi`); verify variant selection and coverage without
-  copying their grids. Persist the selected native layout across reload.
-- Start at round 1. A successful move at round 19 reaches round 20 and dispatches
-  its destination; subsequent moves reject with unchanged position, stock,
-  event state and RNG. Walls/bounds do not spend rounds. Test Escape at the
-  limit without converting exhaustion to `wiped_out` or discarding earned stock.
-- Passage encounter boundary: for a sample `r` in `[0,2)`, spawn at `r <= 1`
-  and skip at `r > 1`. Test 0, just below 1, exactly 1 and just above 1; ordinary
-  wall/start/hidden/consumed-treasure events must not inherit passage RNG.
-- Treasure event `2` generates its pending treasure once per expedition; revisit,
-  save/reload and stale competing transitions do not regenerate it. Triggering
-  treasure must not stand in for inspection or immediately grant a fixed 100G
-  reward. With one or more living unopened chests, withhold all four movement
-  choices and reject direct movement without changing position, round, event
-  state, stock or RNG. Test the generated normal flag state (initial `S` plus
-  `2`, not synthetic `宝`), reload and partial opening of multiple chests;
-  movement stays blocked until the last living enemy-side member is gone, and
-  then resumes only if the round limit permits it. If native inspection is
-  deferred, retain the movement block and Escape rather than silently allowing
-  passage or auto-opening chests. Boss event `B` likewise triggers once and
-  retains existing combat continuation facts, without importing synthetic
-  catalog clear rewards.
-- Hidden passage is traversable but uses the wall appearance within the actor's
-  visible radius, before and after crossing; center marker and out-of-bounds
-  rendering remain correct. Read observations cannot reveal it through private
-  event metadata or mutate the run. Preserve the actor-only scouting policy above.
-- Exercise the existing Memory and Valkey transition adapters; assert event/
-  round/reward consistency across save/reload and stale updates. Verify unchanged
-  behavior for existing catalog runs. Use the existing finalizer for exit tests,
-  without claiming full participant/treasure/exit parity.
+- Passage: draw `r = 2 × U[0,1)` and spawn iff `r <= 1`; start, hidden
+  passage and consumed one-time cells draw nothing.
+- Treasure: once per expedition, creates one unopened chest per living member,
+  plus `1 + rand(2)` when the acting leader is job 78. Chests block all
+  movement (choices withheld, direct calls rejected) until every chest is
+  opened; they are not combat, grant no reward and are never auto-opened.
+- Boss: once per expedition, uses the saved combat continuation; victory grants
+  the monster's rewards only, with no clear bonus, medals or completion.
+- Hidden passage: traversable, always shown as a wall in view; observation
+  lists all four directions while movement is allowed, so it reveals nothing.
+
+Remaining map0 differences: chest contents and inspection (#1762), encounter
+group size/stat scaling and the legacy stage data choice (one native enemy per
+encounter), the wish-4 extra chest and the per-character exit gaps under
+[Remaining limits](#remaining-limits). Start admission is the
+shared combat admission (HP, fatigue and activity checks); legacy dungeon 0 has no
+job-level gate, so the native map has no level or tier requirement. Native maps
+keep the actor-only scouting above.
 
 ### Map1 key and door unit
 
-[Map1 implementation #1761](https://github.com/witchcraze/party2re/issues/1761) is separate and follows map0's working transition contract.
+[Map1 implementation #1761](https://github.com/witchcraze/party2re/issues/1761) is separate and builds on the map0 transition contract.
 Independently author 9×9 native layouts; legacy has seven initial variants and
 a round limit of 50 (`map/1/1.cgi` through `7.cgi`). Its `2` and `3` treasure
 events have independent once flags; `I` retains the hidden-wall presentation.
@@ -284,10 +278,10 @@ extra-open item 215, treasure counts/pools and failure recovery. Legacy treasure
 creation is not reward delivery (`vs_dungeon.cgi:131–135`,
 `_npc_action.cgi:6–84,498–552`); its actor eligibility must not be inferred from
 the current automatic `T` reward path.
-[#1204](https://github.com/witchcraze/party2re/issues/1204) owns remaining participant
-combat/vitality work; independent participant departure, fatigue/equipment exit
-effects and per-character action dispatch are still separate gaps, not supplied
-by a shared movement counter. Exact content and cross-map semantics beyond the
+Per-character combat action dispatch is scoped in
+[#1865](https://github.com/witchcraze/party2re/issues/1865). Independent participant
+departure and fatigue/equipment exit effects remain unscheduled gaps; whole-party
+Escape and a shared movement counter do not supply them. Exact content and cross-map semantics beyond the
 map0/map1 evidence above require their row's scoped investigation. Idle expiry,
 Valkey-loss recovery and multi-instance guarantees retain their existing limits
 in the [run-state architecture](../architecture/transient-run-state.md).

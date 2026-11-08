@@ -8107,8 +8107,21 @@
         "type": "object"
       },
       "DungeonActiveEncounter": {
-        "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter.",
+        "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter. A native treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
         "properties": {
+          "chests": {
+            "description": "Native pending treasure chests; contents and inspection are not modeled yet.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "opened": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
           "cmp": {
             "additionalProperties": {
               "type": "integer"
@@ -8149,12 +8162,16 @@
             },
             "maxItems": 1,
             "minItems": 1,
-            "type": "array"
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "event_type": {
             "enum": [
               "battle",
-              "boss"
+              "boss",
+              "treasure"
             ],
             "type": "string"
           },
@@ -8361,6 +8378,10 @@
           "name": {
             "type": "string"
           },
+          "round_limit": {
+            "description": "Native map round limit; absent for catalog floors. Native layouts are not listed, so floors is null.",
+            "type": "integer"
+          },
           "tier": {
             "type": "integer"
           }
@@ -8501,7 +8522,7 @@
       },
       "DungeonExpeditionObservation": {
         "additionalProperties": false,
-        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Directions use the selected floor geometry, not catalog categories. No private roster inventory, event flags or provisional rewards.",
+        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Catalog directions use the selected floor geometry, not catalog categories. Native maps list all four directions while movement is allowed (walls reject on use), so hidden passages stay undisclosed. No private roster inventory, layout identity, event flags or provisional rewards.",
         "properties": {
           "controls": {
             "$ref": "#/components/schemas/DungeonContinuationControls"
@@ -8544,6 +8565,14 @@
             "type": "string"
           },
           "revision": {
+            "type": "integer"
+          },
+          "round": {
+            "description": "Native maps only: current shared round (1 after start).",
+            "type": "integer"
+          },
+          "round_limit": {
+            "description": "Native maps only: movement rejects once round reaches this limit.",
             "type": "integer"
           },
           "status": {
@@ -22062,7 +22091,7 @@
     },
     "/characters/{id}/dungeons/fight": {
       "post": {
-        "description": "Leader-only continuation using saved enemy HP/MP, participant status/CMP and elemental field state through the existing battle resolver. A frozen terminal buffer retries SQL settlement instead of combat. Returns 409 when no encounter is active or a concurrent command changes or freezes the run.",
+        "description": "Leader-only continuation using saved enemy HP/MP, participant status/CMP and elemental field state through the existing battle resolver. A frozen terminal buffer retries SQL settlement instead of combat. Returns 409 when no hostile encounter is active (pending treasure is not combat) or a concurrent command changes or freezes the run.",
         "operationId": "fightDungeonEncounter",
         "parameters": [
           {
@@ -22156,7 +22185,7 @@
     },
     "/characters/{id}/dungeons/move": {
       "post": {
-        "description": "Rejects movement in all directions while an active enemy remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape.",
+        "description": "Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at their round limit with 409 while the run stays active for escape; walls and bounds spend no round.",
         "operationId": "moveDungeonExpedition",
         "parameters": [
           {
@@ -22234,7 +22263,7 @@
           },
           "409": {
             "$ref": "#/components/responses/Error",
-            "description": "Active enemies block movement, or expedition state changed"
+            "description": "Active enemies or unopened chests block movement, the native round limit is reached, or expedition state changed"
           },
           "415": {
             "$ref": "#/components/responses/Error",

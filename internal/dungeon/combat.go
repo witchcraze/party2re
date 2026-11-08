@@ -154,7 +154,9 @@ func (s *Service) resolveMonsterCombat(
 	monster DungeonMonster,
 	eventType TileEventType,
 	newX, newY int,
+	eventKey string,
 ) (ExpeditionStepResult, error) {
+	turns, stayX, stayY := exp.combatProgress(newX, newY)
 	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, monster)
 	if err != nil {
 		return ExpeditionStepResult{}, err
@@ -189,7 +191,8 @@ func (s *Service) resolveMonsterCombat(
 			MemberExpDeltas:      memberExpDeltas,
 			MemberGoldDeltas:     memberGoldDeltas,
 			ConsumedItems:        consumedItems,
-			TurnsDelta:           -1,
+			TurnsDelta:           turns,
+			EventKey:             eventKey,
 			ExpDelta:             leaderExpDelta,
 			GoldDelta:            leaderGoldDelta,
 			MedalsDelta:          0,
@@ -232,14 +235,15 @@ func (s *Service) resolveMonsterCombat(
 			ExpectedRevision:     &exp.Revision,
 			Combat:               true,
 			NewFloor:             exp.CurrentFloor,
-			NewX:                 exp.PosX,
-			NewY:                 exp.PosY,
+			NewX:                 stayX,
+			NewY:                 stayY,
 			Encounter:            pendingEncounter(exp, monster, eventType, newX, newY, battleRes, field),
 			HPDelta:              leaderHPDelta,
 			MemberHPDeltas:       memberHPDeltas,
 			MemberMPDeltas:       memberMPDeltas,
 			ConsumedItems:        consumedItems,
-			TurnsDelta:           -1,
+			TurnsDelta:           turns,
+			EventKey:             eventKey,
 			Now:                  time.Now().UTC(),
 		})
 		if err != nil {
@@ -268,7 +272,8 @@ func (s *Service) resolveMonsterCombat(
 		MemberHPDeltas:       memberHPDeltas,
 		MemberMPDeltas:       memberMPDeltas,
 		ConsumedItems:        consumedItems,
-		TurnsDelta:           -1,
+		TurnsDelta:           turns,
+		EventKey:             eventKey,
 		Now:                  time.Now().UTC(),
 	})
 	if err != nil {
@@ -398,6 +403,19 @@ func (s *Service) resolveBossCombat(
 		return ExpeditionStepResult{}, err
 	}
 	return s.handleWipeout(ctx, &stepRes.Expedition, char, fmt.Sprintf("フロアボス %s の圧倒的な力の前に敗れ去った…", bossMonster.Name))
+}
+
+// combatProgress keeps catalog batches spending a turn and staying put until
+// victory. Native rounds advance only on the move itself, and the party
+// already stands on the destination (vs_dungeon.cgi _susumu).
+func (exp *ActiveExpedition) combatProgress(newX, newY int) (turns, stayX, stayY int) {
+	if exp.MapVariant == 0 {
+		return -1, exp.PosX, exp.PosY
+	}
+	if exp.Encounter != nil {
+		return 0, newX, newY
+	}
+	return -1, newX, newY
 }
 
 func buildFallbackParticipantWithHP(char corecharacter.Character, currentHP int) corebattle.Participant {

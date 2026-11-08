@@ -60,12 +60,11 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		return ExpeditionStepResult{}, ErrForbidden
 	}
 
-	if exp.Encounter != nil {
+	if exp.Encounter.blocking() {
 		return ExpeditionStepResult{}, ErrCombatActive
 	}
 
-	dungeon, ok := s.dungeonMap[exp.DungeonID]
-	if !ok {
+	if _, ok := s.dungeonMap[exp.DungeonID]; !ok {
 		return ExpeditionStepResult{}, ErrDungeonNotFound
 	}
 
@@ -77,11 +76,14 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		return ExpeditionStepResult{}, err
 	}
 
-	floorIdx := exp.CurrentFloor - 1
-	if floorIdx < 0 || floorIdx >= len(dungeon.Floors) {
-		return ExpeditionStepResult{}, errors.New("invalid floor index")
+	dungeon, floor, err := s.activeFloor(exp)
+	if err != nil {
+		return ExpeditionStepResult{}, err
 	}
-	floor := dungeon.Floors[floorIdx]
+	// The native limit rejects before any state, RNG or wall event changes.
+	if dungeon.native() && exp.TurnsRemaining <= 0 {
+		return ExpeditionStepResult{}, ErrMovementExhausted
+	}
 
 	newX, newY := exp.PosX, exp.PosY
 	switch dir {
@@ -102,8 +104,11 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	}
 
 	tileChar := floor.Grid[newY][newX]
-	if tileChar == '1' {
+	if tileChar == cellWall {
 		return ExpeditionStepResult{}, ErrImpassableWall
+	}
+	if dungeon.native() {
+		return s.moveNative(ctx, exp, &char, floor, newX, newY)
 	}
 
 	now := time.Now().UTC()
@@ -113,7 +118,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	case 'S', '0': // Start or Normal Path
 		if tileChar == '0' && len(floor.Monsters) > 0 {
 			monster := floor.Monsters[newX%len(floor.Monsters)]
-			return s.resolveMonsterCombat(ctx, exp, &char, monster, EventBattle, newX, newY)
+			return s.resolveMonsterCombat(ctx, exp, &char, monster, EventBattle, newX, newY, "")
 		}
 
 		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{

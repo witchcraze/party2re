@@ -19,7 +19,28 @@ type ActiveEncounter struct {
 	EventType TileEventType            `json:"event_type"`
 	X         int                      `json:"x"`
 	Y         int                      `json:"y"`
+	// Chests are the enemy-side members of a pending treasure (no Enemies).
+	Chests []TreasureChest `json:"chests,omitempty"`
 }
+
+// TreasureChest is an unopened chest until actor inspection opens it.
+type TreasureChest struct {
+	Opened bool `json:"opened,omitempty"`
+}
+
+// blocking reports living enemy-side members; they forbid ordinary movement.
+func (enc *ActiveEncounter) blocking() bool {
+	if enc == nil {
+		return false
+	}
+	if enc.EventType != EventTreasure {
+		return true
+	}
+	return slices.ContainsFunc(enc.Chests, func(c TreasureChest) bool { return !c.Opened })
+}
+
+// hostile reports an encounter that Fight resolves; treasure is not combat.
+func (enc *ActiveEncounter) hostile() bool { return enc != nil && enc.EventType != EventTreasure }
 
 func pendingEncounter(exp *ActiveExpedition, monster DungeonMonster, event TileEventType, x, y int, result corebattle.Result, field *corebattle.FieldState) *ActiveEncounter {
 	enemy := corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense)
@@ -72,21 +93,22 @@ func (s *Service) Fight(ctx context.Context, characterID string) (ExpeditionStep
 		return s.resumeSettlement(ctx, exp)
 	}
 	enc := exp.Encounter
-	if enc == nil {
+	if !enc.hostile() {
 		return ExpeditionStepResult{}, ErrNoActiveCombat
 	}
 	char, err := s.characterRepo.FindByID(ctx, characterID)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	if enc.EventType == EventBoss {
-		dungeon, ok := s.dungeonMap[exp.DungeonID]
-		if !ok {
-			return ExpeditionStepResult{}, ErrDungeonNotFound
-		}
+	dungeon, ok := s.dungeonMap[exp.DungeonID]
+	if !ok {
+		return ExpeditionStepResult{}, ErrDungeonNotFound
+	}
+	// A native boss victory is an ordinary win, not a catalog clear.
+	if enc.EventType == EventBoss && !dungeon.native() {
 		return s.resolveBossCombat(ctx, exp, &char, dungeon, enc.Monster, enc.X, enc.Y)
 	}
-	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monster, enc.EventType, enc.X, enc.Y)
+	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monster, enc.EventType, enc.X, enc.Y, "")
 }
 
 func encodeEncounter(enc *ActiveEncounter) (string, error) {
@@ -105,6 +127,12 @@ func decodeEncounter(data string) (*ActiveEncounter, error) {
 	if err := json.Unmarshal([]byte(data), &enc); err != nil {
 		return nil, err
 	}
+	if enc.EventType == EventTreasure {
+		if len(enc.Chests) == 0 || len(enc.Enemies) != 0 {
+			return nil, corebattle.ErrInvalidParticipant
+		}
+		return &enc, nil
+	}
 	if len(enc.Enemies) != 1 || enc.Enemies[0].HP <= 0 {
 		return nil, corebattle.ErrInvalidParticipant
 	}
@@ -117,6 +145,7 @@ func cloneEncounter(enc *ActiveEncounter) *ActiveEncounter {
 	}
 	cp := *enc
 	cp.Enemies = slices.Clone(enc.Enemies)
+	cp.Chests = slices.Clone(enc.Chests)
 	cp.Statuses = maps.Clone(enc.Statuses)
 	cp.CMP = maps.Clone(enc.CMP)
 	cp.Field = enc.Field.Clone()
