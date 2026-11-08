@@ -53,12 +53,25 @@ The exported slot enum has four equipment categories; no `SlotAccessory1` or `Sl
    Depot deposit/send removes links to the moved instance before deleting its
    inventory row, within the same transaction as ownership and character
    customization changes. See [Depot movement invariants](depot.md#1-item-deposit--withdrawal)
-   for metadata clearing and failure rollback; this does not define withdrawal swaps.
+   for metadata clearing and failure rollback; withdrawal swaps follow the
+   [Depot withdrawal contract](depot.md#1-item-deposit--withdrawal).
 5. **Stackability Domain Invariants**:
    - **Stackable Definitions (`Definition.IsStackable() == true`)**: Items with `Slot == SlotNone` (consumables, craft materials) are stackable (`Quantity >= 1`).
    - **Non-Stackable Definitions (`Definition.IsStackable() == false`)**: Equipment items (`Slot != SlotNone`: weapons, armor, shields, accessories) represent discrete gear. Each equipment piece must have `Quantity == 1` and occupy its own distinct storage slot.
    - **Enhancement Level Invariant**: Any item with `EnhancementLevel > 0` must strictly have `Quantity == 1` and cannot stack with any other item instance (`CanStackWith == false`).
    - **Instance Creation & Validation Guards**: `NewInstanceWithEnhancement`, `Definition.NewInstance`, and `Definition.NewInstanceWithEnhancement` reject `Quantity > 1` for equipment or enhanced items with `ErrInvalidInstance`.
+
+### Legacy hand fields
+Legacy characters hold one weapon (`$m{wea}`), one armor (`$m{arm}`) and one
+held item (`$m{ite}`); entering a field is equipping it. Go represents them as
+inventory rows classified by `Definition.LegacyStorageKey` kind: kind 1 weapons
+(main-hand), kind 2 armor (body) and kind 3 every `item-NNN` entry, so shields
+(off-hand), accessories and consumables share the single held field. This kind
+differs from `Slot.Kind()`, which groups shields and accessories with armor.
+[Depot withdrawal](depot.md#1-item-deposit--withdrawal) applies this mapping.
+Other acquisition paths still use the single-row inventory capacity or
+`Slot.Kind()` and do not equip delivered gear
+([#1948](https://github.com/witchcraze/party2re/issues/1948)).
 
 ---
 

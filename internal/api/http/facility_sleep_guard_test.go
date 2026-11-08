@@ -114,7 +114,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"job_memory_recall", http.MethodPost, "/characters/char-1/recall-future", `{"memory_id":"mem-1"}`},
 		// Depot
 		{"depot_deposit", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_deposit","params":{"item_id":"item-1"}}`},
-		{"depot_withdraw", http.MethodPost, "/characters/char-1/depot/withdraw", `{"item_id":"item-1"}`},
+		{"depot_withdraw", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_withdraw","params":{"item_id":"item-1"}}`},
 		{"depot_sell", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sell","params":{"item_id":"item-1"}}`},
 		{"depot_sell_batch", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sell_batch","params":{"item_ids":["item-1"]}}`},
 		{"depot_sort", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sort"}`},

@@ -160,13 +160,8 @@ func (d *Depot) AddItem(instance item.Instance, stackable ...bool) error {
 		isStack = d.isStackable(instance.DefinitionID)
 	}
 
-	if isStack && instance.EnhancementLevel == 0 {
-		for i, existing := range d.Items {
-			if existing.DefinitionID == instance.DefinitionID && existing.EnhancementLevel == 0 {
-				d.Items[i].Quantity += instance.Quantity
-				return nil
-			}
-		}
+	if isStack && d.mergeStack(instance) {
+		return nil
 	}
 	if len(d.Items) >= d.Capacity {
 		return ErrDepotFull
@@ -185,6 +180,27 @@ func (d *Depot) AppendDelivery(instance item.Instance) {
 // rewrites that replace one row in place. Out-of-range positions append.
 func (d *Depot) InsertDelivery(index int, instance item.Instance) {
 	d.Items = slices.Insert(d.Items, min(max(index, 0), len(d.Items)), instance)
+}
+
+// ReturnAt puts a swapped-out instance back without a capacity check: an
+// eligible stack absorbs it, otherwise it takes row index (depot.cgi:226–278).
+func (d *Depot) ReturnAt(index int, instance item.Instance) {
+	if !d.isStackable(instance.DefinitionID) || !d.mergeStack(instance) {
+		d.InsertDelivery(index, instance)
+	}
+}
+
+func (d *Depot) mergeStack(instance item.Instance) bool {
+	if instance.EnhancementLevel != 0 {
+		return false
+	}
+	for i, existing := range d.Items {
+		if existing.DefinitionID == instance.DefinitionID && existing.EnhancementLevel == 0 {
+			d.Items[i].Quantity += instance.Quantity
+			return true
+		}
+	}
+	return false
 }
 
 // Consume removes quantity of the item with the given instanceID.

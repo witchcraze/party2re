@@ -84,19 +84,6 @@ func TestDepotEndpoints(t *testing.T) {
 	}
 	router := h.Router()
 
-	t.Run("POST /characters/{id}/depot/withdraw success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{"item_id": "item-1"})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/withdraw", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
 	t.Run("POST /characters/{id}/depot/send-money success", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{"recipient_character_id": "c2", "amount": 1000})
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/send-money", bytes.NewReader(body))
@@ -111,7 +98,7 @@ func TestDepotEndpoints(t *testing.T) {
 	})
 
 	t.Run("Unauthenticated returns 401", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/withdraw", bytes.NewReader([]byte(`{"item_id":"item-1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/send-money", bytes.NewReader([]byte(`{"recipient_character_id":"c2","amount":1}`)))
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -125,7 +112,7 @@ func TestDepotEndpoints(t *testing.T) {
 			authenticateFn: alwaysAuthPlayer(coreplayer.Player{ID: "p-other", Username: "other"}),
 		}
 		hOther, _ := apihttp.NewHandler(pServiceOther, cService, &stubAdventureService{}, &stubShopService{}, apihttp.WithDepot(depotSvc))
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/withdraw", bytes.NewReader([]byte(`{"item_id":"item-1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/send-money", bytes.NewReader([]byte(`{"recipient_character_id":"c2","amount":1}`)))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		rec := httptest.NewRecorder()
 		hOther.Router().ServeHTTP(rec, req)

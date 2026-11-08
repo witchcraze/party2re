@@ -184,7 +184,11 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service, err := depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, depotRepo)
+	catalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, depotRepo, depot.WithItemDefinitionProvider(catalog))
 	if err != nil {
 		t.Fatal(err)
 	}

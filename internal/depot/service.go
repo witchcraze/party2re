@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -65,20 +66,30 @@ type legacySortItem struct {
 func (s *Service) withLegacySortKeys(items []item.Instance) ([]legacySortItem, error) {
 	keyed := make([]legacySortItem, len(items))
 	for i, inst := range items {
-		if s.itemDefs == nil {
-			return nil, fmt.Errorf("depot sort requires item definitions")
-		}
-		def, err := s.itemDefs.FindByID(inst.DefinitionID)
+		_, kind, no, err := s.legacyDefinition("sort", inst.DefinitionID)
 		if err != nil {
-			return nil, fmt.Errorf("sort depot item %s: %w", inst.DefinitionID, err)
-		}
-		kind, no, err := def.LegacyStorageKey()
-		if err != nil {
-			return nil, fmt.Errorf("sort depot item %s: %w", inst.DefinitionID, err)
+			return nil, err
 		}
 		keyed[i] = legacySortItem{instance: inst, kind: kind, no: no}
 	}
 	return keyed, nil
+}
+
+// legacyDefinition returns a definition with its legacy stored kind
+// (1 weapon, 2 armor, 3 held item) and number.
+func (s *Service) legacyDefinition(op, definitionID string) (item.Definition, int, int, error) {
+	if s.itemDefs == nil {
+		return item.Definition{}, 0, 0, fmt.Errorf("depot %s requires item definitions", op)
+	}
+	def, err := s.itemDefs.FindByID(definitionID)
+	if err != nil {
+		return item.Definition{}, 0, 0, fmt.Errorf("%s depot item %s: %w", op, definitionID, err)
+	}
+	kind, no, err := def.LegacyStorageKey()
+	if err != nil {
+		return item.Definition{}, 0, 0, fmt.Errorf("%s depot item %s: %w", op, definitionID, err)
+	}
+	return def, kind, no, nil
 }
 
 // GetDepot returns the current depot state for the given character, computing dynamic capacity.
@@ -146,8 +157,12 @@ func (s *Service) DepositItem(ctx context.Context, characterID string, itemInsta
 	return resultDepot, nil
 }
 
-// WithdrawItem withdraws an item from the depot into the character inventory.
-// Upon successful withdrawal, automatically registers item in Collection book if configured.
+// WithdrawItem swaps one unit of a depot row into the matching legacy hand
+// (weapon, armor or held item; depot.cgi:208–288 hikidasu). The previous
+// occupant returns to that row without a capacity check, gear is equipped,
+// weapon/armor customization is cleared and the unit is recorded in the
+// Collection book, all in one transaction.
+// Lock Order: characters(2) -> inventory_items/equipment_slots(3) -> character_depots/depot_items(5).
 func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInstanceID string) (Depot, error) {
 	if err := validateItemOp(characterID, itemInstanceID); err != nil {
 		return Depot{}, err
@@ -155,43 +170,96 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 	var resultDepot Depot
 	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: true}
 	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		eq, err := s.lockEquipment(tc.Context, characterID)
+		if err != nil {
+			return err
+		}
 		dep, err := s.depotRepo.FindByCharacterIDForUpdate(tc.Context, characterID)
 		if err != nil {
 			return err
 		}
 		dep.RefreshCapacity(tc.Character.JobLevel, tc.Character.OverDepot)
-		if tc.Inventory.IsFull() {
-			return ErrInventoryFull
+		dep.ItemDefs = s.itemDefs
+		index := slices.IndexFunc(dep.Items, func(i item.Instance) bool { return i.ID == itemInstanceID })
+		if index < 0 {
+			return ErrItemNotFound
 		}
-		itemInstance, err := dep.ConsumeOne(itemInstanceID)
+		def, kind, _, err := s.legacyDefinition("withdraw", dep.Items[index].DefinitionID)
 		if err != nil {
 			return err
 		}
-		for _, existing := range dep.Items {
-			if existing.ID == itemInstanceID {
-				itemInstance.ID = id.New()
-				break
+		var occupants []item.Instance
+		for _, held := range tc.Inventory.Items {
+			_, heldKind, _, err := s.legacyDefinition("withdraw", held.DefinitionID)
+			if err != nil {
+				return err
+			}
+			if heldKind == kind {
+				occupants = append(occupants, held)
 			}
 		}
-		if err := tc.Inventory.Add(itemInstance); err != nil {
-			return ErrInventoryFull
-		}
-		if err := s.saveDepot(tc.Context, dep); err != nil {
-			return err
+		if len(occupants) > 1 {
+			return ErrInventoryFull // An ambiguous hand is not guessed.
 		}
 
-		if s.collector != nil && s.itemDefs != nil {
-			if def, defErr := s.itemDefs.FindByID(itemInstance.DefinitionID); defErr == nil {
-				cat := string(def.Slot)
-				if cat == "" {
-					cat = "consumable"
+		taken, err := dep.ConsumeOne(itemInstanceID)
+		if err != nil {
+			return err
+		}
+		if index < len(dep.Items) && dep.Items[index].ID == itemInstanceID {
+			taken.ID = id.New() // The remaining stack keeps its identity.
+		}
+		unlinked := false
+		for _, old := range occupants {
+			if eq != nil {
+				unlinked = unequipInstance(eq, &tc.Character, old.ID)
+			}
+			if err := tc.Inventory.Consume(old.ID, old.Quantity); err != nil {
+				return err
+			}
+			dep.ReturnAt(index, old)
+		}
+		switch kind {
+		case 1:
+			tc.Character.ClearWeaponCustomization()
+		case 2:
+			tc.Character.ClearArmorCustomization()
+		}
+		if err := tc.Inventory.Add(taken); err != nil {
+			return ErrInventoryFull
+		}
+		if eq != nil {
+			// equipment_slots references inventory_items: unlink before the
+			// runner deletes the old row, link after the new row exists.
+			if unlinked {
+				if err := s.equipment.Save(tc.Context, *eq); err != nil {
+					return err
 				}
-				if err := s.collector.RecordItemDiscovered(tc.Context, characterID, def.ID, def.Name, cat); err != nil {
+			}
+			if def.Slot != item.SlotNone {
+				if err := s.invRepo.Save(tc.Context, tc.Inventory); err != nil {
+					return err
+				}
+				if _, err := eq.Equip(&tc.Inventory, def, taken.ID); err != nil {
+					return err
+				}
+				if err := s.equipment.Save(tc.Context, *eq); err != nil {
 					return err
 				}
 			}
 		}
-
+		if err := s.saveDepot(tc.Context, dep); err != nil {
+			return err
+		}
+		if s.collector != nil {
+			cat := string(def.Slot)
+			if cat == "" {
+				cat = "consumable"
+			}
+			if err := s.collector.RecordItemDiscovered(tc.Context, characterID, def.ID, def.Name, cat); err != nil {
+				return err
+			}
+		}
 		resultDepot = dep
 		return nil
 	})

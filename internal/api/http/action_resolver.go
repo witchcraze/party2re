@@ -90,6 +90,10 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 			Method:      http.MethodPost,
 			PathPattern: "/api/v1/characters/%s/actions",
 		},
+		"depot_withdraw": {
+			Method:      http.MethodPost,
+			PathPattern: "/api/v1/characters/%s/actions",
+		},
 		"depot_sort": {
 			Method:      http.MethodPost,
 			PathPattern: "/api/v1/characters/%s/actions",

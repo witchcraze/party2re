@@ -34,6 +34,11 @@ func (f *depotSaleFixture) DepositItem(ctx context.Context, actor, id string) (d
 	return f.Expand(ctx, actor)
 }
 
+func (f *depotSaleFixture) WithdrawItem(ctx context.Context, actor, id string) (depot.Depot, error) {
+	f.ids, f.batch = []string{id}, false
+	return f.Expand(ctx, actor)
+}
+
 func (f *depotSaleFixture) SendItem(ctx context.Context, actor, recipient, id string) (depot.Depot, error) {
 	f.ids, f.batch, f.recipient = []string{id}, false, recipient
 	return f.Expand(ctx, actor)
@@ -74,7 +79,7 @@ func saleGatewayBody(action, params string) string {
 }
 
 func TestDepotItemGatewayInputs(t *testing.T) {
-	for _, action := range []string{"depot_deposit", "depot_send_item", "depot_sell", "depot_sell_batch"} {
+	for _, action := range []string{"depot_deposit", "depot_withdraw", "depot_send_item", "depot_sell", "depot_sell_batch"} {
 		invalid := []string{"", `null`, `{}`, `[]`, `1`, `{"item_id":null}`, `{"item_ids":null}`}
 		valid := `{"item_id":"one"}`
 		if action != "depot_sell_batch" {
@@ -104,7 +109,7 @@ func TestDepotItemGatewayInputs(t *testing.T) {
 }
 
 func TestDepotItemGatewayOutcomeRecovery(t *testing.T) {
-	for _, action := range []string{"depot_deposit", "depot_send_item", "depot_sell", "depot_sell_batch"} {
+	for _, action := range []string{"depot_deposit", "depot_withdraw", "depot_send_item", "depot_sell", "depot_sell_batch"} {
 		for _, failure := range []string{"", "query", "profile", "depot"} {
 			for _, rejected := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/%t", action, failure, rejected), func(t *testing.T) {
@@ -143,7 +148,7 @@ func TestDepotItemGatewayOutcomeRecovery(t *testing.T) {
 					} else {
 						var result any = &sellDepotResponse{}
 						var want any = &sellDepotResponse{Depot: toDepotResponse(f.dep), GoldEarned: 150}
-						if action == "depot_deposit" {
+						if action == "depot_deposit" || action == "depot_withdraw" {
 							result = &depotResponse{}
 							value := toDepotResponse(f.dep)
 							want = &value
@@ -175,7 +180,7 @@ func TestDepotItemGatewayOutcomeRecovery(t *testing.T) {
 }
 
 func TestDepotItemGatewayErrors(t *testing.T) {
-	for _, action := range []string{"depot_deposit", "depot_send_item", "depot_sell", "depot_sell_batch"} {
+	for _, action := range []string{"depot_deposit", "depot_withdraw", "depot_send_item", "depot_sell", "depot_sell_batch"} {
 		params := `{"item_id":""}`
 		if action == "depot_sell_batch" {
 			params = `{"item_ids":[]}`
@@ -188,7 +193,7 @@ func TestDepotItemGatewayErrors(t *testing.T) {
 			status int
 			code   string
 		}{
-			{depot.ErrDepotFull, 400, "DEPOT_FULL"},
+			{depot.ErrDepotFull, 400, "DEPOT_FULL"}, {depot.ErrInventoryFull, 400, "DEPOT_HAND_CONFLICT"},
 			{depot.ErrRecipientDepotFull, 400, "DEPOT_RECIPIENT_FULL"}, {depot.ErrSelfTransferNotAllowed, 400, "DEPOT_SELF_TRANSFER"}, {depot.ErrRecipientNotFound, 404, "DEPOT_RECIPIENT_NOT_FOUND"},
 			{depot.ErrInvalidCharacterID, 400, "DEPOT_INVALID_CHARACTER_ID"}, {depot.ErrInvalidItemInstanceID, 400, "DEPOT_INVALID_ITEM_INSTANCE_ID"},
 			{depot.ErrEmptyItemList, 400, "DEPOT_EMPTY_ITEM_LIST"}, {depot.ErrInvalidAmount, 400, "DEPOT_INVALID_AMOUNT"}, {depot.ErrInvalidQuantity, 400, "DEPOT_INVALID_QUANTITY"},
@@ -216,7 +221,7 @@ func TestDepotItemGatewayErrors(t *testing.T) {
 }
 
 func TestDepotItemGatewayGuardsAndDiscovery(t *testing.T) {
-	for _, action := range []string{"depot_deposit", "depot_send_item", "depot_sell", "depot_sell_batch"} {
+	for _, action := range []string{"depot_deposit", "depot_withdraw", "depot_send_item", "depot_sell", "depot_sell_batch"} {
 		params := `{"item_id":"one"}`
 		field, kind := "item_id", "string"
 		if action == "depot_sell_batch" {

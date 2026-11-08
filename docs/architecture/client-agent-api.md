@@ -321,8 +321,8 @@ inside the existing service transaction. Clients explicitly enter Depot and
 read GET context for status; connected mutations require explicit Gateway
 intent and retain existing service results. The
 [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
-owns command inputs, verified REST retirements and remaining withdrawal,
-send-money and legacy-effect gaps.
+owns command inputs, verified REST retirements and remaining send-money and
+legacy-effect gaps.
 
 SecretShop facility/subject data reports `support.observation:details` with a
 typed `SecretShopCatalogSceneData` or `SecretShopProductSceneData`. Both contain

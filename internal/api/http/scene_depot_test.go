@@ -103,14 +103,12 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 				t.Fatalf("lost facts or changed reader order: %+v", data)
 			}
 			for _, action := range observation.AvailableActions {
-				if !slices.Contains([]string{"scene_back", "npc_talk", "npc_inspect", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item"}, action.Action) {
+				if !slices.Contains([]string{"scene_back", "npc_talk", "npc_inspect", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_withdraw"}, action.Action) {
 					t.Fatalf("unconnected mutation offered: %+v", action)
 				}
 			}
-			for _, id := range []string{"depot_withdraw"} {
-				if !slices.ContainsFunc(observation.Scene.Support.Actions, func(a SceneActionSupport) bool { return a.Action == id && !a.Connected }) {
-					t.Fatalf("missing connection metadata: %+v", observation.Scene.Support)
-				}
+			if !slices.ContainsFunc(observation.Scene.Support.Actions, func(a SceneActionSupport) bool { return a.Action == "depot_withdraw" && a.Connected }) {
+				t.Fatalf("withdrawal not connected: %+v", observation.Scene.Support)
 			}
 			if status, again := navigationGET(t, router); status != 200 || !reflect.DeepEqual(again.Scene, observation.Scene) || store.writes != 0 || f.writes != 0 || f.executions != 0 || f.dep.Capacity != 5 || f.char.Money != 100 || len(f.actions) != 0 {
 				t.Fatalf("GET wrote or changed state: %d %+v", status, again)
@@ -318,16 +316,5 @@ func TestDepotSceneRequiredReadOwnershipAndContext(t *testing.T) {
 	f.queryOwner = "other"
 	if status, _ := navigationGET(t, router); status != 403 || f.reads != before || f.writes != 0 || store.writes != 0 {
 		t.Fatalf("foreign owned snapshot read Depot: %d", status)
-	}
-}
-
-func TestDepotSceneMutationsRemainUnconnected(t *testing.T) {
-	for _, action := range []string{"depot_withdraw"} {
-		f, store, router := depotSceneRouter(t)
-		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"`+action+`","params":{"item_id":"z"}}`, nil)
-		if status != 501 || f.reads != 0 || f.writes != 0 || f.executions != 0 || store.writes != 0 {
-			t.Fatalf("unconnected mutation executed or refreshed: %d %s", status, raw)
-		}
-		assertGatewayError(t, raw, "ACTION_NOT_IMPLEMENTED")
 	}
 }

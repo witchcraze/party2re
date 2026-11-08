@@ -95,7 +95,7 @@ this delivery path under the existing [trajectory gap](../design/player-and-char
 - **Scope / Legacy**: `lib/depot.cgi`の`うる` / `まとめてうる`、`あずける` / `ひきだす`、`せいとん`、`おくる` (品/金)、`かくちょう`。共有`lib/system.cgi`の配送・未受取送金を含む。
 - **Go / HTTP**: `internal/depot/`、`internal/database/depot_repository.go`、inventory/equipment保存境界、`internal/api/http/depot.go`。
 - **Contracts**: [design/depot.md](../design/depot.md)、[design/items-and-equipment.md](../design/items-and-equipment.md)、[api/paths/depot.json](../api/paths/depot.json)。
-- **Open follow-ups**: [#1109](https://github.com/witchcraze/party2re/issues/1109) (未受取送金/金額保存)、[#1111](https://github.com/witchcraze/party2re/issues/1111) (整頓順)、[#1112](https://github.com/witchcraze/party2re/issues/1112) (装備品移動)、[#1127](https://github.com/witchcraze/party2re/issues/1127) (引出し/装備交換)。通知の受取側はCL-02Aの#1110と合わせて確認する。
+- **Open follow-ups**: [#1109](https://github.com/witchcraze/party2re/issues/1109) (未受取送金/金額保存)、[#1111](https://github.com/witchcraze/party2re/issues/1111) (整頓順)、[#1112](https://github.com/witchcraze/party2re/issues/1112) (装備品移動)。通知の受取側はCL-02Aの#1110と合わせて確認する。
 - **Boundary**: 他機能からのDepot直送は入庫/容量/失敗時の契約を確認する。売買・景品・生産など送信元機能の全仕様は各クラスタが所有する。HomeでのDepot品消費はCL-02E。
 
 #### CL-02D: Towns & Construction
@@ -121,7 +121,7 @@ this delivery path under the existing [trajectory gap](../design/player-and-char
 | 品/金の送付 → Home通知 | CL-02Cの送付・commitとCL-02Aの通知生成/本人表示を一緒に確認する。#1110は#1109の後続。 |
 | 睡眠 → 各更新APIのguard | CL-02Bが制限状態を所有し、CL-02Aの色設定、CL-02Dの建設、CL-02Eの使用入口まで確認する (#1117)。 |
 | Home設定 → 有料住宅契約 | CL-02Aの設定更新がCL-02Dの契約・期限を上書きしないことを確認する (#1115)。 |
-| 品の移動 → 装備/消費 | CL-02Cの所有移動・FK・交換とCL-02Eの使用/消費を区別し、同時操作・失敗時の品と装備状態を確認する (#1112/#1127)。 |
+| 品の移動 → 装備/消費 | CL-02Cの所有移動・FK・交換とCL-02Eの使用/消費を区別し、同時操作・失敗時の品と装備状態を確認する (#1112)。 |
 | 商店建設 → 売買 | CL-02DからCL-03へstore identity・入店条件を引き継ぐ。建設監査だけで商店売買全体のparityを認定しない。 |
 
 The script-level pointers below remain navigation for the parent cluster. **Reconciling** means linked gaps or specifications remain; a closed historical fix does not certify its audit unit or CL-02 as a whole.
@@ -131,7 +131,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/home.cgi` | 自宅拠点 (@自宅ペット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json)<br/>[api/paths/letter.json](../api/paths/letter.json) | Reconciling | CL-02A/B/E。未解決の所有・更新・睡眠・使用差分は各監査単位および所有文書を参照。 |
 | `lib/sleep.cgi` | 睡眠 (無料全快・日次リセット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json) | Reconciling | CL-02B (#1117〜#1119, #1822)。有料宿屋は非存在。時間/人数・起床義務・訪問条件の契約は CL-02B および [design/home.md](../design/home.md) 参照。 |
 | `lib/park.cgi` | 交流広場 (@町娘) | `internal/park/` | [design/town_park.md](../design/town_park.md)<br/>[api/paths/park.json](../api/paths/park.json) | Reconciling | CL-02A (#1126)。占い（22entry・27色）、NPC会話、チャット。文字数/log契約は未確定。10G回復は非存在。 |
-| `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | [design/depot.md](../design/depot.md)<br/>[api/paths/depot.json](../api/paths/depot.json) | Reconciling | CL-02C (#1109, #1111, #1112, #1127) と通知連動#1110。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |
+| `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | [design/depot.md](../design/depot.md)<br/>[api/paths/depot.json](../api/paths/depot.json) | Reconciling | CL-02C (#1109, #1111, #1112) と通知連動#1110。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |
 | `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (住宅建設)<br/>`internal/town/`<br/>`internal/store/` (商店建設)<br/>Client Presentation | [design/home.md](../design/home.md)<br/>[design/store.md](../design/store.md)<br/>[api/paths/towns.json](../api/paths/towns.json)<br/>[api/paths/houses.json](../api/paths/houses.json)<br/>[api/paths/stores.json](../api/paths/stores.json) | Reconciling | CL-02D (#1113, #1114, #1122)。町別上限・GP配線に未解決差分があり、設定/guardはCL-02A/Bと連動確認する。 |
 
 

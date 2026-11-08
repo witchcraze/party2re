@@ -159,4 +159,3 @@ so there is no full gameplay-parity claim.
 
 `WithdrawWeapon` checks only the main-hand slot and does not reject a full
 inventory, matching the legacy equipped-weapon check (`blacksmith.cgi:192–237`).
-Storage policy beyond this remains [#1127](https://github.com/witchcraze/party2re/issues/1127).

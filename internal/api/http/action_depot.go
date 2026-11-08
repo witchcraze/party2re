@@ -40,6 +40,7 @@ func WithDepot(service DepotService) Option {
 		h.depot = service
 		if service == nil {
 			withActionCommand[depositItemRequest]("depot_deposit", nil, nil)(h)
+			withActionCommand[withdrawItemRequest]("depot_withdraw", nil, nil)(h)
 			withActionCommand[sendItemRequest]("depot_send_item", nil, nil)(h)
 			withActionCommand[struct{}]("depot_sort", nil, nil)(h)
 			withActionCommand[struct{}]("depot_expand", nil, nil)(h)
@@ -49,6 +50,13 @@ func WithDepot(service DepotService) Option {
 		}
 		withActionCommand("depot_deposit", func(ctx context.Context, actorID string, params depositItemRequest) (any, error) {
 			value, err := service.DepositItem(ctx, actorID, params.ItemID)
+			if err != nil {
+				return nil, err
+			}
+			return toDepotResponse(value), nil
+		}, depotActionRejection)(h)
+		withActionCommand("depot_withdraw", func(ctx context.Context, actorID string, params withdrawItemRequest) (any, error) {
+			value, err := service.WithdrawItem(ctx, actorID, params.ItemID)
 			if err != nil {
 				return nil, err
 			}
@@ -103,6 +111,8 @@ func depotActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusNotFound, ErrorDetail{Code: "DEPOT_RECIPIENT_NOT_FOUND", Message: "Recipient character not found."}
 	case errors.Is(err, depot.ErrDepotFull):
 		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_FULL", Message: "Depot is full."}
+	case errors.Is(err, depot.ErrInventoryFull):
+		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_HAND_CONFLICT", Message: "Held items cannot be swapped."}
 	case errors.Is(err, depot.ErrInsufficientFunds):
 		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_INSUFFICIENT_FUNDS", Message: "Insufficient wallet funds."}
 	case errors.Is(err, depot.ErrDepotMaxExpanded):
