@@ -238,9 +238,12 @@ selection and paging. Navigation commands have no price, fatigue, scheduled
 cooldown or implicit feature mutation. Recovery and active-session restrictions
 still apply: browsing cannot bypass sleep or abandon a run.
 
-The registry accepts `town`, `bank`, `chapel`, `depot`, `home`, `secretshop` and the four ordinary shops
-(`shop_weapon`, `shop_armor`, `shop_item`, `shop_accessory`), with town as each
-facility's parent. Shop subjects use `target_kind:item` and IDs validated by
+Registered destinations, their parents, subject kinds and paging are defined by
+the production registry (`newPlayerContext` in `cmd/party2/playercontext.go`).
+The OpenAPI `scene_enter` destination enum lists them, and each context's
+offered `scene_enter` schema narrows that enum to the destinations the actor may
+enter. Facility destinations have `town` as parent unless registered otherwise.
+Shop subjects use `target_kind:item` and IDs validated by
 the owned actor's existing Shop catalog, including its eligibility filters.
 Home registers `target_kind:home` with a character ID validated by the public
 Home service. Entering `home` observes the actor; selecting another ID observes
@@ -249,8 +252,8 @@ that target without changing the actor/viewer. `home_inbox` and `home_outbox` ha
 Public Home detail never offers owner mailbox destinations. Other subject kinds
 remain adapter-owned.
 SecretShop registers `target_kind:item` with its public status catalog IDs.
-Its existing JobLevel ≥7 qualification is wired at composition through the pure
-`SceneDefinition.CanEnter` character predicate. Town and the `scene_enter` input
+A destination may register a pure `SceneDefinition.CanEnter` character predicate,
+such as SecretShop's JobLevel ≥7 qualification. Town and the `scene_enter` input
 schema omit disallowed destinations without reading their catalogs.
 Enter/select/page recheck qualification against the owned query snapshot and
 return `403 SCENE_ACCESS_DENIED` before a navigation
@@ -268,8 +271,8 @@ existing keyset reader, while later pages reuse its timestamp/ID tokens. Tokens
 are URL-safe base64 strings bounded to 512 characters; existing service cursor
 decoding and ordering are retained. Offset pages retain totals; cursor pages
 return the service next token without inventing a total or a cross-page snapshot.
-Mixed/unknown fields and null values are rejected. Town, Depot, ordinary Shop and
-SecretShop lists remain offset-only. Back never accepts a caller-supplied parent.
+Mixed/unknown fields and null values are rejected. All other pageable lists are
+offset-only. Back never accepts a caller-supplied parent.
 
 GET and command refresh share the HTTP selected-scene composer, replacing interim
 `scene.navigation` metadata with `town`, `facility`, `subject`, or
@@ -278,7 +281,8 @@ mailbox destinations; its mailbox scenes contain bounded letters and next-page
 inputs. The four ordinary Shops expose one ID-ordered, offset-paged `items`
 collection, or one selected `product`, with exact GetCatalog prices/slot,
 explicit select/purchase inputs, NPC inspect facts and service quantity bounds.
-Home, Shop, Bank and Chapel report `support.observation:details`. Chapel reads
+Destinations with a registered detail reader in the selected-scene composer
+(`internal/api/http/scene_composer.go`) report `support.observation:details`. Chapel reads
 the owned actor's blessing/status and prayer options through the existing service;
 each option's `type` supplies the explicit `chapel_pray` blessing input. Required
 read failures fail the whole observation. Its free command preserves known
