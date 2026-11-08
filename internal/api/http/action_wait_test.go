@@ -4,21 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func actionWaitRouter(t *testing.T, destination string) (*bankGatewayFixture, timer.Service, http.Handler) {
 	t.Helper()
+	return actionWaitRouterWith(t, destination, timer.NewService(nil), playercontext.DefaultActionWait)
+}
+
+func actionWaitRouterWith(t *testing.T, destination string, timers timer.Service, wait time.Duration) (*bankGatewayFixture, timer.Service, http.Handler) {
+	t.Helper()
 	f := newBankGatewayFixture(t)
-	timers := timer.NewService(nil)
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: destination}}
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers,
 		playercontext.WithNavigation(store, playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "bank", Parent: "town"}),
-		playercontext.WithActionWait(timers, playercontext.DefaultActionWait))
+		playercontext.WithActionWait(timers, wait))
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{},
 		WithBank(&bankSceneService{BankService: f, service: f.service}), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture })
 	if err != nil {
@@ -106,5 +112,38 @@ func TestActionWaitIsReadOnlyForGET(t *testing.T) {
 	}
 	if remaining, _ := timers.GetRemainingLock(context.Background(), timer.CategoryActionWait, "hero"); remaining <= 30*time.Second {
 		t.Fatalf("GET changed the wait: %v", remaining)
+	}
+}
+
+// Real Valkey: SET NX EX claim, rejection during the wait, release on a
+// rejected command and expiry, across sequential commands.
+func TestActionWaitWithRealValkey(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+	client, err := vk.NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	timers := timer.NewService(client)
+	ctx := context.Background()
+	_ = timers.ReleaseLock(ctx, timer.CategoryActionWait, "hero")
+	t.Cleanup(func() { _ = timers.ReleaseLock(context.Background(), timer.CategoryActionWait, "hero") })
+	f, _, router := actionWaitRouterWith(t, "bank", timers, time.Second)
+
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"bank_deposit","params":{"amount":999999}}`, nil)
+	if status < 400 || status >= 500 || actionErrorCode(t, raw) == "ACTION_WAIT" {
+		t.Fatalf("expected a service rejection: %d %s", status, raw["error"])
+	}
+	if status, raw = gatewayRequest(t, router, "hero", "session", "application/json", depositOne, nil); status != 200 {
+		t.Fatalf("a rejected command must release its claim: %d %s", status, raw["error"])
+	}
+	if status, raw = gatewayRequest(t, router, "hero", "session", "application/json", depositOne, nil); status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_WAIT" {
+		t.Fatalf("during the wait: %d %s", status, raw["error"])
+	}
+	time.Sleep(1200 * time.Millisecond)
+	if status, raw = gatewayRequest(t, router, "hero", "session", "application/json", depositOne, nil); status != 200 || f.depositCalls != 3 {
+		t.Fatalf("after expiry: %d %s (calls %d)", status, raw["error"], f.depositCalls)
 	}
 }

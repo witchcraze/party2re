@@ -3,13 +3,18 @@ package playercontext
 import (
 	"context"
 	"errors"
+	"os"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/testutil"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func TestActionWaitGateBlocksAllButRecovery(t *testing.T) {
@@ -66,7 +71,9 @@ func TestCatalogWaitDispositions(t *testing.T) {
 type waitTimers struct {
 	remaining map[string]time.Duration
 	err       error
-	set       []string
+	held      bool
+	claims    []string
+	released  int
 }
 
 func (w *waitTimers) GetRemainingLock(_ context.Context, category, _ string) (time.Duration, error) {
@@ -76,9 +83,21 @@ func (w *waitTimers) GetRemainingLock(_ context.Context, category, _ string) (ti
 	return w.remaining[category], nil
 }
 func (w *waitTimers) IsLocked(context.Context, string, string) (bool, error) { return false, nil }
-func (w *waitTimers) SetLock(_ context.Context, category, id string, d time.Duration) error {
-	w.set = append(w.set, category+":"+id+":"+d.String())
-	return w.err
+func (w *waitTimers) TryLockWithToken(_ context.Context, category, id, token string, d time.Duration) (bool, error) {
+	if w.err != nil {
+		return false, w.err
+	}
+	if w.held {
+		return false, nil
+	}
+	w.held = true
+	w.claims = append(w.claims, category+":"+id+":"+d.String())
+	return token != "", nil
+}
+func (w *waitTimers) ReleaseLockWithToken(context.Context, string, string, string) (bool, error) {
+	w.released++
+	w.held = false
+	return true, w.err
 }
 
 type waitChars struct{}
@@ -93,7 +112,7 @@ func (waitActions) FindPendingByActorID(context.Context, string) ([]scheduling.S
 	return nil, nil
 }
 
-func TestQueryReadsAndStartsActionWait(t *testing.T) {
+func TestQueryReadsAndClaimsActionWait(t *testing.T) {
 	ctx := context.Background()
 	timers := &waitTimers{remaining: map[string]time.Duration{timer.CategoryActionWait: 3 * time.Second}}
 
@@ -101,8 +120,8 @@ func TestQueryReadsAndStartsActionWait(t *testing.T) {
 	if r, err := disabled.Query(ctx, "c", "p"); err != nil || r.Snapshot.ActionWait != 0 {
 		t.Fatalf("disabled wait must not be read: %v %v", r.Snapshot.ActionWait, err)
 	}
-	if err := disabled.StartActionWait(ctx, "c"); err != nil || len(timers.set) != 0 {
-		t.Fatalf("disabled wait must not be written: %v %v", err, timers.set)
+	if claim, ok, err := disabled.ClaimActionWait(ctx, "c"); err != nil || !ok || claim.Release(ctx) != nil || len(timers.claims) != 0 {
+		t.Fatalf("disabled wait must not be written: %v %v %v", ok, err, timers.claims)
 	}
 
 	enabled := NewService(waitChars{}, waitActions{}, timers, WithActionWait(timers, DefaultActionWait))
@@ -110,15 +129,22 @@ func TestQueryReadsAndStartsActionWait(t *testing.T) {
 	if err != nil || r.Snapshot.ActionWait != 3*time.Second || !slices.Equal(r.AvailableActions, []string{"rescue_request"}) {
 		t.Fatalf("enabled read: %v %v %v", r.Snapshot.ActionWait, r.AvailableActions, err)
 	}
-	if err := enabled.StartActionWait(ctx, "c"); err != nil || len(timers.set) != 1 || timers.set[0] != "action_wait:c:4s" {
-		t.Fatalf("start: %v %v", err, timers.set)
+	claim, ok, err := enabled.ClaimActionWait(ctx, "c")
+	if err != nil || !ok || len(timers.claims) != 1 || timers.claims[0] != "action_wait:c:4s" {
+		t.Fatalf("claim: %v %v %v", ok, err, timers.claims)
+	}
+	if _, ok, err := enabled.ClaimActionWait(ctx, "c"); err != nil || ok {
+		t.Fatalf("a second claim while held must fail: %v %v", ok, err)
+	}
+	if err := claim.Release(ctx); err != nil || timers.released != 1 {
+		t.Fatalf("release: %v %d", err, timers.released)
 	}
 	timers.err = errors.New("down")
 	if _, err := enabled.Query(ctx, "c", "p"); err == nil {
 		t.Fatal("a wait read failure must fail the query, not pass silently")
 	}
-	if err := enabled.StartActionWait(ctx, "c"); err == nil {
-		t.Fatal("a wait write failure must be reported to the caller")
+	if _, _, err := enabled.ClaimActionWait(ctx, "c"); err == nil {
+		t.Fatal("a claim failure must be reported to the caller")
 	}
 }
 
@@ -126,8 +152,8 @@ func TestActionWaitExpiresWithTimer(t *testing.T) {
 	ctx := context.Background()
 	timers := timer.NewService(nil)
 	s := NewService(waitChars{}, waitActions{}, timers, WithActionWait(timers, 300*time.Millisecond))
-	if err := s.StartActionWait(ctx, "c"); err != nil {
-		t.Fatal(err)
+	if _, ok, err := s.ClaimActionWait(ctx, "c"); err != nil || !ok {
+		t.Fatal(ok, err)
 	}
 	if r, err := s.Query(ctx, "c", "p"); err != nil || r.Snapshot.ActionWait <= 0 || slices.Contains(r.AvailableActions, "scene_enter") {
 		t.Fatalf("inside the wait: %v %v %v", r.Snapshot.ActionWait, r.AvailableActions, err)
@@ -136,4 +162,45 @@ func TestActionWaitExpiresWithTimer(t *testing.T) {
 	if r, err := s.Query(ctx, "c", "p"); err != nil || r.Snapshot.ActionWait != 0 || !slices.Contains(r.AvailableActions, "scene_enter") {
 		t.Fatalf("after the wait: %v %v %v", r.Snapshot.ActionWait, r.AvailableActions, err)
 	}
+}
+
+// Concurrent commands race only on the atomic claim: exactly one wins.
+func TestConcurrentActionWaitClaimsAdmitOne(t *testing.T) {
+	run := func(t *testing.T, timers timer.Service) {
+		ctx := context.Background()
+		charID := id.New()
+		t.Cleanup(func() { _ = timers.ReleaseLock(context.Background(), timer.CategoryActionWait, charID) })
+		s := NewService(waitChars{}, waitActions{}, timers, WithActionWait(timers, time.Minute))
+		var wins atomic.Int32
+		fns := make([]func() error, 20)
+		for i := range fns {
+			fns[i] = func() error {
+				_, ok, err := s.ClaimActionWait(ctx, charID)
+				if ok {
+					wins.Add(1)
+				}
+				return err
+			}
+		}
+		for _, err := range testutil.RunRace(fns...) {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if wins.Load() != 1 {
+			t.Fatalf("%d concurrent claims won, want 1", wins.Load())
+		}
+	}
+	t.Run("memory", func(t *testing.T) { run(t, timer.NewService(nil)) })
+	t.Run("valkey", func(t *testing.T) {
+		if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+			t.Skip("PARTY2_VALKEY_ADDR is not configured")
+		}
+		client, err := vk.NewClient()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(client.Close)
+		run(t, timer.NewService(client))
+	})
 }

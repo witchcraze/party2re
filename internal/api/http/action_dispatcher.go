@@ -158,8 +158,27 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
+		// Claim the wait atomically before running, so concurrent commands cannot
+		// all pass the read-only check above.
+		var claim playercontext.ActionWaitClaim
+		if playercontext.StartsActionWait(def) {
+			var claimed bool
+			claim, claimed, err = h.playerContext.ClaimActionWait(r.Context(), char.ID)
+			if err != nil {
+				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify the action wait.")
+				return
+			}
+			if !claimed {
+				h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_WAIT", Message: "まだ行動することはできません"})
+				return
+			}
+		}
 		result, err := execute(r.Context(), player.ID, char.ID)
 		if err != nil {
+			// Rejected and unknown outcomes never keep the wait.
+			if releaseErr := claim.Release(r.Context()); releaseErr != nil {
+				slog.WarnContext(r.Context(), "action wait not released", slog.String("action", req.Action), slog.String("error", releaseErr.Error()))
+			}
 			if command.reject != nil {
 				status, detail := command.reject(err)
 				if status >= 400 && status < 500 {
@@ -169,12 +188,6 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			}
 			writeActionFailure(w, http.StatusInternalServerError, "EXECUTION_FAILED", "Action outcome could not be confirmed. Do not automatically retry.")
 			return
-		}
-		if playercontext.StartsActionWait(def) {
-			// The outcome is already known; a lost wait only shortens pacing.
-			if err := h.playerContext.StartActionWait(r.Context(), char.ID); err != nil {
-				slog.WarnContext(r.Context(), "action wait not started", slog.String("action", req.Action), slog.String("error", err.Error()))
-			}
 		}
 		observation, refreshError := h.refreshActionContext(r.Context(), player.ID, char.ID)
 		writeJSON(w, http.StatusOK, actionSuccessResponse{Success: true, Result: result, Context: observation, ContextError: refreshError})
