@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
@@ -112,3 +113,72 @@ func TestExileBoard_Integration(t *testing.T) {
 		}
 	}
 }
+
+// A rename and a petition naming the same character serialize on the character
+// row: exactly one succeeds, so no petition keeps a stale target name.
+func TestExileRenameAndPetitionRace_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	repo, err := database.NewExileRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx := database.NewTransactionProvider(db)
+	exiles := exile.NewService(repo, charRepo, timer.NewService(nil), tx, nil)
+	names, err := character.NewService(charRepo, character.WithTransactionProvider(tx), character.WithExileChecker(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var owned []string
+	t.Cleanup(func() {
+		for _, id := range owned {
+			//lint:ignore error-swallow best-effort removal of test-owned rows
+			_, _ = db.ExecContext(context.Background(), "DELETE FROM exile_votes WHERE voter_id = ?", id)
+			//lint:ignore error-swallow best-effort removal of test-owned rows
+			_, _ = db.ExecContext(context.Background(), "DELETE FROM exile_petitions WHERE applicant_id = ?", id)
+			//lint:ignore error-swallow best-effort removal of test-owned rows
+			_, _ = db.ExecContext(context.Background(), "DELETE FROM characters WHERE id = ?", id)
+		}
+	})
+	for i := range 10 {
+		applicant, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("ExA%d", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		target, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("ExT%d", i), character.NameChangeCost)
+		if err != nil {
+			t.Fatal(err)
+		}
+		owned = append(owned, applicant.ID, target.ID)
+		if _, err := db.ExecContext(ctx, "UPDATE characters SET job_level = ? WHERE id = ?", exile.MinJobLevel, applicant.ID); err != nil {
+			t.Fatal(err)
+		}
+		newName := id8(target.ID)
+		petitionErr, renameErr := testutil.RunRace2(
+			func() error {
+				_, err := exiles.Petition(ctx, applicant.ID, target.Name, "race", time.Now().UTC())
+				return err
+			},
+			func() error { _, err := names.ChangeName(ctx, target.ID, newName); return err },
+		)
+		switch {
+		case petitionErr == nil && errors.Is(renameErr, character.ErrExileInvolvedDisallowed):
+		case renameErr == nil && errors.Is(petitionErr, exile.ErrTargetNotFound):
+		default:
+			t.Fatalf("round %d: petition=%v rename=%v", i, petitionErr, renameErr)
+		}
+	}
+}
+
+func id8(id string) string { return "R" + id[:7] }

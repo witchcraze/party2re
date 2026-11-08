@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -29,11 +30,14 @@ type Repository interface {
 
 type CharacterReader interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 	FindByName(ctx context.Context, name string) (corecharacter.Character, error)
 }
 
 type SleepTimer interface {
 	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
+	ReleaseLock(ctx context.Context, category, targetID string) error
 }
 
 type TransactionProvider interface {
@@ -111,13 +115,22 @@ func (s *Service) Petition(ctx context.Context, actorID, targetName, reason stri
 		}
 		return Petition{}, err
 	}
-	p := Petition{
-		ID: id.New(), ApplicantID: actor.ID, ApplicantName: actor.Name, TargetID: target.ID, TargetName: target.Name,
-		Reason: reason, CreatedAt: now, Votes: []Vote{{VoterID: actor.ID, VoterName: actor.Name, Approve: true, VotedAt: now}},
-	}
+	var p Petition
 	err = s.tx.RunInTx(ctx, func(ctx context.Context) error {
 		if _, err := s.repo.LockBoard(ctx); err != nil {
 			return err
+		}
+		locked, err := s.lockCharacters(ctx, actor.ID, target.ID)
+		if err != nil {
+			return err
+		}
+		applicant, target := locked[actor.ID], locked[target.ID]
+		if target.Name != targetName {
+			return ErrTargetNotFound // renamed after the lookup
+		}
+		p = Petition{
+			ID: id.New(), ApplicantID: applicant.ID, ApplicantName: applicant.Name, TargetID: target.ID, TargetName: target.Name,
+			Reason: reason, CreatedAt: now, Votes: []Vote{{VoterID: applicant.ID, VoterName: applicant.Name, Approve: true, VotedAt: now}},
 		}
 		open, err := s.repo.ListPetitions(ctx)
 		if err != nil {
@@ -141,7 +154,7 @@ func (s *Service) Petition(ctx context.Context, actorID, targetName, reason stri
 		if err := s.repo.TouchBoard(ctx, now); err != nil {
 			return err
 		}
-		return s.publish(ctx, fmt.Sprintf("%sが%sを追放申請しました", actor.Name, target.Name), "理由: "+reason, now)
+		return s.publish(ctx, fmt.Sprintf("%sが%sを追放申請しました", applicant.Name, target.Name), "理由: "+reason, now)
 	})
 	if err != nil {
 		return Petition{}, err
@@ -164,12 +177,18 @@ func (s *Service) Vote(ctx context.Context, actorID, targetName string, approve 
 		return VoteResult{}, ErrJobLevelTooLow
 	}
 	var result VoteResult
+	var sentence *sleepChange
 	err = s.tx.RunInTx(ctx, func(ctx context.Context) error {
-		result = VoteResult{Withdrawn: []Petition{}}
+		result, sentence = VoteResult{Withdrawn: []Petition{}}, nil
 		updatedAt, err := s.repo.LockBoard(ctx)
 		if err != nil {
 			return err
 		}
+		locked, err := s.lockCharacters(ctx, actor.ID)
+		if err != nil {
+			return err
+		}
+		actor := locked[actor.ID]
 		open, err := s.repo.ListPetitions(ctx)
 		if err != nil {
 			return err
@@ -204,40 +223,90 @@ func (s *Service) Vote(ctx context.Context, actorID, targetName string, approve 
 		if len(result.Withdrawn) == 0 && result.Petition == nil {
 			return ErrPetitionNotFound
 		}
-		return s.apply(ctx, actor, result, now)
+		sleeper, sleep, err := s.apply(ctx, actor, result, now)
+		if err != nil || sleeper == "" {
+			return err
+		}
+		// Valkey cannot join the transaction: write it last and undo it if the commit fails.
+		prior, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, sleeper)
+		if err != nil {
+			return err
+		}
+		if err := s.timer.SetLock(ctx, timer.CategorySleep, sleeper, sleep); err != nil {
+			return err
+		}
+		sentence = &sleepChange{characterID: sleeper, prior: prior}
+		return nil
 	})
 	if err != nil {
+		if sentence != nil {
+			err = errors.Join(err, sentence.undo(context.WithoutCancel(ctx), s.timer))
+		}
 		return VoteResult{}, err
 	}
 	return result, nil
 }
 
-func (s *Service) apply(ctx context.Context, actor corecharacter.Character, r VoteResult, now time.Time) error {
-	for _, p := range r.Withdrawn {
-		if err := s.repo.DeletePetition(ctx, p.ID); err != nil {
-			return err
-		}
-		if err := s.publish(ctx, fmt.Sprintf("%sが%sの追放申請を取り消しました", actor.Name, p.TargetName), "追放申請は取り消されました。", now); err != nil {
-			return err
-		}
-	}
-	if p := r.Petition; p != nil {
-		if r.Verdict == "" {
-			if err := s.repo.AddVote(ctx, p.ID, p.Votes[0]); err != nil {
-				return err
-			}
-		} else if err := s.resolve(ctx, *p, r, now); err != nil {
-			return err
-		}
-	}
-	return s.repo.TouchBoard(ctx, now)
+// sleepChange restores the sleep a rolled-back verdict replaced.
+// shortcut: a sleep written by another feature between the verdict and the undo is overwritten; acceptable for a failed-commit path.
+type sleepChange struct {
+	characterID string
+	prior       time.Duration
 }
 
-// resolve removes the petition and overwrites the sentenced sleep (legacy
-// regist_you_data). The timer is written last so its failure rolls back the vote.
-func (s *Service) resolve(ctx context.Context, p Petition, r VoteResult, now time.Time) error {
+func (c sleepChange) undo(ctx context.Context, t SleepTimer) error {
+	if c.prior <= 0 {
+		return t.ReleaseLock(ctx, timer.CategorySleep, c.characterID)
+	}
+	return t.SetLock(ctx, timer.CategorySleep, c.characterID, c.prior)
+}
+
+// lockCharacters locks rows in ascending ID order after the board, so renames
+// (which lock the character, then check involvement) serialize with board writes.
+func (s *Service) lockCharacters(ctx context.Context, ids ...string) (map[string]corecharacter.Character, error) {
+	slices.Sort(ids)
+	locked := make(map[string]corecharacter.Character, len(ids))
+	for _, id := range ids {
+		c, err := s.characters.FindByIDForUpdate(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		locked[id] = c
+	}
+	return locked, nil
+}
+
+// apply writes the board and returns the sleep a verdict sentences, if any.
+func (s *Service) apply(ctx context.Context, actor corecharacter.Character, r VoteResult, now time.Time) (string, time.Duration, error) {
+	for _, p := range r.Withdrawn {
+		if err := s.repo.DeletePetition(ctx, p.ID); err != nil {
+			return "", 0, err
+		}
+		if err := s.publish(ctx, fmt.Sprintf("%sが%sの追放申請を取り消しました", actor.Name, p.TargetName), "追放申請は取り消されました。", now); err != nil {
+			return "", 0, err
+		}
+	}
+	var sleeper string
+	var sleep time.Duration
+	if p := r.Petition; p != nil {
+		var err error
+		if r.Verdict == "" {
+			err = s.repo.AddVote(ctx, p.ID, p.Votes[0])
+		} else {
+			sleeper, sleep, err = s.resolve(ctx, *p, r, now)
+		}
+		if err != nil {
+			return "", 0, err
+		}
+	}
+	return sleeper, sleep, s.repo.TouchBoard(ctx, now)
+}
+
+// resolve removes the petition and returns the sleep that replaces the
+// sentenced character's remaining sleep (legacy regist_you_data).
+func (s *Service) resolve(ctx context.Context, p Petition, r VoteResult, now time.Time) (string, time.Duration, error) {
 	if err := s.repo.DeletePetition(ctx, p.ID); err != nil {
-		return err
+		return "", 0, err
 	}
 	tally := fmt.Sprintf("賛成 %d 票 / 反対 %d 票", r.Approvals, r.Oppositions)
 	sleeper, sleep := p.TargetID, GuiltySleep
@@ -249,18 +318,15 @@ func (s *Service) resolve(ctx context.Context, p Petition, r VoteResult, now tim
 		if _, err := s.characters.FindByID(ctx, sleeper); errors.Is(err, corecharacter.ErrNotFound) {
 			sleeper = ""
 		} else if err != nil {
-			return err
+			return "", 0, err
 		} else {
 			content += fmt.Sprintf("申請者の%sは5日間の眠りの刑となりました。", p.ApplicantName)
 		}
 	}
 	if err := s.publish(ctx, title, content, now); err != nil {
-		return err
+		return "", 0, err
 	}
-	if sleeper == "" {
-		return nil
-	}
-	return s.timer.SetLock(ctx, timer.CategorySleep, sleeper, sleep)
+	return sleeper, sleep, nil
 }
 
 func (s *Service) publish(ctx context.Context, title, content string, now time.Time) error {

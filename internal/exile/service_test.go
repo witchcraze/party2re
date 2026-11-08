@@ -16,10 +16,14 @@ import (
 type memRepo struct {
 	updated   time.Time
 	petitions []exile.Petition
+	touchErr  error
 }
 
 func (m *memRepo) LockBoard(context.Context) (time.Time, error) { return m.updated, nil }
 func (m *memRepo) TouchBoard(_ context.Context, at time.Time) error {
+	if m.touchErr != nil {
+		return m.touchErr
+	}
 	m.updated = at
 	return nil
 }
@@ -57,12 +61,20 @@ func (m *memRepo) IsInvolved(_ context.Context, c string) (bool, error) {
 }
 
 // memTx restores the repository on failure, standing in for a rollback.
-type memTx struct{ repo *memRepo }
+// commitErr fails the commit after fn succeeded.
+type memTx struct {
+	repo      *memRepo
+	commitErr *error
+}
 
 func (t memTx) RunInTx(ctx context.Context, fn func(context.Context) error) error {
-	saved := memRepo{updated: t.repo.updated}
+	saved := memRepo{updated: t.repo.updated, touchErr: t.repo.touchErr}
 	saved.petitions, _ = t.repo.ListPetitions(ctx)
-	if err := fn(ctx); err != nil {
+	err := fn(ctx)
+	if err == nil && t.commitErr != nil {
+		err = *t.commitErr
+	}
+	if err != nil {
 		*t.repo = saved
 		return err
 	}
@@ -70,6 +82,10 @@ func (t memTx) RunInTx(ctx context.Context, fn func(context.Context) error) erro
 }
 
 type chars map[string]corecharacter.Character
+
+func (c chars) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return c.FindByID(ctx, id)
+}
 
 func (c chars) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
 	if v, ok := c[id]; ok {
@@ -91,6 +107,15 @@ type sleeps struct {
 	err error
 }
 
+func (s *sleeps) GetRemainingLock(_ context.Context, _, id string) (time.Duration, error) {
+	return s.set[id], nil
+}
+
+func (s *sleeps) ReleaseLock(_ context.Context, _, id string) error {
+	delete(s.set, id)
+	return nil
+}
+
 func (s *sleeps) SetLock(_ context.Context, category, id string, d time.Duration) error {
 	if category != timer.CategorySleep {
 		return fmt.Errorf("unexpected category %s", category)
@@ -103,6 +128,7 @@ func (s *sleeps) SetLock(_ context.Context, category, id string, d time.Duration
 }
 
 type fixture struct {
+	commit error
 	repo   *memRepo
 	chars  chars
 	sleeps *sleeps
@@ -128,7 +154,7 @@ func newFixture(t *testing.T, voters int) *fixture {
 		f.news = append(f.news, title)
 		return nil
 	})
-	f.svc = exile.NewService(f.repo, f.chars, f.sleeps, memTx{f.repo}, news)
+	f.svc = exile.NewService(f.repo, f.chars, f.sleeps, memTx{f.repo, &f.commit}, news)
 	return f
 }
 
@@ -301,5 +327,69 @@ func TestBoardVisibleOnlyToEligible(t *testing.T) {
 	}
 	if b, err := f.svc.GetBoard(context.Background(), "app"); err != nil || !b.Eligible || len(b.Petitions) != 1 {
 		t.Fatalf("eligible board: %+v %v", b, err)
+	}
+}
+
+func (f *fixture) approveUntilLast(t *testing.T) {
+	t.Helper()
+	f.petition(t, "app", "bad")
+	for i := range 8 {
+		if _, err := f.svc.Vote(context.Background(), fmt.Sprintf("v%02d", i), "bad", true, f.now); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// Valkey cannot join the SQL transaction: a verdict whose board write or
+// commit fails must leave the sentenced character's sleep as it was.
+func TestVerdictFailureAfterTimerKeepsPriorSleep(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		prior time.Duration
+		fail  func(*fixture)
+	}{
+		{"commit fails, no prior sleep", 0, func(f *fixture) { f.commit = errors.New("commit failed") }},
+		{"commit fails, longer prior sleep", 2 * time.Hour, func(f *fixture) { f.commit = errors.New("commit failed") }},
+		{"board write fails", 0, func(f *fixture) { f.repo.touchErr = errors.New("touch failed") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, 9)
+			f.approveUntilLast(t)
+			if tc.prior > 0 {
+				f.sleeps.set["bad"] = tc.prior
+			}
+			tc.fail(f)
+			if _, err := f.svc.Vote(context.Background(), "v08", "bad", true, f.now); err == nil {
+				t.Fatal("failed verdict reported success")
+			}
+			if got, ok := f.sleeps.set["bad"]; got != tc.prior || ok != (tc.prior > 0) {
+				t.Fatalf("sleep after rollback = %v (set=%v), want %v", got, ok, tc.prior)
+			}
+			if len(f.repo.petitions) != 1 || len(f.repo.petitions[0].Votes) != 9 {
+				t.Fatalf("verdict not rolled back: %+v", f.repo.petitions)
+			}
+		})
+	}
+}
+
+// renamingChars renames the target right after the unlocked name lookup,
+// as a concurrent ChangeName committing first would.
+type renamingChars struct{ chars }
+
+func (c renamingChars) FindByName(ctx context.Context, name string) (corecharacter.Character, error) {
+	found, err := c.chars.FindByName(ctx, name)
+	if err == nil {
+		renamed := found
+		renamed.Name = "renamed"
+		c.chars[found.ID] = renamed
+	}
+	return found, err
+}
+
+func TestPetitionRejectsTargetRenamedBeforeLock(t *testing.T) {
+	f := newFixture(t, 0)
+	svc := exile.NewService(f.repo, renamingChars{f.chars}, f.sleeps, memTx{f.repo, &f.commit}, nil)
+	if _, err := svc.Petition(context.Background(), "app", "bad", "x", f.now); !errors.Is(err, exile.ErrTargetNotFound) || len(f.repo.petitions) != 0 {
+		t.Fatalf("petition kept a stale name: %v %+v", err, f.repo.petitions)
 	}
 }
