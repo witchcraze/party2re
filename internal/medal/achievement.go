@@ -37,16 +37,15 @@ var (
 
 // Achievement represents a static lifetime milestone definition in the game catalog.
 type Achievement struct {
-	ID                string     `json:"id"`
-	Name              string     `json:"name"`
-	Category          string     `json:"category"`
-	Description       string     `json:"description"`
-	Metric            MetricType `json:"metric"`
-	Threshold         int        `json:"threshold"`
-	MedalID           string     `json:"medal_id"`
-	MedalName         string     `json:"medal_name"`
-	MedalDescription  string     `json:"medal_description"`
-	SmallMedalsReward int        `json:"small_medals_reward"`
+	ID               string     `json:"id"`
+	Name             string     `json:"name"`
+	Category         string     `json:"category"`
+	Description      string     `json:"description"`
+	Metric           MetricType `json:"metric"`
+	Threshold        int        `json:"threshold"`
+	MedalID          string     `json:"medal_id"`
+	MedalName        string     `json:"medal_name"`
+	MedalDescription string     `json:"medal_description"`
 }
 
 // DomainEvent carries information about a completed gameplay action for achievement progress tracking.
@@ -85,7 +84,6 @@ type AchievementProgress struct {
 	MedalID              string     `json:"medal_id"`
 	MedalName            string     `json:"medal_name"`
 	MedalDescription     string     `json:"medal_description"`
-	SmallMedalsReward    int        `json:"small_medals_reward"`
 }
 
 // CharacterMedal represents a commemorative medal awarded to a character upon claiming a completed achievement.
@@ -100,11 +98,10 @@ type CharacterMedal struct {
 
 // ClaimResult contains the results of claiming an achievement milestone reward.
 type ClaimResult struct {
-	AchievementID      string                  `json:"achievement_id"`
-	AchievementName    string                  `json:"achievement_name"`
-	Medal              CharacterMedal          `json:"medal"`
-	SmallMedalsAwarded int                     `json:"small_medals_awarded"`
-	Character          corecharacter.Character `json:"character"`
+	AchievementID   string                  `json:"achievement_id"`
+	AchievementName string                  `json:"achievement_name"`
+	Medal           CharacterMedal          `json:"medal"`
+	Character       corecharacter.Character `json:"character"`
 }
 
 // InitialAchievements loads the embedded default achievement definitions.

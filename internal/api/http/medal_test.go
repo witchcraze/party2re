@@ -56,7 +56,6 @@ func (m *mockMedalService) GetAchievements(ctx context.Context, charID string) (
 			IsCompleted:          true,
 			MedalID:              "medal_adv_bronze",
 			MedalName:            "青銅の冒険勲章",
-			SmallMedalsReward:    1,
 		},
 	}, nil
 }
@@ -73,8 +72,7 @@ func (m *mockMedalService) ClaimAchievement(ctx context.Context, charID string, 
 			MedalID:     "medal_adv_bronze",
 			MedalName:   "青銅の冒険勲章",
 		},
-		SmallMedalsAwarded: 1,
-		Character:          corecharacter.Character{ID: charID, SmallMedals: 6},
+		Character: corecharacter.Character{ID: charID, SmallMedals: 6},
 	}, nil
 }
 
@@ -281,13 +279,12 @@ func TestMedalEndpoints(t *testing.T) {
 			t.Fatalf("expected 200, got %d", rec.Code)
 		}
 		var resp struct {
-			AchievementID      string `json:"achievement_id"`
-			SmallMedalsAwarded int    `json:"small_medals_awarded"`
+			AchievementID string `json:"achievement_id"`
 		}
 		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
 		}
-		if resp.AchievementID != "adv_novice" || resp.SmallMedalsAwarded != 1 {
+		if resp.AchievementID != "adv_novice" {
 			t.Fatalf("unexpected claim response: %+v", resp)
 		}
 	})

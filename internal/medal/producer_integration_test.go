@@ -430,58 +430,52 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	achRepo := newMockAchievementRepo()
 	catalog := []medal.Achievement{
 		{
-			ID:                "test_adv_victories",
-			Name:              "冒険の第一歩",
-			Metric:            medal.MetricAdventureVictories,
-			Threshold:         1,
-			MedalID:           "medal_adv",
-			MedalName:         "冒険者の勲章",
-			SmallMedalsReward: 2,
+			ID:        "test_adv_victories",
+			Name:      "冒険の第一歩",
+			Metric:    medal.MetricAdventureVictories,
+			Threshold: 1,
+			MedalID:   "medal_adv",
+			MedalName: "冒険者の勲章",
 		},
 		{
-			ID:                "test_boss_slain",
-			Name:              "ボス討伐者",
-			Metric:            medal.MetricBossesSlain,
-			Threshold:         1,
-			MedalID:           "medal_boss",
-			MedalName:         "討伐者の勲章",
-			SmallMedalsReward: 5,
+			ID:        "test_boss_slain",
+			Name:      "ボス討伐者",
+			Metric:    medal.MetricBossesSlain,
+			Threshold: 1,
+			MedalID:   "medal_boss",
+			MedalName: "討伐者の勲章",
 		},
 		{
-			ID:                "test_pvp_victories",
-			Name:              "闘技場の覇者",
-			Metric:            medal.MetricPvPVictories,
-			Threshold:         1,
-			MedalID:           "medal_pvp",
-			MedalName:         "闘士の勲章",
-			SmallMedalsReward: 3,
+			ID:        "test_pvp_victories",
+			Name:      "闘技場の覇者",
+			Metric:    medal.MetricPvPVictories,
+			Threshold: 1,
+			MedalID:   "medal_pvp",
+			MedalName: "闘士の勲章",
 		},
 		{
-			ID:                "test_casino_games",
-			Name:              "カジノ通",
-			Metric:            medal.MetricCasinoGames,
-			Threshold:         1,
-			MedalID:           "medal_casino",
-			MedalName:         "勝負師の勲章",
-			SmallMedalsReward: 2,
+			ID:        "test_casino_games",
+			Name:      "カジノ通",
+			Metric:    medal.MetricCasinoGames,
+			Threshold: 1,
+			MedalID:   "medal_casino",
+			MedalName: "勝負師の勲章",
 		},
 		{
-			ID:                "test_alchemy_crafts",
-			Name:              "錬金術見習い",
-			Metric:            medal.MetricAlchemyCrafts,
-			Threshold:         1,
-			MedalID:           "medal_alchemy",
-			MedalName:         "錬金術士の勲章",
-			SmallMedalsReward: 4,
+			ID:        "test_alchemy_crafts",
+			Name:      "錬金術見習い",
+			Metric:    medal.MetricAlchemyCrafts,
+			Threshold: 1,
+			MedalID:   "medal_alchemy",
+			MedalName: "錬金術士の勲章",
 		},
 		{
-			ID:                "test_monsters_slain",
-			Name:              "魔物ハンター",
-			Metric:            medal.MetricMonstersSlain,
-			Threshold:         2, // 1 from adventure + 1 from dungeon
-			MedalID:           "medal_monster",
-			MedalName:         "狩人の勲章",
-			SmallMedalsReward: 3,
+			ID:        "test_monsters_slain",
+			Name:      "魔物ハンター",
+			Metric:    medal.MetricMonstersSlain,
+			Threshold: 2, // 1 from adventure + 1 from dungeon
+			MedalID:   "medal_monster",
+			MedalName: "狩人の勲章",
 		},
 	}
 
@@ -707,9 +701,6 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 		if claimResult.Medal.MedalID == "" || claimResult.Medal.MedalName == "" {
 			t.Errorf("expected commemorative medal to be awarded, got %+v", claimResult)
 		}
-		if claimResult.SmallMedalsAwarded <= 0 {
-			t.Errorf("expected small medals reward > 0, got %d", claimResult.SmallMedalsAwarded)
-		}
 
 		// Verify duplicate claim prevention
 		_, err = medalService.ClaimAchievement(ctx, hero.ID, achID)
@@ -812,31 +803,28 @@ func TestParty_MilestoneIntegration(t *testing.T) {
 	// 2. Setup Achievement Catalog
 	catalog := []medal.Achievement{
 		{
-			ID:                "test_party_adv_victories",
-			Name:              "パーティ冒険王",
-			Metric:            medal.MetricAdventureVictories,
-			Threshold:         1,
-			MedalID:           "medal_party_adv",
-			MedalName:         "結束の勲章",
-			SmallMedalsReward: 5,
+			ID:        "test_party_adv_victories",
+			Name:      "パーティ冒険王",
+			Metric:    medal.MetricAdventureVictories,
+			Threshold: 1,
+			MedalID:   "medal_party_adv",
+			MedalName: "結束の勲章",
 		},
 		{
-			ID:                "test_party_monsters_slain",
-			Name:              "共闘モンスターバスター",
-			Metric:            medal.MetricMonstersSlain,
-			Threshold:         2,
-			MedalID:           "medal_party_slayer",
-			MedalName:         "討伐隊の勲章",
-			SmallMedalsReward: 3,
+			ID:        "test_party_monsters_slain",
+			Name:      "共闘モンスターバスター",
+			Metric:    medal.MetricMonstersSlain,
+			Threshold: 2,
+			MedalID:   "medal_party_slayer",
+			MedalName: "討伐隊の勲章",
 		},
 		{
-			ID:                "test_party_gold_earned",
-			Name:              "パーティ富豪",
-			Metric:            medal.MetricGoldEarned,
-			Threshold:         50,
-			MedalID:           "medal_party_wealth",
-			MedalName:         "協調財産の勲章",
-			SmallMedalsReward: 2,
+			ID:        "test_party_gold_earned",
+			Name:      "パーティ富豪",
+			Metric:    medal.MetricGoldEarned,
+			Threshold: 50,
+			MedalID:   "medal_party_wealth",
+			MedalName: "協調財産の勲章",
 		},
 	}
 
@@ -943,9 +931,6 @@ func TestParty_MilestoneIntegration(t *testing.T) {
 			}
 			if claimResult.Medal.MedalID == "" {
 				t.Errorf("[%s] expected commemorative medal to be awarded", charID)
-			}
-			if claimResult.SmallMedalsAwarded <= 0 {
-				t.Errorf("[%s] expected small medals reward > 0, got %d", charID, claimResult.SmallMedalsAwarded)
 			}
 		}
 

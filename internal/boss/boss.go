@@ -74,18 +74,17 @@ type CharacterBossRecord struct {
 
 // BossChallengeHistory records a completed sealing battle.
 type BossChallengeHistory struct {
-	ID                string
-	CharacterID       string
-	BossID            string
-	Tier              int
-	Outcome           corebattle.Outcome
-	Turns             int
-	RewardExp         int
-	RewardGold        int
-	RewardSmallMedals int
-	RewardItemID      string
-	IsFirstClear      bool
-	CreatedAt         time.Time
+	ID           string
+	CharacterID  string
+	BossID       string
+	Tier         int
+	Outcome      corebattle.Outcome
+	Turns        int
+	RewardExp    int
+	RewardGold   int
+	RewardItemID string
+	IsFirstClear bool
+	CreatedAt    time.Time
 }
 
 // BossStageStatus represents the availability of a King stage for a character.

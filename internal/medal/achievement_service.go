@@ -112,7 +112,6 @@ func (s *Service) GetAchievements(ctx context.Context, characterID string) ([]Ac
 			MedalID:              ach.MedalID,
 			MedalName:            ach.MedalName,
 			MedalDescription:     ach.MedalDescription,
-			SmallMedalsReward:    ach.SmallMedalsReward,
 		})
 	}
 
@@ -184,22 +183,11 @@ func (s *Service) ClaimAchievement(ctx context.Context, characterID string, achi
 			return err
 		}
 
-		// 6. Award small medals if configured
-		if targetAch.SmallMedalsReward > 0 {
-			if err := char.AddSmallMedals(targetAch.SmallMedalsReward); err != nil {
-				return err
-			}
-			if err := s.characters.Update(txCtx, char); err != nil {
-				return err
-			}
-		}
-
 		result = ClaimResult{
-			AchievementID:      targetAch.ID,
-			AchievementName:    targetAch.Name,
-			Medal:              charMedal,
-			SmallMedalsAwarded: targetAch.SmallMedalsReward,
-			Character:          char,
+			AchievementID:   targetAch.ID,
+			AchievementName: targetAch.Name,
+			Medal:           charMedal,
+			Character:       char,
 		}
 		return nil
 	})

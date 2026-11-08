@@ -41,10 +41,7 @@ Small Medals are earned through various exploration and combat activities:
    - **Treasure Chests ('T')**: Each chest opened awards **+1 Small Medal**.
    - **Dungeon Clear**: Completely clearing a dungeon awards bonus Small Medals equal to the dungeon Tier (Tier 1 = +1, Tier 2 = +2, Tier 3 = +3).
    - Medals gathered during exploration are permanently committed to the character upon safe escape or dungeon clear.
-2. **World Boss Battles (`internal/boss`)**:
-   - **Boss Defeat**: Conquering a King Boss awards **1 to 5 Small Medals** (Tier 1〜10; Primal Creator Deity Tier 99 awards **10 Small Medals**).
-   - **First Clear Bonus**: First-time defeat of a boss tier awards an extra **1 to 20 Small Medals**.
-4. **Milestone Achievements (`internal/medal`, [`achievements.md`](achievements.md))**:
-   - Completing lifetime achievements (adventures completed, monsters slain, gold earned, bosses defeated, etc.) awards bonus Small Medals upon claim.
+
+Milestone achievements award commemorative medals only, never Small Medals ([reward policy](achievements.md#reward-policy-1168)).
 
 Transport operations and schemas: [OpenAPI](../api/openapi.json).

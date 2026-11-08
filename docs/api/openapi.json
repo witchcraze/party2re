@@ -6871,16 +6871,12 @@
           },
           "medal": {
             "$ref": "#/components/schemas/MedalCharacterMedal"
-          },
-          "small_medals_awarded": {
-            "type": "integer"
           }
         },
         "required": [
           "achievement_id",
           "achievement_name",
           "medal",
-          "small_medals_awarded",
           "character"
         ],
         "type": "object"
@@ -11024,9 +11020,6 @@
           "name": {
             "type": "string"
           },
-          "small_medals_reward": {
-            "type": "integer"
-          },
           "threshold": {
             "type": "integer"
           }
@@ -11044,8 +11037,7 @@
           "is_claimed",
           "medal_id",
           "medal_name",
-          "medal_description",
-          "small_medals_reward"
+          "medal_description"
         ],
         "type": "object"
       },
