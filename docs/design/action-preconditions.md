@@ -46,7 +46,7 @@ The gate descriptions below summarize the current implementation:
    - Ordinary actions remain blocked while the sleep duration is active or wake recovery is pending. `home_wake` is offered only when the duration has elapsed and recovery is pending.
    - **Emergency exception**: `rescue.cgi:53-65` accepts rescue during existing sleep and adds a penalty. `rescue_request` therefore has no awake requirement.
 4. **Cooldown Gate (`party2:scheduled:actor:<id>`)**:
-   - Characters with Pending or Processing ScheduledActions cannot execute cooldown-gated town or expedition actions. Passing ExecuteAt does not imply settlement; Completed/Failed records do not block. The actor Set is an index, not an exclusive lock ([Scheduled work lifecycle](../architecture/valkey-keyspace.md#scheduled-work-lifecycle)).
+   - Characters with Pending or Processing ScheduledActions cannot execute cooldown-gated town or expedition actions. This gate is not the legacy 4-second action wait (`$act_time`); that planned gate is defined in [place log](../architecture/place-log.md#action-wait-1939). Passing ExecuteAt does not imply settlement; Completed/Failed records do not block. The actor Set is an index, not an exclusive lock ([Scheduled work lifecycle](../architecture/valkey-keyspace.md#scheduled-work-lifecycle)).
 5. **Currency Gate (`$m{money} > 0`)**:
    - Currency-gated entry actions require positive wallet gold. Exact amounts, selected-item prices, alternate currencies and domain-specific prerequisites remain execution-service checks; the catalog has no request payload to evaluate them.
 6. **Location Gate**:
