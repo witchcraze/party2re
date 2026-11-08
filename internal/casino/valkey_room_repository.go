@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -73,6 +74,11 @@ func (v *ValkeyRoomRepository) CreateRoom(ctx context.Context, room Room, leader
 		leaderMember.UpdatedAt = now
 	}
 
+	expectedPrevRoomID, err := v.checkCharacterAdmissionAvailable(ctx, room.ID, leaderMember.CharacterID)
+	if err != nil {
+		return err
+	}
+
 	dto := &valkeyRoomDetailDTO{
 		Room:         room,
 		PasswordHash: room.PasswordHash,
@@ -96,7 +102,12 @@ func (v *ValkeyRoomRepository) CreateRoom(ctx context.Context, room Room, leader
 		syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
 	}
 
-	if err := v.setAdmittedMemberMapping(ctx, room.ID, leaderMember.CharacterID); err != nil {
+	if err := v.claimAdmittedMemberMapping(ctx, room.ID, leaderMember.CharacterID, expectedPrevRoomID); err != nil {
+		if errors.Is(err, ErrAlreadyInRoom) {
+			_ = v.client.Do(ctx, v.client.B().Del().Key(roomKey).Build()).Error()
+			_ = v.client.Do(ctx, v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(room.ID).Build()).Error()
+			return ErrAlreadyInRoom
+		}
 		syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
 	}
 	return syncErr
@@ -256,6 +267,12 @@ func (v *ValkeyRoomRepository) AddMember(ctx context.Context, member RoomMember)
 		if err != nil {
 			return err
 		}
+		expectedPrevRoomID, err := v.checkCharacterAdmissionAvailable(lockedCtx, member.RoomID, member.CharacterID)
+		if err != nil {
+			return err
+		}
+		prevMembers := slices.Clone(dto.Members)
+		prevUpdatedAt := dto.Room.UpdatedAt
 		now := time.Now().UTC()
 		if member.JoinedAt.IsZero() {
 			member.JoinedAt = now
@@ -282,7 +299,13 @@ func (v *ValkeyRoomRepository) AddMember(ctx context.Context, member RoomMember)
 			return syncErr
 		}
 
-		if err := v.setAdmittedMemberMapping(lockedCtx, member.RoomID, member.CharacterID); err != nil {
+		if err := v.claimAdmittedMemberMapping(lockedCtx, member.RoomID, member.CharacterID, expectedPrevRoomID); err != nil {
+			if errors.Is(err, ErrAlreadyInRoom) {
+				dto.Members = prevMembers
+				dto.Room.UpdatedAt = prevUpdatedAt
+				_ = v.saveRoomDetail(lockedCtx, dto)
+				return ErrAlreadyInRoom
+			}
 			syncErr = errors.Join(syncErr, &SecondarySyncError{Err: err})
 		}
 		return syncErr

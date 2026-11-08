@@ -2,10 +2,43 @@ package casino
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/valkey-io/valkey-go"
 )
+
+var (
+	//go:embed lua/claim_character_room.lua
+	claimCharacterRoomLua string
+	//go:embed lua/renew_character_room.lua
+	renewCharacterRoomLua string
+	//go:embed lua/delete_character_room.lua
+	deleteCharacterRoomLua string
+
+	claimCharacterRoomScript  = valkey.NewLuaScript(claimCharacterRoomLua)
+	renewCharacterRoomScript  = valkey.NewLuaScript(renewCharacterRoomLua)
+	deleteCharacterRoomScript = valkey.NewLuaScript(deleteCharacterRoomLua)
+)
+
+func mapCharacterScriptError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "casino character room mapping is invalid"):
+		return ErrInvalidRoomMapping
+	case strings.Contains(msg, "casino character already in room"):
+		return ErrAlreadyInRoom
+	default:
+		return err
+	}
+}
 
 func (v *ValkeyRoomRepository) isCharacterAdmittedInLiveRoom(ctx context.Context, roomID, characterID string) (bool, error) {
 	dto, err := v.getRoomDetail(ctx, roomID)
@@ -23,54 +56,45 @@ func (v *ValkeyRoomRepository) isCharacterAdmittedInLiveRoom(ctx context.Context
 	}), nil
 }
 
-func (v *ValkeyRoomRepository) setAdmittedMemberMapping(ctx context.Context, roomID, characterID string) error {
+func (v *ValkeyRoomRepository) checkCharacterAdmissionAvailable(ctx context.Context, roomID, characterID string) (string, error) {
 	currentRoomID, err := v.GetCharacterRoom(ctx, characterID)
-	if err != nil && !errors.Is(err, ErrRoomNotFound) {
-		return err
+	if errors.Is(err, ErrRoomNotFound) {
+		return "", nil
 	}
-	if err == nil && currentRoomID != roomID {
-		live, err := v.isCharacterAdmittedInLiveRoom(ctx, currentRoomID, characterID)
-		if err != nil {
-			return err
-		}
-		if live {
-			return nil
-		}
+	if err != nil {
+		return "", err
 	}
+	if currentRoomID == roomID {
+		return roomID, nil
+	}
+	live, err := v.isCharacterAdmittedInLiveRoom(ctx, currentRoomID, characterID)
+	if err != nil {
+		return "", err
+	}
+	if live {
+		return "", ErrAlreadyInRoom
+	}
+	return currentRoomID, nil
+}
+
+func (v *ValkeyRoomRepository) claimAdmittedMemberMapping(ctx context.Context, roomID, characterID, expectedPrevRoomID string) error {
 	charKey := DefaultCharacterKeyPrefix + characterID
-	charCmd := v.client.B().Set().Key(charKey).Value(roomID).Ex(DefaultLobbyTTL).Build()
-	return v.client.Do(ctx, charCmd).Error()
+	ttlSeconds := strconv.FormatInt(int64(DefaultLobbyTTL/time.Second), 10)
+	err := claimCharacterRoomScript.Exec(ctx, v.client, []string{charKey}, []string{roomID, expectedPrevRoomID, ttlSeconds}).Error()
+	return mapCharacterScriptError(err)
 }
 
 func (v *ValkeyRoomRepository) renewMemberMapping(ctx context.Context, roomID, characterID string) error {
-	currentRoomID, err := v.GetCharacterRoom(ctx, characterID)
-	if errors.Is(err, ErrRoomNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if currentRoomID != roomID {
-		return nil
-	}
 	charKey := DefaultCharacterKeyPrefix + characterID
-	charCmd := v.client.B().Set().Key(charKey).Value(roomID).Ex(DefaultLobbyTTL).Build()
-	return v.client.Do(ctx, charCmd).Error()
+	ttlSeconds := strconv.FormatInt(int64(DefaultLobbyTTL/time.Second), 10)
+	err := renewCharacterRoomScript.Exec(ctx, v.client, []string{charKey}, []string{roomID, ttlSeconds}).Error()
+	return mapCharacterScriptError(err)
 }
 
 func (v *ValkeyRoomRepository) deleteMemberMapping(ctx context.Context, roomID, characterID string) error {
-	currentRoomID, err := v.GetCharacterRoom(ctx, characterID)
-	if errors.Is(err, ErrRoomNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if currentRoomID != roomID {
-		return nil
-	}
 	charKey := DefaultCharacterKeyPrefix + characterID
-	return v.client.Do(ctx, v.client.B().Del().Key(charKey).Build()).Error()
+	err := deleteCharacterRoomScript.Exec(ctx, v.client, []string{charKey}, []string{roomID}).Error()
+	return mapCharacterScriptError(err)
 }
 
 // UpdateRoomDetail replaces room/member state under the command's room lock.

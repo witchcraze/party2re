@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -58,6 +59,11 @@ func (c *publicationValkey) Do(ctx context.Context, cmd valkeygo.Completed) valk
 	args := cmd.Commands()
 	if len(args) > 1 && (args[1] == casino.DefaultRoomKeyPrefix+c.roomID || args[0] == "ZADD" || args[0] == "DEL") {
 		if err := c.fault.hit("valkey/" + args[0]); err != nil {
+			return valkeygo.NewErrorResult(err)
+		}
+	}
+	if len(args) == 5 && (args[0] == "EVAL" || args[0] == "EVALSHA") && strings.HasPrefix(args[3], casino.DefaultCharacterKeyPrefix) {
+		if err := c.fault.hit("valkey/DEL"); err != nil {
 			return valkeygo.NewErrorResult(err)
 		}
 	}

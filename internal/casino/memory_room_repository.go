@@ -29,25 +29,41 @@ func NewMemoryRoomRepository() *MemoryRoomRepository {
 
 func (m *MemoryRoomRepository) isCharacterAdmittedInLiveRoomLocked(roomID, characterID string) bool {
 	r, ok := m.rooms[roomID]
-	if !ok || r.Status == RoomStatusDisbanded || r.UpdatedAt.Before(time.Now().UTC().Add(-DefaultLobbyTTL)) {
+	if !ok || r.Status == RoomStatusDisbanded || (!r.UpdatedAt.IsZero() && r.UpdatedAt.Before(time.Now().UTC().Add(-DefaultLobbyTTL))) {
 		return false
 	}
 	_, admitted := m.members[roomID][characterID]
 	return admitted
 }
 
+func (m *MemoryRoomRepository) checkCharacterAdmissionAvailableLocked(roomID, characterID string) error {
+	existing, ok := m.charRooms[characterID]
+	if !ok {
+		return nil
+	}
+	if strings.TrimSpace(existing) == "" {
+		return ErrInvalidRoomMapping
+	}
+	if existing != roomID && m.isCharacterAdmittedInLiveRoomLocked(existing, characterID) {
+		return ErrAlreadyInRoom
+	}
+	return nil
+}
+
 func (m *MemoryRoomRepository) CreateRoom(_ context.Context, room Room, leader RoomMember) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if err := m.checkCharacterAdmissionAvailableLocked(room.ID, leader.CharacterID); err != nil {
+		return err
+	}
 
 	m.rooms[room.ID] = room
 	if m.members[room.ID] == nil {
 		m.members[room.ID] = make(map[string]RoomMember)
 	}
 	m.members[room.ID][leader.CharacterID] = leader
-	if existing := m.charRooms[leader.CharacterID]; existing == "" || existing == room.ID || !m.isCharacterAdmittedInLiveRoomLocked(existing, leader.CharacterID) {
-		m.charRooms[leader.CharacterID] = room.ID
-	}
+	m.charRooms[leader.CharacterID] = room.ID
 	return nil
 }
 
@@ -154,13 +170,14 @@ func (m *MemoryRoomRepository) AddMember(_ context.Context, member RoomMember) e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.checkCharacterAdmissionAvailableLocked(member.RoomID, member.CharacterID); err != nil {
+		return err
+	}
 	if m.members[member.RoomID] == nil {
 		m.members[member.RoomID] = make(map[string]RoomMember)
 	}
 	m.members[member.RoomID][member.CharacterID] = member
-	if existing := m.charRooms[member.CharacterID]; existing == "" || existing == member.RoomID || !m.isCharacterAdmittedInLiveRoomLocked(existing, member.CharacterID) {
-		m.charRooms[member.CharacterID] = member.RoomID
-	}
+	m.charRooms[member.CharacterID] = member.RoomID
 	return nil
 }
 

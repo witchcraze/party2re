@@ -163,14 +163,19 @@ the lock.
 
 - **Pre-publication failure**: A rejected action or primary payload write rolls
   back SQL wagers, payouts and `CasinoWins` without publishing an accepted turn
-  or invoking `gamePlayedHook`.
+  or invoking `gamePlayedHook`. Room admission (`CreateRoom`, `AddMember`)
+  verifies before publishing the room payload that the character is not already
+  admitted in another live room (`ErrAlreadyInRoom`), and rolls back the roster
+  write if a concurrent cross-room admission wins the atomic single-key mapping
+  claim (`claim_character_room.lua`).
 - **Post-publication secondary sync (`SecondarySyncError` / `ErrSecondarySync`)**:
   Active-index renewal/removal and reverse-mapping synchronization/cleanup
   failures after payload persistence preserve committed coin/win settlement
   while returning the error. Live room mutations (`saveRoomDetail`,
   `UpdateRoom`, `UpdateRoomDetail`, `AddMember`, `UpdateMember`, `RemoveMember`)
-  renew reverse mappings for still-admitted participants and spectators whose
-  mapping still targets that room, without resurrecting absent mappings or
+  atomically renew (`renew_character_room.lua`) or delete
+  (`delete_character_room.lua`) reverse mappings conditioned on the current
+  mapping still matching that room, without resurrecting absent mappings or
   overwriting/deleting a different live room's mapping. Failed active-index sync
   can hide a live payload from lobby discovery until renewal; idle expiry
   rechecks payload activity before deletion.

@@ -25,7 +25,7 @@ func TestProjectionStorageFailures(t *testing.T) {
 			}
 			client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 				args := cmd.Commands()
-				if (stage == "prune" && args[0] == "ZREMRANGEBYSCORE") || (stage == "list" && args[0] == "ZREVRANGE") || (stage == "room" && args[0] == "GET") || (stage == "missing-prune" && args[0] == "ZREM") || (stage == "expiry-index" && args[0] == "ZRANGEBYSCORE") || (stage == "expiry-read" && args[0] == "GET") || (stage == "delete-character" && args[0] == "DEL" && args[1] == casino.DefaultCharacterKeyPrefix+"member") || (stage == "delete-room" && args[0] == "DEL" && args[1] == casino.DefaultRoomKeyPrefix+"room") || (stage == "delete-index" && args[0] == "ZREM") {
+				if (stage == "prune" && args[0] == "ZREMRANGEBYSCORE") || (stage == "list" && args[0] == "ZREVRANGE") || (stage == "room" && args[0] == "GET") || (stage == "missing-prune" && args[0] == "ZREM") || (stage == "expiry-index" && args[0] == "ZRANGEBYSCORE") || (stage == "expiry-read" && args[0] == "GET") || (stage == "delete-character" && (args[0] == "EVAL" || args[0] == "EVALSHA") && len(args) == 5 && args[3] == casino.DefaultCharacterKeyPrefix+"member") || (stage == "delete-room" && args[0] == "DEL" && args[1] == casino.DefaultRoomKeyPrefix+"room") || (stage == "delete-index" && args[0] == "ZREM") {
 					return valkeytest.MakeErrorResult(failure)
 				}
 				switch args[0] {

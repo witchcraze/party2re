@@ -32,10 +32,10 @@ func (c *faultValkeyClient) Do(ctx context.Context, cmd valkeygo.Completed) valk
 	if c.failZadd.Load() && len(cmds) > 0 && cmds[0] == "ZADD" {
 		return valkeygo.NewErrorResult(errors.New("injected active-index ZADD failure"))
 	}
-	if c.failCharDel.Load() && len(cmds) > 1 && cmds[0] == "DEL" && strings.HasPrefix(cmds[1], casino.DefaultCharacterKeyPrefix) {
+	if c.failCharDel.Load() && len(cmds) == 5 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && strings.HasPrefix(cmds[3], casino.DefaultCharacterKeyPrefix) {
 		return valkeygo.NewErrorResult(errors.New("injected character mapping DEL failure"))
 	}
-	if c.failCharSet.Load() && len(cmds) > 1 && cmds[0] == "SET" && strings.HasPrefix(cmds[1], casino.DefaultCharacterKeyPrefix) {
+	if c.failCharSet.Load() && len(cmds) >= 6 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && strings.HasPrefix(cmds[3], casino.DefaultCharacterKeyPrefix) {
 		return valkeygo.NewErrorResult(errors.New("injected character mapping SET failure"))
 	}
 	return c.Client.Do(ctx, cmd)
@@ -47,6 +47,18 @@ func (c *faultValkeyClient) DoMulti(ctx context.Context, multi ...valkeygo.Compl
 		results[i] = c.Do(ctx, cmd)
 	}
 	return results
+}
+
+type hookValkeyClient struct {
+	valkeygo.Client
+	beforeDo func(cmds []string)
+}
+
+func (c *hookValkeyClient) Do(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
+	if c.beforeDo != nil {
+		c.beforeDo(cmd.Commands())
+	}
+	return c.Client.Do(ctx, cmd)
 }
 
 func openIsolatedTestValkey(t *testing.T, dbIndex int) valkeygo.Client {
@@ -633,12 +645,45 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 		t.Fatalf("expected roomB mapping, got %q err=%v", mapped, err)
 	}
 
-	// 3. Stale/cross-room mutations on roomA must never overwrite or delete peerA's live mapping to roomB.
-	if err := repo.AddMember(ctx, casino.RoomMember{RoomID: roomA, CharacterID: peerA, JoinedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}); err != nil {
+	// 3. Admitted member in live roomB cannot create, join, spectate, or be added to another room,
+	// and roomA's roster/mapping remain untouched.
+	if _, err := svc.CreateRoom(ctx, peerA, casino.CreateRoomRequest{
+		Name: "RoomC-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 2, Rate: 10,
+	}); !errors.Is(err, casino.ErrAlreadyInRoom) {
+		t.Fatalf("expected ErrAlreadyInRoom on CreateRoom while admitted in roomB, got %v", err)
+	}
+	if _, err := svc.JoinRoom(ctx, roomA, peerA, "", 0); !errors.Is(err, casino.ErrAlreadyInRoom) {
+		t.Fatalf("expected ErrAlreadyInRoom on JoinRoom(roomA) while admitted in roomB, got %v", err)
+	}
+	if _, err := svc.SpectateRoom(ctx, roomA, peerA, ""); !errors.Is(err, casino.ErrAlreadyInRoom) {
+		t.Fatalf("expected ErrAlreadyInRoom on SpectateRoom(roomA) while admitted in roomB, got %v", err)
+	}
+	if err := repo.AddMember(ctx, casino.RoomMember{RoomID: roomA, CharacterID: peerA, JoinedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}); !errors.Is(err, casino.ErrAlreadyInRoom) {
+		t.Fatalf("expected ErrAlreadyInRoom on repo.AddMember(roomA) while admitted in roomB, got %v", err)
+	}
+	if _, err := repo.GetMember(ctx, roomA, peerA); !errors.Is(err, casino.ErrMemberNotFound) {
+		t.Fatalf("expected peerA not in roomA roster after rejected admission, got err=%v", err)
+	}
+	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomB {
+		t.Fatalf("rejected admission on roomA altered live roomB mapping: %q err=%v", mapped, err)
+	}
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+peerA, peerA); err != nil || view == nil || view.Room.ID != roomB {
+		t.Fatalf("expected GetCharacterRoomView to return roomB after rejected roomA admission, got %+v err=%v", view, err)
+	}
+
+	// Even if roomA has a stale roster snapshot containing peerA, UpdateRoom/RemoveMember/DeleteRoom on roomA
+	// must never overwrite or delete peerA's live mapping to roomB.
+	if err := repo.UpdateRoomDetail(ctx, casino.RoomDetail{
+		Room: *rA,
+		Members: []casino.RoomMember{
+			{RoomID: roomA, CharacterID: leaderA, JoinedAt: rA.CreatedAt, UpdatedAt: rA.UpdatedAt},
+			{RoomID: roomA, CharacterID: peerA, JoinedAt: rA.CreatedAt, UpdatedAt: rA.UpdatedAt},
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomB {
-		t.Fatalf("AddMember on roomA overwrote live roomB mapping: %q err=%v", mapped, err)
+		t.Fatalf("UpdateRoomDetail on roomA overwrote live roomB mapping: %q err=%v", mapped, err)
 	}
 	if err := repo.UpdateRoom(ctx, *rA); err != nil {
 		t.Fatal(err)
@@ -783,4 +828,294 @@ func TestValkeyRoomRenewal_ConcurrentMembershipAndRenewalSafety(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing.T) {
+	rawClient := openIsolatedTestValkey(t, 0)
+	defer rawClient.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	prefix := "samechar1091-" + id.New()[:8]
+	leaderA := prefix + "-leaderA"
+	leaderB := prefix + "-leaderB"
+	mover := prefix + "-mover"
+	allActors := []string{leaderA, leaderB, mover}
+
+	chars := &inMemoryCharRepo{chars: map[string]corecharacter.Character{}}
+	casinoRepo := newMockPrizeCasinoRepo()
+	for _, actor := range allActors {
+		chars.chars[actor] = corecharacter.Character{ID: actor, Name: actor, PlayerID: "owner-" + actor}
+		casinoRepo.accounts[actor] = casino.Account{CharacterID: actor, Coins: 5000}
+	}
+
+	repo, err := casino.NewValkeyRoomRepository(rawClient, casino.WithValkeyCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	roomADetail, err := svc.CreateRoom(ctx, leaderA, casino.CreateRoomRequest{
+		Name: "SameA-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomA := roomADetail.Room.ID
+
+	roomBDetail, err := svc.CreateRoom(ctx, leaderB, casino.CreateRoomRequest{
+		Name: "SameB-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomB := roomBDetail.Room.ID
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomA, roomB}, allActors)
+
+	assertRosterAndMappingInvariant := func() error {
+		_, errA := repo.GetMember(ctx, roomA, mover)
+		inA := errA == nil
+		if errA != nil && !errors.Is(errA, casino.ErrMemberNotFound) {
+			return errA
+		}
+		_, errB := repo.GetMember(ctx, roomB, mover)
+		inB := errB == nil
+		if errB != nil && !errors.Is(errB, casino.ErrMemberNotFound) {
+			return errB
+		}
+		if inA && inB {
+			return fmt.Errorf("invariant violated: %s admitted in both roomA and roomB rosters", mover)
+		}
+		mapped, mapErr := repo.GetCharacterRoom(ctx, mover)
+		view, viewErr := svc.GetCharacterRoomView(ctx, "owner-"+mover, mover)
+		if viewErr != nil {
+			return viewErr
+		}
+		switch {
+		case inA:
+			if mapErr != nil || mapped != roomA {
+				return fmt.Errorf("in roomA roster but mapping=%q err=%v", mapped, mapErr)
+			}
+			if view == nil || view.Room.ID != roomA {
+				return fmt.Errorf("in roomA roster but view=%+v", view)
+			}
+		case inB:
+			if mapErr != nil || mapped != roomB {
+				return fmt.Errorf("in roomB roster but mapping=%q err=%v", mapped, mapErr)
+			}
+			if view == nil || view.Room.ID != roomB {
+				return fmt.Errorf("in roomB roster but view=%+v", view)
+			}
+		default:
+			if !errors.Is(mapErr, casino.ErrRoomNotFound) {
+				return fmt.Errorf("in neither roster but mapping=%q err=%v", mapped, mapErr)
+			}
+			if view != nil {
+				return fmt.Errorf("in neither roster but view=%+v", view)
+			}
+		}
+		return nil
+	}
+
+	// Deterministic Interleaving A: Both JoinRoom(roomA) and JoinRoom(roomB) observe GET char == nil
+	// before either writes its room payload; atomic claim_character_room.lua serializes the winner
+	// and rolls back the loser's roster.
+	var barrierPreClaim atomic.Bool
+	preClaimArrived := make(chan struct{}, 2)
+	preClaimRelease := make(chan struct{})
+	var pauseDeleteOnRoomA atomic.Bool
+	deletePaused := make(chan struct{})
+	deleteRelease := make(chan struct{})
+
+	hookClient := &hookValkeyClient{
+		Client: rawClient,
+		beforeDo: func(cmds []string) {
+			if barrierPreClaim.Load() && len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+mover {
+				preClaimArrived <- struct{}{}
+				<-preClaimRelease
+			}
+			if pauseDeleteOnRoomA.Load() && len(cmds) == 5 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+mover && cmds[4] == roomA {
+				if pauseDeleteOnRoomA.CompareAndSwap(true, false) {
+					close(deletePaused)
+					<-deleteRelease
+				}
+			}
+		},
+	}
+	hookRepo, err := casino.NewValkeyRoomRepository(hookClient, casino.WithValkeyCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hookSvc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(hookRepo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	barrierPreClaim.Store(true)
+	go func() {
+		<-preClaimArrived
+		<-preClaimArrived
+		barrierPreClaim.Store(false)
+		close(preClaimRelease)
+	}()
+	raceErrs := testutil.RunRace(
+		func() error {
+			_, err := hookSvc.JoinRoom(ctx, roomA, mover, "", 0)
+			return err
+		},
+		func() error {
+			_, err := hookSvc.JoinRoom(ctx, roomB, mover, "", 0)
+			return err
+		},
+	)
+	wins := 0
+	for _, rErr := range raceErrs {
+		if rErr == nil {
+			wins++
+		} else if !errors.Is(rErr, casino.ErrAlreadyInRoom) {
+			t.Fatalf("unexpected error in deterministic pre-claim CAS race: %v", rErr)
+		}
+	}
+	if wins != 1 {
+		t.Fatalf("expected 1 winner in deterministic pre-claim CAS race, got %d (errs=%v)", wins, raceErrs)
+	}
+	if err := assertRosterAndMappingInvariant(); err != nil {
+		t.Fatalf("after deterministic pre-claim CAS race: %v", err)
+	}
+	// Reset mover to roomA for Interleaving B.
+	if mapped, _ := repo.GetCharacterRoom(ctx, mover); mapped == roomB {
+		if err := svc.LeaveRoom(ctx, roomB, mover); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.JoinRoom(ctx, roomA, mover, "", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Deterministic Interleaving B: LeaveRoom(roomA, mover) updates roomA payload, then pauses before
+	// delete_character_room.lua while mover joins roomB; roomA's delayed delete must not remove roomB's mapping.
+	pauseDeleteOnRoomA.Store(true)
+	raceErrs = testutil.RunRace(
+		func() error {
+			return hookSvc.LeaveRoom(ctx, roomA, mover)
+		},
+		func() error {
+			<-deletePaused
+			_, err := hookSvc.JoinRoom(ctx, roomB, mover, "", 0)
+			close(deleteRelease)
+			return err
+		},
+	)
+	for idx, rErr := range raceErrs {
+		if rErr != nil {
+			t.Fatalf("deterministic leave-vs-join race goroutine %d error: %v", idx, rErr)
+		}
+	}
+	if mapped, err := repo.GetCharacterRoom(ctx, mover); err != nil || mapped != roomB {
+		t.Fatalf("delayed roomA delete corrupted roomB mapping: got %q err=%v", mapped, err)
+	}
+	if err := assertRosterAndMappingInvariant(); err != nil {
+		t.Fatalf("after deterministic leave-vs-join race: %v", err)
+	}
+	if err := svc.LeaveRoom(ctx, roomB, mover); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := range 10 {
+		// 1. Concurrent join race on the same character into Room A vs Room B while both rooms renew.
+		errs := testutil.RunRace(
+			func() error {
+				_, err := svc.JoinRoom(ctx, roomA, mover, "", 0)
+				return err
+			},
+			func() error {
+				_, err := svc.JoinRoom(ctx, roomB, mover, "", 0)
+				return err
+			},
+			func() error {
+				return repo.UpdateMember(ctx, casino.RoomMember{RoomID: roomA, CharacterID: leaderA, Action: "待機中", UpdatedAt: time.Now().UTC()})
+			},
+			func() error {
+				return repo.UpdateMember(ctx, casino.RoomMember{RoomID: roomB, CharacterID: leaderB, Action: "待機中", UpdatedAt: time.Now().UTC()})
+			},
+		)
+		joinSuccesses := 0
+		for idx, rErr := range errs[:2] {
+			if rErr == nil {
+				joinSuccesses++
+			} else if !errors.Is(rErr, casino.ErrAlreadyInRoom) {
+				t.Fatalf("iter %d goroutine %d unexpected join error: %v", i, idx, rErr)
+			}
+		}
+		for idx, rErr := range errs[2:] {
+			if rErr != nil {
+				t.Fatalf("iter %d renewal %d error: %v", i, idx, rErr)
+			}
+		}
+		if joinSuccesses != 1 {
+			t.Fatalf("iter %d expected exactly 1 join success across roomA/roomB, got %d (errs=%v)", i, joinSuccesses, errs[:2])
+		}
+		if err := assertRosterAndMappingInvariant(); err != nil {
+			t.Fatalf("iter %d after concurrent join race: %v", i, err)
+		}
+
+		currentRoom, err := repo.GetCharacterRoom(ctx, mover)
+		if err != nil {
+			t.Fatalf("iter %d GetCharacterRoom: %v", i, err)
+		}
+		otherRoom := roomB
+		if currentRoom == roomB {
+			otherRoom = roomA
+		}
+
+		// 2. Leave currentRoom and immediately join otherRoom while concurrent renewals run on both rooms.
+		errs = testutil.RunRace(
+			func() error {
+				if err := svc.LeaveRoom(ctx, currentRoom, mover); err != nil {
+					return err
+				}
+				_, err := svc.JoinRoom(ctx, otherRoom, mover, "", 0)
+				return err
+			},
+			func() error {
+				return repo.UpdateMember(ctx, casino.RoomMember{RoomID: roomA, CharacterID: leaderA, Action: "待機中", UpdatedAt: time.Now().UTC()})
+			},
+			func() error {
+				return repo.UpdateMember(ctx, casino.RoomMember{RoomID: roomB, CharacterID: leaderB, Action: "待機中", UpdatedAt: time.Now().UTC()})
+			},
+		)
+		for idx, rErr := range errs {
+			if rErr != nil {
+				t.Fatalf("iter %d leave+join+renew goroutine %d error: %v", i, idx, rErr)
+			}
+		}
+		if err := assertRosterAndMappingInvariant(); err != nil {
+			t.Fatalf("iter %d after leave+join race: %v", i, err)
+		}
+
+		// 3. Leave otherRoom while concurrent renewals run on both rooms; mapping must not be resurrected.
+		errs = testutil.RunRace(
+			func() error {
+				return svc.LeaveRoom(ctx, otherRoom, mover)
+			},
+			func() error {
+				return repo.UpdateMember(ctx, casino.RoomMember{RoomID: roomA, CharacterID: leaderA, Action: "待機中", UpdatedAt: time.Now().UTC()})
+			},
+			func() error {
+				return repo.UpdateMember(ctx, casino.RoomMember{RoomID: roomB, CharacterID: leaderB, Action: "待機中", UpdatedAt: time.Now().UTC()})
+			},
+		)
+		for idx, rErr := range errs {
+			if rErr != nil {
+				t.Fatalf("iter %d final leave+renew goroutine %d error: %v", i, idx, rErr)
+			}
+		}
+		if err := assertRosterAndMappingInvariant(); err != nil {
+			t.Fatalf("iter %d after final leave race: %v", i, err)
+		}
+	}
 }
