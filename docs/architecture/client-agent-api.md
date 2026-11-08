@@ -437,10 +437,10 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` through `scene_enter` and public Home targets through `scene_select` → Home.GetHomeView. Query authenticates the actor; unavailable targets remain explicit. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
 | Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh derives owned activity/recovery before ordinary selection. Expired sleep requires explicit Wake; conflicting activities remain explicit. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
-| `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Facility/social dialogue and presence reconciliation remains #947–#949; existing REST readers/operations are retained. |
+| `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Planned [place-log contract](place-log.md): shared `npc_talk`/`npc_inspect` (#1940), speech/whisper (#1942); non-NPC player inspection remains #949. Existing REST readers/operations are retained until replaced. |
 | `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. |
 | `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Stored photo acquisition/Contest reconciliation remains #949; client rendering belongs to #140. Separator superseded by structured actions. |
-| Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes; facility reconciliation belongs to #947–#949. No room join/leave, cooldown, recovery or settlement is introduced here. |
+| Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes. Place logs, the action wait and per-place members follow the planned [place-log contract](place-log.md). No room join/leave, recovery or settlement is introduced here. |
 
 The full scoped Home action/call-path reconciliation and retained REST ownership
 are maintained in [Home design](../design/home.md#observation-visibility-and-navigation).
