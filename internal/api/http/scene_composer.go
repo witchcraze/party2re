@@ -19,6 +19,8 @@ type sceneAdapter struct {
 	title      string
 	commands   []string
 	read       func(context.Context, playercontext.Result) (any, error)
+	// placeLog marks facilities with a shared legacy log (docs/architecture/place-log.md).
+	placeLog bool
 }
 
 type SceneSupport struct {
@@ -118,6 +120,7 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			h.sceneAdapters[definition.ID] = adapter
 			continue
 		}
+		adapter.placeLog = placeLogFacilities[definition.ID]
 		if adapter.read == nil {
 			adapter.read = func(_ context.Context, _ playercontext.Result) (any, error) {
 				return SelectionSceneData{Parent: definition.Parent}, nil
@@ -210,6 +213,12 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			scene.Dialogue = "操作を選んでください。"
 		}
 		scene.Data = data
+		if adapter.placeLog {
+			var err error
+			if scene.PlaceLog, err = h.readPlaceLog(ctx, n.Destination, result.Snapshot.Character.ID); err != nil {
+				return err
+			}
+		}
 		switch data := data.(type) {
 		case BankSceneData, BlacksmithSceneData, ChapelSceneData, GemStoreSceneData:
 			scene.Support.Observation = "details"

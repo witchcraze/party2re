@@ -22,6 +22,7 @@ import (
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 )
@@ -53,6 +54,7 @@ func wireApp(
 	soc.home.SetCompanionPhraseLimit(cfg.Home.CompanionPhraseLimit)
 	soc.home.SetLetterLimits(cfg.Home.LetterLogLimit, cfg.Home.LetterMaxLength)
 	soc.park.SetLimits(cfg.Park.PostLogLimit, cfg.Park.PostMaxLength)
+	soc.placeLog = placelog.New(valkeyClient, cfg.PlaceLog)
 	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
 	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, referrals.DeliverReferral, cfg.Player.MaxPlayers, logger); err != nil {
 		return nil, err
@@ -313,6 +315,9 @@ func newHTTPHandler(
 			return nil, fmt.Errorf("invalid trusted proxies: %w", err)
 		}
 		opts = append(opts, http.WithTrustedProxies(prefixes...))
+	}
+	if soc.placeLog != nil {
+		opts = append(opts, http.WithPlaceLog(soc.placeLog))
 	}
 	if soc.schedRepo != nil {
 		opts = append(opts, http.WithPlayerContext(newPlayerContext(core, soc, econ, cmbt, misc)))

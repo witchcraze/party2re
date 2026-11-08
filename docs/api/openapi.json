@@ -12234,6 +12234,45 @@
         ],
         "type": "object"
       },
+      "PlaceLogEntry": {
+        "additionalProperties": false,
+        "description": "One rendered place-log row. Name and colour are snapshots at write time; character IDs are never exposed.",
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "private": {
+            "description": "A whisper the viewer sent or received.",
+            "type": "boolean"
+          },
+          "speaker_kind": {
+            "enum": [
+              "character",
+              "npc"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "occurred_at",
+          "speaker_kind",
+          "name",
+          "color",
+          "text",
+          "private"
+        ],
+        "type": "object"
+      },
       "PlantationFertilizeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -14670,6 +14709,13 @@
           "opponent": {
             "$ref": "#/components/schemas/SceneOpponent"
           },
+          "place_log": {
+            "description": "Viewer-filtered shared log of the current facility, newest first (docs/architecture/place-log.md). Empty outside facilities with a log; a required read failure fails the observation.",
+            "items": {
+              "$ref": "#/components/schemas/PlaceLogEntry"
+            },
+            "type": "array"
+          },
           "speaker": {
             "$ref": "#/components/schemas/SceneSpeaker"
           },
@@ -14692,7 +14738,8 @@
           "dialogue",
           "kind",
           "data",
-          "support"
+          "support",
+          "place_log"
         ],
         "type": "object"
       },

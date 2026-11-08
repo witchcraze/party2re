@@ -21,6 +21,7 @@ import (
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/park"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/ratelimit"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -84,6 +85,7 @@ type socServices struct {
 	limiter      http.RateLimiter
 	worker       *scheduling.Worker
 	timer        timer.Service
+	placeLog     *placelog.Log
 }
 
 func newSocServices(

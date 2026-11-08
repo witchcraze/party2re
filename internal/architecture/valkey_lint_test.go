@@ -31,6 +31,7 @@ var validProdNamespaces = []string{
 	"party2:gvg:",
 	"party2:eventplaza:",
 	"party2:casino:",
+	"party2:placelog:",
 }
 
 // Required keys documented in SSOT docs/architecture/valkey-keyspace.md
@@ -44,6 +45,7 @@ var requiredDocumentedKeys = []string{
 	"party2:scheduled:lock:",
 	"party2:scheduled:actor:",
 	"party2:ratelimit:",
+	"party2:placelog:",
 	"party2:ranking:snapshot:",
 	"party2:ranking:refresh",
 	"party2:party:lobby:",
