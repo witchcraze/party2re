@@ -52,28 +52,7 @@ and enriches its facts with profile avatar and job catalog presentation. Its
 `PlayerContextResponse` DTO and reusable OpenAPI schema are also the required
 context contract for the command gateway.
 
-The four top-level fields are:
-
-- `character`: ID/name/job ID and name, level, HP/MP maxima and current values,
-  wallet gold, fatigue, death and sleeping flags, and icon fields. `icon_url`
-  uses the existing profile AvatarURL (the imgur avatar URL), or an empty string.
-  The asset ID remains empty until production mappings are specified.
-- `scene`: registered `kind`, selected `location_id`, optional `subject`, typed
-  `data`, connection/eligibility `support`, and HTTP-owned presentation fields.
-  Town uses a self-authored SVG placeholder; Home uses typed public/owned details
-  and mailbox pages. Other initial facility/subject scenes contain controls only.
-  Actual activities use a typed owned-facts projection; conflicting activities
-  use an explicit recovery scene. Production art remains separate work.
-- `ongoing_actions`: every unfinished scheduled action, plus an observed
-  sleep/wake recovery timer when present. Empty observations return `[]`.
-  Entries contain `id`, `action_type`, `label`, `execute_at`, rounded-up
-  nonnegative `remaining_seconds`, and `is_ready`. Scheduled deadlines are
-  ordered ascending, with ID breaking ties. Sleep deadlines are estimates
-  derived from the remaining lock duration, not persisted queue records.
-- `available_actions`: connected, scene-appropriate eligible commands in catalog
-  order, with `action`, `label`, `category`, `style`, `required_params` (always an
-  array), strict `params_schema` and optional explicit `params_template`.
-  Adventure controls use `primary`; other controls use `secondary`.
+The four top-level fields are `character` (owned snapshot), `scene` (registered kind, selected location, optional subject, typed data, connection/eligibility support and HTTP-owned presentation), `ongoing_actions` (every unfinished scheduled action plus an observed sleep/wake recovery timer; `is_ready` means the deadline arrived, not that work settled) and `available_actions` (connected, scene-appropriate eligible commands with strict `params_schema` and optional `params_template`). Collections are never null. Field shapes are owned by [OpenAPI](../api/openapi.json).
 
 ### Invariants
 
@@ -274,71 +253,13 @@ return the service next token without inventing a total or a cross-page snapshot
 Mixed/unknown fields and null values are rejected. All other pageable lists are
 offset-only. Back never accepts a caller-supplied parent.
 
-GET and command refresh share the HTTP selected-scene composer, replacing interim
-`scene.navigation` metadata with `town`, `facility`, `subject`, or
-`selection_unavailable` variants. Home facility/subject data contains a whitelisted `view`, parent and own-only
-mailbox destinations; its mailbox scenes contain bounded letters and next-page
-inputs. The four ordinary Shops expose one ID-ordered, offset-paged `items`
-collection, or one selected `product`, with exact GetCatalog prices/slot,
-explicit select/purchase inputs, NPC inspect facts and service quantity bounds.
-Destinations with a registered detail reader in the selected-scene composer
-(`internal/api/http/scene_composer.go`) report `support.observation:details`. Chapel reads
-the owned actor's blessing/status and prayer options through the existing service;
-each option's `type` supplies the explicit `chapel_pray` blessing input. Required
-read failures fail the whole observation. Its free command preserves known
-outcomes across refresh failure, with GET-only recovery; observation never prays
-or resets the quota. See the [Chapel owner](../design/chapel.md) for lifecycle
-and HTTP boundaries. The former Chapel status GET and prayer POST are retired;
-select Chapel through `scene_enter`, read character context and execute
-`chapel_pray`. Its result retains the blessing and HTTP-owned confirmation message.
-Bank facility data
-contains `parent` and the owned `GetState` facts: `character_id`, wallet `money`,
-int64 `deposit` and `max_deposit`, `npc_name` and the complete `dialogues` array.
-The reader passes the incoming context and owned actor to the existing Bank
-service. It does not invoke random NPC talk or change selection or savings.
-Required Bank read failures fail the whole observation; missing configuration
-returns 501. Actual activity overrides saved Bank selection before this reader
-runs. Deposit/withdraw refresh uses this same projection, with known outcomes
-preserved if the read fails and GET-only recovery after the source recovers.
-Bank talk/inspect use the shared `npc_talk`/`npc_inspect` commands. The old Bank
-state GET is retired: enter Bank with `scene_enter`, then GET character context.
-GET never changes selection; actual activity can override the Bank scene.
+GET and command refresh share the HTTP selected-scene composer, which produces `town`, `facility`, `subject` or `selection_unavailable` variants. Each facility scene projects only its owner's facts, with field shapes in OpenAPI and rules in the facility's design document ([Home](../design/home.md#observation-visibility-and-navigation), [Shops](../design/shops.md#10-selected-shop-observation-and-migration-boundary), [Bank](../design/bank.md#observation-and-retained-routes), [Chapel](../design/chapel.md), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration)). Facility rules shared by every scene, stated once here:
 
-Depot facility data reports `support.observation:details` with typed
-`DepotSceneData`: `parent:town`, owned `character_id`, dynamic `capacity`,
-purchased expansion count `ex_depot`, nullable `next_expansion_cost` in gold,
-total occupied slots `item_count`,
-non-null offset-paged `items` and existing page/next inputs. Rows whitelist
-instance `id`, `definition_id`, `quantity` and `enhancement_level`; occupied
-slots count instances, not their summed quantities. The adapter preserves
-`GetDepot` persisted instance order (ID breaks stored-position ties), including
-explicit sorts and subsequent appends. Transport adds no sort. No cross-page snapshot
-is promised. Required character/depot read errors fail the whole observation;
-missing depots yield an empty in-memory projection with dynamic capacity and
-no save. Missing configuration returns 501. Actual activities/conflicts skip
-ordinary Depot reads. Successful/rejected navigation survives failed enrichment
-and recovers through GET without another selection write. GET never creates,
-sorts or saves storage, moves items, records collection or schedules work.
-The quote uses the public expansion price reader and is null at the purchased
-expansion cap. It grants no reservation: execution charges the current tier
-inside the existing service transaction. Clients explicitly enter Depot and
-read GET context for status; connected mutations require explicit Gateway
-intent and retain existing service results. The
-[Depot design](../design/depot.md#gateway-observation-and-retained-operations)
-owns command inputs, verified REST retirements and remaining send-money and
-legacy-effect gaps.
-
-SecretShop facility/subject data reports `support.observation:details` with a
-typed `SecretShopCatalogSceneData` or `SecretShopProductSceneData`. Both contain
-`parent`, `title`, `npc_name`, `is_eligible:true` and quantity bounds 1..99. The
-catalog uses ID-ordered offset pages with non-null `items`; product facts come
-from `GetShopStatus` after required HelperQuest filtering. Each product supplies
-explicit select/purchase IDs. Selected products template `secretshop_purchase`'s
-`item_id`, while `quantity` remains required and editable. A removed/filtered
-product is unavailable; required source errors fail the whole observation.
-GET and refresh invoke no Talk/Inspect/PuffPuff action or purchase. Actual activity
-overrides selection before SecretShop reads. Known purchase/navigation outcomes
-survive a failed scene refresh, with GET-only recovery after the source recovers.
+- Required reads fail the whole observation; missing configuration returns 501. A missing optional store yields an empty in-memory view that GET never persists.
+- GET and refresh never invoke NPC talk/inspect, purchases, deliveries, collection writes, scheduling or other mutations, and never renew selection.
+- Actual activity overrides ordinary selection before any facility read.
+- Known command and navigation outcomes survive a failed refresh and recover through GET only, without another selection write.
+- Offset pages keep the order each feature defines (its design document owns the order and tie-breaker) and promise no cross-page snapshot. A displayed quote or catalog entry is not a reservation or an affordability guarantee.
 
 Town's primary collection is `data.destinations`, ordered by destination ID,
 with explicit `enter_params`, observation support and offset page/next inputs.
@@ -374,47 +295,11 @@ Dungeon/Challenge discovery uses the consented
 An enrolled follower observes `role:member`;
 membership never authorizes executing the controlling actor's commands.
 
-Dungeon activity details use one owned expedition snapshot for visible map,
-floor, remaining turns, revision and legal cardinal directions. Scouting and
-goggles belong only to the viewing actor; roster inventories, undiscovered
-events and provisional rewards stay private. Missing required run, reward,
-member-reference or map-enrichment reads fail the observation. An absent or
-changed run/revision between activity and detail reads also fails, so stale
-continuation eligibility cannot be combined with a replacement run.
-Exploring leaders receive movement candidates only without an encounter and
-with turns remaining; saved enemies instead permit Fight and Escape. Terminal
-buffers expose their frozen outcome, a null map, and Fight/Escape settlement
-retry candidates. Followers receive the actor-visible map without leader
-controls. Generic town-entry and unfinished-work gates do not reject these
-verified continuations; conflicts retain only recovery/escape choices.
-These Dungeon candidates remain unconnected in the Gateway. The replaced
-standalone map GET is retired; catalog listing and all mutation REST routes
-remain available. GET/refresh never advances, escapes or settles the expedition.
-
-The [Challenge individual-exit boundary](transient-run-state.md#challenge-participant-exit-target)
-uses current roster/leadership and durable pending-publication facts.
-`challenge_retire` is scoped to the authenticated actor with explicit `session_id` and
-`expected_revision`; it is a continuation/recovery operation rather than town
-entry. Every remaining participant may leave; only the last departure ends the
-run. Mutation receipts remain actor-owned after departure. GET observes pending
-recovery and stored outcomes without publishing, settling or renewing lifetime.
-The domain port and retained REST advance require an observed revision. Owned
-REST GET routes expose active activity and command receipts; recovery observations
-suppress advance candidates. The initial advance remains leader-only; subsequent
-rounds accept remaining participants. Context supplies the run ID and observed revision
-for each participant's exit control. The result retains the actor-owned receipt and
-`recovery_pending`: a committed settlement remains successful even if publication
-is pending. A known result survives context refresh failure. Clients observe the
-active run, receipt and context by GET without automatically replaying POST; an
-explicit identical retry delegates to the domain receipt/recovery boundary even
-after departure. Current OpenAPI owns executable adapters; operational REST reads
-remain until replaced.
+Run activity details (Dungeon expeditions, Challenge runs) come from one owned snapshot per observation; an absent or changed run/revision between the activity and detail reads fails the observation rather than mixing facts. Private event, reward and member data stay private, and followers never receive leader controls. Projections and continuation rules are owned by the [Dungeon design](../design/dungeon.md#native-map-contract), the [Challenge exit boundary](transient-run-state.md#challenge-participant-exit-target) and the run-state architecture. GET never advances, escapes, settles or publishes a run.
 
 Continuation eligibility comes from actual membership, role and phase, instead
 of entry's town/cooldown/HP/fatigue/currency gates. Exact readiness, team setup,
-prices and parameters remain service checks. Casino participants that have
-already acted cannot act again in Indian/Highlow; Doppel retains its existing
-service behavior. Spectators receive leave only. `support.actions.mode` marks
+prices and parameters remain service checks. Spectators receive leave only. `support.actions.mode` marks
 continuation/recovery controls with `entry_eligible:false`; only eligible controls
 are listed, and `connected` still distinguishes implemented execution.
 Unconnected continuation IDs have strict Gateway schemas and remain 501 until
@@ -454,49 +339,7 @@ maps every registered Shop action and its read/mutation branches, retained route
 and deferred differences. Shop observations do not connect purchase, sale, batch,
 secret discovery, dialogue or synthesis mutations.
 
-Subject selection and paging are the approved typed Gateway controls, not claims
-of new gameplay or formula parity. No legacy source or assets are reused.
-
-```json
-{"action":"scene_enter","params":{"destination":"shop_weapon"}}
-```
-
-```json
-{"action":"scene_select","params":{"target_kind":"item","target_id":"weapon-01"}}
-```
-
-Retain the four top-level observation slots and non-null collection arrays.
-Extend `scene` with a registered kind, selected subject and one typed payload;
-list, detail, room and run variants have their own schemas. Include only the
-selected facility's information, alongside the shared actor/recovery facts.
-Presentation fields remain HTTP-owned; domain services supply structured facts.
-
-For example, the selected-product response has the following `scene`
-fragment, alongside the existing character and the two non-null action arrays.
-The selected ID is a catalog ID, not an inventory instance or authorization:
-
-```json
-{
-  "location_id": "shop_weapon",
-  "kind": "subject",
-  "subject": {"target_kind": "item", "target_id": "weapon-01"},
-  "data": {
-    "product": {
-      "id": "weapon-01",
-      "purchase_params": {"item_definition_id": "weapon-01"}
-    },
-    "quantity": {"minimum": 1, "maximum": 9999}
-  }
-}
-```
-
-The fragment omits other required fields; [OpenAPI](../api/openapi.json) owns the
-complete ShopCatalogSceneData/ShopProductSceneData schemas. Catalog membership
-means current sale eligibility, without inventing a wallet/capacity guarantee.
-GET and refresh never call purchase or random NPC talk. Common presentation
-fields retain their existing contract. A required catalog/helper/inspect/price
-read failure fails the whole observation; a disappeared product is explicit and
-does not rewrite selection.
+Subject selection and paging are the approved typed Gateway controls, not claims of new gameplay or formula parity. A selected ID (for example a catalog product) is an identifier, not an inventory instance or authorization; a disappeared subject is explicit and does not rewrite selection.
 
 `available_actions` narrows to applicable facility operations, selection controls,
 continuations and recovery choices. Static catalog membership alone does not
@@ -544,21 +387,7 @@ state. Casino lobby summaries exclude hidden cards/marks/actions; member,
 spectator and nonparticipant detail follows verified game-specific visibility.
 Selecting a room cannot bypass password or spectator admission.
 
-Casino provides `ListRooms` lobby summaries and `GetRoomView` for owned admitted
-participants/spectators. Its detail adapter verifies the session's player and
-character ownership; the `character_id` query selects an owned character rather
-than supplying a trusted viewer identity. Anonymous detail is 401 and nonmember
-detail is 403. Projections whitelist fields and follow the
-[game-specific visibility contract](../design/casino.md#observation-and-visibility).
-The lobby adapter presents offset pages within the existing public window of
-at most 100 rooms, ordered by ID, with explicit selection and next-page params.
-Selected nonmember rooms expose lobby summaries only. Actual admitted activity
-adds masked room/member facts, the actor's coins and role/phase game choices;
-conflicts preserve these facts while suppressing start/kick/play. Required read
-errors or changed admission/phase/turn eligibility fail the whole observation
-and use the shared GET-only refresh recovery contract. GET does not renew
-navigation or room lifetime; lobby reads retain Casino-owned idle expiry with
-propagated errors. No operational Casino route is retired or mutation connected.
+Room detail requires an owned character with actual participant or spectator admission; selection never admits. Lobby, masking and continuation rules are owned by the [Casino design](../design/casino.md#observation-and-visibility).
 
 Select one primary pageable collection per scene. Reuse limit 20 by default and
 maximum 100, with keyset cursors where the owning service supports them and
@@ -762,50 +591,7 @@ Domain services still validate exact amounts, currencies,
 items and state. Adapters call services directly and reuse HTTP result composition;
 they do not invoke REST handlers through internal HTTP requests or copy game rules.
 
-`depot_expand` is explicit purchase intent for one expansion of the owned actor's
-storage. It accepts no price, count, target or actor fields and calls the existing
-`Expand` service once with the request context. Inspect the selected Depot quote
-before requesting it. Affordability and the purchased expansion cap remain service
-checks, separate from catalog entry eligibility; a zero wallet or a null quote
-does not authorize bypassing them. Known failures use `DEPOT_INSUFFICIENT_FUNDS`,
-`DEPOT_MAX_EXPANDED`, `DEPOT_INVALID_CHARACTER_ID` or `CHARACTER_NOT_FOUND` with
-their explicit 4xx statuses. Unknown execution errors retain the common sanitized
-500 and no replay guarantee. Successful results reuse the existing Depot response
-(character, capacity, expansion count, occupied slots and item ID/definition/quantity);
-enhancement facts remain in the context projection. Shared guards and known
-outcome/GET-only refresh recovery apply unchanged.
-
-`depot_sell` requires one non-null string `item_id`; `depot_sell_batch` requires
-`item_ids`, an array of non-null strings. These are owned instance IDs from Depot
-observation. Unknown fields and actor/price/quantity overrides fail typed decoding;
-empty strings/arrays, duplicate IDs and absent targets remain service validations.
-Discovery exposes the strict schemas with empty templates: callers explicitly
-choose targets, including for a batch; observing a page never selects or sells it.
-The adapters call `SellItem` / `SellItems` once and return the existing
-`{depot,gold_earned}` result. Catalog reads, exact base half-price, stack removal,
-safe arithmetic and wallet saturation remain the [Depot service contract](../design/depot.md#3-depot-item-sales-うる--まとめてうる).
-
-Known sale errors map to `DEPOT_INVALID_CHARACTER_ID`,
-`DEPOT_INVALID_ITEM_INSTANCE_ID`, `DEPOT_EMPTY_ITEM_LIST`, `DEPOT_INVALID_AMOUNT`
-or `DEPOT_INVALID_QUANTITY` (400); missing owned targets/storage or character use
-`DEPOT_ITEM_NOT_FOUND`, `DEPOT_NOT_FOUND` or `CHARACTER_NOT_FOUND` (404).
-Provider/catalog/persistence/cancellation/overflow failures keep the shared
-sanitized `EXECUTION_FAILED` 500 without context or a replay guarantee. Known
-success/rejection survives observation refresh failure and recovers via GET.
-The former sale REST operations are retired; their shared result composition
-remains independent of those routes.
-
-`depot_sort` accepts omitted params or an empty object, with no actor, item
-selection or ordering overrides. It invokes `SortItems` once for the owned
-eligible actor and returns the existing Depot response (IDs, definitions,
-quantities, capacity and expansion count). Enhancement remains in the refreshed
-context projection and persisted state.
-Shared guards, sanitized unknown execution errors and known outcome/GET-only
-refresh recovery apply. Persistence preserves the feature's explicit order, whose
-[stored kind/number comparator](../design/depot.md#4-depot-sorting-せいとん) is
-feature-owned; an item whose catalog key cannot be resolved fails the command as an
-unknown execution error. The former sort REST route returns 404; clients use the
-Gateway command after explicit Depot selection.
+Feature commands send explicit targets: instance IDs from the observation, recipients and quantities are chosen by the caller, and observation never selects or executes them. Feature-specific inputs, results and known rejection codes are owned by OpenAPI and the feature design ([Depot](../design/depot.md#gateway-observation-and-retained-operations)).
 
 ### Command outcome and context refresh
 
@@ -816,38 +602,19 @@ read after execution, not part of the mutation transaction. Recheck ownership
 before returning context; failed reads, enrichment or ownership checks never
 return partial observations.
 
-The HTTP-owned registration seam `withActionCommand` binds a catalog ID to a
-typed parameter struct, direct service invocation and explicit 4xx error mapper.
-It is configured once during Handler construction, rejects unknown/duplicate
-registrations, and treats a nil execution function as an unconfigured dependency.
-Parameter decoding completes before state reads and execution. Only the mapped
-4xx errors are known rejections; all other execution errors use `EXECUTION_FAILED`.
-Both GET and command refresh composition reject ownership changes observed while
-reading profile enrichment.
+Only explicitly mapped 4xx errors are known rejections; every other execution error is `EXECUTION_FAILED`. Both GET and command refresh reject ownership changes observed during enrichment.
 
-### Bank command contract
+### Feature command contracts
 
-Bank amounts, wallet limits and validation belong to [Bank design](../design/bank.md).
-`bank_deposit` / `bank_withdraw` use signed-int64 amounts from their OpenAPI
-conditions; adapters preserve service result types and explicit known rejection
-mappings. See [Bank adapter](../../internal/api/http/action_bank.go).
+Bank, SecretShop, stage adventure, rescue and Home sleep/wake commands keep their feature owners' rules ([Bank](../design/bank.md), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration), [Adventure](../design/adventure.md), [Rescue](../design/rescue-and-helper.md#emergency-rescue), [Home recovery](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)). Cross-cutting points:
+
+- `adventure_start` keeps the immediate batch crawl; its Gateway connection certifies neither parity nor a delayed expedition.
+- `rescue_request` bypasses ordinary entry and Sleep/CanWake gates and does not guarantee that sleep is removed.
+- An early Wake reaches the service and returns its known rejection; an awake character has no eligible Wake.
 
 ### SecretShop purchase command contract
 
-Purchase eligibility, quantities, prices and route-retirement reconciliation
-belong to [SecretShop design](../design/shops.md#74-purchase-transport-and-remaining-migration).
-The command requires explicit `item_id` and `quantity`; it does not inherit the
-retired REST default of one. Presentation remains HTTP-owned. The [SecretShop adapter](../../internal/api/http/action_secretshop.go) owns
-stable known-rejection mapping; unexpected persistence/hook failures remain 500.
-
-### Stage adventure command contract
-
-`adventure_start` requires a non-null `stage_id` string; an empty string retains
-the existing starter-stage default. Its current adapter reuses `StartStage` and
-the immediate-crawl result. [Adventure design](../design/adventure.md) owns entry
-rules and the unresolved explicit-action gap; connection to the Gateway does
-not certify parity or add a delayed expedition. Service-specific known rejections
-remain distinct from the shared `409 ACTION_UNAVAILABLE` preflight boundary.
+The command requires explicit `item_id` and `quantity`; it does not inherit the retired REST default of one.
 
 ### Planned normal-adventure commands and recovery
 
@@ -889,25 +656,6 @@ Clients never automatically replay POST or mint a new identity
 to retry an unknown outcome. Version conflicts request fresh observation.
 Unfinished mandatory effects keep entry blocked and expose explicit recovery;
 optional Replay/cleanup failures do not change a committed settlement result.
-
-### Emergency rescue command contract
-
-`rescue_request` requires a non-null `reason` string and bypasses ordinary
-action-entry and Sleep/CanWake gates. Empty/whitespace reasons reach service
-validation (`422 RESCUE_INVALID_REASON`). It calls the owned actor's Rescue
-service once; it does not guarantee removal of sleep.
-The command replaces the legacy request POST; retained observations and recovery
-limits belong to the [Rescue contract](../design/rescue-and-helper.md#emergency-rescue).
-Known service rejections and unexpected errors keep the common outcome boundary.
-
-### Home sleep and wake command contract
-
-`home_sleep` permits optional `target_home_id`; `home_wake` accepts omitted params
-or `{}`. [Home recovery](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)
-owns duration, explicit waking, claim exclusion, hooks and partial outcomes.
-An early Wake reaches service validation and returns its known rejection; an
-awake character has no eligible Wake. Sleep-state read failures stop before
-execution. The [Home adapter](../../internal/api/http/action_home.go) owns its stable service-rejection codes.
 
 ### Outcome responses
 
