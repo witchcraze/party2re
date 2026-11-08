@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/fleamarket"
 )
 
@@ -28,6 +29,14 @@ type fleaMarketListingRequest struct {
 	ListingID string `json:"listing_id"`
 }
 
+// fleaMarketPurchaseResponse keeps the seller's private wallet balance and character
+// state out of the buyer's purchase result; only buyer-safe facts are returned.
+type fleaMarketPurchaseResponse struct {
+	Listing      fleamarket.Listing `json:"listing"`
+	BuyerGold    int                `json:"buyer_gold"`
+	ItemInstance coreitem.Instance  `json:"item_instance"`
+}
+
 // WithFleaMarket configures the scene observation and the three listing commands.
 func WithFleaMarket(service FleaMarketService) Option {
 	return func(h *Handler) {
@@ -42,7 +51,15 @@ func WithFleaMarket(service FleaMarketService) Option {
 			return service.CreateListing(ctx, actor, p.ItemID, p.Price, time.Now().UTC())
 		}, fleaMarketActionRejection)(h)
 		withActionCommand("fleamarket_purchase", func(ctx context.Context, actor string, p fleaMarketListingRequest) (any, error) {
-			return service.PurchaseListing(ctx, actor, p.ListingID, time.Now().UTC())
+			res, err := service.PurchaseListing(ctx, actor, p.ListingID, time.Now().UTC())
+			if err != nil {
+				return nil, err
+			}
+			return fleaMarketPurchaseResponse{
+				Listing:      res.Listing,
+				BuyerGold:    res.BuyerGold,
+				ItemInstance: res.ItemInstance,
+			}, nil
 		}, fleaMarketActionRejection)(h)
 		withActionCommand("fleamarket_cancel", func(ctx context.Context, actor string, p fleaMarketListingRequest) (any, error) {
 			return service.CancelListing(ctx, actor, p.ListingID)

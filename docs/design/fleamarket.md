@@ -14,7 +14,7 @@ Legacy source: `party2/lib/free.cgi`. Commands use the [Action Gateway](../archi
 | Legacy action | Lines | Go operation | Transport | Disposition |
 |---|---|---|---|---|
 | `しゅっぴん` | 52-138 | `CreateListing` | `fleamarket_list` with `item_id`, `price` | Lists one Depot unit at 1-999,999 G. Legacy matches by item name and takes the first row; `item_id` is an instance ID or a definition ID (first match). The legacy prompt listing Depot rows maps to the `depot` scene's instances. |
-| `かう` | 143-207 | `PurchaseListing` | `fleamarket_purchase` with `listing_id` | Charges the buyer and delivers to the buyer's Depot. Legacy leaves your own listings out of the prompt; Go rejects them with `FLEAMARKET_OWN_LISTING`. |
+| `かう` | 143-207 | `PurchaseListing` | `fleamarket_purchase` with `listing_id` | Charges the buyer and delivers to the buyer's Depot. The action returns the purchased `listing`, `buyer_gold` and `item_instance`, omitting the seller's wallet balance. Legacy leaves your own listings out of the prompt; Go rejects them with `FLEAMARKET_OWN_LISTING`. |
 | `みる` | 212-237 | `ListActiveListings` | `listings` in the scene | Observation only, with no cooldown, as legacy sets `act_time = 0`. A row carries every fact the legacy table shows, so no detail read replaces the retired one. |
 | `もどす` | 242-298 | `CancelListing`, `GetActiveCharacterListings` | `fleamarket_cancel` with `listing_id`; `owned_listings` in the scene | Returns the item to the seller's Depot. Legacy deletes finished rows and offers only active ones, so the former Go read of sold and cancelled history is retired. Those rows stay in the table as records but are not observed. |
 | `はなす`, NPC `しらべる` | `system.cgi` shared | `npc_talk`, `npc_inspect` | None | Talk logs one of `@FMGKDP`'s words and starts the action wait; inspect returns the legacy default privately. |
@@ -56,6 +56,8 @@ classDiagram
         +Instance ItemInstance
     }
 ```
+
+`PurchaseResult` is the internal domain result returned by `PurchaseListing`. The HTTP action adapter (`fleamarket_purchase`) maps this to a buyer-safe response containing `listing`, `buyer_gold`, and `item_instance`, ensuring the seller's wallet balance (`SellerGold`) is never exposed to the buyer.
 
 ### Invariants:
 1. **Server-Wide Active Listing Ceiling**: The market enforces a strict server-wide ceiling of at most 120 simultaneous active listings (`ServerMaxListings = 120`, matching `$MAX = 120` in `free.cgi`). If 120 active listings are present, `CreateListing` returns `ErrServerMaxListingsReached`. Creators serialize on the `fleamarket_capacity_lock` row before counting. Locking listing rows cannot do this because READ COMMITTED has no gap locks. Purchase and cancel only free slots, so they do not take it.
