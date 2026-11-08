@@ -124,7 +124,7 @@ Startup reconciles SQL directly and restores a missing future reservation, rathe
 than replaying uncertain Processing actions. Queue discovery/enqueue errors are
 reported after SQL reconciliation; restarting or explicitly retrying that feature
 reconciliation repairs recurrence without repeating a committed settlement. See
-[ranking design](../design/ranking.md#durable-progress-and-scheduling-recovery).
+[ranking design](../design/ranking.md#weekly-job-change-ranking).
 
 ## Approved navigation storage boundary
 

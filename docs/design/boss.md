@@ -8,76 +8,37 @@ Up to 6 players (4 for `king99`) join a system-opened sealing room (quest type 6
 
 ---
 
-## Architectural Policy & Boundaries
+## Rules and decisions
 
-- **Multi-Participant Battle Engine**: Encounters are resolved through `corebattle.PartyBattleResolver` (`corebattle.Engine{}`), handling party vs. multi-enemy boss formations, agility turn-order, MP/CMP skills, and revive/banishment rules.
-- **Stage Catalog**: The Go catalog represents 11 legacy stages (`stage/king1.cgi` through `stage/king10.cgi`, and dynamic clone stage `king99.cgi`). The original definitions remain authoritative; catalog presence alone does not certify all mechanics.
-- **Capacity Parity**: `king1` through `king10` admit up to **6 players** (`MaxMembers: 6`), whereas `king99` admits **4** (`MaxMembers: 4`). In legacy the boss NPC takes one extra slot (`p_join+1`, counted from 1), so the player capacity equals `p_join`.
-- **No Solo Entry**: Legacy enters `vs_king` only by joining a sealing room (`quest.cgi:1071`). The Go solo operation `fightBoss` (`ChallengeBoss`) has no legacy counterpart. #1199 decided to remove it ([#1928](https://github.com/witchcraze/party2re/issues/1928)).
-- **No Fictional Daily Limits**: Legacy Party2 has no daily attempt caps (the previously fabricated 3-entry solo raid limit has been completely removed). Entrance is governed solely by character fatigue (`tired < 100`) and stage-specific `need_join` conditions (e.g. `hp_400_o`).
-- **Transactional Consistency**: Solo and party settlement run as one SQL Unit of Work: rewards (HeroCount, EXP, gold, crystals, participant-specific loot instances), dejon fatigue +30%, participant state, boss challenge records, and mandatory Monster Book / Hall of Fame records, including any triggered completion. Required failures roll back all of these and propagate. The +20% join fatigue is not part of this settlement: it belongs to the room-join transaction ([§1](#1-entry--fatigue-cost)). Current Go still charges it at the start of the sealing battle. Party sealing also commits a room receipt; cleanup failures after commit retain rewards and retry only room/index deletion. See [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery) for the persistence boundary. News and celebration hooks remain best-effort: their failures do not abort settlement, the Valkey crowd append cannot roll back with SQL, and no separate banquet record is saved.
-
----
+- `king1`–`king10` admit up to 6 players and `king99` 4: the legacy boss NPC takes one extra slot (`p_join+1`, counted from 1).
+- Legacy enters `vs_king` only by joining a sealing room (`quest.cgi:1071`). **Decision (#1199):** the Go solo operation has no counterpart and is removed (#1928).
+- There is no daily attempt cap; entry is governed by fatigue (<100) and the stage's `need_join`.
+- Settlement commits rewards, Dejon fatigue, records and the monster book together; news and the celebration crowd are best effort. Persistence boundary: [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery).
 
 ## Authentic King Stages
 
-The following names, leaders, capacities, and gates were checked against lines
-3–7 of each original stage CGI. All stages use speed 12. In `quest.cgi:947–952`,
-`hp_N_o` requires Max HP ≥ N, while `hp_N_u` requires Max HP < N.
-
-| Stage ID | Stage Name | Leader | Max Members | Participation Gate |
-|---|---|---|---|---|
-| **king1** | @全てを無に還す者@ | 破壊神 | 6 | `hp_400_o` |
-| **king2** | @全てを憎む者@ | 暗黒竜 | 6 | `hp_400_o` |
-| **king3** | @全てを破壊する者@ | 悪魔の書 | 6 | `hp_300_o` |
-| **king4** | @全てを呪う者@ | 暗黒の盾 | 6 | `hp_300_o` |
-| **king5** | @全てを支配する者@ | ドールマスター | 6 | `hp_200_o` |
-| **king6** | @二重世界@ | 闇のクリスタル | 6 | `hp_200_o` |
-| **king7** | @全てを爆発させる者@ | ボマー | 6 | `hp_200_o` |
-| **king8** | @闇でおおいつくす者@ | 魔人のツボ | 6 | `hp_400_u` |
-| **king9** | @悪の城@ | 悪の城 | 6 | `hp_200_u` |
-| **king10** | @無限に増殖する者@ | スライムボックス | 6 | `hp_100_u` |
-| **king99** | @罪と罰@ | Leader of the unsealing party (clone) | 4 | `hp_200_o` |
-
-Detailed enemy stats and weighted treasures belong to each original CGI's
-`@bosses`/`@treasures`, represented by `internal/boss/catalog.go`. Repeated
-treasure entries are weights; do not replace them with a unique-item list.
+Each stage's name, leader, capacity and gate come from lines 3–7 of `stage/king1.cgi`–`king10.cgi` and `king99.cgi`; all use speed 12. In `quest.cgi:947–952`, `hp_N_o` requires Max HP ≥ N and `hp_N_u` Max HP < N. Enemy stats and weighted treasures come from each CGI's `@bosses`/`@treasures`; repeated treasure entries are weights, not a unique list.
 
 ---
 
 ## Battle Mechanics
 
-The following describes the current Go battle/settlement behavior. Verify the
-original battle routines before treating an implementation formula as legacy
-parity. The CGI exposes `＠ふういん` after enemies are defeated; Go currently
-combines resolution and settlement in the service operation.
+The CGI exposes `＠ふういん` after enemies are defeated; Go currently combines resolution and settlement in one operation (#1864).
 
 ### 1. Entry & Fatigue Cost
 - Each participating character incurs **+20% Tired** when joining the room (`quest.cgi:add_member`, `$m{tired} += 20`, written immediately and independently of the battle outcome). Watching charges nothing. The charge commits with the join, exactly once per successful join; a rejected join charges nothing; battle settlement does not charge it again.
 - Go currently charges it at the start of the sealing battle. [#1927](https://github.com/witchcraze/party2re/issues/1927) moves it to the join and removes the settlement charge in the same change, so there is no period with a double charge or no charge.
 - Characters with `tired >= 100` or `hp <= 0` cannot enter.
 
-### 2. Defensive Traits (TMP Abilities)
-Bosses and clones feature specialized passive defensive abilities processed by `internal/core/battle`:
-- **`大防御`**: Reduces all incoming damage (physical & magic) to **10%** (0.1× damage).
-- **`攻軽減`**: Reduces incoming physical damage to **25%** (0.25× damage).
-- **`攻無効`**: Nullifies all physical damage (0 damage).
-- **`魔無効`**: Nullifies all magic attacks (0 damage) and logs: `"<user> の <action>！ <target> は魔法をうけつけない！"`.
-
 ### 3. Boss Skills & Clones
-- **Authentic Job Skills**: Normal bosses (`king1`..`king10`) are assigned skills mapped to their `Job` and `OldJob` based on their `SP` and `OldSP` thresholds in addition to `dejon`.
 - **`king99` Player Clones**:
   - Clones are created **at unseal time** from every member of the unsealing party (`@partys`, NPC companions included) and stored in the room (`stage/king99.cgi` is loaded by `make_vs_king`). Later joiners do not change them; the room leader is the clone of the unsealing party's leader. If a king99 room already exists, a new unseal does not replace its clones.
   - Each clone takes the member's battle state at that treasure creation (after the per-advance status reset): 50× Max HP and Max MP, 2× AT/DF/AG, icon, Job/SP and OldJob/SP; EXP = (Level + JobLevel) × 30, gold = ⌊Level × 0.5⌋ × 30 (`quest.cgi:1177–1178`), 20 crystals.
-  - Inherit all combat skills from that member's Job and OldJob.
   - Go currently builds clones from the sealing battle participants ([#1927](https://github.com/witchcraze/party2re/issues/1927)).
   - Clones possess the **`大防御`** defensive trait.
 
 ### 4. Dejon (デジョン) Banishment
-- Bosses execute the **Dejon** skill (`ActionKindDejon = "dejon"`).
-- Target: Any opposing character whose HP is reduced to `0` or below.
-- Effect: The unconscious character is cast into another dimension and permanently removed from combat. They cannot be revived for the remainder of the battle.
-- Penalty: An additional **+30% Tired** is applied. Legacy `vs_king.cgi:dejon` applies it at banishment; Go settlement applies it upon battle conclusion.
+- Dejon banishes a fallen character for the rest of the battle (no revival) and adds **+30% fatigue**. Legacy `vs_king.cgi:dejon` applies it at banishment; Go settlement applies it upon battle conclusion.
 
 ### 5. Victory, Resealing (`@ふういん`), & Rewards
 Upon defeating all enemy boss participants:
@@ -94,17 +55,7 @@ Upon defeating all enemy boss participants:
 3. **Experience & Gold**:
    - For `king1`..`king10`: Sum of boss definitions.
    - For `king99`: Sum over defeated clones of the values fixed at unseal ([§3](#3-boss-skills--clones)). Go currently computes them from the participants' levels.
-4. **Treasure Drop & Weekday Orbs**:
-   - A random item from the stage's `treasure_item_ids` augmented with the current weekday orb (evaluated in Japan Standard Time / JST matching authentic legacy Party2 `_npc_action.cgi:541-543`):
-     - Monday: `item-060` (月光の玉)
-     - Tuesday: `item-061` (火炎の玉)
-     - Wednesday: `item-062` (水流の玉)
-     - Thursday: `item-063` (木霊の玉)
-     - Friday: `item-064` (黄金の玉)
-     - Saturday: `item-065` (白銀の玉)
-     - Sunday: Random choice among `item-060`..`item-065`.
-   - Legacy loads the stage's `@treasures` before the battle acts (`lib/vs_king.cgi:19–23`), so Job 78 `トレハンのいじ` (`lib/_skill.cgi:6200`) regenerates sealing chests from the same table plus the weekday orb. The legacy comment records this loading as a later fix inferred from related behavior. The retry is not reachable while the sealing battle resolves in one request ([#1862](https://github.com/witchcraze/party2re/issues/1862)).
-   - Reward delivery uses `coreinventory.Inventory` capacity enforcement; overflow items route to `depot.Depot` storage (Rank 5 lock); a treasure found while the Depot is already full is lost, even when a matching stack exists (`_npc_action.cgi:73–75`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
+4. **Treasure**: a random stage treasure plus the JST weekday orb (`_npc_action.cgi:541–543`). Legacy loads the stage's `@treasures` before the battle acts (`lib/vs_king.cgi:19–23`), so job78's treasure retry (`lib/_skill.cgi:6200`) regenerates sealing chests from the same table; that retry is unreachable while the battle resolves in one request (#1862). A treasure found with the Depot full is lost, even with a matching stack (`_npc_action.cgi:73–75`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
 5. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
 6. **Victory Celebration**: Adds a temporary crowd to Event Plaza (`_win_vs_king.cgi`). [Event Plaza design §3](eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) owns generation, presence retention, merchant-selection order and runtime boundaries; there is no independent fixed two-hour banquet window.
 7. **Room after sealing**: The room becomes watch-only and is deleted when its last member exits ([§6](#6-unseal-to-sealing-room-lifecycle)). Go currently deletes the lobby at settlement.

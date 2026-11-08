@@ -1,76 +1,20 @@
-# Photo Contest, Screenshots & Gallery Design (フォトコン会場・コンテスト)
+# Photo Contest Design
 
-## 1. Overview
+## Overview
 
-The Photo Contest and Gallery system (`internal/contest`, legacy `photo.cgi` / `contest.cgi` / `screen_shot.cgi`) provides character screenshot capture and storage, entry submissions to periodic photo contests, community voting with comments, automated round conclusion with prize distribution (Gold, Small Medals, Guild Points), voter reward bonuses, and permanent Hall of Fame (殿堂入り / Legends) archiving.
+Photo contests (`internal/contest`; legacy `photo.cgi`, `contest.cgi`, `screen_shot.cgi`) cover screenshots, entries, voting, settlement with prizes and the hall of fame. Limits, validation and transport are owned by code and [OpenAPI](../api/openapi.json).
 
----
+## Round lifecycle
 
-## 2. Facilities & NPC
+- A preparing round becomes active only with at least 5 entries at a settlement check; otherwise entries are kept and the deadline moves 10 days.
+- **Postponement origin:** a postponed deadline is the **current check time** plus 10 days, never the old end time (`contest.cgi:255–264,294–300`: `$end_time = $time + 24*60*60*$contest_cycle_day`). This also keeps a delayed settlement from scheduling a deadline in the past.
+- An active round with 1–4 entries is postponed together with an under-quorum preparing round. If the preparing round has reached quorum, the active round settles and awards its entrants but skips the hall of fame (`contest.cgi:186`), so entries are never postponed forever.
+- A character may not enter the preparing round while it has an entry in the active round. Self-voting is allowed (`lib/photo.cgi:touhyou`), one vote per character per round.
+- Guild points go to the guild captured when the entry was submitted, never to a later guild or another guild with the same name; results show the entry-time guild name.
 
-- **Facility Title**: フォトコン会場 (Photo Contest Venue)
-- **NPC Name**: `@ワコール`
-- **Location Context**: Legacy `lib/photo.cgi` & `contest.cgi`
+## Prizes
 
----
-
-## 3. Storage & Capacity Rules
-
-### 3.1 Photo Storage (スクリーンショット一覧)
-- **Maximum Photos per Character**: Up to 20 screenshots (`MaxPhotosPerCharacter = 20`).
-- **Deletion**: Players can delete old screenshots to free capacity (`DeletePhoto`).
-
----
-
-## 4. Contest Lifecycle & Rules
-
-### 4.1 Rounds & Cycles
-- **Contest Cycle Duration**: 10 days (`ContestCycleDays = 10`).
-- **Minimum Entry Quorum**: 5 entries (`MinEntriesForContest = 5`).
-  - Submissions are accepted into the preparing round (`status = "preparing"`).
-  - A preparing round transitions to active voting (`status = "active"`) when quorum (5+ entries) is reached at cycle settlement time.
-  - If a check occurs with fewer than 5 entries, submissions are retained in the preparing round and the deadline is extended by 10 days from the current check time (`now + ContestCycleDays`) without prize distribution.
-  - When an active round concludes:
-    - If the active round satisfied quorum (5+ entries), prizes and voter bonuses are distributed, the winner is archived into `contest_legends`, and the round is marked settled. If the next preparing round has 5+ entries, it is promoted to active; otherwise it remains preparing with entries retained and its deadline extended by 10 days from the check time (`now + ContestCycleDays`).
-    - If an active round had 0 entries (empty active round), it is concluded without rewards, and the preparing round is promoted to active if it satisfies quorum (5+ entries); otherwise both rounds are postponed and extended by 10 days from the current check time (`now + ContestCycleDays`).
-    - If an active round has fewer than quorum entries (1–4 entries):
-      - If the preparing round also has fewer than 5 entries (or is absent), both rounds are postponed and extended by 10 days from the current check time (`now + ContestCycleDays`) without prize distribution, retaining submissions in both rounds.
-      - If the preparing round has reached quorum (5+ entries), the active round concludes with prize and voter bonus distribution to its entrants based on votes (preserving submissions and avoiding infinite postponement, as new submissions only enter preparing), Hall of Fame archiving is omitted because quorum was not reached (matching legacy `contest.cgi:186`), and the preparing round is promoted to active.
-- **Postponement Deadline Origin (延期起点の規定)**:
-  - Whenever a round is postponed due to insufficient entries (preparing round under quorum, empty active round, or active round under quorum), the new deadline is calculated strictly from the **current settlement check time** (`now + ContestCycleDays * 24 * time.Hour`), never from the past `EndTime`.
-  - **Legacy Reference**: In legacy `party2/contest.cgi:255–264, 294–300` (`_start_contest`), the postponed deadline is computed as `$end_time = $time + 24*60*60*$contest_cycle_day` using the script execution timestamp `$time`.
-  - **Native Operational Guarantee**: If settlement execution is delayed (e.g. maintenance downtime or recovery), adding cycle duration to the old `EndTime` could leave the new deadline in the past, causing recurring scheduler jobs to immediately re-trigger in a catch-up cascade. Using `now + ContestCycleDays` preserves the legacy behavior while ensuring every postponement schedules a valid future execution time 10 days out and grants players a full 10-day submission window.
-
-### 4.2 Entry Submission Rules (`えんとりー`)
-1. **Single Entry per Round**: A character may submit at most 1 entry per contest round.
-2. **Consecutive Entry Prohibition (`is_renzoku_entry_contest = 0`)**: A character with an active entry in the currently running voting round cannot submit an entry for the upcoming preparing round until the active round concludes.
-3. **Title Constraints**:
-   - Length: $1 \le \text{Length} \le 40$ (UTF-8 character count).
-   - Prohibited Characters: Whitespace (`\s`, `\u3000`), punctuation/symbols `,`, `;`, `"`, `'`, `&`, `<`, `>`, `@`, `＠`.
-4. **Duplicate Title Prevention**: No two entries within the same round may have the exact same title.
-5. **Guild Snapshot at Entry**: When submitting an entry, the character's current guild (stable identifier `guild_id` and display name `guild_name`) is permanently captured in the entry snapshot. If the character is unaffiliated at entry time, the guild fields remain empty.
-
-### 4.3 Voting Rules (`とうひょう`)
-1. **Active Round Only**: Voting is only allowed while a contest round is in `active` status.
-2. **1 Vote per Character**: A character may cast at most 1 vote per contest round (enforced via database unique constraint on `(round, voter_character_id)`).
-3. **Self-Voting Permitted**: Entrants may vote for their own entry (subject to the standard 1 vote per round limit, matching legacy `lib/photo.cgi:touhyou`).
-4. **Optional Comment**: Voters can include an encouraging comment (up to 100 characters).
-
-### 4.4 Prize Structure & Rewards
-The prize table in legacy `party2/contest.cgi:18–24` specifies the following
-amounts; Go currently credits these directly to the character's wallet and
-Small Medals counter. The approved contract below instead preserves the
-original's verified winner medal count and delivery model; it is not yet
-implemented.
-
-- **1st Place**: 15,000 Gold + 10 Small Medals + 700 Guild Points (EXP).
-- **2nd Place**: 7,000 Gold + 6 Small Medals + 300 Guild Points (EXP).
-- **3rd Place**: 3,000 Gold + 3 Small Medals + 100 Guild Points (EXP).
-- **Guild Points Attribution**: Guild Points are awarded strictly to the guild captured in the entry snapshot (`guild_id`). If the entrant was unaffiliated at entry time, joining a guild later does not grant GP. If the captured guild was disbanded prior to settlement, no GP is awarded, and points are never misdelivered to other guilds with the same name.
-- **Results & Hall of Fame Display**: Contest results and Hall of Fame (`contest_legends`) permanently display the entry-time guild name.
-- **Voter Bonus**: Every voter who voted for the 1st place winner receives 1 Small Medal.
-- **Hall of Fame (殿堂入り)**: The 1st place entry is permanently archived into `contest_legends`.
-- **System Announcement**: Broadcasts news announcements for top 3 winners.
+`contest.cgi:18–24` lists 15,000/7,000/3,000 gold, 10/6/3 medals and 700/300/100 guild points for the top three; every voter for the winner gets a medal bonus.
 
 #### Legacy delivery evidence
 
@@ -125,62 +69,4 @@ This deliberately excludes erroneous extra delivery when a package-global
 9 / 5 / 2 was the original author's intent, or that 10 / 6 / 3 was actually
 delivered. Increasing the winner awards to the prize table is not approved.
 
-`internal/contest/settlement.go` still uses direct `AddMoney` / `AddSmallMedals`.
-Pending remittances and capacity-permitting contest item delivery remain under
-[#1496](https://github.com/witchcraze/party2re/issues/1496), which adopts #1109's
-shared remittance contract and implements only the contest capacity exception.
-The current HTTP settlement response and routes remain unchanged by this
-specification decision; transport descriptions change with implementation.
-
-### 4.5 Automated Scheduling & Settlement (`ContestSettlementHandler`)
-- Contest settlements are automatically scheduled as recurring actions (`ActionTypeContestSettlement = "contest_settlement"`) managed by `scheduling.Service`.
-- On server startup, `wireContestSettlement` registers the settlement check for the current active round's `EndTime` (or the preparing round's `EndTime` if no active round is running), ensuring an initial valid schedule exists.
-  - Startup explicitly distinguishes `ErrContestNotFound` from underlying database read errors; storage errors abort startup rather than masking failure.
-- On entry submission (`EnterContest`), the settlement check for the preparing round is also registered if not already scheduled.
-- When triggered by `scheduling.Worker`:
-  - If quorum (5+ entries) is satisfied, prizes and voter bonuses are distributed for the active round, the champion is archived into `contest_legends`, the next preparing round is promoted to active if it reached quorum (or retained in preparing if under quorum), and the next settlement action is scheduled.
-  - If quorum is not satisfied, the round is postponed and extended by 10 days from the current check time (`now + ContestCycleDays`) without prize distribution, entries are retained, and the next check is scheduled for the extended future deadline.
-- **Scheduling Failure & Recovery Boundary (予約失敗と再調停境界)**:
-  - **SQL Commit Precedence**: Database transactions commit durable state (entry submission, round postponement, prize awards) before Valkey scheduling is invoked.
-  - **Error Observability**: Neither startup (`wireContestSettlement`), entry submission (`EnterContest`), settlement execution (`ContestSettlementHandler.Handle`), venue visits (`GetOverview` / `GET /contest/venue`), nor admin settlement (`SettleContest` / `handleSettleContest`) discards scheduling errors. If enqueuing fails after commit, `ErrScheduleFailed` is returned alongside the committed result (e.g. `EnterContest` returns non-empty `ContestEntry` and `ErrScheduleFailed`; `SettleContest` returns `SettlementResult` and `ErrScheduleFailed`). When `Handle` fails to schedule the next check, `scheduling.Worker` transitions the current action to terminal `StateFailed` rather than `StateCompleted`. When opportunistic reconciliation fails during venue access, `GetOverview` propagates the failure and `GET /contest/venue` returns `500 Internal Server Error` without duplicate reconciliation calls. When an unready round (`ErrContestNotReadyToSettle`) fails opportunistic reconciliation during `handleSettleContest`, the endpoint returns `500 Internal Server Error` instead of suppressing the error, while returning `400 Bad Request` when reconciliation succeeds.
-  - **State Machine Protection & Actor Indexing**:
-    - `ReconcileSettlementSchedule` queries active reservations via `FindPendingByActorID(ctx, "contest:settlement")` and backward-compatible checks for legacy actor `"system"`.
-    - If a reservation already exists with state `StatePending` or `StateProcessing` matching the target deadline `EndTime`, reconciliation takes no action. This prevents creating duplicate pending actions and protects in-flight processing actions from being overwritten or restarted.
-    - An in-process mutex (`reconcileMu`) serializes concurrent reconciliation calls within the service instance, preventing race conditions from simultaneous requests (e.g. concurrent `GetOverview` or `EnterContest`) from creating multiple reservations.
-    - Terminal actions (`StateCompleted`, `StateFailed`) are preserved in Valkey and never resurrected back to `StatePending`.
-    - When a new reservation is required, it is scheduled with a unique identifier (`SettlementActionID(round, endTime) + ":" + id.New()`). Because action IDs include a unique nonce, new entries never overwrite or conflict with existing Valkey keys.
-  - **Runtime Reconciliation Pathways (稼働中の復旧契機)**:
-    - Dedicated background schedulers or polling loops are not used; instead, reconciliation self-heals opportunistically along existing system flows:
-      1. **Startup**: `wireContestSettlement` reconciles on server boot.
-      2. **Entry Submission**: `EnterContest` triggers reconciliation upon saving an entry.
-      3. **Venue Access**: `GetOverview` triggers opportunistic reconciliation on player venue visits and propagates reconciliation errors; `GET /contest/venue` delegates directly to `GetOverview` without redundant handler-level reconciliation.
-      4. **Admin Settlement**: `handleSettleContest` (`POST /contest/settle`) reconciles missing reservations when handling an unready round (`ErrContestNotReadyToSettle`) and propagates reconciliation failures (`500`), while `SettleContest` reconciles for the next round after committing the current round.
-      5. **Settlement Handler**: `ContestSettlementHandler.Handle` reconciles when recovering from missing rounds (`ErrContestNotFound`) or after rejecting stale action replays.
-  - **Stale Action & DB Read Integrity**:
-    - In `ContestSettlementHandler.Handle`, database read errors from `GetRoundByNumber` are propagated immediately rather than masked, ensuring unverified rounds are never settled blindly.
-    - If an action references an already-settled round (`StatusSettled`) or an already-postponed timestamp (`targetTime.Before(round.EndTime)`), `Handle` detects that durable SQL progress has occurred, safely skips re-settlement, and reconciles the schedule for the current round.
-
----
-
-## 5. Supported Operations & HTTP API
-
-| Action | Legacy Command | HTTP Endpoint | Description |
-| :--- | :--- | :--- | :--- |
-| **Venue Dialogue** | `はなす` | `GET /contest/venue` | Returns `@ワコール` dialogue and overview of contest status. Opportunistically reconciles settlement schedule (returns `500` on reconciliation failure). |
-| **Current Entries** | `みる` | `GET /contest/current` | Lists entries and vote counts for active round. |
-| **Past Results** | `past` | `GET /contest/past` | Returns results and top comments of last settled contest. |
-| **Hall of Fame** | `legend` | `GET /contest/legends` | Lists historical round champions. |
-| **List Photos** | `みる` | `GET /characters/{id}/photos` | Lists photos owned by the authenticated character. |
-| **Save Photo** | `すくしょ` | `POST /characters/{id}/photos` | Captures and saves a new character photo (max 20). |
-| **Delete Photo** | `けす` | `DELETE /characters/{id}/photos/{photoId}` | Deletes a photo owned by the character. |
-| **Enter Contest** | `えんとりー` | `POST /characters/{id}/contest/enter` | Submits a photo into the next contest round. Returns `200 OK` on full success, or `202 Accepted` with saved entry and `warning` if scheduling fails. |
-| **Vote** | `とうひょう` | `POST /characters/{id}/contest/vote` | Votes for a contest entry with optional comment. |
-| **Settle Contest** | `集計` | `POST /contest/settle` | Admin endpoint to trigger round conclusion and settlement. Returns `200 OK` on full success, `202 Accepted` with settled result and `warning` if next schedule fails, `400 Bad Request` if not ready, or `500` if unready round schedule reconciliation fails. |
-
----
-
-## 6. Concurrency & Security Guarantees
-
-- **Transactional Consistency**: All contest entries, votes, settlements, and prize distributions execute within Unit of Work database transactions (`RunInTx`).
-- **IDOR Protection**: All `/characters/{id}/*` endpoints verify session token authentication and validate character ownership.
-- **Anti-Exploit Controls**: Strict unique keys on `(round, voter_character_id)` prevent double voting under concurrent requests.
+Open (#1496): settlement still credits the wallet and medal counter directly; pending remittances (adopting #1109) and the contest item delivery are not implemented.
