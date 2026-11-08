@@ -216,9 +216,6 @@ func TestService_GetState(t *testing.T) {
 		if state.NPCName != bank.NPCName {
 			t.Errorf("expected npc name %s, got %s", bank.NPCName, state.NPCName)
 		}
-		if len(state.Dialogues) != len(bank.NPCDialogues) {
-			t.Errorf("unexpected dialogues length")
-		}
 	})
 
 	t.Run("empty character ID", func(t *testing.T) {
@@ -359,21 +356,6 @@ func TestService_DepositAndWithdraw(t *testing.T) {
 			t.Fatalf("expected ErrInsufficientBalance, got %v", err)
 		}
 	})
-}
-
-func TestService_NPC(t *testing.T) {
-	repo := newMockRepository()
-	service, _ := bank.NewService(repo)
-
-	npc := service.InspectNPC()
-	if npc.Name != bank.NPCName || len(npc.Dialogues) != 3 {
-		t.Errorf("unexpected NPC info: %+v", npc)
-	}
-
-	talk := service.TalkNPC()
-	if talk == "" {
-		t.Error("expected non-empty talk dialogue")
-	}
 }
 
 func TestNewService_NilRepository(t *testing.T) {

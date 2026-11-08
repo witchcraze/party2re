@@ -15,8 +15,6 @@ import (
 
 type stubBlackMarketService struct {
 	getStatusFn     func(ctx context.Context, characterID string) (*blackmarket.Status, error)
-	talkFn          func(ctx context.Context, characterID string) (*blackmarket.TalkResult, error)
-	inspectFn       func(ctx context.Context, characterID string) (*blackmarket.TalkResult, error)
 	sacrificeItemFn func(ctx context.Context, characterID string, itemInstanceID string) (*blackmarket.SacrificeResult, error)
 	tradePrizeFn    func(ctx context.Context, characterID string, prizeID string) (*blackmarket.TradeResult, error)
 }
@@ -33,26 +31,6 @@ func (s *stubBlackMarketService) GetStatus(ctx context.Context, characterID stri
 		URarePoints:  2,
 		Prizes:       []blackmarket.Prize{},
 		UPrizes:      []blackmarket.Prize{},
-	}, nil
-}
-
-func (s *stubBlackMarketService) Talk(ctx context.Context, characterID string) (*blackmarket.TalkResult, error) {
-	if s.talkFn != nil {
-		return s.talkFn(ctx, characterID)
-	}
-	return &blackmarket.TalkResult{
-		CharacterID: characterID,
-		NPCName:     blackmarket.NPCName,
-	}, nil
-}
-
-func (s *stubBlackMarketService) Inspect(ctx context.Context, characterID string) (*blackmarket.TalkResult, error) {
-	if s.inspectFn != nil {
-		return s.inspectFn(ctx, characterID)
-	}
-	return &blackmarket.TalkResult{
-		CharacterID: characterID,
-		NPCName:     blackmarket.NPCName,
 	}, nil
 }
 
@@ -118,71 +96,14 @@ func TestBlackMarketEndpoints(t *testing.T) {
 	)
 	router := handler.Router()
 
-	t.Run("Talk_Success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/talk", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-		if !strings.Contains(rec.Body.String(), blackmarket.NPCName) {
-			t.Errorf("expected NPC name in talk response, got: %s", rec.Body.String())
-		}
-		if !strings.Contains(rec.Body.String(), `"dialogue"`) {
-			t.Errorf("expected dialogue in talk response, got: %s", rec.Body.String())
-		}
-	})
-
-	t.Run("Inspect_Success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/inspect", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-		if !strings.Contains(rec.Body.String(), "お前の魂で取引したいのか？") {
-			t.Errorf("expected inspect dialogue in response, got: %s", rec.Body.String())
-		}
-	})
-
-	t.Run("Unauthorized_NoToken", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/talk", nil)
-		rec := httptest.NewRecorder()
-
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("expected status 401, got %d", rec.Code)
-		}
-	})
-
-	t.Run("Talk_AccessDenied", func(t *testing.T) {
-		denied := newTestHandler(t, pService, cService, &stubAdventureService{}, &stubShopService{}, apihttp.WithBlackMarket(&stubBlackMarketService{
-			talkFn: func(context.Context, string) (*blackmarket.TalkResult, error) {
-				return nil, blackmarket.ErrAccessDenied
-			},
-		}))
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/talk", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		denied.Router().ServeHTTP(rec, req)
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected status 403, got %d", rec.Code)
-		}
-	})
-
 	t.Run("Retired_Routes", func(t *testing.T) {
 		for _, route := range []struct{ method, path string }{
 			{http.MethodGet, "/characters/c1/blackmarket"},
 			{http.MethodGet, "/characters/c1/blackmarket/points"},
 			{http.MethodPost, "/characters/c1/blackmarket/sacrifice"},
 			{http.MethodPost, "/characters/c1/blackmarket/trade"},
+			{http.MethodPost, "/characters/c1/blackmarket/talk"},
+			{http.MethodPost, "/characters/c1/blackmarket/inspect"},
 		} {
 			req := httptest.NewRequest(route.method, route.path, strings.NewReader(`{"item_instance_id":"i","prize_id":"p"}`))
 			req.Header.Set("Authorization", "Bearer valid-token")

@@ -296,8 +296,7 @@ Required Bank read failures fail the whole observation; missing configuration
 returns 501. Actual activity overrides saved Bank selection before this reader
 runs. Deposit/withdraw refresh uses this same projection, with known outcomes
 preserved if the read fails and GET-only recovery after the source recovers.
-Bank talk/inspect REST routes still require their independent action-effect
-reconciliation and replacement/retirement verification under #947. The old Bank
+Bank talk/inspect use the shared `npc_talk`/`npc_inspect` commands. The old Bank
 state GET is retired: enter Bank with `scene_enter`, then GET character context.
 GET never changes selection; actual activity can override the Bank scene.
 
@@ -437,7 +436,7 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` through `scene_enter` and public Home targets through `scene_select` → Home.GetHomeView. Query authenticates the actor; unavailable targets remain explicit. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
 | Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh derives owned activity/recovery before ordinary selection. Expired sleep requires explicit Wake; conflicting activities remain explicit. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
-| `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Planned [place-log contract](place-log.md): shared `npc_talk`/`npc_inspect` (#1940), speech/whisper (#1942); non-NPC player inspection remains #949. Existing REST readers/operations are retained until replaced. |
+| `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Shared `npc_talk`/`npc_inspect` in facility scenes ([place log](place-log.md#npc-interaction-1940)); speech/whisper remain #1942 and non-NPC player inspection #949. Facilities outside #947 keep their REST dialogue until migrated. |
 | `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. |
 | `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Stored photo acquisition/Contest reconciliation remains #949; client rendering belongs to #140. Separator superseded by structured actions. |
 | Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes. Place logs, the action wait and per-place members follow the planned [place-log contract](place-log.md). No room join/leave, recovery or settlement is introduced here. |

@@ -121,6 +121,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			continue
 		}
 		adapter.placeLog = placeLogFacilities[definition.ID]
+		if _, ok := npcProfiles[definition.ID]; ok {
+			adapter.commands = append(adapter.commands, "npc_talk", "npc_inspect")
+		}
 		if adapter.read == nil {
 			adapter.read = func(_ context.Context, _ playercontext.Result) (any, error) {
 				return SelectionSceneData{Parent: definition.Parent}, nil

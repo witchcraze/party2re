@@ -1184,31 +1184,9 @@
         ],
         "type": "object"
       },
-      "BankNPCInfo": {
-        "additionalProperties": false,
-        "properties": {
-          "dialogues": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "dialogues"
-        ],
-        "type": "object"
-      },
       "BankSceneData": {
         "additionalProperties": false,
-        "description": "Owned Bank state from GetState; observation never executes NPC talk, navigates or mutates savings. Bank talk/inspect REST routes remain for independent reconciliation and retirement.",
+        "description": "Owned Bank state from GetState; observation never runs NPC talk, navigates or mutates savings. NPC dialogue comes from npc_talk/npc_inspect.",
         "properties": {
           "character_id": {
             "maxLength": 128,
@@ -1217,13 +1195,6 @@
           "deposit": {
             "format": "int64",
             "type": "integer"
-          },
-          "dialogues": {
-            "items": {
-              "maxLength": 1024,
-              "type": "string"
-            },
-            "type": "array"
           },
           "max_deposit": {
             "format": "int64",
@@ -1247,8 +1218,7 @@
           "money",
           "deposit",
           "max_deposit",
-          "npc_name",
-          "dialogues"
+          "npc_name"
         ],
         "type": "object"
       },
@@ -1888,27 +1858,6 @@
           "sacrifice_candidates",
           "candidate_count",
           "page"
-        ],
-        "type": "object"
-      },
-      "BlackMarketTalkResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "dialogue": {
-            "example": "よく来たな…。ここは闇市場だ…",
-            "type": "string"
-          },
-          "npc_name": {
-            "example": "@闇商人",
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "npc_name",
-          "dialogue"
         ],
         "type": "object"
       },
@@ -6343,6 +6292,56 @@
               },
               "type": "object"
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "npc_talk",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "npc_inspect",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
           }
         ],
         "properties": {
@@ -9124,18 +9123,12 @@
       },
       "GemStoreSceneData": {
         "additionalProperties": false,
-        "description": "Owned gem box plus the gem catalog for the actor's job level, every synthesis recipe and the shopkeeper's dialogue. Observation never buys, sends, synthesizes or appraises. Appraisal candidates come from the depot scene.",
+        "description": "Owned gem box plus the gem catalog for the actor's job level and every synthesis recipe; NPC dialogue comes from npc_talk/npc_inspect. Observation never buys, sends, synthesizes or appraises. Appraisal candidates come from the depot scene.",
         "properties": {
           "catalog": {
             "description": "Gems purchasable at the actor's job level. price is the base price; a purchase charges five times it.",
             "items": {
               "$ref": "#/components/schemas/GemStoreGem"
-            },
-            "type": "array"
-          },
-          "dialogue": {
-            "items": {
-              "type": "string"
             },
             "type": "array"
           },
@@ -9158,8 +9151,7 @@
           "parent",
           "gem_box",
           "catalog",
-          "recipes",
-          "dialogue"
+          "recipes"
         ],
         "type": "object"
       },
@@ -11301,21 +11293,6 @@
           "body",
           "is_read",
           "created_at"
-        ],
-        "type": "object"
-      },
-      "NpcDialogueResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          },
-          "secret_shop_hint": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dialogue"
         ],
         "type": "object"
       },
@@ -15322,10 +15299,6 @@
       "ShopNPCObservation": {
         "additionalProperties": false,
         "properties": {
-          "dialogue": {
-            "maxLength": 1024,
-            "type": "string"
-          },
           "npc_name": {
             "maxLength": 128,
             "type": "string"
@@ -15346,8 +15319,7 @@
         },
         "required": [
           "shop_type",
-          "npc_name",
-          "dialogue"
+          "npc_name"
         ],
         "type": "object"
       },
@@ -18943,308 +18915,6 @@
         "summary": "Inspect another character's stats and equipped gear (@しらべる)",
         "tags": [
           "Auctions"
-        ]
-      }
-    },
-    "/characters/{id}/bank/inspect": {
-      "post": {
-        "operationId": "postCharactersIdBankInspect",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BankNPCInfo"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Bank Inspect NPC",
-        "tags": [
-          "Bank"
-        ]
-      }
-    },
-    "/characters/{id}/bank/talk": {
-      "post": {
-        "operationId": "postCharactersIdBankTalk",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Bank Talk NPC",
-        "tags": [
-          "Bank"
-        ]
-      }
-    },
-    "/characters/{id}/blackmarket/inspect": {
-      "post": {
-        "description": "Inspects NPC @闇商人 in the Black Market.",
-        "operationId": "inspectBlackMarket",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BlackMarketTalkResult"
-                }
-              }
-            },
-            "description": "Merchant inspection dialogue"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character or prize not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected storage or service failure"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Inspect NPC @闇商人 in the Black Market",
-        "tags": [
-          "Black Market"
-        ]
-      }
-    },
-    "/characters/{id}/blackmarket/talk": {
-      "post": {
-        "description": "Receives dialogue lines from broker @闇商人.",
-        "operationId": "talkBlackMarket",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BlackMarketTalkResult"
-                }
-              }
-            },
-            "description": "Merchant dialogue"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character or prize not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected storage or service failure"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Converse with black market merchant @闇商人",
-        "tags": [
-          "Black Market"
         ]
       }
     },
@@ -27938,106 +27608,6 @@
         ]
       }
     },
-    "/characters/{id}/secretshop/inspect": {
-      "post": {
-        "description": "Retrieves character inspect description for the Secret Shop sheep NPC.",
-        "operationId": "inspectSecretShopNPC",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "npc_name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "character_id",
-                    "npc_name",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "NPC description returned successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Inspect Secret Shop NPC @ヒミツジ",
-        "tags": [
-          "Secret Shop"
-        ]
-      }
-    },
     "/characters/{id}/secretshop/puffpuff": {
       "post": {
         "description": "Interacts with @ヒミツジ for the legendary puff-puff humor dialogue.",
@@ -28124,106 +27694,6 @@
           }
         ],
         "summary": "Experience Secret Shop @ぱふぱふ service",
-        "tags": [
-          "Secret Shop"
-        ]
-      }
-    },
-    "/characters/{id}/secretshop/talk": {
-      "post": {
-        "description": "Retrieves secretive dialogue from the Secret Shop sheep NPC.",
-        "operationId": "talkSecretShopNPC",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "npc_name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "character_id",
-                    "npc_name",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "NPC dialogue returned successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Talk to Secret Shop NPC @ヒミツジ",
         "tags": [
           "Secret Shop"
         ]
@@ -29107,218 +28577,6 @@
           }
         ],
         "summary": "Get shop catalog for weapon, armor, or item shop",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/characters/{id}/shop/{type}/inspect": {
-      "post": {
-        "operationId": "shopInspectNPC",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Shop type",
-            "in": "path",
-            "name": "type",
-            "required": true,
-            "schema": {
-              "enum": [
-                "weapon",
-                "armor",
-                "item",
-                "accessory"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "dialogue": {
-                      "type": "string"
-                    },
-                    "secret_shop_hint": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Shop NPC inspect reaction and optional hint"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Inspect shopkeeper NPC for reaction or hint",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/characters/{id}/shop/{type}/talk": {
-      "post": {
-        "operationId": "shopTalkNPC",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Shop type",
-            "in": "path",
-            "name": "type",
-            "required": true,
-            "schema": {
-              "enum": [
-                "weapon",
-                "armor",
-                "item",
-                "accessory"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NpcDialogueResponse"
-                }
-              }
-            },
-            "description": "Shop NPC dialogue message"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Talk to shopkeeper NPC",
         "tags": [
           "Shop"
         ]

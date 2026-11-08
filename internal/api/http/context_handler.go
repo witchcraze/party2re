@@ -21,6 +21,7 @@ func WithPlayerContext(service *playercontext.Service) Option {
 	return func(h *Handler) {
 		h.playerContext = service
 		h.registerNavigation(service)
+		h.registerNPC(service)
 		h.registerScenes(service)
 	}
 }

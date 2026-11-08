@@ -27,14 +27,6 @@ type secretShopSceneService struct {
 	remove bool
 }
 
-func (*secretShopSceneService) Talk(context.Context, string) (string, error) {
-	return "", errors.New("GET must not execute NPC talk")
-}
-
-func (*secretShopSceneService) Inspect(context.Context, string) (string, error) {
-	return "", errors.New("GET must not execute NPC inspect")
-}
-
 func (*secretShopSceneService) PuffPuff(context.Context, string) (*secretshop.PuffPuffResult, error) {
 	return nil, errors.New("GET must not execute NPC puff-puff")
 }

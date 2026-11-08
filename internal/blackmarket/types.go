@@ -57,11 +57,6 @@ type SacrificeCandidate struct {
 	URarePoints      int    `json:"u_rare_points"`
 }
 
-type TalkResult struct {
-	CharacterID string `json:"character_id"`
-	NPCName     string `json:"npc_name"`
-}
-
 type SacrificeResult struct {
 	CharacterID       string `json:"character_id"`
 	ItemInstanceID    string `json:"item_instance_id"`

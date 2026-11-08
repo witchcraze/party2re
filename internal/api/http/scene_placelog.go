@@ -7,9 +7,10 @@ import (
 	"github.com/witchcraze/party2re/internal/placelog"
 )
 
-// PlaceLogReader reads a place's viewer-filtered log, newest first.
-type PlaceLogReader interface {
+// PlaceLog reads a place's viewer-filtered log, newest first, and appends rows.
+type PlaceLog interface {
 	Read(ctx context.Context, place placelog.Place, viewerID string) ([]placelog.Entry, error)
+	Append(ctx context.Context, place placelog.Place, entries ...placelog.Entry) error
 }
 
 // PlaceLogEntry is the public projection of a log row. Character IDs stay
@@ -33,7 +34,7 @@ var placeLogFacilities = map[string]bool{
 }
 
 // WithPlaceLog configures the shared place log observed by facility scenes.
-func WithPlaceLog(reader PlaceLogReader) Option {
+func WithPlaceLog(reader PlaceLog) Option {
 	return func(h *Handler) { h.placeLog = reader }
 }
 

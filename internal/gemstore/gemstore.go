@@ -234,14 +234,3 @@ func (s *Service) GetCatalog(jobLevel int) []Gem {
 func (s *Service) GetRecipes() []Recipe {
 	return s.catalog.AllRecipes()
 }
-
-// GetDialogue returns shopkeeper @ジェマ dialogue lines.
-func (s *Service) GetDialogue() []string {
-	return []string{
-		"ここは宝石店です。色んな宝石を売っていますよ",
-		"どんな宝石がお好きですか？",
-		"アイテムや宝石を使って、新しい宝石に加工することもできますよ",
-		"宝石ごとに不思議な力があるんです",
-		"あなたにはキラリと光る素敵な宝石がお似合いですね",
-	}
-}

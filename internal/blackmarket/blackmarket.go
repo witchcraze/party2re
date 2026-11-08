@@ -210,24 +210,6 @@ func (s *Service) sacrificeCandidates(ctx context.Context, characterID string) (
 	return candidates, nil
 }
 
-// Talk returns NPC @闇商人 information.
-func (s *Service) Talk(ctx context.Context, characterID string) (*TalkResult, error) {
-	char, err := s.accessibleCharacter(ctx, characterID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TalkResult{
-		CharacterID: char.ID,
-		NPCName:     NPCName,
-	}, nil
-}
-
-// Inspect returns NPC @闇商人 inspection information matching legacy Party2 CGI.
-func (s *Service) Inspect(ctx context.Context, characterID string) (*TalkResult, error) {
-	return s.Talk(ctx, characterID)
-}
-
 // SacrificeItem consumes an eligible rare item instance from character inventory or depot and credits points.
 func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemInstanceID string) (*SacrificeResult, error) {
 	if strings.TrimSpace(characterID) == "" {

@@ -168,7 +168,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"shop_purchase", http.MethodPost, "/shop/purchase", `{"character_id":"char-1","item_definition_id":"herb","quantity":1}`},
 		{"shop_sell", http.MethodPost, "/shop/sell", `{"character_id":"char-1","item_instance_id":"item-1","quantity":1}`},
 		{"shop_batch_purchase", http.MethodPost, "/characters/char-1/shop/batch-purchase", `{"shop_type":"item","items":[{"item_definition_id":"herb","quantity":1}]}`},
-		{"shop_talk", http.MethodPost, "/characters/char-1/shop/item/talk", `{}`},
 		{"shop_discover_secret", http.MethodPost, "/characters/char-1/shop/discover-secret", `{}`},
 		{"shop_accessory_buy", http.MethodPost, "/characters/char-1/shop/accessory/buy", `{"item_definition_id":"acc-1","quantity":1}`},
 		{"shop_accessory_sell", http.MethodPost, "/characters/char-1/shop/accessory/sell", `{"item_instance_id":"item-1","quantity":1}`},

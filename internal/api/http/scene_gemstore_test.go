@@ -36,8 +36,6 @@ func (s *gemStoreSceneService) GetCatalog(jobLevel int) []gemstore.Gem {
 func (s *gemStoreSceneService) GetRecipes() []gemstore.Recipe {
 	return []gemstore.Recipe{{ID: "recipe-1"}}
 }
-func (s *gemStoreSceneService) GetDialogue() []string { return nil }
-
 func (s *gemStoreSceneService) BuyGem(context.Context, string, string) (gemstore.BuyResult, error) {
 	s.mutations++
 	return gemstore.BuyResult{}, nil
@@ -71,7 +69,7 @@ func TestGemStoreSceneObservesOwnedFactsWithoutWrites(t *testing.T) {
 	}
 	data := decodeShopScene[GemStoreSceneData](t, observation)
 	if data.Parent != "town" || data.GemBox.Capacity != 15 || len(data.GemBox.Items) != 1 || data.GemBox.Items[0].ID != "owned-gem" ||
-		len(data.Catalog) != 1 || len(data.Recipes) != 1 || data.Dialogue == nil || service.catalogLevel != 30 {
+		len(data.Catalog) != 1 || len(data.Recipes) != 1 || service.catalogLevel != 30 {
 		t.Fatalf("lost facts: %+v (catalog level %d)", data, service.catalogLevel)
 	}
 	for _, action := range []string{"gemstore_buy", "gemstore_sell", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "gemstore_sort", "scene_back"} {
@@ -87,17 +85,6 @@ func TestGemStoreSceneObservesOwnedFactsWithoutWrites(t *testing.T) {
 		return d.ID == "gemstore" && d.Supported && d.EnterParams.Destination == "gemstore"
 	}) {
 		t.Fatalf("missing town entry: %d %+v", status, town)
-	}
-}
-
-func TestGemStoreSceneEmptyDialogueIsArray(t *testing.T) {
-	_, _, router := gemStoreSceneRouter(t, &gemStoreSceneService{box: gemstore.GemBox{CharacterID: "hero", Capacity: 5, Items: []coreitem.Instance{}}}, "gemstore")
-	_, observation := navigationGET(t, router)
-	data := decodeShopScene[struct {
-		Dialogue []string `json:"dialogue"`
-	}](t, observation)
-	if data.Dialogue == nil {
-		t.Fatalf("null arrays: %+v", data)
 	}
 }
 

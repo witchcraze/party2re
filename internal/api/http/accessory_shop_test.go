@@ -116,36 +116,6 @@ func TestAccessoryShopHTTPEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/c1/shop/accessory/talk", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/accessory/talk", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rr := httptest.NewRecorder()
-
-		router.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/c1/shop/accessory/inspect", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/accessory/inspect", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rr := httptest.NewRecorder()
-
-		router.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
-		}
-
-		var resp map[string]interface{}
-		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if resp["dialogue"] != "なにか私についてる？" {
-			t.Errorf("dialogue = %v, want なにか私についてる？", resp["dialogue"])
-		}
-	})
-
 	t.Run("POST /characters/c1/shop/accessory/buy (envelope compliant)", func(t *testing.T) {
 		body := `{"item_definition_id":"item-147","quantity":1}`
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/accessory/buy", bytes.NewBufferString(body))

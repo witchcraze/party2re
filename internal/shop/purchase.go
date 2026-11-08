@@ -8,7 +8,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
@@ -366,18 +365,6 @@ func (s *Service) InspectNPC(ctx context.Context, shopType ShopType, characterID
 		NPCName:        npc,
 		SecretShopHint: hint,
 	}, nil
-}
-
-func (s *Service) TalkNPC(ctx context.Context, shopType ShopType) (string, error) {
-	if !ValidateShopType(shopType) {
-		return "", ErrInvalidShopType
-	}
-	words := GetShopWords(shopType)
-	if len(words) == 0 {
-		return "", nil
-	}
-	idx := random.Intn(len(words))
-	return words[idx], nil
 }
 
 func (s *Service) DiscoverSecretShop(ctx context.Context, characterID string) (bool, string, error) {

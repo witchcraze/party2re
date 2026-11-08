@@ -14,8 +14,6 @@ import (
 // SecretShopService defines the secret underground shop operations exposed over HTTP.
 type SecretShopService interface {
 	GetShopStatus(ctx context.Context, characterID string) (*secretshop.ShopStatus, error)
-	Talk(ctx context.Context, characterID string) (string, error)
-	Inspect(ctx context.Context, characterID string) (string, error)
 	PuffPuff(ctx context.Context, characterID string) (*secretshop.PuffPuffResult, error)
 	PurchaseItem(ctx context.Context, characterID string, itemID string, quantity int) (*secretshop.PurchaseResult, error)
 }
@@ -28,56 +26,6 @@ type secretShopPurchaseRequest struct {
 type secretShopPurchaseResponse struct {
 	*secretshop.PurchaseResult
 	NPCMessage string `json:"npc_message"`
-}
-
-type secretShopDialogueResponse struct {
-	CharacterID string `json:"character_id"`
-	NPCName     string `json:"npc_name"`
-	Message     string `json:"message"`
-}
-
-func (h *Handler) handleSecretShopTalk(w http.ResponseWriter, r *http.Request) {
-	if h.secretshop == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("secret shop service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		dialogue, err := h.secretshop.Talk(r.Context(), char.ID)
-		if err != nil {
-			h.writeSecretShopError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, secretShopDialogueResponse{
-			CharacterID: char.ID,
-			NPCName:     secretshop.NPCName,
-			Message:     dialogue,
-		})
-	})
-}
-
-func (h *Handler) handleSecretShopInspect(w http.ResponseWriter, r *http.Request) {
-	if h.secretshop == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("secret shop service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		description, err := h.secretshop.Inspect(r.Context(), char.ID)
-		if err != nil {
-			h.writeSecretShopError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, secretShopDialogueResponse{
-			CharacterID: char.ID,
-			NPCName:     secretshop.NPCName,
-			Message:     description,
-		})
-	})
 }
 
 func (h *Handler) handleSecretShopPuffPuff(w http.ResponseWriter, r *http.Request) {

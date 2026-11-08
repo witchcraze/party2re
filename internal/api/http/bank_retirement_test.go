@@ -14,6 +14,8 @@ func TestRetiredBankRoutesDoNotReadOrExecute(t *testing.T) {
 		{http.MethodGet, "/characters/hero/bank"},
 		{http.MethodPost, "/characters/hero/bank/deposit"},
 		{http.MethodPost, "/characters/hero/bank/withdraw"},
+		{http.MethodPost, "/characters/hero/bank/talk"},
+		{http.MethodPost, "/characters/hero/bank/inspect"},
 	} {
 		for _, token := range []string{"", "session"} {
 			r := httptest.NewRequest(route.method, route.path, strings.NewReader(`{"amount":40}`))
@@ -28,21 +30,19 @@ func TestRetiredBankRoutesDoNotReadOrExecute(t *testing.T) {
 	}
 }
 
-func TestOpenAPIBankRetirementKeepsDialogueAndGateway(t *testing.T) {
+func TestOpenAPIBankRetirementKeepsGateway(t *testing.T) {
 	var spec struct {
 		Paths map[string]map[string]json.RawMessage `json:"paths"`
 	}
 	if err := json.Unmarshal(OpenAPISpec(), &spec); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/characters/{id}/bank", "/characters/{id}/bank/deposit", "/characters/{id}/bank/withdraw"} {
+	for _, path := range []string{"/characters/{id}/bank", "/characters/{id}/bank/deposit", "/characters/{id}/bank/withdraw", "/characters/{id}/bank/talk", "/characters/{id}/bank/inspect"} {
 		if _, exists := spec.Paths[path]; exists {
 			t.Errorf("retired path remains in OpenAPI: %s", path)
 		}
 	}
 	for _, route := range []struct{ method, path string }{
-		{"post", "/characters/{id}/bank/talk"},
-		{"post", "/characters/{id}/bank/inspect"},
 		{"post", "/api/v1/characters/{id}/actions"},
 		{"get", "/api/v1/characters/{id}/context"},
 	} {

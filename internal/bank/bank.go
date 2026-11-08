@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 const (
@@ -36,12 +35,11 @@ var (
 
 // State represents the current bank and wallet status of a character.
 type State struct {
-	CharacterID string   `json:"character_id"`
-	Money       int      `json:"money"`
-	Deposit     int64    `json:"deposit"`
-	MaxDeposit  int64    `json:"max_deposit"`
-	NPCName     string   `json:"npc_name"`
-	Dialogues   []string `json:"dialogues"`
+	CharacterID string `json:"character_id"`
+	Money       int    `json:"money"`
+	Deposit     int64  `json:"deposit"`
+	MaxDeposit  int64  `json:"max_deposit"`
+	NPCName     string `json:"npc_name"`
 }
 
 // DepositResult represents the result of depositing gold into the bank.
@@ -62,12 +60,6 @@ type WithdrawResult struct {
 	ActualWithdrawn int    `json:"actual_withdrawn"`
 	Refunded        int64  `json:"refunded"`
 	Message         string `json:"message"`
-}
-
-// NPCInfo represents NPC receptionist metadata.
-type NPCInfo struct {
-	Name      string   `json:"name"`
-	Dialogues []string `json:"dialogues"`
 }
 
 // Repository defines the storage contract for character bank accounts.
@@ -154,7 +146,6 @@ func (s *Service) GetState(ctx context.Context, characterID string) (State, erro
 		Deposit:     char.Deposit,
 		MaxDeposit:  MaxDeposit,
 		NPCName:     NPCName,
-		Dialogues:   NPCDialogues,
 	}, nil
 }
 
@@ -203,20 +194,4 @@ func (s *Service) Withdraw(ctx context.Context, characterID string, amount int64
 		Refunded:        refunded,
 		Message:         fmt.Sprintf("%d Gお返しいたします", amount),
 	}, nil
-}
-
-// InspectNPC returns metadata regarding the Taxeed bank receptionist.
-func (s *Service) InspectNPC() NPCInfo {
-	return NPCInfo{
-		Name:      NPCName,
-		Dialogues: NPCDialogues,
-	}
-}
-
-// TalkNPC returns a random greeting dialogue from the bank receptionist.
-func (s *Service) TalkNPC() string {
-	if len(NPCDialogues) == 0 {
-		return ""
-	}
-	return NPCDialogues[random.Intn(len(NPCDialogues))]
 }

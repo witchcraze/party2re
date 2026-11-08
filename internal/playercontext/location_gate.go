@@ -9,6 +9,10 @@ func (LocationGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
 	if !action.RequiredGates.Has(GateLocationCheck) || action.ID == "home_wake" || action.Category == "navigation" {
 		return true
 	}
+	if action.Category == "npc" {
+		// NPCs stand in facilities; the HTTP registry decides which have one.
+		return snapshot.LocationID != LocationTown
+	}
 	if snapshot.LocationID == LocationTown {
 		return true
 	}

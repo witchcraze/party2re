@@ -189,7 +189,7 @@ func TestShopScenesUseRealCatalogAndExplicitSelection(t *testing.T) {
 						t.Fatalf("product: %+v / %+v", p, def)
 					}
 				}
-				if (data.NPC.SecretShopHint != "") != (kind == shop.ShopTypeItem) || data.NPC.Dialogue != shopInspectDialogue(kind) {
+				if (data.NPC.SecretShopHint != "") != (kind == shop.ShopTypeItem) {
 					t.Fatalf("NPC: %+v", data.NPC)
 				}
 				command := "shop_purchase"

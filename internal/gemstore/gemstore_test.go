@@ -952,12 +952,6 @@ func TestGemStore_GetCatalogAndRecipes(t *testing.T) {
 	if len(recipes) < 50 {
 		t.Errorf("expected at least 50 recipes, got %d", len(recipes))
 	}
-
-	// Check dialogue
-	dialogues := svc.GetDialogue()
-	if len(dialogues) == 0 {
-		t.Error("expected non-empty dialogue list")
-	}
 }
 
 type mockTxProvider struct {

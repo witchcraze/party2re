@@ -41,8 +41,8 @@ func TestSelectedScenesAndConnectedChoices(t *testing.T) {
 	if status != 200 || selected.Scene.Kind != "subject" || selected.Scene.LocationID != "shop_weapon" || selected.Scene.Subject == nil || *selected.Scene.Subject != store.selection.Subject {
 		t.Fatalf("selected: %d %+v", status, selected.Scene)
 	}
-	if len(selected.AvailableActions) != 1 || selected.AvailableActions[0].Action != "scene_back" {
-		t.Fatalf("detail choices: %+v", selected.AvailableActions)
+	if got := actionIDs(selected.AvailableActions); !slices.Equal(got, []string{"scene_back", "npc_talk", "npc_inspect"}) {
+		t.Fatalf("detail choices: %v", got)
 	}
 	available = false
 	status, missing := navigationGET(t, router)
@@ -148,8 +148,8 @@ func TestSceneAdapterFailureAndMissingConnection(t *testing.T) {
 	}
 	h.bank = newBankGatewayFixture(t).service
 	status, response = navigationGET(t, h.Router())
-	if status != 200 || len(response.AvailableActions) != 1 || response.AvailableActions[0].Action != "scene_back" {
-		t.Fatalf("bank: %d %+v", status, response)
+	if got := actionIDs(response.AvailableActions); status != 200 || !slices.Equal(got, []string{"scene_back", "npc_talk", "npc_inspect"}) {
+		t.Fatalf("bank: %d %v", status, got)
 	}
 	if !slices.ContainsFunc(response.Scene.Support.Actions, func(a SceneActionSupport) bool { return a.Action == "bank_deposit" && a.EntryEligible && !a.Connected }) {
 		t.Fatalf("connection vs entry: %+v", response.Scene.Support)
@@ -217,4 +217,12 @@ func TestOfferedParamsReuseGatewaySchemaAndKeepCompleteInputs(t *testing.T) {
 	if schema.Type != "object" || schema.AdditionalProperties || !slices.Equal(a.RequiredParams, []string{"destination"}) || !slices.Equal(schema.Required, a.RequiredParams) || schema.Properties["destination"].Const != "shop_weapon" {
 		t.Fatalf("schema/template: %+v / %+v", a, schema)
 	}
+}
+
+func actionIDs(actions []ContextAction) []string {
+	ids := make([]string, 0, len(actions))
+	for _, a := range actions {
+		ids = append(ids, a.Action)
+	}
+	return ids
 }

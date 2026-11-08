@@ -335,24 +335,6 @@ func TestNPCInteractions(t *testing.T) {
 	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 50000)
 	_ = charRepo.Update(ctx, eligible)
 
-	// Talk
-	talkMsg, err := svc.Talk(ctx, "char-high")
-	if err != nil {
-		t.Fatalf("Talk failed: %v", err)
-	}
-	if talkMsg == "" {
-		t.Fatal("expected non-empty talk message")
-	}
-
-	// Inspect
-	inspectMsg, err := svc.Inspect(ctx, "char-high")
-	if err != nil {
-		t.Fatalf("Inspect failed: %v", err)
-	}
-	if inspectMsg != secretshop.InspectDialogue {
-		t.Fatalf("unexpected inspect message: %s", inspectMsg)
-	}
-
 	// PuffPuff - Legacy parity: returns flavor message only, NO HEALING
 	initialHP := eligible.Stats.HP
 	initialMP := eligible.Stats.MP
