@@ -4,7 +4,18 @@
 
 The Achievement and Commemorative Medal system (`internal/medal`) rewards player characters for long-term progression and lifetime gameplay milestones across combat, exploration, wealth accumulation, boss conquest, player-versus-player duels, casino gambling, and alchemy synthesis.
 
-Completing milestones unlocks prestigious commemorative medals (記念メダル / 勲章) added permanently to the character's medal collection, as well as bonus Small Medals (ちいさなメダル) directly redeemable at the King's medal exchange.
+Completing milestones unlocks prestigious commemorative medals (記念メダル / 勲章) added permanently to the character's medal collection. Claims grant nothing else.
+
+### Reward policy (#1168)
+
+The commemorative medal and the spendable Small Medal (ちいさなメダル) currency are separate effects. Claims award only the commemorative medal; they never change `characters.small_medals`.
+
+- **Legacy reference:** the original game has no milestone achievement system. Only two paths credit the Small Medal balance: using the 小さなメダル item (`lib/_data.cgi:759-763`; the item comes from dungeons, contests, referrals and alchemy) and the god's wish (`lib/god.cgi:33`). Medals are spent at `medal.cgi`'s 15 tiers (`lib/medal.cgi:18-36`). No original path grants Small Medals for lifetime counters.
+- **Approved extension:** the achievement and commemorative medal collection itself was explicitly requested by #70 and #358. #70 asked for commemorative medals only, not spendable currency.
+- **Removed addition:** the catalog previously also credited 68 Small Medals in total across the 18 achievements (1–10 each). No approval for that extra supply exists, so it was removed to keep the original medal economy.
+- **Existing data:** claims and commemorative medals already recorded stay valid. Balances credited earlier are not rolled back (the project is pre-release, with no production data).
+
+Example: a character holding 7 Small Medals claims `adv_novice`. They gain `medal_adv_bronze`, the achievement becomes claimed, and their balance stays 7.
 
 ---
 
@@ -52,32 +63,31 @@ When a character reaches or exceeds the required threshold:
    - If `is_claimed == TRUE`: Returns `409 Conflict` (`ErrAchievementAlreadyClaimed`).
 4. Atomically updates `is_claimed = TRUE` and `claimed_at = UTC_TIMESTAMP()`.
 5. Permanently awards the defined commemorative medal to `character_medals`.
-6. Credits bonus Small Medals (`small_medals`) to the character using Core encapsulation helper `char.AddSmallMedals(reward)`.
 
 ---
 
 ## Default Achievement Catalog
 
-| ID | Title | Metric | Threshold | Commemorative Medal | Small Medals |
-|---|---|---|---|---|---|
-| `adv_novice` | 冒険の第一歩 | `adventure_victories` | 1 | 青銅の冒険勲章 (`medal_adv_bronze`) | 1 |
-| `adv_veteran` | 歴戦の冒険者 | `adventure_victories` | 10 | 白銀の冒険勲章 (`medal_adv_silver`) | 3 |
-| `adv_master` | 偉大なる探検家 | `adventure_victories` | 50 | 黄金の冒険勲章 (`medal_adv_gold`) | 5 |
-| `adv_legend` | 伝説の冒険王 | `adventure_victories` | 100 | 白金の冒険大勲章 (`medal_adv_platinum`) | 10 |
-| `mon_hunter` | モンスターハンター | `monsters_slain` | 10 | 討伐勇士の銅章 (`medal_mon_bronze`) | 1 |
-| `mon_slayer` | 魔物殲滅者 | `monsters_slain` | 50 | 魔物殲滅の銀章 (`medal_mon_silver`) | 3 |
-| `mon_master` | モンスターマスター | `monsters_slain` | 200 | 大討伐覇者の金章 (`medal_mon_gold`) | 5 |
-| `gold_apprentice` | 商売の才覚 | `gold_earned` | 1,000 | 商人見習いの銅貨章 (`medal_gold_bronze`) | 1 |
-| `gold_rich` | 資産家への道 | `gold_earned` | 10,000 | 豪商の銀貨章 (`medal_gold_silver`) | 3 |
-| `gold_tycoon` | 大富豪 | `gold_earned` | 100,000 | 富豪覇者の金章 (`medal_gold_gold`) | 5 |
-| `boss_slayer` | 巨魁を討つ者 | `bosses_slain` | 1 | 巨頭討伐の栄誉章 (`medal_boss_slayer`) | 3 |
-| `boss_champion` | 王者の天敵 | `bosses_slain` | 10 | 王殺しの英雄章 (`medal_boss_champion`) | 10 |
-| `pvp_gladiator` | 闘技場の剣士 | `pvp_victories` | 1 | 闘士の栄光章 (`medal_pvp_bronze`) | 1 |
-| `pvp_champion` | 闘技場の覇王 | `pvp_victories` | 10 | 決闘覇王の金章 (`medal_pvp_gold`) | 5 |
-| `casino_gambler` | 勝負師の嗜み | `casino_games` | 5 | 勝負師の遊戯章 (`medal_casino_bronze`) | 1 |
-| `casino_highroller` | 黄金の勝負師 | `casino_games` | 20 | 幸運の勝負師金章 (`medal_casino_gold`) | 5 |
-| `alchemy_novice` | 錬金術の徒 | `alchemy_crafts` | 5 | 錬金士の証 (`medal_alc_bronze`) | 1 |
-| `alchemy_master` | 至高のアルケミスト | `alchemy_crafts` | 25 | 賢者の錬金大勲章 (`medal_alc_gold`) | 5 |
+| ID | Title | Metric | Threshold | Commemorative Medal |
+|---|---|---|---|---|
+| `adv_novice` | 冒険の第一歩 | `adventure_victories` | 1 | 青銅の冒険勲章 (`medal_adv_bronze`) |
+| `adv_veteran` | 歴戦の冒険者 | `adventure_victories` | 10 | 白銀の冒険勲章 (`medal_adv_silver`) |
+| `adv_master` | 偉大なる探検家 | `adventure_victories` | 50 | 黄金の冒険勲章 (`medal_adv_gold`) |
+| `adv_legend` | 伝説の冒険王 | `adventure_victories` | 100 | 白金の冒険大勲章 (`medal_adv_platinum`) |
+| `mon_hunter` | モンスターハンター | `monsters_slain` | 10 | 討伐勇士の銅章 (`medal_mon_bronze`) |
+| `mon_slayer` | 魔物殲滅者 | `monsters_slain` | 50 | 魔物殲滅の銀章 (`medal_mon_silver`) |
+| `mon_master` | モンスターマスター | `monsters_slain` | 200 | 大討伐覇者の金章 (`medal_mon_gold`) |
+| `gold_apprentice` | 商売の才覚 | `gold_earned` | 1,000 | 商人見習いの銅貨章 (`medal_gold_bronze`) |
+| `gold_rich` | 資産家への道 | `gold_earned` | 10,000 | 豪商の銀貨章 (`medal_gold_silver`) |
+| `gold_tycoon` | 大富豪 | `gold_earned` | 100,000 | 富豪覇者の金章 (`medal_gold_gold`) |
+| `boss_slayer` | 巨魁を討つ者 | `bosses_slain` | 1 | 巨頭討伐の栄誉章 (`medal_boss_slayer`) |
+| `boss_champion` | 王者の天敵 | `bosses_slain` | 10 | 王殺しの英雄章 (`medal_boss_champion`) |
+| `pvp_gladiator` | 闘技場の剣士 | `pvp_victories` | 1 | 闘士の栄光章 (`medal_pvp_bronze`) |
+| `pvp_champion` | 闘技場の覇王 | `pvp_victories` | 10 | 決闘覇王の金章 (`medal_pvp_gold`) |
+| `casino_gambler` | 勝負師の嗜み | `casino_games` | 5 | 勝負師の遊戯章 (`medal_casino_bronze`) |
+| `casino_highroller` | 黄金の勝負師 | `casino_games` | 20 | 幸運の勝負師金章 (`medal_casino_gold`) |
+| `alchemy_novice` | 錬金術の徒 | `alchemy_crafts` | 5 | 錬金士の証 (`medal_alc_bronze`) |
+| `alchemy_master` | 至高のアルケミスト | `alchemy_crafts` | 25 | 賢者の錬金大勲章 (`medal_alc_gold`) |
 
 ---
 

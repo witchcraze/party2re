@@ -83,11 +83,10 @@ type characterAchievementsResponse struct {
 }
 
 type claimAchievementResponse struct {
-	AchievementID      string               `json:"achievement_id"`
-	AchievementName    string               `json:"achievement_name"`
-	Medal              medal.CharacterMedal `json:"medal"`
-	SmallMedalsAwarded int                  `json:"small_medals_awarded"`
-	Character          characterResponse    `json:"character"`
+	AchievementID   string               `json:"achievement_id"`
+	AchievementName string               `json:"achievement_name"`
+	Medal           medal.CharacterMedal `json:"medal"`
+	Character       characterResponse    `json:"character"`
 }
 
 type characterMedalsResponse struct {
@@ -151,11 +150,10 @@ func (h *Handler) handleClaimAchievement(w http.ResponseWriter, r *http.Request)
 		}
 
 		writeJSON(w, http.StatusOK, claimAchievementResponse{
-			AchievementID:      res.AchievementID,
-			AchievementName:    res.AchievementName,
-			Medal:              res.Medal,
-			SmallMedalsAwarded: res.SmallMedalsAwarded,
-			Character:          toCharacterResponse(res.Character),
+			AchievementID:   res.AchievementID,
+			AchievementName: res.AchievementName,
+			Medal:           res.Medal,
+			Character:       toCharacterResponse(res.Character),
 		})
 	})
 }

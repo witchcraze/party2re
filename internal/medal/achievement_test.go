@@ -199,9 +199,6 @@ func TestInitialAchievements_CatalogIntegrity(t *testing.T) {
 		if a.MedalName == "" {
 			t.Errorf("achievement %s has empty medal name", a.ID)
 		}
-		if a.SmallMedalsReward <= 0 {
-			t.Errorf("achievement %s has non-positive small medal reward %d", a.ID, a.SmallMedalsReward)
-		}
 	}
 }
 
@@ -215,22 +212,20 @@ func TestService_RecordProgress_And_Unlock(t *testing.T) {
 
 	customCatalog := []medal.Achievement{
 		{
-			ID:                "test_adv_1",
-			Name:              "冒険の第一歩",
-			Metric:            medal.MetricAdventureVictories,
-			Threshold:         1,
-			MedalID:           "test_medal_1",
-			MedalName:         "テスト勲章1",
-			SmallMedalsReward: 2,
+			ID:        "test_adv_1",
+			Name:      "冒険の第一歩",
+			Metric:    medal.MetricAdventureVictories,
+			Threshold: 1,
+			MedalID:   "test_medal_1",
+			MedalName: "テスト勲章1",
 		},
 		{
-			ID:                "test_adv_10",
-			Name:              "歴戦の冒険者",
-			Metric:            medal.MetricAdventureVictories,
-			Threshold:         10,
-			MedalID:           "test_medal_10",
-			MedalName:         "テスト勲章10",
-			SmallMedalsReward: 5,
+			ID:        "test_adv_10",
+			Name:      "歴戦の冒険者",
+			Metric:    medal.MetricAdventureVictories,
+			Threshold: 10,
+			MedalID:   "test_medal_10",
+			MedalName: "テスト勲章10",
 		},
 	}
 
@@ -297,6 +292,9 @@ func TestService_RecordProgress_And_Unlock(t *testing.T) {
 func TestService_ClaimAchievement(t *testing.T) {
 	charRepo := newMockCharRepo()
 	char, _ := corecharacter.New("Hero")
+	if err := char.AddSmallMedals(7); err != nil {
+		t.Fatal(err)
+	}
 	charRepo.chars[char.ID] = char
 
 	depotRepo := &mockDepotRepo{}
@@ -304,15 +302,14 @@ func TestService_ClaimAchievement(t *testing.T) {
 
 	customCatalog := []medal.Achievement{
 		{
-			ID:                "test_adv_1",
-			Name:              "冒険の第一歩",
-			Metric:            medal.MetricAdventureVictories,
-			Threshold:         1,
-			MedalID:           "test_medal_1",
-			MedalName:         "テスト勲章1",
-			MedalDescription:  "テスト記念",
-			Category:          "adventure",
-			SmallMedalsReward: 3,
+			ID:               "test_adv_1",
+			Name:             "冒険の第一歩",
+			Metric:           medal.MetricAdventureVictories,
+			Threshold:        1,
+			MedalID:          "test_medal_1",
+			MedalName:        "テスト勲章1",
+			MedalDescription: "テスト記念",
+			Category:         "adventure",
 		},
 	}
 
@@ -346,11 +343,12 @@ func TestService_ClaimAchievement(t *testing.T) {
 	if claimRes.AchievementID != "test_adv_1" {
 		t.Errorf("expected achievement ID test_adv_1, got %s", claimRes.AchievementID)
 	}
-	if claimRes.SmallMedalsAwarded != 3 {
-		t.Errorf("expected 3 small medals awarded, got %d", claimRes.SmallMedalsAwarded)
+	// #1168: claims award only the commemorative medal; the spendable balance is untouched.
+	if claimRes.Character.SmallMedals != 7 {
+		t.Errorf("expected character small medals to stay 7, got %d", claimRes.Character.SmallMedals)
 	}
-	if claimRes.Character.SmallMedals != 3 {
-		t.Errorf("expected character small medals to be 3, got %d", claimRes.Character.SmallMedals)
+	if got := charRepo.chars[char.ID].SmallMedals; got != 7 {
+		t.Errorf("expected persisted small medals to stay 7, got %d", got)
 	}
 	if claimRes.Medal.MedalID != "test_medal_1" {
 		t.Errorf("expected medal ID test_medal_1, got %s", claimRes.Medal.MedalID)

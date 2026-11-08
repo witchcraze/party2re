@@ -37,10 +37,12 @@ func TestChallengeRepository(t *testing.T) {
 
 	now := time.Now().UTC()
 	sessionID := fmt.Sprintf("chal_sess_%016x", now.UnixNano())
+	// Private tier: shared test data in tier "0" can outrank this record past the leaderboard limit (#1970).
+	tierID := fmt.Sprintf("t%d", now.UnixNano())
 	s := challenge.ChallengeSession{
 		ID:                 sessionID,
 		CharacterID:        char.ID,
-		TierID:             "0",
+		TierID:             tierID,
 		CurrentRound:       1,
 		CharacterCurrentHP: 150,
 		AccumulatedExp:     50,
@@ -118,7 +120,7 @@ func TestChallengeRepository(t *testing.T) {
 	}
 
 	// 6. FindRecord
-	rec, err := repo.FindRecord(ctx, char.ID, "0")
+	rec, err := repo.FindRecord(ctx, char.ID, tierID)
 	if err != nil || rec == nil {
 		t.Fatalf("FindRecord failed: %v", err)
 	}
@@ -127,7 +129,7 @@ func TestChallengeRepository(t *testing.T) {
 	}
 
 	// 7. GetLeaderboard
-	leaderboard, err := repo.GetLeaderboard(ctx, "0", 100)
+	leaderboard, err := repo.GetLeaderboard(ctx, tierID, 100)
 	if err != nil || len(leaderboard) == 0 {
 		t.Fatalf("GetLeaderboard failed: %v", err)
 	}
