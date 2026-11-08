@@ -29,7 +29,8 @@
       "lock_sequence": [
         { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE" },
         { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE" },
-        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Reads existing Depot; collection discovery after persistence is best-effort." }
+        { "table": "equipment_slots", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Swap unlinks the same-field occupant before its inventory row is deleted and links withdrawn gear after its row is saved." },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Returns the occupant capacity-unchecked; collection failure rolls back the swap." }
       ]
     },
     {

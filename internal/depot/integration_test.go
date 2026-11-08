@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -46,7 +45,11 @@ func TestDepotLifecycle_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	depotService, err := depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, depotRepo)
+	catalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotService, err := depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, depotRepo, depot.WithItemDefinitionProvider(catalog))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,21 +208,15 @@ func TestDepotStackWithdrawRollbackAndConcurrent_Integration(t *testing.T) {
 		t.Fatalf("inventory after rollback = %#v, err = %v", invAfterFail.Items, err)
 	}
 
-	// 2. Paired concurrent withdrawal of the same stack by the same character
+	// 2. Concurrent withdrawals of the same stack: each later swap returns the
+	// held unit to the stack, so every call succeeds and units are conserved.
 	inductor.err = nil
-	var successes atomic.Int64
 	res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		_, err := svc.WithdrawItem(ctx, char.ID, stack.ID)
-		if errors.Is(err, depot.ErrInventoryFull) {
-			return nil
-		}
-		if err == nil {
-			successes.Add(1)
-		}
 		return err
 	})
-	if res.Failures != 0 || successes.Load() != 1 {
-		t.Fatalf("stress results=%+v successes=%d", res, successes.Load())
+	if res.Failures != 0 || res.Deadlocks != 0 || res.Successes != res.TotalOps {
+		t.Fatalf("stress results=%+v", res)
 	}
 
 	depFinal, err := depotRepo.FindByCharacterID(ctx, char.ID)

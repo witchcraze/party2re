@@ -19,14 +19,36 @@ func WithEquipmentRepository(repo EquipmentRepository) Option {
 
 // Called after character/inventory locks and before Depot locks or inventory deletion.
 func (s *Service) detachEquipment(ctx context.Context, char *corecharacter.Character, instanceID string) (bool, error) {
-	if s.equipment == nil {
-		// Explicit test adapters may omit equipment; production supplies the repository.
-		return false, nil
-	}
-	eq, err := s.equipment.FindByCharacterIDForUpdate(ctx, char.ID)
-	if err != nil {
+	eq, err := s.lockEquipment(ctx, char.ID)
+	if err != nil || eq == nil {
 		return false, err
 	}
+	changed, err := unequipInstance(eq, char, instanceID)
+	if err != nil || !changed {
+		return false, err
+	}
+	if err := s.equipment.Save(ctx, *eq); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// lockEquipment returns nil when the repository is not configured.
+func (s *Service) lockEquipment(ctx context.Context, characterID string) (*coreequipment.Equipment, error) {
+	if s.equipment == nil {
+		// Explicit test adapters may omit equipment; production supplies the repository.
+		return nil, nil
+	}
+	eq, err := s.equipment.FindByCharacterIDForUpdate(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	return &eq, nil
+}
+
+// unequipInstance unlinks every slot holding instanceID, clearing weapon or
+// armor customization with its slot, and reports whether anything changed.
+func unequipInstance(eq *coreequipment.Equipment, char *corecharacter.Character, instanceID string) (bool, error) {
 	changed := false
 	for slot, equippedID := range eq.Slots {
 		if equippedID != instanceID {
@@ -43,11 +65,5 @@ func (s *Service) detachEquipment(ctx context.Context, char *corecharacter.Chara
 		}
 		changed = true
 	}
-	if !changed {
-		return false, nil
-	}
-	if err := s.equipment.Save(ctx, eq); err != nil {
-		return false, err
-	}
-	return true, nil
+	return changed, nil
 }

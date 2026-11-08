@@ -117,6 +117,10 @@ func newMemoryItemCatalog() *memoryItemCatalog {
 	defWeapon, _ := item.NewEquipmentDefinition("wea-01", "Iron Sword", 1000, item.SlotMainHand)
 	defShield, _ := item.NewEquipmentDefinition("arm-01", "Iron Shield", 800, item.SlotOffHand)
 	defPotion, _ := item.NewDefinition("item-001", "Herb", 100)
+	defHerb2, _ := item.NewDefinition("item-002", "Herb 2", 100)
+	defCanonicalWeapon, _ := item.NewEquipmentDefinition("weapon-01", "Canonical Sword", 1000, item.SlotMainHand)
+	c.items[defHerb2.ID] = defHerb2
+	c.items[defCanonicalWeapon.ID] = defCanonicalWeapon
 	c.items[defWeapon.ID] = defWeapon
 	c.items[defShield.ID] = defShield
 	c.items[defPotion.ID] = defPotion
@@ -530,41 +534,6 @@ func TestWithdrawItem_PropagatesCollectionError(t *testing.T) {
 	}
 }
 
-func TestWithdrawItem_InventoryFull(t *testing.T) {
-	charRepo := &memoryCharRepo{characters: map[string]corecharacter.Character{}}
-	depotRepo := &memoryDepotRepo{depots: map[string]Depot{}}
-	invRepo := &memoryInvRepo{inventories: map[string]coreinventory.Inventory{}}
-
-	char := corecharacter.Character{ID: "char-full", JobLevel: 5}
-	charRepo.characters[char.ID] = char
-
-	// Character already holds an item in inventory
-	inv, _ := coreinventory.New(char.ID)
-	heldItem, _ := item.NewInstance("wea-01", 1)
-	_ = inv.Add(heldItem)
-	invRepo.inventories[char.ID] = inv
-
-	// Depot holds a potion
-	dp, _ := NewDepot(char.ID)
-	depotPotion, _ := item.NewInstance("item-001", 1)
-	dp.Items = []item.Instance{depotPotion}
-	depotRepo.depots[char.ID] = dp
-
-	service, _ := NewService(depotRepo, charRepo, invRepo)
-
-	// Attempting to withdraw into full inventory must return ErrInventoryFull
-	_, err := service.WithdrawItem(context.Background(), char.ID, depotPotion.ID)
-	if !errors.Is(err, ErrInventoryFull) {
-		t.Fatalf("expected ErrInventoryFull, got %v", err)
-	}
-
-	// Verify depot item was NOT purged
-	savedDepot := depotRepo.depots[char.ID]
-	if len(savedDepot.Items) != 1 || savedDepot.Items[0].ID != depotPotion.ID {
-		t.Fatalf("depot item should not have been removed: %+v", savedDepot.Items)
-	}
-}
-
 func TestDepositAndWithdrawItem_EnhancedEquipment(t *testing.T) {
 	ctx := context.Background()
 	depotRepo := newMemoryDepotRepo()
@@ -576,8 +545,8 @@ func TestDepositAndWithdrawItem_EnhancedEquipment(t *testing.T) {
 	charRepo.characters[char.ID] = char
 
 	inv, _ := coreinventory.New(char.ID)
-	sword0, _ := item.NewInstanceWithEnhancement("wea-01", 1, 0)
-	sword7, _ := item.NewInstanceWithEnhancement("wea-01", 1, 7)
+	sword0, _ := item.NewInstanceWithEnhancement("weapon-01", 1, 0)
+	sword7, _ := item.NewInstanceWithEnhancement("weapon-01", 1, 7)
 	_ = inv.Add(sword0)
 	_ = inv.Add(sword7)
 	invRepo.inventories[char.ID] = inv

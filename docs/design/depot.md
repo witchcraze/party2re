@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. The reconstruction models dynamic capacity, storage expansion, item sorting, direct item selling, inter-character mailing and collection discovery from `system.cgi:get_depot_c` and `depot.cgi`. Known withdrawal differences remain documented below. Gold is kept in character purses and the bank.
+The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. The reconstruction models dynamic capacity, storage expansion, item sorting, direct item selling, inter-character mailing and collection discovery from `system.cgi:get_depot_c` and `depot.cgi`. Withdrawal swaps with the legacy hand fields. Gold is kept in character purses and the bank.
 
 ## Domain Model
 
@@ -61,11 +61,34 @@ To eliminate uninitialized depot records and stale capacity errors, a two-layer 
 - **Deposit Item**: Moves an item instance from character inventory to depot storage.
   - Invariant: Item exists in character inventory.
   - Invariant (Issues #452, #558, #563): Stacking is restricted to stackable items (`Definition.IsStackable() == true` / `Slot == SlotNone`) with `EnhancementLevel == 0`. If a stackable unenhanced item already exists in the depot with identical definition ID, it stacks into the existing slot without consuming an extra slot. Equipment items (weapons, armor, shields, accessories; `IsStackable() == false`) and enhanced items (`EnhancementLevel > 0`) represent discrete gear instances and must NEVER merge into a single slot even if unenhanced (+0), always occupying discrete slots ($\text{len}(Items) < Capacity$).
-- **Withdraw Item**: Moves one unit of an item instance from depot storage to character inventory (`depot.cgi:258–268 hikidasu`).
-  - Invariant: Item exists in depot storage.
-  - Invariant: Character inventory has available space ($\text{len}(Inventory.Items) < Inventory.Capacity$).
-  - Stack splitting: Withdrawing from a depot stack of $N \ge 2$ consumes 1 unit (`ConsumeOne`), leaves $N - 1$ units in the same depot row, and places a quantity-1 instance with a new instance ID in the character's single-hand inventory. Withdrawing from a row of $N = 1$ removes the depot row and preserves its instance ID.
-  - Side effect: Automatically registers the item in the character's Collection book upon withdrawal if configured.
+- **Withdraw Item (`hikidasu`)**: Swaps one unit of the selected depot row into
+  the matching [legacy hand field](items-and-equipment.md#legacy-hand-fields)
+  (`depot.cgi:208–288`).
+  - Invariant: The row exists in depot storage, and its definition and every held
+    definition resolve to a canonical legacy kind; otherwise the withdrawal fails
+    without guessing. Two held rows in the same field are rejected
+    (`ErrInventoryFull`) without change.
+  - Swap: A held occupant of the same field is unequipped and returns to storage at
+    the withdrawn row's position, or merges into an eligible stack. Legacy rewrites
+    one row in place and never checks capacity, so the swap is never rejected for a
+    full depot; when a stack split adds the returned row, the slot count may exceed
+    capacity by one.
+  - Stack splitting: Withdrawing from a stack of $N \ge 2$ leaves $N - 1$ units in
+    the same row and gives the hand a quantity-1 instance with a new ID. A row of
+    $N = 1$ moves with its instance ID.
+  - Equipment: Withdrawn gear is equipped in its slot. A weapon withdrawal clears
+    the weapon name and seal; an armor withdrawal clears the armor name. Held-item
+    swaps leave customization unchanged. The returned instance keeps identity,
+    definition and enhancement, but no customization.
+  - Side effect: Records the withdrawn definition in the Collection book
+    (`_add_collection.cgi`).
+  - Atomicity: Equipment is locked with the inventory before the Depot. The swap
+    unlinks the occupant before its inventory row is deleted and links new gear
+    after its row exists; any failure rolls back hand, equipment, customization,
+    storage and collection together.
+  - Legacy `hikidasu` first collects pending remittances
+    ([#1109](https://github.com/witchcraze/party2re/issues/1109)) and selects rows
+    by name; Go selects an explicit instance ID.
 
 Depositing or sending an equipped instance unlinks its equipment slots before
 removing it from inventory. Removing main-hand equipment clears the sender's
@@ -188,7 +211,7 @@ the mapping below owns individual route dispositions. Connected Gateway
 commands delegate to the listed services and retain their Depot result,
 including gold earned for sales and trimmed recipient/item IDs for sending.
 `depot_expand` and `depot_sort` accept omitted params or an empty object.
-`depot_deposit` and `depot_sell` require a non-null string `item_id`;
+`depot_deposit`, `depot_withdraw` and `depot_sell` require a non-null string `item_id`;
 `depot_sell_batch` requires an explicit array of string `item_ids`.
 `depot_send_item` requires non-null string `item_id` and
 `recipient_character_id`; the actor remains the authenticated path owner.
@@ -203,7 +226,7 @@ maps to the existing services as follows:
 | --- | --- | --- |
 | Listing/header, `get_depot_c` | GetDepot | Selected Depot GET context; whole-list REST retired |
 | `azukeru` | DepositItem | Gateway `depot_deposit`; deposit REST retired |
-| `hikidasu` | WithdrawItem | POST `/characters/{id}/depot/withdraw` |
+| `hikidasu` | WithdrawItem | Gateway `depot_withdraw`; withdrawal REST retired |
 | `uru` | SellItem | Gateway `depot_sell`; sale REST retired |
 | `matomete_uru` | SellItems | Gateway `depot_sell_batch`; batch-sale REST retired |
 | `seiton` | SortItems | Gateway `depot_sort`; sort REST retired |
@@ -213,10 +236,8 @@ maps to the existing services as follows:
 
 This mapping records transport coverage, not full legacy parity. Sorting and
 equipped-item movement use the domain contracts above.
-Legacy `hikidasu` (`depot.cgi:208–288`) swaps held equipment/items back into
-storage, while current WithdrawItem moves into inventory and rejects a full
-slot; the equivalent atomic swap contract remains undecided in #1127. Equipped
-item deposit/send uses the atomic equipment-detachment contract above. Shared
+Withdrawal follows the swap contract above; equipped item deposit/send uses the
+atomic equipment-detachment contract. Shared
 NPC/presence/log effects and remaining command/route migration stay under #947.
 Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item
 lists, all empty in the reference checkout. Current `SendItem` has no such

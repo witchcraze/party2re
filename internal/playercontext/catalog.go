@@ -222,7 +222,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		ID:             "depot_withdraw",
 		Label:          "預かり所からアイテムを引き出す",
 		Category:       "economy",
-		OperationID:    "postCharactersIdDepotWithdraw",
+		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"item_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},

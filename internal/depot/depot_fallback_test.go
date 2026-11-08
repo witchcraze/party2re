@@ -486,12 +486,12 @@ func TestDepositItem_ValidationAndExecutionErrors(t *testing.T) {
 func TestWithdrawItem_ValidationAndExecutionErrors(t *testing.T) {
 	ctx := context.Background()
 
-	potion, _ := item.NewInstance("potion", 2)
+	potion, _ := item.NewInstance("item-001", 2)
 	depotWithItem, _ := NewDepot("char-1")
 	_ = depotWithItem.AddItem(potion)
 
 	baseService := func(depotRepo Repository, invRepo InventoryRepository) *Service {
-		svc, _ := NewService(depotRepo, &stubCharRepo{}, invRepo)
+		svc, _ := NewService(depotRepo, &stubCharRepo{}, invRepo, WithItemDefinitionProvider(newMemoryItemCatalog()))
 		return svc
 	}
 
@@ -528,7 +528,7 @@ func TestWithdrawItem_ValidationAndExecutionErrors(t *testing.T) {
 			return nil, errTestBoom
 		},
 	}
-	svcWithRunner, _ := NewService(depotRepoOK, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr))
+	svcWithRunner, _ := NewService(depotRepoOK, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr), WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svcWithRunner.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom on runner error, got %v", err)
 	}
@@ -539,9 +539,9 @@ func TestWithdrawItem_ValidationAndExecutionErrors(t *testing.T) {
 		t.Fatalf("expected ErrItemNotFound, got %v", err)
 	}
 
-	// Inventory full (inv.Add fails because item ID already in inv)
+	// Ambiguous held hand (two held-item rows) is rejected
 	invWithSameItem, _ := coreinventory.New("char-1")
-	_ = invWithSameItem.Add(potion)
+	invWithSameItem.Items = []item.Instance{{ID: "h1", DefinitionID: "item-001", Quantity: 1}, {ID: "h2", DefinitionID: "item-002", Quantity: 1}}
 	invRepoWithSameItem := &stubInvRepo{
 		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
 			return invWithSameItem, nil
@@ -556,7 +556,7 @@ func TestWithdrawItem_ValidationAndExecutionErrors(t *testing.T) {
 	depotRepoSaveErr := &stubDepotRepo{
 		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			d, _ := NewDepot("char-1")
-			p, _ := item.NewInstance("potion", 2)
+			p, _ := item.NewInstance("item-001", 2)
 			p.ID = potion.ID
 			_ = d.AddItem(p)
 			return d, nil
@@ -835,7 +835,7 @@ func TestTransactionPaths_DepositItem(t *testing.T) {
 func TestTransactionPaths_WithdrawItem(t *testing.T) {
 	ctx := context.Background()
 
-	potion, _ := item.NewInstance("potion", 2)
+	potion, _ := item.NewInstance("item-001", 2)
 	depotWithItem, _ := NewDepot("char-1")
 	_ = depotWithItem.AddItem(potion)
 
@@ -864,7 +864,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return nil, errTestBoom
 		},
 	}
-	svc, _ := NewService(depotRepoOK, charRepoOK, invRepoOK, WithTransactionRunner(runnerErr))
+	svc, _ := NewService(depotRepoOK, charRepoOK, invRepoOK, WithTransactionRunner(runnerErr), WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
@@ -875,7 +875,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return corecharacter.Character{}, corecharacter.ErrNotFound
 		},
 	}
-	svc, _ = NewService(depotRepoOK, charRepoNotFound, invRepoOK)
+	svc, _ = NewService(depotRepoOK, charRepoNotFound, invRepoOK, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, corecharacter.ErrNotFound) {
 		t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
 	}
@@ -889,7 +889,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return errTestBoom
 		},
 	}
-	svc, _ = NewService(depotRepoOK, charRepoUpdateErr, invRepoOK)
+	svc, _ = NewService(depotRepoOK, charRepoUpdateErr, invRepoOK, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom on char update, got %v", err)
 	}
@@ -900,7 +900,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return Depot{}, errTestBoom
 		},
 	}
-	svc, _ = NewService(depotRepoErr, charRepoOK, invRepoOK)
+	svc, _ = NewService(depotRepoErr, charRepoOK, invRepoOK, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
@@ -911,26 +911,26 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return Depot{}, ErrNotFound
 		},
 	}
-	svc, _ = NewService(depotRepoNotFound, charRepoOK, invRepoOK)
+	svc, _ = NewService(depotRepoNotFound, charRepoOK, invRepoOK, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 
 	// 6. Item not found in depot
-	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoOK)
+	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoOK, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", "nonexistent-item"); !errors.Is(err, ErrItemNotFound) {
 		t.Fatalf("expected ErrItemNotFound, got %v", err)
 	}
 
-	// 7. Inventory full (item ID already present in inventory)
+	// 7. Ambiguous held hand (two held-item rows) is rejected
 	invWithSameItem, _ := coreinventory.New("char-1")
-	_ = invWithSameItem.Add(potion)
+	invWithSameItem.Items = []item.Instance{{ID: "h1", DefinitionID: "item-001", Quantity: 1}, {ID: "h2", DefinitionID: "item-002", Quantity: 1}}
 	invRepoWithSameItem := &stubInvRepo{
 		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
 			return invWithSameItem, nil
 		},
 	}
-	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoWithSameItem)
+	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoWithSameItem, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, ErrInventoryFull) {
 		t.Fatalf("expected ErrInventoryFull, got %v", err)
 	}
@@ -939,7 +939,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 	depotRepoSaveErr := &stubDepotRepo{
 		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			d, _ := NewDepot("char-1")
-			p, _ := item.NewInstance("potion", 2)
+			p, _ := item.NewInstance("item-001", 2)
 			p.ID = potion.ID
 			_ = d.AddItem(p)
 			return d, nil
@@ -948,7 +948,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return errTestBoom
 		},
 	}
-	svc, _ = NewService(depotRepoSaveErr, charRepoOK, invRepoOK)
+	svc, _ = NewService(depotRepoSaveErr, charRepoOK, invRepoOK, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom on depot save, got %v", err)
 	}
@@ -962,7 +962,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return errTestBoom
 		},
 	}
-	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoSaveErr)
+	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoSaveErr, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom on inv save, got %v", err)
 	}
@@ -973,14 +973,14 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return errTestBoom
 		},
 	}
-	svc, _ = NewServiceWithTransaction(depotRepoOK, charRepoOK, invRepoOK, txProviderErr)
+	svc, _ = NewServiceWithTransaction(depotRepoOK, charRepoOK, invRepoOK, txProviderErr, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom with txProvider, got %v", err)
 	}
 
 	// 11. Happy path
 	freshDepot, _ := NewDepot("char-1")
-	freshPotion, _ := item.NewInstance("potion", 2)
+	freshPotion, _ := item.NewInstance("item-001", 2)
 	freshPotion.ID = potion.ID
 	_ = freshDepot.AddItem(freshPotion)
 
@@ -989,7 +989,7 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 			return freshDepot, nil
 		},
 	}
-	svc, _ = NewService(depotRepoFresh, charRepoOK, invRepoOK)
+	svc, _ = NewService(depotRepoFresh, charRepoOK, invRepoOK, WithItemDefinitionProvider(newMemoryItemCatalog()))
 	res, err := svc.WithdrawItem(ctx, "char-1", potion.ID)
 	if err != nil {
 		t.Fatalf("unexpected error on happy path: %v", err)

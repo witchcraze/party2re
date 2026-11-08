@@ -360,7 +360,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/shop/accessory/synthesize", h.handleAccessorySynthesize)
 	mux.HandleFunc("GET /characters/{id}/shop/accessory/recipes", h.handleAccessoryRecipes)
 
-	mux.HandleFunc("POST /characters/{id}/depot/withdraw", h.handleWithdrawDepotItem)
 	mux.HandleFunc("POST /characters/{id}/depot/send-money", h.handleDepotSendMoney)
 
 	mux.HandleFunc("GET /park/posts", h.handleGetParkPosts)
