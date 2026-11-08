@@ -254,9 +254,8 @@ EX destination and start enablement [#1961](https://github.com/witchcraze/party2
 
 **Main floor** (`1.cgi`). Only one initial variant exists: entry skips `_` files (`quest.cgi:673–703`).
 The floor is 9×9 with round limit 80. The start's only exit is the altar `A`, so the first
-move always reaches it. Native layouts are independently authored, but they keep that
-property, the per-event shortest distances and the destination corridor order below.
-Passages use the base spawn with the floor pool. The map overrides base `event_B`
+move always reaches it. Native layouts are independently authored under the
+[layout constraints](#map13-layout-constraints) below. Passages use the base spawn with the floor pool. The map overrides base `event_B`
 (`1.cgi:59`), so this floor has no boss or treasure.
 
 | Event | Rule |
@@ -284,6 +283,43 @@ Channels and target freeze after the transfer. Native state is typed: channels, 
 activation, disclosure, selected destination and per-event once facts. Accepted draws
 are stored with their revision-checked step and never redrawn on reload or retry.
 
+#### Map13 layout constraints
+
+These are the movement costs measured on the legacy floors (`1.cgi:8–19`, `_1.cgi:8–19`,
+`_EX.cgi:8–19`). The cells themselves are not reproduced. A native layout may use any
+cells, walls and passage count, but it must keep these 9×9 bounds, the adjacency and the
+shortest move counts, because they set the 80-round budget and the event order.
+Distances count successful moves. "Avoiding" means the path enters no event cell other
+than its two endpoints.
+
+- Main floor: the start has exactly one open neighbour, the altar. Every other main-floor
+  cell is reachable only through the altar, so each event's distance from the start is
+  1 + its distance from the altar. Every pair of main-floor events is connected by an
+  avoiding path with the shortest lengths below. Unrestricted shortest paths equal these,
+  except B–Y, which is 4 through the altar. Re-toggling a channel costs two moves
+  (step off, step back).
+
+  | Avoiding | A | B | C | R | W | Y |
+  |---|---|---|---|---|---|---|
+  | A | 0 | 2 | 2 | 6 | 6 | 2 |
+  | B | 2 | 0 | 4 | 4 | 8 | 6 |
+  | C | 2 | 4 | 0 | 4 | 4 | 4 |
+  | R | 6 | 4 | 4 | 0 | 4 | 8 |
+  | W | 6 | 8 | 4 | 4 | 0 | 4 |
+  | Y | 2 | 6 | 4 | 8 | 4 | 0 |
+
+- Destinations (both routes): the arrival is a passage at the altar's coordinate,
+  with exactly one open neighbour. The floor has exactly 11 reachable cells with these
+  adjacencies and no others:
+  - a corridor: arrival – first cell (alternate boss, or a passage on EX) – recovery – boss – center treasure;
+  - center – west, center – east, center – north;
+  - north – top;
+  - west corner adjacent to both west and north; east corner adjacent to both east and north.
+
+  Shortest distances from the arrival: first cell 1, recovery 2, boss 3, center 4,
+  west/east/north 5, corners/top 6. No treasure is reachable without passing the
+  recovery, the boss and the center treasure cell.
+
 **Destinations** (`_1.cgi`, `_EX.cgi`). From arrival, a corridor runs north: alternate
 boss `Z` (normal) or a passage (EX), then recovery `Q`, then boss `V`. Above it lie a treasure
 row of three, another row of three and a top cell. Every event is once per run.
@@ -295,7 +331,7 @@ Define L, the legacy `$len`, as the count of non-digit flags at request start (`
 | Alternate boss | First single boss iff `rand(10) > L − 1`, so P = (8 − k)/10; else the second (`_1.cgi:89–94,116–168`). | None. Passages use the one-entry EX pool. |
 | Recovery | Party HP and an independent MP base of `(rand(20) + 25) × L`, element "none", through the shared party-heal routines with the actor's modifiers; fallen members excluded (`_1.cgi:96–102`, `_skill.cgi:9056–9188`). | Same, with its L (`_EX.cgi:55–61`). |
 | Boss | Three-member group with party scaling, then the special boss field: allied max-stat caps and status reset, lasting for the run (`_1.cgi:39–45`, `_battle.cgi:1476–1532`). | First the phantom default field (`_battle.cgi:1786–1791`), then the EX group and the special field (`_EX.cgi:39–46`). |
-| Treasure | Gated by the frozen channels (`_1.cgi:47–87`): first row W (center), R (west), B (east); next row Y (center), k > 1 (west), k > 2 (east); top k > 3, which is unreachable. Unavailable cells are plain passages with no flag or display. | Six ungated ordinary cells. The top cell is a fixed treasure: chests per allied player, fallen included, with no job-78/wish bonus (`_EX.cgi:47–53`, `_npc_action.cgi:555–598`). |
+| Treasure | Gated by the frozen channels (`_1.cgi:47–87`): center W, west R, east B, north Y, west corner k > 1, east corner k > 2, top k > 3 (unreachable). Unavailable cells are plain passages with no flag or display. | Six ungated ordinary cells. The top cell is a fixed treasure: chests per allied player, fallen included, with no job-78/wish bonus (`_EX.cgi:47–53`, `_npc_action.cgi:555–598`). |
 
 Contents and inspection: [#1762](https://github.com/witchcraze/party2re/issues/1762).
 Groups/scaling: [#1954](https://github.com/witchcraze/party2re/issues/1954).
