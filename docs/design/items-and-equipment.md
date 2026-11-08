@@ -68,10 +68,11 @@ inventory rows classified by `Definition.LegacyStorageKey` kind: kind 1 weapons
 (main-hand), kind 2 armor (body) and kind 3 every `item-NNN` entry, so shields
 (off-hand), accessories and consumables share the single held field. This kind
 differs from `Slot.Kind()`, which groups shields and accessories with armor.
-[Depot withdrawal](depot.md#1-item-deposit--withdrawal) applies this mapping.
-Other acquisition paths still use the single-row inventory capacity or
-`Slot.Kind()` and do not equip delivered gear
-([#1948](https://github.com/witchcraze/party2re/issues/1948)).
+[Depot withdrawal](depot.md#1-item-deposit--withdrawal) and [Shop single purchase](shops.md#5-purchase-routing-and-depot-auto-transfer)
+apply this mapping, equipping gear into `equipment_slots` atomically on acquisition
+when the target hand field is empty, and routing overflow or occupied hands to Depot.
+Empty hand fields accept grants independently without being blocked by occupied
+fields in other hand kinds (`Inventory.IsFull(definitionID)`).
 
 ---
 

@@ -197,8 +197,65 @@ func TestInventoryCapacity(t *testing.T) {
 	if err := inv.Add(item1); err != nil {
 		t.Fatal(err)
 	}
+	if !inv.IsFull("potion") {
+		t.Fatal("inventory with 1 potion should be full for tool hand")
+	}
+	if inv.IsFull("weapon-01") {
+		t.Fatal("inventory with 1 potion should not be full for weapon hand")
+	}
+	if inv.IsFull("armor-01") {
+		t.Fatal("inventory with 1 potion should not be full for armor hand")
+	}
+	if inv.IsFull() {
+		t.Fatal("inventory with 1 potion should not be completely full (capacity 3)")
+	}
+
+	item2, _ := item.NewInstance("weapon-01", 1)
+	if err := inv.Add(item2); err != nil {
+		t.Fatal(err)
+	}
+	if !inv.IsFull("weapon-02") {
+		t.Fatal("inventory with weapon should be full for weapon hand")
+	}
+	if inv.IsFull("armor-01") {
+		t.Fatal("inventory with weapon and tool should not be full for armor hand")
+	}
+	if inv.IsFull() {
+		t.Fatal("inventory with 2 items should not be completely full (capacity 3)")
+	}
+
+	item3, _ := item.NewInstance("armor-01", 1)
+	if err := inv.Add(item3); err != nil {
+		t.Fatal(err)
+	}
 	if !inv.IsFull() {
-		t.Fatal("inventory with 1 item should be full at default capacity")
+		t.Fatal("inventory with all 3 hand fields occupied should be full")
+	}
+}
+
+func TestInventoryHandOccupancyToolShieldAccessorySharing(t *testing.T) {
+	// Shields (SlotOffHand) and accessories (SlotAccessory) share kind 3 with consumables
+	inv, _ := New("char-tool-sharing")
+
+	shieldInst, _ := item.NewInstance("item-071", 1) // shield
+	if err := inv.Add(shieldInst); err != nil {
+		t.Fatal(err)
+	}
+
+	if !inv.IsHandOccupied(3) {
+		t.Errorf("tool hand should be occupied by shield")
+	}
+	if !inv.IsFull("item-001") {
+		t.Errorf("consumable should be considered full when holding shield")
+	}
+	if !inv.IsFull("item-012") {
+		t.Errorf("accessory should be considered full when holding shield")
+	}
+	if inv.IsFull("weapon-01") {
+		t.Errorf("weapon should not be full when holding shield")
+	}
+	if inv.IsFull("armor-01") {
+		t.Errorf("armor should not be full when holding shield")
 	}
 }
 

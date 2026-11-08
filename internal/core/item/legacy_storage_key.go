@@ -64,3 +64,38 @@ func IsToolID(definitionID string) bool {
 	kind, _, err := (Definition{ID: definitionID}).LegacyStorageKey()
 	return err == nil && kind == 3
 }
+
+// LegacyHandKind returns the legacy hand field kind (1 = weapon $m{wea}, 2 = armor $m{arm}, 3 = item/accessory/shield $m{ite})
+// for this definition. For synthetic IDs without standard prefixes, it falls back to Slot (SlotMainHand -> 1, SlotBody -> 2, otherwise 3).
+func (d Definition) LegacyHandKind() int {
+	if kind, _, err := d.LegacyStorageKey(); err == nil {
+		return kind
+	}
+	switch d.Slot {
+	case SlotMainHand:
+		return 1
+	case SlotBody:
+		return 2
+	default:
+		return 3
+	}
+}
+
+// LegacyHandKindByID returns the legacy hand kind for a definition ID, consulting the default catalog when available.
+func LegacyHandKindByID(definitionID string) int {
+	if strings.HasPrefix(definitionID, "weapon-") {
+		return 1
+	}
+	if strings.HasPrefix(definitionID, "armor-") {
+		return 2
+	}
+	if strings.HasPrefix(definitionID, "item-") {
+		return 3
+	}
+	if cat, err := DefaultCatalog(); err == nil {
+		if def, err := cat.FindByID(definitionID); err == nil {
+			return def.LegacyHandKind()
+		}
+	}
+	return 3
+}

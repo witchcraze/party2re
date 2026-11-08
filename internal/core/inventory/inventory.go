@@ -16,8 +16,11 @@ var (
 	ErrInventoryFull    = errors.New("inventory is full")
 )
 
-// DefaultMaxCapacity is 1, matching the legacy Party2 Perl CGI single hand slot constraint ($m{ite}).
-const DefaultMaxCapacity = 1
+// HandCount is 3, matching the legacy Party2 Perl CGI hand fields ($m{wea}, $m{arm}, $m{ite}).
+const (
+	HandCount          = 3
+	DefaultMaxCapacity = HandCount
+)
 
 type Inventory struct {
 	CharacterID string
@@ -35,10 +38,29 @@ func (i *Inventory) MaxCapacity() int {
 	return DefaultMaxCapacity
 }
 
-// IsFull reports whether the inventory has reached or exceeded its maximum capacity.
-func (i *Inventory) IsFull() bool {
+// IsHandOccupied reports whether the legacy hand field for the given kind
+// (1 = weapon, 2 = armor, 3 = tool/shield/accessory) already holds an item.
+func (i *Inventory) IsHandOccupied(kind int) bool {
 	if i == nil {
 		return false
+	}
+	for _, inst := range i.Items {
+		if item.LegacyHandKindByID(inst.DefinitionID) == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// IsFull reports whether the inventory cannot accept an item.
+// If definitionID is provided, it reports whether the target legacy hand field is occupied.
+// Otherwise, it reports whether all hand fields are occupied.
+func (i *Inventory) IsFull(definitionID ...string) bool {
+	if i == nil {
+		return false
+	}
+	if len(definitionID) > 0 && strings.TrimSpace(definitionID[0]) != "" {
+		return i.IsHandOccupied(item.LegacyHandKindByID(definitionID[0]))
 	}
 	return len(i.Items) >= i.MaxCapacity()
 }

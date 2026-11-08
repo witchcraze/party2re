@@ -81,11 +81,11 @@ Legacy Party2 routes purchased goods based on current inventory occupancy and qu
 
 1. **Direct Inventory Delivery**:
    - Single item purchase ($\text{quantity} = 1$).
-   - The relevant equipment/item slot is currently **empty**:
-     - MainHand slot for weapons
-     - Body slot for armors
-     - First empty consumable item slot for items
-   - The purchased item is placed directly in character inventory and recorded in item collection (`RecordItemCollection`).
+   - The relevant legacy hand field is currently **empty**:
+     - MainHand slot for weapons (kind 1)
+     - Body slot for armors (kind 2)
+     - Held tool slot for shields (`SlotOffHand`), accessories (`SlotAccessory`), or consumables (`SlotNone`) (kind 3)
+   - The purchased item is placed directly in character inventory, equippable gear (`Slot != SlotNone`) is linked in `equipment_slots` in the same transaction, and recorded in item collection (`RecordItemCollection`).
    - Shopkeeper delivers normal delivery message.
 
 2. **Auto-Transfer to Depot**:

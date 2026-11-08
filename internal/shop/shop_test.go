@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -120,6 +121,32 @@ func (r *depotRepoStub) Save(_ context.Context, value depot.Depot) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.depots[value.CharacterID] = value
+	return nil
+}
+
+type equipmentRepoStub struct {
+	mu     sync.Mutex
+	equips map[string]coreequipment.Equipment
+}
+
+func newEquipmentRepoStub() *equipmentRepoStub {
+	return &equipmentRepoStub{equips: make(map[string]coreequipment.Equipment)}
+}
+
+func (r *equipmentRepoStub) FindByCharacterIDForUpdate(_ context.Context, characterID string) (coreequipment.Equipment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	eq, ok := r.equips[characterID]
+	if !ok {
+		return coreequipment.New(characterID)
+	}
+	return eq.Clone(), nil
+}
+
+func (r *equipmentRepoStub) Save(_ context.Context, value coreequipment.Equipment) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.equips[value.CharacterID] = value.Clone()
 	return nil
 }
 
@@ -856,5 +883,118 @@ func TestSellWeapon40ResalePayout(t *testing.T) {
 	}
 	if res.Character.Money != 15000 {
 		t.Errorf("Character.Money = %d, want 15000", res.Character.Money)
+	}
+}
+
+func TestPurchaseEquipsGearInEmptySlot(t *testing.T) {
+	cat, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog(): %v", err)
+	}
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	depotRepo := newDepotRepoStub()
+	equipRepo := newEquipmentRepoStub()
+
+	service, err := shop.NewService(
+		charRepo,
+		invRepo,
+		cat,
+		shop.WithDepotRepository(depotRepo),
+		shop.WithEquipmentRepository(equipRepo),
+	)
+	if err != nil {
+		t.Fatalf("NewService(): %v", err)
+	}
+
+	ctx := context.Background()
+	char := createTestCharacter(t, charRepo, "Hero", 50000)
+
+	// 1. Purchase weapon-01
+	res, err := service.Purchase(ctx, char.ID, "weapon-01", 1)
+	if err != nil {
+		t.Fatalf("Purchase(weapon-01) error = %v", err)
+	}
+	if res.TransferredToDepot {
+		t.Fatal("expected weapon-01 in inventory")
+	}
+
+	// Verify equipped in equipment_slots
+	eq, err := equipRepo.FindByCharacterIDForUpdate(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eqInstID, ok := eq.Equipped(item.SlotMainHand)
+	if !ok || eqInstID != res.ItemInstance.ID {
+		t.Fatalf("weapon-01 not equipped in SlotMainHand: got %s, want %s", eqInstID, res.ItemInstance.ID)
+	}
+
+	// 2. Purchase armor-01 into empty armor hand
+	resArmor, err := service.Purchase(ctx, char.ID, "armor-01", 1)
+	if err != nil {
+		t.Fatalf("Purchase(armor-01) error = %v", err)
+	}
+	if resArmor.TransferredToDepot {
+		t.Fatal("expected armor-01 in inventory")
+	}
+
+	eq, err = equipRepo.FindByCharacterIDForUpdate(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	armorInstID, ok := eq.Equipped(item.SlotBody)
+	if !ok || armorInstID != resArmor.ItemInstance.ID {
+		t.Fatalf("armor-01 not equipped in SlotBody: got %s, want %s", armorInstID, resArmor.ItemInstance.ID)
+	}
+	// MainHand should still be weapon-01
+	if eq.Slots[item.SlotMainHand] != res.ItemInstance.ID {
+		t.Fatalf("weapon-01 should remain equipped in SlotMainHand")
+	}
+
+	// 3. Purchase shield item-071 into empty tool hand
+	resShield, err := service.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-071", 1)
+	if err != nil {
+		t.Fatalf("PurchaseInShop(item-071) error = %v", err)
+	}
+	if resShield.TransferredToDepot {
+		t.Fatal("expected item-071 shield in inventory")
+	}
+
+	eq, err = equipRepo.FindByCharacterIDForUpdate(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shieldInstID, ok := eq.Equipped(item.SlotOffHand)
+	if !ok || shieldInstID != resShield.ItemInstance.ID {
+		t.Fatalf("item-071 not equipped in SlotOffHand: got %s, want %s", shieldInstID, resShield.ItemInstance.ID)
+	}
+
+	// 4. Purchasing another kind 3 item (item-001) while shield occupies tool hand -> routes to depot
+	resPotion, err := service.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-001", 1)
+	if err != nil {
+		t.Fatalf("PurchaseInShop(item-001) error = %v", err)
+	}
+	if !resPotion.TransferredToDepot {
+		t.Fatal("expected item-001 to route to depot when tool hand is occupied")
+	}
+
+	// 5. Sell the equipped weapon -> unlinks from equipment_slots
+	sellRes, err := service.Sell(ctx, char.ID, res.ItemInstance.ID, 1)
+	if err != nil {
+		t.Fatalf("Sell() error = %v", err)
+	}
+	if len(sellRes.Inventory.Items) != 2 { // armor and shield remain
+		t.Errorf("inventory item count after sell = %d, want 2", len(sellRes.Inventory.Items))
+	}
+
+	eqAfterSell, err := equipRepo.FindByCharacterIDForUpdate(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, stillEquipped := eqAfterSell.Equipped(item.SlotMainHand); stillEquipped {
+		t.Fatal("weapon should be unequipped after sell")
+	}
+	if eqAfterSell.Slots[item.SlotBody] != resArmor.ItemInstance.ID {
+		t.Fatal("armor should remain equipped")
 	}
 }

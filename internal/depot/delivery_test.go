@@ -189,7 +189,7 @@ func TestDeliverRewardItem_FullDepot_PolicyDeliverOverCapacity(t *testing.T) {
 	char := corecharacter.Character{ID: charID, JobLevel: 0} // cap = 5
 
 	inv, _ := coreinventory.New(charID)
-	existingInst, _ := item.NewInstance("item-shield", 1)
+	existingInst, _ := item.NewInstance("weapon-existing", 1)
 	_ = inv.Add(existingInst)
 	invRepo := &mockInvRepo{inv: inv}
 

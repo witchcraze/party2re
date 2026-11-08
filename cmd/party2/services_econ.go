@@ -60,6 +60,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		core.itemCatalog,
 		shop.WithTransactionProvider(core.txProvider),
 		shop.WithDepotRepository(depotRepo),
+		shop.WithEquipmentRepository(equipRepo),
 	)
 	if err != nil {
 		return nil, err

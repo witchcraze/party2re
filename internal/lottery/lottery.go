@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -243,20 +242,7 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string) (RaffleRes
 				return invErr
 			}
 
-			for _, inst := range inv.Items {
-				if s.itemDefProvider != nil {
-					def, err := s.itemDefProvider.FindByID(inst.DefinitionID)
-					if err == nil && (def.Slot == coreitem.SlotNone || def.Slot == "" || strings.HasPrefix(inst.DefinitionID, "item-")) {
-						occupied = true
-						break
-					}
-				} else {
-					if strings.HasPrefix(inst.DefinitionID, "item-") {
-						occupied = true
-						break
-					}
-				}
-			}
+			occupied = inv.IsFull(prize.ItemDefinitionID)
 		}
 
 		// 5. Lock Depot (Rank 5) if item must go to depot
