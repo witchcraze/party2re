@@ -11,7 +11,12 @@ description: Rules for maintaining the Single Source of Truth (SSOT) and synchro
 
 ## 2. Documentation Role and Timing
 - **Minimum Prose for Implemented Behavior:** For details already expressed in source, tests or generated specifications, MUST retain only the minimum explanation needed to understand responsibilities, public contracts, domain rules and non-obvious rationale. Link to the owning source when needed; do not reproduce private helpers, internal data structures, SQL or execution traces in prose.
-- **Recording Domain Rules:** Record newly verified, enduring game rules or formulas in their owning `docs/design/` section with source evidence; merge with existing explanations rather than append investigation reports.
+- **Design Document Content:** `docs/design/` MUST keep only content that neither the implementing code/tests nor a direct reading of the legacy routine provides:
+  - approved decisions and their rationale, including intentional departures from legacy behavior;
+  - unresolved specifications and known gaps, linked to open Issues;
+  - verified rules not yet implemented, with legacy evidence, until code and tests own them;
+  - non-obvious findings with legacy line references: source defects, unreachable or broken branches, misleading names or values, and values captured or applied at unexpected times.
+- MUST NOT restate per-entry formulas, parameters or execution order that implemented code or tests express, and MUST NOT keep legacy line references whose only purpose is to locate a routine findable by its name. Merge new findings into the owning section rather than appending investigation reports.
 - **Avoid Pre-emptive Detailed Tech Specs:** While domain rules should be documented early, do not pre-draft overly rigid technical specification files (e.g., defining exact structs and function signatures in markdown) before writing code. Let the detailed technical boundaries settle through TDD and code, then finalize the documentation.
 
 ## 3. Update Affected Explanations within PR
@@ -29,7 +34,7 @@ description: Rules for maintaining the Single Source of Truth (SSOT) and synchro
 - When further documentation cleanup opportunities are found outside the active objective, MUST search for an existing open Issue and create a dedicated documentation-cleanup Issue or refine an existing one under `01-development-workflow.md`. Identify concrete target sections, the redundancy or implementation detail to remove, and the contracts/evidence to preserve; do not require a repository-wide sweep to find candidates.
 - Add a section or document only for a distinct enduring contract, decision or procedure that existing owners cannot explain clearly. Issue-specific investigation, completion records and temporary cautions belong in Issues/PRs; private implementation details and reproducible inventories belong in source, tests or generated artifacts.
 - Add an agent rule only for a cross-cutting constraint or decision criterion needed in future work. A local bug normally needs a regression test, not a repository rule. For mechanically enforced constraints, keep the actionable requirement and link to the check; do not copy its implementation or exception lists into prose.
-- Before deleting or consolidating, MUST inspect contents and inbound references. Preserve unique requirements, approved decisions, legacy evidence and unresolved gaps in their owner or a linked Issue; update affected indexes, links and guidance references. Age or line count alone MUST NOT justify deletion.
+- Before deleting or consolidating, MUST inspect contents and inbound references. Preserve unique requirements, approved decisions, the non-obvious findings defined in §2 and unresolved gaps in their owner or a linked Issue; update affected indexes, links and guidance references. Age or line count alone MUST NOT justify deletion.
 - Do not move completion history into the frozen inventory.
 - In the PR's existing documentation assessment, briefly explain meaningful consolidation or necessary growth and its owner. Do not require deletion quotas, a fixed document sweep or a separate maintenance log.
 

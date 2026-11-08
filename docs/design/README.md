@@ -2,7 +2,7 @@
 
 This directory serves as the **Single Source of Truth (SSOT)** for enduring game and domain rules in Party2 reconstruction (`party2re`), per [`.agents/rules/02-documentation-sync.md`](../../.agents/rules/02-documentation-sync.md).
 
-Specifications here represent language-agnostic gameplay mechanics, formulas, caps, state machines, and system boundaries whose authority is the original Party2 Perl CGI reference codebase (`party2/`). Implementation notes and planned protocols are identified separately. A Go test or merged issue does not establish legacy parity; see [known differences and audit scope](../migration/documentation-audit.md).
+Game behavior's authority is the original Party2 Perl CGI reference codebase (`party2/`). These documents keep the decisions, open gaps, not-yet-implemented rules and non-obvious legacy findings defined by [rule 02's design document content criteria](../../.agents/rules/02-documentation-sync.md#2-documentation-role-and-timing); implemented formulas and parameters live in code and tests. A Go test or merged issue does not establish legacy parity; see [known differences and audit scope](../migration/documentation-audit.md).
 
 ---
 
