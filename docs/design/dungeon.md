@@ -339,8 +339,9 @@ Rewards: [#1957](https://github.com/witchcraze/party2re/issues/1957).
 Per-character combat: [#1865](https://github.com/witchcraze/party2re/issues/1865).
 Start admission: the original player experience applies, so the leader needs
 job level ≥ 80, the menu threshold (`quest.cgi:209`). The server formula's lower
-bound of 25 (`quest.cgi:530–536`) is not adopted. Enforcement and the join rule:
-[#1955](https://github.com/witchcraze/party2re/issues/1955). Map13 adds no
+bound of 25 (`quest.cgi:530–536`) is not adopted. Joining members are not gated
+by job level (`add_member`, `quest.cgi:928–1079`). The thresholds for all dungeons and
+their enforcement: [#1955](https://github.com/witchcraze/party2re/issues/1955). Map13 adds no
 map-specific action (no `add_battle_action2` override). Start, Move, observation and
 Escape reuse the native use cases above. The map stays unlisted and start-rejected
 until both destinations are implemented, so players never meet a partial map.
