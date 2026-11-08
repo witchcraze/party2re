@@ -443,12 +443,6 @@ func TestNPC_Inspect_And_Talk(t *testing.T) {
 	if resI.SecretShopHint != "＠ひみつのみせ に行きたい" {
 		t.Errorf("item inspect secret shop hint mismatch: %s", resI.SecretShopHint)
 	}
-
-	// Talk
-	talkW, err := svc.TalkNPC(context.Background(), shop.ShopTypeWeapon)
-	if err != nil || talkW == "" {
-		t.Errorf("TalkNPC weapon returned empty or error: %v", err)
-	}
 }
 
 func TestDiscoverSecretShop(t *testing.T) {

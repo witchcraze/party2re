@@ -27,11 +27,6 @@ type batchPurchaseResponse struct {
 	NPCMessage     string `json:"npc_message"`
 }
 
-type npcDialogueResponse struct {
-	Dialogue       string `json:"dialogue"`
-	SecretShopHint string `json:"secret_shop_hint,omitempty"`
-}
-
 type discoverSecretResponse struct {
 	Unlocked bool   `json:"unlocked"`
 	Message  string `json:"message"`
@@ -120,56 +115,6 @@ func batchPurchaseNPCMessage(shopType shop.ShopType, characterName string) strin
 	default:
 		return "Transferred to depot."
 	}
-}
-
-func shopInspectDialogue(shopType shop.ShopType) string {
-	switch shopType {
-	case shop.ShopTypeWeapon:
-		return "おいおい、俺は武器じゃねぇぜ"
-	case shop.ShopTypeArmor:
-		return "な、な、何を見ているッスか！？！"
-	case shop.ShopTypeItem:
-		return "ほえ？なんでしょうかぁ？"
-	case shop.ShopTypeAccessory:
-		return "なにか私についてる？"
-	default:
-		return ""
-	}
-}
-
-func (h *Handler) handleShopInspectNPC(w http.ResponseWriter, r *http.Request) {
-	charID := r.PathValue("id")
-	shopTypeStr := r.PathValue("type")
-	shopType := shop.ShopType(shopTypeStr)
-
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		res, err := h.shops.InspectNPC(r.Context(), shopType, char.ID)
-		if err != nil {
-			mapShopHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, npcDialogueResponse{
-			Dialogue:       shopInspectDialogue(shopType),
-			SecretShopHint: res.SecretShopHint,
-		})
-	})
-}
-
-func (h *Handler) handleShopTalkNPC(w http.ResponseWriter, r *http.Request) {
-	charID := r.PathValue("id")
-	shopTypeStr := r.PathValue("type")
-	shopType := shop.ShopType(shopTypeStr)
-
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		msg, err := h.shops.TalkNPC(r.Context(), shopType)
-		if err != nil {
-			mapShopHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, npcDialogueResponse{
-			Dialogue: msg,
-		})
-	})
 }
 
 func (h *Handler) handleShopDiscoverSecret(w http.ResponseWriter, r *http.Request) {

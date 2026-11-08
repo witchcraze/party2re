@@ -2,8 +2,8 @@
 
 > **Status:** approved on 2026-11-08 under
 > [#1937](https://github.com/witchcraze/party2re/issues/1937). Storage, facility
-> observation and the action wait run; the writers and members are planned, and each
-> section names the issue that implements it.
+> observation, the action wait and NPC interaction run; command echoes, speech and
+> members are planned, and each section names the issue that implements it.
 
 Legacy Party2 is a conversation screen. Every place has a short shared log. A player's
 command and the NPC's reply are both written to it, and a short wait follows each
@@ -88,9 +88,10 @@ logs stay with their own features.
 
 ### NPC interaction ([#1940](https://github.com/witchcraze/party2re/issues/1940))
 
-- Each facility registers its NPC name, colour, words and an optional inspect text.
-- **Talk**: the shared `npc_talk` command resolves the facility from the current scene. It logs a random word as an NPC row and starts the wait.
-- **Inspect**: the shared `npc_inspect` command returns the facility's text, or the default text, to the actor only. It writes no row and starts no wait.
+- The HTTP layer keeps one NPC registry keyed by scene destination: name, words (with `{name}` for the actor) and an optional inspect text. The NPC colour is the legacy `$npc_color` `#FF69B4`. Facilities in the registry offer both commands; the facility comes from the current scene, and the scene's qualification is rechecked.
+- **Talk**: `npc_talk` logs the actor row `＠はなす` and a random word as the NPC row, and starts the wait. A facility without words would answer privately with `返事がない、ただのしかばねのようだ…`.
+- **Inspect**: `npc_inspect` returns the facility's `shiraberu_npc` text, or the default `しかし何も見つからなかった…`, to the actor only (`private: true`). It writes no row and starts no wait (`WaitPrivate`).
+- Legacy word lines that embed live facts (Gem Store and Accessory item recommendations, Depot capacity) are omitted until those facts are wired.
 - Facility-specific NPC acts such as `ぱふぱふ` stay facility commands.
 
 ### Members ([#1943](https://github.com/witchcraze/party2re/issues/1943))

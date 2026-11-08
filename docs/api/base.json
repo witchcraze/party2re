@@ -511,27 +511,6 @@
         ],
         "type": "object"
       },
-      "BlackMarketTalkResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "dialogue": {
-            "example": "よく来たな…。ここは闇市場だ…",
-            "type": "string"
-          },
-          "npc_name": {
-            "example": "@闇商人",
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "npc_name",
-          "dialogue"
-        ],
-        "type": "object"
-      },
       "BlackMarketTradeResult": {
         "properties": {
           "character_id": {
@@ -5334,6 +5313,56 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "npc_talk"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "npc_inspect"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
           }
         ]
       },
@@ -5889,7 +5918,7 @@
       "BankSceneData": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Owned Bank state from GetState; observation never executes NPC talk, navigates or mutates savings. Bank talk/inspect REST routes remain for independent reconciliation and retirement.",
+        "description": "Owned Bank state from GetState; observation never runs NPC talk, navigates or mutates savings. NPC dialogue comes from npc_talk/npc_inspect.",
         "properties": {
           "parent": {
             "const": "town",
@@ -5913,13 +5942,6 @@
           "npc_name": {
             "type": "string",
             "maxLength": 128
-          },
-          "dialogues": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "maxLength": 1024
-            }
           }
         },
         "required": [
@@ -5928,8 +5950,7 @@
           "money",
           "deposit",
           "max_deposit",
-          "npc_name",
-          "dialogues"
+          "npc_name"
         ]
       },
       "SelectedSceneSubject": {
@@ -6346,16 +6367,11 @@
           "secret_shop_hint": {
             "type": "string",
             "maxLength": 128
-          },
-          "dialogue": {
-            "type": "string",
-            "maxLength": 1024
           }
         },
         "required": [
           "shop_type",
-          "npc_name",
-          "dialogue"
+          "npc_name"
         ]
       },
       "ShopCatalogSceneData": {
@@ -8376,28 +8392,6 @@
           "definition_id",
           "name",
           "enhancement_level"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "BankNPCInfo": {
-        "properties": {
-          "dialogues": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "dialogues"
         ],
         "type": "object",
         "additionalProperties": false
@@ -15710,21 +15704,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "NpcDialogueResponse": {
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          },
-          "secret_shop_hint": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dialogue"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "StoreDetails": {
         "properties": {
           "interiors": {
@@ -16502,7 +16481,7 @@
       "GemStoreSceneData": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Owned gem box plus the gem catalog for the actor's job level, every synthesis recipe and the shopkeeper's dialogue. Observation never buys, sends, synthesizes or appraises. Appraisal candidates come from the depot scene.",
+        "description": "Owned gem box plus the gem catalog for the actor's job level and every synthesis recipe; NPC dialogue comes from npc_talk/npc_inspect. Observation never buys, sends, synthesizes or appraises. Appraisal candidates come from the depot scene.",
         "properties": {
           "parent": {
             "type": "string",
@@ -16524,20 +16503,13 @@
             "items": {
               "$ref": "#/components/schemas/GemStoreRecipe"
             }
-          },
-          "dialogue": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         },
         "required": [
           "parent",
           "gem_box",
           "catalog",
-          "recipes",
-          "dialogue"
+          "recipes"
         ]
       }
     },

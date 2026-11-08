@@ -91,7 +91,7 @@ Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and
 | GET `/characters/{id}/blackmarket`, GET `.../blackmarket/points` (retired) | POST `scene_enter` with `destination:blackmarket`, then GET `/api/v1/characters/{id}/context` |
 | POST `.../blackmarket/sacrifice` (retired) | POST `/api/v1/characters/{id}/actions`, `action:blackmarket_sacrifice`, explicit `params.item_instance_id` |
 | POST `.../blackmarket/trade` (retired) | Same Gateway, `action:blackmarket_trade`, explicit `params.prize_id`; the result keeps the delivered Depot instance and remaining points |
-| POST `.../blackmarket/talk`, POST `.../blackmarket/inspect` (retained) | Existing dialogue; legacy action effects remain unresolved under #947 |
+| POST `.../blackmarket/talk`, POST `.../blackmarket/inspect` (retired) | Same Gateway, `action:npc_talk` / `action:npc_inspect` in the Black Market scene; both require the scene's qualification |
 
 ### Scoped legacy action reconciliation
 
@@ -102,9 +102,9 @@ Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and
 | `とりひき` with a target (116–125, 135–144) | `blackmarket_trade` | Explicit prize ID replaces the name. A U-Rare trade at zero points rejects instead of redisplaying the list; neither moves assets. Full-Depot delivery remains #1139's specification. |
 | `ささげる` without a target (168–172, 200–250, 310) | `sacrifice_candidates` | Lists eligible instances only, inventory then Depot; legacy lists every owned item and rejects common ones when offered. The empty-handed message is an empty array. |
 | `ささげる` with a target (179–300) | `blackmarket_sacrifice` | Explicit instance ID replaces legacy's Depot-first name match. Sacrificing an equipped item is still blocked by #1140, and the candidate list does not mark equipped rows. |
-| Shared `はなす` (`lib/system.cgi:240–246`), `shiraberu_npc` (81–83) | Retained talk/inspect POSTs | Legacy NPC messages enter the facility log; Go returns them only to the caller. |
+| Shared `はなす` (`lib/system.cgi:240–246`), `shiraberu_npc` (81–83) | `npc_talk`, `npc_inspect` | None: talk logs the word and starts the wait; inspect is private. |
 
-Legacy successful actions also apply the shared action cooldown and write `npc_com` to the facility log, while list views set `$act_time = 0`. Go applies neither effect to these commands; this is the same unresolved cooldown, presence and log reconciliation as other migrated facilities, and the Gateway connection does not certify parity for it.
+Legacy successful actions also apply the shared action wait and write `npc_com` to the facility log, while list views set `$act_time = 0`. The Gateway now applies the [action wait](../architecture/place-log.md#action-wait-1939); writing these commands' log rows remains [#1941](https://github.com/witchcraze/party2re/issues/1941), and presence remains open.
 
 ---
 

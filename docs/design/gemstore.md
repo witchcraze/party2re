@@ -18,7 +18,7 @@
 | `おくる` | `gem_store.cgi:219–261` / `okuru` | `GemStoreService.SendGem` | `gemstore_send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与（満杯時拒否）。旧実装の受信者は名前指定 |
 | `かこう` | `gem_store.cgi:286–332` / `kako` | `GemStoreService.SynthesizeGem` | `gemstore_synthesize`、候補は scene の `recipes` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
 | `かんてい` | `gem_store.cgi:337–398` / `kantei` | `GemStoreService.AppraiseItem` | `gemstore_appraise`、候補は depot scene | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否）。倉庫読取エラー（SQL/キャンセル）は即時中断、未作成倉庫（`depot.ErrNotFound`）のみ許容 |
-| `はなす` | `gem_store.cgi:89–95` / `@words` | `GemStoreService.GetDialogue` | scene の `dialogue` | 店主 `@ジェマ` の会話文。旧実装は1行を無作為に選び、5行目に販売中の宝石名を埋め込む。Goは固定5行を返す |
+| `はなす`, NPC `しらべる` | `gem_store.cgi:89–95` / `@words`, `system.cgi` 共通 | 共通 `npc_talk` / `npc_inspect` | なし | `@ジェマ` の会話を1行無作為に選んで施設ログへ書き、行動ウェイトを始める。しらべるは既定文を本人にだけ返す。旧5行目（販売中の宝石名入り）は未接続のため省く |
 
 ### Gatewayと参照・未移行操作
 
@@ -26,7 +26,7 @@
 
 scene は所有者の宝珠箱、操作者の転職回数で購入できる宝石、全レシピ、会話文を返す。いずれも固定カタログか容量上限のある一覧なのでページングしない。`catalog` の `price` は定価で、購入時はその5倍を支払う。観測は購入・配送・合成・鑑定を行わない。旧カタログGETは任意の転職回数を指定できたが、scene は旧店頭と同じく操作者の段階だけを表示する。
 
-旧dispatchは `party2/lib/gem_store.cgi:100–106`。対象未指定時の候補表示は scene と明示入力で代替する。旧名指定はGoのID指定に置き換える。最低売却価格、数値順とカタログ順の一致、会話の無作為選択、旧NPC `しらべる`・cooldown・presence・logの再現は [#947](https://github.com/witchcraze/party2re/issues/947) の残存照合事項とし、transport移行を完全なゲーム仕様互換の根拠にしない。購入条件は #1135、レシピ解決は #1134、満杯時配送・受信上限は #1139 が扱う。
+旧dispatchは `party2/lib/gem_store.cgi:100–106`。対象未指定時の候補表示は scene と明示入力で代替する。旧名指定はGoのID指定に置き換える。最低売却価格、数値順とカタログ順の一致、各コマンドの施設ログ書き込み、presenceの再現は [#947](https://github.com/witchcraze/party2re/issues/947) の残存照合事項とし、transport移行を完全なゲーム仕様互換の根拠にしない。購入条件は #1135、レシピ解決は #1134、満杯時配送・受信上限は #1139 が扱う。
 
 ---
 

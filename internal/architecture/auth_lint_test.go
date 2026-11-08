@@ -432,7 +432,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handlePurchase":            "handler.go",
 		"handleSell":                "handler.go",
 		"handleShopBatchPurchase":   "shop.go",
-		"handleShopTalkNPC":         "shop.go",
 		"handleShopDiscoverSecret":  "shop.go",
 		"handleAccessoryBuy":        "shop.go",
 		"handleAccessorySell":       "shop.go",

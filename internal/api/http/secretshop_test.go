@@ -15,14 +15,6 @@ import (
 
 type stubSecretShopService struct{ apihttp.SecretShopService }
 
-func (*stubSecretShopService) Talk(context.Context, string) (string, error) {
-	return "メェ〜", nil
-}
-
-func (*stubSecretShopService) Inspect(context.Context, string) (string, error) {
-	return secretshop.InspectDialogue, nil
-}
-
 func (*stubSecretShopService) PuffPuff(_ context.Context, characterID string) (*secretshop.PuffPuffResult, error) {
 	return &secretshop.PuffPuffResult{
 		CharacterID: characterID,
@@ -46,8 +38,6 @@ func TestSecretShopNPCEndpoints(t *testing.T) {
 	)
 	router := h.Router()
 	for _, tc := range []struct{ path, message string }{
-		{"talk", "メェ〜"},
-		{"inspect", secretshop.InspectDialogue},
 		{"puffpuff", secretshop.PuffPuffDialogue},
 	} {
 		t.Run(tc.path, func(t *testing.T) {

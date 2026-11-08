@@ -102,7 +102,6 @@ type ShopService interface {
 	GetCatalog(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
 	BatchPurchase(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
 	InspectNPC(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
-	TalkNPC(ctx context.Context, shopType shop.ShopType) (string, error)
 	DiscoverSecretShop(ctx context.Context, characterID string) (bool, string, error)
 	Synthesize(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error)
 }
@@ -124,7 +123,7 @@ type RescueService interface {
 type Handler struct {
 	playerContext  *playercontext.Service
 	sceneAdapters  map[string]sceneAdapter
-	placeLog       PlaceLogReader
+	placeLog       PlaceLog
 	actionCommands map[string]actionCommand
 	players        PlayerService
 	characters     CharacterService
@@ -355,8 +354,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /shop/sell", h.handleSell)
 	mux.HandleFunc("GET /characters/{id}/shop/{type}", h.handleGetShopCatalog)
 	mux.HandleFunc("POST /characters/{id}/shop/batch-purchase", h.handleShopBatchPurchase)
-	mux.HandleFunc("POST /characters/{id}/shop/{type}/inspect", h.handleShopInspectNPC)
-	mux.HandleFunc("POST /characters/{id}/shop/{type}/talk", h.handleShopTalkNPC)
 	mux.HandleFunc("POST /characters/{id}/shop/discover-secret", h.handleShopDiscoverSecret)
 	mux.HandleFunc("POST /characters/{id}/shop/accessory/buy", h.handleAccessoryBuy)
 	mux.HandleFunc("POST /characters/{id}/shop/accessory/sell", h.handleAccessorySell)
@@ -365,11 +362,6 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("POST /characters/{id}/depot/withdraw", h.handleWithdrawDepotItem)
 	mux.HandleFunc("POST /characters/{id}/depot/send-money", h.handleDepotSendMoney)
-
-	if h.bank != nil {
-		mux.HandleFunc("POST /characters/{id}/bank/inspect", h.handleBankInspectNPC)
-		mux.HandleFunc("POST /characters/{id}/bank/talk", h.handleBankTalkNPC)
-	}
 
 	mux.HandleFunc("GET /park/posts", h.handleGetParkPosts)
 	mux.HandleFunc("POST /park/posts", h.handlePostParkMessage)
@@ -471,8 +463,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/wishing-well/exchange", h.handleWishingWellExchange)
 
 	// Secret Shop
-	mux.HandleFunc("POST /characters/{id}/secretshop/talk", h.handleSecretShopTalk)
-	mux.HandleFunc("POST /characters/{id}/secretshop/inspect", h.handleSecretShopInspect)
 	mux.HandleFunc("POST /characters/{id}/secretshop/puffpuff", h.handleSecretShopPuffPuff)
 
 	// Tavern
@@ -492,8 +482,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/plantation/harvest", h.handlePlantationHarvest)
 
 	// Black Market
-	mux.HandleFunc("POST /characters/{id}/blackmarket/talk", h.handleBlackMarketTalk)
-	mux.HandleFunc("POST /characters/{id}/blackmarket/inspect", h.handleBlackMarketInspect)
 
 	// Collections
 	mux.HandleFunc("GET /characters/{id}/collections/monsters", h.handleGetMonsterBook)

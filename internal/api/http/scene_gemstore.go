@@ -11,11 +11,10 @@ import (
 // GETs. Every list is a fixed catalog or capacity-bounded, so it is not paged.
 // GetGemBox already returns a non-nil item slice, including for a new box.
 type GemStoreSceneData struct {
-	Parent   string            `json:"parent"`
-	GemBox   gemstore.GemBox   `json:"gem_box"`
-	Catalog  []gemstore.Gem    `json:"catalog"`
-	Recipes  []gemstore.Recipe `json:"recipes"`
-	Dialogue []string          `json:"dialogue"`
+	Parent  string            `json:"parent"`
+	GemBox  gemstore.GemBox   `json:"gem_box"`
+	Catalog []gemstore.Gem    `json:"catalog"`
+	Recipes []gemstore.Recipe `json:"recipes"`
 }
 
 func (h *Handler) gemStoreSceneData(ctx context.Context, r playercontext.Result) (any, error) {
@@ -28,7 +27,6 @@ func (h *Handler) gemStoreSceneData(ctx context.Context, r playercontext.Result)
 		return nil, err
 	}
 	return GemStoreSceneData{Parent: "town", GemBox: box,
-		Catalog:  append([]gemstore.Gem{}, h.gemstore.GetCatalog(char.JobLevel)...),
-		Recipes:  append([]gemstore.Recipe{}, h.gemstore.GetRecipes()...),
-		Dialogue: append([]string{}, h.gemstore.GetDialogue()...)}, nil
+		Catalog: append([]gemstore.Gem{}, h.gemstore.GetCatalog(char.JobLevel)...),
+		Recipes: append([]gemstore.Recipe{}, h.gemstore.GetRecipes()...)}, nil
 }

@@ -202,49 +202,6 @@ func TestShopEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/shop/{type}/inspect success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/item/inspect", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rr := httptest.NewRecorder()
-
-		router.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
-		}
-
-		var resp map[string]interface{}
-		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if resp["dialogue"] == "" {
-			t.Error("expected dialogue to be non-empty")
-		}
-		if resp["secret_shop_hint"] != shop.SecretShopHint {
-			t.Errorf("expected secret shop hint, got %v", resp["secret_shop_hint"])
-		}
-	})
-
-	t.Run("POST /characters/{id}/shop/{type}/talk success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/weapon/talk", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rr := httptest.NewRecorder()
-
-		router.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
-		}
-
-		var resp map[string]interface{}
-		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if resp["dialogue"] == "" {
-			t.Error("expected dialogue to be non-empty")
-		}
-	})
-
 	t.Run("POST /characters/{id}/shop/discover-secret success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/discover-secret", nil)
 		req.Header.Set("Authorization", "Bearer valid-token")

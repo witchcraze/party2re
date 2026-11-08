@@ -24,9 +24,9 @@ type ShopProduct struct {
 	PurchaseParams ShopPurchaseParams    `json:"purchase_params"`
 }
 
+// ShopNPCObservation keeps NPC facts; dialogue comes from npc_talk/npc_inspect.
 type ShopNPCObservation struct {
 	shop.NPCInspectResult
-	Dialogue string `json:"dialogue"`
 }
 
 type ShopSceneInfo struct {
@@ -63,7 +63,7 @@ func (h *Handler) shopSceneData(ctx context.Context, r playercontext.Result) (an
 		return nil, err
 	}
 	info := ShopSceneInfo{Parent: "town", Title: catalog.Title, ShopType: catalog.ShopType,
-		NPC:      ShopNPCObservation{NPCInspectResult: inspect, Dialogue: shopInspectDialogue(inspect.ShopType)},
+		NPC:      ShopNPCObservation{NPCInspectResult: inspect},
 		Quantity: ShopQuantityBounds{Minimum: 1, Maximum: shop.MaxTransactionQuantity}}
 	products := make([]ShopProduct, 0, len(catalog.Items))
 	for _, p := range catalog.Items {

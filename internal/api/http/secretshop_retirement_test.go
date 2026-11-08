@@ -44,14 +44,12 @@ func TestOpenAPISecretShopRetirementKeepsNPCAndGateway(t *testing.T) {
 	if err := json.Unmarshal(OpenAPISpec(), &spec); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/characters/{id}/secretshop", "/characters/{id}/secretshop/purchase"} {
+	for _, path := range []string{"/characters/{id}/secretshop", "/characters/{id}/secretshop/purchase", "/characters/{id}/secretshop/talk", "/characters/{id}/secretshop/inspect"} {
 		if _, exists := spec.Paths[path]; exists {
 			t.Errorf("retired path remains in OpenAPI: %s", path)
 		}
 	}
 	for _, route := range []struct{ method, path string }{
-		{"post", "/characters/{id}/secretshop/talk"},
-		{"post", "/characters/{id}/secretshop/inspect"},
 		{"post", "/characters/{id}/secretshop/puffpuff"},
 		{"post", "/api/v1/characters/{id}/actions"},
 		{"get", "/api/v1/characters/{id}/context"},

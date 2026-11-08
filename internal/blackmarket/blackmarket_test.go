@@ -346,35 +346,6 @@ func TestGetStatus(t *testing.T) {
 	}
 }
 
-func TestTalkAndInspect(t *testing.T) {
-	ctx := context.Background()
-	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
-	bmRepo := newMockBlackMarketRepo()
-	catalog, _ := blackmarket.LoadDefaultCatalog()
-
-	svc, _ := blackmarket.NewService(charRepo, invRepo, bmRepo, catalog)
-
-	char := corecharacter.Character{ID: "char-talker", Name: "Talker", JobLevel: blackmarket.MinAccessJobLevel}
-	_ = charRepo.Update(ctx, char)
-
-	talk, err := svc.Talk(ctx, "char-talker")
-	if err != nil {
-		t.Fatalf("unexpected Talk error: %v", err)
-	}
-	if talk.NPCName != "@闇商人" {
-		t.Errorf("expected @闇商人, got %s", talk.NPCName)
-	}
-
-	inspect, err := svc.Inspect(ctx, "char-talker")
-	if err != nil {
-		t.Fatalf("unexpected Inspect error: %v", err)
-	}
-	if inspect.NPCName != "@闇商人" {
-		t.Errorf("expected @闇商人, got %s", inspect.NPCName)
-	}
-}
-
 func TestSacrificeItem_Inventory(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
@@ -863,12 +834,6 @@ func TestValidationErrors(t *testing.T) {
 	if _, err := svc.GetStatus(ctx, ""); err != blackmarket.ErrCharacterNotFound {
 		t.Errorf("expected ErrCharacterNotFound, got %v", err)
 	}
-	if _, err := svc.Talk(ctx, ""); err != blackmarket.ErrCharacterNotFound {
-		t.Errorf("expected ErrCharacterNotFound, got %v", err)
-	}
-	if _, err := svc.Inspect(ctx, ""); err != blackmarket.ErrCharacterNotFound {
-		t.Errorf("expected ErrCharacterNotFound, got %v", err)
-	}
 	if _, err := svc.SacrificeItem(ctx, "", "inst"); err != blackmarket.ErrCharacterNotFound {
 		t.Errorf("expected ErrCharacterNotFound, got %v", err)
 	}
@@ -1044,8 +1009,6 @@ func TestAccessRequiresDiscoveryJobLevelWithoutMutation(t *testing.T) {
 
 	for name, run := range map[string]func() error{
 		"status":    func() error { _, err := f.svc.GetStatus(ctx, "hero"); return err },
-		"talk":      func() error { _, err := f.svc.Talk(ctx, "hero"); return err },
-		"inspect":   func() error { _, err := f.svc.Inspect(ctx, "hero"); return err },
 		"sacrifice": func() error { _, err := f.svc.SacrificeItem(ctx, "hero", rare.ID); return err },
 		"trade":     func() error { _, err := f.svc.TradePrize(ctx, "hero", "bm_prize_087"); return err },
 	} {

@@ -20,7 +20,6 @@ type GemStoreService interface {
 	SortGemBox(ctx context.Context, characterID string) (gemstore.GemBox, error)
 	GetCatalog(jobLevel int) []gemstore.Gem
 	GetRecipes() []gemstore.Recipe
-	GetDialogue() []string
 }
 
 type gemStoreItemRequest struct {

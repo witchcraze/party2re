@@ -123,9 +123,9 @@ A recipe consists of:
 | `れしぴ` (46-94) | `compendium` in the scene | Legacy awards `comp_alc` when the list is viewed; Go awards it at delivery because observation does not write. |
 | `れんきん` without a target (99-144) | `compendium` in the scene | None for listing visibility. |
 | `れんきん` with a target (99-144) | `alchemy_synthesize` | Explicit recipe ID replaces the base and material names. Messages omit those names and rejections use structured codes. |
-| Shared `はなす` (`@words`, 22-26), `shiraberu_npc` (31-33) | No Go operation | NPC dialogue is unresolved under [#947](https://github.com/witchcraze/party2re/issues/947). |
+| Shared `はなす` (`@words`, 22-26), `shiraberu_npc` (31-33) | `npc_talk`, `npc_inspect` | None; talk logs the word and starts the action wait, inspect returns `@トロデ「いやん。どこをさわっとるんじゃっ！」` privately. |
 
-Legacy successful actions also apply the shared action cooldown and write `npc_com` to the facility log, while list views set `$act_time = 0`. Go applies neither effect; this is the same unresolved cooldown, presence and log reconciliation as other migrated facilities, and the Gateway connection does not certify parity for it.
+Legacy successful actions also apply the shared action wait and write `npc_com` to the facility log, while list views set `$act_time = 0`. The Gateway now applies the [action wait](../architecture/place-log.md#action-wait-1939); writing these commands' log rows remains [#1941](https://github.com/witchcraze/party2re/issues/1941), and presence remains open.
 
 ---
 

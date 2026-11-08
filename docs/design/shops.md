@@ -155,8 +155,7 @@ The secret shop stocks the 8 authentic rare items specified in legacy `secret.cg
 - **Purchase Dialogue**: The presentation layer formats the purchase acknowledgement from the item name and delivery destination: `<item>メェ〜。持ってけメェ〜` for inventory, or `<item>は<character>メェ〜の預かり所の方に投げましたメェ〜` for depot delivery (legacy `secret.cgi:40-44`). Domain purchase results contain structured purchase facts only.
 
 ### 7.3. NPC Interactions & Puff-Puff Service
-- **Talk (`POST /characters/{id}/secretshop/talk`)**: Sheep dialogue hints (*"値段は高いメェ〜けれど、他では手に入らないレアものだメェ〜"*).
-- **Inspect (`POST /characters/{id}/secretshop/inspect`)**: Lore background of Himitsuji.
+- **Talk and inspect**: the shared `npc_talk` / `npc_inspect` commands in the SecretShop scene ([NPC commands](../architecture/place-log.md#npc-interaction-1940)); qualification is rechecked.
 - **Puff-Puff (`POST /characters/{id}/secretshop/puffpuff`)**: Authentic humorous interaction (*"パフパフ♥ パフパフ♥ パフパフ♥"*). No HP/MP healing or stat changes.
 
 ### 7.4. Purchase Transport and Remaining Migration
@@ -168,9 +167,8 @@ defines strict input, rejection and refresh recovery behavior. Status GET and
 purchase POST are retired. Clients enter SecretShop with `scene_enter`, GET
 character context for catalog/product observations, and purchase through the
 Gateway with explicit item/quantity (send `quantity:1` for a single item; the
-retired REST quantity default does not apply). Talk, inspect and puff-puff POSTs
-remain registered pending their own replacement and action-effect reconciliation
-under #947.
+retired REST quantity default does not apply). Talk and inspect use the shared
+NPC commands; the puff-puff POST remains pending its replacement under #947.
 Qualified town navigation now exposes `secretshop`: JobLevel ≥7 is checked without
 catalog reads for town discovery and again before entry/select/page writes.
 Saved selections whose qualification or product availability disappears become
@@ -186,8 +184,8 @@ Legacy `secret.cgi:34–82` dispatches `かう` to `kau` and `ぱふぱふ` to `
 The former maps to `PurchaseItem` through the Gateway; the latter remains the
 puff-puff REST operation. `item.cgi:57–69` entry
 now maps to qualified ordinary scene navigation under #1047; CGI presence/log
-effects remain separate reconciliation. Shared talk/inspect and puff-puff effects
-and their route replacements remain pending. Legacy `kau` buys one item; current
+effects remain separate reconciliation. Puff-puff's private log row and its route
+replacement remain pending. Legacy `kau` buys one item; current
 Go permits 1..99 and routes bulk quantities to depot. That existing implementation difference is not an
 approved replacement for the legacy single-purchase rule or changed by this
 transport adapter. Depot overflow behavior remains an independent specification
@@ -237,8 +235,9 @@ bounds 1–9999 from the existing service. These are current Go quantity bounds;
 legacy single purchase bought one item, while batch input named multiple items.
 Catalog membership does not promise sufficient funds or inventory/depot capacity.
 
-Observations include structured InspectNPC facts and reuse HTTP inspect dialogue.
-They never invoke random TalkNPC, secret discovery, purchase, sell or synthesis.
+Observations include structured InspectNPC facts (NPC name, secret-shop hint).
+Dialogue comes only from `npc_talk`/`npc_inspect`; observation never invokes
+secret discovery, purchase, sell or synthesis.
 Missing or newly excluded products become `selection_unavailable` without a
 saved fallback. Required reads yield no partial observation; known navigation
 outcomes survive refresh failure and recover with GET alone. No keys, tables,
@@ -259,8 +258,8 @@ The complete shop additions and read/mutation branches reconcile as follows:
 | Weapon/Armor/Item `まとめてかう` → `matomete_kau` (`weapon.cgi:116–173`, `armor.cgi:115–178`, `item.cgi:137–197`) | No-target catalog → the same selected observation. Multi-name purchase/depot delivery → BatchPurchase; Gateway migration #947. Not registered for Accessory. |
 | Item hidden `ひみつのみせ` → `himitsunomise` (`item.cgi:57–69`) | Inspect hint is observed. Qualified `scene_enter` selects `secretshop` through the approved ordinary-navigation contract; SecretShop catalog/product data and explicit purchase command are connected. DiscoverSecretShop REST and legacy presence/log reconciliation remain #947. |
 | Accessory `ごうせい` → `acce`, `check_depot`, `get_item_no` (`accessory.cgi:100–101,172–292`) | Recipe preview → AllSynthesisRecipes/REST; Synthesize handles material consumption/output. Recipe scene and mutation migration remain #947; held-elixir gap remains in [Accessory design](accessory-shop.md). `get_depot` is an uncalled utility, not an omitted action. |
-| Shared `しらべる` → `shiraberu` → `shiraberu_npc` (`system.cgi:322–329,413`; `weapon.cgi:38–40`, `armor.cgi:34–36`, `item.cgi:45–48`) | InspectNPC structured facts + HTTP presentation observed. Accessory inherits the default “nothing found” in legacy, while Go supplies its own custom line; this existing difference remains #947. Non-NPC inspection remains social migration #949. |
-| Shared `はなす` → `hanasu` (`system.cgi:240–263`) using facility `@words` | TalkNPC/REST retain random dialogue. Go's abbreviated static lines omit legacy dynamic recommendations/status and contain wording differences; no exact-dialogue parity claim. Gateway talk/log/presence migration remains #947/#949. |
+| Shared `しらべる` → `shiraberu` → `shiraberu_npc` (`system.cgi:322–329,413`; `weapon.cgi:38–40`, `armor.cgi:34–36`, `item.cgi:45–48`) | `npc_inspect` returns the legacy `$npc_name「…」` line privately; Accessory now uses the legacy default “nothing found”. Non-NPC inspection remains social migration #949. |
+| Shared `はなす` → `hanasu` (`system.cgi:240–263`) using facility `@words` | `npc_talk` logs a random word and starts the action wait. Go's static lines still omit legacy dynamic recommendations (Accessory's random item line) and keep earlier wording differences; no exact-dialogue parity claim. |
 | Shared `br`, `いどう`, `まち`, `ほーむ`, conditional `ぎるど`, `ささやき`, `ろぐあうと`, `すくしょ` (`system.cgi:9–24`) | Full mapping and deferred ownership are in the [shared reconciliation](../architecture/client-agent-api.md#scoped-legacy-navigation-reconciliation). Separator/auth redirects are superseded; movement uses scene controls; remaining social/presence/photo work belongs to #949. |
 | Purchase delivery → `send_item` (`system.cgi:818–837`) / `_add_collection.cgi`; helper filter → `get_helper_item` (`system.cgi:1424–1438`) | Existing inventory/depot/collection services and helper read port. Observation calls no delivery or collection write. Mutation reconciliation remains #947. |
 
@@ -286,8 +285,6 @@ alone does not establish per-command schema independence or authorize retirement
 | POST `/shop/purchase` | Existing standard purchase; no Gateway mutation adapter/schema replacement. |
 | POST `/shop/sell` | Existing sale; held-item preview and Gateway replacement remain. |
 | POST `/characters/{id}/shop/batch-purchase` | Existing atomic batch/depot operation; no Gateway replacement. |
-| POST `/characters/{id}/shop/{type}/inspect` | Typed scene reuses facts, but direct inspect/resolver migration remains. |
-| POST `/characters/{id}/shop/{type}/talk` | Random NPC interaction/log reconciliation is not performed by observation. |
 | POST `/characters/{id}/shop/discover-secret` | Secret discovery/entry replacement remains. |
 | POST `/characters/{id}/shop/accessory/buy` | Accessory pricing/tier mutation has no Gateway replacement. |
 | POST `/characters/{id}/shop/accessory/sell` | Accessory sale has no Gateway replacement. |

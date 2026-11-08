@@ -17,7 +17,7 @@ Legacy source: `party2/lib/free.cgi`. Commands use the [Action Gateway](../archi
 | `かう` | 143-207 | `PurchaseListing` | `fleamarket_purchase` with `listing_id` | Charges the buyer and delivers to the buyer's Depot. Legacy leaves your own listings out of the prompt; Go rejects them with `FLEAMARKET_OWN_LISTING`. |
 | `みる` | 212-237 | `ListActiveListings` | `listings` in the scene | Observation only, with no cooldown, as legacy sets `act_time = 0`. A row carries every fact the legacy table shows, so no detail read replaces the retired one. |
 | `もどす` | 242-298 | `CancelListing`, `GetActiveCharacterListings` | `fleamarket_cancel` with `listing_id`; `owned_listings` in the scene | Returns the item to the seller's Depot. Legacy deletes finished rows and offers only active ones, so the former Go read of sold and cancelled history is retired. Those rows stay in the table as records but are not observed. |
-| `はなす`, NPC `しらべる` | `system.cgi` shared | None | None | No Go operation. Unresolved under #947. |
+| `はなす`, NPC `しらべる` | `system.cgi` shared | `npc_talk`, `npc_inspect` | None | Talk logs one of `@FMGKDP`'s words and starts the action wait; inspect returns the legacy default privately. |
 
 ### Known differences
 
@@ -25,7 +25,7 @@ These are recorded, not approved departures:
 
 - **Seller payment**: legacy `send_money` (`free.cgi:174`) holds the money as a pending remittance. Go credits the wallet at purchase, and `AddMoney` clamps at the cap, so excess gold is lost. Owner: #1902.
 - **Full Depot**: legacy `send_item` does not check capacity on purchase or return (`free.cgi:161-171,257-271`). Go rejects with `ErrDepotFull` and rolls back. Owner: #1139.
-- **Cooldown and facility log**: legacy successful commands keep the default action cooldown and write the facility log. Go applies neither, the same open reconciliation as other migrated facilities under #947.
+- **Action wait and facility log**: legacy successful commands keep the default action wait and write the facility log. The Gateway applies the [action wait](../architecture/place-log.md#action-wait-1939); the commands' log rows remain [#1941](https://github.com/witchcraze/party2re/issues/1941).
 - **Listing number**: legacy shows the lowest free number. Go uses an opaque listing ID, and order ties use age then ID.
 
 ---

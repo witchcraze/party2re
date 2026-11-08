@@ -60,6 +60,9 @@ const (
 	// WaitActivityPacing: battle and room turns keep their own pacing, owned by
 	// the combat and room migrations (#948, #949).
 	WaitActivityPacing WaitExemption = "activity_pacing"
+	// WaitPrivate: the result is a private $mes (e.g. NPC しらべる), which
+	// writes no log and starts no wait (lib/system.cgi:322-328,413,651).
+	WaitPrivate WaitExemption = "private"
 )
 
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
@@ -135,6 +138,9 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		// Note: Wake requires an expired sleep timer and pending recovery; rescue is also exempt.
 		RequiredGates: GateLocationCheck,
 	},
+	// Shared NPC interaction in the current facility (docs/architecture/place-log.md).
+	{ID: "npc_talk", Label: "はなす", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "npc_inspect", Label: "しらべる", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitPrivate},
 	{
 		ID:             "chapel_pray",
 		Label:          "礼拝堂で祈る（祈願）",

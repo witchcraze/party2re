@@ -146,15 +146,16 @@ Legacy `system.cgi:9–25` also registers `br`, `いどう`, `まち`, `ほー�
 Layout separators and screenshots belong to presentation; session logout replaces
 the logout action; navigation, Home, Guild and whisper retain their shared
 migration owners (#947/#949/#950), rather than becoming equipment commands.
-Legacy `はなす` (`@words`, `blacksmith.cgi:17–19`) and NPC `しらべる` have no Go
-Blacksmith operation or observation and remain #947 reconciliation.
+Legacy `はなす` (`@words`, `blacksmith.cgi:17–19`) and NPC `しらべる` map to the
+shared `npc_talk` / `npc_inspect` commands.
 
 Transport migration preserves existing service behavior, including equipped-item
 naming, leading/trailing whitespace trimming and ASCII `@` rejection. Legacy
 differs on these points, uses a wall-clock action cooldown and venue comment/NPC
 logs (`system.cgi:639–680`), and includes weapon names in storage dialogue.
-These reconciliations remain #947 work; the Gateway adds no legacy cooldown,
-presence or log implementation and makes no full gameplay-parity claim.
+The Gateway applies the [action wait](../architecture/place-log.md#action-wait-1939);
+the commands' log rows (#1941), presence and the naming differences remain open,
+so there is no full gameplay-parity claim.
 
 `WithdrawWeapon` checks only the main-hand slot and does not reject a full
 inventory, matching the legacy equipped-weapon check (`blacksmith.cgi:192–237`).

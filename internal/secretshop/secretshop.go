@@ -2,10 +2,8 @@ package secretshop
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
 	"slices"
 	"strings"
 
@@ -224,44 +222,6 @@ func (s *Service) GetShopStatus(ctx context.Context, characterID string) (*ShopS
 		IsEligible:   true,
 		Items:        items,
 	}, nil
-}
-
-// Talk returns a secretive sheep dialogue from @ヒミツジ.
-func (s *Service) Talk(ctx context.Context, characterID string) (string, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return "", ErrCharacterNotFound
-	}
-	char, err := s.characterRepo.FindByID(ctx, characterID)
-	if err != nil {
-		return "", ErrCharacterNotFound
-	}
-
-	if !CheckEligibility(char) {
-		return "", ErrAccessDenied
-	}
-
-	nBig, err := rand.Int(rand.Reader, big.NewInt(int64(len(DefaultTalkDialogues))))
-	if err != nil {
-		return DefaultTalkDialogues[0], nil
-	}
-	return DefaultTalkDialogues[nBig.Int64()], nil
-}
-
-// Inspect returns NPC background description.
-func (s *Service) Inspect(ctx context.Context, characterID string) (string, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return "", ErrCharacterNotFound
-	}
-	char, err := s.characterRepo.FindByID(ctx, characterID)
-	if err != nil {
-		return "", ErrCharacterNotFound
-	}
-
-	if !CheckEligibility(char) {
-		return "", ErrAccessDenied
-	}
-
-	return InspectDialogue, nil
 }
 
 // PuffPuff provides the playful secret puff-puff service with flavor text only (no stat modifications).

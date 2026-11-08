@@ -19,6 +19,17 @@ type fakePlaceLog struct {
 	viewer string
 }
 
+func (f *fakePlaceLog) Append(_ context.Context, p placelog.Place, entries ...placelog.Entry) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.places = append(f.places, p)
+	for _, e := range entries { // the last entry becomes the newest, as in placelog.Log
+		f.rows = append([]placelog.Entry{e}, f.rows...)
+	}
+	return nil
+}
+
 func (f *fakePlaceLog) Read(_ context.Context, p placelog.Place, viewer string) ([]placelog.Entry, error) {
 	f.places, f.viewer = append(f.places, p), viewer
 	if f.err != nil {

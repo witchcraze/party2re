@@ -59,24 +59,22 @@ Savings are stored per character (`Character.Deposit int64`) rather than at the 
 
 ## Observation and retained routes
 
-Selecting `bank` exposes the owned character's wallet, savings, savings limit,
-NPC name and complete dialogue list through character context. GET and command
+Selecting `bank` exposes the owned character's wallet, savings, savings limit
+and NPC name through character context. GET and command
 refresh use the same existing `GetState` reader; observation never deposits,
 withdraws, chooses a random dialogue or updates navigation. Required read failure
 prevents partial observation. See the [context and recovery contract](../architecture/client-agent-api.md).
 
-Bank state GET and deposit/withdraw REST operations are retired after verified
-Gateway/context replacement. Bank inspect and talk POSTs remain; these dialogue
-commands still require legacy cooldown, presence and log reconciliation under
-#947.
+Every Bank REST operation is retired. NPC talk and inspect use the shared
+[NPC commands](../architecture/place-log.md#npc-interaction-1940).
 
 | Former or retained REST operation | Supported replacement / disposition |
 | --- | --- |
 | GET `/characters/{id}/bank` (retired) | POST `scene_enter` with `destination:bank`, then GET `/api/v1/characters/{id}/context`; GET observes without navigating and actual activity takes precedence |
 | POST `/characters/{id}/bank/deposit` (retired) | POST `/api/v1/characters/{id}/actions`, `action:bank_deposit`, explicit `params.amount` |
 | POST `/characters/{id}/bank/withdraw` (retired) | Same Gateway, `action:bank_withdraw`, explicit `params.amount`; result keeps actual withdrawal/refund facts |
-| POST `/characters/{id}/bank/inspect` (retained) | Existing NPC metadata; action effects/parity remain unresolved |
-| POST `/characters/{id}/bank/talk` (retained) | Existing random dialogue; action effects remain unresolved |
+| POST `/characters/{id}/bank/talk` (retired) | Same Gateway, `action:npc_talk` in the Bank scene; a random word is logged and starts the action wait |
+| POST `/characters/{id}/bank/inspect` (retired) | Same Gateway, `action:npc_inspect`; private legacy default `しかし何も見つからなかった…` |
 
 Requests to retired routes return 404. Gateway commands retain owned-actor,
 sleep/pending-Wake and unfinished-work guards, strict amount inputs and known
@@ -89,9 +87,8 @@ The local behavioral reference is `party2/party2/lib/bank.cgi`: header display
 actions `あずける` and `ひきだす` (lines 30–33) map to the existing Deposit/Withdraw
 services and Gateway commands. NPC name, limit and words come from lines 8–24.
 `party.cgi:13–30` loads the current facility and shared action/request lifecycle.
-Shared `はなす` uses a random word (`lib/system.cgi:240–246`); NPC `しらべる`
-uses the default nothing-found response (`322–328,413`), while the current Go
-inspect returns NPC metadata. The observation exposes existing service facts;
-it does not claim parity for these commands or reproduce their side effects.
+Shared `はなす` uses a random word (`lib/system.cgi:240–246`) and NPC `しらべる`
+uses the default nothing-found response (`322–328,413`); both now follow legacy
+through `npc_talk`/`npc_inspect`.
 Shared navigation uses the approved ordinary selector; presence effects remain
 separate. Whisper, logout and screenshot are outside Bank's responsibility.
