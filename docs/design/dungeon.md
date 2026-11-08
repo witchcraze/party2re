@@ -71,51 +71,13 @@ round limit permits it. Escape is a separate action, not permission to move
 past unopened chests. This contract preserves the legacy behavior; allowing
 ordinary chest abandonment by movement would require an approved departure.
 
-## Current implementation and remaining reconciliation
+## Catalog dungeons
 
-Catalog dungeons dispatch generic `T/X/D/B/E` events in `expedition.go`, uses
-Valkey working state/rewards (including `consumed_events` so each `T` tile event
-grants treasure at most once per expedition and subsequent visits resolve as
-normal movement), and finalizes durable records in MariaDB. Unresolved battles
-retain enemy HP/MP/status, allied ailments, CMP and elemental field duration
-across requests and block every movement direction. Explicitly cured ailments
-and depleted CMP remain cleared/zero on the next batch.
-The leader can resume the shared resolver against that enemy or escape; a new
-encounter is not generated on resume. This remains batch combat, rather than
-legacy per-character action dispatch: per-batch tension, stat-buff and action
-scheduling internals are not a full legacy lifetime snapshot.
-That generic event model does not reproduce legacy map-owned events; native
-maps (below) replace it map by map.
-Its turn-limit wipeout, trap bases and treasure generation
-need comparison with the behavior above; they are implementation differences,
-not canonical rules inferred from the Go catalog.
-
-Current map observation uses the acting member's saved job and nonempty run
-inventory. An empty or omitted saved `item_ids` cannot distinguish no items
-from a run created without inventory discovery, so observation requires a fresh
-read of that actor's inventory. A missing reader or failed read returns no map;
-observation never fills or rewrites the saved roster. Older solo buffers also
-require the actor's character read. Canonical
-`job-09/job-26/job-27/job-79` and `item-197` identities and compatible aliases
-are recognized. A party member's bonus does not expand another actor's view.
-Required-source or invalid-geometry failures return no partial map.
-Context includes actor-visible cells and actual legal directions, never the full
-floor grid or private event/reward buffers. Member discovery uses the canonical
-run reference; no lobby lifetime grants access. Saved enemies suppress movement,
-and terminal buffers preserve their frozen outcome for leader-only settlement
-retry through Fight or Escape. Observation performs neither operation.
-See the [context contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract).
-
-Active state is no longer mastered by a SQL `dungeon_active_expeditions` table.
-See [run-state architecture](../architecture/transient-run-state.md),
-[current API](../api/paths/dungeon.json), and
-[documented differences](../migration/documentation-audit.md).
+The synthetic catalog dungeons (`dungeon-01`–`dungeon-03`) use a generic `T/X/D/B/E` event model with batch combat. It does not reproduce map-owned events; its turn-limit wipeout, trap bases and treasure generation are implementation differences, not canonical rules. Native maps replace it map by map; retiring the catalog is undecided (#1958). Scouting is actor-only: a party member's bonus never expands another actor's view ([context contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract)).
 
 ## Native map contract
 
-This is the design decision approved in
-[#1202](https://github.com/witchcraze/party2re/issues/1202); map0 implements it
-(see [Map0 implementation](#map0-implementation)). It extends the existing Dungeon owner and ports, without a
+**Decision (#1202).** It extends the existing Dungeon owner and ports, without a
 script engine, legacy runtime or a second run store. The existing `dungeon-01`
 through `dungeon-03` catalog remains available; adding native maps does not
 authorize deletion, reinterpretation of saved runs, or automatic catalog cutover.
@@ -155,17 +117,7 @@ position displays the party marker. There is no source-backed permanent reveal
 flag (`map/0/1.cgi:14–16`, `vs_dungeon.cgi:114–129`). Map5's lever-controlled
 visibility is a different map rule.
 
-[The modular Dungeon OpenAPI](../api/paths/dungeon.json) owns current transport
-schemas. Runtime follow-ups update it and regenerate artifacts when their
-public contract changes. Native maps reuse the existing routes.
-Current actor scouting and Gateway observations are described above. Native
-map reads must extend the selected map's projection rather than infer event
-types from catalog letters. Existing leader-only commands stay
-in place; participant commands and individual exit need a separately approved
-contract, not an incidental authorization change in the map implementation.
-The [Dungeon Guidance index](../../.arch/modules/dungeon.json) continues to
-describe implemented ports/locks only. Update its verified symbol references
-when implementation changes those boundaries; do not index proposed symbols.
+Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Existing leader-only commands stay; participant commands and individual exit need a separately approved contract (#1956), not an incidental change in a map implementation.
 
 ### Legacy action reconciliation
 
@@ -175,18 +127,15 @@ are relative to `party2/` at legacy revision
 `ff97fc549932a146cc945d7edf71b44c868a840e`; the inspected files are unchanged at
 checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 
-| Legacy action / call path | Native use case / transport and scope |
+| Legacy action / call path | Native replacement and scope |
 |---|---|
-| `ダンジョン` → `quest.dungeon` / `get_dungeon_data` (`quest.cgi:198,623–703`); join selects `vs_dungeon` (`1051–1053`) | Existing `StartExpedition` / `StartPartyExpedition`, POST `.../dungeons/start` / `party-start`; map0 adds independently authored native definitions and selected-map persistence. Preserve consented roster admission. |
-| `すすむ` → `susumu` (`vs_dungeon.cgi:33–36,57–67`) | Map0 Start initializes round 1; separate action is superseded by atomic start, retaining leader admission. |
-| `にし` → `nishi` (`39–40,73`) | `Move(west)`, existing POST `.../dungeons/move`; map-owned dispatch follows admission. |
-| `きた` → `kita` (`39,41,70`) | `Move(north)`, same route. |
-| `みなみ` → `minami` (`39,42,71`) | `Move(south)`, same route. |
-| `ひがし` → `higashi` (`39,43,72`) | `Move(east)`, same route. |
-| `ちず` → `chizu` (`39,44,114–129`) | `ObserveExpedition`, GET `/api/v1/characters/{id}/context` and command refresh; actor-only visibility. The standalone map GET is retired. |
-| Treasure `しらべる` → `shiraberu(target)` (`45–48`; `_npc_action.cgi:6–84`) | Deferred native treasure-inspection contract, including per-actor eligibility and item delivery. Generic `T` automatic rewards do not implement it. No connected native inspect endpoint is claimed. |
-| `add_battle_action2` → map16 `さいくつ` → `saikutu` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Deferred map16 explicit mining use case; no current command replacement. |
-| Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Existing `Escape`, POST `.../dungeons/escape`; map0 verifies availability after exhaustion and stock preservation. Per-character departure, fatigue and exit equipment effects remain unverified/deferred; whole-party Escape is not equivalent. |
+| `ダンジョン` → `quest.dungeon` / `get_dungeon_data` (`quest.cgi:198,623–703`); join selects `vs_dungeon` (`1051–1053`) | Existing solo/party start; preserve consented roster admission |
+| `すすむ` → `susumu` (`vs_dungeon.cgi:33–36,57–67`) | Superseded by atomic start, which initializes round 1 and keeps leader admission |
+| `にし`/`きた`/`みなみ`/`ひがし` (`39–43,70–73`) | Move in that direction; map-owned dispatch follows admission |
+| `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
+| Treasure `しらべる` → `shiraberu(target)` (`45–48`; `_npc_action.cgi:6–84`) | Open: native inspection with per-actor eligibility and delivery (#1762). Generic `T` rewards do not implement it |
+| `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Open: map16 mining (#1777) |
+| Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Existing Escape, available after exhaustion with stock kept. Open: per-character departure, fatigue and exit equipment effects (#1956); whole-party Escape is not equivalent |
 
 ## Map events and restoration units
 
@@ -199,35 +148,15 @@ Legacy grids, dialogue and monster/asset names are not implementation inputs.
 
 ### Map0 implementation
 
-`native-map-0` adds six independently authored 5×5 layouts beside the
-unchanged catalog (`internal/dungeon/native_map.go`); the legacy has six
-initial variants, two without a hidden passage (`map/0/1.cgi`–`6.cgi`). Start
-picks and saves one layout, places the party on its start and sets round 1
-without a tile event. A successful move advances the round and dispatches the
-destination; at round 20 every move rejects with no state, RNG or settlement
-change, while the run stays active for Escape and keeps its stock. Walls and
-bounds reject without spending a round. Resumed combat batches spend no round.
-The run stores the remaining budget (`turns_remaining = limit − round`);
-observation reports `round`/`round_limit`.
+Native map0 has six independently authored 5×5 layouts (legacy has six initial variants, two without a hidden passage: `map/0/1.cgi`–`6.cgi`). Non-obvious rules:
 
-- Passage: draw `r = 2 × U[0,1)` and spawn iff `r <= 1`; start, hidden
-  passage and consumed one-time cells draw nothing.
-- Treasure: once per expedition, creates one unopened chest per living member,
-  plus `1 + rand(2)` when the acting leader is job 78. Chests block all
-  movement (choices withheld, direct calls rejected) until every chest is
-  opened; they are not combat, grant no reward and are never auto-opened.
-- Boss: once per expedition, uses the saved combat continuation; victory grants
-  the monster's rewards only, with no clear bonus, medals or completion.
-- Hidden passage: traversable, always shown as a wall in view; observation
-  lists all four directions while movement is allowed, so it reveals nothing.
+- Passage spawn draws `r = 2 × U[0,1)` and spawns iff `r <= 1`; start, hidden passage and consumed one-time cells draw nothing.
+- Treasure chests (one per living member, plus `1 + rand(2)` for an acting job78 leader) block all movement until opened; they grant nothing by themselves and are never auto-opened.
+- Boss victory grants the monster's rewards only, with no clear bonus, medals or completion.
+- The hidden passage is always shown as a wall; observation lists all four directions while movement is allowed, so it reveals nothing.
+- Legacy dungeon 0 has no job-level gate, so native map0 has none.
 
-Remaining map0 differences: chest contents and inspection (#1762), encounter
-group size/stat scaling and the legacy stage data choice (one native enemy per
-encounter), the wish-4 extra chest and the per-character exit gaps under
-[Remaining limits](#remaining-limits). Start admission is the
-shared combat admission (HP, fatigue and activity checks); legacy dungeon 0 has no
-job-level gate, so the native map has no level or tier requirement. Native maps
-keep the actor-only scouting above.
+Open: chest contents and inspection (#1762), encounter group size and scaling (#1954), the wish-4 extra chest, and the per-character exit gaps under [Remaining limits](#remaining-limits).
 
 ### Map1 key and door unit
 
@@ -245,8 +174,7 @@ position. This event does not advance a floor.
 
 ### Map13 channel puzzle and routes
 
-Decided in [#1774](https://github.com/witchcraze/party2re/issues/1774); this is
-a target specification, not current behavior. Evidence is static, relative to
+**Decision (#1774)**; this is a target specification, not current behavior. Evidence is static, relative to
 `party2/` at the legacy revision above (`map/13/` files abbreviated). Implementation
 units: puzzle/route [#1959](https://github.com/witchcraze/party2re/issues/1959),
 normal destination [#1960](https://github.com/witchcraze/party2re/issues/1960),
