@@ -145,7 +145,6 @@ a concrete need rather than speculative infrastructure.
 - [`components.md`](components.md) — component responsibilities and boundaries.
 - [`interfaces.md`](interfaces.md) — component contracts.
 - [`../design/game-overview.md`](../design/game-overview.md) — game/domain context.
-- [`../../STATUS.md`](../../STATUS.md) — current implementation status.
 
 
 ## UI-independent operations and external access

@@ -158,4 +158,3 @@ The target is the game's meaningful behavior and design, not its historical impl
 - [`../architecture/components.md`](../architecture/components.md) — component ownership.
 - [`../architecture/components.md#feature-modules`](../architecture/components.md#feature-modules) — feature expansion model.
 - [`../../.agents/rules/`](../../.agents/rules/) — mandatory development rules.
-- [`../../STATUS.md`](../../STATUS.md) — current reconstruction status.

@@ -18,9 +18,9 @@ description: Rules for maintaining the Single Source of Truth (SSOT) and synchro
 
 - Assess whether the change makes an existing explanation outdated or introduces a contract that needs permanent documentation. Update the owning documents in the same PR.
 - Update design documents when game rules/formulas/state transitions change; architecture documents when responsibilities/contracts/dependencies change; development documents when procedures change.
-- Update STATUS only when its summary of major capabilities, limitations or immediate gaps changes; update ROADMAP when remaining milestones or direction change.
+- GitHub Issues, labels and milestones own current gaps, limitations and planned work. MUST NOT recreate repository files that summarize current status, progress or roadmap; record a new gap or plan in its Issue or milestone.
 - Do not require a fixed list of documents to be reviewed or edited for every feature. A change that leaves their explanations accurate requires no document edit; state that briefly in the PR when applicable.
-- Do not duplicate live command coverage, task progress or completion histories in architecture/design documents. Use current OpenAPI/source for registered contracts and STATUS/GitHub for current coverage and gaps. Maintained documents MUST NOT retain Issue/PR links merely identifying where behavior was implemented or completed; retain references only when needed for specification decisions, legacy evidence or unresolved work.
+- Do not duplicate live command coverage, task progress or completion histories in architecture/design documents. Use current OpenAPI/source for registered contracts and GitHub Issues for current coverage and gaps. Maintained documents MUST NOT retain Issue/PR links merely identifying where behavior was implemented or completed; retain references only when needed for specification decisions, legacy evidence or unresolved work.
 - Do not routinely append or update feature-inventory.md. Preserve its dated snapshot and existing records. Any correction MUST describe an error in the historical snapshot rather than silently updating it to today's state.
 - Keep unresolved specifications, missing coverage, unverified behavior and known differences discoverable through their owning documents or linked open Issues. Freezing a historical inventory MUST NOT mark its unfinished work complete or imply full parity.
 
@@ -30,7 +30,7 @@ description: Rules for maintaining the Single Source of Truth (SSOT) and synchro
 - Add a section or document only for a distinct enduring contract, decision or procedure that existing owners cannot explain clearly. Issue-specific investigation, completion records and temporary cautions belong in Issues/PRs; private implementation details and reproducible inventories belong in source, tests or generated artifacts.
 - Add an agent rule only for a cross-cutting constraint or decision criterion needed in future work. A local bug normally needs a regression test, not a repository rule. For mechanically enforced constraints, keep the actionable requirement and link to the check; do not copy its implementation or exception lists into prose.
 - Before deleting or consolidating, MUST inspect contents and inbound references. Preserve unique requirements, approved decisions, legacy evidence and unresolved gaps in their owner or a linked Issue; update affected indexes, links and guidance references. Age or line count alone MUST NOT justify deletion.
-- MUST remove or revise resolved STATUS gaps; keep it a slim current snapshot. Do not move completion history into ROADMAP or the frozen inventory.
+- Do not move completion history into the frozen inventory.
 - In the PR's existing documentation assessment, briefly explain meaningful consolidation or necessary growth and its owner. Do not require deletion quotas, a fixed document sweep or a separate maintenance log.
 
 ## 5. OpenAPI Specification Synchronization (SSOT & Modular Paths)

@@ -1,6 +1,6 @@
 # Client & Agent API — CQRS & Server-Driven UI Architecture
 
-This document defines the HTTP observation and command contracts, service boundaries and client recovery behavior. See [STATUS](../../STATUS.md) for major current capabilities/gaps and [ROADMAP](../../ROADMAP.md) for remaining milestones; detailed progress and dependencies are tracked in GitHub.
+This document defines the HTTP observation and command contracts, service boundaries and client recovery behavior. Current gaps, remaining command coverage and dependencies are tracked in GitHub Issues.
 
 Current clients use the registered routes in [OpenAPI](../api/openapi.json).
 `GET /api/v1/characters/{id}/context` and `POST /api/v1/characters/{id}/actions`
@@ -1010,8 +1010,6 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 
 ## 6. Related documents
 
-- [STATUS](../../STATUS.md): major current capabilities, command coverage and gaps.
-- [ROADMAP](../../ROADMAP.md): remaining milestones and migration direction.
 - [OpenAPI](../api/openapi.json): registered routes and transport schemas.
 - [Components](components.md#playercontext): observation/command responsibility boundaries.
 - [Action preconditions](../design/action-preconditions.md): game-entry eligibility and behavioral evidence.
