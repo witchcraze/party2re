@@ -139,6 +139,7 @@ type Handler struct {
 	jobs           JobService
 	customSkills   CustomSkillService
 	chapel         ChapelService
+	exile          ExileService
 	collections    CollectionService
 	depot          DepotService
 	lottery        LotteryService

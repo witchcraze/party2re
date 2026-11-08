@@ -19,6 +19,7 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 ### 3.1 Cost & Preconditions
 - **Fee**: 500,000 Gold (`NameChangeCost = 500000`).
 - **Guild Constraint**: The character must not be a member of any guild (`IsInGuild == false`). Characters must leave their guild prior to changing their name.
+- **Exile Vote Constraint**: The character must not be an applicant, a target or a voter on an open [exile petition](exile.md#rules) (`name_change.cgi:112`). This check runs after the guild check.
 - **Flea Market Constraint**: The character must not have active listings in the flea market (`HasActiveListings == false`).
 
 ### 3.2 Name Format & Validation Rules

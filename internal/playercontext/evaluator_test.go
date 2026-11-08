@@ -83,6 +83,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
 			"helper_complete", "park_post", "rescue_request",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
+			"exile_petition", "exile_approve", "exile_oppose",
 		}},
 		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{
 			"scene_enter", "scene_select", "scene_page", "scene_back",
@@ -94,6 +95,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
 			"helper_complete", "park_post", "rescue_request",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
+			"exile_petition", "exile_approve", "exile_oppose",
 		}},
 		{"sleeping", func(s *Snapshot) { s.Sleeping = true; s.SleepRemaining = time.Minute }, []string{"rescue_request"}},
 		{"wakeable", func(s *Snapshot) { s.Sleeping = true; s.CanWake = true }, []string{"home_wake", "rescue_request"}},
@@ -122,7 +124,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 62 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 65 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -142,8 +144,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 55 {
-		t.Fatalf("exhausted action count = %d, want 55", len(got))
+	if len(got) != 58 {
+		t.Fatalf("exhausted action count = %d, want 58", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request"} {
 		if !slices.Contains(got, action) {

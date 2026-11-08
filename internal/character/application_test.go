@@ -255,11 +255,13 @@ func TestService_ChangeName(t *testing.T) {
 	news := &mockNewsPublisher{}
 	guildChecker := &mockGuildChecker{}
 	fleaChecker := &mockFleaChecker{}
+	inExile := false
 
 	service, err := NewService(repo,
 		WithNewsPublisher(news),
 		WithGuildChecker(guildChecker),
 		WithFleaMarketChecker(fleaChecker),
+		WithExileChecker(exileCheckerFunc(func(context.Context, string) (bool, error) { return inExile, nil })),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -319,6 +321,13 @@ func TestService_ChangeName(t *testing.T) {
 		t.Fatalf("expected ErrActiveMarketDisallowed, got %v", err)
 	}
 	fleaChecker.hasListings = false
+
+	// 7b. Exile vote involvement block (legacy is_join_exile)
+	inExile = true
+	if _, err := service.ChangeName(context.Background(), char.ID, "ValName"); !errors.Is(err, ErrExileInvolvedDisallowed) {
+		t.Fatalf("expected ErrExileInvolvedDisallowed, got %v", err)
+	}
+	inExile = false
 
 	// 8. Invalid name formats
 	invalidNames := []string{
@@ -1248,3 +1257,7 @@ func TestService_SetPersonality(t *testing.T) {
 		t.Fatalf("read failure: err=%v saves=%d news=%d", err, repo.saveProfileCalls, news)
 	}
 }
+
+type exileCheckerFunc func(context.Context, string) (bool, error)
+
+func (f exileCheckerFunc) IsInvolved(ctx context.Context, id string) (bool, error) { return f(ctx, id) }

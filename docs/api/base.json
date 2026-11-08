@@ -2337,6 +2337,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/ChapelSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ExileSceneData"
                     }
                   ]
                 }
@@ -2941,6 +2944,36 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "exile"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ExileSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3424,6 +3457,7 @@
                         "blacksmith",
                         "chapel",
                         "depot",
+                        "exile",
                         "fleamarket",
                         "gemstore",
                         "home",
@@ -3521,6 +3555,7 @@
                         "blacksmith",
                         "chapel",
                         "depot",
+                        "exile",
                         "fleamarket",
                         "gemstore",
                         "home",
@@ -5397,6 +5432,112 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "exile_petition"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "target_name": {
+                      "type": "string",
+                      "description": "Exact petitioned name. Rules: docs/design/exile.md."
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "target_name",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "exile_approve"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "target_name": {
+                      "type": "string",
+                      "description": "Exact petitioned name. Rules: docs/design/exile.md."
+                    }
+                  },
+                  "required": [
+                    "target_name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "exile_oppose"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "target_name": {
+                      "type": "string",
+                      "description": "Exact petitioned name. Rules: docs/design/exile.md."
+                    }
+                  },
+                  "required": [
+                    "target_name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
           }
         ]
       },
@@ -5765,6 +5906,7 @@
               "blacksmith",
               "chapel",
               "depot",
+              "exile",
               "fleamarket",
               "gemstore",
               "home",
@@ -5890,6 +6032,7 @@
                   "blacksmith",
                   "chapel",
                   "depot",
+                  "exile",
                   "fleamarket",
                   "gemstore",
                   "home",
@@ -16562,6 +16705,148 @@
           "gem_box",
           "catalog",
           "recipes"
+        ]
+      },
+      "ExileVote": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "voter_id": {
+            "type": "string"
+          },
+          "voter_name": {
+            "type": "string"
+          },
+          "approve": {
+            "type": "boolean"
+          },
+          "voted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "voter_id",
+          "voter_name",
+          "approve",
+          "voted_at"
+        ]
+      },
+      "ExilePetition": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Votes are newest first.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "applicant_id": {
+            "type": "string"
+          },
+          "applicant_name": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "votes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExileVote"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "applicant_id",
+          "applicant_name",
+          "target_id",
+          "target_name",
+          "reason",
+          "created_at",
+          "votes"
+        ]
+      },
+      "ExileBoard": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Open petitions in submission order; empty unless eligible.",
+        "properties": {
+          "eligible": {
+            "type": "boolean"
+          },
+          "petitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExilePetition"
+            }
+          }
+        },
+        "required": [
+          "eligible",
+          "petitions"
+        ]
+      },
+      "ExileSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Exile board observation. GET never files, votes or withdraws.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "board": {
+            "$ref": "#/components/schemas/ExileBoard"
+          }
+        },
+        "required": [
+          "parent",
+          "board"
+        ]
+      },
+      "ExileVoteResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Gateway exile_approve/exile_oppose result. exile_petition returns ExilePetition.",
+        "properties": {
+          "withdrawn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExilePetition"
+            }
+          },
+          "petition": {
+            "$ref": "#/components/schemas/ExilePetition"
+          },
+          "approvals": {
+            "type": "integer"
+          },
+          "oppositions": {
+            "type": "integer"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "guilty",
+              "acquitted"
+            ]
+          }
+        },
+        "required": [
+          "withdrawn",
+          "approvals",
+          "oppositions"
         ]
       }
     },

@@ -114,6 +114,7 @@ func (c *coreServices) initPlayerAndChar(
 	guildService *guild.Service,
 	fleamarketRepo *database.FleaMarketRepository,
 	notificationService *notification.Service,
+	exileChecker character.ExileChecker,
 	referralDelivery character.ReferralDelivery,
 	maxPlayers int,
 	logger logging.Logger,
@@ -141,6 +142,7 @@ func (c *coreServices) initPlayerAndChar(
 			return count > 0, nil
 		})),
 		character.WithJobDefinitionProvider(c.jobCatalog),
+		character.WithExileChecker(exileChecker),
 	)
 
 	if guildService != nil {

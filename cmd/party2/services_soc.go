@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/exile"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/inventory"
@@ -86,6 +87,8 @@ type socServices struct {
 	worker       *scheduling.Worker
 	timer        timer.Service
 	placeLog     *placelog.Log
+	exile        *exile.Service
+	exileRepo    *database.ExileRepository
 }
 
 func newSocServices(
@@ -190,7 +193,19 @@ func newSocServices(
 
 	guildService.SetMutationCheck(normalWriter(core).check)
 
+	exileRepo, err := database.NewExileRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	exileService := exile.NewService(exileRepo, core.charRepo, timerService, database.NewTransactionProvider(db),
+		exile.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		}))
+
 	return &socServices{
+		exile:        exileService,
+		exileRepo:    exileRepo,
 		schedRepo:    schedRepo,
 		guildRepo:    guildRepo,
 		guild:        guildService,

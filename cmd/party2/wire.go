@@ -57,7 +57,7 @@ func wireApp(
 	soc.park.SetLimits(cfg.Park.PostLogLimit, cfg.Park.PostMaxLength)
 	soc.placeLog = placelog.New(valkeyClient, cfg.PlaceLog)
 	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
-	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, referrals.DeliverReferral, cfg.Player.MaxPlayers, logger); err != nil {
+	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, soc.exileRepo, referrals.DeliverReferral, cfg.Player.MaxPlayers, logger); err != nil {
 		return nil, err
 	}
 	cmbt, err := newCmbtServices(db, core, soc, econ, valkeyClient)
@@ -326,6 +326,7 @@ func newHTTPHandler(
 	opts = append(opts,
 		http.WithHelper(misc.helper),
 		http.WithRescue(misc.rescue),
+		http.WithExile(soc.exile),
 		http.WithMedal(misc.medal),
 		http.WithPark(soc.park),
 		http.WithRanking(soc.ranking),

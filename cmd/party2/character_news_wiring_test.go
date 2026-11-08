@@ -38,7 +38,7 @@ func TestCharacterJoiningNewsProductionWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
-	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, referrals.DeliverReferral, 0, logging.Nop()); err != nil {
+	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, soc.exileRepo, referrals.DeliverReferral, 0, logging.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	player, err := database.CreateTestPlayer(ctx, db)
