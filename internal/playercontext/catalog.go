@@ -44,15 +44,31 @@ type ActionDefinition struct {
 	RequiredGates  GateFlags `json:"required_gates"`
 	ActivityKind   string    `json:"activity_kind,omitempty"`
 	Recovery       bool      `json:"recovery,omitempty"`
+	// WaitExempt explains why success does not start the legacy action wait;
+	// empty means it does. WaitRecovery is also never blocked by the wait.
+	WaitExempt WaitExemption `json:"-"`
 }
+
+// WaitExemption records the legacy reason an action does not start the wait.
+type WaitExemption string
+
+const (
+	// WaitNavigation: いどう/まち/ほーむ and list views set $mes or act_time = 0.
+	WaitNavigation WaitExemption = "navigation"
+	// WaitRecovery: rescue.cgi and sleep.cgi run outside the party.cgi action path.
+	WaitRecovery WaitExemption = "recovery"
+	// WaitActivityPacing: battle and room turns keep their own pacing, owned by
+	// the combat and room migrations (#948, #949).
+	WaitActivityPacing WaitExemption = "activity_pacing"
+)
 
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
 // Granular item or skill selections are handled within individual endpoints/sub-commands.
 var DefaultCatalog = append(append([]ActionDefinition{
-	{ID: "scene_enter", Label: "施設を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "scene_select", Label: "対象を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"target_kind", "target_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "scene_page", Label: "ページを選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "scene_back", Label: "戻る", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "scene_enter", Label: "施設を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
+	{ID: "scene_select", Label: "対象を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"target_kind", "target_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
+	{ID: "scene_page", Label: "ページを選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
+	{ID: "scene_back", Label: "戻る", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
 	// =========================================================================
 	// Category: adventure (Combat & Expeditions)
 	// =========================================================================
@@ -111,6 +127,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 	},
 	{
 		ID:             "home_wake",
+		WaitExempt:     WaitRecovery,
 		Label:          "目を覚ます",
 		Category:       "home",
 		OperationID:    "executeCharacterAction",
@@ -443,6 +460,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 	},
 	{
 		ID:             "rescue_request",
+		WaitExempt:     WaitRecovery,
 		Label:          "緊急救出要請",
 		Category:       "social",
 		OperationID:    "executeCharacterAction",

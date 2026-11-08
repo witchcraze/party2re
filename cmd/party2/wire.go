@@ -23,6 +23,7 @@ import (
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/placelog"
+	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 )
@@ -320,7 +321,7 @@ func newHTTPHandler(
 		opts = append(opts, http.WithPlaceLog(soc.placeLog))
 	}
 	if soc.schedRepo != nil {
-		opts = append(opts, http.WithPlayerContext(newPlayerContext(core, soc, econ, cmbt, misc)))
+		opts = append(opts, http.WithPlayerContext(newPlayerContext(core, soc, econ, cmbt, misc, playercontext.WithActionWait(soc.timer, cfg.ActionWait))))
 	}
 	opts = append(opts,
 		http.WithHelper(misc.helper),

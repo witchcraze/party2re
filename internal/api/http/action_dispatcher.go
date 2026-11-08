@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -122,6 +123,12 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
 			return
 		}
+		def, _ := actionDefinition(req.Action)
+		// Legacy rejects every registered action while $m{wt} runs (lib/system.cgi:641-644).
+		if current.Snapshot.ActionWait > 0 && !(playercontext.ActionWaitGate{}).Allows(def, &current.Snapshot) {
+			h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_WAIT", Message: "まだ行動することはできません"})
+			return
+		}
 		// A premature Wake reaches the service for its recognized rejection.
 		// GET still offers Wake only when recovery is ready; an awake actor
 		// remains subject to entry eligibility.
@@ -140,7 +147,6 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		def, _ := actionDefinition(req.Action)
 		if req.Action != "home_wake" && req.Action != "rescue_request" && !def.Recovery {
 			message, err := h.sleepingCharacterMessage(r.Context(), char.ID)
 			if err != nil {
@@ -163,6 +169,12 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			}
 			writeActionFailure(w, http.StatusInternalServerError, "EXECUTION_FAILED", "Action outcome could not be confirmed. Do not automatically retry.")
 			return
+		}
+		if playercontext.StartsActionWait(def) {
+			// The outcome is already known; a lost wait only shortens pacing.
+			if err := h.playerContext.StartActionWait(r.Context(), char.ID); err != nil {
+				slog.WarnContext(r.Context(), "action wait not started", slog.String("action", req.Action), slog.String("error", err.Error()))
+			}
 		}
 		observation, refreshError := h.refreshActionContext(r.Context(), player.ID, char.ID)
 		writeJSON(w, http.StatusOK, actionSuccessResponse{Success: true, Result: result, Context: observation, ContextError: refreshError})

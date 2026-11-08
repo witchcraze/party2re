@@ -6693,6 +6693,11 @@
       },
       "CharacterSnapshot": {
         "properties": {
+          "action_wait_ms": {
+            "description": "Remaining legacy action wait in milliseconds (default 4 s after a successful command). While positive, every Gateway command except rescue and wake is rejected with 409 ACTION_WAIT.",
+            "minimum": 0,
+            "type": "integer"
+          },
           "gold": {
             "type": "integer"
           },
@@ -6756,7 +6761,8 @@
           "gold",
           "tired",
           "is_dead",
-          "is_sleeping"
+          "is_sleeping",
+          "action_wait_ms"
         ],
         "type": "object"
       },
