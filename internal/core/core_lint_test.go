@@ -268,6 +268,16 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 			} else if ident, ok := stmt.Fun.(*ast.Ident); ok {
 				fnName = ident.Name
 			}
+			if fnName == "delete" && len(stmt.Args) > 0 && !isAllowedEquipment {
+				if sel, ok := stmt.Args[0].(*ast.SelectorExpr); ok && sel.Sel.Name == "Slots" {
+					violations = append(violations, coreViolation{
+						file:    filename,
+						line:    fset.Position(stmt.Pos()).Line,
+						field:   "Slots",
+						message: "direct deletion from Equipment.Slots is prohibited; use Equipment.Equip or Unequip instead",
+					})
+				}
+			}
 			if fnName == "NewParticipant" || fnName == "MustNewParticipant" || fnName == "NewParticipantBuilder" {
 				if len(stmt.Args) > 0 {
 					if valSel, ok := stmt.Args[0].(*ast.SelectorExpr); ok {
@@ -621,6 +631,18 @@ func EquipItem(eq *Equipment, owned Ownership, def Definition, instID string) er
 			code: `package feature
 func ForceEquip(eq *Equipment, slot Slot, instID string) {
 	eq.Slots[slot] = instID
+}`,
+			expectError: true,
+			field:       "Slots",
+			errSnippet:  "use Equipment.Equip or Unequip",
+		},
+
+		{
+			name: "Violation: Equipment.Slots direct deletion",
+			path: "internal/feature/service.go",
+			code: `package feature
+func ForceUnequip(eq *Equipment, slot Slot) {
+	delete(eq.Slots, slot)
 }`,
 			expectError: true,
 			field:       "Slots",

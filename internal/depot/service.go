@@ -212,7 +212,9 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 		unlinked := false
 		for _, old := range occupants {
 			if eq != nil {
-				unlinked = unequipInstance(eq, &tc.Character, old.ID)
+				if unlinked, err = unequipInstance(eq, &tc.Character, old.ID); err != nil {
+					return err
+				}
 			}
 			if err := tc.Inventory.Consume(old.ID, old.Quantity); err != nil {
 				return err

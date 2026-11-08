@@ -50,11 +50,22 @@ func newSwapFixture(t *testing.T, hand []item.Instance, slots map[item.Slot]stri
 	f.char = corecharacter.Character{ID: "swap-char", WeaponCustomName: "Blade", WeaponSeal: 3, ArmorCustomName: "Mail"}
 	f.chars.characters[f.char.ID] = f.char
 	inv, _ := coreinventory.New(f.char.ID)
-	inv.Items = append(inv.Items, hand...)
+	for _, held := range hand {
+		if err := inv.Add(held); err != nil {
+			t.Fatal(err)
+		}
+	}
 	f.invs.inventories[f.char.ID] = inv
 	eq, _ := coreequipment.New(f.char.ID)
 	for slot, instanceID := range slots {
-		eq.Slots[slot] = instanceID
+		held, _ := inv.Find(instanceID)
+		def, err := catalog.FindByID(held.DefinitionID)
+		if err != nil || def.Slot != slot {
+			t.Fatalf("fixture %s cannot equip %s: %v", instanceID, slot, err)
+		}
+		if _, err := eq.Equip(&inv, def, instanceID); err != nil {
+			t.Fatal(err)
+		}
 	}
 	f.equip = &memoryEquipRepo{value: eq}
 	dep, _ := NewDepot(f.char.ID)
@@ -245,4 +256,25 @@ func TestWithdrawItem_RejectsWithoutChange(t *testing.T) {
 		}
 		// Rollback needs a real transaction: cmd/party2/depot_equipment_test.go.
 	})
+}
+
+func TestEquipmentUnlinkErrorsAbortMoves(t *testing.T) {
+	ctx := context.Background()
+	sword := item.Instance{ID: "sword", DefinitionID: "weapon-01", Quantity: 1}
+	next := item.Instance{ID: "next", DefinitionID: "weapon-02", Quantity: 1}
+	for name, move := range map[string]func(f swapFixture) error{
+		"withdraw": func(f swapFixture) error { _, err := f.service.WithdrawItem(ctx, f.char.ID, next.ID); return err },
+		"deposit":  func(f swapFixture) error { _, err := f.service.DepositItem(ctx, f.char.ID, sword.ID); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newSwapFixture(t, []item.Instance{sword}, map[item.Slot]string{item.SlotMainHand: sword.ID}, []item.Instance{next})
+			f.equip.value.CharacterID = "" // Equipment.Unequip rejects an invalid aggregate.
+			if err := move(f); !errors.Is(err, coreequipment.ErrInvalidEquipment) {
+				t.Fatalf("err = %v", err)
+			}
+			if f.equip.saves != 0 {
+				t.Fatal("equipment saved after a failed unlink")
+			}
+		})
+	}
 }
