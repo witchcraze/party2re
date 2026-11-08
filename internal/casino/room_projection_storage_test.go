@@ -35,6 +35,9 @@ func TestProjectionStorageFailures(t *testing.T) {
 					if stage == "missing-prune" {
 						return valkeytest.MakeNilResult()
 					}
+					if len(args) > 1 && args[1] == casino.DefaultCharacterKeyPrefix+"member" {
+						return valkeytest.MakeStringResult("room")
+					}
 					return valkeytest.MakeStringResult(string(raw))
 				default:
 					return valkeytest.MakeOKResult()

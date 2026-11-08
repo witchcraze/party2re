@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -18,7 +19,9 @@ import (
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 type casinoSceneAccounts struct {
@@ -343,5 +346,119 @@ func TestCasinoObservationFailuresAndMissingSelection(t *testing.T) {
 	f.accounts.err = nil
 	if status, _ := navigationGET(t, router); status != 200 || f.store.writes != 1 {
 		t.Fatal("GET recovery replayed selection")
+	}
+}
+
+func TestCasinoGatewayPreservesAdmissionAndEntryGatesAcrossRenewal(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+	client, err := vk.NewClientWithConfig(vk.ConfigFromEnvironment())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	f := newCasinoSceneFixture(t)
+	roomRepo, err := casino.NewValkeyRoomRepository(client, casino.WithValkeyCharacterRepository(f.characters))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.service, err = casino.NewService(f.accounts, casino.WithRoomRepository(roomRepo), casino.WithCharacterRepository(f.characters))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.reads = &casinoSceneReads{CasinoService: f.service, f: f.gatewayFixture}
+	router := f.router()
+
+	prefix := "http1091-" + id.New()[:8]
+	roomID := prefix + "-room"
+	peerID := prefix + "-peer"
+	t.Cleanup(func() {
+		bg := context.Background()
+		_ = client.Do(bg, client.B().Del().Key(casino.DefaultRoomKeyPrefix+roomID).Build())
+		_ = client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build())
+		for _, actor := range []string{"hero", peerID} {
+			_ = client.Do(bg, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+actor).Build())
+		}
+	})
+
+	now := time.Now().UTC()
+	r := casino.Room{
+		ID: roomID, Name: "Gateway-" + prefix, GameType: casino.GameTypeIndian, Status: casino.RoomStatusWaiting,
+		LeaderCharacterID: peerID, Rate: 10, MaxPlayers: 4, Speed: casino.SpeedFast, AllowSpectators: true, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := roomRepo.CreateRoom(ctx, r, casino.RoomMember{RoomID: roomID, CharacterID: peerID, Action: "待機中", Card: 2, JoinedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := roomRepo.AddMember(ctx, casino.RoomMember{RoomID: roomID, CharacterID: "hero", Action: "待機中", Card: 5, JoinedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Shorten hero's mapping to 60s, then let peer's room activity renew the room.
+	heroKey := casino.DefaultCharacterKeyPrefix + "hero"
+	if err := client.Do(ctx, client.B().Expire().Key(heroKey).Seconds(60).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	if err := roomRepo.UpdateMember(ctx, casino.RoomMember{RoomID: roomID, CharacterID: peerID, Action: "待機中", Card: 2, JoinedAt: now, UpdatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	ttl, err := client.Do(ctx, client.B().Ttl().Key(heroKey).Build()).AsInt64()
+	if err != nil || ttl <= 60 {
+		t.Fatalf("expected hero mapping TTL > 60 after peer activity, got %d err=%v", ttl, err)
+	}
+	// Advance past the original 60s admission deadline.
+	if err := client.Do(ctx, client.B().Expire().Key(heroKey).Seconds(ttl-61).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+
+	status, response := navigationGET(t, router)
+	data := decodeShopScene[ActivitySceneData](t, response)
+	if status != 200 || response.Scene.LocationID != "casino" || response.Scene.Kind != "activity" || data.Casino == nil || data.Casino.View.Room.ID != roomID || len(data.Activities) != 1 {
+		t.Fatalf("expected active casino scene across original admission deadline, got status=%d scene=%+v data=%+v", status, response.Scene, data)
+	}
+	for _, gated := range []string{"scene_enter", "casino_room_create", "casino_room_join", "casino_room_spectate"} {
+		if slices.ContainsFunc(response.AvailableActions, func(a ContextAction) bool { return a.Action == gated }) {
+			t.Fatalf("expected %s to be gated while admitted in live room: %+v", gated, response.AvailableActions)
+		}
+	}
+	if gateStatus, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"town"}}`, nil); gateStatus != http.StatusConflict {
+		t.Fatalf("expected ordinary scene_enter gate 409 across original admission deadline, got %d %s", gateStatus, raw)
+	}
+
+	// GET must not renew TTL beyond the remaining deadline.
+	if err := client.Do(ctx, client.B().Expire().Key(heroKey).Seconds(45).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := navigationGET(t, router); status != 200 {
+		t.Fatalf("GET status=%d", status)
+	}
+	if afterTTL, err := client.Do(ctx, client.B().Ttl().Key(heroKey).Build()).AsInt64(); err != nil || afterTTL > 45 {
+		t.Fatalf("GET renewed hero mapping TTL=%d err=%v", afterTTL, err)
+	}
+
+	// Leave/removal clears admission; saved room selection never grants or repairs membership.
+	f.store.selection = playercontext.Selection{Destination: "casino", Subject: playercontext.Subject{Kind: "room", ID: roomID}}
+	if err := roomRepo.RemoveMember(ctx, roomID, "hero"); err != nil {
+		t.Fatal(err)
+	}
+	status, response = navigationGET(t, router)
+	if status != 200 || response.Scene.Kind != "subject" || response.Scene.LocationID != "casino" {
+		t.Fatalf("expected ordinary selected room summary after removal, got status=%d scene=%+v", status, response.Scene)
+	}
+	if !slices.ContainsFunc(response.Scene.Support.Actions, func(a SceneActionSupport) bool { return a.Action == "casino_room_join" }) {
+		t.Fatalf("expected casino_room_join support candidate restored after removal: %+v", response.Scene.Support.Actions)
+	}
+	if gateStatus, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"town"}}`, nil); gateStatus != http.StatusOK {
+		t.Fatalf("expected ordinary scene_enter gate lifted after removal, got %d %s", gateStatus, raw)
+	}
+
+	// Unreadable blank mapping must return 500, not false idle.
+	if err := client.Do(ctx, client.B().Set().Key(heroKey).Value("").Ex(casino.DefaultLobbyTTL).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := navigationGET(t, router); status != 500 {
+		t.Fatalf("expected 500 on unreadable mapping, got %d", status)
 	}
 }

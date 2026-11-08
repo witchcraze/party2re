@@ -3,7 +3,9 @@ package casino_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,6 +13,8 @@ import (
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/testutil"
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -18,15 +22,21 @@ import (
 // into specific Valkey commands while delegating other operations directly to the real server.
 type faultValkeyClient struct {
 	valkeygo.Client
-	failZadd atomic.Bool
+	failZadd    atomic.Bool
+	failCharDel atomic.Bool
+	failCharSet atomic.Bool
 }
 
 func (c *faultValkeyClient) Do(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
-	if c.failZadd.Load() {
-		cmds := cmd.Commands()
-		if len(cmds) > 0 && cmds[0] == "ZADD" {
-			return valkeygo.NewErrorResult(errors.New("injected active-index ZADD failure"))
-		}
+	cmds := cmd.Commands()
+	if c.failZadd.Load() && len(cmds) > 0 && cmds[0] == "ZADD" {
+		return valkeygo.NewErrorResult(errors.New("injected active-index ZADD failure"))
+	}
+	if c.failCharDel.Load() && len(cmds) > 1 && cmds[0] == "DEL" && strings.HasPrefix(cmds[1], casino.DefaultCharacterKeyPrefix) {
+		return valkeygo.NewErrorResult(errors.New("injected character mapping DEL failure"))
+	}
+	if c.failCharSet.Load() && len(cmds) > 1 && cmds[0] == "SET" && strings.HasPrefix(cmds[1], casino.DefaultCharacterKeyPrefix) {
+		return valkeygo.NewErrorResult(errors.New("injected character mapping SET failure"))
 	}
 	return c.Client.Do(ctx, cmd)
 }
@@ -332,4 +342,445 @@ func TestValkeyRoomRenewal_CommandCallerPreservesPartialEffectOnWriteFailure(t *
 	if !errors.Is(err, casino.ErrRoomViewForbidden) {
 		t.Errorf("expected ErrRoomViewForbidden for spoofed player, got %v", err)
 	}
+}
+
+func registerCasinoValkeyCleanup(t *testing.T, client valkeygo.Client, roomIDs []string, charIDs []string) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx := context.Background()
+		for _, rID := range roomIDs {
+			_ = client.Do(ctx, client.B().Del().Key(casino.DefaultRoomKeyPrefix+rID).Build())
+			_ = client.Do(ctx, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(rID).Build())
+		}
+		for _, cID := range charIDs {
+			_ = client.Do(ctx, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+cID).Build())
+		}
+	})
+}
+
+func TestValkeyRoomRenewal_PreservesAdmissionDiscoveryAcrossOriginalDeadline(t *testing.T) {
+	rawClient := openIsolatedTestValkey(t, 0)
+	defer rawClient.Close()
+
+	ctx := context.Background()
+	prefix := "r1091-" + id.New()[:8]
+	leader := prefix + "-leader"
+	peer := prefix + "-peer"
+	spec := prefix + "-spec"
+	extra := prefix + "-extra"
+	unrenewedLeader := prefix + "-unrenewed"
+
+	chars := &inMemoryCharRepo{
+		chars: map[string]corecharacter.Character{
+			leader:          {ID: leader, Name: "Leader", PlayerID: "owner-leader"},
+			peer:            {ID: peer, Name: "Peer", PlayerID: "owner-peer"},
+			spec:            {ID: spec, Name: "Spectator", PlayerID: "owner-spec"},
+			extra:           {ID: extra, Name: "Extra", PlayerID: "owner-extra"},
+			unrenewedLeader: {ID: unrenewedLeader, Name: "IdleLeader", PlayerID: "owner-idle"},
+		},
+	}
+	casinoRepo := newMockPrizeCasinoRepo()
+	for _, actor := range []string{leader, peer, spec, extra, unrenewedLeader} {
+		casinoRepo.accounts[actor] = casino.Account{CharacterID: actor, Coins: 1000}
+	}
+
+	repo, err := casino.NewValkeyRoomRepository(rawClient, casino.WithValkeyCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	created, err := svc.CreateRoom(ctx, leader, casino.CreateRoomRequest{
+		Name:            "Renew-" + prefix,
+		GameType:        casino.GameTypeIndian,
+		Speed:           casino.SpeedFast,
+		MaxPlayers:      4,
+		Rate:            10,
+		AllowSpectators: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomID := created.Room.ID
+
+	unrenewedCreated, err := svc.CreateRoom(ctx, unrenewedLeader, casino.CreateRoomRequest{
+		Name:            "Idle-" + prefix,
+		GameType:        casino.GameTypeIndian,
+		Speed:           casino.SpeedFast,
+		MaxPlayers:      2,
+		Rate:            10,
+		AllowSpectators: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unrenewedRoomID := unrenewedCreated.Room.ID
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomID, unrenewedRoomID}, []string{leader, peer, spec, extra, unrenewedLeader})
+
+	if _, err := svc.JoinRoom(ctx, roomID, peer, "", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SpectateRoom(ctx, roomID, spec, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	shortenMappings := func(actors ...string) {
+		t.Helper()
+		for _, actor := range actors {
+			if err := rawClient.Do(ctx, rawClient.B().Expire().Key(casino.DefaultCharacterKeyPrefix+actor).Seconds(60).Build()).Error(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	assertRenewedBeyondOriginalDeadline := func(step string, actors ...string) {
+		t.Helper()
+		roomTTL, err := rawClient.Do(ctx, rawClient.B().Ttl().Key(casino.DefaultRoomKeyPrefix+roomID).Build()).AsInt64()
+		if err != nil || roomTTL <= 60 {
+			t.Fatalf("%s: room TTL=%d err=%v", step, roomTTL, err)
+		}
+		for _, actor := range actors {
+			charKey := casino.DefaultCharacterKeyPrefix + actor
+			charTTL, err := rawClient.Do(ctx, rawClient.B().Ttl().Key(charKey).Build()).AsInt64()
+			if err != nil || charTTL <= 60 {
+				t.Fatalf("%s: actor %s mapping TTL=%d err=%v (roomTTL=%d)", step, actor, charTTL, err, roomTTL)
+			}
+			// Advance past the original 60s admission deadline without waiting wall-clock minutes.
+			if err := rawClient.Do(ctx, rawClient.B().Expire().Key(charKey).Seconds(charTTL-61).Build()).Error(); err != nil {
+				t.Fatal(err)
+			}
+			owner := chars.chars[actor].PlayerID
+			view, err := svc.GetCharacterRoomView(ctx, owner, actor)
+			if err != nil || view == nil || view.Room.ID != roomID {
+				t.Fatalf("%s: GetCharacterRoomView(%s) across original deadline = %+v, err=%v", step, actor, view, err)
+			}
+		}
+	}
+
+	// GET/refresh must not renew room or mapping lifetime.
+	shortenMappings(leader, peer, spec)
+	if err := rawClient.Do(ctx, rawClient.B().Expire().Key(casino.DefaultRoomKeyPrefix+roomID).Seconds(60).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	for _, actor := range []string{leader, peer, spec} {
+		owner := chars.chars[actor].PlayerID
+		if view, err := svc.GetCharacterRoomView(ctx, owner, actor); err != nil || view == nil {
+			t.Fatalf("read view(%s): %+v %v", actor, view, err)
+		}
+	}
+	if roomTTL, err := rawClient.Do(ctx, rawClient.B().Ttl().Key(casino.DefaultRoomKeyPrefix+roomID).Build()).AsInt64(); err != nil || roomTTL > 60 {
+		t.Fatalf("GET renewed room TTL=%d err=%v", roomTTL, err)
+	}
+	for _, actor := range []string{leader, peer, spec} {
+		if charTTL, err := rawClient.Do(ctx, rawClient.B().Ttl().Key(casino.DefaultCharacterKeyPrefix+actor).Build()).AsInt64(); err != nil || charTTL > 60 {
+			t.Fatalf("GET renewed actor %s mapping TTL=%d err=%v", actor, charTTL, err)
+		}
+	}
+
+	// 1. UpdateRoom renews all admitted participants and spectators.
+	shortenMappings(leader, peer, spec)
+	r, err := repo.GetRoom(ctx, roomID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.UpdatedAt = time.Now().UTC()
+	if err := repo.UpdateRoom(ctx, *r); err != nil {
+		t.Fatal(err)
+	}
+	assertRenewedBeyondOriginalDeadline("UpdateRoom", leader, peer, spec)
+
+	// 2. UpdateMember driven by peer renews leader, peer and spectator.
+	shortenMappings(leader, peer, spec)
+	peerMem, err := repo.GetMember(ctx, roomID, peer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerMem.UpdatedAt = time.Now().UTC()
+	if err := repo.UpdateMember(ctx, *peerMem); err != nil {
+		t.Fatal(err)
+	}
+	assertRenewedBeyondOriginalDeadline("UpdateMember", leader, peer, spec)
+
+	// 3. AddMember (another participant joining) renews existing members and sets new member.
+	shortenMappings(leader, peer, spec)
+	if _, err := svc.JoinRoom(ctx, roomID, extra, "", 0); err != nil {
+		t.Fatal(err)
+	}
+	assertRenewedBeyondOriginalDeadline("AddMember", leader, peer, spec, extra)
+
+	// 4. RemoveMember (extra leaving) renews remaining members and removes extra's mapping.
+	shortenMappings(leader, peer, spec)
+	if err := svc.LeaveRoom(ctx, roomID, extra); err != nil {
+		t.Fatal(err)
+	}
+	assertRenewedBeyondOriginalDeadline("RemoveMember", leader, peer, spec)
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-extra", extra); err != nil || view != nil {
+		t.Fatalf("left member still discoverable: %+v %v", view, err)
+	}
+
+	// 5. UpdateRoomDetail via game start and peer turn action renews leader, peer and spectator.
+	shortenMappings(leader, peer, spec)
+	if _, err := svc.StartIndianPoker(ctx, roomID, leader); err != nil {
+		t.Fatal(err)
+	}
+	assertRenewedBeyondOriginalDeadline("StartIndianPoker", leader, peer, spec)
+
+	shortenMappings(leader, peer, spec)
+	if _, err := svc.PlayIndianPokerAction(ctx, roomID, peer, casino.ActionCall); err != nil {
+		t.Fatal(err)
+	}
+	assertRenewedBeyondOriginalDeadline("PlayIndianPokerAction(peer)", leader, peer, spec)
+
+	// Contrast: unrenewed room/mapping expires at original admission deadline.
+	if err := rawClient.Do(ctx, rawClient.B().Expire().Key(casino.DefaultCharacterKeyPrefix+unrenewedLeader).Seconds(0).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-idle", unrenewedLeader); err != nil || view != nil {
+		t.Fatalf("expired mapping should return nil, nil, got view=%+v err=%v", view, err)
+	}
+}
+
+func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
+	rawClient := openIsolatedTestValkey(t, 0)
+	defer rawClient.Close()
+
+	ctx := context.Background()
+	prefix := "iso1091-" + id.New()[:8]
+	leaderA := prefix + "-leaderA"
+	peerA := prefix + "-peerA"
+	specA := prefix + "-specA"
+	leaderB := prefix + "-leaderB"
+	allActors := []string{leaderA, peerA, specA, leaderB}
+
+	chars := &inMemoryCharRepo{chars: map[string]corecharacter.Character{}}
+	casinoRepo := newMockPrizeCasinoRepo()
+	for _, actor := range allActors {
+		chars.chars[actor] = corecharacter.Character{ID: actor, Name: actor, PlayerID: "owner-" + actor}
+		casinoRepo.accounts[actor] = casino.Account{CharacterID: actor, Coins: 500}
+	}
+
+	faultClient := &faultValkeyClient{Client: rawClient}
+	repo, err := casino.NewValkeyRoomRepository(faultClient, casino.WithValkeyCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	roomADetail, err := svc.CreateRoom(ctx, leaderA, casino.CreateRoomRequest{
+		Name: "RoomA-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomA := roomADetail.Room.ID
+
+	roomBDetail, err := svc.CreateRoom(ctx, leaderB, casino.CreateRoomRequest{
+		Name: "RoomB-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomB := roomBDetail.Room.ID
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomA, roomB}, allActors)
+
+	if _, err := svc.JoinRoom(ctx, roomA, peerA, "", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SpectateRoom(ctx, roomA, specA, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. KickMember removes spectator mapping; subsequent roomA renewal does not resurrect it.
+	if err := svc.KickMember(ctx, roomA, leaderA, specA); err != nil {
+		t.Fatal(err)
+	}
+	rA, err := repo.GetRoom(ctx, roomA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rA.UpdatedAt = time.Now().UTC()
+	if err := repo.UpdateRoom(ctx, *rA); err != nil {
+		t.Fatal(err)
+	}
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+specA, specA); err != nil || view != nil {
+		t.Fatalf("kicked spectator resurrected: %+v %v", view, err)
+	}
+
+	// 2. If secondary DEL fails on LeaveRoom, error is ErrSecondarySync, GetCharacterRoomView
+	// still reports nil, nil (not forbidden) because live roster no longer admits peerA,
+	// and joining roomB overwrites the stale roomA mapping.
+	faultClient.failCharDel.Store(true)
+	leaveErr := svc.LeaveRoom(ctx, roomA, peerA)
+	faultClient.failCharDel.Store(false)
+	if !errors.Is(leaveErr, casino.ErrSecondarySync) {
+		t.Fatalf("expected ErrSecondarySync on failed DEL, got %v", leaveErr)
+	}
+	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomA {
+		t.Fatalf("expected stale mapping to roomA before rejoin, got %q err=%v", mapped, err)
+	}
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+peerA, peerA); err != nil || view != nil {
+		t.Fatalf("stale mapping after leave should resolve to nil, nil, got view=%+v err=%v", view, err)
+	}
+	if _, err := svc.JoinRoom(ctx, roomB, peerA, "", 0); err != nil {
+		t.Fatalf("rejoin roomB after stale mapping failed: %v", err)
+	}
+	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomB {
+		t.Fatalf("expected roomB mapping, got %q err=%v", mapped, err)
+	}
+
+	// 3. Stale/cross-room mutations on roomA must never overwrite or delete peerA's live mapping to roomB.
+	if err := repo.AddMember(ctx, casino.RoomMember{RoomID: roomA, CharacterID: peerA, JoinedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomB {
+		t.Fatalf("AddMember on roomA overwrote live roomB mapping: %q err=%v", mapped, err)
+	}
+	if err := repo.UpdateRoom(ctx, *rA); err != nil {
+		t.Fatal(err)
+	}
+	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomB {
+		t.Fatalf("UpdateRoom on roomA overwrote live roomB mapping: %q err=%v", mapped, err)
+	}
+	if err := repo.RemoveMember(ctx, roomA, peerA); err != nil {
+		t.Fatal(err)
+	}
+	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomB {
+		t.Fatalf("RemoveMember on roomA deleted live roomB mapping: %q err=%v", mapped, err)
+	}
+	if err := repo.DeleteRoom(ctx, roomA); err != nil {
+		t.Fatal(err)
+	}
+	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomB {
+		t.Fatalf("DeleteRoom on roomA deleted live roomB mapping: %q err=%v", mapped, err)
+	}
+
+	// 4. Secondary SET failure on mapping renewal propagates ErrSecondarySync.
+	faultClient.failCharSet.Store(true)
+	rB, err := repo.GetRoom(ctx, roomB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rB.UpdatedAt = time.Now().UTC()
+	setSyncErr := repo.UpdateRoom(ctx, *rB)
+	faultClient.failCharSet.Store(false)
+	if !errors.Is(setSyncErr, casino.ErrSecondarySync) {
+		t.Fatalf("expected ErrSecondarySync on failed mapping renewal SET, got %v", setSyncErr)
+	}
+
+	// 5. Unreadable mapping (blank value or WRONGTYPE) is not absence.
+	if err := rawClient.Do(ctx, rawClient.B().Set().Key(casino.DefaultCharacterKeyPrefix+specA).Value("   ").Ex(casino.DefaultLobbyTTL).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetCharacterRoom(ctx, specA); !errors.Is(err, casino.ErrInvalidRoomMapping) {
+		t.Fatalf("expected ErrInvalidRoomMapping on blank key, got %v", err)
+	}
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+specA, specA); view != nil || !errors.Is(err, casino.ErrInvalidRoomMapping) {
+		t.Fatalf("expected ErrInvalidRoomMapping from GetCharacterRoomView, got view=%+v err=%v", view, err)
+	}
+	_ = rawClient.Do(ctx, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+specA).Build())
+	if err := rawClient.Do(ctx, rawClient.B().Hset().Key(casino.DefaultCharacterKeyPrefix+specA).FieldValue().FieldValue("bad", "type").Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+specA, specA); view != nil || err == nil || errors.Is(err, casino.ErrRoomNotFound) {
+		t.Fatalf("expected non-absence error on WRONGTYPE mapping, got view=%+v err=%v", view, err)
+	}
+}
+
+func TestValkeyRoomRenewal_ConcurrentMembershipAndRenewalSafety(t *testing.T) {
+	rawClient := openIsolatedTestValkey(t, 0)
+	defer rawClient.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	cfg := testutil.GetStressConfig()
+	prefix := "conc1091-" + id.New()[:8]
+	roomA := prefix + "-roomA"
+	roomB := prefix + "-roomB"
+	leaderA := prefix + "-leaderA"
+	leaderB := prefix + "-leaderB"
+
+	movers := make([]string, cfg.Workers)
+	allChars := []string{leaderA, leaderB}
+	chars := &inMemoryCharRepo{
+		chars: map[string]corecharacter.Character{
+			leaderA: {ID: leaderA, Name: leaderA, PlayerID: "owner-" + leaderA},
+			leaderB: {ID: leaderB, Name: leaderB, PlayerID: "owner-" + leaderB},
+		},
+	}
+	for i := range movers {
+		cID := fmt.Sprintf("%s-mover-%d", prefix, i)
+		movers[i] = cID
+		allChars = append(allChars, cID)
+		chars.chars[cID] = corecharacter.Character{ID: cID, Name: cID, PlayerID: "owner-" + cID}
+	}
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomA, roomB}, allChars)
+
+	repo, err := casino.NewValkeyRoomRepository(rawClient, casino.WithValkeyCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := casino.NewService(newMockPrizeCasinoRepo(), casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().UTC()
+	if err := repo.CreateRoom(ctx, casino.Room{
+		ID: roomA, Name: "ConcA-" + prefix, GameType: casino.GameTypeIndian, LeaderCharacterID: leaderA,
+		Speed: casino.SpeedFast, MaxPlayers: 64, Rate: 10, AllowSpectators: true, Status: casino.RoomStatusWaiting, CreatedAt: now, UpdatedAt: now,
+	}, casino.RoomMember{RoomID: roomA, CharacterID: leaderA, JoinedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateRoom(ctx, casino.Room{
+		ID: roomB, Name: "ConcB-" + prefix, GameType: casino.GameTypeIndian, LeaderCharacterID: leaderB,
+		Speed: casino.SpeedFast, MaxPlayers: 64, Rate: 10, AllowSpectators: true, Status: casino.RoomStatusWaiting, CreatedAt: now, UpdatedAt: now,
+	}, casino.RoomMember{RoomID: roomB, CharacterID: leaderB, JoinedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range movers {
+		if err := repo.AddMember(ctx, casino.RoomMember{RoomID: roomA, CharacterID: m, IsSpectator: true, JoinedAt: now, UpdatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	testutil.RunConcurrentStressTest(t, cfg, func(workerID, iter int) error {
+		mover := movers[workerID]
+		if iter == 0 {
+			if err := repo.RemoveMember(ctx, roomA, mover); err != nil {
+				return err
+			}
+			if err := repo.AddMember(ctx, casino.RoomMember{
+				RoomID: roomB, CharacterID: mover, IsSpectator: true, JoinedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+			}); err != nil {
+				return err
+			}
+		}
+		if workerID%2 == 0 {
+			if err := repo.UpdateMember(ctx, casino.RoomMember{
+				RoomID: roomA, CharacterID: leaderA, Action: "待機中", UpdatedAt: time.Now().UTC(),
+			}); err != nil {
+				return err
+			}
+		} else {
+			if err := repo.UpdateMember(ctx, casino.RoomMember{
+				RoomID: roomB, CharacterID: mover, IsSpectator: true, UpdatedAt: time.Now().UTC(),
+			}); err != nil {
+				return err
+			}
+		}
+		view, err := svc.GetCharacterRoomView(ctx, "owner-"+mover, mover)
+		if err != nil {
+			return err
+		}
+		if view == nil || view.Room.ID != roomB {
+			return fmt.Errorf("mover %s view=%+v, want roomB %s", mover, view, roomB)
+		}
+		return nil
+	})
 }

@@ -3,7 +3,10 @@ package casino
 import (
 	"context"
 	"errors"
+	"strings"
 )
+
+var ErrInvalidRoomMapping = errors.New("casino character room mapping is invalid")
 
 // GetCharacterRoomView discovers actual admission through the owner index and
 // reuses the authorized, masked projection. Missing/expired rooms are absent.
@@ -28,11 +31,11 @@ func (s *Service) GetCharacterRoomView(ctx context.Context, playerID, characterI
 	if err != nil {
 		return nil, err
 	}
-	if roomID == "" {
-		return nil, nil
+	if strings.TrimSpace(roomID) == "" {
+		return nil, ErrInvalidRoomMapping
 	}
 	view, err := s.GetRoomView(ctx, roomID, playerID, characterID)
-	if errors.Is(err, ErrRoomNotFound) {
+	if errors.Is(err, ErrRoomNotFound) || errors.Is(err, ErrRoomViewForbidden) {
 		return nil, nil
 	}
 	return view, err

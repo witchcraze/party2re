@@ -98,6 +98,10 @@ Reads never start, advance, wager or settle.
 
 Gateway activity discovers the owned actor's existing character-room mapping
 through `GetCharacterRoomView`, then applies `GetRoomView` authorization/masking.
+Stale mappings pointing to rooms that are missing, disbanded, idle-expired or no
+longer admit the actor in their live roster resolve as absent (`nil, nil`)
+without mutating Valkey, whereas unreadable or blank mapping records return an
+error rather than reporting false idle state.
 Context adds the authorized masked room view, the actor's coin balance and
 service-owned role/phase controls to the activity facts, including conflicts.
 Actual admission overrides ordinary selection, even if the selector cannot be
@@ -161,10 +165,15 @@ the lock.
   back SQL wagers, payouts and `CasinoWins` without publishing an accepted turn
   or invoking `gamePlayedHook`.
 - **Post-publication secondary sync (`SecondarySyncError` / `ErrSecondarySync`)**:
-  Active-index or reverse-mapping cleanup failures after payload persistence
-  preserve committed coin/win settlement while returning the error. Failed
-  active-index sync can hide a live payload from lobby discovery until renewal;
-  idle expiry rechecks payload activity before deletion.
+  Active-index renewal/removal and reverse-mapping synchronization/cleanup
+  failures after payload persistence preserve committed coin/win settlement
+  while returning the error. Live room mutations (`saveRoomDetail`,
+  `UpdateRoom`, `UpdateRoomDetail`, `AddMember`, `UpdateMember`, `RemoveMember`)
+  renew reverse mappings for still-admitted participants and spectators whose
+  mapping still targets that room, without resurrecting absent mappings or
+  overwriting/deleting a different live room's mapping. Failed active-index sync
+  can hide a live payload from lobby discovery until renewal; idle expiry
+  rechecks payload activity before deletion.
 - **Post-commit response observation failure**: Once the SQL settlement and
   room publication succeed without a secondary-sync failure, any committed
   winner progression hook (`gamePlayedHook` -> `medal.MetricCasinoGames`) runs
@@ -175,9 +184,7 @@ the lock.
   already-submitted turn are rejected (`ErrGameNotInRound` or `ErrAlreadyActed`).
 
 The [persistence and lifetime contract](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging)
-owns publication ordering and cross-store limits. Room creation/start and
-admission retain their separate boundaries; this action contract does not
-establish reverse-mapping lifetime correctness for every writer.
+owns publication ordering and cross-store limits.
 
 ---
 
