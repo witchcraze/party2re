@@ -215,7 +215,10 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 	if turnsRemaining <= 0 {
 		turnsRemaining = 0
-		finalStatus = StatusWipedOut
+		// Native maps keep exhausted runs active; only catalog runs wipe out on turns.
+		if exp.MapVariant == 0 {
+			finalStatus = StatusWipedOut
+		}
 	}
 
 	if params.FinishStatus != "" {
@@ -238,6 +241,9 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		}
 		if eventConsumed {
 			exp.ConsumedEvents = append(exp.ConsumedEvents, params.EventKey)
+		} else {
+			// An accepted one-time event never regenerates its encounter.
+			exp.Encounter = nil
 		}
 	}
 

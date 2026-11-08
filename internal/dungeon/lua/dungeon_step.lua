@@ -165,9 +165,13 @@ else
         final_status = 'wiped_out'
     end
 end
+-- Native maps keep exhausted runs active; only catalog runs wipe out on turns.
+local map_variant = redis.call('HGET', state_key, 'map_variant') or ''
 if turns_remaining <= 0 then
     turns_remaining = 0
-    final_status = 'wiped_out'
+    if map_variant == '' then
+        final_status = 'wiped_out'
+    end
 end
 
 if ARGV[22] and ARGV[22] ~= '' then
@@ -194,6 +198,9 @@ if event_key ~= '' then
     end
     if event_consumed == 1 then
         table.insert(consumed_events, event_key)
+    else
+        -- An accepted one-time event never regenerates its encounter.
+        encounter = ''
     end
 end
 
@@ -315,5 +322,6 @@ return {
     new_events_str,
     tostring(event_consumed),
     encounter,
-    tostring(revision)
+    tostring(revision),
+    map_variant
 }

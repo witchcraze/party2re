@@ -76,8 +76,8 @@ func TestDungeonIntegrationFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListDungeons failed: %v", err)
 	}
-	if len(overviews) != 3 {
-		t.Errorf("expected 3 default dungeons, got %d", len(overviews))
+	if len(overviews) != 4 {
+		t.Errorf("expected 3 catalog dungeons and native map0, got %d", len(overviews))
 	}
 	if !overviews[0].IsUnlocked {
 		t.Errorf("expected Dungeon 1 to be unlocked for level 30 character")

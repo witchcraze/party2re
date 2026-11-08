@@ -26,7 +26,7 @@ func writeCombatAdmissionError(w http.ResponseWriter, err error) bool {
 		writeError(w, http.StatusUnprocessableEntity, err)
 	case errors.Is(err, dungeon.ErrCombatActive):
 		writeError(w, http.StatusConflict, errors.New("※敵を全て倒すまで、先に進むことはできません"))
-	case errors.Is(err, dungeon.ErrExpeditionStateChanged), errors.Is(err, dungeon.ErrNoActiveCombat),
+	case errors.Is(err, dungeon.ErrExpeditionStateChanged), errors.Is(err, dungeon.ErrNoActiveCombat), errors.Is(err, dungeon.ErrMovementExhausted),
 		errors.Is(err, dungeon.ErrExpeditionNotActive),
 		errors.Is(err, dungeon.ErrExpeditionNotFound), errors.Is(err, dungeon.ErrExpeditionIDMismatch):
 		writeError(w, http.StatusConflict, err)

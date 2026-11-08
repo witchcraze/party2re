@@ -147,6 +147,7 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 	posY, _ := strconv.Atoi(sMap["pos_y"])
 	hp, _ := strconv.Atoi(sMap["current_hp"])
 	turns, _ := strconv.Atoi(sMap["turns_remaining"])
+	variant, _ := strconv.Atoi(sMap["map_variant"])
 
 	exp, _ := strconv.Atoi(rMap["exp"])
 	gold, _ := strconv.Atoi(rMap["gold"])
@@ -179,6 +180,7 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 		PartyName:         sMap["party_name"],
 		Members:           members,
 		DungeonID:         sMap["dungeon_id"],
+		MapVariant:        variant,
 		CurrentFloor:      floor,
 		PosX:              posX,
 		PosY:              posY,
@@ -227,6 +229,7 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 			FieldValue("party_name", exp.PartyName).
 			FieldValue("members", membersJSON).
 			FieldValue("dungeon_id", exp.DungeonID).
+			FieldValue("map_variant", encodeVariant(exp.MapVariant)).
 			FieldValue("current_floor", strconv.Itoa(exp.CurrentFloor)).
 			FieldValue("pos_x", strconv.Itoa(exp.PosX)).
 			FieldValue("pos_y", strconv.Itoa(exp.PosY)).
@@ -332,7 +335,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 20 {
+	if err != nil || len(vals) < 21 {
 		return StepOutcome{}, fmt.Errorf("unexpected lua step response format: %v", err)
 	}
 
@@ -362,6 +365,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		return StepOutcome{}, err
 	}
 	revision, _ := strconv.Atoi(vals[19])
+	variant, _ := strconv.Atoi(vals[20])
 	exp := ActiveExpedition{
 		Encounter: encounter,
 		Revision:  revision,
@@ -369,6 +373,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		ID:                params.ExpectedExpeditionID,
 		CharacterID:       characterID,
 		DungeonID:         dungeonID,
+		MapVariant:        variant,
 		CurrentFloor:      floor,
 		PosX:              posX,
 		PosY:              posY,
@@ -389,4 +394,13 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		Status:        status,
 		EventConsumed: eventConsumed,
 	}, nil
+}
+
+// encodeVariant stores catalog runs as empty, which the step script reads as
+// "not native".
+func encodeVariant(v int) string {
+	if v <= 0 {
+		return ""
+	}
+	return strconv.Itoa(v)
 }

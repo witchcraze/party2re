@@ -171,11 +171,19 @@ func (s *Service) startRoster(
 		return nil, ErrTooManyPartyMembers
 	}
 
-	if len(dungeon.Floors) == 0 {
+	variant, turns := 0, dungeon.MaxTurnsPerFloor
+	var firstFloor Floor
+	switch {
+	case dungeon.native():
+		// Legacy picks one initial layout; accepted start is the leader's
+		// initial advance from round 0 to 1 without a tile event.
+		variant, turns = s.rng.Intn(len(dungeon.Variants))+1, dungeon.RoundLimit-1
+		firstFloor = dungeon.Variants[variant-1]
+	case len(dungeon.Floors) == 0:
 		return nil, errors.New("dungeon has no floors")
+	default:
+		firstFloor = dungeon.Floors[0]
 	}
-
-	firstFloor := dungeon.Floors[0]
 	members := make([]ExpeditionMember, 0, len(memberIDs))
 	leaderHP := 0
 
@@ -260,11 +268,12 @@ func (s *Service) startRoster(
 		PartyID:           partyID,
 		Members:           members,
 		DungeonID:         dungeon.ID,
+		MapVariant:        variant,
 		CurrentFloor:      1,
 		PosX:              firstFloor.StartX,
 		PosY:              firstFloor.StartY,
 		CurrentHP:         leaderHP,
-		TurnsRemaining:    dungeon.MaxTurnsPerFloor,
+		TurnsRemaining:    turns,
 		AccumulatedExp:    0,
 		AccumulatedGold:   0,
 		AccumulatedItems:  []string{},

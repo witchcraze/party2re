@@ -12462,6 +12462,10 @@
           "max_turns_per_floor": {
             "type": "integer"
           },
+          "round_limit": {
+            "type": "integer",
+            "description": "Native map round limit; absent for catalog floors. Native layouts are not listed, so floors is null."
+          },
           "min_level": {
             "type": "integer"
           },
@@ -16075,7 +16079,7 @@
       },
       "DungeonActiveEncounter": {
         "type": "object",
-        "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter.",
+        "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter. A native treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
         "properties": {
           "monster": {
             "type": "object",
@@ -16083,7 +16087,10 @@
             "additionalProperties": true
           },
           "enemies": {
-            "type": "array",
+            "type": [
+              "array",
+              "null"
+            ],
             "minItems": 1,
             "maxItems": 1,
             "items": {
@@ -16121,8 +16128,22 @@
             "type": "string",
             "enum": [
               "battle",
-              "boss"
+              "boss",
+              "treasure"
             ]
+          },
+          "chests": {
+            "type": "array",
+            "description": "Native pending treasure chests; contents and inspection are not modeled yet.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "opened": {
+                  "type": "boolean"
+                }
+              }
+            }
           },
           "x": {
             "type": "integer"
@@ -16235,6 +16256,14 @@
           "turns_remaining": {
             "type": "integer"
           },
+          "round": {
+            "type": "integer",
+            "description": "Native maps only: current shared round (1 after start)."
+          },
+          "round_limit": {
+            "type": "integer",
+            "description": "Native maps only: movement rejects once round reaches this limit."
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -16282,7 +16311,7 @@
           "directions",
           "controls"
         ],
-        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Directions use the selected floor geometry, not catalog categories. No private roster inventory, event flags or provisional rewards."
+        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Catalog directions use the selected floor geometry, not catalog categories. Native maps list all four directions while movement is allowed (walls reject on use), so hidden passages stay undisclosed. No private roster inventory, layout identity, event flags or provisional rewards."
       },
       "BlackMarketSacrificeCandidate": {
         "type": "object",

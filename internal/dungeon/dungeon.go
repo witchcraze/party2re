@@ -27,6 +27,7 @@ var (
 	ErrInvalidDirection          = errors.New("invalid move direction")
 	ErrImpassableWall            = errors.New("cannot move into wall or out of map bounds")
 	ErrExpeditionAlreadyFinished = errors.New("expedition is already completed")
+	ErrMovementExhausted         = errors.New("movement limit reached; escape to leave the dungeon")
 )
 
 type ExpeditionStatus string
@@ -93,6 +94,10 @@ type Dungeon struct {
 	Floors           []Floor `json:"floors"`
 	ClearExpBonus    int     `json:"clear_exp_bonus"`
 	ClearGoldBonus   int     `json:"clear_gold_bonus"`
+	// RoundLimit and Variants define a native map; variants stay private
+	// because their grids disclose hidden passages.
+	RoundLimit int     `json:"round_limit,omitempty"`
+	Variants   []Floor `json:"-"`
 }
 
 type ActiveExpedition struct {
@@ -104,6 +109,7 @@ type ActiveExpedition struct {
 	PartyName         string             `json:"party_name,omitempty"`
 	Members           []ExpeditionMember `json:"members,omitempty"`
 	DungeonID         string             `json:"dungeon_id"`
+	MapVariant        int                `json:"-"` // 1-based native layout; 0 for catalog floors
 	CurrentFloor      int                `json:"current_floor"`
 	PosX              int                `json:"pos_x"`
 	PosY              int                `json:"pos_y"`
@@ -397,7 +403,8 @@ func (s *Service) ListDungeons(ctx context.Context, characterID string) ([]Dunge
 			}
 		}
 
-		isCleared := rec.HighestDungeonCleared >= d.Tier
+		// Native maps have no clear outcome; boss victory does not clear them.
+		isCleared := !d.native() && rec.HighestDungeonCleared >= d.Tier
 		overviews = append(overviews, DungeonOverview{
 			Dungeon:    d,
 			IsUnlocked: isUnlocked,

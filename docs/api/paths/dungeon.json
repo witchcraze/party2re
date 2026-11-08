@@ -180,7 +180,7 @@
   },
   "/characters/{id}/dungeons/fight": {
     "post": {
-      "description": "Leader-only continuation using saved enemy HP/MP, participant status/CMP and elemental field state through the existing battle resolver. A frozen terminal buffer retries SQL settlement instead of combat. Returns 409 when no encounter is active or a concurrent command changes or freezes the run.",
+      "description": "Leader-only continuation using saved enemy HP/MP, participant status/CMP and elemental field state through the existing battle resolver. A frozen terminal buffer retries SQL settlement instead of combat. Returns 409 when no hostile encounter is active (pending treasure is not combat) or a concurrent command changes or freezes the run.",
       "operationId": "fightDungeonEncounter",
       "parameters": [
         {
@@ -274,7 +274,7 @@
   },
   "/characters/{id}/dungeons/move": {
     "post": {
-      "description": "Rejects movement in all directions while an active enemy remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape.",
+      "description": "Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at their round limit with 409 while the run stays active for escape; walls and bounds spend no round.",
       "operationId": "moveDungeonExpedition",
       "parameters": [
         {
@@ -352,7 +352,7 @@
         },
         "409": {
           "$ref": "#/components/responses/Error",
-          "description": "Active enemies block movement, or expedition state changed"
+          "description": "Active enemies or unopened chests block movement, the native round limit is reached, or expedition state changed"
         },
         "415": {
           "$ref": "#/components/responses/Error",
