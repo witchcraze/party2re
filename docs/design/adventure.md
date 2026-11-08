@@ -1,824 +1,154 @@
-# Adventure System & 10-Floor Dungeon Crawl Design Specification
+# Adventure System Design
 
 ## Overview
 
-The Adventure system targets a clean-room reconstruction of the operation-driven
-adventure in legacy Party2 (`quest.cgi`, `vs_monster.cgi`, `_battle.cgi`).
+The Adventure system reconstructs the operation-driven stage adventure of legacy Party2 (`quest.cgi`, `vs_monster.cgi`, `_battle.cgi`). Evidence paths are under `party2/` at revision `ff97fc549932a146cc945d7edf71b44c868a840e`.
 
-The fictional one-hour expedition timer was removed by #478 / PR #583. The
-replacement currently resolves all battles, floor advances and treasure
-inspections in one start request. This is an implementation gap, not equivalent
-to the original adventure or approval to omit player actions. #478 requested
-strategy selection, explicit advance and exit; #1014 / PR #1020 connected the
-existing service to the Gateway without deciding new domain rules. The user
-directed restoration of player-command progression in
-[#1323](https://github.com/witchcraze/party2re/issues/1323). Removing an invented
-one-hour wait does not remove the original per-actor action interval.
+Production starts still resolve all battles, floor advances and treasure inspections in one request (the batch crawl). This is an implementation gap, not the original game: the user directed restoration of player-command progression (#1323). Removing the invented one-hour expedition timer does not remove the original per-actor action interval. The native interactive run (`NormalRunService`) still lacks explicit combat (#1329) and its Gateway cutover (#1330).
 
 ## Original interaction contract and reconstruction target
 
-References in this section use `party2/` at legacy revision
-`ff97fc549932a146cc945d7edf71b44c868a840e`. These are source-inspected requirements,
-not a claim of full CGI execution or complete skill/formula parity.
+These are source-inspected requirements, not a claim of full CGI execution or complete skill/formula parity.
 
-- **Admission and progress are separate.** A normal quest is created at floor 0
-  (`lib/quest.cgi:579–586`). The first `すすむ` requires the leader; subsequent
-  advances are not universally leader-only. Living enemies prevent advancing
-  (`lib/vs_monster.cgi:35–82`). Advancing creates the next encounter; it does not
-  resolve the entire battle or automatically continue to another floor.
-- **Players choose actions.** `lib/_skill.cgi:set_action` derives available
-  actions from the actor's job, learned skills, resources and current situation.
-  `lib/_battle.cgi:561–659` parses an action and target and checks actor state.
-  A server-selected skill/lowest-HP target for every ally is not a replacement
-  for this choice. Some skills have additional-action behavior; this contract
-  does not reduce every command to exactly one hit.
-- **Actions have an interval.** `read_member` assigns the room's speed to
-  `act_time` (`lib/_battle.cgi:450–468`); a registered action is rejected when
-  elapsed time since that actor's previous action is below that interval
-  (`641–644`). The accepted action path updates actor timing and persists the
-  shared state (`1169–1178`). This is not a round barrier waiting for all players
-  and not an animation-only delay. A clock deadline becoming due does not by
-  itself execute an action.
-- **NPC responses are bounded by the submitted operation.** The eligible action
-  path invokes `npc_turn` unless suppressed (`lib/_battle.cgi:1169–1171`).
-  `lib/_npc_action.cgi:89–155` selects at most one living, interval-ready enemy
-  for its action and rotates its order. Advancing and treasure-room operations
-  disable this response (`lib/vs_monster.cgi:37–53`). Repeated GETs do not execute
-  combat; no background auto-combat or full agility-sorted party round is implied.
-- **Treasure and exit remain individual operations.** `しらべる` selects a chest
-  and checks the actor's allowance/item rules (`lib/_npc_action.cgi:5–85`);
-  entry to the treasure room does not auto-open everyone's chest. `にげる`
-  distinguishes an actual participant from a spectator, removes that actor and
-  applies participant exit effects (`lib/_battle.cgi:1184–1278`). Different
-  participants can leave at different times; one exit is not a party-wide finish.
-- **Scene capture follows actual submissions.** `party.cgi:20–27` records an
-  eligible operation, including submitted commentary, using the pre-operation
-  normal-adventure location. Rejected operations and refreshes do not record.
-  Personal copying precedes possible capture from the exit operation. Content,
-  visibility and copy rules belong to [Replay](replay.md).
+- **Admission and progress are separate.** A normal quest is created at floor 0 (`lib/quest.cgi:579–586`). The first `すすむ` requires the leader; later advances are not leader-only. Living enemies prevent advancing (`lib/vs_monster.cgi:35–82`). Advancing creates the next encounter; it does not resolve the battle or continue to another floor.
+- **Players choose actions.** `lib/_skill.cgi:set_action` derives available actions from the actor's job, learned skills, resources and situation; `lib/_battle.cgi:561–659` parses an action and target and checks actor state. A server-selected skill or lowest-HP target is not a replacement. Some skills have additional-action behavior.
+- **Actions have an interval.** `read_member` assigns the room's speed to `act_time` (`lib/_battle.cgi:450–468`); an action is rejected when elapsed time since that actor's previous action is below that interval (`641–644`). The accepted path updates actor timing and persists shared state (`1169–1178`). This is not a round barrier, not an animation delay, and a due deadline does not execute an action.
+- **NPC responses are bounded by the submitted operation.** The eligible action path invokes `npc_turn` unless suppressed (`lib/_battle.cgi:1169–1171`); `lib/_npc_action.cgi:89–155` selects at most one living, interval-ready enemy and rotates its order. Advancing and treasure-room operations disable the response (`lib/vs_monster.cgi:37–53`). GETs never execute combat; there is no background auto-combat or agility-sorted party round.
+- **Treasure and exit are individual operations.** `しらべる` selects a chest and checks the actor's allowance/item rules (`lib/_npc_action.cgi:5–85`); entering the treasure room does not open chests. `にげる` distinguishes a participant from a spectator, removes that actor and applies participant exit effects (`lib/_battle.cgi:1184–1278`). Participants leave at different times; one exit is not a party-wide finish.
+- **Scene capture follows actual submissions.** `party.cgi:20–27` records an eligible operation, including commentary, using the pre-operation location. Rejected operations and refreshes do not record. Content, visibility and copy rules belong to [Replay](replay.md).
 
-The dispatch reconciliation for this interaction boundary is:
+The state between operations must be enough to resume the same encounter: roster and roles, living/fallen participants, resources, statuses/effects and lifetimes, chosen encounter, field state, consumed items, actor/NPC timing, progression and earned-reward/exit facts. Persisting only HP/MP and restarting the batch resolver loses these facts. SQL is the run authority ([transient run state](../architecture/transient-run-state.md#normal-adventure-durable-command-boundary-1325)); Party lobbies and adventure audit rows cannot resume combat.
 
-| Original operation | Current native path | Reconstruction responsibility |
-| --- | --- | --- |
-| `つくる` / `さんか` (`quest.cgi:189–199`) | Party `CreateParty` / `JoinParty`; `NormalRunService.EnterSolo` / `EnterParty` enroll at floor 0 | Production starts still use the batch path until #1330 |
-| `けんがく` | Party detail reads exist; no equivalent active normal-adventure view is established | Reconcile admission and actor-dependent observation under #948; spectators are not combatants or archive recipients |
-| `すすむ` | `NormalRunService.Command` creates one encounter or ordinary treasure room, using the injected reset/combat port | #1329 supplies the certified explicit combat consumer; #1330 connects transport |
-| Registered battle action and target (`_skill.cgi:set_action`) | `ResolvePartyBattle` automatically selects all combatants' actions until termination | Add resumable explicit-action processing, reusing battle effects and the participant adapter |
-| `しらべる` | Normal-run command claims the selected chest, individual allowance/key and delivery atomically | #1330 connects explicit selection; retained batch starts still inspect automatically |
-| `にげる` | Normal-run command settles one recipient and preserves the remaining roster | Party lobby `LeaveParty` remains separate; #1330 connects active-run exit |
-| Submitted comments / `ささやき` / `すくしょ` | No equivalent normal-adventure command contract established | Reconcile separately under #948; private whispers and manual screenshots are not automatic Replay payloads |
-| Refresh | Current reads and Gateway context | Observe without advancing, granting rewards, recording a scene or renewing game deadlines |
-
-The reconstruction must retain enough authoritative state between operations
-to resume the same encounter: roster and roles, living/fallen participants,
-resources, statuses/effects and their lifetimes, chosen encounter, field state,
-consumed items, actor/NPC timing, progression and earned-reward/exit facts.
-Persisting only HP/MP and restarting the batch resolver loses these facts.
-Current `CrawlSession` is request-local; it is not a production run store.
-
-The [selected SQL boundary](../architecture/transient-run-state.md#normal-adventure-durable-command-boundary-1325)
-separates `NormalRunService` from the retained batch starts. SQL preserves its
-enrollment, effect state, recipient entitlements and receipts across requests;
-Party lobbies and adventure audit rows alone cannot resume combat. The retained
-batch paths commit assets and history together, but their Valkey lobby updates
-are outside SQL rollback. Their passing tests do not establish interactive parity.
-
-Restore shared action processing, resumable adventure/individual settlement,
-then verified Gateway commands and owned observations as bounded implementation
-units under #1323. Keep unrelated combat modes unchanged and retain current REST
-routes until #948 verifies replacements. EX progression (#1191), inspection
-allowances (#1196), consumed-item carry (#1197), per-operation earnings (#1328/#1329),
-exit fatigue (#1221), chronicle records (#1222) and transaction repair (#1224)
-remain separately owned; no full parity for these is certified here.
+Open: comments, whispers (`ささやき`), manual screenshots (`すくしょ`) and spectating (`けんがく`) have no native normal-adventure command contract yet (#948). Private whispers and manual screenshots are not automatic Replay payloads.
 
 ## Resumable normal-run transitions
 
-The following lifecycle follows the #1325 reconstruction decision. The user approved
-SQL authority and the explicit idle-cleanup timing below on 2026-10-11. Legacy
-requirements remain separate from these native decisions; the SQL boundary is in
-[Transient run state](../architecture/transient-run-state.md#normal-adventure-durable-command-boundary-1325).
-`NormalRunService` implements lifecycle persistence; the certified combat/reset
-port (#1329) and production Gateway connection (#1330) remain separate.
+**Decision (#1325, 2026-10-11):** SQL authority for the run, and the explicit idle-cleanup timing below.
 
 | Transition | Preconditions and resulting facts |
 | --- | --- |
-| Waiting admission | Party owns create/join/readiness; solo uses the same Adventure enrollment boundary without a lobby. Enrollment preserves ordered participants, leader, stage/mode and speed; it creates floor 0 without combat |
-| Encounter creation (`すすむ`) | Living participant, actor interval satisfied, no living enemies; floor 0 additionally requires leader. Clear applicable statuses and temporary/anti fields, advance exactly one floor and create its encounter; no NPC response or automatic allied action |
-| Battle action | Authorized current living actor (or verified fallen-actor exception), registered action and valid target/resources. Process that explicit operation, applicable effects and bounded eligible NPC response; persist all resulting state |
-| Defeat | Resolve revival and death effects within the operation. Keep fallen membership and earned facts; do not silently exit everyone, halve prior EXP or erase gold. With no living allies expose permitted exit/recovery rather than fabricating an automatic run-wide payout |
-| Ordinary boss defeat | Preserve clear/chronicle facts and allow explicit advance into treasure floor 11; do not generate/open treasure merely because the batch resolver returned victory. EX beyond the ordinary boundary remains #1191 |
-| Treasure inspection (`しらべる`) | Living actor selects a current unopened chest; validate actor allowance and any consumable key. Claim/delivery is individual and atomic; no NPC response. Remain in the room until explicit exit |
-| Individual exit (`にげる`) | Distinguish enrolled participant from spectator. Participant receives only outstanding personal effects/history, leaves roster and releases ownership after mandatory processing; preserve others' encounter/resources/timing. Spectator receives no combat rewards |
-| Leadership and room disposal | On leader exit choose the first remaining real participant in preserved roster order, not sorted lock order. Dispose room only after last real participant leaves and required settlement is durable; NPCs do not keep an empty normal room alive |
-| Idle cleanup | Separate due detection, participant recovery/penalty and physical deletion; expired storage is never proof that rewards or mandatory work were processed |
+| Waiting admission | Party owns create/join/readiness; solo uses the same enrollment boundary without a lobby. Enrollment keeps ordered participants, leader, stage/mode and speed and creates floor 0 without combat |
+| Encounter creation (`すすむ`) | Living participant, interval satisfied, no living enemies; floor 0 also requires the leader. Clear applicable statuses and temporary/anti fields, advance exactly one floor and create its encounter; no NPC response or automatic allied action |
+| Battle action | Authorized current living actor (or a verified fallen-actor exception), registered action and valid target/resources. Process that operation, its effects and the bounded NPC response |
+| Defeat | Resolve revival and death effects within the operation. Keep fallen membership and earned facts; do not exit everyone, halve prior EXP or erase gold. With no living allies, offer permitted exit/recovery, not an automatic payout |
+| Ordinary boss defeat | Keep clear facts and allow explicit advance into treasure floor 11; treasure is not generated or opened by victory alone |
+| Treasure inspection (`しらべる`) | Living actor selects a current unopened chest; validate allowance and any consumable key. Claim/delivery is individual and atomic; no NPC response. Stay in the room until explicit exit |
+| Individual exit (`にげる`) | Participant receives only outstanding personal effects/history, leaves the roster and releases ownership; others' encounter/resources/timing are kept. Spectators receive no combat rewards |
+| Leadership and room disposal | On leader exit, choose the first remaining real participant in roster order, not lock order. Dispose the room only after the last real participant leaves and settlement is durable; NPCs do not keep an empty room alive |
+| Idle cleanup | Separate due detection, participant recovery/penalty and physical deletion; expired storage never proves rewards or mandatory work were processed |
 
-Evidence: `quest.cgi:579–586`; `vs_monster.cgi:37–82,89–109`;
-`_battle.cgi:640–665,1169–1178,1184–1227,1330–1345`.
-Fallen actors are restricted, but not universally barred from operations:
-`_battle.cgi:646–665` allows whisper/screenshot before the fallen check and
-contains a specific self-revival exception. Spectators receive only
-whisper/exit/screenshot in `_skill.cgi:22–30`. These operations' transport and
-visibility reconciliation remains #948; automatic scene capture and personal
-exit copies are owned by [Replay](replay.md#native-scene-and-latest-slot-contract).
-An unsupported exception must remain an explicit cutover blocker, not silently
-disappear from discovery.
+Evidence: `quest.cgi:579–586`; `vs_monster.cgi:37–82,89–109`; `_battle.cgi:640–665,1169–1178,1184–1227,1330–1345`. Fallen actors are restricted but not universally barred: `_battle.cgi:646–665` allows whisper/screenshot before the fallen check and has a specific self-revival exception. Spectators get only whisper/exit/screenshot (`_skill.cgi:22–30`). An unsupported exception must stay an explicit cutover blocker, not disappear from discovery.
 
 ### Normal-run operation discovery
 
-Normal runs discover actions from current encounter facts, not the automatic
-batch resolver's priority list. Shared combat dispatch, targeting, resource and
-effect gates are owned by the [Battle action matrix](battle.md#normal-adventure-action-and-target-matrix).
-Evidence below uses legacy revision `ff97fc549932a146cc945d7edf71b44c868a840e`.
-The user requested original behavior as the default on 2026-10-12 (#1327).
+Discovery uses current encounter facts, not the batch resolver's priority list. Shared combat dispatch, targeting, resource and effect gates are owned by the [Battle action matrix](battle.md#normal-adventure-action-and-target-matrix). **Decision (#1327, 2026-10-12):** original behavior is the default.
 
-| Legacy operation / dispatch | Discovery, target and result | Native owner / verification |
-| --- | --- | --- |
-| `こうげき`, `ぼうぎょ`, `てんしょん`; current/previous-job, equipment/book/seal, custom and tool actions | `_skill.cgi:set_action:33–151,219–309`; current resources, job/SP, curse, equipment and encounter predicates select callbacks. Tool category 1 is also discovered outside the enemy-present skill block | #1188 supplies jobs; #1332/#1333 effect gates; #1197 consumption; #1329 command consumer; #1330 discovery. No automatic action when interval elapses |
-| `すすむ` → `susumu` | `vs_monster.cgi:37–82`: no enemies, initial leader only, explicit one-floor advance; resets effects, creates encounter, disables NPC response. Ordinary treasure entry is a further explicit advance | #1328 owns phase/encounter state, #1329 reset effects, #1330 transport. Test floor 0/nonleader, living enemies and final ordinary floor |
-| `しらべる` → `shiraberu` | Treasure floor only (`vs_monster.cgi:38–41`); chosen existing unopened NPC chest, individual allowance/key (`_npc_action.cgi:6–80`). No NPC response; inventory/depot outcome and chest state commit together | #1196 allowance/keys, #1197 consumption, #1328 individual claim, #1330 choice/observations |
-| `にげる` → `nigeru` | `_skill.cgi:157–160`, `_battle.cgi:1184–1345`: participant exits individually; spectator exits without reward. Living and fallen roles differ from combat admission. Departing real participant is atomically removed from active battle membership (`Battle.Actors`) and room roster; remaining allies/helpers/NPCs continue in preserved semantic order. Leader follows preserved order | #1328 owns settlement/removal and outstanding earnings; #1225 cooperative multiplier, #1221 fatigue, #1222 chronicle; #1330 tests survivor continuation; #1812 active battle membership |
-| `まえ`, `うしろ` → `mae`, `ushiro` | `_skill.cgi:152–154,894–929`: party size >1, move actor to front/back; no listed MP. Ordinary accepted-action/status/tail processing applies; no blanket noncombat NPC suppression | #1329 owns ordered formation mutation and applicable response, #1330 advertises it; test persisted order and status-blocked action |
-| `サバイバル`, `フォームチェンジ`, calling | `_skill.cgi:166–217,226–258`: no-enemy/job/SP/curse/item gates; self recovery, forward/reverse transformation and dynamic helpers; original costs in Battle matrix | #1333 owns missing native effects, #1329 executes certified entries. These cannot be omitted just because there is no enemy |
-| `すとっく` → `stock_lv_up` | `_skill.cgi:312–317`: no enemies, level/EXP gates; `_battle.cgi:358–379` performs accumulated level processing, no listed MP. Distinct from pending recipient reward stock | #1328 uses existing progression/settlement primitives, #1329 handles operation facts, #1330 discovery; test threshold, repeated command and restart |
-| `さそう`, `きっく` → `sasou`, `kick` | `_skill.cgi:161–164,769–783`: floor 0; kick leader only. Invitation dispatch redirects its log to the public quest area, not the room | Party owns waiting admission/permissions; #948/#1330 reconcile equivalent commands. Invitation is not room activity just because it was submitted from that room |
-| Plain comment / unknown command | `party.cgi:21–27`: nonempty submission invokes action and writes comment unless `$mes`; `_battle.cgi:640` returns on unknown dispatch without setting an error, so unknown command can remain a comment | #948/#1330 own explicit comment acceptance and visibility. Unknown typed Gateway actions remain schema errors; any faithful text-submission path must treat unknown text as a comment rather than silently equate the two |
-| `ささやき` → `sasayaki` | `_battle.cgi:640–649` checks dispatch/interval first, then returns before fallen/status/resource/tail processing. `system.cgi:251–262` validates named recipient, disables NPC response. No target is a public comment; private recipient may be outside encounter | #948/#1330 own allowed audience and sender/recipient-only observation (`system.cgi:622–630`); accepted writes renew room activity, not actor battle time |
-| `すくしょ` → `sukusho` | `_battle.cgi:650–652` returns before combat tail; `system.cgi:165–207` copies owned scene/public comment lines, excludes private lines, sets `$mes` on success or failure, so no room comment write | #948/#1330 reconcile manual screenshot transport; no automatic Replay capture, room renewal or battle effects. Manual publication is separate from #1320's personal Replay copies |
-| Spectator/fallen exceptions | `_skill.cgi:25–30`: spectator discovers whisper/exit/screenshot only. Fallen actor is blocked after whisper/screenshot dispatch except exit and the gated self-revival callback (`_battle.cgi:654–665`) | #1329/#1330 role tests; #1333 self-revival prerequisite. Discovery cannot imply spectators may fight; blanket rejection of fallen submissions loses original exceptions |
-
-These are domain mappings, not newly registered HTTP routes. #1330 must supply
-strict commands/owned observations through the existing Gateway; #948 owns
-remaining combat transport reconciliation and #1320 Replay privacy/archive
-work. Shared core does not send messages, archive screenshots or own room time.
+| Legacy operation | Discovery, target and result |
+| --- | --- |
+| `こうげき`, `ぼうぎょ`, `てんしょん`; current/previous-job, equipment/book/seal, custom and tool actions | `_skill.cgi:set_action:33–151,219–309`: resources, job/SP, curse, equipment and encounter predicates select callbacks. Tool category 1 is also discovered outside the enemy-present block. No automatic action when the interval elapses |
+| `すすむ` → `susumu` | `vs_monster.cgi:37–82`: no enemies, initial leader only, one-floor advance; resets effects, creates the encounter, disables NPC response. Treasure entry is a further explicit advance |
+| `しらべる` → `shiraberu` | Treasure floor only (`vs_monster.cgi:38–41`); an existing unopened chest, individual allowance/key (`_npc_action.cgi:6–80`). No NPC response; delivery and chest state commit together |
+| `にげる` → `nigeru` | `_skill.cgi:157–160`, `_battle.cgi:1184–1345`: individual exit; spectator exits without reward. The departing participant is removed from active battle membership and the room roster atomically; others continue in roster order |
+| `まえ`, `うしろ` | `_skill.cgi:152–154,894–929`: party size >1, move actor to front/back; no listed MP. Ordinary accepted-action/status/tail processing applies; no blanket NPC suppression |
+| `サバイバル`, `フォームチェンジ`, calling | `_skill.cgi:166–217,226–258`: no-enemy/job/SP/curse/item gates. These cannot be omitted because there is no enemy |
+| `すとっく` → `stock_lv_up` | `_skill.cgi:312–317`: no enemies, level/EXP gates; `_battle.cgi:358–379` performs accumulated level processing, no listed MP. Distinct from pending reward stock |
+| `さそう`, `きっく` | `_skill.cgi:161–164,769–783`: floor 0; kick is leader only. Invitation redirects its log to the public quest area, so it is not room activity |
+| Plain comment / unknown command | `party.cgi:21–27`: a nonempty submission writes a comment unless `$mes`; `_battle.cgi:640` returns on unknown dispatch without an error, so unknown text remains a comment. Unknown typed Gateway actions stay schema errors |
+| `ささやき` | `_battle.cgi:640–649` checks dispatch/interval, then returns before fallen/status/resource/tail processing. `system.cgi:251–262` validates the named recipient and disables NPC response; no recipient means a public comment; the recipient may be outside the encounter. Visible to sender/recipient only (`system.cgi:622–630`) |
+| `すくしょ` | `_battle.cgi:650–652` returns before the combat tail; `system.cgi:165–207` copies owned scene/public lines, excludes private lines and sets `$mes`, so no room comment is written |
 
 ### Earnings and inactivity evidence
 
-`_battle.cgi:199–274` gives ordinary defeat earnings to living allies at the
-defeat operation: directly for the acting character, and through a per-user
-`stock.cgi` for other recipients. `get_stock` (`1459–1473`) consumes that stock
-on applicable actions (`912`) and personal exit (`1208`). Try-mode stock has
-different release behavior (`1915–1939`); ordinary unconditional earnings must
-not be confused with conditional mode rewards. Ordinary earnings survive later
-defeat; the batch crawl settles cleared-floor earnings even when its final
-outcome is defeat. Defeat does not grant new victory drops or clear credit.
-Per-operation durable recipient grants remain with #1328/#1329;
-#1225 owns the cooperative multiplier, #1221 personal exit fatigue/flags, and #1222
-chronicle consistency. Native durable entitlements replace stock files without
-copying their architecture or claiming all reward formulas were audited here.
+`_battle.cgi:199–274` gives ordinary defeat earnings to living allies at the defeat operation: directly for the acting character and through per-user stock for others. `get_stock` (`1459–1473`) releases stock on applicable actions (`912`) and personal exit (`1208`). Ordinary earnings survive later defeat; defeat grants no new victory drops or clear credit.
 
-Try-mode release is a normal-adventure continuation gate, not another combat
-resolver: `vs_monster.cgi:91–102` calls `success_try` only on explicit ordinary
-treasure-floor creation. `_battle.cgi:1915–1949` aggregates each real party
-recipient's pending EXP/gold/crystals, multiplies each aggregate by 1.5 with
-integer truncation, rewrites pending stock and returns room mode to normal.
-The generic action stock release at `912` excludes Try mode. #1328 owns this
-conditional entitlement disposition and atomic transition; #1225
-owns the separate cooperative multiplier. A retry must not apply 1.5 twice,
-and ordinary unconditional earned assets must not be replaced by conditional
-Try stock. On participant exit, `nigeru:1208` calls `get_stock`; while Try is
-still active, `get_stock:1459–1473` reads and clears pending stock **without
-crediting it**. After successful treasure entry, the mode is normal and the
-converted stock can be credited once on a subsequent action or exit. Falling
-alone does not invoke that personal exit disposition. #1328 must test
-pre-success exit forfeiture separately from normal earned assets and timeout
-preservation; timeout's already-approved retention is not an ordinary exit.
+**Try mode.** `vs_monster.cgi:91–102` calls `success_try` only on explicit ordinary treasure-floor creation. `_battle.cgi:1915–1949` multiplies each real recipient's pending EXP/gold/crystals by 1.5 (truncated), rewrites pending stock and returns the room to normal mode. The generic release at `912` excludes Try mode. A retry must not apply 1.5 twice. **Pitfall:** on exit while Try is still active, `get_stock` reads and clears pending stock **without crediting it**; after treasure entry the converted stock is credited once on a later action or exit. Falling alone does not trigger the exit disposition.
 
-`quest.cgi:80–91,172–183` checks **strictly more than 1800 seconds** since the
-room log modification, clears each non-NPC member's location and sets
-`sleep=3600`, then deletes the room directory. It does not call `nigeru` or
-`get_stock`, and user-owned stock is outside the deleted directory. Thus idle
-cleanup is neither ordinary personal exit nor permission to delete pending
-earnings. Participants already removed from the roster are not penalized again.
-Later eligible normal stock processing (`_battle.cgi:912`, `get_stock:1459–1473`)
-is the only consumer, so the native unconditional balances survive the disposed
-room and are credited once at the owner's next stock-releasing normal command;
-this adds no timeout bonus and no release at cleanup itself.
-GET must never perform this mutation or renew its deadline in the reconstruction.
+**Idle cleanup.** `quest.cgi:80–91,172–183` checks **strictly more than 1800 seconds** since the room log changed, clears each non-NPC member's location, sets `sleep=3600` and deletes the room. It calls neither `nigeru` nor `get_stock`, and user-owned stock lives outside the room, so pending earnings survive and are credited once at the owner's next stock-releasing normal command. There is no timeout bonus and no release at cleanup. GET never performs cleanup or renews its deadline.
 
-**User-approved native timeout contract (2026-10-11, #1325):** retain the strict 30-minute
-inactivity threshold, trigger cleanup by an explicit owner command, retain
-earned recipient assets/entitlements and apply a recoverable one-hour sleep
-penalty to remaining real participants. Anchor that hour to the committed
-cleanup instant; persist its deadline/processing identity before optional timer
-projection, and preserve explicit Wake/recovery. A failed timer write cannot
-release active ownership or extend the hour on retry. This fixes a native time
-representation rather than certifying literal CGI timing: the original writes
-a duration through `system.cgi:861–883`, while `sleep.cgi:19` later subtracts
-time since previous login. No ordinary exit fatigue/history or full recovery
-is inferred for timeout. Record a distinct timeout history disposition; any
-additional loss, reward release or penalty rule needs evidence/approval.
+**Decision (#1325, 2026-10-11):** keep the strict 30-minute threshold; trigger cleanup by an explicit owner command; keep earned assets; apply a recoverable one-hour sleep penalty to remaining real participants, anchored to the committed cleanup instant. Persist its deadline before any timer projection; a failed timer write cannot release ownership or extend the hour on retry. Record a distinct timeout history disposition. No exit fatigue, history or recovery is inferred for timeout. (The original writes a duration via `system.cgi:861–883` that `sleep.cgi:19` later reduces by time since login; the native anchor is a deliberate representation choice.)
 
 ### Room activity contract
 
-Room activity and actor battle eligibility are separate clocks. The original
-`party.cgi:21–27` writes a submitted comment only when `$mes` is unset;
-`system.cgi:660–676` rewrites `$this_file.cgi`, normally the room log
-(`_battle.cgi:19–20`). `quest.cgi:80–91` uses that file's modification time.
-Thus the rule is accepted **room-log-equivalent submission**, not merely
-successful damage or any POST. Preserve original admission/visibility and
-distinguish an accepted no-effect result from a rejected operation.
+Room activity and actor battle eligibility are separate clocks. `party.cgi:21–27` writes a submitted comment only when `$mes` is unset; `system.cgi:660–676` rewrites the room log (`_battle.cgi:19–20`), whose modification time `quest.cgi:80–91` uses. So the rule is accepted **room-log-equivalent submission**, not successful damage or any POST.
 
-| Operation / result | Update room last-activity time? | Evidence / required verification |
+| Operation / result | Renews room activity? | Evidence |
 | --- | --- | --- |
-| Accepted combat, including incapacitated action or accepted no-effect callback | Yes | `_battle.cgi:686–728,761–762,1174–1178`; no `$mes` → comment write. Test a status-blocked actor separately from a cooldown rejection |
-| Accepted advance, treasure claim, formation change, between-encounter recovery/transformation/call, stock-level processing | Yes | Each normal dispatch returns through `party.cgi` comment write; callback `$mes` instead means rejected. Test no-effect versus error without inferring from HP changes |
-| Accepted exit with room remaining | Yes, if its resulting log belongs to that room | `_battle.cgi:1330–1345`: last-participant disposal redirects `$this_file` to the quest area; there is then no surviving room to renew. Preserve participant/spectator distinction |
-| Accepted plain comment, unknown legacy text command, public or private whisper | Yes, including permitted spectator/fallen submissions | Unknown action returns before interval check (`640`); recognized whisper checks interval then returns before combat tail (`641–649`). `system.cgi:251–262,660–676` writes it, even if no recipient was supplied. Do not make plain comments inherit combat cooldown; do not expose whispers in public observations |
-| Banned skill silently ignored by legacy dispatch | Yes, as a comment; no actor combat timestamp update | `_battle.cgi:667–675` returns without `$mes`, so `party.cgi:25` still writes the submission. A combat effect not executing does not prove that its submission was rejected |
-| Successful floor-0 kick | Yes | `_skill.cgi:796–837` removes a member and additionally writes a quest-area notice without redirecting `$this_file`; the caller still writes its room comment |
-| Invitation or any dispatch redirected to another area's log | No | `sasou`, `_skill.cgi:772–776`, redirects `$this_file`. Posting from a room is insufficient evidence of room activity |
-| Screenshot, including successful capture | No | `system.cgi:175–191` sets `$mes`; `party.cgi:25` skips room comment write. Archive mutation is not room activity |
-| Rejected operation: cooldown, forbidden role, resource/target validation error with `$mes` | No | `$mes` prevents comment write (`party.cgi:25`). Unknown **text** or silently ignored skill accepted as a comment is different from a typed API action rejected by schema/validation |
-| GET/refresh/discovery, elapsed time or due detection | Never | Existing approved #1325 observation boundary; no synthetic log write or effect tick |
-| Same committed command retried / receipt read | No new activity instant | Existing approved #1325 receipt boundary: return committed facts, no second submission/log write. A new intentional comment with a new command identity is a new submission |
+| Accepted combat, including incapacitated action or accepted no-effect callback | Yes | `_battle.cgi:686–728,761–762,1174–1178` |
+| Accepted advance, treasure claim, formation change, between-encounter recovery/transformation/call, stock-level processing | Yes | Each returns through the `party.cgi` comment write; a callback `$mes` means rejected |
+| Accepted exit with the room remaining | Yes | `_battle.cgi:1330–1345`: last-participant disposal redirects the log to the quest area |
+| Plain comment, unknown legacy text, public or private whisper | Yes, including permitted spectator/fallen submissions | Unknown action returns before the interval check (`640`); whisper checks interval then returns before the combat tail (`641–649`). Plain comments do not inherit combat cooldown |
+| Banned skill silently ignored | Yes, as a comment; no actor combat timestamp | `_battle.cgi:667–675` returns without `$mes` |
+| Successful floor-0 kick | Yes | `_skill.cgi:796–837` also writes a quest-area notice without redirecting the room log |
+| Invitation or other dispatch redirected to another log | No | `sasou`, `_skill.cgi:772–776` |
+| Screenshot, even successful | No | `system.cgi:175–191` sets `$mes` |
+| Rejected operation (`$mes`) | No | `party.cgi:25` |
+| GET, discovery, elapsed time, due detection | Never | #1325 observation boundary |
+| Retried committed command / receipt read | No new instant | #1325 receipt boundary; a new intentional comment is a new submission |
 
-#1328 persists room activity in the same SQL commit as the accepted operation;
-failed/rolled-back commands cannot renew it. #1330/#948 reconcile the actual
-comment/whisper/manual-screenshot submission paths and privacy, while #1320 owns
-automatic Replay capture and personal exit copies.
-Tests must cover accepted/rejected/no-effect text, private whispers, screenshot,
-redirected logs, GET and receipt retries, strict `>1800` seconds and the existing
-cleanup-time one-hour penalty anchor. This gate affects #1328 idle cleanup only;
-its other lifecycle work does not wait for transport implementation.
+Room activity is persisted in the same commit as the accepted operation; rolled-back commands cannot renew it.
 
 ### Combat travel and encounter replacement
 
-This contract traces category-1 travel tools through discovery, callback,
-action tail, persistence and the next operation at the revision above. These
-are source-inspected requirements, not executed CGI parity or native coverage.
-The user explicitly retained tool 150's old-enemy response/reappearance on
-2026-10-12 (#1345); it must not be silently repaired during reconstruction.
+**Decision (#1345, 2026-10-12):** tool150's old-enemy response/reappearance is retained, not repaired.
 
-All entries use `どうぐ` → `dougu` → the held item's callback, with listed MP
-cost zero (`_skill.cgi:150–151,758–764`). A living enrolled participant may use
-them with enemies, between encounters, at floor 0 or in the treasure room;
-there is no travel-specific leader gate. Spectators cannot discover the tool,
-and fallen actors cannot execute it (`_skill.cgi:25–30`;
-`_battle.cgi:640–665`). The ordinary interval, ban and incapacitation gates
-still apply. Incapacitation can skip the callback and consumption while
-completing the applicable action tail; it is not a selection error.
+All travel entries use `どうぐ` → `dougu` → the held item's callback with listed MP 0 (`_skill.cgi:150–151,758–764`). A living participant may use them with enemies, between encounters, at floor 0 or in the treasure room; there is no leader gate. Spectators cannot discover the tool and fallen actors cannot execute it (`_skill.cgi:25–30`; `_battle.cgi:640–665`). Interval, ban and incapacitation gates apply; incapacitation can skip the callback and consumption while completing the action tail.
 
-| Tool / callback evidence (`lib/_data.cgi`) | Argument, condition and callback result |
+| Tool / callback (`lib/_data.cgi`) | Argument, condition and result |
 | --- | --- |
-| 66 / 1055–1067; 67 / 1069–1080; 68 / 1082–1093; 69 / 1095–1107; 70 / 1109–1120 | No participant target; normal adventure only. Assign stage 15/16/17/18/19 respectively and floor 1 |
-| 71 / 1122–1137 | No participant target; normal adventure and actor's weapon 35 plus armor 37 (original names checked, catalog identities at `_data.cgi:452,582`). Assign stage 20/floor 1; missing set rejects without consumption |
-| 104 / 1335–1346 | No participant target; normal adventure only. Assign stage 21/floor 1 |
-| 184 / 1765–1789 | Explicit destination matching stage 23 or 25; assign that stage/floor 1. Missing/other destination returns selection error without consumption |
-| 83 / 1243–1253 | No participant target; increment floor only in normal adventure with floor <9 (including floor 0). Otherwise accepted no-effect: consume, retain coordinates and process the normal tail |
-| 107 / 1350–1361 | No participant target; normal adventure only. Assign floor 10; unchanged floor 10 is still accepted and consumed. Does not create chests or set clear. Distinct from chest allowance item 215 (#1196) |
+| 66 / 1055–1067; 67 / 1069–1080; 68 / 1082–1093; 69 / 1095–1107; 70 / 1109–1120 | No target; normal adventure only. Assign stage 15/16/17/18/19 and floor 1 |
+| 71 / 1122–1137 | No target; normal adventure and the actor's weapon35 plus armor37 (`_data.cgi:452,582`). Assign stage 20/floor 1; missing set rejects without consumption |
+| 104 / 1335–1346 | No target; normal adventure only. Assign stage 21/floor 1 |
+| 184 / 1765–1789 | Destination stage 23 or 25; assign it/floor 1. Missing/other destination rejects without consumption |
+| 83 / 1243–1253 | No target; increment floor only in normal adventure with floor <9 (including 0). Otherwise accepted no-effect: consume, keep coordinates, run the normal tail |
+| 107 / 1350–1361 | No target; normal adventure only. Assign floor 10; already 10 is still accepted and consumed. Creates no chests and sets no clear |
 | 150 / 1614–1639 | Explicit floor: reset all participants' status, assign floor, call `set_monster`, request reload. Missing/invalid floor or wrong mode rejects without consumption |
 
-Other than tool 83's accepted no-effect branch, wrong-mode callbacks set an
-error and retain the tool. `dougu` defaults a missing/falsy argument to the
-actor, but floor/destination arguments are not participant IDs. Native input
-uses an integer floor 1–10 or a destination stage ID restricted to 23/25;
-parameter-free entries need no target. Reject null, strings, fractions,
-out-of-range floors and foreign destinations before mutation. The original
-150 predicate is an unanchored digit match plus Perl numeric comparisons
-(`!=0`, `<=10`), not strict integer parsing; its malformed-string, fractional
-and negative-number coercions are not native validation rules. This typed
-boundary is required by #1345, not permission to change valid travel behavior.
+Except tool83's no-effect branch, wrong-mode callbacks set an error and keep the tool. `dougu` defaults a missing argument to the actor, but floor/destination arguments are not participant IDs. Native input is an integer floor 1–10 or a destination 23/25; the original's unanchored digit match and Perl numeric coercion are not native validation rules.
 
-**Coordinate assignment preserves the encounter.** Tools 66–71, 83, 104, 107
-and 184 do not reset statuses/fields, call `set_monster`, clear enemies or
-reload. Their accepted callbacks clear the held tool and continue the ordinary
-player effects, stock/level processing, field counters and eligible bounded
-NPC response, then update actor time/turn count and write room state
-(`_battle.cgi:761–1178`; `_npc_action.cgi:89–155`). Thus old living enemies can
-respond and survive under new coordinates. With no enemies, no encounter is
-created by the tool. An old treasure encounter, including unopened boxes, also
-survives assignment and continues to block advance; tool150 replaces its boxes
-when creating the new encounter. On the next request `read_member` rebuilds sides from the
-persisted members (`453–493`). Only explicit `すすむ`, after the no-enemy and
-end/EX gates, resets statuses, deletes temporary/anti fields, increments the
-assigned floor once and creates an encounter (`vs_monster.cgi:37–82`). A
-stage-changing tool therefore next creates destination floor 2, not floor 1;
-83 at floor 8 next creates floor 10; 107 next creates floor 11 without fighting
-a newly generated boss. A nonleader using travel at floor 0 can bypass the
-initial-advance leader restriction by assigning a positive floor. Do not add a
-leader-only travel restriction or auto-complete the bypassed encounters.
+**Coordinate assignment preserves the encounter.** Tools 66–71, 83, 104, 107 and 184 do not reset statuses/fields, call `set_monster`, clear enemies or reload. Their callbacks clear the held tool and continue player effects, stock/level processing, field counters and the bounded NPC response, then update actor time and write room state (`_battle.cgi:761–1178`; `_npc_action.cgi:89–155`). Old living enemies can respond and survive under new coordinates; an old treasure encounter, including unopened boxes, survives and keeps blocking advance. Only explicit `すすむ` resets, increments the assigned floor once and creates an encounter (`vs_monster.cgi:37–82`). **Pitfalls:** a stage-changing tool next creates destination floor **2**; tool83 at floor 8 next creates floor 10; tool107 next creates floor 11 without fighting a boss; a nonleader using travel at floor 0 bypasses the initial-advance leader restriction. Do not add a leader gate or auto-complete bypassed encounters.
 
-**Tool 150 continues after reload.** `reset_status_all` includes its accessory
-revival/reset hooks (`_battle.cgi:1390–1430`); it is not HP/MP restoration.
-Unlike `susumu`, the callback does not delete temporary/anti fields or disable
-NPC response. `set_monster` replaces `@members` with allies and adds new NPCs
-but leaves `@enemys` and old `%ms` entries intact (`vs_monster.cgi:85–155`;
-`_npc_action.cgi:600–681`). `auto_reload` only emits navigation and sets waiting
-time; it does not exit the callback/action (`system.cgi:456–470`). Consequently
-the tool is consumed and the normal action tail still runs. If an old living
-interval-ready enemy responds, `npc_turn` uses the old enemy list and rebuilds
-members from it, potentially restoring old enemies and dropping newly created
-ones; a generated NPC with the same legacy name overwrites that old payload.
-If none responds, this NPC path does not replace the generated members. With
-no old enemies, the new encounter gets no immediate response. Native encounter IDs
-must preserve this observable distinction without making user-supplied names
-authoritative. Test both branches, name collision and reload after each result.
-Treasure-floor discovery suppresses NPC response before the tool callback
-(`vs_monster.cgi:38–41`), so travelling out of that room retains suppression
-for the submitted operation. New discovery is computed on the next request.
+**Tool150 continues after reload.** `reset_status_all` includes accessory revival/reset hooks (`_battle.cgi:1390–1430`), not HP/MP restoration; unlike `susumu`, temporary/anti fields stay and NPC response is not disabled. `set_monster` replaces `@members` with allies and adds new NPCs but leaves `@enemys` and old `%ms` intact (`vs_monster.cgi:85–155`; `_npc_action.cgi:600–681`); `auto_reload` does not exit the action (`system.cgi:456–470`), so the tool is consumed and the tail runs. **Pitfall:** if an old living interval-ready enemy responds, `npc_turn` rebuilds members from the old enemy list, potentially restoring old enemies and dropping new ones; a generated NPC with the same legacy name overwrites that old payload. If none responds, the generated members stay. Native encounter IDs keep this distinction without making names authoritative. Treasure-floor discovery suppresses NPC response before the callback (`vs_monster.cgi:38–41`), so leaving that room keeps suppression for the operation.
 
-Job callbacks share this encounter replacement and ordinary action-tail
-contract; navigation never terminates the enclosing action. At the same pinned
-revision, `_skill.cgi` defines these distinct bodies:
+Job callbacks share this replacement and tail contract (`_skill.cgi`):
 
-| Job position / evidence | Room or ordering rule |
+| Job position | Room or ordering rule |
 | --- | --- |
 | 78.2 / 6119–6133 | Normal stage adventure, floor <9: a 1/3 draw resets all members, increments the floor and creates its encounter. Floor ≥9 accepts without a draw or reset |
-| 78.4 / 6147–6174 | A 1/6 draw immobilizes the actor and resets tension. Otherwise direct breath base50 reads the verified package cursor, ignoring the submitted target; absence uses enemy-helper fallback. Move the returned living enemy last, except an ally or breath reflector. Missing cursor provenance rejects the whole callback |
-| 78.6 / 6201–6234 | Resolve the neutral enemy helper first. A treasure target gets a 3/5 draw: recreate the current floor, then set both current/previous job78 SP to100 for every ally, including fallen allies. A failed draw changes only the actor's matching positions; a non-treasure target changes no SP |
-| 79.2 / 6258–6275 | Player: 1/2 self-sleep, remove the enemy head for this operation, save members with that head last, suppress only NPC response and add a three-operation ban. NPC: general random once, then again if the actor survives, even with no enemies |
+| 78.4 / 6147–6174 | A 1/6 draw immobilizes the actor and resets tension. Otherwise direct breath base50 reads the package cursor, ignoring the submitted target; absence uses enemy-helper fallback. Move the returned living enemy last, except an ally or breath reflector |
+| 78.6 / 6201–6234 | Resolve the enemy helper first. A treasure target gets a 3/5 draw: recreate the current floor, then set current/previous job78 SP to 100 for every ally, including fallen. A failed draw changes only the actor's matching positions; a non-treasure target changes no SP |
+| 79.2 / 6258–6275 | Player: 1/2 self-sleep, remove the enemy head for this operation, save members with that head last, suppress only NPC response and add a three-operation ban. NPC: general random once, then again if alive, even with no enemies |
 
-Room recreation retains room identity, earnings, fields and clear/EX markers;
-only the shortcut performs the all-member reset. Treasure recreation shares
-advance's box generation, Try conversion, retained-clear handling and stage19
-unseal event. Other combat modes remain unsupported for reachable room effects.
-The operation's enemy array and saved member order are separate: the removed
-time-callback head remains available to member-based helpers, then returns last
-when the next request rebuilds sides (`_battle.cgi:453–493`).
+Room recreation keeps room identity, earnings, fields and clear/EX markers; only the shortcut performs the all-member reset. Treasure recreation shares advance's box generation, Try conversion, retained-clear handling and stage19 unseal event. The removed time-callback head stays available to member-based helpers, then returns last when the next request rebuilds sides (`_battle.cgi:453–493`). Mixed-sequence projections remain open (#1733).
 
-`PrepareJobEncounters` supplies operation ports inside `Command`. Its consumer
-registers the callbacks before whole-action admission, preserves changed target
-context through the normal tail, and passes member-only IDs and the genuine
-unseal event in `RunActionEffects`. Its transition requests reload after genuine
-recreation. `Command` restores those living members before defeat verification for
-the next request and settles the event in the receipt transaction. Catalog-wide
-predecessor projections, including both NPC random calls, retain the
-[#1733](https://github.com/witchcraze/party2re/issues/1733) gate; body registration
-alone does not certify an unsupported descendant or mixed sequence.
-
-**Room facts survive travel.** The room ID/log destination, ordered allies,
-leader, mode, record header and earned recipient facts are not reinitialized.
-Member persistence writes changed stage/floor but preserves `$r_stage` and
-records (`_battle.cgi:464–468,496–554`); the record header is not a travel stage
-mirror (`quest.cgi:1287–1296`). Accepted travel writes the same room log;
-Replay's title was selected before action, while captured members reflect its
-result (`party.cgi:20–27`; `_skill.cgi:23`; `system.cgi:660–677,1499–1519`).
-Refresh observes the committed result without running another action. Native
-SQL receipts must freeze draws/results and consumption once (#1328/#1197).
-
-Travel itself neither pays nor erases earnings; normal stock processing still
-runs through the lifecycle owner (#1328). Assignment-only callbacks retain
-`$is_clear` and existing EX markers. Tool 150's encounter creation at floor 10 sets clear; stage 24 also
-creates its EX marker and applies the [ordinary NPC/field contract](battle.md#normal-adventure-action-and-target-matrix).
-The run's boss-field port applies the shared cap/reset owner after enemy creation. Ordinary
-treasure creation at floor 11 runs Try success if applicable and, independently
-of clear/victory, invokes unsealing for **stage19 only**. Clear credit separately
-consumes the retained clear flag for the current destination (`vs_monster.cgi:91–110`).
-Both normal runs and batch crawl sessions (solo and party) send this explicit event (`UnsealDemonKing`)
-to Battle settlement for enrolled real participants within their respective settlement transactions,
-with no inference from stage 20, habitat, or monster defeat.
-Assignment, chest inspection and exit emit no unseal event; receipt replay cannot
-repeat its counter update. Each genuine treasure recreation is a new source event.
-The unseal clock, sealing rooms and news follow the [Boss unseal lifecycle](boss.md#6-unseal-to-sealing-room-lifecycle);
-calling Boss's counter-writing unseal helper as well would double-count.
-Next advance from assigned floor 10 still executes the destination's EX flag
-path before creating floor 11 (`52–80,227–249`); existing EX files are not
-deleted by travel. Try mode is retained until treasure creation invokes
-`success_try`, multiplies pending stock by 1.5/floors it and changes mode to
-normal (`_battle.cgi:1915–1949`). Preserve these transition hooks under
-the [EX marker/continuation](#ex-unlock-and-continuation) and Try lifecycle owners, including their ordering
-before any old-enemy response; do not replay rewards or infer clear solely from coordinates. Exit
-uses the changed floor for fatigue/other floor-dependent effects (#1221), not
-the number of encounters actually fought (`_battle.cgi:1208–1222`).
+**Room facts survive travel.** Room ID/log, ordered allies, leader, mode, record header and earned facts are not reinitialized; member persistence writes changed stage/floor but keeps `$r_stage` and records (`_battle.cgi:464–468,496–554`; `quest.cgi:1287–1296`). Travel neither pays nor erases earnings. Assignment keeps `$is_clear` and EX markers. Tool150's encounter creation at floor 10 sets clear; at stage24 it also creates the EX marker and applies the [ordinary NPC/field contract](battle.md#normal-adventure-action-and-target-matrix). Ordinary treasure creation at floor 11 runs Try success if applicable and, independently of clear/victory, unseals for **stage19 only**; clear credit consumes the retained flag for the current destination (`vs_monster.cgi:91–110`). Assignment, inspection and exit emit no unseal event; each genuine treasure recreation is a new event. The unseal clock follows the [Boss unseal lifecycle](boss.md#6-unseal-to-sealing-room-lifecycle); calling Boss's counter-writing helper as well would double-count. The next advance from assigned floor 10 still runs the destination's EX flag path before floor 11 (`52–80,227–249`). Exit uses the changed floor for fatigue, not the encounters actually fought (`_battle.cgi:1208–1222`).
 
 ### EX unlock and continuation
 
-EX eligibility is a durable **room-wide marker**, separate from stage clear,
-the special boss stat cap and named fields. Moving stages never clears it;
-the current stage must also declare EX support (22–26). At legacy revision
-`ff97fc549932a146cc945d7edf71b44c868a840e`, all five stage predicates read the
-same `ex.cgi`, rather than a per-stage achievement. This contract and the
-bounded implementation split below were approved on 2026-11-03 (#1191).
+**Decision (#1191, 2026-11-03).** EX eligibility is a durable **room-wide marker**, separate from stage clear, the special boss stat cap and named fields. Moving stages never clears it; the current stage must also support EX (22–26). All five stage predicates read the same `ex.cgi`, not a per-stage achievement.
 
 | Marker producer | Condition and evidence |
 | --- | --- |
-| Stage 22 defeat hook | Each player-credited defeat of the source Royal Bee identity draws `rand(3) < 1`, in defeat order and even when the marker exists; NPC killers, self-defeat and revival never reach the hook. Use a server-owned native catalog identity, never client/display names (`_battle.cgi:28–51,142,277–280`). The combat port reports credited defeat identities; the run applies the draws |
-| Stage 23 explicit advance | Leaving assigned floor 10 with at least two ordered allies in active battle membership, including legitimate helpers/fallen allies (departed participants are removed on exit); no boss-victory requirement (`vs_monster.cgi:52,240–245`) |
-| Stage 24 encounter creation | Creating ordinary floor-10 enemies, including tool150; coordinate assignment alone does not qualify (`vs_monster.cgi:143–152`) |
-| Stage 25 explicit advance | Leaving assigned floor 10, without a party-size or victory requirement (`vs_monster.cgi:245–249`) |
-| Stage 26 room creation | After selecting the room season, draw `rand(3) < 1` exactly once (`quest.cgi:596–600`); later travel neither repeats nor repairs that draw. Party lobbies select the season at creation; solo admission selects it in the run's creation transaction (`quest.cgi:1246–1255`) |
+| Stage22 defeat hook | Each player-credited defeat of the source Royal Bee identity draws `rand(3) < 1`, in defeat order and even when the marker exists; NPC killers, self-defeat and revival never reach the hook. Use a server-owned catalog identity, never display names (`_battle.cgi:28–51,142,277–280`) |
+| Stage23 explicit advance | Leaving assigned floor 10 with at least two ordered allies in active battle membership, including helpers/fallen allies; no boss-victory requirement (`vs_monster.cgi:52,240–245`) |
+| Stage24 encounter creation | Creating ordinary floor-10 enemies, including tool150; coordinate assignment alone does not qualify (`vs_monster.cgi:143–152`) |
+| Stage25 explicit advance | Leaving assigned floor 10, with no party-size or victory requirement (`vs_monster.cgi:245–249`) |
+| Stage26 room creation | After selecting the season, draw `rand(3) < 1` exactly once (`quest.cgi:596–600`); travel never repeats it. Lobbies select the season at creation; solo admission in the run's creation transaction (`quest.cgi:1246–1255`) |
 
-Explicit advance remains the only ordinary progression operation. With no
-living enemies, floor 10 enters ordinary treasure at 11, running the existing
-Try conversion and current-stage clear/unseal hooks. An eligible EX room may
-then advance 11→12; otherwise it ends at 11. Entering 12 creates that stage's
-EX roster, restores allies' HP/MP/CMP to their current maxima and installs the
-declared default field (stage23 snow, stage24 sanctuary). Stages24/25 then apply
-the shared boss cap/reset hook, so restoration precedes any lower maximum.
-After defeating the EX encounter, explicit advance 12→13 creates EX treasure;
-13 is terminal. Defeat at 12 grants no treasure or automatic exit; ordinary
-earned assets survive and personal exit uses the actual floor. Evidence:
-`vs_monster.cgi:54–153`, `_npc_action.cgi:682–779`, `_battle.cgi:1485–1530`.
+With no living enemies, floor 10 enters ordinary treasure at 11. An EX room may then advance 11→12; otherwise it ends at 11. Entering 12 creates the EX roster, restores every active ally's HP/MP/CMP to current maxima (helpers and fallen, not banished) and installs the declared default field (stage23 snow, stage24 sanctuary); stages 24/25 then apply the boss cap/reset, which lowers maxima but leaves current HP/MP above them. After the EX encounter, 12→13 creates EX treasure; 13 is terminal. Defeat at 12 grants no treasure or automatic exit and records floor 12 without clear credit (`vs_monster.cgi:54–153`; `_npc_action.cgi:682–779`; `_battle.cgi:1485–1530`). EX treasure uses the EX item pool with duplicate weights; stages 24/25/26 also create fixed-item chests with a separate allowance (`_npc_action.cgi:6–84,555–599,725–779`).
 
-EX treasure creation uses the source EX item pool, preserving duplicate
-weights, rather than ordinary weapon/armor/item selection. Stages24/25/26
-also create fixed-item chests. Creation never grants or opens a chest;
-ordinary and fixed inspection allowances are separate and delivery uses
-the existing asset owner (`_npc_action.cgi:6–84,555–599,725–779`).
+Open: EX treasure and inspection (#1808) — 12→13 is rejected before reset, draws, costs or effects. NPC-only EX jobs stay whole-action gates ([Battle](battle.md#normal-adventure-action-and-target-matrix)). The batch crawl is not an EX fallback.
 
-Native explicit advance creates the EX encounter in the existing SQL command
-transaction. Restoration covers every active ally (helpers and fallen members,
-not banished/detached ones); the later cap lowers maxima but leaves current
-HP/MP above them, as the source does. EX defeat records floor 12 as the deepest
-defeated floor without clear credit. Ordinary encounter coverage does not
-certify EX skills: NPC-only EX jobs keep the whole-action gates named in
-[battle.md](battle.md#normal-adventure-action-and-target-matrix), and
-[EX treasure/inspection](https://github.com/witchcraze/party2re/issues/1808)
-still rejects 12→13 before reset, random draws, costs or persisted effects.
-The retained batch crawl is not an EX fallback. The SQL run snapshot/receipt
-remains the only authority; no second EX store or background progression is
-introduced.
+## Batch crawl
 
-### Remaining reconciliation gates
+The batch crawl (`internal/adventure`, `internal/party`) is the current production path. It is not authorization to keep automatic battles, advance, inspection or exit in the interactive adventure. Its formulas live in code and tests; these points are decisions or non-obvious source behavior:
 
-Native [travel admission and mutation](../../internal/adventure/combat_travel.go)
-run inside the existing SQL command transaction. Coordinate tools preserve the
-encounter; tool150 generates members while retaining an operation-local old
-enemy side for the player tail and conditional NPC response. Catalog collision
-aliases are server-owned and independent of display names. Unrepresented old
-identities or roster/reset context reject before mutation. Shared reset belongs to
-[the battle adapter](../../internal/battle/reset_all.go); encounter creation
-retains a pending clear flag separately from confirmed clear history and EX.
-Receipts retain resulting coordinates without rerunning consumption or draws.
+- **Treasure count** (`vs_monster.cgi:90–101`; `_npc_action.cgi:498–519`). The loop is inclusive (`for 0 .. $count`), so an index of P−1−D yields one chest per surviving member. Job, accessory (equipped slot only) and chapel blessing bonuses use the acting player (`%m`) only, never other members. **Pitfall:** `my $count = shift || $#partys;` treats an index of 0 as falsy and falls back to P−1 before the blessing and dead-member penalty.
+- **Treasure pocket** (item215). **Decision (2026-11-07, #1899):** `shiraberu` clears `$m{ite}` on use and the hand holds one unit, so a character carries at most one pocket at a time. Batch crawls claim only the base one-chest allowance and never consume a pocket automatically. Native interactive inspection is open (#1762).
+- **Once-daily lock** (stage26, dungeon16; `quest.cgi:594–599` `$m{once}=1`). The quota is consumed at party creation or solo start, only for the creator/leader, and is not restored by disbanding or start failure. It clears only on waking at Home.
+- **Early defeat** keeps previously earned unconditional rewards for cleared floors; Try stock follows the [conditional release rule](#earnings-and-inactivity-evidence).
+- **Exit fatigue** is `round × 3 + 1` (halved in calm mode) where round is the exit floor, not turns or floors cleared (`_battle.cgi:1187–1188,1216`).
+- **Room speed** values (3/18/25 seconds) are the per-actor action interval in the original; the batch crawl stores but does not enforce them.
+- **Unsupported modes** (`calm`, `try`, `hard`) are rejected at party creation until their reward and unlock rules are reconciled.
+- **Chronicle** (`adventure_record.cgi`; `vs_monster.cgi:111–120`): stage26 clears count separately per season. Solo and party runs write the same history source with a deterministic per-run identity, so a retry updates rather than duplicates. Historical party-log backfill cannot recover members who fell before the final floor, seasons or per-member rewards; backfilled rows record zero rewards and unclassified season rather than guesses.
 
-The full player/NPC action tail and instance binding remain #1329;
-typed Gateway discovery/submission remains #1330. Transition and bounded SQL
-consumer tests do not certify those integrations. Recorded-job/participant tool
-arguments are separate callbacks (`lib/_data.cgi:1879–1924`).
-
-MP restoration, MP drain and resource-consuming gems use the
-[shared battle resource contract](battle.md#resources-revival-and-roster-changes).
-Run consumers persist the resulting facts and apply enclosing costs in order.
-
-The operation matrix establishes the family boundary. Production cutover still
-requires #1188 job supply, #1332 effect lifetimes and the effects/transactions
-decomposed by [#1333](https://github.com/witchcraze/party2re/issues/1333) into
-#1337–#1346. Ordinary NPC payloads, conditional rosters, frozen summon tables and
-stage24's special field follow the [shared battle contract](battle.md#normal-adventure-action-and-target-matrix). The
-[entry ownership reconciliation](battle.md#dynamic-effects-and-catalog-admission)
-distinguishes those payloads from their concrete callback bodies, descendant
-closure, registration and production wiring. Its implementation owners remain
-cutover prerequisites after the audit itself closes; #1346 enforces support for
-the whole reachable effect in both discovery and execution. Indirect invocation
-must not bypass that gate or narrow the original random pool to implemented
-effects. Missing original choices remain cutover blockers. #1328 implements
-Try success/exit disposition and #1196/#1197 item rules.
-Random/delegated discovery and submission also depend on the
-[transitive job closure](battle.md#random-and-delegated-job-closure): discovery
-uses `skill.BattleDefinitions.InvocationAction` and execution shares core
-invocation preflight. Arithmetic selectors and job wallet/held-tool effects use
-their finite native bindings, as do the job-driven room/order bodies above. Tool-only travel coverage does
-not certify a job callback that replaces an encounter, changes job SP or
-reorders enemies. Discovery must retain current/previous-job and caller context
-when applying the shared whole-effect gate; a supported direct child is
-insufficient when any hidden descendant is unsupported. The whole submitted
-operation must reject before consumption or durable mutation in that case.
-Resolve the outer tool argument (default self) or custom target before passing
-the callback frame. Keep complete ordered tables and source-context variants,
-rebuild selection against current run actors, and preserve each generated
-child's captured identity. Nested callback changes must retain their ordered
-rosters and assets; each later custom slot receives the original resolved target
-and runs only while the actor remains alive. The run service must freeze command
-draws/results with its receipt and return committed facts on retry, without
-invoking the executor again. Executor support alone certifies no production
-job/gem/tool table and does not provide SQL run/receipt storage.
-For [arithmetic effects](battle.md#arithmetic-selectors-and-digit-reversal),
-discovery and submission share `skill.BattleDefinitions.ArithmeticAction` with
-the same ordered discovered names and submitted text. Keep the selected callback
-identity through nested invocation and the divisor within that operation. Apply
-ordinary costs after the callback, so MP-divisibility reads the source's current
-resources. Persist resulting HP, temporaries, revival/drop facts and completed
-end processing with the command receipt; reload must not rebuild participants
-or rerun selection. An unavailable defeat/reset closure or unsupported discovered
-child rejects before any outer consumption or committed draw. This finite
-effect support does not enable the full random pool or the SQL command consumer.
-The [combat asset contract](battle.md#combat-books-stored-tools-and-purchases)
-also applies to discovery and nested submission: distinguish requester/payer,
-temporary actor, ordered depot selection and held-item instances. Job50 binds
-the outer submitted command/item/target, even through indirect invocation;
-its used-definition history is scoped by room and actor color, not by inventory
-instance or individual player. Book exchange selects the first matching stored
-instance; typed book targets allow the same encounter participant twice.
-Enhanced tools use their own 22-entry table and evidenced numeric-argument
-binding; ordinary tool84 and enhanced84 are different effects. Return after
-second-child death and requester-wallet debit during NPC purchase must survive
-reload. Missing native context or capacity policy rejects the whole entry;
-native storage and callback implementation prerequisites remain cutover gates.
-Persist nested effects, histories, debit, item transfer and command receipt in
-one transaction. A committed retry observes its prior draw/result; GET cannot
-execute a purchase, mark a stored tool used or return a book. Book return delivers past
-capacity and exchange swaps in place ([delivery capacity](depot.md#delivery-capacity-by-caller)); #1197 owns consumed instances.
-
-[`NormalRunService.WithJobAssets`](../../internal/adventure/job_assets.go) supplies
-the requesting command owner's locked wallet and durable single-hand facts to
-the entire combat operation, including NPC and commanded actors. Invoke it once
-inside `Command`, using the injected economy runner and helper-quest facts;
-preflight the complete invocation before effects or outer costs. It commits
-wallet changes and created or consumed held instances in the same ambient
-transaction as battle state and receipt. The combat hand is saved in the run; an
-NPC's scavenging, enhanced use or purchase changes only that hand, though a
-purchase still debits the requester. Inventory/save/receipt failure rolls back the operation,
-and committed retries return the receipt without another draw or grant.
-
-With the injected depot port, `WithJobAssets` also locks the requester's depot
-after the inventory and lists its ordered tool rows for job50. The outer
-command's `TargetID` and `Input` are that body's item selector and remaining
-target text, also when job50 is reached indirectly. A consumed outcome removes one
-unit of the selected row. An exchange moves the durable held instance, if any, to
-the selected row's position without a capacity check, as the source rewrite does,
-and equips one unit of that row, keeping instance identity. A selection error
-writes no wallet, hand or depot change; the run keeps only the room/color history,
-and the consumer skips costs, the tail and the interval. Stored travel tools use
-`PrepareStoredToolTravel`, whose transition never consumes a held tool. The
-bounded SQL tests verify this asset boundary; production action/tail composition
-and instance hydration remain with #1329, transport discovery with #1330.
-The [shared modifier contract](battle.md#shared-modifiers-and-callback-outcomes)
-also gates direct entries: helper invocation/returned target does not prove an
-effect applied, and callback category differs from elemental names. Preserve
-accepted no-effect versus rejection, actor/target context and suppressed tails.
-The #1343 decomposition separates native target, damage, recovery/stat, status/reset
-and field/composite work. Explicit recovery/stat operations preserve base/current
-stats, helper outcomes and ordered incidental effects as described in the shared
-contract. Explicit single/area damage, finite damage-gem formulas and immediate
-recoil preserve ordered modifiers, hit counts and success-dependent tails in
-that same contract; gear terms must be saved rather than redrawn on reload.
-Their finite producer formulas do not admit outer custom/random/calling
-closures. The consumer must preflight all descendants and required reset/defeat, damage,
-requester and cursor context before costs or committed RNG.
-The finite damage-gem registry and its already-applied target MP facts follow
-[Battle's shared damage contract](battle.md#shared-modifiers-and-callback-outcomes);
-the consumer must keep slot CMP contributions separate from MP and persist
-absorption/damage results without replaying them on reload.
-The [shared status/reset contract](battle.md#shared-modifiers-and-callback-outcomes)
-also supplies the seventeen status/cure/death gem bodies and job35.1's ordered
-dispel. Preflight the complete reset/defeat closure, including later members and
-post-revival continuations, before any costs or draws. Retain raw equipment and
-request table-load seal facts; supply requester level, current actor and reset
-target independently. Reward and fortress callbacks remain their owners' work;
-helper registration alone does not connect an Adventure command or admit mixed
-custom slots. Item110 and unrepresented recursive descendants remain rejected.
-
-Player/NPC equipment tails, player recovery, CMP and extended-effect bodies use
-[Battle's operation-tail contract](battle.md#explicit-action-resumption-requirements).
-Capture fallen-party and equipment-tail snapshots before callbacks, retain
-source-specific player/NPC and normal-action/combat-tail guards, and finish the
-operation counters once.
-
-Revival and sacrifice use [Battle's ordered revival contract](battle.md#resources-revival-and-roster-changes).
-Ordinary fallen-self discovery requires the66.6 entry and its living designated
-helper; direct callback admission is not ordinary role/learning admission.
-Persist resulting revival, consumed-accessory and ban facts without replaying
-the callback on reload. Mixed slot transition projection remains #1436's owner.
-
-Summoned identity, command-actor restoration and save-boundary
-roster rules are owned by [Battle's roster contract](battle.md#summoned-roster-and-helper-commands).
-`Stage.SummonPool` requires complete certified payloads in the current seasonal
-stage's original table order; it never filters through ordinary-floor boss
-exclusion or silently fills missing job/custom effects from scalar monster stats.
-Weighted appearance positions remain separate server-owned input. Service/run
-storage and Gateway execution retain #1329/#1330 ownership.
-The #1367
-[callback context contract](battle.md#callback-context-and-failure-admission)
-distinguishes the requesting player, temporary actor, package target cursor,
-category and operation-entry field snapshot. Preserve those explicit contexts;
-missing native representation remains a whole-command gate. Gems101/102 have no
-successful execution through the original queue consumers and remain unavailable;
-do not repair or skip them, narrow a random pool, or execute an earlier custom
-slot before rejecting the command. Item110's recursive roster/reset failure also
-remains rejected. Specification resolution does not certify native coverage or
-remove #1329/#1330's remaining implementation blockers.
-Shared [dynamic-effect rules](battle.md#dynamic-effects-and-catalog-admission)
-and [resumption requirements](battle.md#explicit-action-resumption-requirements)
-are owned by Battle; commands and owned observations by
-[Client/Agent API](../architecture/client-agent-api.md#planned-normal-adventure-commands-and-recovery).
-
-The following sections describe the **current batch crawl** and existing models.
-They are not authorization to preserve automatic battles, advance, inspection
-or exit in the reconstructed interactive adventure.
-
----
-
-## 1. Dungeon Crawl Loop (10 Floors + Floor 11 Treasure Room)
-
-Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and `_battle.cgi`:
-
-```text
-[Floor 1–9: Normal Monsters] ──> [Floor 10: Stage Boss] ──> [Floor 11: Treasure Room]
-            │                                 │
-            └── (Defeat) ───┐                 └── (Defeat) ───┐
-                            ▼                                 ▼
-                     [Early Defeat]                    [Early Defeat]
-                     - Half EXP, 0 Gold                - Half EXP, 0 Gold
-                     - 0 Crystals                      - 0 Crystals
-                     - Characters keep 1 HP            - Characters keep 1 HP
-```
-
-### Floors 1 to 9: Stage Monsters
-- Encounter count follows authentic Party2 CGI rules (`lib/_npc_action.cgi:636 add_monster`): $c = \text{int}(\text{rand}(2.5 + N \times 0.6))$, iterating $0..c$ to spawn $c + 1$ enemies (1–4 enemies for solo $N=1$, 1–5 enemies for 4-player party $N=4$) from the stage's normal monster roster (`stage.GetNormalMonsterIDs()`).
-- Normal monsters exclude designated stage bosses.
-- Monster stat scaling: Each monster's stats (`HP`, `MP`, `Attack`, `Defense`, `Agility`, `CMP`) scale according to party size and random variance: $\text{stat} = \text{int}(\text{base} \times (0.9 + \text{rand}(0.3) + (N - 2) \times 0.1) \times s)$ (`lib/_npc_action.cgi:657`), where $s = 1.0$ (or $1.5$ in Hard mode, `lib/_npc_action.cgi:649-653`).
-- Multi-participant turn combat is resolved using `corebattle.PartyBattleResolver`.
-- On victory: allies advance to the next floor with their remaining HP and MP preserved across floors. Total EXP, Gold, and monster Crystal drops (`TotalCrystals`, 刻印晶) accumulate.
-
-### Floor 10: Stage Boss Battle
-- Spawns the stage boss (`stage.GetBossIDs()`). If boss IDs are not explicitly configured, the final monster in the stage's monster list is designated as the stage boss.
-- Boss stats scale using the same party size and variance formula: $\text{stat} = \text{int}(\text{base} \times (0.9 + \text{rand}(0.3) + (N - 2) \times 0.1))$ (`lib/_npc_action.cgi:612 add_boss`).
-- On defeat of the boss: the stage is marked as cleared (`is_cleared = true`), and the party gains access to Floor 11.
-
-### Early Defeat Handling
-- If all living party members are knocked unconscious at any floor (1–10), the crawl terminates immediately.
-- `FloorsCleared` is set to the last fully cleared floor number.
-- Previously earned unconditional EXP, gold and crystals are retained and settled, without granting rewards for the lost floor. Try stock follows the separate [conditional release contract](#earnings-and-inactivity-evidence).
-- Participating characters survive with 1 HP (preventing permanent death).
-
----
-
-## 2. Floor 11 Treasure Room & Bonus Formulas
-
-Upon defeating the Floor 10 boss, the party enters Floor 11 (Treasure Room) per legacy `vs_monster.cgi` (`$boss_round + 1`) and `_npc_action.cgi` (`add_treasure`).
-
-### Treasure Box Count Calculation
-The number of treasure chests generated in Floor 11 follows authentic legacy Party2 rules (`vs_monster.cgi:90-101`, `_npc_action.cgi:498-519`):
-
-$$\text{Index} = \text{BaseIndex} + \text{MerchantBonus} + \text{TreasureHunterBonus} + \text{LuckyPendantBonus} + \text{GamblerBonus} + \text{TreasureBlessingBonus} - \text{DeadMembers}$$
-
-1. **Base Index & Inclusive Generation**:
-   In legacy Party2, treasure generation initializes a loop upper bound `$count` (`vs_monster.cgi:92`) and spawns chests via an inclusive loop `for my $i (0 .. $count)` (`_npc_action.cgi:519`):
-   - Standard Stages: $\text{BaseIndex} = P - 1$ (where $P$ is total party members). With $D$ dead members, $\text{Index} = P - 1 - D = A - 1$. The inclusive loop $0 .. \text{Index}$ produces $A$ (surviving members) chests when no job/item bonuses apply.
-   - Multiplier Stages (Stage 17 幻の秘境, Stage 20 天空城, Stage 21 カオスフィールド): $\text{BaseIndex} = 3 \times P$. With $D$ dead members, $\text{Index} = 3P - D$. The inclusive loop $0 .. \text{Index}$ produces $3P - D + 1$ chests ($3A + 2D + 1$; e.g., $N=2$ with 2 alive yields $2 \times 3 + 1 = 7$ chests).
-2. **Acting Player (操作主体) Bonus Scope**:
-   Job, accessory, and chapel blessing bonuses are evaluated strictly for the session leader / acting player (matching legacy `%m` in `vs_monster.cgi` and `_npc_action.cgi:501`), never aggregated across arbitrary party members:
-   - **Merchant Job Bonus** (`job-07` / 商人): +1 treasure chest.
-   - **Treasure Hunter Job Bonus** (`job-78` / トレジャーハンター): +1 to +2 treasure chests ($1 + \text{rand}(2)$).
-   - **Gambler / Pirate Job Bonus** (`job-81` / 海賊): $+\text{rand}(3) - \text{rand}(2)$ treasure chests. If the leader holds Lucky Pendant (`item-191`), the index cannot drop below $P - 1$.
-   - **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント / 海賊ハット): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest. Checked strictly on the equipped accessory slot (`$m{ite}`), not unequipped inventory items.
-   - **Chapel Treasure Blessing Bonus** (`DROP` / `4` / `treasure_wish` / `宝箱がほしい`): $1/5$ chance ($\text{rand}(5) == 0$) of +1 treasure chest (`_npc_action.cgi:501`: `$m{wish} eq '4'`), evaluated strictly for the session leader once when spawning chests in the treasure room. Non-leader member blessings do not apply.
-3. **Legacy Falsy Index Fallback**:
-   In legacy `_npc_action.cgi:499` (`my $count = shift || $#partys;`), if the index passed from `vs_monster.cgi` is `0` (Perl falsy, e.g., a 2-player party whose Pirate roll resulted in $1 - 1 = 0$), it falls back to $P - 1$ before evaluating the Chapel Blessing and dead member penalty.
-4. **Lower Bound**: If surviving party members $\le 0$, 0 chests are spawned. If the final index $< 0$, 0 chests are spawned; otherwise, $\text{Index} + 1$ chests are spawned.
-
-### Treasure Box Loot Pool Distribution & Weekday Orbs
-Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons`, `treasure_armors`, `treasure_items`) per `_npc_action.cgi:540-550`:
-- **Distribution**: Category roll $v = \text{rand}(4) + 1$ (if $v > 3$, $v = 3$):
-  - $v = 1$: Weapon (25% chance, drawn from stage `treasure_weapons`).
-  - $v = 2$: Armor (25% chance, drawn from stage `treasure_armors`).
-  - $v = 3$: Item / Tool (50% chance, drawn from stage `treasure_items`).
-- **Weekday Orb Pool Injection**: The current day-of-week orb is dynamically injected into the Tool pool:
-  - Sunday: Random orb (`item-060` through `item-065`).
-  - Monday: 月のオーブ (`item-060`).
-  - Tuesday: 火のオーブ (`item-061`).
-  - Wednesday: 水のオーブ (`item-062`).
-  - Thursday: 木のオーブ (`item-063`).
-  - Friday: 金のオーブ (`item-064`).
-  - Saturday: 土のオーブ (`item-065`).
-
-### Once-Daily Challenge Lock (`CategoryDungeonOnce` / `$m{once}`)
-- Certain limited dungeons can only be challenged once per day (until the character sleeps and wakes at Home):
-  - Stage 26: 神秘の森 / 四季のダンジョン (`stage-26`)
-  - Dungeon 16: 機軍要塞
-- **Admission & Consumption Rules**:
-  - Enforced via Valkey/ephemeral `TimerService` (`timer.CategoryDungeonOnce = "dungeon_once"`).
-  - Shared across solo crawl admission (`adventure.Service.ExecuteCrawl`) and party creation (`party.Service.CreateParty`).
-  - Quota is consumed immediately upon party creation (matching `party2/lib/quest.cgi:594-599` `$m{once}=1`) or upon initiating solo crawl. If creation/crawl fails before transaction commit, acquired locks are compensated via token-bound release (`ReleaseLockWithToken`).
-  - Once a party is created, disbanding or adventure start failure does not restore the creator's once-per-wake quota (quota remains consumed).
-  - Quota is consumed only for the creator/starter (the solo explorer or the party leader). Non-leader party participants do not have their once-lock consumed and are not blocked from creating/leading their own runs.
-  - Locks persist without arbitrary TTL expiration (duration = 0) and are cleared exclusively upon awakening from sleep at Home (`internal/home.Service.Wake` via `ResetDungeonOnceWithClaim`).
-
-### Treasure Chest Examination (`ExamineTreasure`) & Post-Battle Settlement
-- Each surviving party member may examine and claim treasure chests on Floor 11 (`_npc_action.cgi:6-56 shiraberu`).
-- **Inspection Allowance & Treasure Pocket (`item-215`)**:
-  - Each surviving participant has a base inspection allowance of 1 treasure chest (`1人1箱`).
-  - To open an additional chest beyond the 1-chest allowance, the participant must hold Treasure Pocket (`item-215` / トレジャーポケット / `ItemTreasurePocket`, also referenced as Master Key / `ItemMasterKey` in earlier tickets) in the single-unit hand.
-  - Single-pocket rule (`_npc_action.cgi:6–56 shiraberu`, approved 2026-11-07 under #1899): Legacy `shiraberu` clears `$m{ite} = 0` upon use, and the hand holds at most one item unit, so a character carries at most one Treasure Pocket at a time (stacked pockets are not kept in hand; current batch `ExamineTreasure` still tracks per-unit consumption on `CrawlSession`, while native interactive inspection is owned by #1762).
-  - Rejection conditions: non-participants (`ErrNotParticipant`), unconscious characters (`ErrUnconsciousCharacter`), exceeding allowance without holding a Treasure Pocket (`ErrTreasureLimitReached`), or no remaining unopened chests (`ErrNoUnopenedTreasure`) are rejected.
-  - Automatic solo/party crawl loops only claim the base 1-chest allowance per surviving participant. Opening additional chests with `item-215` is not executed automatically to avoid unintended item loss; explicit manual chest selection is reserved for player action commands (#948 / #1330).
-- Post-battle settlement delegates to `battle.Service.ApplyPostBattleResult` (`PostBattleSettler`), enforcing atomic single-transaction persistence obeying the global lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`):
-  - Obtained treasure items are added to the character's inventory (`coreinventory.Inventory`).
-  - When the inventory is full, items automatically route to the character's depot (`_npc_action.cgi:60-80`).
-  - If the Depot is already full, the item is lost and reported in `LostDrops`, even when a matching stack exists ([delivery capacity](depot.md#delivery-capacity-by-caller)).
-  - Surviving HP and MP are persisted to `characters` in MariaDB. If defeated, fallen characters survive with 1 HP.
-  - **Exit Fatigue (`CalculateExitFatigue`, `_battle.cgi:1187-1188, 1216`)**: `CrawlSession.Round` tracks the current/exit floor (`$round`, starting at `0` on room creation, updated on floor entry `1..11` or travel floor transitions, distinct from `TotalTurns`, `FloorsCleared`, and `len(FloorResults)`). At crawl conclusion, each participating character gains `add_tired = round * 3 + 1` fatigue (halved with integer truncation `int(add_tired * 0.5)` when `mode == "calm"`), with no upper bound.
-  - Standard job progression, EXP with job mastery triggers, gold, and crystal rewards are applied atomically.
-
----
-
-## 3. Party & Quest Room Rules (`quest.cgi`)
-
-Multiplayer co-op quest rooms allow up to 4 adventurers to form an expedition lobby before embarking on a dungeon crawl.
-
-### Room Settings
-- **Capacity**: 1 to 4 characters (`max_members`).
-- **Speed Settings**: Original per-actor action interval in seconds (not only animation/log pacing); currently stored by Party but not enforced by the batch crawl:
-  - `3`: さくさく (Fast)
-  - `18`: まったり (Relaxed) — **Default** ($def\_spd = 18$)
-  - `25`: じっくり (Deliberate)
-- **Secret Passphrase (`合言葉`)**: Optional password requirement to enter private quest rooms.
-- **Participation Conditions (`need_join`)**:
-  - Encoded condition string: `{key}_{val}_{u|o}`
-    - `key`: `hp` (MaxHP) or `joblv` (JobLevel).
-    - `val`: Target threshold integer.
-    - `u`: Under / less than (`< val`).
-    - `o`: Over / greater than or equal to (`>= val`).
-  - Validated on both room creation (leader must qualify) and member join (`ErrNeedJoinConditionFailed`).
-- **Stage Access Gates (`$job_lv[$stage]`)**:
-  - Each stage specifies a `RequiredJobLevel` based on the character's total job changes (`JobLevel`).
-  - Novice stages (0–2) require JobLevel 0, normal stages 3–14 require `JobLevel >= stage - 2`, and special stages require up to JobLevel 50 (stage 22: 6, stage 24: 50, stage 25: 10), with seasonal availability enforced in JST for winter (stages 23 and 25 in Dec–Feb) and Halloween (stage 27 in Oct).
-- **Mode Settings (`mode`)**:
-  - `normal` (Default; empty string defaults to `normal`): Standard dungeon crawl mode.
-  - Unimplemented modes (`calm`, `try`, `hard`): Explicitly rejected on party creation (`ErrUnsupportedMode`) to prevent running crawls with incomplete reward/unlock rules until milestone unlocks and full reward scaling are reconciled. Unrecognized mode strings return `ErrInvalidMode`.
-- **Idle Lobby Auto-Disband**:
-  - Waiting lobbies have a 30-minute idle TTL (`DefaultLobbyTTL = 30 * time.Minute`), matching legacy `quest.cgi` 30-minute auto-disband.
-
----
-
-## 4. Cooperative Synergy & Progression
-
-### Synergy Multipliers
-Multi-player party crawls grant cooperative reward boosts:
-- 1 Member: 0% bonus (base rewards)
-- 2 Members: +10% bonus EXP and Gold
-- 3 Members: +20% bonus EXP and Gold
-- 4 Members: +30% bonus EXP and Gold
-
-### Event Hooks & Integrations
-- **Victory Hook (`adventure.VictoryHook`)**: Invoked when an adventure or party expedition concludes with a victory. Automatically records milestone achievements in `internal/medal` (`adventure_victories`, `monsters_slain`, `gold_earned`).
-- **Post-Adventure Hook (`adventure.PostAdventureHook` / `party.PostAdventureHook`)**: Invoked after crawl rewards, exit fatigue, and character state are committed (on both victory and defeat). Resets the character's Tavern meal fullness flag (`$m{is_eat} = 0` via `tavern.Service.ResetFullness`) and claims any pre-ordered meal delivery from the Adventurer's Tavern (`tavern.Service.ClaimDelivery`).
-- **Hook Error Semantics**: Both hooks execute as best-effort post-commit side-effects outside the settlement transaction. Errors returned by hook implementations are logged as warnings (`s.logger.Warn`) and do not fail the completed adventure or corrupt committed character/history state.
-- **Settlement & Persistence Atomicity**: Post-battle reward/item/fatigue settlement (`settlePostBattle` or fallback character updates) and `adventures` history persistence (`Repository.Save`) execute within the same `TransactionProvider` (`RunInTx`) Unit of Work, ensuring that any history save error rolls back all rewards, fatigue changes, and partial participant records without firing post-adventure hooks.
-
----
-
-## 5. Adventure Chronicle & Milestone Progression (`adventure_record.cgi`)
-
-The Adventure Chronicle provides authenticated players with historical logs, statistical summaries, stage completion breakdowns, and milestone progression tracking for their characters' past adventures.
-
-### Paginated History (`GET /characters/{id}/adventures`)
-Retrieves chronological records of previous expeditions with catalog-enriched stage and monster display names (`started_at DESC`).
-- `limit`: 1 to 100 (default: 20).
-- `offset`: `>= 0` (default: 0).
-- Response fields: `id`, `character_id`, `stage_id`, `stage_name`, `monster_id`, `monster_name`, `outcome`, `battle_turns`, `experience_reward`, `currency_reward`, `started_at`, `resolved`.
-
-### Statistical Aggregation (`GET /characters/{id}/adventure-chronicle`)
-Aggregates overall statistics and per-stage completion records:
-- **Overall Stats**: `total_adventures`, `total_victories`, `total_defeats`, `total_draws`, `win_rate` (rounded to 4 decimals), `total_turns`, `total_exp_earned`, `total_gold_earned`. Rewards (`total_exp_earned`, `total_gold_earned`) reflect settled earnings per member (`MemberRewardSummary.GainedEXP` / `GainedGold`, 0 for Try Mode) rather than unadjusted raw crawl totals.
-- **Stage Breakdown**: `stage_id`, `stage_name`, `seasonal_sub_id`, `season`, `clear_count`, `total_attempts`.
-- **Seasonal Sub-Identity**: Stage 26 (神秘の森 / 四季のダンジョン, `vs_monster.cgi:111-120`, `adventure_record.cgi:49-86`) tracks and aggregates clears separately by seasonal variant (`seasonal_sub_id`: 1=spring, 2=summer, 3=autumn, 4=winter; 0 for normal stages) rather than collapsing into a single stage count.
-- **Unified Solo & Party Clear Source**: Completed multiplayer party crawls (`internal/party`) and solo crawls (`internal/adventure`) persist individual participant records into the shared `adventures` repository within their transactional units, ensuring unified chronicle counts (`solo1 + party1 = 2`). Chronicle statistical aggregation (`GetAggregatedStats`) counts canonical defeat outcomes (`defeat` / `loss`, as well as legacy 1-on-1 opponent victory records where `winner_id != character_id` and `is_cleared = false`) across solo and party runs alongside victories (`win` / `is_cleared`) and draws (`draw`). Deterministic run identifiers (`party:<party_adventure_log.id>:<character_id>`) ensure retrying the same run updates rather than duplicates clear counts (`same run retry = 1`).
-- **Backfill Feasibility and Constraints from Historical Logs**: Historical `party_adventure_logs` can be backfilled into `adventures` using participant IDs from `details_json` (`AlliesSurvived` + `AlliesFallen`).
-  - *Participant recoverability constraint*: Historical logs only record the final floor's battle result in `details_json`. Participants who fell on earlier floors (Floors 1..9) and were absent from the final encounter cannot be reconstructed from historical logs; speculative guessing is avoided to prevent data corruption.
-  - *Seasonal sub-identity constraint*: Historical party logs lack runtime seasonal variant metadata, so past Stage 26 records are backfilled as unclassified (`seasonal_sub_id=0`).
-  - *Reward and progress constraints*: Historical party logs do not record per-member post-battle settled earnings (individual blessings, Try Mode suppression, level caps) or defeat floor numbers. To preserve the integrity of Chronicle's settled earnings statistics (`total_exp_earned`, `total_gold_earned`), backfilled records set reward EXP/Gold to 0, and record `floors_cleared = 10` for wins and `0` for unrecorded defeat floors, focusing on restoring accurate stage completion counts and attempt history.
-  - *Double-counting and data protection*: Backfill shares the canonical `party:<log.id>:<character_id>` deterministic identifier with live runs. `advRepo.FindByID` is verified before saving; existing records are skipped (preserving live settled rewards), and lookup errors abort execution to prevent accidental overwrites.
-- **Combat travel and clear credit**: [Travel](#combat-travel-and-encounter-replacement) preserves the pending clear flag on coordinate assignment. Ordinary boss generation, including tool150, sets that flag; explicit floor11 creation consumes it for the current destination. Coordinate changes alone grant no achievements.
-- **Milestone Tiers** (Unlocks based on total cleared stage counts per `adventure_record.cgi` / `vs_monster.cgi`):
-
-| Milestone Key | Display Name | Clear Count Threshold | Description |
-| :--- | :--- | :--- | :--- |
-| `try_mode` | トライモード (Try Mode) | 50 | Unlocks Try Mode adventure expeditions |
-| `image_setting` | イメージ設定 (Image Setting) | 100 | Unlocks custom character image configuration |
-| `calm_mode` | カームモード (Calm Mode) | 150 | Unlocks Calm Mode adventure expeditions |
-| `hard_mode` | ハードモード (Hard Mode) | 300 | Unlocks Hard Mode adventure challenges |
-| `avatar_setting` | アバター設定 (Avatar Setting) | 500 | Unlocks special avatar portrait customizations |
-| `extreme_mode` | エクストリームモード (Extreme Mode) | 1000 | Unlocks Extreme Mode high-difficulty adventure expeditions |
-
----
-
-## 6. Exploration Subsystem Boundaries
-
-Party2 features three distinct exploration and dungeon crawl modes with specialized responsibilities:
-
-| Exploration Mode | Go Package | Legacy Reference | Primary Mechanics | Canonical Document |
-| :--- | :--- | :--- | :--- | :--- |
-| **Stage Adventure** | `internal/adventure` | `quest.cgi`, `vs_monster.cgi` | 10-floor sequential stage crawl, Floor 11 treasure room, job gating | This document (`adventure.md`) |
-| **Grid Dungeon** | `internal/dungeon` | `vs_dungeon.cgi`, `map/` | 2D tile matrix exploration, hazard traps, `@ちず` scouting, escape portals | [`dungeon.md`](dungeon.md) |
-| **Endurance Challenge** | `internal/challenge` | `vs_challenge.cgi`, `challenge/` | Consecutive wave survival, dynamic enemy scaling, no inter-round healing, Hall of Fame | [`challenge.md`](challenge.md) |
-
----
-
-## 7. Storage & Database Schema (Migration 073, 109)
-
-The `adventures` table schema reflects immediate crawl resolution and seasonal sub-identity tracking:
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | VARCHAR(64) | PRIMARY KEY | Unique adventure session identifier |
-| `character_id` | VARCHAR(64) | NOT NULL, INDEX | Foreign key referencing `characters(id)` |
-| `adventure_type` | VARCHAR(64) | NOT NULL | Stage identifier (e.g. `stage-01`) |
-| `stage_id` | VARCHAR(64) | NOT NULL DEFAULT '' | Explicit stage reference |
-| `monster_id` | VARCHAR(64) | NOT NULL DEFAULT '' | Encounter monster reference |
-| `started_at` | DATETIME | NOT NULL | Crawl execution timestamp |
-| `floors_cleared` | INT | NOT NULL DEFAULT 0 | Number of floors cleared (0–10) |
-| `is_cleared` | BOOLEAN | NOT NULL DEFAULT FALSE | True if Floor 10 boss was defeated |
-| `seasonal_sub_id`| INT | NOT NULL DEFAULT 0 | Seasonal sub identity (0: normal, 1: spring, 2: summer, 3: autumn, 4: winter) |
-| `season` | VARCHAR(32) | NOT NULL DEFAULT '' | Seasonal variant name (`spring`, `summer`, `autumn`, `winter`) |
-| `party_size` | INT | NOT NULL DEFAULT 1 | Total party size (1–4) |
-| `experience_reward`| INT | NOT NULL DEFAULT 0 | Total EXP awarded |
-| `outcome` | VARCHAR(32) | NOT NULL DEFAULT '' | Battle outcome (`WIN` or `DEFEAT`) |
-| `turns` | INT | NOT NULL DEFAULT 0 | Total combat turns across all floors |
-| `resolved` | BOOLEAN | NOT NULL DEFAULT TRUE | Immediate crawl resolution status |
-| `created_at` | DATETIME | NOT NULL | Record creation timestamp |
-| `updated_at` | DATETIME | NOT NULL | Record update timestamp |
-
-> [!NOTE]
-> Fictional columns `available_at` and `claimed`, along with index `idx_adventures_character_claimed`, were permanently dropped in migration `073_purge_adventure_timer.sql`. Migration `109_adventure_seasonal_sub_identity.sql` added `seasonal_sub_id` and `season` along with composite index `idx_adventures_character_stage_season (character_id, resolved, adventure_type, seasonal_sub_id)` to preserve four-seasons sub-identities and unify solo/party clear counting in chronicles.
+Grid dungeons and endurance challenges are separate modes; see [Dungeon](dungeon.md) and [Challenge](challenge.md).
