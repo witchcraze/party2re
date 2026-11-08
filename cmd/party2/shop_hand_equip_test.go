@@ -128,9 +128,62 @@ func TestWireShopPurchaseEquipsWeapon_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectedMoney := 50000 - res.TotalPrice
+	if res.Character.Money != expectedMoney {
+		t.Fatalf("res.Character.Money = %d, want %d", res.Character.Money, expectedMoney)
+	}
+	if char.Money != expectedMoney {
+		t.Fatalf("MariaDB char.Money = %d, want %d (must not be reset)", char.Money, expectedMoney)
+	}
+	if char.Money != res.Character.Money {
+		t.Fatalf("DB money %d != result money %d", char.Money, res.Character.Money)
+	}
 	stats := battle.CalculateEquipmentStats(char, inv, eq, zeroRandomSource{})
 	if stats.Gear.WeaponID != "weapon-01" || stats.AttackBonus <= 0 {
 		t.Fatalf("CalculateEquipmentStats Gear.WeaponID = %q, AttackBonus = %d", stats.Gear.WeaponID, stats.AttackBonus)
+	}
+}
+
+func TestWireShopPurchaseClearsCustomizationAndPreservesDeductedMoney_Integration(t *testing.T) {
+	f := newShopFixture(t, 50000)
+	ctx := context.Background()
+
+	// Set weapon and armor customization on character
+	char, _ := f.core.charRepo.FindByID(ctx, f.char.ID)
+	char.WeaponCustomName = "Customized Sword"
+	char.WeaponSeal = 5
+	char.ArmorCustomName = "Customized Armor"
+	if err := f.core.charRepo.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+
+	// Purchase weapon-01
+	res, err := f.econ.shop.Purchase(ctx, f.char.ID, "weapon-01", 1)
+	if err != nil {
+		t.Fatalf("Purchase(weapon-01) error = %v", err)
+	}
+
+	expectedMoney := 50000 - res.TotalPrice
+	if res.Character.Money != expectedMoney {
+		t.Errorf("res.Character.Money = %d, want %d", res.Character.Money, expectedMoney)
+	}
+
+	// Verify in MariaDB: money is deducted AND weapon customization is cleared
+	dbChar, err := f.core.charRepo.FindByID(ctx, f.char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dbChar.Money != expectedMoney {
+		t.Fatalf("MariaDB char.Money was overwritten! got %d, want %d", dbChar.Money, expectedMoney)
+	}
+	if dbChar.WeaponCustomName != "" || dbChar.WeaponSeal != 0 {
+		t.Errorf("weapon customization not cleared: name=%q seal=%d", dbChar.WeaponCustomName, dbChar.WeaponSeal)
+	}
+	if dbChar.ArmorCustomName != "Customized Armor" {
+		t.Errorf("armor customization should be preserved: got %q", dbChar.ArmorCustomName)
+	}
+	if dbChar.Money != res.Character.Money {
+		t.Errorf("DB money %d != res money %d", dbChar.Money, res.Character.Money)
 	}
 }
 

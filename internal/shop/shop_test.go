@@ -951,6 +951,12 @@ func TestPurchaseEquipsGearInEmptySlot(t *testing.T) {
 		t.Fatalf("weapon-01 should remain equipped in SlotMainHand")
 	}
 
+	// Verify money persistence after buying armor
+	savedCharAfterArmor, _ := charRepo.FindByID(ctx, char.ID)
+	if savedCharAfterArmor.Money != resArmor.Character.Money {
+		t.Fatalf("charRepo.Money = %d, want %d (must match resArmor.Character.Money)", savedCharAfterArmor.Money, resArmor.Character.Money)
+	}
+
 	// 3. Purchase shield item-071 into empty tool hand
 	resShield, err := service.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-071", 1)
 	if err != nil {

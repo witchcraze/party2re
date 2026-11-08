@@ -149,20 +149,27 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 				return err
 			}
 
+			updatedChar := res.Character
 			if s.equipment != nil && definition.Slot != item.SlotNone {
 				eq, err := s.equipment.FindByCharacterIDForUpdate(txCtx, characterID)
 				if err != nil {
 					return err
 				}
+				charChanged := false
 				switch definition.Slot {
 				case item.SlotMainHand:
-					char.ClearWeaponCustomization()
-					if err := s.characters.Update(txCtx, char); err != nil {
-						return err
+					if updatedChar.WeaponCustomName != "" || updatedChar.WeaponSeal != 0 {
+						updatedChar.ClearWeaponCustomization()
+						charChanged = true
 					}
 				case item.SlotBody:
-					char.ClearArmorCustomization()
-					if err := s.characters.Update(txCtx, char); err != nil {
+					if updatedChar.ArmorCustomName != "" {
+						updatedChar.ClearArmorCustomization()
+						charChanged = true
+					}
+				}
+				if charChanged {
+					if err := s.characters.Update(txCtx, updatedChar); err != nil {
 						return err
 					}
 				}
@@ -181,7 +188,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 			}
 
 			result = PurchaseResult{
-				Character:          res.Character,
+				Character:          updatedChar,
 				Inventory:          res.Inventory,
 				ItemInstance:       *res.GrantedItem,
 				TotalPrice:         totalPrice,
