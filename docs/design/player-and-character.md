@@ -2,45 +2,20 @@
 
 ## 1. Domain Overview
 
-In Party2, identity and game progression are strictly separated across two domain entities:
-
-- **Player**: The account-level entity responsible for authentication, credentials, and session management.
-- **Character**: The in-game persona holding stats, progression, inventory, equipment, jobs, and feature-specific associations.
-
-Every `Character` belongs to exactly one `Player`. A `Player` may own multiple characters over time.
-
----
+A Player is the account (authentication, sessions); a Character is the in-game persona. Every Character belongs to exactly one Player for its whole life, and only the owning Player's session may read or mutate it. Player, character and API shapes are owned by the code, migrations and [OpenAPI](../api/openapi.json).
 
 ## 2. Invariants and Rules
 
-### 2.1 Ownership Invariant
-- A `Character` cannot exist without being associated with a valid `Player` (`player_id`).
-- When a `Character` is created, its `player_id` must be explicitly specified and must refer to an existing `Player`.
-- A `Character`'s ownership cannot be transferred arbitrarily; `player_id` remains immutable throughout ordinary gameplay operations.
-
-### 2.2 Authorization & Access Control
-- All player-initiated operations acting upon a `Character` (such as starting an adventure, buying/selling in shops, depositing/withdrawing in depot or bank) require an authenticated session belonging to that character's owning `Player`.
-- If an authenticated session attempts to inspect or mutate a `Character` owned by a different `Player`, the request is rejected with `Forbidden` (`403`).
-
-### 2.3 Character Listing & Querying
-- A `Player` can query all characters associated with their account (`FindByPlayerID`).
-- Each `Character` response contains `id`, `player_id`, `name`, `job_id`, `gender`, `level`, `experience`, `money`, `sp`, and `stats`.
-
 ### 2.4 Currency & Wallet Ceiling
-- `Character.Money` holds the character's active wallet gold, strictly capped at an authentic maximum ceiling of `999,999 G` (`corecharacter.MaxMoney`, reproducing legacy Party2 `system.cgi:71`).
-- All currency-crediting pathways (`Character.AddMoney`, `economy.Service.AddGold`, shops, adventures, depot, battles, courier) respect this ceiling, clamping any overflowed gold to `999,999 G`.
-- Wealth beyond 999,999 G must be deposited into the Bank (`Character.Deposit`), which supports large-scale gold savings up to 99兆9999億9999万9999 G (`bank.MaxDeposit`).
-- `Character.SmallMedals` is capped at `999,999,999` (`corecharacter.MaxSmallMedals`).
+
+- Wallet gold is capped at 999,999 (legacy `system.cgi:71`); every credit path clamps to it. Larger sums belong in the [Bank](bank.md). Small medals cap at 999,999,999.
 
 ### 2.5 Vitality & Fatigue Invariants
-- **Vitality Bounds**: HP and MP are strictly bounded within `[0, MaxHP]` and `[0, MaxMP]` via `Stats.ClampVitality`. Restorative actions (sleeping, job changes) restore full vitality via `Character.RecoverVitality`.
-- **Combat Survival Floor**: In combat settlement (`battle/apply.go`, `boss/battle.go`), fallen combatants (`HP <= 0` or fallen flag) survive with an authentic minimum floor of `1 HP` via `Character.ApplyCombatSurvival`. Surviving MP is updated and clamped within `[0, MaxMP]`.
-- **Fatigue Range**: Fatigue percentage has no upper or lower bound, matching legacy additions (`lib/_battle.cgi:1211-1213`, `lib/quest.cgi:1073`, `lib/_casino.cgi:217`, `lib/vs_king.cgi:88`) and subtraction (`lib/god.cgi:57`). `AddTired` can exceed `100%`, and `god.WishRefresh` (`ReduceTired(150)`) can go below `0%`, buffering later fatigue. At `100%` or more, exhaustion (`IsExhausted() == true`) blocks adventures and fatigue-generating mini-games. Resting at home clears fatigue to 0 (`ResetTired`).
+
+- Fatigue has no upper or lower bound, matching legacy additions (`lib/_battle.cgi:1211–1213`, `lib/quest.cgi:1073`, `lib/_casino.cgi:217`, `lib/vs_king.cgi:88`) and subtraction (`lib/god.cgi:57`): it can exceed 100% and a refresh wish can push it below 0%, buffering later fatigue. At 100% or more, adventures and fatigue-generating mini-games are blocked. Resting at home sets it to 0.
 
 ### 2.6 Player Account Lifecycle & Ban Invariant
-- **Account State**: Each `Player` record tracks `created_at`, `updated_at`, `last_ip`, and an optional `banned_at` timestamp.
-- **Login Tracking**: Upon successful login, the player's `last_ip` and `updated_at` are refreshed.
-- **Soft-Ban Enforcement**: When an account is soft-banned (`banned_at IS NOT NULL` / `IsBanned() == true`), all active Valkey sessions and Personal Access Tokens are immediately invalidated. Subsequent login attempts (`POST /sessions`) and authenticated character requests receive HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
+- **Soft ban** invalidates all sessions and personal access tokens immediately; later logins and character requests are rejected.
 - **Registration boundary**: Account BAN does not prevent a different account from registering at the same IP. [Optional IP registration denial](admin.md#33-optional-ip-registration-denial-planned), including independent release and explicit BAN-time selection, is adopted but deferred; `last_ip` alone is not a registration prohibition.
 
 Character activity is independent of account login tracking. The adopted
@@ -51,95 +26,29 @@ durable gameplay clock before automatic deletion can be enabled.
 ### 2.7 Request Throttling and Reload Sleep Penalty Reconciliation (Approved Departure)
 
 #### 2.7.1 Legacy Reload Penalty Specification
-In original Party2, inter-request intervals and rapid manual reloading were monitored to prevent CGI server overload:
-- **Inter-Request Detection (`party2/lib/system.cgi:148–156`)**:
-  - During `&read_user`, if the interval since the character's last access was less than `$wait_time` (`config.cgi:88`, reference default `1` second), i.e., `$m{ltime} + $wait_time > $time`, and auto-reload was not flagged (`!$in{is_auto}`):
-    - Appended `"1<>"` to `$userdir/$id/reload.cgi` (recording a reload strike).
-    - Terminated immediately with an error message: `更新の連打は禁止しています。最低でも $wait_time 秒は待ってください<br>※過度な更新連打は自動削除の対象となります`.
-- **Strike Consumption & Character Sleep Penalty (`party2/login.cgi:37–104`)**:
-  - Upon subsequent login, if `$userdir/$id/reload.cgi` existed and had non-zero size, its contents were split by `<>` to count strikes (`@lines`), and the file was immediately truncated to 0 bytes (`truncate $fh, 0`), consuming and resetting the strike record.
-  - Strikes exceeding thresholds triggered severe character sleep penalties added to existing `$m{sleep}` (`$m{sleep} = $m{sleep} > 0 ? $m{sleep} + $sleep_time * 60 : $sleep_time * 60`):
-    - **`> 30` strikes**: `$sleep_time = 7 * 24 * 60` minutes (7 days = 10,080 minutes / 604,800 seconds). In original source comments, account deletion (`&delete_directory`) and IP blacklisting (`&add_black_list`) were drafted but commented out, falling back to 7 days sleep.
-    - **`> 25` strikes**: `$sleep_time = 3 * 24 * 60` minutes (3 days = 4,320 minutes / 259,200 seconds). IP blacklist was commented out.
-    - **`> 20` strikes**: `$sleep_time = 24 * 60` minutes (24 hours = 1,440 minutes / 86,400 seconds).
-    - **`> 15` strikes**: `$sleep_time = 6 * 60` minutes (6 hours = 360 minutes / 21,600 seconds).
-    - **`> 10` strikes**: `$sleep_time = 60` minutes (1 hour = 60 minutes / 3,600 seconds).
-    - **`<= 10` strikes**: No penalty applied; strikes were wiped on login.
+
+- `party2/lib/system.cgi:148–156`: during `&read_user`, when `$m{ltime} + $wait_time > $time` (`config.cgi:88`, reference default 1 second) and the request is not an auto-reload, append a strike to `reload.cgi` and stop with “更新の連打は禁止しています…”.
+- `party2/login.cgi:37–104`: on the next login, count and truncate the strikes, then add sleep: more than 30 strikes 7 days, more than 25 3 days, more than 20 24 hours, more than 15 6 hours, more than 10 1 hour; 10 or fewer nothing. Account deletion and IP blacklisting were drafted but commented out.
 
 #### 2.7.2 Approved Architectural Departure (#1106)
-Legacy reload sleep penalties are **formally deprecated and superseded** by modern HTTP transport rate limiting and administrative soft-ban controls:
-1. **Separation of Concerns & Layering Principles**:
-   - Request frequency control and DoS mitigation belong exclusively to the HTTP transport/middleware layer (`internal/api/http/middleware.go` via `internal/ratelimit`).
-   - Game-state sleep (`timer.CategorySleep`) is strictly reserved for in-game mechanics: HP/MP restoration via home sleep (`internal/home`) and dungeon defeat rescue penalty (`internal/rescue`).
-   - Transport-level request bursts must never mutate domain character timers or lock character progression.
-2. **Comparison of Throttling vs. Game Sleep**:
-   - `HTTP 429 Too Many Requests`: An ephemeral, transport-level backoff signal with `X-RateLimit-*` and `Retry-After: <seconds>` headers. Traffic resumes immediately once the window lapses without altering character state.
-   - `Character Sleep Penalty`: An in-game lock lasting hours or days that halts all player/party progression. Applying this to HTTP frequency violations creates severe false positives.
-3. **Malicious Abuse Handling**:
-   - Extreme, persistent, or malicious abuse is mitigated via administrative soft-bans (`Player.banned_at` / `POST /admin/players/{id}/ban`), revoking tokens and rejecting all requests with `403 Forbidden`, rather than poisoning gameplay sleep timers.
 
-#### 2.7.3 Non-Interference and Testing Requirements
-- **SPA & Parallel Request Non-Interference**: Modern browser and mobile clients dispatch multiple parallel asynchronous requests on page loads (e.g. character details, notifications, party status, chat). Sub-second inter-request spacing must not accumulate penalty strikes or restrict valid traffic within configured HTTP quotas (Public 10 req/min, Authenticated 60 req/min).
-- **Automated Agents & PAT Non-Interference**: Programmatic clients (AI agents, automated scripts) operating via Personal Access Tokens must receive standard HTTP 429 backoff responses when exceeding quotas, without triggering character sleep locks.
-- **Resilience and Separation during Infrastructure Failure**: When Valkey is unavailable, `ValkeyLimiter` falls back to an in-memory `MemoryLimiter`, actively enforcing rate limits in process memory. If an unrecoverable limiter error occurs, HTTP middleware fails open gracefully (`internal/api/http/ratelimit_test.go`) to prevent service disruption. Under no circumstances do rate-limiter infrastructure incidents or rate-limit rejections mutate domain character timers (`timer.CategorySleep`) or impose gameplay sleep penalties.
+**Decision (#1106):** reload sleep penalties are superseded by HTTP rate limiting (429 with retry headers) and administrative soft bans. Request frequency belongs to the transport layer and never mutates character timers: game sleep is reserved for home sleep and rescue penalties, and a multi-hour gameplay lock on parallel SPA or agent requests would be a severe false positive. Limiter infrastructure failures never impose gameplay sleep either.
 
 ### 2.8 Registration Population Limit & Capacity Reconciliation (#1105)
 
 #### 2.8.1 Legacy Population Limit Specification
-In original Party2, world registration capacity was constrained by a hardcoded configuration ceiling:
-- **Configuration Default (`party2/config.cgi_origin:46`)**:
-  - `$max_entry = 999;` defined the maximum allowable player population on the server.
-- **Capacity Counter Storage & Admission Check (`party2/new_entry.cgi:133–138`)**:
-  - Maintained an aggregate flat-file counter in `$logdir/entry.cgi` formatted as `"$entry_count<>$last_addr<>"`.
-  - During registration (`new_entry.cgi`), if `$entry_count >= $max_entry`, registration was immediately blocked with the authentic message:
-    `"現在定員のため、新規登録は受け付けておりません"`.
-- **Atomic Counter Increment (`party2/new_entry.cgi:224–234`)**:
-  - On successful registration, `sub plus_entry_count` opened `$logdir/entry.cgi` with exclusive advisory locking (`flock $fh, 2`), read `$entry_count`, incremented it (`++$entry_count`), and rewrote the file.
-- **Counter Decrement on Deletion (`party2/delete.cgi:56`, `party2/admin.cgi:115`)**:
-  - Self-deletion called `&minus_entry_count(1)` (`delete.cgi:56`).
-  - Administrative user deletion called `&minus_entry_count($count)` (`admin.cgi:115`).
-- **Exile / Ban Treatment (`party2/lib/exile.cgi:177`)**:
-  - In original Party2, `&minus_entry_count` was explicitly commented out in `lib/exile.cgi` (`## &minus_entry_count;`). Consequently, banned/exiled players continued to occupy a registration slot in `$entry_count` until directory cleanup.
-- **Recalibration & Inactivity Purge (`party2/login.cgi:190–250`)**:
-  - When rebuilding the player ranking and list (`login.cgi`), the system scanned all user directories (`$userdir`), purged inactive accounts exceeding `$auto_delete_day` (or `job_lv <= 0` and level <= 2 inactive for strictly more than 7 days), tallied surviving active user directories (`$count`), and rewrote `$logdir/entry.cgi` as `"$count<><>"`, recalibrating any drift.
+
+- `config.cgi_origin:46` sets `$max_entry = 999`. `new_entry.cgi:133–138` rejects registration with “現在定員のため、新規登録は受け付けておりません” when the flat-file counter reaches it, and `224–234` increments the counter under an exclusive lock.
+- Self-deletion and admin deletion decrement the counter (`delete.cgi:56`, `admin.cgi:115`). **Pitfall:** exile has the decrement commented out (`lib/exile.cgi:177`), so exiled players kept their slot until directory cleanup.
+- `login.cgi:190–250` recalibrates the counter while rebuilding the ranking, after purging inactive accounts.
 
 #### 2.8.2 Reconciled Architecture & Adoption Policy (#1105)
-In Party2re's relational domain model, identity and game progression are separated into distinct `Player` (account) and `Character` (in-game persona) entities. The registration population limit is reconciled with this architecture as follows:
 
-1. **Unit of Population Limit (Account-Level Enforcement)**:
-   - The registration capacity ceiling applies strictly to **Player Accounts** (`players` table).
-   - The registration gateway `POST /players` (`player.Service.Register`) is the sole enforcement boundary for server population limits.
-   - Character creation (`POST /characters`) operates independently of this server-wide limit and neither consumes nor evaluates registration population capacity.
-
-2. **Configuration Source & Unlimited Option**:
-   - The limit is governed by the environment variable `PARTY2_MAX_PLAYERS` (configurable via `compose.yaml` / Docker Compose / process environment).
-   - **Authentic Legacy Default**: Defaults to `999` to faithfully preserve the original game's reference capacity (`$max_entry = 999`).
-   - **Unlimited Capacity Flag**: Setting `PARTY2_MAX_PLAYERS=0` (or negative) disables the population limit entirely, allowing unlimited account registration for modern high-capacity or cloud-native deployments.
-
-3. **Active Population & Soft-Ban Reconciliation**:
-   - The population count evaluates **active accounts only**: `SELECT COUNT(*) FROM players WHERE banned_at IS NULL`.
-   - **Soft-Ban Slot Recovery**: In contrast to the original CGI's commented-out decrement, soft-banned accounts (`banned_at IS NOT NULL`) do not consume population quota, ensuring that malicious or banned accounts cannot permanently starve legitimate players of registration slots.
-   - **Account Deletion Slot Recovery**: Hard deletion of a player account (`DELETE /players/me` or admin `DELETE /players/{id}`) removes the row from `players`, automatically decrementing the active count.
-
-4. **Admission Boundary & Rejection Contract**:
-   - **Threshold Condition**: When `PARTY2_MAX_PLAYERS > 0` and the current active account count satisfies `active_count >= max_players`, registration requests are rejected.
-   - **HTTP Transport Response**: `POST /players` returns `HTTP 409 Conflict` (domain error `ErrRegistrationLimitReached`, JSON error code `"registration_limit_reached"`) with the authentic legacy message:
-     `"現在定員のため、新規登録は受け付けておりません"`.
-
-5. **Concurrency Invariant & Verification Requirements**:
-   - **Atomic Admission Under Race Conditions**: Registration transactions must prevent race conditions where concurrent requests observe `active_count == max_players - 1` and simultaneously insert multiple records, exceeding `max_players`.
-   - Enforcement must execute within a database transaction boundary (e.g. pessimistic locking on a counter row, advisory lock, or serialized lock check).
-   - **Required Stress Verification**: Implementation must include a paired concurrency stress test (`testutil.RunConcurrentStressTest` / `testutil.RunRace`) verifying that when capacity has room for $M$ registrants, exactly $M$ concurrent registrations succeed and all remaining concurrent attempts fail with `409 Conflict`, with final `COUNT(*) <= max_players`.
-
-#### 2.8.3 Implementation & Verification
-Runtime enforcement of this specification is implemented across `cmd/party2/config.go`, `internal/player`, and `internal/api/http`, with verified transaction locking and paired concurrency stress tests (`internal/player/registration_concurrency_integration_test.go`, `internal/player/application_test.go`). When active account capacity (`WHERE banned_at IS NULL`) reaches `PARTY2_MAX_PLAYERS`, `POST /players` atomically rejects with `409 Conflict` (`registration_limit_reached`).
+**Decision (#1105):** the limit applies to Player accounts at registration only; character creation neither consumes nor checks it. `PARTY2_MAX_PLAYERS` defaults to the legacy 999, and 0 or negative disables the limit. Only non-banned accounts count, so, unlike the commented-out legacy decrement, banned accounts free their slot; account deletion frees it too. At the limit, registration is rejected with the legacy message, atomically under concurrent registrations.
 
 ### 2.9 Transactional Character Creation & Joining News
 
-Character creation (`POST /characters`, `character.Service.CreateWithOptions`) coordinates persistence through an ambient database transaction (`s.runInTx` via injected `TransactionProvider`):
-1. **Atomic Persistence**: The character (`characters`), initial storage (`character_depots`, capacity = 5), eligible [referral delivery](#210-registration-referral-delivery), and [joining news](notifications.md#character-joining-news) share this single transaction boundary. An existing referrer character is locked before saving the new character; its depot is locked before appending the reward.
-2. **Rollback Guarantee**: A character, depot, referral item/notice or news persistence error is propagated and rolls back the transaction. Creation is not reported as successful with missing required writes, nor as failed after a separately committed character. A commit error can leave its outcome unknown after a connection failure; clients must not automatically replay a creation POST.
-3. **Ambient Transaction Propagation**: When called within an existing ambient transaction, character creation participates in the caller's transaction without premature commit, ensuring full rollback if subsequent enclosing operations fail.
+The character, its initial Depot, any eligible [referral delivery](#210-registration-referral-delivery) and the [joining news](notifications.md#character-joining-news) commit in one transaction. A failure in any of them rolls back the creation. After an unknown commit outcome, clients must not replay the creation automatically.
 
 Legacy `party2/new_entry.cgi:155–206` routes `mode=new_entry` through `new_entry` → `create_user`, saving the character before writing birth memory and joining news. Account registration and character creation are separate in Party2re: only character creation emits joining news. The same-transaction news boundary strengthens failure atomicity over the legacy file writes. Birth memory and trajectory history remain separate work in [#773](https://github.com/witchcraze/party2re/issues/773); joining news does not implement or replace them.
 
@@ -265,10 +174,7 @@ spaces/legacy forbidden punctuation and retaining safe combining marks, while
 rejecting rather than stripping newlines, is the explicitly approved departure
 in #1104; its implementation prioritizes safe storage and output.
 
-[Shared validation](../../internal/validation/validation.go)'s `ValidateVerbatimLine`
-implements this contract over the same per-character safety predicate as the
-trimming/normalizing wrappers, whose policies are unchanged; do not duplicate
-sanitizers or silently change other text fields. Validate at the service boundary, use SQL
+Validate at the service boundary, use SQL
 parameters, serialize with the shared JSON writer, and render through escaped
 text nodes/framework text binding. HTML, script, attribute and URL contexts need
 their own safe encoders/validators; a single universal escaping function is not
@@ -278,12 +184,7 @@ content. Never interpolate user text into executable markup or SQL.
 
 **Persistence and delivery.** MariaDB owns the character's message and sampling
 clock (`characters`) and at most one entry and one sample snapshot per character
-(`character_presence_snapshots`); Valkey is unnecessary. The Character
-[presence service](../../internal/character/presence.go) records entry and
-save-equivalent samples, observes the list/count and reads the current message
-and clock for cards. Its writes lock the owning character and join the caller's
-transaction, so a gameplay save, its retention event and any due sample commit
-together, as do entry message changes and entry publication. Publication copies
+(`character_presence_snapshots`); Valkey is unnecessary. A gameplay save, its retention event and any due sample commit together, as do entry message changes and entry publication. Publication copies
 display fields; an avatar outside the [profile avatar contract](character-customization.md#51-profile-attributes-character_profiles)
 is published as an empty icon rather than blocking presence. Observation rechecks
 each stored public field and fails as a whole on unsafe data. Initial deployment
@@ -340,60 +241,3 @@ gold, not permission to serialize Character/Profile/Home aggregates. Exclude
 Player IDs/usernames, IP/host, tokens, credentials, private biography, letters,
 notices, inventory contents, bank balances and timers. Apply §2.12's shared text
 and image-output safety without changing existing message input policy.
-
----
-
-## 3. Data Schema & Persistence
-
-### 3.1 Players Table
-- `id VARCHAR(32) PRIMARY KEY`
-- `username VARCHAR(64) NOT NULL UNIQUE`
-- `password_hash VARCHAR(255) NOT NULL`
-- `banned_at DATETIME(6) NULL DEFAULT NULL`
-- `created_at DATETIME(6) NOT NULL`
-- `updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)`
-- `last_ip VARCHAR(45) NOT NULL DEFAULT ''`
-
-### 3.2 Characters Table
-- `id VARCHAR(32) PRIMARY KEY`
-- `player_id VARCHAR(32) NOT NULL` (Foreign key constraint referencing `players(id)`)
-- `name VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_nopad_bin NOT NULL` (unique index `uq_characters_name`)
-- `job_id VARCHAR(32) NOT NULL`
-- `gender VARCHAR(16) NOT NULL`
-- `level INT NOT NULL`
-- `experience INT NOT NULL`
-- `money INT NOT NULL`
-- `sp INT NOT NULL`
-- `max_hp INT NOT NULL`, `max_mp INT NOT NULL`, `hp INT NOT NULL`, `mp INT NOT NULL`
-- `attack INT NOT NULL`, `defense INT NOT NULL`, `agility INT NOT NULL`
-
----
-
-## 4. State Transitions
-
-```text
-       [Register Player]
-               |
-               v
-      Player Account Created
-               |
-               v
-       [Login / Session]
-               |
-               v
-     Authenticated Session
-               |
-               v
-     [Create Character(player_id, name)]
-               |
-               v
-      Character Linked to Player
-               |
-  +------------+------------+
-  |                         |
-  v                         v
-[Own Player Request]     [Other Player Request]
-  |                         |
-  v                         v
-Allowed (200 / 201)      Rejected (403 Forbidden)
-```
