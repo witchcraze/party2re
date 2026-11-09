@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/bank"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -102,9 +104,19 @@ func (h *Handler) registerNPC(service *playercontext.Service) {
 	if h.actionCommands == nil {
 		h.actionCommands = make(map[string]actionCommand)
 	}
-	for _, id := range []string{"npc_talk", "npc_inspect"} {
+	acts := map[string]func(context.Context, string, string) (NPCResult, error){
+		"npc_talk": func(ctx context.Context, owner, actor string) (NPCResult, error) {
+			return h.npcAct(ctx, service, owner, actor, true)
+		},
+		"npc_inspect": func(ctx context.Context, owner, actor string) (NPCResult, error) {
+			return h.npcAct(ctx, service, owner, actor, false)
+		},
+		"secretshop_puffpuff": func(ctx context.Context, owner, actor string) (NPCResult, error) {
+			return h.puffPuff(ctx, service, owner, actor)
+		},
+	}
+	for id, act := range acts {
 		def, _ := playercontext.GetAction(id)
-		talk := id == "npc_talk"
 		h.actionCommands[id] = actionCommand{
 			reject: npcRejection,
 			prepare: func(raw json.RawMessage) (func(context.Context, string, string) (any, error), error) {
@@ -112,32 +124,54 @@ func (h *Handler) registerNPC(service *playercontext.Service) {
 				if err := decodeActionParams(raw, def.RequiredParams, &none); err != nil {
 					return nil, err
 				}
-				return func(ctx context.Context, owner, actor string) (any, error) {
-					return h.npcAct(ctx, service, owner, actor, talk)
-				}, nil
+				return func(ctx context.Context, owner, actor string) (any, error) { return act(ctx, owner, actor) }, nil
 			},
 		}
 	}
 }
 
-func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, owner, actor string, talk bool) (NPCResult, error) {
+// currentNPC resolves the NPC of the owner's current, still qualified facility.
+func (h *Handler) currentNPC(ctx context.Context, service *playercontext.Service, owner, actor string) (string, npcProfile, corecharacter.Character, error) {
 	current, err := service.Query(ctx, actor, owner)
 	if err != nil {
-		return NPCResult{}, err
+		return "", npcProfile{}, corecharacter.Character{}, err
 	}
 	n := current.Navigation
 	if n == nil || n.Unavailable {
-		return NPCResult{}, errNPCUnavailable
+		return "", npcProfile{}, corecharacter.Character{}, errNPCUnavailable
 	}
 	destination := n.Selection.Destination
 	npc, ok := npcProfiles[destination]
 	if !ok {
-		return NPCResult{}, errNPCUnavailable
+		return "", npcProfile{}, corecharacter.Character{}, errNPCUnavailable
 	}
 	char := current.Snapshot.Character
 	// A qualification lost after entry (e.g. job level) also hides the NPC.
 	if def, ok := h.sceneAdapters[destination]; !ok || (def.definition.CanEnter != nil && !def.definition.CanEnter(char)) {
+		return "", npcProfile{}, corecharacter.Character{}, errNPCUnavailable
+	}
+	return destination, npc, char, nil
+}
+
+// puffPuff is ＠ぱふぱふ (secret.cgi:79-84): dialogue only, logged as a private
+// row pair addressed to the actor ($to_name = $m).
+func (h *Handler) puffPuff(ctx context.Context, service *playercontext.Service, owner, actor string) (NPCResult, error) {
+	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
+	if err != nil {
+		return NPCResult{}, err
+	}
+	if destination != "secretshop" {
 		return NPCResult{}, errNPCUnavailable
+	}
+	word := fmt.Sprintf(secretshop.PuffPuffDialogueFormat, char.Name)
+	h.appendNPCLog(ctx, destination, char, "＠ぱふぱふ", npc.name, word, char.ID)
+	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
+}
+
+func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, owner, actor string, talk bool) (NPCResult, error) {
+	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
+	if err != nil {
+		return NPCResult{}, err
 	}
 	if !talk {
 		text := npc.inspect
@@ -150,14 +184,21 @@ func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, ow
 		return NPCResult{NPCName: npc.name, Dialogue: npcNoWords, Private: true}, nil
 	}
 	word := strings.ReplaceAll(npc.words[random.Intn(len(npc.words))], "{name}", char.Name)
-	if h.placeLog != nil {
-		now := time.Now().UTC()
-		if err := h.placeLog.Append(ctx, placelog.Place{Kind: placelog.KindFacility, ID: destination},
-			placelog.Entry{OccurredAt: now, SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: char.ID, Name: char.Name, Color: char.Color, Text: "＠はなす"},
-			placelog.Entry{OccurredAt: now, SpeakerKind: placelog.SpeakerNPC, Name: npc.name, Color: npcColor, Text: word}); err != nil {
-			// The reply is already decided; a lost log row is display-only.
-			slog.WarnContext(ctx, "place log append failed", slog.String("place", destination), slog.String("error", err.Error()))
-		}
-	}
+	h.appendNPCLog(ctx, destination, char, "＠はなす", npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
+}
+
+// appendNPCLog writes the actor's command row and the NPC reply; a nonempty
+// recipient makes both rows private, like legacy $to_name.
+func (h *Handler) appendNPCLog(ctx context.Context, destination string, char corecharacter.Character, command, npcName, word, recipient string) {
+	if h.placeLog == nil {
+		return
+	}
+	now := time.Now().UTC()
+	if err := h.placeLog.Append(ctx, placelog.Place{Kind: placelog.KindFacility, ID: destination},
+		placelog.Entry{OccurredAt: now, SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: char.ID, Name: char.Name, Color: char.Color, Text: command, RecipientCharacterID: recipient},
+		placelog.Entry{OccurredAt: now, SpeakerKind: placelog.SpeakerNPC, Name: npcName, Color: npcColor, Text: word, RecipientCharacterID: recipient}); err != nil {
+		// The reply is already decided; a lost log row is display-only.
+		slog.WarnContext(ctx, "place log append failed", slog.String("place", destination), slog.String("error", err.Error()))
+	}
 }

@@ -94,7 +94,7 @@ this delivery path under the existing [trajectory gap](../design/player-and-char
 
 - **Scope / Legacy**: `lib/depot.cgi`の`うる` / `まとめてうる`、`あずける` / `ひきだす`、`せいとん`、`おくる` (品/金)、`かくちょう`。共有`lib/system.cgi`の配送・未受取送金を含む。
 - **Go / HTTP**: `internal/depot/`、`internal/database/depot_repository.go`、inventory/equipment保存境界、`internal/api/http/depot.go`。
-- **Contracts**: [design/depot.md](../design/depot.md)、[design/items-and-equipment.md](../design/items-and-equipment.md)、[api/paths/depot.json](../api/paths/depot.json)。
+- **Contracts**: [design/depot.md](../design/depot.md)、[design/items-and-equipment.md](../design/items-and-equipment.md)。
 - **Open follow-ups**: [#1109](https://github.com/witchcraze/party2re/issues/1109) (未受取送金/金額保存)、[#1111](https://github.com/witchcraze/party2re/issues/1111) (整頓順)、[#1112](https://github.com/witchcraze/party2re/issues/1112) (装備品移動)。通知の受取側はCL-02Aの#1110と合わせて確認する。
 - **Boundary**: 他機能からのDepot直送は入庫/容量/失敗時の契約を確認する。売買・景品・生産など送信元機能の全仕様は各クラスタが所有する。HomeでのDepot品消費はCL-02E。
 
@@ -131,7 +131,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/home.cgi` | 自宅拠点 (@自宅ペット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json)<br/>[api/paths/letter.json](../api/paths/letter.json) | Reconciling | CL-02A/B/E。未解決の所有・更新・睡眠・使用差分は各監査単位および所有文書を参照。 |
 | `lib/sleep.cgi` | 睡眠 (無料全快・日次リセット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json) | Reconciling | CL-02B (#1117〜#1119, #1822)。有料宿屋は非存在。時間/人数・起床義務・訪問条件の契約は CL-02B および [design/home.md](../design/home.md) 参照。 |
 | `lib/park.cgi` | 交流広場 (@町娘) | `internal/park/` | [design/town_park.md](../design/town_park.md)<br/>[api/paths/park.json](../api/paths/park.json) | Reconciling | CL-02A (#1126)。占い（22entry・27色）、NPC会話、チャット。文字数/log契約は未確定。10G回復は非存在。 |
-| `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | [design/depot.md](../design/depot.md)<br/>[api/paths/depot.json](../api/paths/depot.json) | Reconciling | CL-02C (#1109, #1111, #1112) と通知連動#1110。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |
+| `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | [design/depot.md](../design/depot.md) | Reconciling | CL-02C (#1109, #1111, #1112) と通知連動#1110。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |
 | `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (住宅建設)<br/>`internal/town/`<br/>`internal/store/` (商店建設)<br/>Client Presentation | [design/home.md](../design/home.md)<br/>[design/store.md](../design/store.md)<br/>[api/paths/towns.json](../api/paths/towns.json)<br/>[api/paths/houses.json](../api/paths/houses.json)<br/>[api/paths/stores.json](../api/paths/stores.json) | Reconciling | CL-02D (#1113, #1114, #1122)。町別上限・GP配線に未解決差分があり、設定/guardはCL-02A/Bと連動確認する。 |
 
 
@@ -150,12 +150,12 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/item.cgi` | 道具屋 (@アイテムコ) | `internal/shop/` | [design/shops.md](../design/shops.md)<br/>[api/paths/shop.json](../api/paths/shop.json) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、秘密の店ヒント |
 | `lib/accessory.cgi` | 装飾品屋 (@ミラ) | `internal/shop/` | [design/accessory-shop.md](../design/accessory-shop.md)<br/>[api/paths/shop.json](../api/paths/shop.json) | Review against source | カタログ・倍率・48レシピ・秘薬保証。成功確率の原典比較境界に差分あり。 |
 | `lib/blacksmith.cgi` | 鍛冶屋 (@ブッキー) | `internal/blacksmith/` | [design/blacksmith.md](../design/blacksmith.md) | Review against source | 武器刻印12種(刻印晶消費)、装備名付け(武器・防具/20文字/サニタイズ)、専用武器預かり所(3枠/名前重複禁止/装備中引出不可) |
-| `lib/secret.cgi` | 秘密の店 (@ヒミツジ) | `internal/secretshop/` | [design/shops.md](../design/shops.md)<br/>[api/paths/secretshop.json](../api/paths/secretshop.json) | Review against source | 転職7回以上(`job_lv >= 7`)、原典8種3倍価格、手持ち直接購入時の図鑑自動登録連携(`RecordItemDiscovered`)、満杯時Depot転送(`depot.FindOrCreate`)、ぱふぱふ会話のみ |
-| `lib/black_market.cgi` | 闇市場 (@闇商人) | `internal/blackmarket/` | [design/black-market.md](../design/black-market.md)<br/>[api/paths/blackmarket.json](../api/paths/blackmarket.json) | Review against source | `job_lv>=15` で入場、純粋レアポイント物々交換、手持ち/Depot生贄、24種景品Depot直送、原典台詞 |
+| `lib/secret.cgi` | 秘密の店 (@ヒミツジ) | `internal/secretshop/` | [design/shops.md](../design/shops.md) | Review against source | 転職7回以上(`job_lv >= 7`)、原典8種3倍価格、手持ち直接購入時の図鑑自動登録連携(`RecordItemDiscovered`)、満杯時Depot転送(`depot.FindOrCreate`)、ぱふぱふ会話のみ |
+| `lib/black_market.cgi` | 闇市場 (@闇商人) | `internal/blackmarket/` | [design/black-market.md](../design/black-market.md) | Review against source | `job_lv>=15` で入場、純粋レアポイント物々交換、手持ち/Depot生贄、24種景品Depot直送、原典台詞 |
 | `lib/gem_store.cgi` | 宝石店 (@ジェマ) | `internal/gemstore/` | [design/gemstore.md](../design/gemstore.md) | Review against source | 宝石購入(5倍価格・GemBox格納)、売却(50%)、56種加工レシピ、5種未鑑定オーブ鑑定。ギフト時のメール通知のみ未実装 |
 | `lib/store.cgi`, `lib/goods.cgi` | プレイヤーストア・オラクル屋 | `internal/store/` | [design/store.md](../design/store.md)<br/>[api/paths/stores.json](../api/paths/stores.json) | Review against source | 店舗建設(50,000G/90日)、ゴールド・物々交換出品、壁紙50種（最大50,000G実控除）・看板(5,000G残高要・控除なし)・家具15種内装(1,000G残高要・控除なし)。詳細は [design/store.md](../design/store.md#customization-charges-1146) 参照。 |
 | `lib/bar.cgi` | ルイーダの酒場 (@ルイーダ) | `internal/tavern/` | [design/tavern.md](../design/tavern.md)<br/>[api/paths/tavern.json](../api/paths/tavern.json) | Review against source | 食事注文・福引券付与、出前予約・冒険完了時自動配達フック（架空NPCおつかい・小包便撤廃） |
-| `lib/bank.cgi` | ゴールド銀行 (@タクシード) | `internal/bank/` | [design/bank.md](../design/bank.md)<br/>[api/paths/bank.json](../api/paths/bank.json) | Review against source | 預金・引出、上限99兆G、所持金999,999G上限クランプ＆超過預金返還。架空の日次利息は非存在 |
+| `lib/bank.cgi` | ゴールド銀行 (@タクシード) | `internal/bank/` | [design/bank.md](../design/bank.md) | Review against source | 預金・引出、上限99兆G、所持金999,999G上限クランプ＆超過預金返還。架空の日次利息は非存在 |
 | `lib/auction.cgi` | オークション (@ワイルド) | `internal/auction/` | [design/auction.md](../design/auction.md)<br/>[api/paths/auction.json](../api/paths/auction.json) | Review against source | リアルタイムP2P送金・装備/アイテムDepot直送譲渡(`＠おくる`)、他PC調査(`＠しらべる`)。架空の入札・競売システムは非存在 |
 | `lib/free.cgi` | フリーマーケット | `internal/fleamarket/` | [design/fleamarket.md](../design/fleamarket.md) | Review against source | Depotから直接出品(サーバー上限120件・個人上限5+OverFlea)、購入品・キャンセル品はDepotへ即時格納 |
 
@@ -176,7 +176,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/name_change.cgi` | 命名の館 (@アストロン) | `internal/character/` | [design/character-customization.md](../design/character-customization.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | ゴールド手数料(名前変更: 500,000G、性転換: 10,000G)、名前文字数1〜8文字・空白拒否（`name_change.cgi:121–125`）、重複ネーム検証、ギルド・追放投票・フリマガード、現在職の性別制限検証 |
 | `lib/custom_image.cgi`, `lib/upload_image.cgi` | 画像設定所 | `internal/character/` | [design/character-customization.md](../design/character-customization.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `lib/reborn.cgi` | 復活の祭壇 (@巫女) | `internal/altar/`<br/>`internal/core/progression/` | [design/altar-of-rebirth.md](../design/altar-of-rebirth.md)<br/>[design/progression.md](../design/progression.md)<br/>[api/paths/altar.json](../api/paths/altar.json) | Review against source | ラーミア復活(6オーブ/30分)、4大旅行アイテムDepot直送。🚨 Lv1転生は架空として完全撤廃済。Lv99→150限界突破は天界(`god.cgi`)で実装 |
-| `lib/chapel.cgi` | 礼拝堂 (@シスター) | `internal/chapel/` | [design/chapel.md](../design/chapel.md)<br/>[api/paths/chapel.json](../api/paths/chapel.json) | Review against source | 祈願枠と効果期間の分離、同日睡眠後の再祈願拒否、日跨ぎ睡眠による枠解除・効果終了、残留chapel_reset安全化。詳細は [design/chapel.md](../design/chapel.md) 参照。 |
+| `lib/chapel.cgi` | 礼拝堂 (@シスター) | `internal/chapel/` | [design/chapel.md](../design/chapel.md) | Review against source | 祈願枠と効果期間の分離、同日睡眠後の再祈願拒否、日跨ぎ睡眠による枠解除・効果終了、残留chapel_reset安全化。詳細は [design/chapel.md](../design/chapel.md) 参照。 |
 | `lib/god.cgi` | 天界 (@神) | `internal/god/` | [design/god.md](../design/god.md)<br/>[api/paths/god.json](../api/paths/god.json) | Review against source | 20種の願い(メイド・オルテガ・アバター・全ステータス+40: 現在HP/MP維持)、Lv99→150限界突破 |
 | `lib/u_god.cgi` | 裏天界 (@裏神) | `internal/god/` | [design/god.md](../design/god.md)<br/>[api/paths/god.json](../api/paths/god.json) | Review against source | 5大保管庫拡張(牧場・預かり所+50/段、各最大5段階) |
 | `lib/medal.cgi` | メダル王 (@メダル王) | `internal/medal/` | [design/medal.md](../design/medal.md)<br/>[design/achievements.md](../design/achievements.md)<br/>[api/paths/medal.json](../api/paths/medal.json) | Review against source | 全15段階の小さなメダル景品交換、景品はDepotへ直送 |

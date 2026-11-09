@@ -42,18 +42,10 @@ var DefaultTalkDialogues = []string{
 }
 
 const (
-	InspectDialogue        = "@ヒミツジ「オイラは羊の@ヒミツジだメェ〜。羊の国から来たよ…ゴホッゴホッ…羊の国から来たメェ〜」"
-	PuffPuffDialogue       = "パフパフ♥ パフパフ♥ パフパフ♥ ……… どうだ わしのパフパフは気持ちいいだろう"
+	InspectDialogue = "@ヒミツジ「オイラは羊の@ヒミツジだメェ〜。羊の国から来たよ…ゴホッゴホッ…羊の国から来たメェ〜」"
+	// PuffPuffDialogueFormat is the ＠ぱふぱふ reply; %s is the actor's name (secret.cgi:79-84).
 	PuffPuffDialogueFormat = "パフパフ♥ パフパフ♥ パフパフ♥ ……… どうだ %s わしのパフパフは気持ちいいだろう"
 )
-
-// FormatPuffPuffMessage formats the puff-puff dialogue with the character name, matching legacy CGI (secret.cgi).
-func FormatPuffPuffMessage(charName string) string {
-	if strings.TrimSpace(charName) == "" {
-		return PuffPuffDialogue
-	}
-	return fmt.Sprintf(PuffPuffDialogueFormat, charName)
-}
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
@@ -181,14 +173,6 @@ type ShopStatus struct {
 	Items        []Item `json:"items"`
 }
 
-// PuffPuffResult contains the result of the NPC puff-puff interaction.
-// Under legacy parity (secret.cgi), puff-puff provides flavor dialogue only with no healing.
-type PuffPuffResult struct {
-	CharacterID string `json:"character_id"`
-	NPCName     string `json:"npc_name"`
-	Message     string `json:"message"`
-}
-
 // CheckEligibility returns true if the character meets secret shop discovery qualifications.
 // The original CGI (item.cgi:himitsunomise) is accessible only when job_lv >= 7.
 func CheckEligibility(c corecharacter.Character) bool {
@@ -220,27 +204,6 @@ func (s *Service) GetShopStatus(ctx context.Context, characterID string) (*ShopS
 		NPCName:      NPCName,
 		IsEligible:   true,
 		Items:        items,
-	}, nil
-}
-
-// PuffPuff provides the playful secret puff-puff service with flavor text only (no stat modifications).
-func (s *Service) PuffPuff(ctx context.Context, characterID string) (*PuffPuffResult, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, ErrCharacterNotFound
-	}
-	char, err := s.characterRepo.FindByID(ctx, characterID)
-	if err != nil {
-		return nil, ErrCharacterNotFound
-	}
-
-	if !CheckEligibility(char) {
-		return nil, ErrAccessDenied
-	}
-
-	return &PuffPuffResult{
-		CharacterID: char.ID,
-		NPCName:     NPCName,
-		Message:     FormatPuffPuffMessage(char.Name),
 	}, nil
 }
 

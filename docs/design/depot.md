@@ -128,8 +128,8 @@ Stored items sell at floor(base price × 0.5) per unit without withdrawal. Legac
 
 ### 5. Mailing Items and Money (`おくる`)
 
-Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Open: recipient Home delivery notices (#1110).
+Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Legacy gold goes through `send_money` as a pending remittance, while Go credits the recipient's wallet at once (#1109). Open: recipient Home delivery notices (#1110).
 
 ## Gateway Observation and Retained Operations
 
-Depot is a pageable town destination observed through character context (`depot.cgi:49–99`; capacity and occupied-row rule `system.cgi:1267–1288`). A stack occupies one slot. GET never creates or saves a Depot, sorts it or moves items. All Depot operations use Gateway commands except send-money, which stays on REST. The remaining migration, shared NPC/presence/log effects and legacy parity are open (#947).
+Depot is a pageable town destination observed through character context (`depot.cgi:49–99`; capacity and occupied-row rule `system.cgi:1267–1288`). A stack occupies one slot. GET never creates or saves a Depot, sorts it or moves items. All Depot operations, including gold sending (`depot_send_money` with explicit `amount` and `recipient_character_id`), use Gateway commands; no Depot REST route remains. Command place-log echoes (#1941), presence and legacy parity remain open.

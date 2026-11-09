@@ -92,7 +92,7 @@ logs stay with their own features.
 - **Talk**: `npc_talk` logs the actor row `＠はなす` and a random word as the NPC row, and starts the wait. A facility without words would answer privately with `返事がない、ただのしかばねのようだ…`.
 - **Inspect**: `npc_inspect` returns the facility's `shiraberu_npc` text, or the default `しかし何も見つからなかった…`, to the actor only (`private: true`). It writes no row and starts no wait (`WaitPrivate`).
 - Legacy word lines that embed live facts (Gem Store and Accessory item recommendations, Depot capacity) are omitted until those facts are wired.
-- Facility-specific NPC acts such as `ぱふぱふ` stay facility commands.
+- Facility-specific NPC acts stay facility commands in the `npc` category, such as SecretShop `secretshop_puffpuff`. It logs `＠ぱふぱふ` and its reply as rows private to the actor and starts the wait.
 
 ### Members ([#1943](https://github.com/witchcraze/party2re/issues/1943))
 

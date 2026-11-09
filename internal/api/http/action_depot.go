@@ -34,7 +34,7 @@ func (ids *depotSaleItemIDs) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// WithDepot configures Depot REST operations and its Gateway commands.
+// WithDepot configures the Depot Gateway commands.
 func WithDepot(service DepotService) Option {
 	return func(h *Handler) {
 		h.depot = service
@@ -42,6 +42,7 @@ func WithDepot(service DepotService) Option {
 			withActionCommand[depositItemRequest]("depot_deposit", nil, nil)(h)
 			withActionCommand[withdrawItemRequest]("depot_withdraw", nil, nil)(h)
 			withActionCommand[sendItemRequest]("depot_send_item", nil, nil)(h)
+			withActionCommand[sendMoneyRequest]("depot_send_money", nil, nil)(h)
 			withActionCommand[struct{}]("depot_sort", nil, nil)(h)
 			withActionCommand[struct{}]("depot_expand", nil, nil)(h)
 			withActionCommand[sellDepotItemRequest]("depot_sell", nil, nil)(h)
@@ -69,6 +70,14 @@ func WithDepot(service DepotService) Option {
 				return nil, err
 			}
 			return sendItemResponse{Depot: toDepotResponse(value), RecipientCharacterID: recipientID, ItemID: itemID}, nil
+		}, depotActionRejection)(h)
+		withActionCommand("depot_send_money", func(ctx context.Context, actorID string, params sendMoneyRequest) (any, error) {
+			recipientID := strings.TrimSpace(params.RecipientCharacterID)
+			value, err := service.SendMoney(ctx, actorID, recipientID, params.Amount)
+			if err != nil {
+				return nil, err
+			}
+			return sendMoneyResponse{Depot: toDepotResponse(value), RecipientCharacterID: recipientID, Amount: params.Amount}, nil
 		}, depotActionRejection)(h)
 		withActionCommand("depot_sort", func(ctx context.Context, actorID string, _ struct{}) (any, error) {
 			value, err := service.SortItems(ctx, actorID)
@@ -124,7 +133,7 @@ func depotActionRejection(err error) (int, ErrorDetail) {
 	case errors.Is(err, depot.ErrEmptyItemList):
 		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_EMPTY_ITEM_LIST", Message: "Select depot items to sell."}
 	case errors.Is(err, depot.ErrInvalidAmount):
-		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_INVALID_AMOUNT", Message: "Invalid depot sale amount."}
+		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_INVALID_AMOUNT", Message: "Invalid depot amount."}
 	case errors.Is(err, depot.ErrInvalidQuantity):
 		return http.StatusBadRequest, ErrorDetail{Code: "DEPOT_INVALID_QUANTITY", Message: "Invalid depot item quantity."}
 	case errors.Is(err, depot.ErrItemNotFound):

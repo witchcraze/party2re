@@ -21,6 +21,7 @@ func TestRetiredSecretShopRoutesDoNotReadOrExecute(t *testing.T) {
 		for _, route := range []struct{ method, suffix string }{
 			{http.MethodGet, ""},
 			{http.MethodPost, "/purchase"},
+			{http.MethodPost, "/puffpuff"},
 		} {
 			for _, actor := range []struct{ id, token string }{{"hero", ""}, {"hero", "session"}, {"other", "session"}, {"missing", "session"}} {
 				path := "/characters/" + actor.id + "/secretshop" + route.suffix
@@ -37,20 +38,19 @@ func TestRetiredSecretShopRoutesDoNotReadOrExecute(t *testing.T) {
 	}
 }
 
-func TestOpenAPISecretShopRetirementKeepsNPCAndGateway(t *testing.T) {
+func TestOpenAPISecretShopRetirementKeepsGateway(t *testing.T) {
 	var spec struct {
 		Paths map[string]map[string]json.RawMessage `json:"paths"`
 	}
 	if err := json.Unmarshal(OpenAPISpec(), &spec); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/characters/{id}/secretshop", "/characters/{id}/secretshop/purchase", "/characters/{id}/secretshop/talk", "/characters/{id}/secretshop/inspect"} {
+	for _, path := range []string{"/characters/{id}/secretshop", "/characters/{id}/secretshop/purchase", "/characters/{id}/secretshop/talk", "/characters/{id}/secretshop/inspect", "/characters/{id}/secretshop/puffpuff"} {
 		if _, exists := spec.Paths[path]; exists {
 			t.Errorf("retired path remains in OpenAPI: %s", path)
 		}
 	}
 	for _, route := range []struct{ method, path string }{
-		{"post", "/characters/{id}/secretshop/puffpuff"},
 		{"post", "/api/v1/characters/{id}/actions"},
 		{"get", "/api/v1/characters/{id}/context"},
 	} {

@@ -27,6 +27,7 @@ func TestRetiredDepotRoutesDoNotReadOrExecute(t *testing.T) {
 			{http.MethodPost, "/deposit"},
 			{http.MethodPost, "/send-item"},
 			{http.MethodPost, "/withdraw"},
+			{http.MethodPost, "/send-money"},
 		} {
 			for _, actor := range []struct{ id, token string }{{"hero", ""}, {"hero", "session"}, {"other", "session"}, {"missing", "session"}} {
 				path := "/characters/" + actor.id + "/depot" + route.suffix
@@ -43,31 +44,16 @@ func TestRetiredDepotRoutesDoNotReadOrExecute(t *testing.T) {
 	}
 }
 
-func TestOpenAPIDepotRetirementKeepsRemainingOperationsAndGateway(t *testing.T) {
+func TestOpenAPIDepotRetirementKeepsGateway(t *testing.T) {
 	var spec struct {
 		Paths map[string]map[string]json.RawMessage `json:"paths"`
 	}
 	if err := json.Unmarshal(OpenAPISpec(), &spec); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/characters/{id}/depot", "/characters/{id}/depot/expand", "/characters/{id}/depot/sell", "/characters/{id}/depot/sell-batch", "/characters/{id}/depot/sort"} {
-		if _, exists := spec.Paths[path]; exists {
-			t.Errorf("retired path remains in OpenAPI: %s", path)
-		}
-	}
-	if _, exists := spec.Paths["/characters/{id}/depot/deposit"]; exists {
-		t.Error("retired deposit path remains in OpenAPI")
-	}
-	if _, exists := spec.Paths["/characters/{id}/depot/send-item"]; exists {
-		t.Error("retired send-item path remains in OpenAPI")
-	}
-	if _, exists := spec.Paths["/characters/{id}/depot/withdraw"]; exists {
-		t.Error("retired withdraw path remains in OpenAPI")
-	}
-	for _, suffix := range []string{"send-money"} {
-		path := "/characters/{id}/depot/" + suffix
-		if len(spec.Paths[path]["post"]) == 0 {
-			t.Errorf("retained Depot operation missing: POST %s", path)
+	for _, suffix := range []string{"", "/expand", "/sell", "/sell-batch", "/sort", "/deposit", "/send-item", "/withdraw", "/send-money"} {
+		if _, exists := spec.Paths["/characters/{id}/depot"+suffix]; exists {
+			t.Errorf("retired path remains in OpenAPI: /characters/{id}/depot%s", suffix)
 		}
 	}
 	for _, route := range []struct{ method, path string }{

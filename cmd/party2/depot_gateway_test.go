@@ -142,3 +142,38 @@ func TestWireDepotGatewayMovementConcurrency_Integration(t *testing.T) {
 	}
 	f.assertMoved(t, item.SlotMainHand, true, sends.Load() == 1)
 }
+
+func (f depotEquipmentFixture) gatewaySendMoney(router http.Handler, amount int) *httptest.ResponseRecorder {
+	body := fmt.Sprintf(`{"action":"depot_send_money","params":{"amount":%d,"recipient_character_id":"%s"}}`, amount, f.recipient.ID)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/characters/"+f.sender.ID+"/actions", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer session")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+	return w
+}
+
+// Concurrent Gateway remittances conserve gold and never overdraw the sender.
+func TestWireDepotGatewaySendMoneyConcurrency_Integration(t *testing.T) {
+	f := newDepotEquipmentFixture(t, item.SlotMainHand, false)
+	router := f.gateway(t)
+	if w := f.gatewaySendMoney(router, 1001); w.Code != 400 || !strings.Contains(w.Body.String(), `"DEPOT_INSUFFICIENT_FUNDS"`) {
+		t.Fatalf("overdraft: %d %s", w.Code, w.Body.String())
+	}
+	var sent atomic.Int64
+	result := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(_, _ int) error {
+		w := f.gatewaySendMoney(router, 300)
+		if w.Code == 400 && strings.Contains(w.Body.String(), `"DEPOT_INSUFFICIENT_FUNDS"`) {
+			return nil
+		}
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `"success":true`) {
+			return fmt.Errorf("Gateway remittance: %d %s", w.Code, w.Body.String())
+		}
+		sent.Add(1)
+		return nil
+	})
+	after := f.state(t)
+	if result.Failures != 0 || sent.Load() != 3 || after.sender.Money != 100 || after.recipient.Money != 2900 {
+		t.Fatalf("result=%+v sent=%d sender=%d recipient=%d", result, sent.Load(), after.sender.Money, after.recipient.Money)
+	}
+}

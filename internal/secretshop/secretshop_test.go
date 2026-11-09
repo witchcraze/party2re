@@ -328,36 +328,6 @@ func TestHelperQuestFilter(t *testing.T) {
 	}
 }
 
-func TestNPCInteractions(t *testing.T) {
-	svc, charRepo, _, _ := setupTest(t)
-	ctx := context.Background()
-
-	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 50000)
-	_ = charRepo.Update(ctx, eligible)
-
-	// PuffPuff - Legacy parity: returns flavor message only, NO HEALING
-	initialHP := eligible.Stats.HP
-	initialMP := eligible.Stats.MP
-	puffResult, err := svc.PuffPuff(ctx, "char-high")
-	if err != nil {
-		t.Fatalf("PuffPuff failed: %v", err)
-	}
-	expectedPuffMsg := secretshop.FormatPuffPuffMessage("Veteran")
-	if puffResult.Message != expectedPuffMsg {
-		t.Fatalf("unexpected puff message: got %q, want %q", puffResult.Message, expectedPuffMsg)
-	}
-
-	// Verify character state was NOT mutated (no HP/MP healing)
-	charAfter, err := charRepo.FindByID(ctx, "char-high")
-	if err != nil {
-		t.Fatalf("FindByID failed: %v", err)
-	}
-	if charAfter.Stats.HP != initialHP || charAfter.Stats.MP != initialMP {
-		t.Fatalf("puff-puff must not heal stats: HP %d->%d, MP %d->%d",
-			initialHP, charAfter.Stats.HP, initialMP, charAfter.Stats.MP)
-	}
-}
-
 func TestPurchaseItemDirectToInventory(t *testing.T) {
 	depotRepo := newMockDepotRepo()
 	svc, charRepo, invRepo, _ := setupTest(t, secretshop.WithDepotRepository(depotRepo))

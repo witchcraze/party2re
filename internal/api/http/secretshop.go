@@ -2,19 +2,14 @@ package http
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/secretshop"
 )
 
-// SecretShopService defines the secret underground shop operations exposed over HTTP.
+// SecretShopService defines the secret shop operations behind its scene and purchase command.
 type SecretShopService interface {
 	GetShopStatus(ctx context.Context, characterID string) (*secretshop.ShopStatus, error)
-	PuffPuff(ctx context.Context, characterID string) (*secretshop.PuffPuffResult, error)
 	PurchaseItem(ctx context.Context, characterID string, itemID string, quantity int) (*secretshop.PurchaseResult, error)
 }
 
@@ -28,47 +23,10 @@ type secretShopPurchaseResponse struct {
 	NPCMessage string `json:"npc_message"`
 }
 
-func (h *Handler) handleSecretShopPuffPuff(w http.ResponseWriter, r *http.Request) {
-	if h.secretshop == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("secret shop service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		result, err := h.secretshop.PuffPuff(r.Context(), char.ID)
-		if err != nil {
-			h.writeSecretShopError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, result)
-	})
-}
-
 func toSecretShopPurchaseResponse(result *secretshop.PurchaseResult, charName string) secretShopPurchaseResponse {
 	message := fmt.Sprintf("%sメェ〜。持ってけメェ〜", result.Item.Name)
 	if result.TransferredToDepot {
 		message = fmt.Sprintf("%sは%sメェ〜の預かり所の方に投げましたメェ〜", result.Item.Name, charName)
 	}
 	return secretShopPurchaseResponse{PurchaseResult: result, NPCMessage: message}
-}
-
-func (h *Handler) writeSecretShopError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, secretshop.ErrAccessDenied):
-		writeError(w, http.StatusForbidden, err)
-	case errors.Is(err, secretshop.ErrCharacterNotFound), errors.Is(err, secretshop.ErrItemNotFound):
-		writeError(w, http.StatusNotFound, err)
-	case errors.Is(err, secretshop.ErrInsufficientFunds),
-		errors.Is(err, secretshop.ErrInvalidQuantity),
-		errors.Is(err, secretshop.ErrPriceOverflow):
-		writeError(w, http.StatusBadRequest, err)
-	case errors.Is(err, secretshop.ErrDepotNotConfigured):
-		writeError(w, http.StatusInternalServerError, err)
-	case errors.Is(err, secretshop.ErrItemUnavailableInHelperQuest):
-		writeError(w, http.StatusConflict, err)
-	default:
-		writeError(w, http.StatusInternalServerError, err)
-	}
 }

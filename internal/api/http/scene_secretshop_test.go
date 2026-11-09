@@ -27,10 +27,6 @@ type secretShopSceneService struct {
 	remove bool
 }
 
-func (*secretShopSceneService) PuffPuff(context.Context, string) (*secretshop.PuffPuffResult, error) {
-	return nil, errors.New("GET must not execute NPC puff-puff")
-}
-
 func (s *secretShopSceneService) GetShopStatus(ctx context.Context, actor string) (*secretshop.ShopStatus, error) {
 	s.reads++
 	if s.err != nil {
@@ -44,6 +40,11 @@ func (s *secretShopSceneService) GetShopStatus(ctx context.Context, actor string
 }
 
 func secretShopSceneRouter(t *testing.T, options ...func(*playercontext.Service)) (*secretShopGatewayFixture, *gatewayNavigationStore, *secretShopSceneService, http.Handler) {
+	t.Helper()
+	return secretShopSceneRouterWith(t, nil, options...)
+}
+
+func secretShopSceneRouterWith(t *testing.T, handlerOptions []Option, options ...func(*playercontext.Service)) (*secretShopGatewayFixture, *gatewayNavigationStore, *secretShopSceneService, http.Handler) {
 	t.Helper()
 	f := newSecretShopGatewayFixture(t)
 	store := &gatewayNavigationStore{}
@@ -64,7 +65,11 @@ func secretShopSceneRouter(t *testing.T, options ...func(*playercontext.Service)
 	}
 	h, err := NewHandler(f.gatewayFixture, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithSecretShop(reads), WithPlayerContext(pc), WithDungeon(&dungeonSceneFixture{observeExpeditionFn: func(context.Context, string) (*dungeon.ExpeditionObservation, error) {
 		return &dungeon.ExpeditionObservation{ID: "active", LeaderID: "leader", Status: "in_progress", Directions: []dungeon.Direction{}}, nil
-	}}), func(h *Handler) { h.homes = f.gatewayFixture })
+	}}), func(h *Handler) { h.homes = f.gatewayFixture }, func(h *Handler) {
+		for _, option := range handlerOptions {
+			option(h)
+		}
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,16 +2,11 @@ package http
 
 import (
 	"context"
-	"errors"
-	"net/http"
-	"strings"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
-// DepotService defines depot storage operations exposed over HTTP.
+// DepotService defines the depot operations behind the Gateway commands and scene.
 type DepotService interface {
 	GetDepot(ctx context.Context, characterID string) (depot.Depot, error)
 	DepositItem(ctx context.Context, characterID string, itemInstanceID string) (depot.Depot, error)
@@ -93,53 +88,4 @@ func toDepotResponse(d depot.Depot) depotResponse {
 		ItemCount:   len(d.Items),
 		Items:       items,
 	}
-}
-
-func mapDepotHTTPError(w http.ResponseWriter, err error) {
-	if errors.Is(err, depot.ErrNotFound) ||
-		errors.Is(err, depot.ErrItemNotFound) ||
-		errors.Is(err, depot.ErrRecipientNotFound) {
-		writeError(w, http.StatusNotFound, err)
-		return
-	}
-	if errors.Is(err, depot.ErrDepotFull) ||
-		errors.Is(err, depot.ErrInventoryFull) ||
-		errors.Is(err, depot.ErrRecipientDepotFull) ||
-		errors.Is(err, depot.ErrInsufficientFunds) ||
-		errors.Is(err, depot.ErrInvalidAmount) ||
-		errors.Is(err, depot.ErrInvalidCharacterID) ||
-		errors.Is(err, depot.ErrInvalidItemInstanceID) ||
-		errors.Is(err, depot.ErrSelfTransferNotAllowed) ||
-		errors.Is(err, depot.ErrEmptyItemList) {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	writeError(w, http.StatusInternalServerError, err)
-}
-
-func (h *Handler) handleDepotSendMoney(w http.ResponseWriter, r *http.Request) {
-	if h.depot == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req sendMoneyRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		recipientID := strings.TrimSpace(req.RecipientCharacterID)
-		dep, err := h.depot.SendMoney(r.Context(), char.ID, recipientID, req.Amount)
-		if err != nil {
-			mapDepotHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, sendMoneyResponse{
-			Depot:                toDepotResponse(dep),
-			RecipientCharacterID: recipientID,
-			Amount:               req.Amount,
-		})
-	})
 }
