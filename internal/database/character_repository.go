@@ -210,7 +210,6 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM contest_entries WHERE character_id = ?`,
 		`DELETE FROM character_photos WHERE character_id = ?`,
 		`DELETE FROM fleamarket_listings WHERE seller_character_id = ?`,
-		`DELETE FROM character_letters WHERE sender_character_id = ? OR recipient_character_id = ?`,
 		`DELETE FROM character_companion_phrases WHERE character_id = ?`,
 		`DELETE FROM character_delivery_notices WHERE character_id = ?`,
 		`DELETE FROM character_homes WHERE character_id = ?`,
@@ -246,6 +245,11 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM character_presence_snapshots WHERE character_id = ?`,
 		`DELETE FROM character_profiles WHERE character_id = ?`,
 		`DELETE FROM characters WHERE id = ?`,
+		// Letters keep the counterpart's copy (#1094): hide this character's copies, then purge unowned rows.
+		// Running after the character delete holds its row lock, as CreateLetter does, so no letter arrives unflagged.
+		`UPDATE character_letters SET is_deleted_by_sender = TRUE WHERE sender_character_id = ?`,
+		`UPDATE character_letters SET is_deleted_by_recipient = TRUE WHERE recipient_character_id = ?`,
+		`DELETE FROM character_letters WHERE (sender_character_id = ? OR recipient_character_id = ?) AND is_deleted_by_sender AND is_deleted_by_recipient`,
 	}
 
 	for _, q := range queries {
