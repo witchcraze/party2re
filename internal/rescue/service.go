@@ -3,6 +3,7 @@ package rescue
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -25,6 +26,11 @@ type ActionCleaner interface {
 	ClearActiveActions(ctx context.Context, characterID string) (bool, error)
 }
 
+// ActivityReader lists feature activities still owned by the character.
+type ActivityReader interface {
+	ActivityKinds(ctx context.Context, ownerID, characterID string) ([]string, error)
+}
+
 type TimerService interface {
 	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
 	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
@@ -35,6 +41,27 @@ type Service struct {
 	characters CharacterRepository
 	cleaner    ActionCleaner
 	timer      TimerService
+	activities ActivityReader
+}
+
+// SetActivityReader wires the feature activity observation after composition.
+func (s *Service) SetActivityReader(r ActivityReader) {
+	s.activities = r
+}
+
+// ensureNoActivity rejects rescue while feature-owned state the cleaner cannot end remains.
+func (s *Service) ensureNoActivity(ctx context.Context, char corecharacter.Character) error {
+	if s.activities == nil {
+		return nil
+	}
+	kinds, err := s.activities.ActivityKinds(ctx, char.PlayerID, char.ID)
+	if err != nil {
+		return err
+	}
+	if len(kinds) > 0 {
+		return fmt.Errorf("%w: %s", ErrActivityRemaining, strings.Join(kinds, ","))
+	}
+	return nil
 }
 
 func NewService(
@@ -53,13 +80,18 @@ func NewService(
 
 // Unstuck resets the character's active and pending scheduled actions without applying
 // a rescue penalty cooldown (admin refresh per legacy party2/admin.cgi:121-131).
+// It returns ErrActivityRemaining without changes while feature activity remains.
 func (s *Service) Unstuck(ctx context.Context, characterID string) error {
 	characterID = strings.TrimSpace(characterID)
 	if characterID == "" {
 		return ErrInvalidCharacterID
 	}
 
-	if _, err := s.characters.FindByID(ctx, characterID); err != nil {
+	char, err := s.characters.FindByID(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	if err := s.ensureNoActivity(ctx, char); err != nil {
 		return err
 	}
 
@@ -74,6 +106,7 @@ func (s *Service) Unstuck(ctx context.Context, characterID string) error {
 
 // EmergencyRescue resets player character state when stuck or encountering errors, applying a sleep penalty cooldown.
 // If the character is safe in town with no active actions, returns early with 0 penalty cooldown per legacy rescue.cgi:56-65.
+// Feature activity the scheduler cannot end returns ErrActivityRemaining without changes.
 func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (RescueRecord, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return RescueRecord{}, ErrInvalidCharacterID
@@ -84,6 +117,9 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 
 	char, err := s.characters.FindByID(ctx, characterID)
 	if err != nil {
+		return RescueRecord{}, err
+	}
+	if err := s.ensureNoActivity(ctx, char); err != nil {
 		return RescueRecord{}, err
 	}
 

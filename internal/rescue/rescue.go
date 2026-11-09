@@ -14,6 +14,7 @@ var (
 	ErrInvalidReason         = errors.New("rescue reason cannot be empty")
 	ErrCharacterUnderPenalty = errors.New("character is currently under rescue penalty cooldown")
 	ErrNoRescueRecord        = errors.New("no rescue record found")
+	ErrActivityRemaining     = errors.New("character still has unrecovered feature activity")
 )
 
 type RescueRecord struct {

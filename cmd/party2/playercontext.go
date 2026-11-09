@@ -72,6 +72,6 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 			},
 		})
 	}
-	readers := contextActivityReaders{party: cmbt.party, pvp: cmbt.pvp, gvg: cmbt.gvg, dungeon: cmbt.dungeon, challenge: cmbt.challenge, casino: misc.casino, normal: cmbt.normal}
+	readers := newContextActivityReaders(cmbt, misc)
 	return playercontext.NewService(core.charRepo, soc.schedRepo, contextSleepReader{TimerReader: soc.timer, home: soc.home}, append([]func(*playercontext.Service){playercontext.WithNavigation(core.navigation, scenes...), playercontext.WithActivities(readers.read)}, options...)...)
 }

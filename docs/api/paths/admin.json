@@ -64,6 +64,16 @@
           },
           "description": "Character not found"
         },
+        "409": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Feature activity remains; nothing was cleared"
+        },
         "500": {
           "content": {
             "application/json": {

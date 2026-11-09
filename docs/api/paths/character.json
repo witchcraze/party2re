@@ -111,7 +111,7 @@
               }
             }
           },
-          "description": "Current entry or Sleep/CanWake exclusion: ACTION_UNAVAILABLE. Home service rejections: HOME_ALREADY_SLEEPING, HOME_STILL_SLEEPING (early Wake does not restore vitality), HOME_NOT_SLEEPING, HOME_WAKE_IN_PROGRESS. Preserves the recognized rejection and refreshes context when possible. Challenge revision or different-action receipt conflicts use CHALLENGE_REVISION_CONFLICT."
+          "description": "Current entry or Sleep/CanWake exclusion: ACTION_UNAVAILABLE. Home service rejections: HOME_ALREADY_SLEEPING, HOME_STILL_SLEEPING (early Wake does not restore vitality), HOME_NOT_SLEEPING, HOME_WAKE_IN_PROGRESS. Preserves the recognized rejection and refreshes context when possible. Challenge revision or different-action receipt conflicts use CHALLENGE_REVISION_CONFLICT. Rescue returns RESCUE_ACTIVITY_REMAINING without changes while party, PvP (including unpublished claims), GvG, dungeon, challenge, casino or adventure activity remains."
         },
         "415": {
           "content": {

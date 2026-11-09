@@ -352,3 +352,66 @@ func TestEmergencyRescueActionCleanerFailure(t *testing.T) {
 		t.Fatalf("expected timer not locked, got locked=%v, err=%v", locked, err)
 	}
 }
+
+type stubActivityReader struct {
+	kinds         []string
+	err           error
+	owner, target string
+}
+
+func (r *stubActivityReader) ActivityKinds(_ context.Context, ownerID, characterID string) ([]string, error) {
+	r.owner, r.target = ownerID, characterID
+	return r.kinds, r.err
+}
+
+func TestRescueRejectsRemainingFeatureActivity(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	readFailure := errors.New("activity store down")
+	for _, tc := range []struct {
+		name    string
+		reader  *stubActivityReader
+		wantErr error
+	}{
+		{"activity without scheduled work", &stubActivityReader{kinds: []string{"dungeon", "pvp"}}, ErrActivityRemaining},
+		{"observation failure", &stubActivityReader{err: readFailure}, readFailure},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rescueRepo := &stubRescueRepo{}
+			charRepo := &stubCharRepo{characters: map[string]corecharacter.Character{"char-1": {ID: "char-1", PlayerID: "player-1"}}}
+			cleaner := &stubActionCleaner{stuckCharacters: map[string]bool{}}
+			timerSvc := timer.NewService(nil)
+			if err := timerSvc.SetLock(ctx, timer.CategorySleep, "char-1", time.Hour); err != nil {
+				t.Fatal(err)
+			}
+			svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
+			svc.SetActivityReader(tc.reader)
+
+			if _, err := svc.EmergencyRescue(ctx, "char-1", "stuck", now); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("rescue error = %v, want %v", err, tc.wantErr)
+			}
+			if err := svc.Unstuck(ctx, "char-1"); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("unstuck error = %v, want %v", err, tc.wantErr)
+			}
+			if tc.reader.owner != "player-1" || tc.reader.target != "char-1" {
+				t.Fatalf("activity read for %q/%q", tc.reader.owner, tc.reader.target)
+			}
+			if len(cleaner.clearedCharacters) != 0 || len(rescueRepo.records) != 0 {
+				t.Fatalf("unrecovered rescue changed state: cleared=%v records=%v", cleaner.clearedCharacters, rescueRepo.records)
+			}
+			if rem, err := timerSvc.GetRemainingLock(ctx, timer.CategorySleep, "char-1"); err != nil || rem <= 59*time.Minute || rem > time.Hour {
+				t.Fatalf("sleep changed: %s %v", rem, err)
+			}
+		})
+	}
+
+	t.Run("no activity keeps idle rescue free", func(t *testing.T) {
+		charRepo := &stubCharRepo{characters: map[string]corecharacter.Character{"char-1": {ID: "char-1"}}}
+		svc := NewService(&stubRescueRepo{}, charRepo, &stubActionCleaner{stuckCharacters: map[string]bool{}}, timer.NewService(nil))
+		svc.SetActivityReader(&stubActivityReader{kinds: []string{}})
+		rec, err := svc.EmergencyRescue(ctx, "char-1", "stuck", now)
+		if err != nil || rec.PenaltySeconds != 0 {
+			t.Fatalf("idle rescue = %+v, %v", rec, err)
+		}
+	})
+}
