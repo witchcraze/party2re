@@ -11370,10 +11370,43 @@
       "CharacterProfileView": {
         "properties": {
           "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
           },
           "profile": {
-            "$ref": "#/components/schemas/CharacterProfile"
+            "type": "object",
+            "properties": {
+              "comment": {
+                "type": "string"
+              },
+              "avatar_url": {
+                "type": "string"
+              },
+              "aura_effect": {
+                "type": "integer"
+              },
+              "bio_data": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "maxLength": 160
+                }
+              }
+            },
+            "required": [
+              "comment",
+              "avatar_url",
+              "aura_effect"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

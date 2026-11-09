@@ -97,6 +97,18 @@ func (h *Handler) handleChangeCharacterGender(w http.ResponseWriter, r *http.Req
 	})
 }
 
+type characterProfileResponse struct {
+	Character struct {
+		Name string `json:"name"`
+	} `json:"character"`
+	Profile struct {
+		Comment    string            `json:"comment"`
+		AvatarURL  string            `json:"avatar_url"`
+		AuraEffect int               `json:"aura_effect"`
+		BioData    map[string]string `json:"bio_data,omitempty"`
+	} `json:"profile"`
+}
+
 // handleGetCharacterProfile returns public profile information for a character.
 func (h *Handler) handleGetCharacterProfile(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
@@ -115,7 +127,13 @@ func (h *Handler) handleGetCharacterProfile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusOK, profileView)
+	var response characterProfileResponse
+	response.Character.Name = profileView.Character.Name
+	response.Profile.Comment = profileView.Profile.Comment
+	response.Profile.AvatarURL = profileView.Profile.AvatarURL
+	response.Profile.AuraEffect = profileView.Profile.AuraEffect
+	response.Profile.BioData = profileView.Profile.BioData
+	writeJSON(w, http.StatusOK, response)
 }
 
 // handleUpdateCharacterProfile updates comment, avatar URL, or bio data for a character.

@@ -2212,7 +2212,7 @@
   },
   "/characters/{id}/profile": {
     "get": {
-      "description": "Retrieves public character information including stats, bio comment, avatar URL, aura effect, and custom metadata.",
+      "description": "Returns only the character name and player-written profile (comment, avatar URL, aura effect and optional bio data). Account/character IDs, balances, stats, actual job/gender and internal profile metadata are not exposed.",
       "operationId": "getCharacterProfile",
       "parameters": [
         {
