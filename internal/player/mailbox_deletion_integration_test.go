@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/player"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 // Deleting an identity removes only that identity's mailbox copies (#1094).
@@ -184,4 +185,76 @@ func TestIdentityDeletionPreservesSurvivingMailboxCopies(t *testing.T) {
 	t.Run("account deletion", func(t *testing.T) {
 		run(t, func(a corecharacter.Character) error { return accounts.DeleteAccount(ctx, a.PlayerID, "") })
 	})
+}
+
+// A letter delivered while its recipient is being deleted must not outlive both owners' copies.
+func TestCharacterDeletionRacingLetterDelivery(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	homes, err := database.NewHomeRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chars, err := character.NewService(charRepo, character.WithTransactionProvider(database.NewTransactionProvider(db)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	newChar := func() corecharacter.Character {
+		c, err := database.CreateTestCharacter(ctx, db, "Race")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+
+	const rounds, senders = 3, 4
+	for round := 0; round < rounds; round++ {
+		target := newChar()
+		from := make([]corecharacter.Character, senders)
+		for i := range from {
+			from[i] = newChar()
+		}
+		fns := []func() error{func() error { return chars.Delete(ctx, target.PlayerID, target.ID) }}
+		for _, s := range from {
+			fns = append(fns, func() error {
+				err := homes.CreateLetter(ctx, home.Letter{
+					ID: id.New(), SenderCharacterID: s.ID, SenderName: s.Name,
+					RecipientCharacterID: target.ID, RecipientName: target.Name,
+					Content: "race", Color: "#000000", CreatedAt: time.Now().UTC(),
+				}, 30)
+				if errors.Is(err, home.ErrCharacterNotFound) {
+					return nil
+				}
+				return err
+			})
+		}
+		for i, err := range testutil.RunRace(fns...) {
+			if err != nil {
+				t.Fatalf("round %d fn %d: %v", round, i, err)
+			}
+		}
+		var leaked int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM character_letters WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE`, target.ID).Scan(&leaked); err != nil {
+			t.Fatal(err)
+		}
+		if leaked != 0 {
+			t.Fatalf("round %d: %d letters keep a copy for the deleted recipient", round, leaked)
+		}
+		for _, s := range from {
+			if err := chars.Delete(ctx, s.PlayerID, s.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 }
