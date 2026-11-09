@@ -3316,6 +3316,31 @@
               "type": "object",
               "properties": {
                 "action": {
+                  "type": "string",
+                  "const": "secretshop_puffpuff"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
                   "const": "adventure_start"
                 }
               },
@@ -4552,6 +4577,48 @@
                   "additionalProperties": false,
                   "required": [
                     "item_id",
+                    "recipient_character_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "depot_send_money",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": -9223372036854775808,
+                      "maximum": 9223372036854775807,
+                      "description": "Explicit gold amount; the Depot service rejects nonpositive amounts and amounts above the wallet."
+                    },
+                    "recipient_character_id": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
                     "recipient_character_id"
                   ]
                 }
@@ -12533,44 +12600,6 @@
         ],
         "additionalProperties": false
       },
-      "SendMoneyResponse": {
-        "properties": {
-          "amount": {
-            "type": "integer"
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotResponse"
-          },
-          "recipient_character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "depot",
-          "recipient_character_id",
-          "amount"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "SendMoneyRequest": {
-        "properties": {
-          "amount": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "recipient_character_id": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "type": "object",
-        "required": [
-          "recipient_character_id",
-          "amount"
-        ],
-        "additionalProperties": false
-      },
       "DungeonListResponse": {
         "properties": {
           "dungeons": {
@@ -15725,26 +15754,6 @@
           "reason",
           "penalty_seconds",
           "created_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "SecretshopPuffPuffResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "npc_name",
-          "message"
         ],
         "type": "object",
         "additionalProperties": false

@@ -108,6 +108,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"home_wake", "", "", false},
 		{"depot_expand", "", "", false},
 		{"depot_sort", "", "", false},
+		{"secretshop_puffpuff", "", "", false},
 		{"gemstore_sort", "", "", false},
 		{"gemstore_sell", "item_id", "string", true},
 		{"gemstore_buy", "gem_id", "string", true},
@@ -155,7 +156,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "postCharactersIdDepotWithdraw", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox", "getBlackMarketStatus", "getBlackMarketPoints", "sacrificeBlackMarketItem", "tradeBlackMarketPrize", "getCharactersIdAlchemy", "postCharactersIdAlchemySynthesize", "postCharactersIdAlchemyClaim", "createFleaMarketListing", "purchaseFleaMarketListing", "cancelFleaMarketListing", "listFleaMarketListings", "getFleaMarketListing", "getCharacterFleaMarketListings", "buyGem", "sendGem", "synthesizeGem", "appraiseGemStoreItem", "getCharacterGemBox", "getGemStoreCatalog", "getGemStoreRecipes", "getGemStoreDialogue"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "postCharactersIdDepotWithdraw", "postCharactersIdDepotSendMoney", "experienceSecretShopPuffPuff", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox", "getBlackMarketStatus", "getBlackMarketPoints", "sacrificeBlackMarketItem", "tradeBlackMarketPrize", "getCharactersIdAlchemy", "postCharactersIdAlchemySynthesize", "postCharactersIdAlchemyClaim", "createFleaMarketListing", "purchaseFleaMarketListing", "cancelFleaMarketListing", "listFleaMarketListings", "getFleaMarketListing", "getCharacterFleaMarketListings", "buyGem", "sendGem", "synthesizeGem", "appraiseGemStoreItem", "getCharacterGemBox", "getGemStoreCatalog", "getGemStoreRecipes", "getGemStoreDialogue"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {
@@ -191,6 +192,19 @@ func TestCatalog_DepotSendGatewayContract(t *testing.T) {
 	then, params := gatewayContract(t, loadOpenAPISpec(t), act.ID)
 	if params.Type != "object" || string(params.AdditionalProperties) != "false" || !slices.Equal(then.Required, []string{"params"}) || !slices.Equal(params.Required, act.RequiredParams) || len(params.Properties) != 2 || params.Properties["item_id"].Type != "string" || params.Properties["recipient_character_id"].Type != "string" {
 		t.Fatalf("incorrect send contract: %+v / %+v", then, params)
+	}
+}
+
+func TestCatalog_DepotSendMoneyGatewayContract(t *testing.T) {
+	act, ok := playercontext.GetAction("depot_send_money")
+	if !ok || act.OperationID != "executeCharacterAction" || !slices.Equal(act.RequiredParams, []string{"amount", "recipient_character_id"}) || !act.RequiredGates.Has(playercontext.GateCurrencyCheck) {
+		t.Fatalf("remittance not bound to explicit Gateway inputs: %+v", act)
+	}
+	then, params := gatewayContract(t, loadOpenAPISpec(t), act.ID)
+	amount := params.Properties["amount"]
+	if params.Type != "object" || string(params.AdditionalProperties) != "false" || !slices.Equal(then.Required, []string{"params"}) || !slices.Equal(params.Required, act.RequiredParams) || len(params.Properties) != 2 ||
+		amount.Type != "integer" || amount.Format != "int64" || amount.Minimum.String() != "-9223372036854775808" || amount.Maximum.String() != "9223372036854775807" || params.Properties["recipient_character_id"].Type != "string" {
+		t.Fatalf("incorrect remittance contract: %+v / %+v", then, params)
 	}
 }
 

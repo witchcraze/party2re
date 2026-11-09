@@ -86,6 +86,8 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 			Method:      http.MethodPost,
 			PathPattern: "/api/v1/characters/%s/actions",
 		},
+		"depot_send_money":    {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"secretshop_puffpuff": {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"depot_deposit": {
 			Method:      http.MethodPost,
 			PathPattern: "/api/v1/characters/%s/actions",

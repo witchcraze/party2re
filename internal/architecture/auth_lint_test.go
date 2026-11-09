@@ -380,8 +380,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleExchangeJob":        "job.go",
 		"handleSaveFutureMemory":   "job.go",
 		"handleRecallFutureMemory": "job.go",
-		// Depot
-		"handleDepotSendMoney": "depot.go",
 		// Plantation
 		"handlePlantationSow":       "plantation.go",
 		"handlePlantationFertilize": "plantation.go",
@@ -435,8 +433,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleAccessoryBuy":        "shop.go",
 		"handleAccessorySell":       "shop.go",
 		"handleAccessorySynthesize": "shop.go",
-		// Secret Shop
-		"handleSecretShopPuffPuff": "secretshop.go",
 		// Home
 		"handleBuildHouse":            "home_estate.go",
 		"handleSetCharacterColor":     "home_estate.go",

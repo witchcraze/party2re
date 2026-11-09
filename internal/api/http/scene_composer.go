@@ -91,7 +91,7 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.title, adapter.commands = "荒らし追放騎士団", []string{"exile_petition", "exile_approve", "exile_oppose"}
 			adapter.read = h.exileSceneData
 		case "depot":
-			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_send_item", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}
+			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}
 			adapter.read = h.depotSceneData
 		case "fleamarket":
 			adapter.title, adapter.commands = "フリーマーケット", []string{"fleamarket_list", "fleamarket_purchase", "fleamarket_cancel"}
@@ -100,7 +100,7 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.title, adapter.commands = "宝石店", []string{"gemstore_buy", "gemstore_sell", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "gemstore_sort"}
 			adapter.read = h.gemStoreSceneData
 		case "secretshop":
-			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase"}
+			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase", "secretshop_puffpuff"}
 			adapter.read = h.secretShopSceneData
 		case "home":
 			adapter.title, adapter.commands = "自宅", []string{"home_sleep"}

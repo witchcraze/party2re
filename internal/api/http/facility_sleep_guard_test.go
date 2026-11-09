@@ -119,7 +119,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"depot_sell_batch", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sell_batch","params":{"item_ids":["item-1"]}}`},
 		{"depot_sort", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sort"}`},
 		{"depot_expand", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_expand"}`},
-		{"depot_send_money", http.MethodPost, "/characters/char-1/depot/send-money", `{"recipient_character_id":"char-2","amount":100}`},
+		{"depot_send_money", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_send_money","params":{"recipient_character_id":"char-2","amount":100}}`},
 		{"depot_send_item", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_send_item","params":{"recipient_character_id":"char-2","item_id":"item-1"}}`},
 		// Plantation
 		{"plantation_sow", http.MethodPost, "/characters/char-1/plantation/sow", `{"seed_id":"seed-1"}`},
@@ -172,9 +172,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"shop_accessory_buy", http.MethodPost, "/characters/char-1/shop/accessory/buy", `{"item_definition_id":"acc-1","quantity":1}`},
 		{"shop_accessory_sell", http.MethodPost, "/characters/char-1/shop/accessory/sell", `{"item_instance_id":"item-1","quantity":1}`},
 		{"shop_accessory_synthesize", http.MethodPost, "/characters/char-1/shop/accessory/synthesize", `{"recipe_target":"acc-2"}`},
-		// Black Market
-		// Secret Shop
-		{"secretshop_puffpuff", http.MethodPost, "/characters/char-1/secretshop/puffpuff", `{}`},
 		// Home
 		{"home_build_house", http.MethodPost, "/towns/town1/houses", `{"character_id":"char-1","house_style":"001"}`},
 		{"home_set_character_color", http.MethodPost, "/characters/char-1/color", `{"color":"#ffffff"}`},

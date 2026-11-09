@@ -123,3 +123,63 @@ func TestNPCRequiresTheFacilityQualification(t *testing.T) {
 		t.Fatalf("unqualified talk: %d %s", status, raw["error"])
 	}
 }
+
+func TestSecretShopPuffPuffLogsAPrivateRowPairForTheActor(t *testing.T) {
+	log := &fakePlaceLog{}
+	f, store, _, router := secretShopSceneRouterWith(t, []Option{WithPlaceLog(log)})
+	store.selection = playercontext.Selection{Destination: "secretshop"}
+	f.char.JobLevel, f.char.Name, f.char.Color = 7, "Hero", "#00ff00"
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"secretshop_puffpuff"}`, nil)
+	word := "パフパフ♥ パフパフ♥ パフパフ♥ ……… どうだ Hero わしのパフパフは気持ちいいだろう"
+	if r := npcResult(t, raw); status != 200 || r != (NPCResult{NPCName: secretshop.NPCName, Dialogue: word}) {
+		t.Fatalf("puffpuff: %d %+v %s", status, r, raw["error"])
+	}
+	want := []placelog.Entry{
+		{SpeakerKind: placelog.SpeakerNPC, Name: secretshop.NPCName, Color: npcColor, Text: word, RecipientCharacterID: "hero"},
+		{SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: "hero", Name: "Hero", Color: "#00ff00", Text: "＠ぱふぱふ", RecipientCharacterID: "hero"},
+	}
+	if len(log.rows) != 2 || log.places[0] != (placelog.Place{Kind: placelog.KindFacility, ID: "secretshop"}) {
+		t.Fatalf("log: %+v at %+v", log.rows, log.places)
+	}
+	for i := range want {
+		got := log.rows[i]
+		got.OccurredAt = want[i].OccurredAt
+		if got != want[i] {
+			t.Fatalf("row %d = %+v, want %+v", i, got, want[i])
+		}
+	}
+	if store.writes != 0 || f.executions != 0 || f.writes != 0 {
+		t.Fatalf("puffpuff changed state: navigation %d executions %d writes %d", store.writes, f.executions, f.writes)
+	}
+}
+
+func TestSecretShopPuffPuffOnlyInTheQualifiedSecretShop(t *testing.T) {
+	log := &fakePlaceLog{}
+	f, store, _, router := secretShopSceneRouterWith(t, []Option{WithPlaceLog(log)})
+	f.char.JobLevel = 7
+	for _, tc := range []struct {
+		destination string
+		jobLevel    int
+		code        string
+	}{{"town", 7, "ACTION_UNAVAILABLE"}, {"secretshop", 6, "NPC_UNAVAILABLE"}} {
+		store.selection, f.char.JobLevel = playercontext.Selection{Destination: tc.destination}, tc.jobLevel
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"secretshop_puffpuff"}`, nil)
+		if status != http.StatusConflict || actionErrorCode(t, raw) != tc.code {
+			t.Fatalf("%s job %d: %d %s", tc.destination, tc.jobLevel, status, raw["error"])
+		}
+	}
+	store.selection, f.char.JobLevel = playercontext.Selection{Destination: "secretshop"}, 7
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"secretshop_puffpuff","params":{"target":"x"}}`, nil); status != http.StatusBadRequest {
+		t.Fatalf("extra params: %d %s", status, raw["error"])
+	}
+	if len(log.rows) != 0 {
+		t.Fatalf("rejected puffpuff wrote the log: %+v", log.rows)
+	}
+}
+
+func TestSecretShopPuffPuffStartsTheActionWait(t *testing.T) {
+	def, ok := playercontext.GetAction("secretshop_puffpuff")
+	if !ok || !playercontext.StartsActionWait(def) || def.Category != "npc" {
+		t.Fatalf("puffpuff must be a wait-starting NPC act: %+v", def)
+	}
+}

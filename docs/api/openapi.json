@@ -4261,6 +4261,31 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "secretshop_puffpuff",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "adventure_start"
                 }
               },
@@ -5497,6 +5522,48 @@
                   },
                   "required": [
                     "item_id",
+                    "recipient_character_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "depot_send_money",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount": {
+                      "description": "Explicit gold amount; the Depot service rejects nonpositive amounts and amounts above the wallet.",
+                      "format": "int64",
+                      "maximum": 9223372036854775807,
+                      "minimum": -9223372036854775808,
+                      "type": "integer"
+                    },
+                    "recipient_character_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount",
                     "recipient_character_id"
                   ],
                   "type": "object"
@@ -15367,26 +15434,6 @@
         ],
         "type": "object"
       },
-      "SecretshopPuffPuffResult": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "npc_name",
-          "message"
-        ],
-        "type": "object"
-      },
       "SelectedSceneSubject": {
         "additionalProperties": false,
         "properties": {
@@ -15455,44 +15502,6 @@
           "depot",
           "recipient_character_id",
           "item_id"
-        ],
-        "type": "object"
-      },
-      "SendMoneyRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "amount": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "recipient_character_id": {
-            "minLength": 1,
-            "type": "string"
-          }
-        },
-        "required": [
-          "recipient_character_id",
-          "amount"
-        ],
-        "type": "object"
-      },
-      "SendMoneyResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "amount": {
-            "type": "integer"
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotResponse"
-          },
-          "recipient_character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "depot",
-          "recipient_character_id",
-          "amount"
         ],
         "type": "object"
       },
@@ -17423,7 +17432,7 @@
               }
             }
           },
-          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_withdraw/depot_sell require non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted.",
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_withdraw/depot_sell require non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene.",
           "required": true
         },
         "responses": {
@@ -22135,85 +22144,6 @@
         "summary": "Set custom skill synthesis",
         "tags": [
           "CustomSkills"
-        ]
-      }
-    },
-    "/characters/{id}/depot/send-money": {
-      "post": {
-        "operationId": "postCharactersIdDepotSendMoney",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SendMoneyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SendMoneyResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Depot Send Money",
-        "tags": [
-          "Depot"
         ]
       }
     },
@@ -27887,97 +27817,6 @@
         "tags": [
           "Character",
           "Replay"
-        ]
-      }
-    },
-    "/characters/{id}/secretshop/puffpuff": {
-      "post": {
-        "description": "Interacts with @ヒミツジ for the legendary puff-puff humor dialogue.",
-        "operationId": "experienceSecretShopPuffPuff",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SecretshopPuffPuffResult"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Puff-puff dialogue interaction executed successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Access denied"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Experience Secret Shop @ぱふぱふ service",
-        "tags": [
-          "Secret Shop"
         ]
       }
     },

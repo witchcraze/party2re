@@ -218,6 +218,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"item_id", "recipient_character_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
+	{ID: "depot_send_money", Label: "相手へゴールドを送る", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"amount", "recipient_character_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
 	{
 		ID:             "depot_withdraw",
 		Label:          "預かり所からアイテムを引き出す",
@@ -293,6 +294,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"item_id", "quantity"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
+	{ID: "secretshop_puffpuff", Label: "ぱふぱふ", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "blackmarket_sacrifice", Label: "闇市でレアアイテムをささげる", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "blackmarket_trade", Label: "闇市景品交換", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"prize_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
