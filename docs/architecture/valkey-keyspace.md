@@ -167,22 +167,26 @@ to blindly delete arbitrary financial/session state on any type error.
 
 Casino room persistence and writer-side partial failure boundary:
 
-Indian Poker, HighLow and Doppel actions hold the room lock while staging the
-complete room/member result, including next-round resets and eliminations.
-Required reads, wagers, payouts and win updates run inside the SQL transaction
+Indian Poker, HighLow, Doppel and departure actions hold the room lock while
+staging the complete room/member result, including next-round resets,
+eliminations, leader succession and disband. Required reads, wagers, payouts,
+win updates and departure fatigue run inside the SQL transaction
 before `UpdateRoomDetail` publishes that result with one authoritative payload
 `SET`. No intermediate accepted turn or removal is published. This keeps a
 rejected action from later settling against a rolled-back wager.
 
 - **Before publication**: A required read, SQL mutation or rejected payload write returns its error and rolls back SQL; the previously published room/member snapshot remains unchanged and no winner progression hook runs.
 - **After publication**: `saveRoomDetail` synchronizes the active index (`party2:casino:rooms:active` ZADD/ZREM) and renews reverse mappings (`party2:casino:character:<character_id>`) for every still-admitted participant and spectator whose mapping still targets the mutating room (or removes them on disband); `UpdateRoomDetail` then removes eliminated characters' reverse mappings when still mapped to that room. Admission writes (`CreateRoom`, `AddMember`) avoid overwriting a different live room mapping, and missing/expired mappings are not resurrected by renewal. These post-payload synchronization failures return `SecondarySyncError` / `ErrSecondarySync`. The action permits SQL to commit because the complete payload already applied. Secondary synchronization/cleanup is attempted across all members even when an earlier index or mapping update fails.
+- **Departure outcome**: A confirmed secondary-sync failure still commits participant fatigue with the published roster, leader and status; spectators incur no fatigue. `LeaveRoom` returns the mutation outcome directly, without a subsequent observation that could replace it. Observe the room and character before a new command; a departed member's retry rejects without another fatigue increment. If SQL finalization also fails, both errors remain observable, and the published roster alone does not prove fatigue committed.
 - **Observation and replay**: Once the transaction and `UpdateRoomDetail` succeed without a secondary-sync failure, the masked response snapshot is read reentrantly under the same room lock; if that snapshot read fails, the committed round's winner progression hook (`gamePlayedHook` -> `medal.MetricCasinoGames`) still runs before the read error is returned. Secondary errors and response-read errors remain observable by callers (HTTP 500). Refresh room/account observations before deciding a new action; never blindly replay an unconfirmed command. Indian Poker/HighLow reject an already submitted turn; Doppel permits reselection before settlement without another wager. Settled rooms reject further game actions. A successful renewal restores the active index and extends matching reverse mappings; failed reverse-mapping cleanup can leave a stale room pointer, which `GetCharacterRoomView` resolves as absent once live roster admission is gone while unreadable or blank mappings return an error.
 
 This boundary handles confirmed command failures; it is not crash-proof
 cross-store atomicity. A lost SET acknowledgement, SQL commit failure after
 payload publication, process crash, or Valkey data loss still requires a
-separately designed durable recovery protocol. There is no settlement ledger or
-automatic replay/reconciliation guarantee. Room creation/start and admission
+separately designed durable recovery protocol
+([departure recovery scope](https://github.com/witchcraze/party2re/issues/1997)).
+There is no settlement ledger or automatic replay/reconciliation guarantee.
+Room creation/start and admission
 operations retain their own publication boundaries. `AddMember` / `RemoveMember`
 also publish payloads before synchronizing reverse mappings.
 
