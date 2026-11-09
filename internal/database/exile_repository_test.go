@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/exile"
+	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -186,3 +187,99 @@ func TestExileRenameAndPetitionRace_Integration(t *testing.T) {
 }
 
 func id8(id string) string { return "R" + id[:7] }
+
+type exileLookupHook struct {
+	exile.CharacterReader
+	beforeLookup func(context.Context) error
+}
+
+func (r exileLookupHook) FindByName(ctx context.Context, name string) (corecharacter.Character, error) {
+	if err := r.beforeLookup(ctx); err != nil {
+		return corecharacter.Character{}, err
+	}
+	return r.CharacterReader.FindByName(ctx, name)
+}
+
+func TestExileSelfPetitionAfterApplicantRename_Integration(t *testing.T) {
+	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items",
+		"exile_board", "exile_petitions", "exile_votes", "exile_sentences", "news_articles")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	boardTime := now.Add(-24 * time.Hour)
+	if _, err := db.ExecContext(ctx, "INSERT INTO exile_board (id, updated_at) VALUES ('global', ?)", boardTime); err != nil {
+		t.Fatal(err)
+	}
+	applicant, err := database.CreateTestCharacterWithFunds(ctx, db, "ExSelf", character.NameChangeCost+123)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET job_level = ? WHERE id = ?", exile.MinJobLevel, applicant.ID); err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := database.NewExileRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newsRepo, err := database.NewNotificationRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newsService, err := notification.NewService(newsRepo, newsRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	news := exile.NewsPublisherFunc(func(ctx context.Context, category, title, content, author string, at time.Time) error {
+		_, err := newsService.PublishNews(ctx, category, title, content, author, at)
+		return err
+	})
+	tx := database.NewTransactionProvider(db)
+	names, err := character.NewService(charRepo, character.WithTransactionProvider(tx), character.WithExileChecker(repo), character.WithNewsPublisher(news))
+	if err != nil {
+		t.Fatal(err)
+	}
+	newName := id8(applicant.ID)
+	reader := exileLookupHook{CharacterReader: charRepo, beforeLookup: func(ctx context.Context) error {
+		// Commit the independent rename after the early self-name check, before target lookup.
+		_, err := names.ChangeName(ctx, applicant.ID, newName)
+		return err
+	}}
+	svc := exile.NewService(repo, reader, timer.NewService(nil), tx, news)
+	if _, err := svc.Petition(ctx, applicant.ID, newName, "self rename race", now); !errors.Is(err, exile.ErrSelfPetition) {
+		t.Errorf("petition error = %v, want ErrSelfPetition", err)
+	}
+	stored, err := charRepo.FindByID(ctx, applicant.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Name != newName || stored.Money != 123 {
+		t.Errorf("independently committed rename/fee lost: name=%s money=%d", stored.Name, stored.Money)
+	}
+	for _, table := range []string{"exile_petitions", "exile_votes", "exile_sentences"} {
+		var count int
+		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Errorf("%s contains %d rows after rejection", table, count)
+		}
+	}
+	var updated time.Time
+	if err := db.QueryRowContext(ctx, "SELECT updated_at FROM exile_board WHERE id = 'global'").Scan(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if !updated.Equal(boardTime) {
+		t.Errorf("board time changed: got %v want %v", updated, boardTime)
+	}
+	articles, total, err := newsRepo.ListNews(ctx, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(articles) != 1 || articles[0].Category != "character" {
+		t.Errorf("only the committed rename should publish news: total=%d articles=%+v", total, articles)
+	}
+}
