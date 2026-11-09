@@ -95,7 +95,7 @@ func assertTerminalStorage(t *testing.T, client valkey.Client, action core.Sched
 func TestTerminalSaveFailureRecovery(t *testing.T) {
 	for _, state := range []core.State{core.StateCompleted, core.StateFailed} {
 		for _, retention := range []string{"future", "zero", "expired", "boundary", "subsecond"} {
-			for _, failure := range []string{"SET", "DEL_LOCK", "SREM", "ZREM", "DEL_ACTION", "healthy"} {
+			for _, failure := range []string{"SET", "ZADD", "DEL_LOCK", "SREM", "ZREM", "DEL_ACTION", "healthy"} {
 				if failure == "DEL_ACTION" && retention != "expired" && retention != "boundary" && retention != "subsecond" {
 					continue
 				}
@@ -134,7 +134,7 @@ func TestTerminalSaveFailureRecovery(t *testing.T) {
 					}
 					fault.fail = func(cmd []string) bool {
 						switch failure {
-						case "SET", "SREM", "ZREM":
+						case "SET", "ZADD", "SREM", "ZREM":
 							return cmd[0] == failure
 						case "DEL_LOCK":
 							return cmd[0] == "DEL" && cmd[1] == "party2:scheduled:lock:"+action.ID
@@ -159,7 +159,7 @@ func TestTerminalSaveFailureRecovery(t *testing.T) {
 					if failure == "SET" {
 						storedState, ttl = core.StateProcessing, "persistent"
 					}
-					assertTerminalStorage(t, client, action, storedState, ttl, failure != "healthy", failure == "SET" || failure == "DEL_LOCK" || failure == "SREM", failure == "SET" || failure == "DEL_LOCK")
+					assertTerminalStorage(t, client, action, storedState, ttl, failure != "healthy", failure == "SET" || failure == "ZADD" || failure == "DEL_LOCK" || failure == "SREM", failure == "SET" || failure == "ZADD" || failure == "DEL_LOCK")
 					active, err := repo.FindPendingByActorID(ctx, action.ActorID)
 					if err != nil || (len(active) == 1) != (failure == "SET") {
 						t.Fatalf("actor observation: %+v, %v", active, err)
@@ -309,5 +309,121 @@ func TestWorkerExpiredTerminalCleanupRecovery(t *testing.T) {
 			}
 			assertTerminalStorage(t, client, action, core.StateCompleted, "absent", false, false, false)
 		})
+	}
+}
+
+type blockingTerminalHandler struct {
+	calls   int
+	err     error
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (h *blockingTerminalHandler) Handle(context.Context, core.ScheduledAction) error {
+	h.calls++
+	close(h.entered)
+	<-h.release
+	return h.err
+}
+
+// peerHookClient runs hook once, just before the peer forwards its queue removal of id.
+type peerHookClient struct {
+	valkey.Client
+	id    string
+	hook  func()
+	fired bool
+}
+
+func (c *peerHookClient) Do(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+	args := cmd.Commands()
+	if !c.fired && c.hook != nil && args[0] == "ZREM" && args[len(args)-1] == c.id {
+		c.fired = true
+		c.hook()
+	}
+	return c.Client.Do(ctx, cmd)
+}
+
+func TestConcurrentProcessingFetchPreservesTerminalCleanup(t *testing.T) {
+	for _, interleaving := range []string{"in-flight", "stale-read", "healthy"} {
+		for _, handlerFails := range []bool{false, true} {
+			t.Run(interleaving+"/"+map[bool]string{false: "completed", true: "failed"}[handlerFails], func(t *testing.T) {
+				client, fault, repo, action := terminalFixture(t)
+				ctx := context.Background()
+				handler := &blockingTerminalHandler{entered: make(chan struct{}), release: make(chan struct{})}
+				if handlerFails {
+					handler.err = errors.New("feature failed")
+				}
+				worker := scheduling.NewWorker(repo, time.Minute, logging.NewJSON(io.Discard))
+				worker.RegisterHandler(action.ActionType, handler)
+				fault.fail = func(cmd []string) bool { return cmd[0] == "SREM" }
+
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					worker.ProcessAction(ctx, action)
+				}()
+				<-handler.entered
+
+				peerClient := &peerHookClient{Client: client, id: action.ID}
+				peer := scheduling.NewValkeyRepository(peerClient)
+				switch interleaving {
+				case "in-flight":
+					if _, err := peer.FetchDue(ctx, time.Now(), 1000); err != nil {
+						t.Fatal(err)
+					}
+					// The peer observed the live Processing record and separated it from candidates.
+					if _, err := client.Do(ctx, client.B().Zscore().Key("party2:scheduled:pending").Member(action.ID).Build()).ToString(); !valkey.IsValkeyNil(err) {
+						t.Fatalf("peer did not separate Processing record: %v", err)
+					}
+					close(handler.release)
+					<-done
+				case "stale-read":
+					// Terminal publication lands between the peer's Processing read and its removal.
+					peerClient.hook = func() {
+						close(handler.release)
+						<-done
+					}
+					if _, err := peer.FetchDue(ctx, time.Now(), 1000); err != nil {
+						t.Fatal(err)
+					}
+					if !peerClient.fired {
+						t.Fatal("peer never attempted removal from its Processing read")
+					}
+				default:
+					close(handler.release)
+					<-done
+				}
+
+				data, err := client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+action.ID).Build()).ToString()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal([]byte(data), &action); err != nil {
+					t.Fatal(err)
+				}
+				state := core.StateCompleted
+				if handlerFails {
+					state = core.StateFailed
+				}
+				assertTerminalStorage(t, client, action, state, "retained", true, true, false)
+
+				fault.fail = nil
+				for i := 0; i < 2; i++ {
+					due, err := repo.FetchDue(ctx, time.Now(), 1000)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, a := range due {
+						if a.ID == action.ID {
+							worker.ProcessAction(ctx, a)
+						}
+					}
+				}
+				if handler.calls != 1 {
+					t.Fatalf("handler invoked %d times", handler.calls)
+				}
+				assertTerminalStorage(t, client, action, state, "retained", false, false, false)
+			})
+		}
 	}
 }

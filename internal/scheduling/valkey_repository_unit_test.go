@@ -390,6 +390,44 @@ func TestValkeyRepository_FetchDue_TransientReadError(t *testing.T) {
 	}
 }
 
+// A failed re-read after separating Processing cannot prove the record is still
+// Processing, so discovery is restored before the read error propagates.
+func TestValkeyRepository_FetchDue_ProcessingRecheckReadErrorRestoresQueue(t *testing.T) {
+	processing := core_scheduling.ScheduledAction{
+		ID: "act-recheck-1", ActionType: "adventure:explore", ActorID: "char-recheck",
+		State: core_scheduling.StateProcessing, ExecuteAt: time.Unix(1700000000, 0),
+	}
+	processingJSON, _ := json.Marshal(processing)
+	readErr := errors.New("connection reset by peer")
+	gets := 0
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		switch cmd.Commands()[0] {
+		case "ZRANGEBYSCORE":
+			return valkeytest.MakeStringSliceResult([]string{processing.ID})
+		case "GET":
+			gets++
+			if gets > 1 {
+				return valkeytest.MakeErrorResult(readErr)
+			}
+			return valkeytest.MakeStringResult(string(processingJSON))
+		}
+		return valkeytest.MakeOKResult()
+	}))
+	if _, err := NewValkeyRepository(client).FetchDue(context.Background(), time.Now(), 10); !errors.Is(err, readErr) {
+		t.Fatalf("expected re-read error, got %v", err)
+	}
+	var ops []string
+	for _, c := range client.RecordedCommandStrings() {
+		ops = append(ops, c[0])
+	}
+	if want := []string{"ZRANGEBYSCORE", "GET", "ZREM", "GET", "ZADD"}; !reflect.DeepEqual(ops, want) {
+		t.Fatalf("expected %v, got %v", want, ops)
+	}
+	if last := client.LastCommandStrings(); last[len(last)-2] != "1700000000" || last[len(last)-1] != processing.ID {
+		t.Fatalf("unexpected restore command %v", last)
+	}
+}
+
 func TestValkeyRepository_FetchDue_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -620,12 +658,12 @@ func TestValkeyRepository_Save(t *testing.T) {
 	}
 
 	cmdsComp := clientCompleted.RecordedCommandStrings()
-	// Persist terminal payload first; remove queue membership last.
+	// Persist terminal payload first, restore queue discovery, remove queue membership last.
 	var operations []string
 	for _, c := range cmdsComp {
 		operations = append(operations, c[0])
 	}
-	expectedOps := []string{"SET", "DEL", "SREM", "ZREM"}
+	expectedOps := []string{"SET", "ZADD", "DEL", "SREM", "ZREM"}
 	if !reflect.DeepEqual(operations, expectedOps) {
 		t.Fatalf("expected operations %v, got %v", expectedOps, operations)
 	}
@@ -653,7 +691,7 @@ func TestValkeyRepository_Save(t *testing.T) {
 	for _, c := range cmdsPast {
 		opsPast = append(opsPast, c[0])
 	}
-	expectedOpsPast := []string{"SET", "DEL", "DEL", "ZREM"}
+	expectedOpsPast := []string{"SET", "ZADD", "DEL", "DEL", "ZREM"}
 	if !reflect.DeepEqual(opsPast, expectedOpsPast) {
 		t.Fatalf("expected operations %v, got %v", expectedOpsPast, opsPast)
 	}
