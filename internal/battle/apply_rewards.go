@@ -12,13 +12,21 @@ import (
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
+type dropItem struct {
+	definitionID string
+	isTreasure   bool
+}
+
 // dropsForCharacter determines which item definition IDs should be delivered to the specified character.
+// It tags whether each item originated from a treasure chest (RecipientDrops) or shared battle drops.
 // It ensures that items are never cloned across party members.
-func (req ApplyPostBattleRequest) dropsForCharacter(charID string) []string {
-	var drops []string
+func (req ApplyPostBattleRequest) dropsForCharacter(charID string) []dropItem {
+	var drops []dropItem
 	if len(req.RecipientDrops) > 0 {
 		if explicit, ok := req.RecipientDrops[charID]; ok {
-			drops = append(drops, explicit...)
+			for _, defID := range explicit {
+				drops = append(drops, dropItem{definitionID: defID, isTreasure: true})
+			}
 		}
 	}
 
@@ -26,10 +34,12 @@ func (req ApplyPostBattleRequest) dropsForCharacter(charID string) []string {
 	if req.designatedRecipient() == charID {
 		if req.BattleResult.TotalReward.ItemDefinitionID != "" && req.BattleResult.TotalReward.ItemQuantity > 0 {
 			for i := 0; i < req.BattleResult.TotalReward.ItemQuantity; i++ {
-				drops = append(drops, req.BattleResult.TotalReward.ItemDefinitionID)
+				drops = append(drops, dropItem{definitionID: req.BattleResult.TotalReward.ItemDefinitionID, isTreasure: false})
 			}
 		}
-		drops = append(drops, req.DropItems...)
+		for _, defID := range req.DropItems {
+			drops = append(drops, dropItem{definitionID: defID, isTreasure: false})
+		}
 	}
 
 	return drops
@@ -54,7 +64,7 @@ func (s *Service) applyRewardsForCharacter(
 	char *corecharacter.Character,
 	inv *coreinventory.Inventory,
 	reward corebattle.Reward,
-	dropDefIDs []string,
+	drops []dropItem,
 	finalized bool,
 ) (int, int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
 	blessing := ""
@@ -108,14 +118,14 @@ func (s *Service) applyRewardsForCharacter(
 	var invDrops []coreitem.Instance
 	var depotDrops []coreitem.Instance
 
-	for _, defID := range dropDefIDs {
-		inst, err := coreitem.NewInstance(defID, 1)
+	for _, drop := range drops {
+		inst, err := coreitem.NewInstance(drop.definitionID, 1)
 		if err != nil {
 			continue
 		}
 
-		// Check inventory capacity
-		if len(inv.Items) < s.maxInventoryCapacity() {
+		// Check hand / inventory eligibility
+		if s.canAcceptDrop(inv, drop) {
 			if err := inv.Add(inst); err == nil {
 				invDrops = append(invDrops, inst)
 				continue
@@ -127,6 +137,13 @@ func (s *Service) applyRewardsForCharacter(
 	}
 
 	return gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, nil
+}
+
+func (s *Service) canAcceptDrop(inv *coreinventory.Inventory, drop dropItem) bool {
+	if drop.isTreasure {
+		return depot.AcceptsTreasure(inv, drop.definitionID)
+	}
+	return len(inv.Items) < s.maxInventoryCapacity()
 }
 
 func (req ApplyPostBattleRequest) rewardForCharacter(charID string) corebattle.Reward {

@@ -97,8 +97,9 @@ func DeliverRewardItemInstance(
 // It strictly enforces the lock hierarchy: Rank 3 (Inventory) -> Rank 5 (Depot).
 //
 // Lifecycle:
-//  1. Deliver items to the character's inventory up to coreinventory.DefaultMaxCapacity (if invRepo is provided).
-//  2. Any items overflowing inventory are routed to the character's depot.
+//  1. Deliver items to an eligible empty hand (if invRepo is provided): treasure
+//     (PolicyTreatOverflowAsLost) only to an empty tool hand; NPC delivery to any empty matching hand.
+//  2. Every other item is routed to the character's depot.
 //  3. Load or initialize the depot, refreshing capacity via dep.RefreshCapacity(char.JobLevel, char.OverDepot).
 //  4. PolicyDeliverOverCapacity delivers every overflow item; PolicyTreatOverflowAsLost
 //     marks an item DeliveredToLost when the depot is full before it, otherwise delivers it.
@@ -126,7 +127,7 @@ func DeliverRewardItems(
 
 		invChanged := false
 		for _, inst := range items {
-			if !inv.IsFull(inst.DefinitionID) {
+			if acceptsHand(&inv, inst.DefinitionID, policy) {
 				if err := inv.Add(inst); err == nil {
 					invChanged = true
 					results = append(results, DeliveryResult{
@@ -189,4 +190,24 @@ func DeliverRewardItems(
 	}
 
 	return results, nil
+}
+
+// AcceptsTreasure reports whether a found treasure goes directly to the hand:
+// only a legacy kind-3 item, and only while the tool hand is empty
+// (_npc_action.cgi:66–72). Weapons, armor and every other case take the
+// depot-or-loss path regardless of other empty hands or matching stacks.
+func AcceptsTreasure(inv *coreinventory.Inventory, definitionID string) bool {
+	if inv == nil {
+		return false
+	}
+	return item.LegacyHandKindByID(definitionID) == 3 && !inv.IsHandOccupied(3)
+}
+
+// acceptsHand applies the caller's hand-eligibility rule: treasure follows the
+// legacy tool-hand-only exception; NPC delivery fills any empty matching hand.
+func acceptsHand(inv *coreinventory.Inventory, definitionID string, policy DeliveryPolicy) bool {
+	if policy == PolicyTreatOverflowAsLost {
+		return AcceptsTreasure(inv, definitionID)
+	}
+	return !inv.IsFull(definitionID)
 }

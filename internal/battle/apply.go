@@ -107,7 +107,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 
 		// 5. Apply earned assets independently of the final encounter outcome.
 		if req.BattleResult.Outcome == corebattle.OutcomeWin || req.PreserveEarnedRewards {
-			var charDrops []string
+			var charDrops []dropItem
 			if req.BattleResult.Outcome == corebattle.OutcomeWin {
 				charDrops = req.dropsForCharacter(charID)
 			}
@@ -229,7 +229,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			}
 
 			if req.BattleResult.Outcome == corebattle.OutcomeWin || req.PreserveEarnedRewards {
-				var charDrops []string
+				var charDrops []dropItem
 				if req.BattleResult.Outcome == corebattle.OutcomeWin {
 					charDrops = req.dropsForCharacter(id)
 				}

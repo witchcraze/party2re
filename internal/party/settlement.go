@@ -232,7 +232,7 @@ func (s *Service) settleFallback(
 
 				res, err := depot.DeliverRewardItem(ctx, s.invRepo, s.depotRepo, c, box.ItemID, 1, depot.PolicyTreatOverflowAsLost)
 				if err != nil {
-					continue
+					return nil, nil, fmt.Errorf("delivering treasure %s for character %s: %w", box.ItemID, cID, err)
 				}
 				box.DeliveredTo = string(res.DeliveredTo)
 				if res.DeliveredTo == depot.DeliveredToInventory || res.DeliveredTo == depot.DeliveredToDepot {

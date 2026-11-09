@@ -787,7 +787,13 @@ func TestAdventure_TreasureBlessing_SingleChestGenerationNoItemDuplication(t *te
 			res, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
 				CharacterIDs: []string{char.ID},
 				StageID:      "stage-01",
-				Rng:          func(n int) int { return 0 },
+				// Roll a tool (rng(4)==2) so the opened chest enters the empty tool hand.
+				Rng: func(n int) int {
+					if n == 4 {
+						return 2
+					}
+					return 0
+				},
 			})
 			if err != nil {
 				t.Fatalf("ExecuteCrawl failed: %v", err)

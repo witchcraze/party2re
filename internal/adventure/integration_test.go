@@ -636,7 +636,14 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deterministicRng := func(n int) int { return 0 }
+	// Roll category 3 (tool/item, rng(4)==2) so treasure enters the empty tool hand,
+	// matching legacy _npc_action.cgi:66–78 ($m{ite} exception).
+	deterministicRng := func(n int) int {
+		if n == 4 {
+			return 2
+		}
+		return 0
+	}
 	battleEngine := &settlementBattleEngine{}
 
 	battleAdapter := battle.NewService(
