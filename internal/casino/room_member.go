@@ -3,6 +3,7 @@ package casino
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -153,32 +154,25 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID string, characterID stri
 	}
 
 	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
+		var secondarySyncErr error
+		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
 				return err
 			}
-			member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
+			members, err := s.roomRepo.ListMembersForUpdate(txCtx, roomID)
 			if err != nil {
+				return err
+			}
+			index := slices.IndexFunc(members, func(m RoomMember) bool { return m.CharacterID == characterID })
+			if index < 0 {
 				return ErrMemberNotFound
 			}
-
-			if err := s.roomRepo.RemoveMember(txCtx, roomID, characterID); err != nil {
-				return err
-			}
-
-			// If leaving member was spectator, no leader transfer or disband needed
-			if member.IsSpectator {
-				return nil
-			}
-
-			remaining, err := s.roomRepo.ListMembersForUpdate(txCtx, roomID)
-			if err != nil {
-				return err
-			}
+			member := members[index]
+			remaining := slices.Delete(members, index, index+1)
 
 			// Participating player leaving room incurs fatigue penalty (party2/lib/_casino.cgi:216-218)
-			if s.charRepo != nil {
+			if !member.IsSpectator && s.charRepo != nil {
 				char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 				if err != nil {
 					return err
@@ -189,30 +183,25 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID string, characterID stri
 				}
 			}
 
-			// Count remaining active non-spectators
-			var activeMembers []RoomMember
-			for _, m := range remaining {
-				if !m.IsSpectator {
-					activeMembers = append(activeMembers, m)
+			if !member.IsSpectator {
+				firstActive := slices.IndexFunc(remaining, func(m RoomMember) bool { return !m.IsSpectator })
+				if firstActive < 0 {
+					room.Status = RoomStatusDisbanded
+				} else if room.LeaderCharacterID == characterID {
+					room.LeaderCharacterID = remaining[firstActive].CharacterID
 				}
 			}
-
-			if len(activeMembers) == 0 {
-				room.Status = RoomStatusDisbanded
-				room.UpdatedAt = time.Now().UTC()
-				return s.roomRepo.UpdateRoom(txCtx, *room)
-			}
-
-			if room.LeaderCharacterID == characterID {
-				room.LeaderCharacterID = activeMembers[0].CharacterID
-				room.UpdatedAt = time.Now().UTC()
-				if err := s.roomRepo.UpdateRoom(txCtx, *room); err != nil {
+			room.UpdatedAt = time.Now().UTC()
+			if err := s.roomRepo.UpdateRoomDetail(txCtx, RoomDetail{Room: *room, Members: remaining}); err != nil {
+				if errors.Is(err, ErrSecondarySync) {
+					secondarySyncErr = err
+				} else {
 					return err
 				}
 			}
-
 			return nil
 		})
+		return errors.Join(txErr, secondarySyncErr)
 	})
 }
 

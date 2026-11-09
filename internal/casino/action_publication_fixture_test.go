@@ -57,7 +57,7 @@ type publicationValkey struct {
 
 func (c *publicationValkey) Do(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
 	args := cmd.Commands()
-	if len(args) > 1 && (args[1] == casino.DefaultRoomKeyPrefix+c.roomID || args[0] == "ZADD" || args[0] == "DEL") {
+	if len(args) > 1 && (args[1] == casino.DefaultRoomKeyPrefix+c.roomID || args[0] == "ZADD" || args[0] == "ZREM" || args[0] == "DEL") {
 		if err := c.fault.hit("valkey/" + args[0]); err != nil {
 			return valkeygo.NewErrorResult(err)
 		}
