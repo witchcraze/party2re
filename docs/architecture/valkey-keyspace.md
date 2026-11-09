@@ -38,7 +38,7 @@ readiness. Introducing Cluster requires resolving those multi-key placements.
 | `party2:session:<token>` | Valkey Master | `String` | 7 days (`604800s`), sliding or fixed | JSON (`PlayerSession`: `token`, `player_id`, `created_at`, `expires_at`) | `internal/player` | `CreateSession` (SET EX), `GetSession` (GET), `DeleteSession` (DEL), `DeleteSessionsByPlayerID` (bulk DEL). |
 | `party2:player:sessions:<player_id>` | Valkey Master | `Sorted Set (ZSet)` | 7 days (`604800s`), refreshed on login | Member: session token, Score: `ExpiresAt.Unix()` (`float64`) | `internal/player` | `Save` (ZADD + EXPIRE + lazy ZREMRANGEBYSCORE), `FindByID` (lazy ZREMRANGEBYSCORE), `Revoke` (ZREM + lazy ZREMRANGEBYSCORE), `DeleteByPlayerID` (ZRANGE -> DEL tokens + DEL key). Automatic expiration score tracking eliminates stale token accumulation. |
 | `party2:maintenance:status` | SQL-backed projection | `String` | None (Persistent / Admin managed) | JSON (`SystemMaintenance`: `enabled`, `message`, `starts_at`, `ends_at`, `updated_at`) | `internal/maintenance` | `SetStatus` (SET without TTL), `GetStatus` (GET with in-memory sync), admin endpoints (`POST/PUT /admin/maintenance`). Backed by `system_maintenance` MariaDB table. |
-| `party2:scheduled:pending` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic queue) | Member: Action ID (`string`), Score: `ExecuteAt.Unix()` (`float64`) | `internal/scheduling` | `ScheduleAction` (ZADD), `FetchDue` (bounded ZRANGEBYSCORE traversal; transient read errors preserve queue membership, stale entries cleaned via ZREM; Processing separated from execution candidates via ZREM; terminal Save removes pending membership), `CancelAction` (ZREM). |
+| `party2:scheduled:pending` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic queue) | Member: Action ID (`string`), Score: `ExecuteAt.Unix()` (`float64`) | `internal/scheduling` | `ScheduleAction` (ZADD), `FetchDue` (bounded ZRANGEBYSCORE traversal; transient read errors preserve queue membership, stale entries cleaned via ZREM; Processing separated from execution candidates via ZREM, then re-read and re-added unless still Processing or missing; terminal Save re-adds via ZADD before cleanup and removes pending membership last), `CancelAction` (ZREM). |
 | `party2:scheduled:action:<id>` | Valkey Master | `String` | No TTL while unfinished; 24h terminal retention; cancellation deletes | JSON (`ScheduledAction`: `id`, `action_type`, `payload`, `execute_at`, `state`) | `internal/scheduling` | `ScheduleAction` (SET), `GetAction` (GET), `Save` (SET with RetainUntil for terminal actions), `CancelByActorID` (DEL). |
 | `party2:scheduled:lock:<id>` | Distributed Coordination | `String` | 5 minutes (`300s` worker lock) | Flag (`"1"`) | `internal/scheduling` | `AcquireLock` (SET NX EX 300), released via DEL on completion or auto-released on worker crash. |
 | `party2:scheduled:actor:<actor_id>` | Valkey Master | `Set` | None; membership removed on completion/failure, index deleted on actor cancellation | Scheduled Action IDs (`string`) | `internal/scheduling` | `Schedule` (SADD prior to ZADD enqueueing; failure halts and cleans up), `FindPendingByActorID` (SMEMBERS + MGET, Pending/Processing only), `Save` (SREM for terminal states), `CancelByActorID` (DEL on success; write errors halt and propagate without destructive index deletion). An index, not an exclusive actor lock. |
@@ -81,8 +81,9 @@ loss, and reverse-mapping deletion compares the room ID. See
 
 ## Scheduled terminal persistence and recovery
 
-`ValkeyRepository.Save` persists Completed/Failed before deleting the worker
-lock, removing actor membership, and finally removing pending queue membership.
+`ValkeyRepository.Save` persists Completed/Failed, re-adds pending queue
+membership at the original `ExecuteAt` score, then deletes the worker lock,
+removes actor membership, and finally removes pending queue membership.
 Each required write error propagates and stops subsequent cleanup. If the
 terminal SET fails before being applied, the stored Processing payload, queue,
 actor index and lock remain unchanged. A lost response can leave the write's
@@ -112,7 +113,17 @@ records from execution candidates by removing their pending queue membership whi
 keeping their authoritative payload, lock, and actor discovery intact, preventing
 retained records from starving subsequent due actions across ticks. Pagination offsets
 track entries retained in the queue so purges of stale, malformed, or unexecutable
-records do not skip subsequent entries. This state requires feature-specific reconciliation or explicit
+records do not skip subsequent entries.
+
+A peer `FetchDue` may separate a Processing record while its worker is still
+running the handler. Save's re-add after the terminal SET keeps that outcome
+discoverable for metadata-only retries. A stale peer read (Processing read, then
+terminal publication, then the peer's removal) is reconciled by `FetchDue`
+re-reading the payload after each Processing removal and re-adding it unless it
+is still Processing or missing; a failed re-read re-adds conservatively before
+returning the error. These are ordered single-key commands, not a cross-slot
+atomic script, and a failing re-add returns its storage error. Restored records
+count as retained for pagination. Processing itself still requires feature-specific reconciliation or explicit
 cancellation, not automatic replay. Worker logs persistence/cleanup errors; Save
 returns them to direct callers. These guarantees concern scheduling metadata,
 not exactly-once feature execution or lossless SQL/Valkey settlement across a crash.

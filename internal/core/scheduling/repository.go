@@ -18,7 +18,9 @@ type ScheduledActionRepository interface {
 	// FetchDue returns actions that are due for execution at or before the given time.
 	// It traverses the pending queue in bounded batches, separating preserved Processing
 	// records from execution candidates by removing them from the pending queue while
-	// retaining their authoritative state, lock, and actor discovery. It limits returned
+	// retaining their authoritative state, lock, and actor discovery. After each removal
+	// it re-reads the payload and re-enqueues a record no longer Processing, so a stale
+	// read cannot hide a concurrently published terminal outcome. It limits returned
 	// actions to prevent overwhelming the worker.
 	// Stale entries with genuinely absent payloads are cleaned up from the queue.
 	// Transient storage/read failures preserve queued entries and return an error.
@@ -33,7 +35,8 @@ type ScheduledActionRepository interface {
 	// Save updates an action's state. Terminal payload persistence precedes cleanup;
 	// a payload write failure leaves unfinished discovery/coordination untouched.
 	// Cleanup failures propagate after the terminal outcome has been persisted.
-	// Queue membership is removed last so terminal metadata can be retried without
+	// The terminal record is re-enqueued before cleanup, because a concurrent FetchDue
+	// may have separated the live Processing record. Queue membership is removed last so terminal metadata can be retried without
 	// handler replay. Retention is based on the original RetainUntil, not retry time.
 	Save(ctx context.Context, action ScheduledAction) error
 

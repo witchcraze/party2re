@@ -163,6 +163,13 @@ func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit i
 				if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
 					return nil, remErr
 				}
+				restored, err := r.restoreSettled(ctx, action)
+				if err != nil {
+					return nil, err
+				}
+				if restored {
+					retainedInBatch++
+				}
 				continue
 			}
 
@@ -186,6 +193,29 @@ func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit i
 	return actions, nil
 }
 
+// restoreSettled re-reads a Processing record after its queue removal. A peer
+// worker may have published a terminal outcome after the earlier read, so any
+// state other than confirmed Processing or a missing payload is re-enqueued for
+// metadata-only finalization. Read failures re-enqueue conservatively.
+func (r *ValkeyRepository) restoreSettled(ctx context.Context, action core_scheduling.ScheduledAction) (bool, error) {
+	val, err := r.client.Do(ctx, r.client.B().Get().Key(actionKeyPrefix+action.ID).Build()).AsBytes()
+	if valkey.IsValkeyNil(err) {
+		return false, nil
+	}
+	var current core_scheduling.ScheduledAction
+	if err == nil && json.Unmarshal(val, &current) == nil && current.State == core_scheduling.StateProcessing {
+		return false, nil
+	}
+	if addErr := r.enqueue(ctx, action); addErr != nil {
+		return false, addErr
+	}
+	return true, err
+}
+
+func (r *ValkeyRepository) enqueue(ctx context.Context, action core_scheduling.ScheduledAction) error {
+	return r.client.Do(ctx, r.client.B().Zadd().Key(pendingQueueKey).ScoreMember().ScoreMember(float64(action.ExecuteAt.Unix()), action.ID).Build()).Error()
+}
+
 func (r *ValkeyRepository) AcquireLock(ctx context.Context, actionID string, lockTTL time.Duration) (bool, error) {
 	lockKey := lockKeyPrefix + actionID
 	ttlSecs := int64(lockTTL.Seconds())
@@ -203,8 +233,9 @@ func (r *ValkeyRepository) AcquireLock(ctx context.Context, actionID string, loc
 	return true, nil
 }
 
-// Save persists a terminal outcome before cleanup. Cleanup stops on the first
-// error and removes queue membership last, allowing metadata-only worker retries.
+// Save persists a terminal outcome before cleanup, then re-enqueues it so a
+// concurrent Processing fetch cannot hide it. Cleanup stops on the first error
+// and removes queue membership last, allowing metadata-only worker retries.
 // Failed payload writes leave unfinished discovery and coordination untouched.
 func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.ScheduledAction) error {
 	data, err := json.Marshal(action)
@@ -228,6 +259,11 @@ func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.Sche
 			}
 		}
 		if err := r.client.Do(ctx, cmd).Error(); err != nil {
+			return err
+		}
+		// A peer FetchDue may have removed the live Processing record from the
+		// queue; restore discovery before cleanup that can fail.
+		if err := r.enqueue(ctx, action); err != nil {
 			return err
 		}
 		if err := r.client.Do(ctx, r.client.B().Del().Key(lockKeyPrefix+action.ID).Build()).Error(); err != nil {
