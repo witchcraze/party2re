@@ -65,6 +65,14 @@ func (i *Inventory) IsFull(definitionID ...string) bool {
 	return len(i.Items) >= i.MaxCapacity()
 }
 
+// AcceptsTreasure reports whether a found treasure goes directly to the hand:
+// only a legacy kind-3 item, and only while the tool hand is empty
+// (_npc_action.cgi:66–72). Weapons, armor and every other case take the
+// depot-or-loss path regardless of other empty hands or matching stacks.
+func (i *Inventory) AcceptsTreasure(definitionID string) bool {
+	return item.LegacyHandKindByID(definitionID) == 3 && !i.IsHandOccupied(3)
+}
+
 func New(characterID string) (Inventory, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return Inventory{}, ErrInvalidInventory

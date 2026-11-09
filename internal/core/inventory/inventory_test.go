@@ -233,6 +233,39 @@ func TestInventoryCapacity(t *testing.T) {
 	}
 }
 
+func TestInventoryAcceptsTreasureOnlyIntoEmptyToolHand(t *testing.T) {
+	held := func(ids ...string) *Inventory {
+		inv, _ := New("char-treasure")
+		for _, id := range ids {
+			inst, _ := item.NewInstance(id, 1)
+			if err := inv.Add(inst); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return &inv
+	}
+	for _, tc := range []struct {
+		name  string
+		inv   *Inventory
+		found string
+		want  bool
+	}{
+		{"weapon with empty hands", held(), "weapon-01", false},
+		{"armor with empty hands", held(), "armor-01", false},
+		{"weapon while holding a tool", held("item-001"), "weapon-01", false},
+		{"tool with empty hands", held(), "item-001", true},
+		{"tool while holding weapon and armor", held("weapon-02", "armor-02"), "item-001", true},
+		{"tool while holding another tool", held("item-002"), "item-001", false},
+		{"tool matching the held stack", held("item-001"), "item-001", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.inv.AcceptsTreasure(tc.found); got != tc.want {
+				t.Fatalf("AcceptsTreasure(%s) = %v, want %v", tc.found, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestInventoryHandOccupancyToolShieldAccessorySharing(t *testing.T) {
 	// Shields (SlotOffHand) and accessories (SlotAccessory) share kind 3 with consumables
 	inv, _ := New("char-tool-sharing")
