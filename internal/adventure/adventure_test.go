@@ -15,6 +15,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/timer"
 )
 
@@ -440,6 +441,16 @@ func (e crystalRewardPartyBattleEngine) ResolvePartyBattle(req corebattle.PartyB
 	}, nil
 }
 
+type deterministicPartyBattleEngine struct {
+	corebattle.Engine
+	rng random.Generator
+}
+
+func (e deterministicPartyBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	req.RNG = e.rng
+	return e.Engine.ResolvePartyBattle(req)
+}
+
 func TestAdventureNewServiceNilDependencies(t *testing.T) {
 	adventures := &repositoryStub{}
 	characters := &characterRepositoryStub{}
@@ -652,28 +663,33 @@ func TestExecuteCrawl_DailyOnceLock(t *testing.T) {
 	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
 	stages, _ := InitialStageCatalog()
 	monsters, _ := InitialMonsterCatalog()
-	service, err := NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, corebattle.Engine{}, nil, nopLogger{}, clock)
+	service, err := NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, deterministicPartyBattleEngine{
+		Engine: corebattle.Engine{},
+		rng:    random.NewDeterministic(1895),
+	}, nil, nopLogger{}, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	timerSvc := timer.NewService(nil)
 	service.SetTimerService(timerSvc)
+	crawlRequest := func(stageID string) DungeonCrawlRequest {
+		return DungeonCrawlRequest{
+			CharacterIDs: []string{character.ID},
+			StageID:      stageID,
+			Rng:          func(int) int { return 0 },
+			RngFloat:     func() float64 { return 0 },
+		}
+	}
 
 	// Normal stage should succeed without lock restriction
-	_, err = service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
-		CharacterIDs: []string{character.ID},
-		StageID:      "stage-00",
-	})
+	_, err = service.ExecuteCrawl(context.Background(), crawlRequest("stage-00"))
 	if err != nil {
 		t.Fatalf("ExecuteCrawl for stage-00 failed: %v", err)
 	}
 
 	// First attempt on stage-26 should succeed and acquire the lock
-	res, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
-		CharacterIDs: []string{character.ID},
-		StageID:      "stage-26",
-	})
+	res, err := service.ExecuteCrawl(context.Background(), crawlRequest("stage-26"))
 	if err != nil {
 		t.Fatalf("first ExecuteCrawl for stage-26 failed: %v", err)
 	}
@@ -688,20 +704,14 @@ func TestExecuteCrawl_DailyOnceLock(t *testing.T) {
 	}
 
 	// Second attempt on stage-26 on the same day should fail with ErrDailyOnceAlreadyUsed
-	_, err = service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
-		CharacterIDs: []string{character.ID},
-		StageID:      "stage-26",
-	})
+	_, err = service.ExecuteCrawl(context.Background(), crawlRequest("stage-26"))
 	if !errors.Is(err, ErrDailyOnceAlreadyUsed) {
 		t.Fatalf("expected ErrDailyOnceAlreadyUsed, got: %v", err)
 	}
 
 	// Releasing lock (e.g. via Home sleep wake) allows entry again
 	_ = timerSvc.ReleaseLock(context.Background(), timer.CategoryDungeonOnce, character.ID)
-	_, err = service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
-		CharacterIDs: []string{character.ID},
-		StageID:      "stage-26",
-	})
+	_, err = service.ExecuteCrawl(context.Background(), crawlRequest("stage-26"))
 	if err != nil {
 		t.Fatalf("ExecuteCrawl after lock release failed: %v", err)
 	}
