@@ -134,6 +134,9 @@ func (s *Service) Petition(ctx context.Context, actorID, targetName, reason stri
 		if target.Name != targetName {
 			return ErrTargetNotFound // renamed after the lookup
 		}
+		if applicant.ID == target.ID {
+			return ErrSelfPetition
+		}
 		p = Petition{
 			ID: id.New(), ApplicantID: applicant.ID, ApplicantName: applicant.Name, TargetID: target.ID, TargetName: target.Name,
 			Reason: reason, CreatedAt: now, Votes: []Vote{{VoterID: applicant.ID, VoterName: applicant.Name, Approve: true, VotedAt: now}},
