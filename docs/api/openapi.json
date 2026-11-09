@@ -6773,10 +6773,43 @@
         "additionalProperties": false,
         "properties": {
           "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
           },
           "profile": {
-            "$ref": "#/components/schemas/CharacterProfile"
+            "additionalProperties": false,
+            "properties": {
+              "aura_effect": {
+                "type": "integer"
+              },
+              "avatar_url": {
+                "type": "string"
+              },
+              "bio_data": {
+                "additionalProperties": {
+                  "maxLength": 160,
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "comment": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "comment",
+              "avatar_url",
+              "aura_effect"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -26834,7 +26867,7 @@
     },
     "/characters/{id}/profile": {
       "get": {
-        "description": "Retrieves public character information including stats, bio comment, avatar URL, aura effect, and custom metadata.",
+        "description": "Returns only the character name and player-written profile (comment, avatar URL, aura effect and optional bio data). Account/character IDs, balances, stats, actual job/gender and internal profile metadata are not exposed.",
         "operationId": "getCharacterProfile",
         "parameters": [
           {
