@@ -253,7 +253,7 @@ return the service next token without inventing a total or a cross-page snapshot
 Mixed/unknown fields and null values are rejected. All other pageable lists are
 offset-only. Back never accepts a caller-supplied parent.
 
-GET and command refresh share the HTTP selected-scene composer, which produces `town`, `facility`, `subject` or `selection_unavailable` variants. Each facility scene projects only its owner's facts, with field shapes in OpenAPI and rules in the facility's design document ([Home](../design/home.md#observation-visibility-and-navigation), [Shops](../design/shops.md#10-selected-shop-observation-and-migration-boundary), [Bank](../design/bank.md#observation-and-retained-routes), [Chapel](../design/chapel.md), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration)). Facility rules shared by every scene, stated once here:
+GET and command refresh share the HTTP selected-scene composer, which produces `town`, `facility`, `subject` or `selection_unavailable` variants. Each facility scene projects only its owner's facts, with field shapes in OpenAPI and rules in the facility's design document ([Home](../design/home.md#observation-visibility-and-navigation), [Shops](../design/shops.md#10-shop-scenes-and-commands), [Bank](../design/bank.md#observation-and-retained-routes), [Chapel](../design/chapel.md), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration)). Facility rules shared by every scene, stated once here:
 
 - Required reads fail the whole observation; missing configuration returns 501. A missing optional store yields an empty in-memory view that GET never persists.
 - GET and refresh never invoke NPC talk/inspect, purchases, deliveries, collection writes, scheduling or other mutations, and never renew selection.
@@ -335,9 +335,8 @@ are maintained in [Home design](../design/home.md#observation-visibility-and-nav
 This includes public/own dispatch, private mailbox paging, explicit Wake and
 render-time notice acknowledgment departures; it is not a formula parity claim.
 The [Shop reconciliation](../design/shops.md#scoped-legacy-actioncall-path-reconciliation)
-maps every registered Shop action and its read/mutation branches, retained routes
-and deferred differences. Shop observations do not connect purchase, sale, batch,
-secret discovery, dialogue or synthesis mutations.
+maps every registered Shop action to its Gateway command or navigation and lists
+the deferred differences.
 
 Subject selection and paging are the approved typed Gateway controls, not claims of new gameplay or formula parity. A selected ID (for example a catalog product) is an identifier, not an inventory instance or authorization; a disappeared subject is explicit and does not rewrite selection.
 
@@ -348,22 +347,22 @@ eligibility, and do not offer an unconnected command as executable. Each offered
 action supplies its strict `params_schema` and, where useful, `params_template`;
 `required_params` still lists the complete command's required fields. Previously
 selected values appear as constants/templates, so a client asks only for remaining
-inputs without guessing IDs or parameter types. The following purchase-action
-schema illustrates the planned mutation adapter contract; Shop purchases remain
-unconnected and are not offered in `available_actions` by observation:
+inputs without guessing IDs or parameter types. For example, a selected Shop
+product offers (schema abbreviated):
 
 ```json
 {
   "action": "shop_purchase",
-  "required_params": ["item_definition_id", "quantity"],
-  "params_template": {"item_definition_id": "weapon-01"},
+  "required_params": ["shop_type", "item_definition_id", "quantity"],
+  "params_template": {"shop_type": "weapon", "item_definition_id": "weapon-01"},
   "params_schema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["item_definition_id", "quantity"],
+    "required": ["shop_type", "item_definition_id", "quantity"],
     "properties": {
+      "shop_type": {"type": "string", "const": "weapon"},
       "item_definition_id": {"type": "string", "const": "weapon-01"},
-      "quantity": {"type": "integer", "minimum": 1}
+      "quantity": {"type": "integer"}
     }
   }
 }
@@ -502,7 +501,7 @@ facility operation has a replacement.
 
 | Migration owner | Responsibility and contract sources |
 | --- | --- |
-| [Economy #947](https://github.com/witchcraze/party2re/issues/947) | Shop, Bank, Depot, SecretShop and markets/crafting. Feature-owned retained-operation mappings: [Shops](../design/shops.md#retained-routes), [Bank](../design/bank.md#observation-and-retained-routes), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [Auction](../design/auction.md#gateway-and-retained-reads), [Black Market](../design/black-market.md#5-gateway-and-retained-routes), [Blacksmith](../design/blacksmith.md#5-gateway-commands-and-observation), [Alchemy](../design/alchemy.md#gateway-and-observation), [Flea Market](../design/fleamarket.md#1-legacy-actions-reconciliation-table), [Gem Store](../design/gemstore.md#gatewayと参照未移行操作). |
+| [Economy #947](https://github.com/witchcraze/party2re/issues/947) | Shop, Bank, Depot, SecretShop and markets/crafting. Feature-owned retained-operation mappings: [Shops](../design/shops.md#scoped-legacy-actioncall-path-reconciliation), [Bank](../design/bank.md#observation-and-retained-routes), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [Auction](../design/auction.md#gateway-and-retained-reads), [Black Market](../design/black-market.md#5-gateway-and-retained-routes), [Blacksmith](../design/blacksmith.md#5-gateway-commands-and-observation), [Alchemy](../design/alchemy.md#gateway-and-observation), [Flea Market](../design/fleamarket.md#1-legacy-actions-reconciliation-table), [Gem Store](../design/gemstore.md#gatewayと参照未移行操作). |
 | [Combat/Adventure #948](https://github.com/witchcraze/party2re/issues/948) | Run/room/Party commands, owned observations, monsters and Replay. Adopt [run authority and recovery](transient-run-state.md), [Adventure](../design/adventure.md) and [Replay visibility](../design/replay.md); generic activity facts do not replace maps, explicit battle choices or receipt reads. |
 | [Town/Faith/Social #949](https://github.com/witchcraze/party2re/issues/949) | Home, Casino, faith and social facilities. [Home](../design/home.md#retained-rest-and-deferred-detail-ownership) and [Casino](../design/casino.md#scoped-legacy-dispatch-reconciliation) own their visibility/action mappings; observation does not connect mutations. |
 | [Final cleanup #950](https://github.com/witchcraze/party2re/issues/950) | Final router/OpenAPI cleanup, deliberate exceptions and otherwise unassigned core profile/inventory/equipment, Event Plaza, ranking/news/notification surfaces. Assign remaining gameplay replacements to bounded children before deleting them. |
@@ -606,7 +605,7 @@ Only explicitly mapped 4xx errors are known rejections; every other execution er
 
 ### Feature command contracts
 
-Bank, SecretShop, stage adventure, rescue and Home sleep/wake commands keep their feature owners' rules ([Bank](../design/bank.md), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration), [Adventure](../design/adventure.md), [Rescue](../design/rescue-and-helper.md#emergency-rescue), [Home recovery](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)). Cross-cutting points:
+Bank, Shop, SecretShop, stage adventure, rescue and Home sleep/wake commands keep their feature owners' rules ([Bank](../design/bank.md), [Shop](../design/shops.md#10-shop-scenes-and-commands), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration), [Adventure](../design/adventure.md), [Rescue](../design/rescue-and-helper.md#emergency-rescue), [Home recovery](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)). Cross-cutting points:
 
 - `adventure_start` keeps the immediate batch crawl; its Gateway connection certifies neither parity nor a delayed expedition.
 - `rescue_request` bypasses ordinary entry and Sleep/CanWake gates and does not guarantee that sleep is removed.

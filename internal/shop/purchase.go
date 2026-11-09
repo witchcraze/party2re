@@ -33,17 +33,6 @@ type BatchPurchaseResult struct {
 	TotalPrice int                     `json:"total_price"`
 }
 
-func shopTypeFromKind(kind int) ShopType {
-	switch kind {
-	case 1:
-		return ShopTypeWeapon
-	case 2:
-		return ShopTypeArmor
-	default:
-		return ShopTypeItem
-	}
-}
-
 func (s *Service) isItemInActiveHelper(ctx context.Context, itemID string) bool {
 	if s.helper == nil {
 		return false
@@ -53,17 +42,6 @@ func (s *Service) isItemInActiveHelper(ctx context.Context, itemID string) bool 
 		return false
 	}
 	return slices.Contains(active, itemID)
-}
-
-// Purchase buys an item at retail price.
-// If the target slot is empty in inventory and quantity is 1, it is delivered to inventory.
-// If the slot is already occupied, quantity > 1, or depot transfer occurs, it is sent to depot.
-func (s *Service) Purchase(ctx context.Context, characterID string, itemDefinitionID string, quantity int) (PurchaseResult, error) {
-	definition, err := s.catalog.FindByID(itemDefinitionID)
-	if err != nil {
-		return PurchaseResult{}, ErrItemNotFound
-	}
-	return s.PurchaseInShop(ctx, characterID, shopTypeFromKind(definition.LegacyHandKind()), itemDefinitionID, quantity)
 }
 
 // PurchaseInShop buys an item from a specific shop type, applying shop-specific pricing and messages.
@@ -379,15 +357,4 @@ func (s *Service) InspectNPC(ctx context.Context, shopType ShopType, characterID
 		NPCName:        npc,
 		SecretShopHint: hint,
 	}, nil
-}
-
-func (s *Service) DiscoverSecretShop(ctx context.Context, characterID string) (bool, string, error) {
-	char, err := s.characters.FindByID(ctx, characterID)
-	if err != nil {
-		return false, "", err
-	}
-	if char.JobLevel < 7 {
-		return false, "転職回数が足りません（7回以上の転職が必要です）", nil
-	}
-	return true, "秘密の店を見つけました！", nil
 }

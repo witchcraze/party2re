@@ -18,6 +18,7 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/testutil"
 	vk "github.com/witchcraze/party2re/internal/valkey"
@@ -164,7 +165,10 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 					return err
 				}},
 				{"consume-definition", func() error { _, err := core.economy.ConsumeItemDefinition(ctx, actor.ID, "item-001", 1); return err }},
-				{"shop", func() error { _, err := econ.shop.Purchase(ctx, actor.ID, "item-001", 1); return err }},
+				{"shop", func() error {
+					_, err := econ.shop.PurchaseInShop(ctx, actor.ID, shop.ShopTypeItem, "item-001", 1)
+					return err
+				}},
 				{"secretshop", func() error {
 					_, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root", 1)
 					return err

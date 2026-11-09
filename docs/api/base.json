@@ -5605,6 +5605,207 @@
                 "params"
               ]
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "shop_purchase"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "shop_type": {
+                      "type": "string",
+                      "enum": [
+                        "weapon",
+                        "armor",
+                        "item",
+                        "accessory"
+                      ],
+                      "description": "Explicit shop from the observed scene; prices and the sales list belong to this shop."
+                    },
+                    "item_definition_id": {
+                      "type": "string",
+                      "description": "Explicit product ID from the observed catalog. Funds, availability and helper exclusions stay service-owned."
+                    },
+                    "quantity": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": -9223372036854775808,
+                      "maximum": 9223372036854775807,
+                      "description": "Explicit quantity; the service accepts 1..9999. One item goes to the empty hand, otherwise goods go to the Depot."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "shop_type",
+                    "item_definition_id",
+                    "quantity"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "shop_sell"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "shop_type": {
+                      "type": "string",
+                      "enum": [
+                        "weapon",
+                        "armor",
+                        "item",
+                        "accessory"
+                      ],
+                      "description": "Explicit shop from the observed scene."
+                    },
+                    "item_instance_id": {
+                      "type": "string",
+                      "description": "Owned inventory instance, normally the observed sale_offer. One unit is sold at half the base price."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "shop_type",
+                    "item_instance_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "shop_batch_purchase"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "shop_type": {
+                      "type": "string",
+                      "enum": [
+                        "weapon",
+                        "armor",
+                        "item"
+                      ],
+                      "description": "Explicit shop; the accessory shop has no batch purchase."
+                    },
+                    "items": {
+                      "type": "array",
+                      "minItems": 1,
+                      "description": "Products from the shop's current sales list; everything is delivered to the Depot in one transaction.",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "item_definition_id": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": -9223372036854775808,
+                            "maximum": 9223372036854775807,
+                            "description": "1..9999 per entry."
+                          }
+                        },
+                        "required": [
+                          "item_definition_id",
+                          "quantity"
+                        ]
+                      }
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "shop_type",
+                    "items"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "shop_synthesize"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "recipe_target": {
+                      "type": "string",
+                      "description": "Recipe target from the observed accessory-shop recipes. Both materials must be in the Depot; they are consumed on success and failure, and the product goes to the Depot."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "recipe_target"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
           }
         ]
       },
@@ -6579,6 +6780,16 @@
           },
           "purchase_params": {
             "$ref": "#/components/schemas/ShopPurchaseParams"
+          },
+          "power": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nominal strength; weapon and armor shops only."
+          },
+          "weight": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nominal weight; weapon and armor shops only."
           }
         },
         "required": [
@@ -6653,6 +6864,47 @@
           },
           "page": {
             "$ref": "#/components/schemas/ShopScenePage"
+          },
+          "sale_offer": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "item_instance_id": {
+                    "type": "string"
+                  },
+                  "item_definition_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "payout": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "item_instance_id",
+                  "item_definition_id",
+                  "name",
+                  "payout"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The item in this shop's hand (weapon, armor, or the tool hand for the item and accessory shops) and its unit payout; null when that hand is empty."
+          },
+          "recipes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShopSynthesisRecipe"
+            },
+            "description": "Accessory shop only: the synthesis recipes."
           }
         },
         "required": [
@@ -6662,7 +6914,8 @@
           "npc",
           "quantity",
           "items",
-          "page"
+          "page",
+          "sale_offer"
         ]
       },
       "ShopProductSceneData": {
@@ -6693,6 +6946,47 @@
           },
           "product": {
             "$ref": "#/components/schemas/ShopProduct"
+          },
+          "sale_offer": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "item_instance_id": {
+                    "type": "string"
+                  },
+                  "item_definition_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "payout": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "item_instance_id",
+                  "item_definition_id",
+                  "name",
+                  "payout"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The item in this shop's hand (weapon, armor, or the tool hand for the item and accessory shops) and its unit payout; null when that hand is empty."
+          },
+          "recipes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShopSynthesisRecipe"
+            },
+            "description": "Accessory shop only: the synthesis recipes."
           }
         },
         "required": [
@@ -6701,7 +6995,8 @@
           "shop_type",
           "npc",
           "quantity",
-          "product"
+          "product",
+          "sale_offer"
         ]
       },
       "ShopScenePage": {
@@ -15758,37 +16053,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "PurchaseResponse": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "item_definition_id": {
-            "type": "string"
-          },
-          "npc_message": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "integer"
-          },
-          "total_cost": {
-            "type": "integer"
-          },
-          "transferred_to_depot": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "character_id",
-          "item_definition_id",
-          "quantity",
-          "total_cost",
-          "transferred_to_depot"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "ShopSynthesisRecipe": {
         "properties": {
           "id": {
@@ -15833,88 +16097,6 @@
           "material2_name",
           "material2_definition_id",
           "success_rate"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "SaleResponse": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "item_instance_id": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "integer"
-          },
-          "total_payout": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "item_instance_id",
-          "quantity",
-          "total_payout"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AccessorySynthesizeResponse": {
-        "properties": {
-          "consumed_hiyaku_item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemInstance"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "consumed_materials": {
-            "items": {
-              "$ref": "#/components/schemas/ItemInstance"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "created_item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemInstance"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotDepot"
-          },
-          "npc_message": {
-            "type": "string"
-          },
-          "recipe": {
-            "$ref": "#/components/schemas/ShopSynthesisRecipe"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "used_hiyaku": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "recipe",
-          "success",
-          "used_hiyaku",
-          "consumed_materials",
-          "depot",
-          "npc_message"
         ],
         "type": "object",
         "additionalProperties": false

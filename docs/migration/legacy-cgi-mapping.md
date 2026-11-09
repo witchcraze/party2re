@@ -145,10 +145,10 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| `lib/weapon.cgi` | 武器屋 (@ブッキー) | `internal/shop/` | [design/shops.md](../design/shops.md)<br/>[design/items-and-equipment.md](../design/items-and-equipment.md)<br/>[api/paths/shop.json](../api/paths/shop.json) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、手助けクエスト除外、Depot自動転送 |
-| `lib/armor.cgi` | 防具屋 (@アマノ) | `internal/shop/` | [design/shops.md](../design/shops.md)<br/>[api/paths/shop.json](../api/paths/shop.json) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、手助けクエスト除外、Depot自動転送 |
-| `lib/item.cgi` | 道具屋 (@アイテムコ) | `internal/shop/` | [design/shops.md](../design/shops.md)<br/>[api/paths/shop.json](../api/paths/shop.json) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、秘密の店ヒント |
-| `lib/accessory.cgi` | 装飾品屋 (@ミラ) | `internal/shop/` | [design/accessory-shop.md](../design/accessory-shop.md)<br/>[api/paths/shop.json](../api/paths/shop.json) | Review against source | カタログ・倍率・48レシピ・秘薬保証。成功確率の原典比較境界に差分あり。 |
+| `lib/weapon.cgi` | 武器屋 (@ブッキー) | `internal/shop/` | [design/shops.md](../design/shops.md)<br/>[design/items-and-equipment.md](../design/items-and-equipment.md) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、手助けクエスト除外、Depot自動転送 |
+| `lib/armor.cgi` | 防具屋 (@アマノ) | `internal/shop/` | [design/shops.md](../design/shops.md) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、手助けクエスト除外、Depot自動転送 |
+| `lib/item.cgi` | 道具屋 (@アイテムコ) | `internal/shop/` | [design/shops.md](../design/shops.md) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、秘密の店ヒント |
+| `lib/accessory.cgi` | 装飾品屋 (@ミラ) | `internal/shop/` | [design/accessory-shop.md](../design/accessory-shop.md) | Review against source | カタログ・倍率・48レシピ・秘薬保証。成功確率の原典比較境界に差分あり。 |
 | `lib/blacksmith.cgi` | 鍛冶屋 (@ブッキー) | `internal/blacksmith/` | [design/blacksmith.md](../design/blacksmith.md) | Review against source | 武器刻印12種(刻印晶消費)、装備名付け(武器・防具/20文字/サニタイズ)、専用武器預かり所(3枠/名前重複禁止/装備中引出不可) |
 | `lib/secret.cgi` | 秘密の店 (@ヒミツジ) | `internal/secretshop/` | [design/shops.md](../design/shops.md) | Review against source | 転職7回以上(`job_lv >= 7`)、原典8種3倍価格、手持ち直接購入時の図鑑自動登録連携(`RecordItemDiscovered`)、満杯時Depot転送(`depot.FindOrCreate`)、ぱふぱふ会話のみ |
 | `lib/black_market.cgi` | 闇市場 (@闇商人) | `internal/blackmarket/` | [design/black-market.md](../design/black-market.md) | Review against source | `job_lv>=15` で入場、純粋レアポイント物々交換、手持ち/Depot生贄、24種景品Depot直送、原典台詞 |

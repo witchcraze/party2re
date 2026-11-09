@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records legacy rules, decisions and open gaps for the town shops (weapon, armor, item and accessory) and the secret shop. Catalog tiers, prices, dialogue and transport are owned by code and [OpenAPI](../api/paths/shop.json); other commerce facilities have their own documents ([Store](store.md), [Flea Market](fleamarket.md), [Auction](auction.md), [Black Market](black-market.md), [Accessory Shop](accessory-shop.md)).
+This document records legacy rules, decisions and open gaps for the town shops (weapon, armor, item and accessory) and the secret shop. Catalog tiers, prices, dialogue and transport are owned by code and [OpenAPI](../api/base.json); other commerce facilities have their own documents ([Store](store.md), [Flea Market](fleamarket.md), [Auction](auction.md), [Black Market](black-market.md), [Accessory Shop](accessory-shop.md)).
 
 ## Helper quest exclusion
 
@@ -22,20 +22,23 @@ Access requires job level 7 or more (`item.cgi:57–69`); the secret shop sells 
 
 Purchase uses the Gateway's `secretshop_purchase` with explicit item and quantity ([command contract](../architecture/client-agent-api.md#secretshop-purchase-command-contract)). Puff-puff uses `secretshop_puffpuff`, an NPC act with no inputs: like legacy `pafupafu` (`$to_name = $m`), its actor row and NPC row are private to the actor ([NPC interaction](../architecture/place-log.md#npc-interaction-1940)). No SecretShop REST route remains. **Known difference:** legacy `kau` (`secret.cgi:34–82`) buys one item, while Go accepts 1–99 and sends bulk quantities to the Depot; this is not an approved replacement of the single-purchase rule.
 
-## 10. Selected Shop observation and migration boundary
+## 10. Shop scenes and commands
 
-The four ordinary shops map directly to scene destinations through the shared [navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery). Accessory products stay ordinary item catalog entries. Observation never invokes secret discovery, purchase, sale or synthesis. Go quantity bounds (1–9999) are not legacy: the original bought one item per purchase, and batch input named several items.
+The four ordinary shops map directly to scene destinations through the shared [navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery). Accessory products stay ordinary item catalog entries. Each command names its shop explicitly (`shop_type`), so later navigation cannot redirect it. Go quantity bounds (1–9999) are not legacy: the original bought one item per purchase, and batch input named several items.
 
 ### Scoped legacy action/call-path reconciliation
 
-Shop files load through `party.cgi:14–30`; `system.cgi:9–24` registers shared controls and `system.cgi:639–655` dispatches with the action-time guard. Purchase (`かう`), sale (`うる`), batch purchase, secret discovery (`ひみつのみせ`) and accessory synthesis (`ごうせい`, `accessory.cgi:100–101,172–292`) still run through REST; their Gateway migration is open (#947). `get_depot` is an uncalled utility, not an omitted action. Talk and inspect use the shared NPC commands; the static dialogue still omits legacy dynamic recommendations (such as the accessory shop's random item line), so exact dialogue parity is not claimed.
+Shop files load through `party.cgi:14–30`; `system.cgi:9–24` registers shared controls and `system.cgi:639–655` dispatches with the action-time guard.
 
-Open gaps (#947):
+| Legacy action | Gateway | Note |
+|---|---|---|
+| `かう` (four shops) | `shop_purchase` | The scene lists the catalog with nominal strength/weight in the weapon and armor shops. |
+| `うる` | `shop_sell` | The scene offers the item in the shop's hand (`sale_offer`): weapon, armor, or the tool hand in the item and accessory shops. |
+| `まとめてかう` (weapon, armor, item) | `shop_batch_purchase` | Always delivers to the Depot. |
+| `ひみつのみせ` (item shop) | `scene_enter` `secretshop` | Qualified navigation (job level 7). Legacy enters only from the item shop; Go enters from town. |
+| `ごうせい` (accessory, `accessory.cgi:100–101,172–292`) | `shop_synthesize` | The accessory scene lists the recipes; see [Accessory Shop](accessory-shop.md#synthesis). |
+| `はなす` / NPC `しらべる` | `npc_talk` / `npc_inspect` | Static dialogue omits legacy dynamic recommendations (such as the accessory shop's random item line); exact dialogue parity is not claimed. |
 
-- Legacy weapon and armor listings show nominal strength and weight; the catalog shows only price and slot.
-- Standard purchase does not enforce sales-tier membership, unlike batch and accessory purchase.
-- A failed helper read in standard purchase is treated as no exclusion.
+`get_depot` is an uncalled utility, not an omitted action. No ordinary Shop REST route remains.
 
-### Retained routes
-
-Shop REST routes (catalog, purchase, sale, batch purchase, secret discovery and the accessory buy/sell/synthesize/recipes routes) remain until verified replacements exist (#947).
+Open service gaps (#2009): standard purchase does not enforce sales-tier membership, a failed helper read is treated as no exclusion, and sale accepts any owned inventory item instead of only the shop's hand.

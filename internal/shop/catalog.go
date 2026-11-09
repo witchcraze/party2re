@@ -19,11 +19,10 @@ const (
 const SecretShopHint = "＠ひみつのみせ に行きたい"
 
 var (
-	ErrInvalidShopType       = errors.New("invalid shop type")
-	ErrItemUnavailable       = errors.New("item is currently unavailable (active helper quest)")
-	ErrEmptyPurchaseList     = errors.New("purchase list cannot be empty")
-	ErrDepotNotConfigured    = errors.New("depot repository is not configured")
-	ErrSecretShopRequirement = errors.New("insufficient job level to access secret shop")
+	ErrInvalidShopType    = errors.New("invalid shop type")
+	ErrItemUnavailable    = errors.New("item is currently unavailable (active helper quest)")
+	ErrEmptyPurchaseList  = errors.New("purchase list cannot be empty")
+	ErrDepotNotConfigured = errors.New("depot repository is not configured")
 )
 
 type CatalogItem struct {
@@ -32,6 +31,9 @@ type CatalogItem struct {
 	BasePrice   int       `json:"base_price"`
 	RetailPrice int       `json:"retail_price"`
 	Slot        item.Slot `json:"slot,omitempty"`
+	// Power and Weight are the nominal strength and weight the weapon and armor listings show.
+	Power  int `json:"power,omitempty"`
+	Weight int `json:"weight,omitempty"`
 }
 
 type ShopCatalog struct {

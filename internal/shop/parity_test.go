@@ -118,7 +118,7 @@ func TestPurchase_SlotOccupied_AutoTransferToDepot(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Fighter", 1000)
 
 	// 1. First weapon purchase -> empty inventory -> goes to inventory
-	res1, err := svc.Purchase(context.Background(), char.ID, "weapon-01", 1)
+	res1, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if err != nil {
 		t.Fatalf("first purchase error: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestPurchase_SlotOccupied_AutoTransferToDepot(t *testing.T) {
 	}
 
 	// 2. Second weapon purchase -> slot occupied -> auto-transfers to depot
-	res2, err := svc.Purchase(context.Background(), char.ID, "weapon-02", 1)
+	res2, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02", 1)
 	if err != nil {
 		t.Fatalf("second purchase error: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestPurchase_DepotFullDeliversOverCapacity(t *testing.T) {
 	_ = depotRepo.Save(context.Background(), dep)
 
 	// send_item appends to a full depot (system.cgi:818-837).
-	if _, err := svc.Purchase(context.Background(), char.ID, "weapon-02", 1); err != nil {
+	if _, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02", 1); err != nil {
 		t.Fatalf("purchase into full depot: %v", err)
 	}
 	charAfter, _ := charRepo.FindByID(context.Background(), char.ID)
@@ -210,13 +210,13 @@ func TestPurchase_ActiveHelperExclusion(t *testing.T) {
 	helperMock.activeIDs = []string{"weapon-01"}
 
 	// Attempt to purchase weapon-01 -> rejected with ErrItemUnavailable
-	_, err := svc.Purchase(context.Background(), char.ID, "weapon-01", 1)
+	_, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if !errors.Is(err, shop.ErrItemUnavailable) {
 		t.Fatalf("expected ErrItemUnavailable, got %v", err)
 	}
 
 	// Purchase weapon-02 (not in helper) -> succeeds
-	res, err := svc.Purchase(context.Background(), char.ID, "weapon-02", 1)
+	res, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02", 1)
 	if err != nil {
 		t.Fatalf("weapon-02 purchase error: %v", err)
 	}
@@ -438,38 +438,5 @@ func TestNPC_Inspect_And_Talk(t *testing.T) {
 	}
 	if resI.SecretShopHint != "＠ひみつのみせ に行きたい" {
 		t.Errorf("item inspect secret shop hint mismatch: %s", resI.SecretShopHint)
-	}
-}
-
-func TestDiscoverSecretShop(t *testing.T) {
-	svc, charRepo, _, _, _, _ := setupParityTest(t)
-	char := createTestCharacter(t, charRepo, "Hero", 100)
-
-	// Level 6 (< 7): fails
-	char.JobLevel = 6
-	_ = charRepo.Update(context.Background(), char)
-	ok, msg, err := svc.DiscoverSecretShop(context.Background(), char.ID)
-	if err != nil {
-		t.Fatalf("DiscoverSecretShop error: %v", err)
-	}
-	if ok {
-		t.Errorf("job_lv 6 should not unlock secret shop")
-	}
-	if msg == "" {
-		t.Errorf("expected failure message")
-	}
-
-	// Level 7: succeeds
-	char.JobLevel = 7
-	_ = charRepo.Update(context.Background(), char)
-	ok7, msg7, err := svc.DiscoverSecretShop(context.Background(), char.ID)
-	if err != nil {
-		t.Fatalf("DiscoverSecretShop error: %v", err)
-	}
-	if !ok7 {
-		t.Errorf("job_lv 7 should unlock secret shop")
-	}
-	if msg7 != "秘密の店を見つけました！" {
-		t.Errorf("unexpected success message: %s", msg7)
 	}
 }

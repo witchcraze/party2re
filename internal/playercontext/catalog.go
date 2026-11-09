@@ -242,30 +242,10 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	// =========================================================================
 	// Category: shop (Commerce & Specialty Stores)
 	// =========================================================================
-	{
-		ID:             "shop_purchase",
-		Label:          "店でアイテム購入",
-		Category:       "shop",
-		OperationID:    "shopPurchase",
-		RequiredParams: []string{"item_definition_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
-	},
-	{
-		ID:             "shop_sell",
-		Label:          "店にアイテム売却",
-		Category:       "shop",
-		OperationID:    "shopSell",
-		RequiredParams: []string{"item_instance_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "shop_accessory_buy",
-		Label:          "装飾品購入",
-		Category:       "shop",
-		OperationID:    "shopAccessoryBuy",
-		RequiredParams: []string{"item_definition_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
-	},
+	{ID: "shop_purchase", Label: "店でアイテム購入", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_definition_id", "quantity"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
+	{ID: "shop_sell", Label: "店にアイテム売却", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "shop_batch_purchase", Label: "まとめてかう", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "items"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
+	{ID: "shop_synthesize", Label: "装飾品合成", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_target"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{
 		ID:             "gemstore_sell",
 		Label:          "宝珠箱の宝石を売る",

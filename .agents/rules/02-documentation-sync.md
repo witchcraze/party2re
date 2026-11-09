@@ -41,7 +41,7 @@ description: Rules for maintaining the Single Source of Truth (SSOT) and synchro
 ## 5. OpenAPI Specification Synchronization (SSOT & Modular Paths)
 - **Source of Truth:**
   - Base metadata, reusable schemas, and security schemes reside in `docs/api/base.json`.
-  - Endpoint path operations reside in modular files: `docs/api/paths/{module}.json` (e.g., `character.json`, `shop.json`).
+  - Endpoint path operations reside in modular files: `docs/api/paths/{module}.json` (e.g., `character.json`, `home.json`).
 - **NEVER edit compiled artifacts directly:**
   - Do NOT edit `docs/api/openapi.json` or `internal/api/http/openapi.json` directly. These are compiled build artifacts generated deterministically by `scripts/sync_openapi/`.
 - **Synchronization Workflow:**

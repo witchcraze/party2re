@@ -41,7 +41,7 @@ func TestSelectedScenesAndConnectedChoices(t *testing.T) {
 	if status != 200 || selected.Scene.Kind != "subject" || selected.Scene.LocationID != "shop_weapon" || selected.Scene.Subject == nil || *selected.Scene.Subject != store.selection.Subject {
 		t.Fatalf("selected: %d %+v", status, selected.Scene)
 	}
-	if got := actionIDs(selected.AvailableActions); !slices.Equal(got, []string{"scene_back", "npc_talk", "npc_inspect"}) {
+	if got := actionIDs(selected.AvailableActions); !slices.Equal(got, []string{"scene_back", "npc_talk", "npc_inspect", "shop_purchase", "shop_batch_purchase"}) {
 		t.Fatalf("detail choices: %v", got)
 	}
 	available = false

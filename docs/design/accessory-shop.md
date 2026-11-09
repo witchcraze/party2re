@@ -2,8 +2,8 @@
 
 The accessory shop (`lib/accessory.cgi`, NPC @ミラ) sells items, resells the
 held item, and synthesizes depot materials. The original CGI defines the
-rules below. `internal/shop` is their current Go representation; merged #779
-does not certify complete behavioral parity.
+rules below. `internal/shop` is their current Go representation; it does not
+certify complete behavioral parity.
 
 ## Catalog and prices
 
@@ -50,11 +50,3 @@ the different comparison operators alone do not establish a probability bug.
 held-item slot (`accessory.cgi:175`). Go scans all inventory items and consumes
 the first item-180 it finds, whether equipped or not. Preserve the held-item
 condition as the specification when reconciling inventory/equipment modeling.
-
-## Implementation boundary
-
-Current synthesis locks character, inventory (for held elixir), then depot
-inside one injected transaction. Catalog, purchase, sell, and synthesis routes
-are documented in [shop OpenAPI sources](../api/paths/shop.json).
-NPC dialogue/inspect routes are shared shop routes. There is no separate
-accessory `/talk` or `/inspect` route, and response envelopes vary by operation.

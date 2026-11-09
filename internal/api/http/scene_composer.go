@@ -113,9 +113,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.read = h.casinoSceneData
 		case "shop_weapon", "shop_armor", "shop_item", "shop_accessory":
 			adapter.title = map[string]string{"shop_weapon": "武器店", "shop_armor": "防具店", "shop_item": "道具店", "shop_accessory": "装飾品店"}[definition.ID]
-			adapter.commands = []string{"shop_purchase"}
+			adapter.commands = []string{"shop_purchase", "shop_batch_purchase", "shop_sell"}
 			if definition.ID == "shop_accessory" {
-				adapter.commands = []string{"shop_accessory_buy"}
+				adapter.commands = []string{"shop_purchase", "shop_sell", "shop_synthesize"}
 			}
 			adapter.read = h.shopSceneData
 		default:
@@ -269,6 +269,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			}
 		case ShopCatalogSceneData:
 			scene.Support.Observation, scene.Title = "details", data.Title
+			choices = shopTemplates(data.ShopSceneInfo, choices, templates)
 			if data.Page.Next != nil {
 				choices = append(choices, "scene_page")
 				p := data.Page.Next
@@ -276,7 +277,8 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			}
 		case ShopProductSceneData:
 			scene.Support.Observation, scene.Title = "details", data.Title
-			templates[adapter.commands[0]] = map[string]any{"item_definition_id": data.Product.PurchaseParams.ItemDefinitionID}
+			choices = shopTemplates(data.ShopSceneInfo, choices, templates)
+			templates["shop_purchase"]["item_definition_id"] = data.Product.PurchaseParams.ItemDefinitionID
 		case SecretShopCatalogSceneData:
 			scene.Support.Observation, scene.Title = "details", data.Title
 			if p := data.Page.Next; p != nil {
