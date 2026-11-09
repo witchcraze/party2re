@@ -210,7 +210,10 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM contest_entries WHERE character_id = ?`,
 		`DELETE FROM character_photos WHERE character_id = ?`,
 		`DELETE FROM fleamarket_listings WHERE seller_character_id = ?`,
-		`DELETE FROM character_letters WHERE sender_character_id = ? OR recipient_character_id = ?`,
+		// Letters keep the counterpart's copy (#1094): hide this character's copies, then purge unowned rows.
+		`UPDATE character_letters SET is_deleted_by_sender = TRUE WHERE sender_character_id = ?`,
+		`UPDATE character_letters SET is_deleted_by_recipient = TRUE WHERE recipient_character_id = ?`,
+		`DELETE FROM character_letters WHERE (sender_character_id = ? OR recipient_character_id = ?) AND is_deleted_by_sender AND is_deleted_by_recipient`,
 		`DELETE FROM character_companion_phrases WHERE character_id = ?`,
 		`DELETE FROM character_delivery_notices WHERE character_id = ?`,
 		`DELETE FROM character_homes WHERE character_id = ?`,

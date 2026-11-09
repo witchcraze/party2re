@@ -28,6 +28,8 @@ Four towns have different prices, lease cycles and style ranges, with at most te
 
 A character may send a letter to itself, as in legacy; it appears in both of its boxes. Sender and recipient delete independently; the row is purged only when both have deleted it, including eviction from a full box.
 
+Each box's copy belongs to its owner, not to the counterpart's identity (legacy stores the recipient's copy and the sender's log in separate per-player directories, and self-deletion removes only the deleting player's directory). Deleting a character or account hides only that character's copies; the survivor keeps theirs, including read state and the name/color/body/time snapshots, until they delete it. Character IDs on a letter are therefore historical references, not foreign keys; the row is purged once neither side retains a copy.
+
 <a id="letter-settings"></a>
 
 #### Letter throttling, retention and body length

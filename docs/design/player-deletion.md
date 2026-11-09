@@ -25,6 +25,9 @@ preserves the admission row while another participant's durable claim remains,
 including completed settlement awaiting publication. Surviving participants retain
 their existing run and rewards. See the [run lifetime contract](../architecture/transient-run-state.md#identity-and-admission).
 
+Mailbox letters are per-owner copies: deletion removes only the deleted character's
+copies and leaves the counterpart's ([Home letters](home.md#2-player-to-player-letters)).
+
 Current `character.Service.Delete` invokes hooks **before** its SQL transaction
 and treats hook errors as best-effort. SQL rollback therefore does not restore
 Valkey/external cleanup. This is not an atomic cross-store cascade; callers must
