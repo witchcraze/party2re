@@ -264,34 +264,24 @@ func TestWireShopPurchaseIndependentHandFields_Integration(t *testing.T) {
 	}
 }
 
-func TestWireShopPurchaseShieldAndAccessorySharing_Integration(t *testing.T) {
+func TestWireShopPurchaseToolHandSharing_Integration(t *testing.T) {
 	f := newShopFixture(t, 50000)
 	ctx := context.Background()
 
-	// Buy shield (item-071, SlotOffHand, kind 3)
-	resShield, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeItem, "item-071", 1)
+	// Shops sell no shields (legacy @sales); an item-shop tool and an accessory share the tool hand.
+	resHerb, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeItem, "item-001", 1)
 	if err != nil {
-		t.Fatalf("Purchase(item-071) error = %v", err)
+		t.Fatalf("Purchase(item-001) error = %v", err)
 	}
-	if resShield.TransferredToDepot {
-		t.Fatal("expected shield in inventory")
+	if resHerb.TransferredToDepot {
+		t.Fatal("expected item-001 in the empty tool hand")
 	}
-
-	eq, err := f.econ.equipRepo.FindByCharacterID(ctx, f.char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := eq.Equipped(item.SlotOffHand); !ok {
-		t.Fatal("shield not equipped in SlotOffHand")
-	}
-
-	// Buying accessory (item-147, SlotAccessory, kind 3) while shield occupies kind 3 routes to depot!
 	resAccessory, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeAccessory, "item-147", 1)
 	if err != nil {
 		t.Fatalf("Purchase(item-147) error = %v", err)
 	}
 	if !resAccessory.TransferredToDepot {
-		t.Fatal("expected accessory to route to depot when tool hand is occupied by shield")
+		t.Fatal("expected accessory to route to depot when the tool hand is occupied")
 	}
 }
 

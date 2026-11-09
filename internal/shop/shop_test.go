@@ -152,11 +152,11 @@ func (r *equipmentRepoStub) Save(_ context.Context, value coreequipment.Equipmen
 
 func newTestSetup(t *testing.T) (*shop.Service, *characterRepoStub, *inventoryRepoStub, *item.Catalog) {
 	t.Helper()
-	sword, err := item.NewEquipmentDefinition("bronze_sword", "Bronze Sword", 100, item.SlotMainHand)
+	sword, err := item.NewEquipmentDefinition("weapon-01", "Bronze Sword", 100, item.SlotMainHand)
 	if err != nil {
 		t.Fatal(err)
 	}
-	potion, err := item.NewDefinition("herb", "Herb", 30)
+	potion, err := item.NewDefinition("item-001", "Herb", 30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestPurchaseSuccess(t *testing.T) {
 	service, charRepo, invRepo, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 200)
 
-	result, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", 1)
+	result, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if err != nil {
 		t.Fatalf("Purchase() error = %v", err)
 	}
@@ -213,7 +213,7 @@ func TestPurchaseSuccess(t *testing.T) {
 	if len(result.Inventory.Items) != 1 {
 		t.Fatalf("Inventory items count = %d, want 1", len(result.Inventory.Items))
 	}
-	if result.ItemInstance.DefinitionID != "bronze_sword" {
+	if result.ItemInstance.DefinitionID != "weapon-01" {
 		t.Errorf("ItemInstance.DefinitionID = %s, want bronze_sword", result.ItemInstance.DefinitionID)
 	}
 	if result.TransferredToDepot {
@@ -233,7 +233,7 @@ func TestPurchaseSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(savedInv.Items) != 1 || savedInv.Items[0].DefinitionID != "bronze_sword" {
+	if len(savedInv.Items) != 1 || savedInv.Items[0].DefinitionID != "weapon-01" {
 		t.Errorf("persisted Inventory = %#v", savedInv)
 	}
 }
@@ -243,7 +243,7 @@ func TestPurchaseMultipleQuantity(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Hero", 200)
 
 	// Herb base price 30 * 2 = 60 retail. 3 herbs = 180.
-	result, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", 3)
+	result, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "item-001", 3)
 	if err != nil {
 		t.Fatalf("Purchase() error = %v", err)
 	}
@@ -266,7 +266,7 @@ func TestPurchaseInsufficientFunds(t *testing.T) {
 	service, charRepo, invRepo, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 50)
 
-	_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", 1)
+	_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if !errors.Is(err, shop.ErrInsufficientFunds) {
 		t.Fatalf("Purchase() error = %v, want %v", err, shop.ErrInsufficientFunds)
 	}
@@ -296,10 +296,10 @@ func TestPurchaseInvalidQuantity(t *testing.T) {
 	service, charRepo, _, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 200)
 
-	if _, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", 0); !errors.Is(err, shop.ErrInvalidQuantity) {
+	if _, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 0); !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Purchase(0) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
-	if _, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", -1); !errors.Is(err, shop.ErrInvalidQuantity) {
+	if _, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", -1); !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Purchase(-1) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
 }
@@ -307,7 +307,7 @@ func TestPurchaseInvalidQuantity(t *testing.T) {
 func TestPurchaseCharacterNotFound(t *testing.T) {
 	service, _, _, _ := newTestSetup(t)
 
-	if _, err := service.PurchaseInShop(context.Background(), "unknown_id", shop.ShopTypeWeapon, "bronze_sword", 1); !errors.Is(err, corecharacter.ErrNotFound) {
+	if _, err := service.PurchaseInShop(context.Background(), "unknown_id", shop.ShopTypeWeapon, "weapon-01", 1); !errors.Is(err, corecharacter.ErrNotFound) {
 		t.Fatalf("Purchase(unknown) error = %v, want %v", err, corecharacter.ErrNotFound)
 	}
 }
@@ -318,14 +318,14 @@ func TestSellSuccess(t *testing.T) {
 
 	// Add item to inventory first
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-	swordInst, err := item.NewInstance("bronze_sword", 1)
+	swordInst, err := item.NewInstance("weapon-01", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = inv.Add(swordInst)
 	_ = invRepo.Save(context.Background(), inv)
 
-	result, err := service.Sell(context.Background(), char.ID, swordInst.ID, 1)
+	result, err := service.Sell(context.Background(), char.ID, shop.ShopTypeWeapon, swordInst.ID, 1)
 	if err != nil {
 		t.Fatalf("Sell() error = %v", err)
 	}
@@ -358,7 +358,7 @@ func TestSellWalletMaxMoneyClamp(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "RichHero", 999_980)
 
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-	swordInst, err := item.NewInstance("bronze_sword", 1)
+	swordInst, err := item.NewInstance("weapon-01", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestSellWalletMaxMoneyClamp(t *testing.T) {
 	_ = invRepo.Save(context.Background(), inv)
 
 	// Bronze Sword (100 G) sells for 50 G payout. 999,980 + 50 = 1,000,030 -> clamps to MaxMoney (999,999)
-	result, err := service.Sell(context.Background(), char.ID, swordInst.ID, 1)
+	result, err := service.Sell(context.Background(), char.ID, shop.ShopTypeWeapon, swordInst.ID, 1)
 	if err != nil {
 		t.Fatalf("Sell() error = %v", err)
 	}
@@ -390,7 +390,7 @@ func TestSellPartialQuantity(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Hero", 100)
 
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-	herbInst, err := item.NewInstance("herb", 5)
+	herbInst, err := item.NewInstance("item-001", 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestSellPartialQuantity(t *testing.T) {
 	_ = invRepo.Save(context.Background(), inv)
 
 	// Herb price = 30 G -> sell price = 15 G each. Selling 2 = 30 G payout.
-	result, err := service.Sell(context.Background(), char.ID, herbInst.ID, 2)
+	result, err := service.Sell(context.Background(), char.ID, shop.ShopTypeItem, herbInst.ID, 2)
 	if err != nil {
 		t.Fatalf("Sell() error = %v", err)
 	}
@@ -418,7 +418,7 @@ func TestSellUnownedItem(t *testing.T) {
 	service, charRepo, _, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 100)
 
-	_, err := service.Sell(context.Background(), char.ID, "nonexistent_instance_id", 1)
+	_, err := service.Sell(context.Background(), char.ID, shop.ShopTypeItem, "nonexistent_instance_id", 1)
 	if !errors.Is(err, shop.ErrUnownedItem) {
 		t.Fatalf("Sell() error = %v, want %v", err, shop.ErrUnownedItem)
 	}
@@ -429,14 +429,14 @@ func TestSellQuantityGreaterThanOwned(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Hero", 100)
 
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-	herbInst, err := item.NewInstance("herb", 2)
+	herbInst, err := item.NewInstance("item-001", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = inv.Add(herbInst)
 	_ = invRepo.Save(context.Background(), inv)
 
-	_, err = service.Sell(context.Background(), char.ID, herbInst.ID, 5)
+	_, err = service.Sell(context.Background(), char.ID, shop.ShopTypeItem, herbInst.ID, 5)
 	if !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Fatalf("Sell() error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
@@ -446,10 +446,10 @@ func TestSellInvalidQuantity(t *testing.T) {
 	service, charRepo, _, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 100)
 
-	if _, err := service.Sell(context.Background(), char.ID, "inst_id", 0); !errors.Is(err, shop.ErrInvalidQuantity) {
+	if _, err := service.Sell(context.Background(), char.ID, shop.ShopTypeItem, "inst_id", 0); !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Sell(0) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
-	if _, err := service.Sell(context.Background(), char.ID, "inst_id", -1); !errors.Is(err, shop.ErrInvalidQuantity) {
+	if _, err := service.Sell(context.Background(), char.ID, shop.ShopTypeItem, "inst_id", -1); !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Sell(-1) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
 }
@@ -498,7 +498,7 @@ func TestPurchase_QuantityBounds(t *testing.T) {
 
 	// MaxTransactionQuantity is 9999
 	// 1. Exactly MaxTransactionQuantity -> succeeds (herb is 30 gold each)
-	res, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", shop.MaxTransactionQuantity)
+	res, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "item-001", shop.MaxTransactionQuantity)
 	if err != nil {
 		t.Fatalf("Purchase(MaxTransactionQuantity) failed: %v", err)
 	}
@@ -507,14 +507,14 @@ func TestPurchase_QuantityBounds(t *testing.T) {
 	}
 
 	// 2. MaxTransactionQuantity + 1 -> fails with ErrInvalidQuantity
-	_, err = service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", shop.MaxTransactionQuantity+1)
+	_, err = service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "item-001", shop.MaxTransactionQuantity+1)
 	if !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Purchase(MaxTransactionQuantity + 1) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
 
 	// 3. Negative & Zero -> fails with ErrInvalidQuantity
 	for _, q := range []int{0, -1, -999} {
-		_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", q)
+		_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "item-001", q)
 		if !errors.Is(err, shop.ErrInvalidQuantity) {
 			t.Errorf("Purchase(%d) error = %v, want %v", q, err, shop.ErrInvalidQuantity)
 		}
@@ -546,7 +546,7 @@ func TestSell_QuantityBounds(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Hero", 100)
 
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-	herbInst, err := item.NewInstance("herb", shop.MaxTransactionQuantity)
+	herbInst, err := item.NewInstance("item-001", shop.MaxTransactionQuantity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -554,13 +554,13 @@ func TestSell_QuantityBounds(t *testing.T) {
 	_ = invRepo.Save(context.Background(), inv)
 
 	// MaxTransactionQuantity + 1 -> fails with ErrInvalidQuantity
-	_, err = service.Sell(context.Background(), char.ID, herbInst.ID, shop.MaxTransactionQuantity+1)
+	_, err = service.Sell(context.Background(), char.ID, shop.ShopTypeItem, herbInst.ID, shop.MaxTransactionQuantity+1)
 	if !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Sell(MaxTransactionQuantity + 1) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
 
 	// Valid MaxTransactionQuantity -> succeeds
-	res, err := service.Sell(context.Background(), char.ID, herbInst.ID, shop.MaxTransactionQuantity)
+	res, err := service.Sell(context.Background(), char.ID, shop.ShopTypeItem, herbInst.ID, shop.MaxTransactionQuantity)
 	if err != nil {
 		t.Fatalf("Sell(MaxTransactionQuantity) error = %v", err)
 	}
@@ -587,7 +587,7 @@ func TestSell_IntegerOverflowProtection(t *testing.T) {
 	_ = inv.Add(gemInst)
 	_ = invRepo.Save(context.Background(), inv)
 
-	_, err = service.Sell(context.Background(), char.ID, gemInst.ID, 4)
+	_, err = service.Sell(context.Background(), char.ID, shop.ShopTypeItem, gemInst.ID, 4)
 	if !errors.Is(err, shop.ErrPriceOverflow) {
 		t.Errorf("Sell with overflowing payout returned %v, want %v", err, shop.ErrPriceOverflow)
 	}
@@ -598,7 +598,7 @@ func TestConcurrentPurchase_StrictAtomicBalance(t *testing.T) {
 	// 5 concurrent attempts to buy 1 item.
 	// Exactly 1 must succeed, 4 must fail with ErrInsufficientFunds.
 	// Final balance must be 50, inventory must have 1 item.
-	sword, err := item.NewEquipmentDefinition("bronze_sword", "Bronze Sword", 100, item.SlotMainHand)
+	sword, err := item.NewEquipmentDefinition("weapon-01", "Bronze Sword", 100, item.SlotMainHand)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -620,7 +620,7 @@ func TestConcurrentPurchase_StrictAtomicBalance(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", 1)
+			_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 			errs <- err
 		}()
 	}
@@ -662,7 +662,7 @@ func TestConcurrentSell_StrictAtomicQuantity(t *testing.T) {
 	// 5 concurrent attempts to sell the same instance of quantity 1.
 	// Exactly 1 must succeed, 4 must fail.
 	// Final payout must be exactly 15, inventory must have 0 items.
-	potion, err := item.NewDefinition("herb", "Herb", 30)
+	potion, err := item.NewDefinition("item-001", "Herb", 30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -678,7 +678,7 @@ func TestConcurrentSell_StrictAtomicQuantity(t *testing.T) {
 
 	char := createTestCharacter(t, charRepo, "SelHero", 0)
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-	herbInst, _ := item.NewInstance("herb", 1)
+	herbInst, _ := item.NewInstance("item-001", 1)
 	_ = inv.Add(herbInst)
 	_ = invRepo.Save(context.Background(), inv)
 
@@ -688,7 +688,7 @@ func TestConcurrentSell_StrictAtomicQuantity(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := service.Sell(context.Background(), char.ID, herbInst.ID, 1)
+			_, err := service.Sell(context.Background(), char.ID, shop.ShopTypeItem, herbInst.ID, 1)
 			errs <- err
 		}()
 	}
@@ -758,7 +758,7 @@ func TestService_Sell_LockHierarchy(t *testing.T) {
 	trackedCharRepo := &orderTrackingCharRepo{characterRepoStub: charRepo, lockOrder: &lockOrder}
 	trackedInvRepo := &orderTrackingInvRepo{inventoryRepoStub: invRepo, lockOrder: &lockOrder}
 
-	sword, err := item.NewEquipmentDefinition("bronze_sword", "Bronze Sword", 100, item.SlotMainHand)
+	sword, err := item.NewEquipmentDefinition("weapon-01", "Bronze Sword", 100, item.SlotMainHand)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -774,11 +774,11 @@ func TestService_Sell_LockHierarchy(t *testing.T) {
 
 	char := createTestCharacter(t, charRepo, "SelHero", 0)
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-	swordInst, _ := item.NewInstance("bronze_sword", 1)
+	swordInst, _ := item.NewInstance("weapon-01", 1)
 	_ = inv.Add(swordInst)
 	_ = invRepo.Save(context.Background(), inv)
 
-	_, err = service.Sell(context.Background(), char.ID, swordInst.ID, 1)
+	_, err = service.Sell(context.Background(), char.ID, shop.ShopTypeWeapon, swordInst.ID, 1)
 	if err != nil {
 		t.Fatalf("Sell() failed: %v", err)
 	}
@@ -794,7 +794,7 @@ func TestService_Sell_LockHierarchy(t *testing.T) {
 func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
 	charRepo := newCharacterRepoStub()
 	invRepo := newInventoryRepoStub()
-	potion, _ := item.NewDefinition("herb", "Herb", 30)
+	potion, _ := item.NewDefinition("item-001", "Herb", 30)
 	catalog, _ := item.NewCatalog([]item.Definition{potion})
 	service, err := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(&mockTxProvider{}), shop.WithDepotRepository(newDepotRepoStub()))
 	if err != nil {
@@ -805,7 +805,7 @@ func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
 
 	// Add 10 herbs for selling
-	herbInst, _ := item.NewInstance("herb", 10)
+	herbInst, _ := item.NewInstance("item-001", 10)
 	_ = inv.Add(herbInst)
 	_ = invRepo.Save(context.Background(), inv)
 
@@ -818,12 +818,12 @@ func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", 1)
+			_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "item-001", 1)
 			errs <- err
 		}()
 		go func() {
 			defer wg.Done()
-			_, err := service.Sell(context.Background(), char.ID, herbInst.ID, 1)
+			_, err := service.Sell(context.Background(), char.ID, shop.ShopTypeItem, herbInst.ID, 1)
 			errs <- err
 		}()
 	}
@@ -840,7 +840,7 @@ func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
 func TestNewServiceWithTransaction_DeprecatedCompatibility(t *testing.T) {
 	charRepo := newCharacterRepoStub()
 	invRepo := newInventoryRepoStub()
-	sword, _ := item.NewEquipmentDefinition("bronze_sword", "Bronze Sword", 100, item.SlotMainHand)
+	sword, _ := item.NewEquipmentDefinition("weapon-01", "Bronze Sword", 100, item.SlotMainHand)
 	cat, _ := item.NewCatalog([]item.Definition{sword})
 
 	svc, err := shop.NewServiceWithTransaction(charRepo, invRepo, nil, cat)
@@ -874,7 +874,7 @@ func TestSellWeapon40ResalePayout(t *testing.T) {
 	_ = inv.Add(weaponInst)
 	_ = invRepo.Save(context.Background(), inv)
 
-	res, err := service.Sell(context.Background(), char.ID, weaponInst.ID, 1)
+	res, err := service.Sell(context.Background(), char.ID, shop.ShopTypeWeapon, weaponInst.ID, 1)
 	if err != nil {
 		t.Fatalf("Sell() error = %v", err)
 	}
@@ -957,25 +957,30 @@ func TestPurchaseEquipsGearInEmptySlot(t *testing.T) {
 		t.Fatalf("charRepo.Money = %d, want %d (must match resArmor.Character.Money)", savedCharAfterArmor.Money, resArmor.Character.Money)
 	}
 
-	// 3. Purchase shield item-071 into empty tool hand
-	resShield, err := service.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-071", 1)
+	// 3. Purchase accessory item-145 (sold from job level 50) into the empty tool hand
+	stored, _ := charRepo.FindByID(ctx, char.ID)
+	stored.JobLevel = 50
+	if err := charRepo.Update(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
+	resShield, err := service.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-145", 1)
 	if err != nil {
-		t.Fatalf("PurchaseInShop(item-071) error = %v", err)
+		t.Fatalf("PurchaseInShop(item-145) error = %v", err)
 	}
 	if resShield.TransferredToDepot {
-		t.Fatal("expected item-071 shield in inventory")
+		t.Fatal("expected item-145 in inventory")
 	}
 
 	eq, err = equipRepo.FindByCharacterIDForUpdate(ctx, char.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	shieldInstID, ok := eq.Equipped(item.SlotOffHand)
+	shieldInstID, ok := eq.Equipped(item.SlotAccessory)
 	if !ok || shieldInstID != resShield.ItemInstance.ID {
-		t.Fatalf("item-071 not equipped in SlotOffHand: got %s, want %s", shieldInstID, resShield.ItemInstance.ID)
+		t.Fatalf("item-145 not equipped in SlotAccessory: got %s, want %s", shieldInstID, resShield.ItemInstance.ID)
 	}
 
-	// 4. Purchasing another kind 3 item (item-001) while shield occupies tool hand -> routes to depot
+	// 4. Purchasing another kind 3 item (item-001) while the accessory occupies the tool hand -> routes to depot
 	resPotion, err := service.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-001", 1)
 	if err != nil {
 		t.Fatalf("PurchaseInShop(item-001) error = %v", err)
@@ -985,11 +990,11 @@ func TestPurchaseEquipsGearInEmptySlot(t *testing.T) {
 	}
 
 	// 5. Sell the equipped weapon -> unlinks from equipment_slots
-	sellRes, err := service.Sell(ctx, char.ID, res.ItemInstance.ID, 1)
+	sellRes, err := service.Sell(ctx, char.ID, shop.ShopTypeWeapon, res.ItemInstance.ID, 1)
 	if err != nil {
 		t.Fatalf("Sell() error = %v", err)
 	}
-	if len(sellRes.Inventory.Items) != 2 { // armor and shield remain
+	if len(sellRes.Inventory.Items) != 2 { // armor and accessory remain
 		t.Errorf("inventory item count after sell = %d, want 2", len(sellRes.Inventory.Items))
 	}
 

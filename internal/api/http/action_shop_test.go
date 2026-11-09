@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -28,11 +29,15 @@ func TestShopSellUsesObservedHandOffer(t *testing.T) {
 		i < 0 || response.AvailableActions[i].ParamsTemplate["item_instance_id"] != weapon.ID || response.AvailableActions[i].ParamsTemplate["shop_type"] != "weapon" {
 		t.Fatalf("sale offer: %+v %+v", data.SaleOffer, response.AvailableActions)
 	}
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_sell","params":{"shop_type":"item","item_instance_id":"`+weapon.ID+`"}}`, nil)
+	if status != 409 || !strings.Contains(string(raw["error"]), "SHOP_ITEM_NOT_IN_HAND") || len(f.inv.Items) != 1 || f.char.Money != 1 {
+		t.Fatalf("item shop bought a weapon: %d %s", status, raw)
+	}
 	body, err := json.Marshal(map[string]any{"action": "shop_sell", "params": response.AvailableActions[i].ParamsTemplate})
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", string(body), nil)
+	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", string(body), nil)
 	var result shopSaleResponse
 	if err := json.Unmarshal(raw["result"], &result); err != nil {
 		t.Fatal(err)

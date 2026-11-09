@@ -24,6 +24,7 @@ var (
 	ErrItemNotFound      = errors.New("item not found in catalog")
 	ErrUnownedItem       = errors.New("item is not owned in inventory")
 	ErrInvalidQuantity   = errors.New("invalid transaction quantity")
+	ErrNotInShopHand     = errors.New("item is not in the hand this shop buys from")
 	ErrPriceOverflow     = economy.ErrGoldOverflow
 )
 
@@ -326,7 +327,11 @@ func (s *Service) GetSaleOffer(ctx context.Context, shopType ShopType, character
 	return nil, nil
 }
 
-func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID string, quantity int) (SaleResult, error) {
+// Sell buys back an item from the shop's hand only (legacy uru).
+func (s *Service) Sell(ctx context.Context, characterID string, shopType ShopType, itemInstanceID string, quantity int) (SaleResult, error) {
+	if !ValidateShopType(shopType) {
+		return SaleResult{}, ErrInvalidShopType
+	}
 	if quantity <= 0 || quantity > MaxTransactionQuantity {
 		return SaleResult{}, ErrInvalidQuantity
 	}
@@ -350,6 +355,9 @@ func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID s
 		instance, found := inv.Find(itemInstanceID)
 		if !found {
 			return ErrUnownedItem
+		}
+		if item.LegacyHandKindByID(instance.DefinitionID) != handKind(shopType) {
+			return ErrNotInShopHand
 		}
 		if instance.Quantity < quantity {
 			return ErrInvalidQuantity

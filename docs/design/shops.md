@@ -6,7 +6,7 @@ This document records legacy rules, decisions and open gaps for the town shops (
 
 ## Helper quest exclusion
 
-Items requested by helper quests are not sold (`system.cgi:1424–1438`, filtered by item kind). **Pitfall:** legacy armor batch purchase filters helper kind 1 (`armor.cgi:120`) while single armor purchase uses kind 2 (`armor.cgi:52`); Go filters armor definition IDs consistently, and the difference is unreconciled (#947).
+Items requested by helper quests are not sold (`system.cgi:1424–1438`, filtered by item kind). A helper read failure aborts the listing or purchase before any change (`&error`, `system.cgi:1428–1429`); this applies to every shop, including the secret shop. **Pitfall:** legacy armor batch purchase filters helper kind 1 (`armor.cgi:120`) while single armor purchase uses kind 2 (`armor.cgi:52`); Go filters armor definition IDs consistently, and the difference is unreconciled (#947).
 
 ## 5. Purchase Routing and Depot Auto-Transfer
 
@@ -16,7 +16,7 @@ Items requested by helper quests are not sold (`system.cgi:1424–1438`, filtere
 
 ## 7. Secret shop
 
-Access requires job level 7 or more (`item.cgi:57–69`); the secret shop sells its eight items at three times the base price (`secret.cgi` sales). Stored uncompleted helper requests exclude their targets, also after expiry, until no other uncompleted request needs them ([Helper lifecycle](rescue-and-helper.md#lifecycle-and-expiration)); a failed helper read aborts listing or purchase before any change (`secret.cgi:44–51`). Inventory delivery registers the item collection (`secret.cgi:44–46`); Depot delivery does not. Puff-puff (`ぱふぱふ`) has no effect beyond its dialogue.
+Access requires job level 7 or more (`item.cgi:57–69`); the secret shop sells its eight items at three times the base price (`secret.cgi` sales). Stored uncompleted helper requests exclude their targets, also after expiry, until no other uncompleted request needs them ([Helper lifecycle](rescue-and-helper.md#lifecycle-and-expiration)). Inventory delivery registers the item collection (`secret.cgi:44–46`); Depot delivery does not. Puff-puff (`ぱふぱふ`) has no effect beyond its dialogue.
 
 ### 7.4. Purchase Transport and Remaining Migration
 
@@ -33,12 +33,10 @@ Shop files load through `party.cgi:14–30`; `system.cgi:9–24` registers share
 | Legacy action | Gateway | Note |
 |---|---|---|
 | `かう` (four shops) | `shop_purchase` | The scene lists the catalog with nominal strength/weight in the weapon and armor shops. |
-| `うる` | `shop_sell` | The scene offers the item in the shop's hand (`sale_offer`): weapon, armor, or the tool hand in the item and accessory shops. |
+| `うる` | `shop_sell` | Only the item in the shop's hand sells (`sale_offer`): weapon, armor, or the tool hand in the item and accessory shops. |
 | `まとめてかう` (weapon, armor, item) | `shop_batch_purchase` | Always delivers to the Depot. |
 | `ひみつのみせ` (item shop) | `scene_enter` `secretshop` | Qualified navigation (job level 7). Legacy enters only from the item shop; Go enters from town. |
 | `ごうせい` (accessory, `accessory.cgi:100–101,172–292`) | `shop_synthesize` | The accessory scene lists the recipes; see [Accessory Shop](accessory-shop.md#synthesis). |
 | `はなす` / NPC `しらべる` | `npc_talk` / `npc_inspect` | Static dialogue omits legacy dynamic recommendations (such as the accessory shop's random item line); exact dialogue parity is not claimed. |
 
 `get_depot` is an uncalled utility, not an omitted action. No ordinary Shop REST route remains.
-
-Open service gaps (#2009): standard purchase does not enforce sales-tier membership, a failed helper read is treated as no exclusion, and sale accepts any owned inventory item instead of only the shop's hand.
