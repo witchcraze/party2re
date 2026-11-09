@@ -134,7 +134,7 @@ func shopCommands() Option {
 			if err != nil {
 				return nil, err
 			}
-			res, err := h.shops.Sell(ctx, actor, p.ItemInstanceID, 1)
+			res, err := h.shops.Sell(ctx, actor, p.ShopType, p.ItemInstanceID, 1)
 			if err != nil {
 				return nil, err
 			}
@@ -195,6 +195,8 @@ func shopActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusNotFound, ErrorDetail{Code: "SHOP_ITEM_NOT_FOUND", Message: "Item is not sold here."}
 	case errors.Is(err, shop.ErrUnownedItem):
 		return http.StatusNotFound, ErrorDetail{Code: "SHOP_ITEM_NOT_OWNED", Message: "Item is not owned."}
+	case errors.Is(err, shop.ErrNotInShopHand):
+		return http.StatusConflict, ErrorDetail{Code: "SHOP_ITEM_NOT_IN_HAND", Message: "This shop only buys the item in its hand."}
 	case errors.Is(err, shop.ErrRecipeNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "SHOP_RECIPE_NOT_FOUND", Message: "Recipe not found."}
 	case errors.Is(err, shop.ErrItemUnavailable):

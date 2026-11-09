@@ -65,20 +65,10 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 	}
 
 	// Initial character has starting money of 200
-	// Let's purchase a club (price in weapons.json) or herb (price in consumables.json)
-	defs := catalog.Definitions()
-	if len(defs) == 0 {
-		t.Fatal("empty item catalog")
-	}
-	var testItem item.Definition
-	for _, d := range defs {
-		if d.Price > 0 && d.Price <= 100 {
-			testItem = d
-			break
-		}
-	}
-	if testItem.ID == "" {
-		t.Fatal("no suitable test item found under 100 gold")
+	// item-001 is on the job-level-0 item shop list.
+	testItem, err := catalog.FindByID("item-001")
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// 1. Purchase item
@@ -110,7 +100,7 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 
 	// 2. Sell item back
 	itemInstanceID := restoredInv.Items[0].ID
-	sellResult, err := shopService.Sell(ctx, createdChar.ID, itemInstanceID, 1)
+	sellResult, err := shopService.Sell(ctx, createdChar.ID, shop.ShopTypeItem, itemInstanceID, 1)
 	if err != nil {
 		t.Fatalf("Sell() error = %v", err)
 	}
@@ -158,7 +148,7 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 	char.Money = 250
 	_ = charRepo.Update(ctx, char)
 
-	sword, _ := item.NewEquipmentDefinition("con_sword", "Con Sword", 100, item.SlotMainHand)
+	sword, _ := item.NewEquipmentDefinition("weapon-01", "Con Sword", 100, item.SlotMainHand)
 	catalog, _ := item.NewCatalog([]item.Definition{sword})
 
 	depotRepo, _ := database.NewDepotRepository(db)
@@ -171,7 +161,7 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "con_sword", 1)
+			_, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 			errs <- err
 		}()
 	}
@@ -243,7 +233,7 @@ func TestConcurrentShopSalesPreventDoubleSpending(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := shopService.Sell(ctx, char.ID, potionInst.ID, 1)
+			_, err := shopService.Sell(ctx, char.ID, shop.ShopTypeItem, potionInst.ID, 1)
 			errs <- err
 		}()
 	}
@@ -298,13 +288,13 @@ func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
 	char.Money = 999_999
 	_ = charRepo.Update(ctx, char)
 
-	potion, _ := item.NewDefinition("bulk_potion", "Bulk Potion", 10)
+	potion, _ := item.NewDefinition("item-001", "Bulk Potion", 10)
 	catalog, _ := item.NewCatalog([]item.Definition{potion})
 	depotRepo, _ := database.NewDepotRepository(db)
 	shopService, _ := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(txProvider), shop.WithDepotRepository(depotRepo))
 
 	// 1. Purchase MaxTransactionQuantity (9999)
-	res, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "bulk_potion", shop.MaxTransactionQuantity)
+	res, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-001", shop.MaxTransactionQuantity)
 	if err != nil {
 		t.Fatalf("Purchase(9999) failed: %v", err)
 	}
@@ -314,7 +304,7 @@ func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
 	}
 
 	// 2. Purchase MaxTransactionQuantity + 1 -> rejected
-	_, err = shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "bulk_potion", shop.MaxTransactionQuantity+1)
+	_, err = shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-001", shop.MaxTransactionQuantity+1)
 	if err == nil {
 		t.Fatalf("expected error for quantity > MaxTransactionQuantity, got nil")
 	}

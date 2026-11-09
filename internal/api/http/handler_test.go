@@ -205,7 +205,7 @@ func (s *stubAdventureService) GetChronicle(ctx context.Context, characterID str
 }
 
 type stubShopService struct {
-	sellFn           func(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error)
+	sellFn           func(ctx context.Context, characterID string, shopType shop.ShopType, itemInstanceID string, quantity int) (shop.SaleResult, error)
 	getCatalogFn     func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
 	batchPurchaseFn  func(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
 	inspectNPCFn     func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
@@ -221,9 +221,9 @@ func (s *stubShopService) PurchaseInShop(ctx context.Context, characterID string
 	}
 	return shop.PurchaseResult{}, nil
 }
-func (s *stubShopService) Sell(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error) {
+func (s *stubShopService) Sell(ctx context.Context, characterID string, shopType shop.ShopType, itemInstanceID string, quantity int) (shop.SaleResult, error) {
 	if s.sellFn != nil {
-		return s.sellFn(ctx, characterID, itemInstanceID, quantity)
+		return s.sellFn(ctx, characterID, shopType, itemInstanceID, quantity)
 	}
 	return shop.SaleResult{}, nil
 }

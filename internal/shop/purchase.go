@@ -33,15 +33,16 @@ type BatchPurchaseResult struct {
 	TotalPrice int                     `json:"total_price"`
 }
 
-func (s *Service) isItemInActiveHelper(ctx context.Context, itemID string) bool {
+// isItemInActiveHelper aborts on a failed helper read, as legacy get_helper_item does.
+func (s *Service) isItemInActiveHelper(ctx context.Context, itemID string) (bool, error) {
 	if s.helper == nil {
-		return false
+		return false, nil
 	}
 	active, err := s.helper.GetActiveHelperItemIDs(ctx, s.now())
 	if err != nil {
-		return false
+		return false, err
 	}
-	return slices.Contains(active, itemID)
+	return slices.Contains(active, itemID), nil
 }
 
 // PurchaseInShop buys an item from a specific shop type, applying shop-specific pricing and messages.
@@ -61,7 +62,9 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 		return PurchaseResult{}, ErrItemNotFound
 	}
 
-	if s.isItemInActiveHelper(ctx, itemDefinitionID) {
+	if excluded, err := s.isItemInActiveHelper(ctx, itemDefinitionID); err != nil {
+		return PurchaseResult{}, err
+	} else if excluded {
 		return PurchaseResult{}, ErrItemUnavailable
 	}
 
@@ -81,24 +84,16 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 		if err != nil {
 			return err
 		}
-		if char.Money < totalPrice {
-			return ErrInsufficientFunds
+		sales, err := GetSalesItemIDs(shopType, char.JobLevel)
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(sales, itemDefinitionID) {
+			return ErrItemNotFound
 		}
 
-		if shopType == ShopTypeAccessory {
-			sales, err := GetSalesItemIDs(shopType, char.JobLevel)
-			if err == nil {
-				found := false
-				for _, sid := range sales {
-					if sid == itemDefinitionID {
-						found = true
-						break
-					}
-				}
-				if !found {
-					return ErrItemNotFound
-				}
-			}
+		if char.Money < totalPrice {
+			return ErrInsufficientFunds
 		}
 
 		// 2. Lock Inventory (Rank 3)
@@ -245,7 +240,9 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 		if it.Quantity <= 0 || it.Quantity > MaxTransactionQuantity {
 			return BatchPurchaseResult{}, ErrInvalidQuantity
 		}
-		if s.isItemInActiveHelper(ctx, it.ItemDefinitionID) {
+		if excluded, err := s.isItemInActiveHelper(ctx, it.ItemDefinitionID); err != nil {
+			return BatchPurchaseResult{}, err
+		} else if excluded {
 			return BatchPurchaseResult{}, ErrItemUnavailable
 		}
 	}

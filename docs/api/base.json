@@ -5637,7 +5637,7 @@
                     },
                     "item_definition_id": {
                       "type": "string",
-                      "description": "Explicit product ID from the observed catalog. Funds, availability and helper exclusions stay service-owned."
+                      "description": "Explicit product ID from the shop's current job-level sales list. Funds and helper exclusions stay service-owned."
                     },
                     "quantity": {
                       "type": "integer",
@@ -5691,7 +5691,7 @@
                     },
                     "item_instance_id": {
                       "type": "string",
-                      "description": "Owned inventory instance, normally the observed sale_offer. One unit is sold at half the base price."
+                      "description": "The item in the shop's hand (the observed sale_offer); other instances are rejected. One unit is sold at half the base price."
                     }
                   },
                   "additionalProperties": false,
