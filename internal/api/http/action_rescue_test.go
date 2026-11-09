@@ -25,6 +25,8 @@ type rescueGatewayFixture struct {
 	saved, returned            rescue.RescueRecord
 	saves, clears              int
 	saveErr, clearErr, findErr error
+	remaining                  []string
+	activityErr                error
 	before, after              time.Time
 }
 
@@ -82,8 +84,17 @@ func (f *rescueGatewayFixture) ClearActiveActions(ctx context.Context, actor str
 	return cleared, nil
 }
 
+func (f *rescueGatewayFixture) ActivityKinds(ctx context.Context, owner, actor string) ([]string, error) {
+	f.checkContext(ctx)
+	if actor != "hero" {
+		f.t.Fatal("wrong activity actor")
+	}
+	return f.remaining, f.activityErr
+}
+
 func (f *rescueGatewayFixture) router(timers timer.Service) http.Handler {
 	f.service = rescue.NewService(f, f, f, timers)
+	f.service.SetActivityReader(f)
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{},
 		WithRescue(f), WithPlayerContext(playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers)),
 		func(h *Handler) { h.homes = f.gatewayFixture })
@@ -224,6 +235,11 @@ func TestRescueGatewayRejectionsAndUnknownFailures(t *testing.T) {
 		}},
 		{"missing character", "stuck", "CHARACTER_NOT_FOUND", 404, func(f *rescueGatewayFixture) { f.findErr = fmt.Errorf("wrapped: %w", corecharacter.ErrNotFound) }},
 		{"cleanup failure", "stuck", "EXECUTION_FAILED", 500, func(f *rescueGatewayFixture) { f.clearErr = errors.New("secret cleanup store") }},
+		{"feature activity remains", "stuck", "RESCUE_ACTIVITY_REMAINING", 409, func(f *rescueGatewayFixture) {
+			f.actions = []scheduling.ScheduledAction{{ID: "work", ActorID: "hero", State: scheduling.StatePending}}
+			f.remaining = []string{"dungeon"}
+		}},
+		{"activity read failure", "stuck", "EXECUTION_FAILED", 500, func(f *rescueGatewayFixture) { f.activityErr = errors.New("secret activity store") }},
 		{"save failure", "stuck", "EXECUTION_FAILED", 500, func(f *rescueGatewayFixture) {
 			f.actions = []scheduling.ScheduledAction{{ID: "work", ActorID: "hero", State: scheduling.StatePending}}
 			f.saveErr = errors.New("secret rescue store")
@@ -243,6 +259,9 @@ func TestRescueGatewayRejectionsAndUnknownFailures(t *testing.T) {
 					t.Fatalf("status=%d executions=%d: %s", status, f.executions, got)
 				}
 				assertGatewayError(t, got, tc.code)
+				if (f.remaining != nil || f.activityErr != nil) && (f.clears != 0 || f.saves != 0) {
+					t.Fatalf("unrecovered activity changed state: clears=%d saves=%d", f.clears, f.saves)
+				}
 				if status == 500 {
 					if _, exists := got["context"]; exists || f.profileCalls != 0 {
 						t.Fatal("unknown outcome refreshed/exposed context")

@@ -51,8 +51,14 @@ func (f *activityFixtures) GetCharacterRoomView(_ context.Context, owner, actor 
 }
 
 type pvpActivityFixture struct {
-	room pvp.RoomDetail
-	err  error
+	room     pvp.RoomDetail
+	err      error
+	claim    string
+	claimErr error
+}
+
+func (f *pvpActivityFixture) GetCharacterClaim(context.Context, string) (string, error) {
+	return f.claim, f.claimErr
 }
 
 func (f *pvpActivityFixture) GetCharacterRoom(context.Context, string) (pvp.RoomDetail, error) {
@@ -78,6 +84,30 @@ func (f *gvgActivityFixture) GetCharacterRoom(context.Context, string) (gvg.Room
 		return gvg.RoomDetail{}, gvg.ErrRoomNotFound
 	}
 	return f.room, nil
+}
+
+func TestPvPClaimWithoutLiveRoomIsNotIdle(t *testing.T) {
+	f, pv, gv := &activityFixtures{}, &pvpActivityFixture{claim: "lost-room"}, &gvgActivityFixture{}
+	r := contextActivityReaders{party: f, pvp: pv, gvg: gv, dungeon: f, challenge: f, casino: f}
+	ctx := context.Background()
+	facts, err := r.read(ctx, "owner", "hero")
+	if err != nil || len(facts) != 1 || facts[0].Kind != "pvp" || facts[0].ID != "lost-room" || facts[0].Phase != "recovery_pending" || len(facts[0].Actions) != 0 {
+		t.Fatalf("unpublished claim: %+v %v", facts, err)
+	}
+	if kinds, err := r.ActivityKinds(ctx, "owner", "hero"); err != nil || !slices.Equal(kinds, []string{"pvp"}) {
+		t.Fatalf("rescue kinds: %v %v", kinds, err)
+	}
+	pv.room = pvp.RoomDetail{Room: pvp.ColosseumRoom{ID: "lost-room", Status: pvp.StatusRecruiting}, Members: []pvp.RoomMember{{CharacterID: "hero"}}}
+	if facts, err := r.read(ctx, "owner", "hero"); err != nil || len(facts) != 1 || facts[0].Phase != pvp.StatusRecruiting {
+		t.Fatalf("published room duplicated by claim: %+v %v", facts, err)
+	}
+	pv.room, pv.claimErr = pvp.RoomDetail{}, errors.New("claim store down")
+	if _, err := r.read(ctx, "owner", "hero"); !errors.Is(err, pv.claimErr) {
+		t.Fatalf("claim failure hidden: %v", err)
+	}
+	if _, err := r.ActivityKinds(ctx, "owner", "hero"); !errors.Is(err, pv.claimErr) {
+		t.Fatalf("rescue claim failure hidden: %v", err)
+	}
 }
 
 func TestFeatureActivityComposition(t *testing.T) {

@@ -88,7 +88,9 @@ These records have no automatic expiry. Recovery covers committed financial
 transitions awaiting publication; it does not reconstruct later team/round changes
 after an already published lobby expires or is evicted, or identify losses from
 older deployments. Active claims survive that loss, preventing another debit but
-requiring explicit recovery rather than silently abandoning the escrow. This adds
+requiring explicit recovery rather than silently abandoning the escrow; the
+character context reports such a claim without a live room as a PvP activity, so
+rescue does not treat it as idle. This adds
 no timeout refund rule. Retry after a new join/leave cycle is a new operation; the
 API has no client request identity to distinguish a delayed request across cycles.
 SQL versions protect the financial claim; live combat and publication still use

@@ -25,4 +25,8 @@ Helper quests (`helper.cgi`) are a request board where players turn in Depot ite
 
 `rescue.cgi:17–21,53–70` clears saved activity and adds sleep; an idle player gets no penalty. The reconstruction adds 600 seconds to any remaining sleep and never shortens it (`rescue.cgi:58–59`); with nothing to clear there is no penalty, timer or record (`rescue.cgi:56–65`). Rescue is allowed during sleep.
 
-Open: clearing scheduled actions does not prove other feature activity is idle (#1099); cleanup, record and timer are not atomic, and a failed sleep read can overwrite existing sleep (#1100).
+**Pitfall:** legacy `refresh_player` empties only the screen module `$m{lib}`; quest/room membership (`$m{quest}`) and its files survive, so rescue never ended activities.
+
+**Decision (#1099):** rescue (player and admin unstuck) clears only scheduled actions. Before any change it reads the same activity facts as the character context (adventure, party, PvP including SQL claims without a live room, GvG, dungeon, challenge, casino); if any remain it returns `RESCUE_ACTIVITY_REMAINING` (admin: 409) and changes nothing. Those activities end only through their owners' commands; rescue adds no forced exit or settlement rule. A PvP claim left after live-room loss has no owner exit yet (#2012).
+
+Open: cleanup, record and timer are not atomic, and a failed sleep read can overwrite existing sleep (#1100).

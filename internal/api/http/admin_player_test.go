@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/rescue"
 )
 
 func TestAdminListPlayers(t *testing.T) {
@@ -155,6 +157,9 @@ func TestAdminUnstuckCharacter(t *testing.T) {
 			if characterID == "err" {
 				return errors.New("internal error")
 			}
+			if characterID == "busy" {
+				return fmt.Errorf("%w: dungeon", rescue.ErrActivityRemaining)
+			}
 			unstuckCharID = characterID
 			return nil
 		},
@@ -226,6 +231,17 @@ func TestAdminUnstuckCharacter(t *testing.T) {
 
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("expected 404 NotFound, got %d", rec.Code)
+		}
+	})
+
+	t.Run("409 Conflict while feature activity remains", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/characters/busy/unstuck", nil)
+		req.Header.Set("X-Admin-Key", adminKey)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusConflict || unstuckCharID == "busy" {
+			t.Fatalf("expected 409 Conflict, got %d", rec.Code)
 		}
 	})
 

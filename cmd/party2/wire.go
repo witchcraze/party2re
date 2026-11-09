@@ -108,8 +108,8 @@ func wireHooks(
 	econ.alchemy.SetSynthesisHook(func(ctx context.Context, characterID string, recipeID string) error {
 		return misc.medal.RecordProgress(ctx, characterID, medal.MetricAlchemyCrafts, 1)
 	})
-
 	cmbt.boss.SetVictoryBanquetHook(buildVictoryBanquetHook(misc.eventplaza))
+	misc.rescue.SetActivityReader(newContextActivityReaders(cmbt, misc))
 
 	misc.casino.SetGamePlayedHook(func(ctx context.Context, characterID string, gameName string) error {
 		return misc.medal.RecordProgress(ctx, characterID, medal.MetricCasinoGames, 1)

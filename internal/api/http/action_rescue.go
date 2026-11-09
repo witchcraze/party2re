@@ -37,6 +37,8 @@ func rescueActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "RESCUE_INVALID_CHARACTER_ID", Message: "Invalid rescue character ID."}
 	case errors.Is(err, rescue.ErrInvalidReason):
 		return http.StatusUnprocessableEntity, ErrorDetail{Code: "RESCUE_INVALID_REASON", Message: "Rescue reason cannot be empty."}
+	case errors.Is(err, rescue.ErrActivityRemaining):
+		return http.StatusConflict, ErrorDetail{Code: "RESCUE_ACTIVITY_REMAINING", Message: "Feature activity remains; finish or recover it through its own actions."}
 	case errors.Is(err, corecharacter.ErrNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "CHARACTER_NOT_FOUND", Message: "Character not found."}
 	default:

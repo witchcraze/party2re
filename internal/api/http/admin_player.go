@@ -114,6 +114,10 @@ func (h *Handler) handleAdminUnstuckCharacter(w http.ResponseWriter, r *http.Req
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
+		if errors.Is(err, rescue.ErrActivityRemaining) {
+			writeError(w, http.StatusConflict, err)
+			return
+		}
 		if errors.Is(err, corecharacter.ErrNotFound) || strings.Contains(strings.ToLower(err.Error()), "not found") {
 			writeError(w, http.StatusNotFound, err)
 			return

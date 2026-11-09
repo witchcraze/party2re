@@ -36,6 +36,12 @@ func WithTransitionRepository(repo TransitionRepository) Option {
 	return func(s *Service) { s.transitions = repo }
 }
 
+// GetCharacterClaim returns the room whose SQL participation claim still holds the character,
+// including claims whose Valkey publication is missing. It does not publish or repair.
+func (s *Service) GetCharacterClaim(ctx context.Context, characterID string) (string, error) {
+	return s.transitions.FindCharacterClaim(ctx, characterID)
+}
+
 type transitionVersionKey struct{}
 
 func (s *Service) commitTransition(ctx context.Context, t Transition, mutate func(context.Context) error) error {
