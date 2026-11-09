@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -76,6 +77,14 @@ func sanitizeTestName(name string, maxLen int, defaultPrefix string) string {
 	return cleaned
 }
 
+// testPlayerPassword is the password of every factory-created player.
+const testPlayerPassword = "testpassword123"
+
+// testPlayerTemplate hashes testPlayerPassword once: bcrypt at production cost dominated fixture setup.
+var testPlayerTemplate = sync.OnceValues(func() (coreplayer.Player, error) {
+	return coreplayer.New("template", testPlayerPassword, time.Now())
+})
+
 // CreateTestPlayer creates and persists a player for testing purposes.
 func CreateTestPlayer(ctx context.Context, db *sql.DB) (coreplayer.Player, error) {
 	username := fmt.Sprintf("tp_%s", id.New()[:12])
@@ -85,11 +94,12 @@ func CreateTestPlayer(ctx context.Context, db *sql.DB) (coreplayer.Player, error
 // CreateTestPlayerWithUsername creates and persists a player with a designated username.
 // Domain constraints (max length 32 chars, valid password hashing, UTC timestamp) are enforced.
 func CreateTestPlayerWithUsername(ctx context.Context, db *sql.DB, username string) (coreplayer.Player, error) {
-	safeUsername := sanitizeTestName(username, 32, "tp")
-	p, err := coreplayer.New(safeUsername, "testpassword123", time.Now().UTC())
+	p, err := testPlayerTemplate()
 	if err != nil {
 		return coreplayer.Player{}, err
 	}
+	now := time.Now().UTC()
+	p.ID, p.Username, p.CreatedAt, p.UpdatedAt = id.New(), sanitizeTestName(username, 32, "tp"), now, now
 	repo, err := NewPlayerRepository(db)
 	if err != nil {
 		return coreplayer.Player{}, err
