@@ -119,17 +119,6 @@ func TestAuthHelpers(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /shop/purchase - invalid JSON body returns 400", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/shop/purchase", bytes.NewReader([]byte("{invalid json")))
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("expected 400, got %d", rec.Code)
-		}
-	})
 }
 
 func TestAdminAuth(t *testing.T) {
@@ -322,30 +311,6 @@ func TestGuardSleepingCharacter(t *testing.T) {
 		h.Router().ServeHTTP(rec, req)
 		if rec.Code == http.StatusConflict {
 			t.Errorf("expected awake character not to be blocked by conflict, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("shop batch purchase returns 409 Conflict when sleeping", func(t *testing.T) {
-		mockHome := &mockHomeService{
-			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
-				return home.SleepStatus{
-					Sleeping:         true,
-					RemainingSeconds: 300,
-					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
-				}, nil
-			},
-		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
-		if err != nil {
-			t.Fatalf("failed to create handler: %v", err)
-		}
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/shop/batch-purchase", bytes.NewReader([]byte(`{"shop_type":"item","items":[]}`)))
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		h.Router().ServeHTTP(rec, req)
-		if rec.Code != http.StatusConflict {
-			t.Errorf("expected 409 Conflict for shop when sleeping, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 

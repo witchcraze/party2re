@@ -198,7 +198,7 @@ func TestPurchaseSuccess(t *testing.T) {
 	service, charRepo, invRepo, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 200)
 
-	result, err := service.Purchase(context.Background(), char.ID, "bronze_sword", 1)
+	result, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", 1)
 	if err != nil {
 		t.Fatalf("Purchase() error = %v", err)
 	}
@@ -243,7 +243,7 @@ func TestPurchaseMultipleQuantity(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Hero", 200)
 
 	// Herb base price 30 * 2 = 60 retail. 3 herbs = 180.
-	result, err := service.Purchase(context.Background(), char.ID, "herb", 3)
+	result, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", 3)
 	if err != nil {
 		t.Fatalf("Purchase() error = %v", err)
 	}
@@ -266,7 +266,7 @@ func TestPurchaseInsufficientFunds(t *testing.T) {
 	service, charRepo, invRepo, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 50)
 
-	_, err := service.Purchase(context.Background(), char.ID, "bronze_sword", 1)
+	_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", 1)
 	if !errors.Is(err, shop.ErrInsufficientFunds) {
 		t.Fatalf("Purchase() error = %v, want %v", err, shop.ErrInsufficientFunds)
 	}
@@ -286,7 +286,7 @@ func TestPurchaseInvalidItem(t *testing.T) {
 	service, charRepo, _, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 200)
 
-	_, err := service.Purchase(context.Background(), char.ID, "nonexistent_item", 1)
+	_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "nonexistent_item", 1)
 	if !errors.Is(err, shop.ErrItemNotFound) {
 		t.Fatalf("Purchase() error = %v, want %v", err, shop.ErrItemNotFound)
 	}
@@ -296,10 +296,10 @@ func TestPurchaseInvalidQuantity(t *testing.T) {
 	service, charRepo, _, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 200)
 
-	if _, err := service.Purchase(context.Background(), char.ID, "bronze_sword", 0); !errors.Is(err, shop.ErrInvalidQuantity) {
+	if _, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", 0); !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Purchase(0) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
-	if _, err := service.Purchase(context.Background(), char.ID, "bronze_sword", -1); !errors.Is(err, shop.ErrInvalidQuantity) {
+	if _, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", -1); !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Purchase(-1) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
 }
@@ -307,7 +307,7 @@ func TestPurchaseInvalidQuantity(t *testing.T) {
 func TestPurchaseCharacterNotFound(t *testing.T) {
 	service, _, _, _ := newTestSetup(t)
 
-	if _, err := service.Purchase(context.Background(), "unknown_id", "bronze_sword", 1); !errors.Is(err, corecharacter.ErrNotFound) {
+	if _, err := service.PurchaseInShop(context.Background(), "unknown_id", shop.ShopTypeWeapon, "bronze_sword", 1); !errors.Is(err, corecharacter.ErrNotFound) {
 		t.Fatalf("Purchase(unknown) error = %v, want %v", err, corecharacter.ErrNotFound)
 	}
 }
@@ -498,7 +498,7 @@ func TestPurchase_QuantityBounds(t *testing.T) {
 
 	// MaxTransactionQuantity is 9999
 	// 1. Exactly MaxTransactionQuantity -> succeeds (herb is 30 gold each)
-	res, err := service.Purchase(context.Background(), char.ID, "herb", shop.MaxTransactionQuantity)
+	res, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", shop.MaxTransactionQuantity)
 	if err != nil {
 		t.Fatalf("Purchase(MaxTransactionQuantity) failed: %v", err)
 	}
@@ -507,14 +507,14 @@ func TestPurchase_QuantityBounds(t *testing.T) {
 	}
 
 	// 2. MaxTransactionQuantity + 1 -> fails with ErrInvalidQuantity
-	_, err = service.Purchase(context.Background(), char.ID, "herb", shop.MaxTransactionQuantity+1)
+	_, err = service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", shop.MaxTransactionQuantity+1)
 	if !errors.Is(err, shop.ErrInvalidQuantity) {
 		t.Errorf("Purchase(MaxTransactionQuantity + 1) error = %v, want %v", err, shop.ErrInvalidQuantity)
 	}
 
 	// 3. Negative & Zero -> fails with ErrInvalidQuantity
 	for _, q := range []int{0, -1, -999} {
-		_, err := service.Purchase(context.Background(), char.ID, "herb", q)
+		_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", q)
 		if !errors.Is(err, shop.ErrInvalidQuantity) {
 			t.Errorf("Purchase(%d) error = %v, want %v", q, err, shop.ErrInvalidQuantity)
 		}
@@ -535,7 +535,7 @@ func TestPurchase_IntegerOverflowProtection(t *testing.T) {
 	catalog, _ := item.NewCatalog([]item.Definition{hugeItem})
 	service, _ := shop.NewService(charRepo, invRepo, catalog)
 
-	_, err = service.Purchase(context.Background(), char.ID, "huge_item", 2)
+	_, err = service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "huge_item", 2)
 	if !errors.Is(err, shop.ErrPriceOverflow) {
 		t.Errorf("Purchase with overflowing price returned %v, want %v", err, shop.ErrPriceOverflow)
 	}
@@ -620,7 +620,7 @@ func TestConcurrentPurchase_StrictAtomicBalance(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := service.Purchase(context.Background(), char.ID, "bronze_sword", 1)
+			_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "bronze_sword", 1)
 			errs <- err
 		}()
 	}
@@ -818,7 +818,7 @@ func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			_, err := service.Purchase(context.Background(), char.ID, "herb", 1)
+			_, err := service.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeItem, "herb", 1)
 			errs <- err
 		}()
 		go func() {
@@ -911,7 +911,7 @@ func TestPurchaseEquipsGearInEmptySlot(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Hero", 50000)
 
 	// 1. Purchase weapon-01
-	res, err := service.Purchase(ctx, char.ID, "weapon-01", 1)
+	res, err := service.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if err != nil {
 		t.Fatalf("Purchase(weapon-01) error = %v", err)
 	}
@@ -930,7 +930,7 @@ func TestPurchaseEquipsGearInEmptySlot(t *testing.T) {
 	}
 
 	// 2. Purchase armor-01 into empty armor hand
-	resArmor, err := service.Purchase(ctx, char.ID, "armor-01", 1)
+	resArmor, err := service.PurchaseInShop(ctx, char.ID, shop.ShopTypeArmor, "armor-01", 1)
 	if err != nil {
 		t.Fatalf("Purchase(armor-01) error = %v", err)
 	}

@@ -35,6 +35,10 @@ type ShopSceneInfo struct {
 	ShopType shop.ShopType      `json:"shop_type"`
 	NPC      ShopNPCObservation `json:"npc"`
 	Quantity ShopQuantityBounds `json:"quantity"`
+	// SaleOffer is the item in this shop's hand; null when that hand is empty.
+	SaleOffer *shop.SaleOffer `json:"sale_offer"`
+	// Recipes are the accessory shop's synthesis recipes.
+	Recipes []shop.SynthesisRecipe `json:"recipes,omitempty"`
 }
 
 type ShopCatalogSceneData struct {
@@ -62,9 +66,16 @@ func (h *Handler) shopSceneData(ctx context.Context, r playercontext.Result) (an
 	if err != nil {
 		return nil, err
 	}
+	offer, err := h.shops.GetSaleOffer(ctx, kind, r.Snapshot.Character.ID)
+	if err != nil {
+		return nil, err
+	}
 	info := ShopSceneInfo{Parent: "town", Title: catalog.Title, ShopType: catalog.ShopType,
 		NPC:      ShopNPCObservation{NPCInspectResult: inspect},
-		Quantity: ShopQuantityBounds{Minimum: 1, Maximum: shop.MaxTransactionQuantity}}
+		Quantity: ShopQuantityBounds{Minimum: 1, Maximum: shop.MaxTransactionQuantity}, SaleOffer: offer}
+	if kind == shop.ShopTypeAccessory {
+		info.Recipes = shop.AllSynthesisRecipes()
+	}
 	products := make([]ShopProduct, 0, len(catalog.Items))
 	for _, p := range catalog.Items {
 		product := ShopProduct{CatalogItem: p, SelectParams: playercontext.Subject{Kind: "item", ID: p.ID}, PurchaseParams: ShopPurchaseParams{ItemDefinitionID: p.ID}}
@@ -89,4 +100,17 @@ func (h *Handler) shopSceneData(ctx context.Context, r playercontext.Result) (an
 		page.Next = &playercontext.PageParams{Destination: n.Destination, Offset: end, Limit: limit}
 	}
 	return ShopCatalogSceneData{ShopSceneInfo: info, Items: append([]ShopProduct{}, products[start:end]...), Page: page}, nil
+}
+
+// shopTemplates fixes the observed shop and sale target, and drops the sale
+// choice when the shop's hand is empty.
+func shopTemplates(info ShopSceneInfo, choices []string, templates map[string]map[string]any) []string {
+	for _, id := range []string{"shop_purchase", "shop_batch_purchase", "shop_sell"} {
+		templates[id] = map[string]any{"shop_type": string(info.ShopType)}
+	}
+	if info.SaleOffer == nil {
+		return slices.DeleteFunc(choices, func(id string) bool { return id == "shop_sell" })
+	}
+	templates["shop_sell"]["item_instance_id"] = info.SaleOffer.ItemInstanceID
+	return choices
 }

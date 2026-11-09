@@ -54,6 +54,10 @@ func (navigationShopService) GetCatalog(context.Context, shop.ShopType, string) 
 	return shop.ShopCatalog{ShopType: shop.ShopTypeWeapon, Title: "武器屋", Items: []shop.CatalogItem{{ID: "weapon-01", Name: "武器"}}}, nil
 }
 
+func (navigationShopService) GetSaleOffer(context.Context, shop.ShopType, string) (*shop.SaleOffer, error) {
+	return nil, nil
+}
+
 func (navigationShopService) InspectNPC(context.Context, shop.ShopType, string) (shop.NPCInspectResult, error) {
 	return shop.NPCInspectResult{ShopType: shop.ShopTypeWeapon}, nil
 }

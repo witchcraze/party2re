@@ -217,7 +217,7 @@ obsolete blanket exception list.
 
 **Character ownership verification:**
 
-All endpoints that operate on a character (`GET /characters/{id}`, `POST /adventures`, `POST /shop/*`)
+All endpoints that operate on a character (`GET /characters/{id}`, `POST /adventures`, `POST /api/v1/characters/{id}/actions`)
 verify that the authenticated player owns the targeted character (`char.PlayerID == player.ID`).
 Cross-player requests are rejected with `403 Forbidden`.
 

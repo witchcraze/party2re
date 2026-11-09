@@ -96,13 +96,12 @@ type AdventureService interface {
 
 // ShopService defines the shop operations exposed over HTTP.
 type ShopService interface {
-	Purchase(ctx context.Context, characterID string, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
 	PurchaseInShop(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
 	Sell(ctx context.Context, characterID string, itemInstanceID string, quantity int) (shop.SaleResult, error)
 	GetCatalog(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
 	BatchPurchase(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
 	InspectNPC(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
-	DiscoverSecretShop(ctx context.Context, characterID string) (bool, string, error)
+	GetSaleOffer(ctx context.Context, shopType shop.ShopType, characterID string) (*shop.SaleOffer, error)
 	Synthesize(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error)
 }
 
@@ -304,7 +303,7 @@ func NewHandler(
 		shops:          shops,
 		allowedOrigins: make(map[string]struct{}),
 	}
-	for _, opt := range append([]Option{adventureStartCommand(adventures)}, opts...) {
+	for _, opt := range append([]Option{adventureStartCommand(adventures), shopCommands()}, opts...) {
 		if opt != nil {
 			opt(h)
 		}
@@ -350,16 +349,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /adventures", h.handleStartAdventure)
 	mux.HandleFunc("GET /characters/{id}/adventures", h.handleListCharacterAdventures)
 	mux.HandleFunc("GET /characters/{id}/adventure-chronicle", h.handleGetAdventureChronicle)
-
-	mux.HandleFunc("POST /shop/purchase", h.handlePurchase)
-	mux.HandleFunc("POST /shop/sell", h.handleSell)
-	mux.HandleFunc("GET /characters/{id}/shop/{type}", h.handleGetShopCatalog)
-	mux.HandleFunc("POST /characters/{id}/shop/batch-purchase", h.handleShopBatchPurchase)
-	mux.HandleFunc("POST /characters/{id}/shop/discover-secret", h.handleShopDiscoverSecret)
-	mux.HandleFunc("POST /characters/{id}/shop/accessory/buy", h.handleAccessoryBuy)
-	mux.HandleFunc("POST /characters/{id}/shop/accessory/sell", h.handleAccessorySell)
-	mux.HandleFunc("POST /characters/{id}/shop/accessory/synthesize", h.handleAccessorySynthesize)
-	mux.HandleFunc("GET /characters/{id}/shop/accessory/recipes", h.handleAccessoryRecipes)
 
 	mux.HandleFunc("GET /park/posts", h.handleGetParkPosts)
 	mux.HandleFunc("POST /park/posts", h.handlePostParkMessage)
@@ -956,76 +945,6 @@ func toAdventureResponse(adv adventure.Adventure) adventureResponse {
 // -------------------------------------------------------------------
 // Shop
 // -------------------------------------------------------------------
-
-type purchaseRequest struct {
-	CharacterID      string `json:"character_id"`
-	ItemDefinitionID string `json:"item_definition_id"`
-	Quantity         int    `json:"quantity"`
-}
-
-type purchaseResponse struct {
-	CharacterID        string `json:"character_id"`
-	ItemDefinitionID   string `json:"item_definition_id"`
-	Quantity           int    `json:"quantity"`
-	TotalCost          int    `json:"total_cost"`
-	TransferredToDepot bool   `json:"transferred_to_depot"`
-	NPCMessage         string `json:"npc_message,omitempty"`
-}
-
-type sellRequest struct {
-	CharacterID    string `json:"character_id"`
-	ItemInstanceID string `json:"item_instance_id"`
-	Quantity       int    `json:"quantity"`
-}
-
-type saleResponse struct {
-	CharacterID string `json:"character_id"`
-	InstanceID  string `json:"item_instance_id"`
-	Quantity    int    `json:"quantity"`
-	TotalPayout int    `json:"total_payout"`
-}
-
-func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
-	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *purchaseRequest) string {
-		return req.CharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req purchaseRequest) {
-		result, err := h.shops.Purchase(r.Context(), char.ID, req.ItemDefinitionID, req.Quantity)
-		if err != nil {
-			writeError(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-		npcMsg := "purchased successfully"
-		if result.TransferredToDepot {
-			npcMsg = "delivered to depot"
-		}
-		writeJSON(w, http.StatusOK, purchaseResponse{
-			CharacterID:        result.Character.ID,
-			ItemDefinitionID:   result.ItemInstance.DefinitionID,
-			Quantity:           result.ItemInstance.Quantity,
-			TotalCost:          result.TotalPrice,
-			TransferredToDepot: result.TransferredToDepot,
-			NPCMessage:         npcMsg,
-		})
-	})
-}
-
-func (h *Handler) handleSell(w http.ResponseWriter, r *http.Request) {
-	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *sellRequest) string {
-		return req.CharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req sellRequest) {
-		result, err := h.shops.Sell(r.Context(), char.ID, req.ItemInstanceID, req.Quantity)
-		if err != nil {
-			writeError(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, saleResponse{
-			CharacterID: result.Character.ID,
-			InstanceID:  result.SoldInstance.ID,
-			Quantity:    result.SoldInstance.Quantity,
-			TotalPayout: result.TotalPayout,
-		})
-	})
-}
 
 // -------------------------------------------------------------------
 // Helpers

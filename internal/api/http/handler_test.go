@@ -12,7 +12,6 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -206,28 +205,21 @@ func (s *stubAdventureService) GetChronicle(ctx context.Context, characterID str
 }
 
 type stubShopService struct {
-	purchaseFn           func(ctx context.Context, characterID, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
-	sellFn               func(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error)
-	getCatalogFn         func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
-	batchPurchaseFn      func(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
-	inspectNPCFn         func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
-	talkNPCFn            func(ctx context.Context, shopType shop.ShopType) (string, error)
-	discoverSecretShopFn func(ctx context.Context, characterID string) (bool, string, error)
-	purchaseInShopFn     func(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
-	synthesizeFn         func(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error)
+	sellFn           func(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error)
+	getCatalogFn     func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
+	batchPurchaseFn  func(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
+	inspectNPCFn     func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
+	talkNPCFn        func(ctx context.Context, shopType shop.ShopType) (string, error)
+	saleOfferFn      func(ctx context.Context, shopType shop.ShopType, characterID string) (*shop.SaleOffer, error)
+	purchaseInShopFn func(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
+	synthesizeFn     func(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error)
 }
 
-func (s *stubShopService) Purchase(ctx context.Context, characterID, itemDefinitionID string, quantity int) (shop.PurchaseResult, error) {
-	if s.purchaseFn != nil {
-		return s.purchaseFn(ctx, characterID, itemDefinitionID, quantity)
-	}
-	return shop.PurchaseResult{}, nil
-}
 func (s *stubShopService) PurchaseInShop(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error) {
 	if s.purchaseInShopFn != nil {
 		return s.purchaseInShopFn(ctx, characterID, shopType, itemDefinitionID, quantity)
 	}
-	return s.Purchase(ctx, characterID, itemDefinitionID, quantity)
+	return shop.PurchaseResult{}, nil
 }
 func (s *stubShopService) Sell(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error) {
 	if s.sellFn != nil {
@@ -259,11 +251,11 @@ func (s *stubShopService) TalkNPC(ctx context.Context, shopType shop.ShopType) (
 	}
 	return "", nil
 }
-func (s *stubShopService) DiscoverSecretShop(ctx context.Context, characterID string) (bool, string, error) {
-	if s.discoverSecretShopFn != nil {
-		return s.discoverSecretShopFn(ctx, characterID)
+func (s *stubShopService) GetSaleOffer(ctx context.Context, shopType shop.ShopType, characterID string) (*shop.SaleOffer, error) {
+	if s.saleOfferFn != nil {
+		return s.saleOfferFn(ctx, shopType, characterID)
 	}
-	return true, "unlocked", nil
+	return nil, nil
 }
 func (s *stubShopService) Synthesize(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error) {
 	if s.synthesizeFn != nil {
@@ -787,156 +779,6 @@ func TestHandleStartAdventure_LevelRequirementNotMet(t *testing.T) {
 	req := jsonRequest(t, http.MethodPost, "/adventures", `{"character_id":"c1","stage_id":"stage-99"}`)
 	req.Header.Set("Authorization", bearerToken("sess1"))
 	h.Router().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-}
-
-// -------------------------------------------------------------------
-// Shop purchase
-// -------------------------------------------------------------------
-
-func TestHandlePurchase_Success(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
-	instance, _ := coreitem.NewInstance("sword-01", 1)
-	result := shop.PurchaseResult{
-		Character:    corecharacter.Character{ID: "c1", PlayerID: "p1"},
-		ItemInstance: instance,
-		TotalPrice:   100,
-	}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	cs := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
-	}
-	ss := &stubShopService{
-		purchaseFn: func(_ context.Context, charID, itemID string, qty int) (shop.PurchaseResult, error) {
-			return result, nil
-		},
-	}
-	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
-
-	rec := httptest.NewRecorder()
-	req := jsonRequest(t, http.MethodPost, "/shop/purchase", `{"character_id":"c1","item_definition_id":"sword-01","quantity":1}`)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d\nbody: %s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	var resp map[string]any
-	decodeResponseBody(t, rec.Body.Bytes(), &resp)
-	if resp["total_cost"] != float64(100) {
-		t.Errorf("total_cost = %v, want 100", resp["total_cost"])
-	}
-}
-
-func TestHandlePurchase_Forbidden_DifferentPlayer(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "other_player"}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	cs := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
-	}
-	ss := &stubShopService{
-		purchaseFn: func(_ context.Context, charID, itemID string, qty int) (shop.PurchaseResult, error) {
-			return shop.PurchaseResult{}, nil
-		},
-	}
-	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
-
-	rec := httptest.NewRecorder()
-	req := jsonRequest(t, http.MethodPost, "/shop/purchase", `{"character_id":"c1","item_definition_id":"sword-01","quantity":1}`)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-}
-
-func TestHandlePurchase_ServiceError(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	cs := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
-	}
-	ss := &stubShopService{
-		purchaseFn: func(_ context.Context, charID, itemID string, qty int) (shop.PurchaseResult, error) {
-			return shop.PurchaseResult{}, errors.New("insufficient funds")
-		},
-	}
-	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
-
-	rec := httptest.NewRecorder()
-	req := jsonRequest(t, http.MethodPost, "/shop/purchase", `{"character_id":"c1","item_definition_id":"sword-01","quantity":1}`)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-}
-
-// -------------------------------------------------------------------
-// Shop sell
-// -------------------------------------------------------------------
-
-func TestHandleSell_Success(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
-	instance, _ := coreitem.NewInstance("sword-01", 1)
-	result := shop.SaleResult{
-		Character:    corecharacter.Character{ID: "c1", PlayerID: "p1"},
-		SoldInstance: instance,
-		TotalPayout:  50,
-	}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	cs := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
-	}
-	ss := &stubShopService{
-		sellFn: func(_ context.Context, charID, instID string, qty int) (shop.SaleResult, error) {
-			return result, nil
-		},
-	}
-	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
-
-	rec := httptest.NewRecorder()
-	req := jsonRequest(t, http.MethodPost, "/shop/sell", `{"character_id":"c1","item_instance_id":"inst-1","quantity":1}`)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d\nbody: %s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	var resp map[string]any
-	decodeResponseBody(t, rec.Body.Bytes(), &resp)
-	if resp["total_payout"] != float64(50) {
-		t.Errorf("total_payout = %v, want 50", resp["total_payout"])
-	}
-}
-
-func TestHandleSell_Forbidden_DifferentPlayer(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "other_player"}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	cs := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
-	}
-	ss := &stubShopService{
-		sellFn: func(_ context.Context, charID, instID string, qty int) (shop.SaleResult, error) {
-			return shop.SaleResult{}, nil
-		},
-	}
-	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
-
-	rec := httptest.NewRecorder()
-	req := jsonRequest(t, http.MethodPost, "/shop/sell", `{"character_id":"c1","item_instance_id":"inst-1","quantity":1}`)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}

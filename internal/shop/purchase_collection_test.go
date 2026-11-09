@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/shop"
 )
 
 type errCollectionRecorder struct {
@@ -33,7 +34,7 @@ func TestPurchase_PropagatesCollectionError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := svc.Purchase(ctx, char.ID, "weapon-01", 1)
+	_, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if !errors.Is(err, colErr) {
 		t.Fatalf("expected collection error %v, got: %v", colErr, err)
 	}

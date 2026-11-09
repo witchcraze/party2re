@@ -13,64 +13,6 @@
       }
     },
     "schemas": {
-      "AccessorySynthesizeResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "consumed_hiyaku_item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemInstance"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "consumed_materials": {
-            "items": {
-              "$ref": "#/components/schemas/ItemInstance"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "created_item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ItemInstance"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotDepot"
-          },
-          "npc_message": {
-            "type": "string"
-          },
-          "recipe": {
-            "$ref": "#/components/schemas/ShopSynthesisRecipe"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "used_hiyaku": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "recipe",
-          "success",
-          "used_hiyaku",
-          "consumed_materials",
-          "depot",
-          "npc_message"
-        ],
-        "type": "object"
-      },
       "ActionErrorDetail": {
         "additionalProperties": false,
         "properties": {
@@ -6542,6 +6484,207 @@
                   },
                   "required": [
                     "target_name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "shop_purchase",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_definition_id": {
+                      "description": "Explicit product ID from the observed catalog. Funds, availability and helper exclusions stay service-owned.",
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "description": "Explicit quantity; the service accepts 1..9999. One item goes to the empty hand, otherwise goods go to the Depot.",
+                      "format": "int64",
+                      "maximum": 9223372036854775807,
+                      "minimum": -9223372036854775808,
+                      "type": "integer"
+                    },
+                    "shop_type": {
+                      "description": "Explicit shop from the observed scene; prices and the sales list belong to this shop.",
+                      "enum": [
+                        "weapon",
+                        "armor",
+                        "item",
+                        "accessory"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "shop_type",
+                    "item_definition_id",
+                    "quantity"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "shop_sell",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_instance_id": {
+                      "description": "Owned inventory instance, normally the observed sale_offer. One unit is sold at half the base price.",
+                      "type": "string"
+                    },
+                    "shop_type": {
+                      "description": "Explicit shop from the observed scene.",
+                      "enum": [
+                        "weapon",
+                        "armor",
+                        "item",
+                        "accessory"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "shop_type",
+                    "item_instance_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "shop_batch_purchase",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "description": "Products from the shop's current sales list; everything is delivered to the Depot in one transaction.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "item_definition_id": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "description": "1..9999 per entry.",
+                            "format": "int64",
+                            "maximum": 9223372036854775807,
+                            "minimum": -9223372036854775808,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "item_definition_id",
+                          "quantity"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "shop_type": {
+                      "description": "Explicit shop; the accessory shop has no batch purchase.",
+                      "enum": [
+                        "weapon",
+                        "armor",
+                        "item"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "shop_type",
+                    "items"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "shop_synthesize",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "recipe_target": {
+                      "description": "Recipe target from the observed accessory-shop recipes. Both materials must be in the Depot; they are consumed on success and failure, and the product goes to the Depot.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "recipe_target"
                   ],
                   "type": "object"
                 }
@@ -13091,37 +13234,6 @@
         ],
         "type": "object"
       },
-      "PurchaseResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "item_definition_id": {
-            "type": "string"
-          },
-          "npc_message": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "integer"
-          },
-          "total_cost": {
-            "type": "integer"
-          },
-          "transferred_to_depot": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "character_id",
-          "item_definition_id",
-          "quantity",
-          "total_cost",
-          "transferred_to_depot"
-        ],
-        "type": "object"
-      },
       "PvPColosseumRoom": {
         "additionalProperties": false,
         "properties": {
@@ -14083,30 +14195,6 @@
           "reason",
           "penalty_seconds",
           "created_at"
-        ],
-        "type": "object"
-      },
-      "SaleResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "item_instance_id": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "integer"
-          },
-          "total_payout": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "item_instance_id",
-          "quantity",
-          "total_payout"
         ],
         "type": "object"
       },
@@ -15650,6 +15738,47 @@
           "quantity": {
             "$ref": "#/components/schemas/ShopQuantityBounds"
           },
+          "recipes": {
+            "description": "Accessory shop only: the synthesis recipes.",
+            "items": {
+              "$ref": "#/components/schemas/ShopSynthesisRecipe"
+            },
+            "type": "array"
+          },
+          "sale_offer": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "item_definition_id": {
+                    "type": "string"
+                  },
+                  "item_instance_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "payout": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "item_instance_id",
+                  "item_definition_id",
+                  "name",
+                  "payout"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The item in this shop's hand (weapon, armor, or the tool hand for the item and accessory shops) and its unit payout; null when that hand is empty."
+          },
           "shop_type": {
             "enum": [
               "weapon",
@@ -15671,7 +15800,8 @@
           "npc",
           "quantity",
           "items",
-          "page"
+          "page",
+          "sale_offer"
         ],
         "type": "object"
       },
@@ -15719,6 +15849,11 @@
             "maxLength": 128,
             "type": "string"
           },
+          "power": {
+            "description": "Nominal strength; weapon and armor shops only.",
+            "minimum": 0,
+            "type": "integer"
+          },
           "purchase_params": {
             "$ref": "#/components/schemas/ShopPurchaseParams"
           },
@@ -15752,6 +15887,11 @@
               "accessory"
             ],
             "type": "string"
+          },
+          "weight": {
+            "description": "Nominal weight; weapon and armor shops only.",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
@@ -15779,6 +15919,47 @@
           "quantity": {
             "$ref": "#/components/schemas/ShopQuantityBounds"
           },
+          "recipes": {
+            "description": "Accessory shop only: the synthesis recipes.",
+            "items": {
+              "$ref": "#/components/schemas/ShopSynthesisRecipe"
+            },
+            "type": "array"
+          },
+          "sale_offer": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "item_definition_id": {
+                    "type": "string"
+                  },
+                  "item_instance_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "payout": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "item_instance_id",
+                  "item_definition_id",
+                  "name",
+                  "payout"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The item in this shop's hand (weapon, armor, or the tool hand for the item and accessory shops) and its unit payout; null when that hand is empty."
+          },
           "shop_type": {
             "enum": [
               "weapon",
@@ -15799,7 +15980,8 @@
           "shop_type",
           "npc",
           "quantity",
-          "product"
+          "product",
+          "sale_offer"
         ],
         "type": "object"
       },
@@ -27820,889 +28002,6 @@
         ]
       }
     },
-    "/characters/{id}/shop/accessory/buy": {
-      "post": {
-        "operationId": "shopAccessoryBuy",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_definition_id": {
-                    "type": "string"
-                  },
-                  "quantity": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "item_definition_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PurchaseResponse"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Accessory purchase result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - insufficient funds or job level requirement not met"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Purchase accessory from accessory shop",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/characters/{id}/shop/accessory/recipes": {
-      "get": {
-        "operationId": "shopAccessoryRecipes",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "items": {
-                        "$ref": "#/components/schemas/ShopSynthesisRecipe"
-                      },
-                      "type": [
-                        "array",
-                        "null"
-                      ]
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "List of all accessory synthesis recipes"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List all accessory synthesis recipes",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/characters/{id}/shop/accessory/sell": {
-      "post": {
-        "operationId": "shopAccessorySell",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_instance_id": {
-                    "type": "string"
-                  },
-                  "quantity": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "item_instance_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/SaleResponse"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Accessory sale result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - item not found or equipped"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Sell item to accessory shop",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/characters/{id}/shop/accessory/synthesize": {
-      "post": {
-        "operationId": "shopAccessorySynthesize",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "recipe_id": {
-                    "type": "string"
-                  },
-                  "recipe_target": {
-                    "type": "string"
-                  },
-                  "target": {
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/AccessorySynthesizeResponse"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Accessory synthesis result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - recipe not found or missing required materials"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Synthesize accessory using materials from depot",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/characters/{id}/shop/batch-purchase": {
-      "post": {
-        "operationId": "shopBatchPurchase",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "items": {
-                    "items": {
-                      "properties": {
-                        "item_definition_id": {
-                          "type": "string"
-                        },
-                        "quantity": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "item_definition_id",
-                        "quantity"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "shop_type": {
-                    "enum": [
-                      "weapon",
-                      "armor",
-                      "item"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "shop_type",
-                  "items"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "npc_message": {
-                      "type": "string"
-                    },
-                    "purchased_count": {
-                      "type": "integer"
-                    },
-                    "total_price": {
-                      "type": "integer"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Batch purchase success, items sent directly to depot"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - insufficient funds"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Batch purchase multiple items directly into character depot",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/characters/{id}/shop/discover-secret": {
-      "post": {
-        "operationId": "shopDiscoverSecret",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    },
-                    "unlocked": {
-                      "type": "boolean"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Secret shop discovery result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - job level requirement not met"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Discover secret shop (requires job level 7+)",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/characters/{id}/shop/{type}": {
-      "get": {
-        "operationId": "getShopCatalog",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Shop type (weapon, armor, item)",
-            "in": "path",
-            "name": "type",
-            "required": true,
-            "schema": {
-              "enum": [
-                "weapon",
-                "armor",
-                "item",
-                "accessory"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "items": {
-                      "items": {
-                        "properties": {
-                          "base_price": {
-                            "type": "integer"
-                          },
-                          "id": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "retail_price": {
-                            "type": "integer"
-                          },
-                          "slot": {
-                            "type": "string"
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "npc_name": {
-                      "type": "string"
-                    },
-                    "shop_type": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Shop catalog filtered by character job level and active helper quests"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid shop type"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get shop catalog for weapon, armor, or item shop",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
     "/characters/{id}/store": {
       "get": {
         "operationId": "getCharactersIdStore",
@@ -37981,220 +37280,6 @@
         "summary": "Login player and obtain session token",
         "tags": [
           "Auth"
-        ]
-      }
-    },
-    "/shop/purchase": {
-      "post": {
-        "operationId": "shopPurchase",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  },
-                  "item_definition_id": {
-                    "type": "string"
-                  },
-                  "quantity": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "character_id",
-                  "item_definition_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PurchaseResponse"
-                }
-              }
-            },
-            "description": "Item purchase result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Purchase item from town shop",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/shop/sell": {
-      "post": {
-        "operationId": "shopSell",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  },
-                  "item_instance_id": {
-                    "type": "string"
-                  },
-                  "quantity": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "character_id",
-                  "item_instance_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SaleResponse"
-                }
-              }
-            },
-            "description": "Item sale result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Sell item from inventory to shop",
-        "tags": [
-          "Shop"
         ]
       }
     },

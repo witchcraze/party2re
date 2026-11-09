@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -158,7 +157,7 @@ func TestShopScenesUseRealCatalogAndExplicitSelection(t *testing.T) {
 		for _, level := range []int{0, 1, 3, 5, 7, 11, 12, 49, 50, 99, 100} {
 			t.Run(fmt.Sprintf("%s/%d", kind, level), func(t *testing.T) {
 				f, store, router := shopSceneRouter(t)
-				f.char.JobLevel, f.char.Money = level, 0
+				f.char.JobLevel, f.char.Money = level, 1
 				store.selection.Destination = "shop_" + string(kind)
 				status, response := navigationGET(t, router)
 				if status != 200 || response.Scene.Support.Observation != "details" {
@@ -192,12 +191,33 @@ func TestShopScenesUseRealCatalogAndExplicitSelection(t *testing.T) {
 				if (data.NPC.SecretShopHint != "") != (kind == shop.ShopTypeItem) {
 					t.Fatalf("NPC: %+v", data.NPC)
 				}
-				command := "shop_purchase"
+				commands := []string{"shop_purchase", "shop_batch_purchase"}
 				if kind == shop.ShopTypeAccessory {
-					command = "shop_accessory_buy"
+					commands = []string{"shop_purchase", "shop_synthesize"}
 				}
-				if !slices.ContainsFunc(response.Scene.Support.Actions, func(a SceneActionSupport) bool { return a.Action == command && !a.Connected }) || slices.ContainsFunc(response.AvailableActions, func(a ContextAction) bool { return a.Action == command }) {
-					t.Fatalf("unconnected purchase: %+v", response.Scene.Support)
+				for _, command := range commands {
+					i := slices.IndexFunc(response.AvailableActions, func(a ContextAction) bool { return a.Action == command })
+					if i < 0 || (command != "shop_synthesize" && response.AvailableActions[i].ParamsTemplate["shop_type"] != string(kind)) {
+						t.Fatalf("%s not offered for this shop: %+v", command, response.AvailableActions)
+					}
+				}
+				if data.SaleOffer != nil || slices.ContainsFunc(response.AvailableActions, func(a ContextAction) bool { return a.Action == "shop_sell" }) {
+					t.Fatalf("sale offered with an empty hand: %+v", data.SaleOffer)
+				}
+				if (len(data.Recipes) > 0) != (kind == shop.ShopTypeAccessory) {
+					t.Fatalf("recipes: %d", len(data.Recipes))
+				}
+				for _, p := range data.Items {
+					var power, weight int
+					switch kind {
+					case shop.ShopTypeWeapon:
+						power, weight = item.NominalWeaponStats(p.ID)
+					case shop.ShopTypeArmor:
+						power, weight = item.NominalArmorStats(p.ID)
+					}
+					if p.Power != power || p.Weight != weight {
+						t.Fatalf("stats %s: %d/%d want %d/%d", p.ID, p.Power, p.Weight, power, weight)
+					}
 				}
 				body, err := json.Marshal(map[string]any{"action": "scene_select", "params": data.Items[0].SelectParams})
 				if err != nil {
@@ -355,16 +375,25 @@ func TestShopSceneActorOwnershipAndExplicitPurchase(t *testing.T) {
 	_, response := navigationGET(t, router)
 	product := decodeShopScene[ShopProductSceneData](t, response).Product
 	store.selection = playercontext.Selection{Destination: "shop_item", Subject: playercontext.Subject{Kind: "item", ID: "item-001"}}
-	body, err := json.Marshal(map[string]any{"character_id": "hero", "item_definition_id": product.PurchaseParams.ItemDefinitionID, "quantity": 1})
+	i := slices.IndexFunc(response.AvailableActions, func(a ContextAction) bool { return a.Action == "shop_purchase" })
+	if i < 0 || response.AvailableActions[i].ParamsTemplate["item_definition_id"] != "weapon-01" {
+		t.Fatalf("purchase template: %+v", response.AvailableActions)
+	}
+	params := response.AvailableActions[i].ParamsTemplate
+	params["quantity"] = 1
+	// The command keeps the observed shop and product even after selection moves.
+	store.selection = playercontext.Selection{Destination: "shop_item", Subject: playercontext.Subject{Kind: "item", ID: "item-001"}}
+	body, err := json.Marshal(map[string]any{"action": "shop_purchase", "params": params})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r = httptest.NewRequest(http.MethodPost, "/shop/purchase", strings.NewReader(string(body)))
-	r.Header.Set("Authorization", "Bearer session")
-	r.Header.Set("Content-Type", "application/json")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, r)
-	if w.Code != 200 || len(f.inv.Items) != 1 || f.inv.Items[0].DefinitionID != "weapon-01" || f.char.Money != 100-product.RetailPrice || store.writes != 0 {
-		t.Fatalf("purchase redirected: %d %s %+v", w.Code, w.Body.String(), f.inv)
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", string(body), nil)
+	var result shopPurchaseResponse
+	if err := json.Unmarshal(raw["result"], &result); err != nil {
+		t.Fatal(err)
+	}
+	if status != 200 || len(f.inv.Items) != 1 || f.inv.Items[0].DefinitionID != "weapon-01" || f.char.Money != 100-product.RetailPrice || store.writes != 0 ||
+		result.NPCMessage != "まいど！ヒノキの棒だ！受けとってくれ！" || result.TransferredToDepot {
+		t.Fatalf("purchase redirected: %d %s %+v", status, raw, f.inv)
 	}
 }

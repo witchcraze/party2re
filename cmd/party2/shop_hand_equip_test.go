@@ -96,7 +96,7 @@ func TestWireShopPurchaseEquipsWeapon_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Initial money is 50000, inventory empty
-	res, err := f.econ.shop.Purchase(ctx, f.char.ID, "weapon-01", 1)
+	res, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if err != nil {
 		t.Fatalf("Purchase(weapon-01) error = %v", err)
 	}
@@ -158,7 +158,7 @@ func TestWireShopPurchaseClearsCustomizationAndPreservesDeductedMoney_Integratio
 	}
 
 	// Purchase weapon-01
-	res, err := f.econ.shop.Purchase(ctx, f.char.ID, "weapon-01", 1)
+	res, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if err != nil {
 		t.Fatalf("Purchase(weapon-01) error = %v", err)
 	}
@@ -192,7 +192,7 @@ func TestWireShopPurchaseIndependentHandFields_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Buy weapon-01 (enters kind 1, equips in MainHand)
-	resWeapon, err := f.econ.shop.Purchase(ctx, f.char.ID, "weapon-01", 1)
+	resWeapon, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 	if err != nil {
 		t.Fatalf("Purchase(weapon-01) error = %v", err)
 	}
@@ -201,7 +201,7 @@ func TestWireShopPurchaseIndependentHandFields_Integration(t *testing.T) {
 	}
 
 	// 2. Buy item-001 (Herb, kind 3): weapon is held, but tool hand is empty!
-	resHerb, err := f.econ.shop.Purchase(ctx, f.char.ID, "item-001", 1)
+	resHerb, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeItem, "item-001", 1)
 	if err != nil {
 		t.Fatalf("Purchase(item-001) error = %v", err)
 	}
@@ -210,7 +210,7 @@ func TestWireShopPurchaseIndependentHandFields_Integration(t *testing.T) {
 	}
 
 	// 3. Buy armor-01 (enters kind 2, equips in Body)
-	resArmor, err := f.econ.shop.Purchase(ctx, f.char.ID, "armor-01", 1)
+	resArmor, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeArmor, "armor-01", 1)
 	if err != nil {
 		t.Fatalf("Purchase(armor-01) error = %v", err)
 	}
@@ -240,7 +240,7 @@ func TestWireShopPurchaseIndependentHandFields_Integration(t *testing.T) {
 
 	// 4. Now tool hand (kind 3) is occupied by item-001.
 	// Buying another kind 3 item (item-007) must route to depot!
-	resAntidote, err := f.econ.shop.Purchase(ctx, f.char.ID, "item-007", 1)
+	resAntidote, err := f.econ.shop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeItem, "item-007", 1)
 	if err != nil {
 		t.Fatalf("Purchase(item-007) error = %v", err)
 	}
@@ -317,7 +317,7 @@ func TestWireShopPurchaseRollback_Integration(t *testing.T) {
 			before := f.state(t)
 
 			// Attempt purchase of weapon-01
-			_, err = failingShop.Purchase(ctx, f.char.ID, "weapon-01", 1)
+			_, err = failingShop.PurchaseInShop(ctx, f.char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
 			if !errors.Is(err, errDepotEquipmentPersistence) {
 				t.Fatalf("expected errDepotEquipmentPersistence, got %v", err)
 			}

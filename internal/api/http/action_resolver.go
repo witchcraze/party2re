@@ -124,26 +124,10 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 			Method:      http.MethodPost,
 			PathPattern: "/api/v1/characters/%s/actions",
 		},
-		"shop_weapon": {
-			Method:      http.MethodGet,
-			PathPattern: "/characters/%s/shop/weapon",
-		},
-		"shop_armor": {
-			Method:      http.MethodGet,
-			PathPattern: "/characters/%s/shop/armor",
-		},
-		"shop_item": {
-			Method:      http.MethodGet,
-			PathPattern: "/characters/%s/shop/item",
-		},
-		"shop_accessory": {
-			Method:      http.MethodGet,
-			PathPattern: "/characters/%s/shop/accessory",
-		},
-		"shop_batch_purchase": {
-			Method:      http.MethodPost,
-			PathPattern: "/characters/%s/shop/batch-purchase",
-		},
+		"shop_purchase":       {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"shop_sell":           {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"shop_batch_purchase": {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"shop_synthesize":     {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"home_sleep": {
 			Method:      http.MethodPost,
 			PathPattern: "/characters/%s/home/sleep",

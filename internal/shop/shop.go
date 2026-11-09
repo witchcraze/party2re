@@ -267,6 +267,12 @@ func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID
 			RetailPrice: retailPrice,
 			Slot:        def.Slot,
 		})
+		switch shopType {
+		case ShopTypeWeapon:
+			items[len(items)-1].Power, items[len(items)-1].Weight = item.NominalWeaponStats(def.ID)
+		case ShopTypeArmor:
+			items[len(items)-1].Power, items[len(items)-1].Weight = item.NominalArmorStats(def.ID)
+		}
 	}
 
 	title, npc := GetShopMeta(shopType)
@@ -276,6 +282,48 @@ func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID
 		NPCName:  npc,
 		Items:    items,
 	}, nil
+}
+
+// SaleOffer is the held item a shop buys back and its unit payout.
+type SaleOffer struct {
+	ItemInstanceID   string `json:"item_instance_id"`
+	ItemDefinitionID string `json:"item_definition_id"`
+	Name             string `json:"name"`
+	Payout           int    `json:"payout"`
+}
+
+// handKind is the legacy hand a shop buys from: weapon 1, armor 2, otherwise the tool hand 3.
+func handKind(shopType ShopType) int {
+	switch shopType {
+	case ShopTypeWeapon:
+		return 1
+	case ShopTypeArmor:
+		return 2
+	default:
+		return 3
+	}
+}
+
+// GetSaleOffer returns the item in the shop's hand, or nil when that hand is empty.
+func (s *Service) GetSaleOffer(ctx context.Context, shopType ShopType, characterID string) (*SaleOffer, error) {
+	if !ValidateShopType(shopType) {
+		return nil, ErrInvalidShopType
+	}
+	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	for _, inst := range inv.Items {
+		if item.LegacyHandKindByID(inst.DefinitionID) != handKind(shopType) {
+			continue
+		}
+		def, err := s.catalog.FindByID(inst.DefinitionID)
+		if err != nil {
+			return nil, fmt.Errorf("read held item %s: %w", inst.DefinitionID, err)
+		}
+		return &SaleOffer{ItemInstanceID: inst.ID, ItemDefinitionID: def.ID, Name: def.Name, Payout: s.CalculateSellPrice(def.Price)}, nil
+	}
+	return nil, nil
 }
 
 func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID string, quantity int) (SaleResult, error) {

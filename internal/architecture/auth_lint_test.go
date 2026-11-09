@@ -425,14 +425,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleClaimAchievement": "medal.go",
 		// Adventure
 		"handleStartAdventure": "handler.go",
-		// Shop & Commercial
-		"handlePurchase":            "handler.go",
-		"handleSell":                "handler.go",
-		"handleShopBatchPurchase":   "shop.go",
-		"handleShopDiscoverSecret":  "shop.go",
-		"handleAccessoryBuy":        "shop.go",
-		"handleAccessorySell":       "shop.go",
-		"handleAccessorySynthesize": "shop.go",
 		// Home
 		"handleBuildHouse":            "home_estate.go",
 		"handleSetCharacterColor":     "home_estate.go",

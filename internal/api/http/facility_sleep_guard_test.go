@@ -17,7 +17,6 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/playercontext"
-	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/store"
 )
 
@@ -164,14 +163,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		// Medal
 		{"medal_claim_reward", http.MethodPost, "/medals/claim", `{"character_id":"char-1","item_id":"reward-1"}`},
 		{"medal_claim_achievement", http.MethodPost, "/characters/char-1/achievements/ach-1/claim", `{}`},
-		// Shop & Commercial
-		{"shop_purchase", http.MethodPost, "/shop/purchase", `{"character_id":"char-1","item_definition_id":"herb","quantity":1}`},
-		{"shop_sell", http.MethodPost, "/shop/sell", `{"character_id":"char-1","item_instance_id":"item-1","quantity":1}`},
-		{"shop_batch_purchase", http.MethodPost, "/characters/char-1/shop/batch-purchase", `{"shop_type":"item","items":[{"item_definition_id":"herb","quantity":1}]}`},
-		{"shop_discover_secret", http.MethodPost, "/characters/char-1/shop/discover-secret", `{}`},
-		{"shop_accessory_buy", http.MethodPost, "/characters/char-1/shop/accessory/buy", `{"item_definition_id":"acc-1","quantity":1}`},
-		{"shop_accessory_sell", http.MethodPost, "/characters/char-1/shop/accessory/sell", `{"item_instance_id":"item-1","quantity":1}`},
-		{"shop_accessory_synthesize", http.MethodPost, "/characters/char-1/shop/accessory/synthesize", `{"recipe_target":"acc-2"}`},
 		// Home
 		{"home_build_house", http.MethodPost, "/towns/town1/houses", `{"character_id":"char-1","house_style":"001"}`},
 		{"home_set_character_color", http.MethodPost, "/characters/char-1/color", `{"color":"#ffffff"}`},
@@ -341,18 +332,16 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
 				return home.SleepStatus{}, errors.New("timer lookup failed")
 			},
-		}
-		mockShop := &stubShopService{
-			purchaseFn: func(_ context.Context, _, _ string, _ int) (shop.PurchaseResult, error) {
+			sendLetterFn: func(_ context.Context, _, _, _, _ string) (home.Letter, error) {
 				called = true
-				return shop.PurchaseResult{}, nil
+				return home.Letter{}, nil
 			},
 		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, mockShop, apihttp.WithHome(mockHome))
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
 		if err != nil {
 			t.Fatal(err)
 		}
-		req := httptest.NewRequest(http.MethodPost, "/shop/purchase", bytes.NewReader([]byte(`{"character_id":"char-1","item_definition_id":"herb","quantity":1}`)))
+		req := httptest.NewRequest(http.MethodPost, "/letters", bytes.NewReader([]byte(`{"sender_character_id":"char-1","recipient_character_id":"char-2","content":"hello"}`)))
 		req.Header.Set("Authorization", "Bearer valid-session")
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -362,7 +351,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			t.Errorf("expected 500, got %d", rec.Code)
 		}
 		if called {
-			t.Error("expected shop purchase callback not to be invoked on sleep lookup failure")
+			t.Error("expected letter callback not to be invoked on sleep lookup failure")
 		}
 	})
 
@@ -380,20 +369,18 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			getSleepStatusFn: func(ctx context.Context, _ string) (home.SleepStatus, error) {
 				return home.SleepStatus{}, ctx.Err()
 			},
-		}
-		mockShop := &stubShopService{
-			purchaseFn: func(_ context.Context, _, _ string, _ int) (shop.PurchaseResult, error) {
+			sendLetterFn: func(_ context.Context, _, _, _, _ string) (home.Letter, error) {
 				called = true
-				return shop.PurchaseResult{}, nil
+				return home.Letter{}, nil
 			},
 		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, mockShop, apihttp.WithHome(mockHome))
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
 		if err != nil {
 			t.Fatal(err)
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		req := httptest.NewRequest(http.MethodPost, "/shop/purchase", bytes.NewReader([]byte(`{"character_id":"char-1","item_definition_id":"herb","quantity":1}`))).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodPost, "/letters", bytes.NewReader([]byte(`{"sender_character_id":"char-1","recipient_character_id":"char-2","content":"hello"}`))).WithContext(ctx)
 		req.Header.Set("Authorization", "Bearer valid-session")
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -403,7 +390,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			t.Errorf("expected 500, got %d", rec.Code)
 		}
 		if called {
-			t.Error("expected shop purchase callback not to be invoked on canceled context")
+			t.Error("expected letter callback not to be invoked on canceled context")
 		}
 	})
 
