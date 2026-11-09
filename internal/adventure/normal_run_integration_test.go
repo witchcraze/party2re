@@ -182,6 +182,7 @@ type normalFixture struct {
 	db      *sql.DB
 	chars   *database.CharacterRepository
 	invs    *database.InventoryRepository
+	depots  *database.DepotRepository
 	history *normalHistory
 	store   *normalStore
 	clock   *normalClock
@@ -208,11 +209,15 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	depots, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	runner, err := economy.NewService(chars, invs, economy.WithTransactionProvider(database.NewTransactionProvider(db)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter := battle.NewService(battle.WithCharacterRepository(chars), battle.WithInventoryRepository(invs), battle.WithEquipmentRepository(equipment), battle.WithJobHistoryRepository(jobs), battle.WithTransactionProvider(database.NewTransactionProvider(db)), battle.WithTransactionRunner(runner), battle.WithMaxInventoryCapacity(30))
+	adapter := battle.NewService(battle.WithCharacterRepository(chars), battle.WithInventoryRepository(invs), battle.WithDepotRepository(depots), battle.WithEquipmentRepository(equipment), battle.WithJobHistoryRepository(jobs), battle.WithTransactionProvider(database.NewTransactionProvider(db)), battle.WithTransactionRunner(runner), battle.WithMaxInventoryCapacity(30))
 	stages, err := adventure.InitialStageCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +226,7 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &normalFixture{db: db, chars: chars, invs: invs, history: &normalHistory{Repository: history}, store: &normalStore{NormalRunStore: runRepo}, clock: &normalClock{}, penalty: &normalPenalty{}, combat: &normalCombat{}, rng: &normalRNG{}}
+	f := &normalFixture{db: db, chars: chars, invs: invs, depots: depots, history: &normalHistory{Repository: history}, store: &normalStore{NormalRunStore: runRepo}, clock: &normalClock{}, penalty: &normalPenalty{}, combat: &normalCombat{}, rng: &normalRNG{}}
 	f.clock.nanos.Store(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for range count {
 		c, err := database.CreateTestCharacterWithFunds(context.Background(), db, id.New()[:8], 100)
@@ -439,9 +444,13 @@ func TestNormalRunChestReceiptAndSQLRollback(t *testing.T) {
 	if err != nil || len(inv.Items) != 0 {
 		t.Fatal("failed chest leaked an item", inv, err)
 	}
+	if dep, err := f.depots.FindByCharacterID(context.Background(), c.ID); err != nil || len(dep.Items) != 0 {
+		t.Fatal("failed chest leaked a depot item", dep, err)
+	}
 	f.store.failWrite.Store(false)
 	result, err := f.svc.Command(context.Background(), cmd)
-	if err != nil || result.Box == nil || result.Box.DeliveredTo != "inventory" {
+	// The fixed RNG rolls a weapon, which bypasses the empty hand and goes to the Depot.
+	if err != nil || result.Box == nil || result.Box.DeliveredTo != "depot" {
 		t.Fatal(result, err)
 	}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(int, int) error { _, err := f.svc.Command(context.Background(), cmd); return err })
@@ -449,8 +458,11 @@ func TestNormalRunChestReceiptAndSQLRollback(t *testing.T) {
 		t.Fatal(stats)
 	}
 	inv, err = f.invs.FindByCharacterID(context.Background(), c.ID)
-	if err != nil || len(inv.Items) != 1 || inv.Items[0].Quantity != 1 {
-		t.Fatal("duplicate chest delivery", inv, err)
+	if err != nil || len(inv.Items) != 0 {
+		t.Fatal("weapon chest entered the hand", inv, err)
+	}
+	if dep, err := f.depots.FindByCharacterID(context.Background(), c.ID); err != nil || len(dep.Items) != 1 || dep.Items[0].Quantity != 1 {
+		t.Fatal("duplicate chest delivery", dep, err)
 	}
 	// A real concrete key instance is debited only on an additional inspection.
 	key, err := coreitem.NewInstance(adventure.ItemTreasurePocket, 2)

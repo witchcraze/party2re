@@ -258,7 +258,13 @@ func TestSettleWithBattleSettler_ConveysUnsealDemonKing(t *testing.T) {
 	}
 }
 
-func TestSettleFallback_TreasureBoxes_Routing(t *testing.T) {
+func TestSettlePostBattle_TreasureBoxes_Routing(t *testing.T) {
+	t.Run("fallback", func(t *testing.T) { testTreasureBoxRouting(t, false) })
+	// Production wiring: treasure flows through the battle adapter's reward application.
+	t.Run("battle settler", func(t *testing.T) { testTreasureBoxRouting(t, true) })
+}
+
+func testTreasureBoxRouting(t *testing.T, viaBattle bool) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepository()
 	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
@@ -278,6 +284,13 @@ func TestSettleFallback_TreasureBoxes_Routing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
+	if viaBattle {
+		svc.battleSettler = battleadapter.NewService(
+			battleadapter.WithCharacterRepository(charRepo),
+			battleadapter.WithInventoryRepository(invRepo),
+			battleadapter.WithDepotRepository(depotRepo),
+		)
+	}
 
 	// char1: holds a tool, empty weapon/armor hands. Depot full (5/5).
 	// char2: holds a tool, empty weapon/armor hands. Depot has space (0/5).
@@ -288,6 +301,17 @@ func TestSettleFallback_TreasureBoxes_Routing(t *testing.T) {
 	charRepo.chars["c1"] = c1
 	charRepo.chars["c2"] = c2
 	charRepo.chars["c3"] = c3
+	// char4: empty hands, depot full: a weapon must not take the empty weapon hand.
+	c4 := corecharacter.Character{ID: "c4", Name: "C4", JobLevel: 0}
+	charRepo.chars["c4"] = c4
+	inv4, _ := coreinventory.New("c4")
+	invRepo.inventories["c4"] = inv4
+	dep4, _ := depot.NewDepotWithCapacity("c4", 0, 0, 0)
+	for i := 0; i < 5; i++ {
+		fill, _ := coreitem.NewInstance(fmt.Sprintf("weapon-fill-%d", i), 1)
+		_ = dep4.AddItem(fill)
+	}
+	_ = depotRepo.Save(ctx, dep4)
 
 	tool1, _ := coreitem.NewInstance("item-001", 1)
 	inv1, _ := coreinventory.New("c1")
@@ -326,8 +350,9 @@ func TestSettleFallback_TreasureBoxes_Routing(t *testing.T) {
 		{CharacterID: "c1", PartyID: "p"},
 		{CharacterID: "c2", PartyID: "p"},
 		{CharacterID: "c3", PartyID: "p"},
+		{CharacterID: "c4", PartyID: "p"},
 	}
-	charMap := map[string]corecharacter.Character{"c1": c1, "c2": c2, "c3": c3}
+	charMap := map[string]corecharacter.Character{"c1": c1, "c2": c2, "c3": c3, "c4": c4}
 
 	crawlResult := &adventure.DungeonCrawlResult{
 		Outcome: corebattle.OutcomeWin,
@@ -336,12 +361,20 @@ func TestSettleFallback_TreasureBoxes_Routing(t *testing.T) {
 			{OpenedBy: "c2", ItemID: "weapon-01"}, // c2: space in depot -> depot
 			{OpenedBy: "c3", ItemID: "item-001"},  // c3: empty tool hand -> inventory
 			{OpenedBy: "c1", ItemID: "item-002"},  // c1: tool hand occupied, full depot -> lost
+			{OpenedBy: "c4", ItemID: "weapon-01"}, // c4: empty hands, full depot -> lost
 		},
 	}
 
-	summaries, lostDrops, err := svc.settleFallback(ctx, members, charMap, crawlResult, corebattle.PartyBattleResult{})
+	summaries, lostDrops, err := svc.settlePostBattle(ctx, members, charMap, crawlResult, corebattle.PartyBattleResult{})
 	if err != nil {
-		t.Fatalf("settleFallback failed: %v", err)
+		t.Fatalf("settlePostBattle failed: %v", err)
+	}
+	for id, want := range map[string][2]int{"c1": {1, 5}, "c2": {1, 1}, "c3": {1, 5}, "c4": {0, 5}} {
+		inv, _ := invRepo.FindByCharacterID(ctx, id)
+		dep, _ := depotRepo.FindByCharacterID(ctx, id)
+		if len(inv.Items) != want[0] || len(dep.Items) != want[1] {
+			t.Errorf("%s stored inventory/depot = %d/%d, want %d/%d", id, len(inv.Items), len(dep.Items), want[0], want[1])
+		}
 	}
 
 	if crawlResult.TreasureBoxes[0].DeliveredTo != "lost" {
@@ -357,6 +390,9 @@ func TestSettleFallback_TreasureBoxes_Routing(t *testing.T) {
 		t.Errorf("box 3 delivered_to = %s, want lost", crawlResult.TreasureBoxes[3].DeliveredTo)
 	}
 
+	if crawlResult.TreasureBoxes[4].DeliveredTo != "lost" || len(lostDrops["c4"]) != 1 {
+		t.Errorf("box 4 delivered_to = %s, c4 lost = %v; want lost weapon-01", crawlResult.TreasureBoxes[4].DeliveredTo, lostDrops["c4"])
+	}
 	// c1 lost drops: weapon-01 and item-002
 	if len(lostDrops["c1"]) != 2 || lostDrops["c1"][0] != "weapon-01" || lostDrops["c1"][1] != "item-002" {
 		t.Errorf("c1 lostDrops mismatch: %v", lostDrops["c1"])

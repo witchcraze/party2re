@@ -47,7 +47,11 @@ func TestNormalRunPairedChestClaim(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, item := range inv.Items {
+		dep, err := f.depots.FindByCharacterID(context.Background(), c.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range append(inv.Items, dep.Items...) {
 			total += item.Quantity
 		}
 		inspections += r.Recipients[c.ID].Inspected
