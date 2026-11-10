@@ -10,6 +10,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/party"
 )
 
@@ -160,15 +161,87 @@ func TestStartSealingBattle_RequiredFailureRollsBackWholeSettlement(t *testing.T
 			if !errors.Is(err, errInjected) {
 				t.Fatalf("expected injected failure to propagate, got %v", err)
 			}
-			f.requireNothingSettled(t)
-			if f.partyRepo.deleted[f.pID] {
-				t.Error("room must not be completed when settlement fails")
-			}
-			if got := f.partyRepo.parties[f.pID].Status; got != party.StatusRecruiting {
-				t.Errorf("failed settlement must release the room claim, status=%q", got)
-			}
+			f.requireSealRolledBack(t)
 		})
 	}
+}
+
+func (f *sealFixture) requireSealRolledBack(t *testing.T) {
+	t.Helper()
+	f.requireNothingSettled(t)
+	if f.partyRepo.deleted[f.pID] {
+		t.Error("room must not be completed when settlement fails")
+	}
+	if got := f.partyRepo.parties[f.pID].Status; got != party.StatusRecruiting {
+		t.Errorf("failed settlement must release the room claim, status=%q", got)
+	}
+}
+
+// setLevel gives a fixture member a level ApplyExperience rejects.
+func (f *sealFixture) setLevel(id string, level int) {
+	c := f.charRepo.chars[id]
+	c.Level = level
+	f.charRepo.chars[id] = c
+	f.original[id] = c
+}
+
+func failingNews(context.Context, string, string, string, string, time.Time) error {
+	return errInjected
+}
+
+func TestBossSettlement_HookFailureRollsBackWholeSettlement(t *testing.T) {
+	cases := []struct {
+		name  string
+		build func(f *sealFixture, t *testing.T) *boss.Service
+	}{
+		{"news publisher", func(f *sealFixture, t *testing.T) *boss.Service {
+			return f.service(t, f.bossRepo, f.partyRepo, boss.WithNewsPublisher(boss.NewsPublisherFunc(failingNews)))
+		}},
+		{"victory hook", func(f *sealFixture, t *testing.T) *boss.Service {
+			svc := f.service(t, f.bossRepo, f.partyRepo)
+			svc.SetVictoryHook(func(context.Context, string, string, int) error { return errInjected })
+			return svc
+		}},
+	}
+	for _, tc := range cases {
+		t.Run("party/"+tc.name, func(t *testing.T) {
+			f := newSealFixture("leader", "m1")
+			_, err := tc.build(f, t).StartSealingBattle(context.Background(), f.pID, "leader")
+			if !errors.Is(err, errInjected) {
+				t.Fatalf("expected hook failure to propagate, got %v", err)
+			}
+			f.requireSealRolledBack(t)
+		})
+		t.Run("solo/"+tc.name, func(t *testing.T) {
+			f := newSealFixture("solo")
+			_, err := tc.build(f, t).ChallengeBoss(context.Background(), "solo", "king1")
+			if !errors.Is(err, errInjected) {
+				t.Fatalf("expected hook failure to propagate, got %v", err)
+			}
+			f.requireNothingSettled(t)
+		})
+	}
+}
+
+func TestBossSettlement_ExperienceFailureRollsBackWholeSettlement(t *testing.T) {
+	t.Run("party", func(t *testing.T) {
+		f := newSealFixture("leader", "m1")
+		f.setLevel("m1", 0)
+		_, err := f.service(t, f.bossRepo, f.partyRepo).StartSealingBattle(context.Background(), f.pID, "leader")
+		if !errors.Is(err, progression.ErrInvalidCharacterLevel) {
+			t.Fatalf("expected experience failure to propagate, got %v", err)
+		}
+		f.requireSealRolledBack(t)
+	})
+	t.Run("solo", func(t *testing.T) {
+		f := newSealFixture("solo")
+		f.setLevel("solo", 0)
+		_, err := f.service(t, f.bossRepo, f.partyRepo).ChallengeBoss(context.Background(), "solo", "king1")
+		if !errors.Is(err, progression.ErrInvalidCharacterLevel) {
+			t.Fatalf("expected experience failure to propagate, got %v", err)
+		}
+		f.requireNothingSettled(t)
+	})
 }
 
 func TestChallengeBoss_RequiredFailureRollsBackWholeSettlement(t *testing.T) {

@@ -221,7 +221,9 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 					return fmt.Errorf("failed to add boss currency reward: %w", err)
 				}
 				if battleRes.TotalReward.Experience > 0 {
-					_, _ = progression.ApplyExperience(&c, battleRes.TotalReward.Experience)
+					if _, err := progression.ApplyExperience(&c, battleRes.TotalReward.Experience); err != nil {
+						return fmt.Errorf("failed to add boss experience reward: %w", err)
+					}
 				}
 				if rewardCrystals > 0 {
 					if err := c.AddCrystal(rewardCrystals); err != nil {
@@ -234,7 +236,9 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 
 			newsMsg = fmt.Sprintf("勇者%sが%sを封印する", strings.Join(heroNames, "、"), stage.Name)
 			if s.newsPub != nil {
-				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", s.now())
+				if err := s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", s.now()); err != nil {
+					return fmt.Errorf("failed to publish boss news: %w", err)
+				}
 			}
 
 			for _, m := range members {
@@ -250,7 +254,9 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 				banquetHeld = true
 			}
 			if s.victoryHook != nil {
-				_ = s.victoryHook(txCtx, leaderChar.ID, stage.ID, stageTier)
+				if err := s.victoryHook(txCtx, leaderChar.ID, stage.ID, stageTier); err != nil {
+					return fmt.Errorf("failed to record boss victory progress: %w", err)
+				}
 			}
 		}
 

@@ -13,7 +13,7 @@ Up to 6 players (4 for `king99`) join a system-opened sealing room (quest type 6
 - `king1`–`king10` admit up to 6 players and `king99` 4: the legacy boss NPC takes one extra slot (`p_join+1`, counted from 1).
 - Legacy enters `vs_king` only by joining a sealing room (`quest.cgi:1071`). **Decision (#1199):** the Go solo operation has no counterpart and is removed (#1928).
 - There is no daily attempt cap; entry is governed by fatigue (<100) and the stage's `need_join`.
-- Settlement commits rewards, Dejon fatigue, records and the monster book together; news and the celebration crowd are best effort. Persistence boundary: [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery).
+- Settlement commits rewards, Dejon fatigue, records, the monster book, server news and boss medal progress together; the celebration crowd (Valkey) is best effort ([#2033](https://github.com/witchcraze/party2re/issues/2033)). Persistence boundary: [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery).
 
 ## Authentic King Stages
 
