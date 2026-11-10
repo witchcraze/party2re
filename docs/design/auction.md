@@ -51,9 +51,6 @@ and presence at the composition root.
   in the venue words cannot actually be checked.
 - **Armor defect:** legacy prints armor only `if $p{wea}` (`system.cgi:373,402`),
   a copy of the weapon condition. Armor is shown whenever equipped.
-- **Gaps:** where an online target currently is (home, quest or place) and gem
-  names are not projected yet ([#2024](https://github.com/witchcraze/party2re/issues/2024));
-  gem IDs are returned in slot order.
 
 ---
 

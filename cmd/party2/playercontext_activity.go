@@ -34,11 +34,13 @@ type challengeActivityReader interface {
 }
 type casinoActivityReader interface {
 	GetCharacterRoomView(context.Context, string, string) (*casino.RoomView, error)
+	HasCharacterRoom(context.Context, string) (bool, error)
 }
 
 type contextActivityReaders struct {
 	normal interface {
 		GetActorRun(context.Context, string, string) (*adventure.ActorRun, error)
+		HasActiveRun(context.Context, string) (bool, error)
 	}
 	party     partyActivityReader
 	pvp       pvpActivityReader

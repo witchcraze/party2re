@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/api/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
 // playerInspectAdapter composes the common しらべる from its owning features.
@@ -27,7 +29,11 @@ type playerInspectAdapter struct {
 	presence interface {
 		State(ctx context.Context, characterID string) (character.PresenceState, error)
 	}
-	now func() time.Time
+	location interface {
+		InspectLocation(context.Context, string) (playercontext.PublicLocation, error)
+	}
+	gems customskill.GemProvider
+	now  func() time.Time
 }
 
 func (a playerInspectAdapter) InspectPlayer(ctx context.Context, actorID, targetID, targetName string) (http.PlayerInspection, error) {
@@ -35,7 +41,7 @@ func (a playerInspectAdapter) InspectPlayer(ctx context.Context, actorID, target
 	if err != nil {
 		return http.PlayerInspection{}, err
 	}
-	out := http.PlayerInspection{InspectResult: status, Gems: []string{}}
+	out := http.PlayerInspection{InspectResult: status, Gems: []string{}, GemNames: []string{}}
 	g, _, err := a.guild.GetByCharacter(ctx, status.CharacterID)
 	switch {
 	case err == nil:
@@ -50,7 +56,12 @@ func (a playerInspectAdapter) InspectPlayer(ctx context.Context, actorID, target
 	if skill != nil {
 		for _, gem := range skill.Gems {
 			if gem != "" {
+				definition, ok := a.gems.FindGemByID(gem)
+				if !ok {
+					return http.PlayerInspection{}, fmt.Errorf("inspect unresolved gem %q", gem)
+				}
 				out.Gems = append(out.Gems, gem)
+				out.GemNames = append(out.GemNames, definition.Name)
 			}
 		}
 	}
@@ -63,6 +74,13 @@ func (a playerInspectAdapter) InspectPlayer(ctx context.Context, actorID, target
 		at := state.SampledAt.UTC()
 		out.LastUpdatedAt = &at
 		out.Online = a.now().Sub(at) <= character.PresenceWindowSeconds*time.Second
+	}
+	if out.Online {
+		location, err := a.location.InspectLocation(ctx, status.CharacterID)
+		if err != nil {
+			return http.PlayerInspection{}, err
+		}
+		out.Location = &http.PlayerInspectionLocation{PublicLocation: location}
 	}
 	return out, nil
 }

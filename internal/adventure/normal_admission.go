@@ -289,6 +289,12 @@ func (s *NormalRunService) GetActorRun(ctx context.Context, player, actor string
 	return state, nil
 }
 
+// HasActiveRun exposes admission only; full run observations still require ownership.
+func (s *NormalRunService) HasActiveRun(ctx context.Context, actor string) (bool, error) {
+	run, err := s.cfg.Store.FindActorRun(ctx, actor)
+	return run != nil, err
+}
+
 // GetRunReceipt waits for an in-flight commit without advancing any game state.
 // Transaction: WithRunForUpdate. Lock Order: run(0), no asset mutation.
 func (s *NormalRunService) GetRunReceipt(ctx context.Context, player, actor, runID, key string) (*RunReceipt, error) {

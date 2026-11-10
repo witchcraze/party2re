@@ -298,8 +298,9 @@ func newHTTPHandler(
 	if soc.placeLog != nil {
 		opts = append(opts, http.WithPlaceLog(soc.placeLog))
 	}
+	pc := newPlayerContext(core, soc, econ, cmbt, misc, playercontext.WithActionWait(soc.timer, cfg.ActionWait))
 	if soc.schedRepo != nil {
-		opts = append(opts, http.WithPlayerContext(newPlayerContext(core, soc, econ, cmbt, misc, playercontext.WithActionWait(soc.timer, cfg.ActionWait))))
+		opts = append(opts, http.WithPlayerContext(pc))
 	}
 	opts = append(opts,
 		http.WithHelper(misc.helper),
@@ -322,7 +323,7 @@ func newHTTPHandler(
 		http.WithGvG(cmbt.gvg),
 		http.WithReplay(cmbt.replay),
 		http.WithAuction(econ.auction),
-		http.WithPlayerInspect(playerInspectAdapter{status: econ.auction, guild: soc.guild, skills: cmbt.customSkill, presence: core.presence, now: time.Now}),
+		http.WithPlayerInspect(playerInspectAdapter{status: econ.auction, guild: soc.guild, skills: cmbt.customSkill, presence: core.presence, location: pc, gems: cmbt.gems, now: time.Now}),
 		http.WithNotification(soc.notification),
 		http.WithHome(soc.home),
 		http.WithCustomSkill(cmbt.customSkill),

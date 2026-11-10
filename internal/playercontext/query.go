@@ -36,14 +36,15 @@ type Result struct {
 
 // Service builds uncached player observations using existing read contracts.
 type Service struct {
-	characters     CharacterReader
-	actions        ActionReader
-	timers         TimerReader
-	navigation     NavigationRepository
-	scenes         map[string]SceneDefinition
-	readActivities ActivityReader
-	waitWriter     ActionWaitWriter
-	waitDuration   time.Duration
+	characters       CharacterReader
+	actions          ActionReader
+	timers           TimerReader
+	navigation       NavigationRepository
+	scenes           map[string]SceneDefinition
+	readActivities   ActivityReader
+	publicActivities PublicActivityReader
+	waitWriter       ActionWaitWriter
+	waitDuration     time.Duration
 }
 
 // NewService requires character, scheduled-action and sleep-timer readers.

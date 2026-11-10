@@ -17152,6 +17152,24 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "gem_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Catalog names aligned one-for-one with gems, in the same slot order."
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlayerInspectionLocation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for offline targets. Actual activity overrides saved selection. Only coarse whereabouts are public; source failures fail inspection."
           }
         },
         "required": [
@@ -17175,11 +17193,87 @@
           "gems",
           "login_message",
           "online",
-          "last_updated_at"
+          "last_updated_at",
+          "gem_names",
+          "location"
         ],
         "type": "object",
         "additionalProperties": false,
         "description": "Common しらべる on a player. Wallet money is never included."
+      },
+      "PlayerInspectionLocation": {
+        "description": "Public location only: quest category, home owner, or registered scene and title. Never includes activity identity, phase, roster, selected product or pagination.",
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "quest"
+                ]
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "title"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "home"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "home_owner_character_id": {
+                "type": "string"
+              },
+              "home_owner_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "title",
+              "home_owner_character_id",
+              "home_owner_name"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "scene"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "scene_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "title",
+              "scene_id"
+            ],
+            "additionalProperties": false
+          }
+        ]
       }
     },
     "securitySchemes": {

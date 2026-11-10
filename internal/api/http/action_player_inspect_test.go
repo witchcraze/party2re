@@ -16,12 +16,39 @@ type playerInspectFixture struct {
 	*gatewayFixture
 	actor, id, name string
 	err             error
+	location        *PlayerInspectionLocation
 }
 
 func (f *playerInspectFixture) InspectPlayer(ctx context.Context, actorID, targetID, targetName string) (PlayerInspection, error) {
 	f.executions++
 	f.actor, f.id, f.name = actorID, targetID, targetName
-	return PlayerInspection{InspectResult: auction.InspectResult{CharacterID: "peer", Name: "相手"}, Gems: []string{}}, f.err
+	return PlayerInspection{InspectResult: auction.InspectResult{CharacterID: "peer", Name: "相手"}, Gems: []string{}, GemNames: []string{}, Location: f.location}, f.err
+}
+
+func TestPlayerInspectGatewayLocation(t *testing.T) {
+	for _, tc := range []struct {
+		location *PlayerInspectionLocation
+		title    string
+	}{
+		{nil, ""},
+		{&PlayerInspectionLocation{PublicLocation: playercontext.PublicLocation{Kind: "quest"}}, "クエスト中"},
+		{&PlayerInspectionLocation{PublicLocation: playercontext.PublicLocation{Kind: "scene", SceneID: "town"}}, "始まりの街"},
+		{&PlayerInspectionLocation{PublicLocation: playercontext.PublicLocation{Kind: "home", HomeOwnerCharacterID: "host", HomeOwnerName: "家主"}}, "家主の家"},
+	} {
+		f, router := playerInspectRouter(t)
+		f.location = tc.location
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"player_inspect"}`, nil)
+		var result PlayerInspection
+		if err := json.Unmarshal(got["result"], &result); err != nil {
+			t.Fatal(err)
+		}
+		if status != 200 || (result.Location == nil) != (tc.location == nil) || result.GemNames == nil {
+			t.Fatalf("status=%d result=%+v", status, result)
+		}
+		if result.Location != nil && result.Location.Title != tc.title {
+			t.Fatalf("location=%+v", result.Location)
+		}
+	}
 }
 
 func playerInspectRouter(t *testing.T) (*playerInspectFixture, http.Handler) {

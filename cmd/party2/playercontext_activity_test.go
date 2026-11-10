@@ -50,6 +50,10 @@ func (f *activityFixtures) GetCharacterRoomView(_ context.Context, owner, actor 
 	return f.casino, f.err
 }
 
+func (f *activityFixtures) HasCharacterRoom(context.Context, string) (bool, error) {
+	return f.casino != nil, f.err
+}
+
 type pvpActivityFixture struct {
 	room     pvp.RoomDetail
 	err      error

@@ -92,6 +92,13 @@ precise activity timestamps, private profile data, wallet/inventory and timers.
 Never expose or reuse the owned context DTO as a public response. Required read
 or unsafe stored-data failures return an error, not partial rows or a false zero.
 
+The authenticated `player_inspect` command exposes another character's coarse
+whereabouts through a viewer-independent read port, separate from owned context.
+Online activity takes precedence over saved scene selection and reveals only
+`quest`; otherwise inspection reveals the registered scene or Home owner.
+Offline targets have no location. This read never admits, renews or recovers an
+activity, and never exposes activity IDs, phases, members or selected products.
+
 Planned owned Gateway commands are `presence_enter` (game entry, optional string
 `login_message`) and `presence_refresh` (saved screen refresh, empty params).
 Omitted message preserves it; `""` clears it; null/non-string/invalid text returns
