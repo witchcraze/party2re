@@ -1,17 +1,98 @@
 package guild_test
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
+	"os"
+	"os/exec"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/guild"
 )
+
+func TestApprovalRoleWorkerCleanup_StopTimeout(t *testing.T) {
+	const diagnostic = "blocked worker did not stop after cancellation"
+	const cleaned = "fixture cleanup after worker stopped"
+	if os.Getenv("PARTY2_APPROVAL_WORKER_SUBPROCESS") == "1" {
+		db, err := sql.Open("mysql", "unused:unused@tcp(127.0.0.1:3306)/unused")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := db.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		f := &approvalRoleFixture{ctx: ctx, cancel: cancel, db: db}
+		finished := make(chan struct{})
+		t.Cleanup(func() {
+			select {
+			case <-finished:
+				fmt.Println(cleaned)
+			default:
+				t.Error("fixture cleanup ran before worker stopped")
+			}
+		})
+		f.startWorker(t, "blocked", func() error {
+			defer close(finished)
+			_, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			return err
+		})
+		return // Run the actual registered cancellation/join cleanup.
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestApprovalRoleWorkerCleanup_StopTimeout$", "-test.v", "-test.timeout=20s")
+	cmd.Env = append(os.Environ(), "PARTY2_APPROVAL_WORKER_SUBPROCESS=1")
+	output, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Stderr = cmd.Stdout
+	input, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.Close()
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var transcript strings.Builder
+	var reported, teardown bool
+	scanner := bufio.NewScanner(output)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Fprintln(&transcript, line)
+		if strings.Contains(line, diagnostic) && !reported {
+			reported = true
+			if _, err := fmt.Fprintln(input, "release"); err != nil {
+				t.Errorf("release worker: %v", err)
+			}
+		}
+		if line == cleaned {
+			teardown = reported
+		}
+	}
+	err = cmd.Wait()
+	if scanner.Err() != nil || ctx.Err() != nil || !reported || !teardown || strings.Contains(transcript.String(), "panic:") {
+		t.Fatalf("worker cleanup ordering failed (scan=%v, context=%v):\n%s", scanner.Err(), ctx.Err(), transcript.String())
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("expected timeout diagnostic to fail child test with exit 1, got %v:\n%s", err, transcript.String())
+	}
+}
 
 func TestApprovalRoleWorkerCleanup(t *testing.T) {
 	db, err := sql.Open("mysql", "unused:unused@tcp(127.0.0.1:3306)/unused")

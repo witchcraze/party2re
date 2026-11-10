@@ -266,8 +266,9 @@ func (f *approvalRoleFixture) startWorker(t *testing.T, name string, fn func() e
 		select {
 		case <-stopped:
 		case <-time.After(5 * time.Second):
-			// Stop the test process rather than clean up rows still used by a stuck worker.
-			panic(name + " worker did not stop after cancellation")
+			t.Error(name + " worker did not stop after cancellation")
+			// Keep fixture cleanup behind worker termination, even after the diagnostic.
+			<-stopped
 		}
 	}
 	t.Cleanup(func() {
