@@ -141,6 +141,25 @@
       ]
     },
     {
+      "method": "depart",
+      "source_ref": "internal/guild/removal.go#Service.depart",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Leave and RemoveFromGuilds lock the departing characters and every member of their guilds in ascending ID order; membership changes lock the character first, so candidate eligibility is stable."
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock departure guilds in ascending ID order, then hand over or dissolve (news in the same transaction). Character/account deletion runs this inside its transaction."
+        }
+      ]
+    },
+    {
       "method": "removeAuthorizedMember",
       "source_ref": "internal/guild/removal.go#Service.removeAuthorizedMember",
       "transaction_type": "RunInTx",

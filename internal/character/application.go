@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,17 +24,22 @@ type Repository interface {
 	FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error)
 	Update(ctx context.Context, value corecharacter.Character) error
 	Delete(ctx context.Context, id string) error
+	// DeleteSharedRows removes the character's Rank 0 rows (listings, sales, unneeded admissions).
+	DeleteSharedRows(ctx context.Context, id string) error
 }
 
-// CleanupHook defines an interface for cleaning up external domain resources when a character is deleted.
+// CleanupHook releases feature-owned associations of characters being deleted. It runs
+// inside the deletion transaction after Rank 0 cleanup and before the repository deletes
+// the rows, so it must lock the characters (ascending) before feature rows. An error
+// aborts the whole deletion.
 type CleanupHook interface {
-	CleanupCharacter(ctx context.Context, characterID string) error
+	CleanupCharacters(ctx context.Context, characterIDs ...string) error
 }
 
-type CleanupHookFunc func(ctx context.Context, characterID string) error
+type CleanupHookFunc func(ctx context.Context, characterIDs ...string) error
 
-func (f CleanupHookFunc) CleanupCharacter(ctx context.Context, characterID string) error {
-	return f(ctx, characterID)
+func (f CleanupHookFunc) CleanupCharacters(ctx context.Context, characterIDs ...string) error {
+	return f(ctx, characterIDs...)
 }
 
 // passiveRecipientLocker is implemented by repositories that lock an existing referral
@@ -86,7 +92,7 @@ func WithProfileRepository(repo ProfileRepository) Option {
 	}
 }
 
-// WithCleanupHook registers a cleanup hook to run prior to character deletion.
+// WithCleanupHook registers a cleanup hook run within character deletion.
 func WithCleanupHook(hook CleanupHook) Option {
 	return func(s *Service) {
 		if hook != nil {
@@ -410,32 +416,68 @@ func (s *Service) GetNamingHallDialogue() NamingHallDialogue {
 	}
 }
 
-// Delete validates character ownership (if playerID is provided), executes all registered cleanup hooks,
-// and deletes the character and its associated database records.
+// Delete validates character ownership (if playerID is provided) and deletes the character,
+// its hook-owned associations and its records in one transaction.
 func (s *Service) Delete(ctx context.Context, playerID, characterID string) error {
 	characterID = strings.TrimSpace(characterID)
 	if characterID == "" {
 		return ErrNotFound
 	}
 	playerID = strings.TrimSpace(playerID)
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		char, err := s.repository.FindByID(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+		if playerID != "" && char.PlayerID != playerID {
+			return ErrForbidden
+		}
+		return s.deleteCharacters(txCtx, []string{characterID})
+	})
+}
 
-	char, err := s.repository.FindByID(ctx, characterID)
-	if err != nil {
-		return err
+// DeleteByPlayerID deletes every character of the player in one transaction; a failure
+// leaves all of them intact.
+func (s *Service) DeleteByPlayerID(ctx context.Context, playerID string) error {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return ErrInvalidPlayer
 	}
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		chars, err := s.repository.FindByPlayerID(txCtx, playerID)
+		if err != nil {
+			return err
+		}
+		ids := make([]string, len(chars))
+		for i, c := range chars {
+			ids[i] = c.ID
+		}
+		return s.deleteCharacters(txCtx, ids)
+	})
+}
 
-	if playerID != "" && char.PlayerID != playerID {
-		return ErrForbidden
+// deleteCharacters runs inside the caller's transaction in lock-rank order: shared rows
+// (Rank 0), cleanup hooks (characters ascending, then feature rows), then
+// each character's records in ascending ID order.
+func (s *Service) deleteCharacters(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
 	}
-
-	// Run domain cleanup hooks
-	for _, hook := range s.cleanupHooks {
-		if hook != nil {
-			_ = hook.CleanupCharacter(ctx, characterID)
+	slices.Sort(ids)
+	for _, id := range ids {
+		if err := s.repository.DeleteSharedRows(ctx, id); err != nil {
+			return err
 		}
 	}
-
-	return s.runInTx(ctx, func(txCtx context.Context) error {
-		return s.repository.Delete(txCtx, characterID)
-	})
+	for _, hook := range s.cleanupHooks {
+		if err := hook.CleanupCharacters(ctx, ids...); err != nil {
+			return err
+		}
+	}
+	for _, id := range ids {
+		if err := s.repository.Delete(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }

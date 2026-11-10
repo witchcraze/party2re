@@ -15,10 +15,15 @@ In Party2, player accounts and individual characters can be permanently removed 
 
 ### 2.2 Cleanup boundary
 
-`CleanupHook` lets feature owners release associations and ephemeral state before
-character deletion; SQL repository cleanup removes dependent records before the
-character root in one transaction. The concrete table list belongs to the
-[repository](../../internal/database/character_repository.go) and migrations.
+Character deletion is one SQL transaction: guild departure (succession or
+dissolution, including its news) and the repository's dependent-record cleanup
+commit or roll back together, and a `CleanupHook` error aborts it. The concrete
+table list belongs to the [repository](../../internal/database/character_repository.go)
+and migrations. Locks follow the global rank order: the characters' Rank 0 rows
+(flea market listings, store sales and unneeded Challenge admissions), which
+purchases and run transitions lock before characters; then the deleted characters
+together with every member of their guilds in ascending ID order (Rank 2); then
+those guilds in ascending ID order (Rank 7); then dependent rows.
 
 Challenge admission is shared run evidence: deleting a departed original leader
 preserves the admission row while another participant's durable claim remains,
@@ -28,11 +33,6 @@ their existing run and rewards. See the [run lifetime contract](../architecture/
 Mailbox letters are per-owner copies: deletion removes only the deleted character's
 copies and leaves the counterpart's ([Home letters](home.md#2-player-to-player-letters)).
 
-Current `character.Service.Delete` invokes hooks **before** its SQL transaction
-and treats hook errors as best-effort. SQL rollback therefore does not restore
-Valkey/external cleanup. This is not an atomic cross-store cascade; callers must
-not infer full rollback from a later deletion failure.
-
 ## 3. Player Account Deletion (`DELETE /players/me` and `DELETE /players/{id}`)
 
 ### 3.1 Authorization & Invariants
@@ -40,18 +40,19 @@ not infer full rollback from a later deletion failure.
 - `DELETE /players/{id}`: Deletion of a specific player account by ID. Allowed if the authenticated player matches the target ID or if the request contains valid administrator credentials.
 - Invalid password returns HTTP `401 Unauthorized`.
 
-### 3.2 Cascading Cleanup Order
-Current account deletion runs the following sequence; only the final player
-repository deletion is wrapped by the account service transaction. Character
-deletions and external invalidation occur earlier. Full persistent rollback is
-a known gap tracked in [#1095](https://github.com/witchcraze/party2re/issues/1095):
-1. Retrieves all characters owned by the player via `FindByPlayerID`.
-2. Iterates through and invokes `characterService.Delete(ctx, playerID, char.ID)` for each character, triggering all character cleanup hooks and cascading SQL deletions.
-3. Invalidate all active player sessions in Valkey Master via `SessionRepository.DeleteByPlayerID` (O(1) player session set and token deletion).
-4. Player-linked relational tables in MariaDB:
-   - `player_notifications`
-   - `player_api_tokens`
-5. Primary player record in `players`.
+### 3.2 Cleanup boundary
+
+One SQL transaction first locks the player row (Rank 1, as a ban does, so the two
+serialize), then deletes every owned character under the
+[character boundary](#22-cleanup-boundary) (one lock pass across all of them) and
+finally the player row with its notifications and API tokens. The character Rank 0
+rows follow the player lock; their other lockers never wait on a player row. Any failure, including
+a failed character listing, leaves the account, its characters and guild state
+unchanged.
+
+Interactive sessions live in Valkey, outside that transaction, and are invalidated
+only after commit. If that invalidation fails, a leftover session no longer
+resolves to a player, so it cannot authenticate.
 
 ---
 
@@ -137,12 +138,9 @@ backlog](https://github.com/witchcraze/party2re/issues/1799) tracks that work.
 - Public presence shares save events and the UTC clock, but preserves a separate
   [sampled record lifecycle](player-and-character.md#212-public-presence-and-login-message).
   Retention rollout baselines must not publish online presence.
-- Resolve [persistent deletion atomicity](https://github.com/witchcraze/party2re/issues/1095)
-  before enabling. Recheck current activity and beginner status under the same
-  transaction/locking boundary as deletion, coordinated with gameplay saves. SQL
-  failure rolls back persistent cleanup; external cleanup/recovery follows the
-  actual deletion contract, without claiming a SQL/Valkey atomic transaction.
-  Shared run evidence needed by surviving participants must remain intact.
+- Recheck current activity and beginner status under the same transaction/locking
+  boundary as [character deletion](#22-cleanup-boundary), coordinated with gameplay
+  saves. Shared run evidence needed by surviving participants must remain intact.
 
 ### Implementation handoff and verification
 

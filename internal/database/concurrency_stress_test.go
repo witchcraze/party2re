@@ -944,7 +944,7 @@ func TestConcurrencyStressGuildConcurrentDepartures(t *testing.T) {
 			opErr = guildSvc.Leave(ctx, fix.guild.ID, charID)
 		} else {
 			// Character-cleanup departure
-			opErr = guildSvc.RemoveCharacterFromGuild(ctx, charID)
+			opErr = guildSvc.RemoveFromGuilds(ctx, charID)
 		}
 
 		if opErr != nil {

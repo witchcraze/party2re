@@ -448,6 +448,10 @@ func (r *realCharRepoForBankTest) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (r *realCharRepoForBankTest) DeleteSharedRows(context.Context, string) error {
+	return nil
+}
+
 type realBankRepoForBankTest struct {
 	charRepo *realCharRepoForBankTest
 }

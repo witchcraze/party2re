@@ -21,6 +21,7 @@ type PlayerRepository interface {
 	Save(context.Context, coreplayer.Player) error
 	FindByUsername(context.Context, string) (coreplayer.Player, error)
 	FindByID(context.Context, string) (coreplayer.Player, error)
+	FindByIDForUpdate(context.Context, string) (coreplayer.Player, error)
 	Delete(context.Context, string) error
 	List(ctx context.Context, sort string) ([]coreplayer.Player, error)
 	UpdateBannedAt(ctx context.Context, id string, bannedAt *time.Time) error
@@ -47,11 +48,11 @@ type APITokenRepository interface {
 
 type CharacterService interface {
 	FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error)
-	Delete(ctx context.Context, playerID, characterID string) error
+	DeleteByPlayerID(ctx context.Context, playerID string) error
 }
 
 type GuildMembershipCleaner interface {
-	RemoveCharacterFromGuild(ctx context.Context, characterID string) error
+	RemoveFromGuilds(ctx context.Context, characterIDs ...string) error
 }
 
 type TransactionProvider interface {
@@ -334,40 +335,29 @@ func (s *Service) DeleteAccount(ctx context.Context, playerID, password string) 
 		return coreplayer.ErrAuthentication
 	}
 
-	// Delete all player characters first
-	if s.characters != nil {
-		chars, err := s.characters.FindByPlayerID(ctx, playerID)
-		if err == nil {
-			for _, char := range chars {
-				if err := s.characters.Delete(ctx, playerID, char.ID); err != nil {
-					s.logger.Error(ctx, "player.delete.character", err, slog.String("player_id", playerID), slog.String("character_id", char.ID))
-					return err
-				}
+	// Characters, guild departures and player rows (including API tokens) commit together.
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		// Rank 1 before characters, as BanPlayer does, so a concurrent ban serializes instead of deadlocking.
+		// Character deletion's Rank 0 rows follow; no Rank 0 holder waits on a player row.
+		if _, err := s.players.FindByIDForUpdate(txCtx, playerID); err != nil {
+			return err
+		}
+		if s.characters != nil {
+			if err := s.characters.DeleteByPlayerID(txCtx, playerID); err != nil {
+				return err
 			}
 		}
-	}
-
-	// Delete active player sessions
-	if s.sessions != nil {
-		if err := s.sessions.DeleteByPlayerID(ctx, playerID); err != nil {
-			s.logger.Warn(ctx, "player.delete.sessions", slog.String("player_id", playerID), slog.String("reason", err.Error()))
-		}
-	}
-
-	// Delete active player API tokens
-	if s.apiTokens != nil {
-		if err := s.apiTokens.DeleteByPlayerID(ctx, playerID); err != nil {
-			s.logger.Warn(ctx, "player.delete.api_tokens", slog.String("player_id", playerID), slog.String("reason", err.Error()))
-		}
-	}
-
-	// Delete player and player-level resources
-	err = s.runInTx(ctx, func(txCtx context.Context) error {
 		return s.players.Delete(txCtx, playerID)
 	})
 	if err != nil {
 		s.logger.Error(ctx, "player.delete", err, slog.String("player_id", playerID))
 		return err
+	}
+
+	// Valkey sessions are outside the SQL transaction, so they are dropped only after commit.
+	// A session surviving a failure here no longer resolves to a player.
+	if err := s.sessions.DeleteByPlayerID(ctx, playerID); err != nil {
+		s.logger.Warn(ctx, "player.delete.sessions", slog.String("player_id", playerID), slog.String("reason", err.Error()))
 	}
 
 	s.logger.Info(ctx, "player.delete", slog.String("player_id", playerID))
@@ -394,39 +384,37 @@ func (s *Service) BanPlayer(ctx context.Context, playerID string) error {
 	now := s.now()
 	p.Ban(now)
 
-	if err := s.players.UpdateBannedAt(ctx, playerID, &now); err != nil {
+	// The ban, token removal and guild departure (admin.cgi:109) commit together.
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.players.UpdateBannedAt(txCtx, playerID, &now); err != nil {
+			return err
+		}
+		if s.apiTokens != nil {
+			if err := s.apiTokens.DeleteByPlayerID(txCtx, playerID); err != nil {
+				return err
+			}
+		}
+		if s.characters == nil || s.guildCleaner == nil {
+			return nil
+		}
+		chars, err := s.characters.FindByPlayerID(txCtx, playerID)
+		if err != nil {
+			return err
+		}
+		ids := make([]string, len(chars))
+		for i, char := range chars {
+			ids[i] = char.ID
+		}
+		return s.guildCleaner.RemoveFromGuilds(txCtx, ids...)
+	})
+	if err != nil {
 		s.logger.Error(ctx, "player.ban", err, slog.String("player_id", playerID))
 		return err
 	}
 
-	// Invalidate active sessions
-	if s.sessions != nil {
-		if err := s.sessions.DeleteByPlayerID(ctx, playerID); err != nil {
-			s.logger.Warn(ctx, "player.ban.sessions", slog.String("player_id", playerID), slog.String("reason", err.Error()))
-		}
-	}
-
-	// Invalidate active API tokens
-	if s.apiTokens != nil {
-		if err := s.apiTokens.DeleteByPlayerID(ctx, playerID); err != nil {
-			s.logger.Warn(ctx, "player.ban.api_tokens", slog.String("player_id", playerID), slog.String("reason", err.Error()))
-		}
-	}
-
-	// Remove guild memberships for all characters of the banned player (admin.cgi:109)
-	if s.characters != nil && s.guildCleaner != nil {
-		chars, err := s.characters.FindByPlayerID(ctx, playerID)
-		if err == nil {
-			for _, char := range chars {
-				if err := s.guildCleaner.RemoveCharacterFromGuild(ctx, char.ID); err != nil {
-					s.logger.Warn(ctx, "player.ban.guild_clean",
-						slog.String("player_id", playerID),
-						slog.String("character_id", char.ID),
-						slog.String("reason", err.Error()),
-					)
-				}
-			}
-		}
+	// Valkey sessions are dropped after commit; banned players are rejected at authentication anyway.
+	if err := s.sessions.DeleteByPlayerID(ctx, playerID); err != nil {
+		s.logger.Warn(ctx, "player.ban.sessions", slog.String("player_id", playerID), slog.String("reason", err.Error()))
 	}
 
 	s.logger.Info(ctx, "player.ban", slog.String("player_id", playerID))

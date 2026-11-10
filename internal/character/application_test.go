@@ -3,6 +3,7 @@ package character
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ type mockRepository struct {
 	err              error
 	getProfileErr    error
 	saveProfileCalls int
+	deletionLog      []string
 }
 
 func newMockRepository() *mockRepository {
@@ -112,7 +114,13 @@ func (r *mockRepository) SaveProfile(_ context.Context, profile Profile) error {
 	return nil
 }
 
+func (r *mockRepository) DeleteSharedRows(_ context.Context, id string) error {
+	r.deletionLog = append(r.deletionLog, "shared:"+id)
+	return r.err
+}
+
 func (r *mockRepository) Delete(_ context.Context, id string) error {
+	r.deletionLog = append(r.deletionLog, "delete:"+id)
 	if r.err != nil {
 		return r.err
 	}
@@ -645,8 +653,8 @@ func TestService_Delete(t *testing.T) {
 	t.Run("successfully deletes character and invokes cleanup hooks", func(t *testing.T) {
 		repo := newMockRepository()
 		var hookRan bool
-		hook := CleanupHookFunc(func(ctx context.Context, characterID string) error {
-			hookRan = true
+		hook := CleanupHookFunc(func(ctx context.Context, characterIDs ...string) error {
+			hookRan = len(characterIDs) == 1
 			return nil
 		})
 
@@ -666,6 +674,41 @@ func TestService_Delete(t *testing.T) {
 
 		if _, err := service.Get(ctx, char.ID); !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound after deletion, got %v", err)
+		}
+	})
+
+	t.Run("hook failure aborts deletion", func(t *testing.T) {
+		repo := newMockRepository()
+		hookErr := errors.New("guild cleanup failed")
+		service, _ := NewService(repo, WithCleanupHook(CleanupHookFunc(func(context.Context, ...string) error { return hookErr })))
+		char, _ := service.CreateWithOptions(ctx, "player-123", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
+
+		if err := service.Delete(ctx, "player-123", char.ID); !errors.Is(err, hookErr) {
+			t.Fatalf("Delete() error = %v, want hook error", err)
+		}
+		if _, err := service.Get(ctx, char.ID); err != nil {
+			t.Fatalf("character must survive a failed hook: %v", err)
+		}
+	})
+
+	t.Run("player deletion releases shared rows, runs hooks once, then deletes in ascending order", func(t *testing.T) {
+		repo := newMockRepository()
+		var hooked []string
+		service, _ := NewService(repo, WithCleanupHook(CleanupHookFunc(func(_ context.Context, ids ...string) error {
+			hooked = ids
+			repo.deletionLog = append(repo.deletionLog, "hook")
+			return nil
+		})))
+		a, _ := service.CreateWithOptions(ctx, "player-123", "HeroA", CreationOptions{JobID: "job-01", Gender: "m"})
+		b, _ := service.CreateWithOptions(ctx, "player-123", "HeroB", CreationOptions{JobID: "job-01", Gender: "m"})
+		lo, hi := min(a.ID, b.ID), max(a.ID, b.ID)
+
+		if err := service.DeleteByPlayerID(ctx, "player-123"); err != nil {
+			t.Fatalf("DeleteByPlayerID() error = %v", err)
+		}
+		want := []string{"shared:" + lo, "shared:" + hi, "hook", "delete:" + lo, "delete:" + hi}
+		if !slices.Equal(repo.deletionLog, want) || !slices.Equal(hooked, []string{lo, hi}) {
+			t.Fatalf("deletion order = %v (hook %v), want %v", repo.deletionLog, hooked, want)
 		}
 	})
 

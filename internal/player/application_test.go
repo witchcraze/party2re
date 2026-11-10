@@ -82,6 +82,10 @@ func (r *playerRepositoryStub) FindByID(context.Context, string) (coreplayer.Pla
 	return r.value, nil
 }
 
+func (r *playerRepositoryStub) FindByIDForUpdate(ctx context.Context, id string) (coreplayer.Player, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *playerRepositoryStub) Delete(context.Context, string) error {
 	if r.deleteErr != nil {
 		return r.deleteErr
@@ -310,20 +314,26 @@ func (c *charServiceStub) FindByPlayerID(ctx context.Context, playerID string) (
 	return c.chars, nil
 }
 
-func (c *charServiceStub) Delete(ctx context.Context, playerID, characterID string) error {
+func (c *charServiceStub) DeleteByPlayerID(ctx context.Context, playerID string) error {
 	if c.deleteErr != nil {
 		return c.deleteErr
 	}
-	c.deleted = append(c.deleted, characterID)
+	for _, char := range c.chars {
+		c.deleted = append(c.deleted, char.ID)
+	}
 	return nil
 }
 
 type guildMembershipCleanerStub struct {
 	removed []string
+	err     error
 }
 
-func (s *guildMembershipCleanerStub) RemoveCharacterFromGuild(ctx context.Context, characterID string) error {
-	s.removed = append(s.removed, characterID)
+func (s *guildMembershipCleanerStub) RemoveFromGuilds(ctx context.Context, characterIDs ...string) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.removed = append(s.removed, characterIDs...)
 	return nil
 }
 
@@ -535,13 +545,12 @@ func TestAPITokenServiceLifecycleAndDualAuthentication(t *testing.T) {
 		t.Errorf("expected ErrAuthentication after revocation, got %v", err)
 	}
 
-	// 8. DeleteAccount cascades to API tokens
-	_, _, _ = service.CreateAPIToken(ctx, player.ID, "Cascade Test", nil)
+	// 8. DeleteAccount deletes the player row (SQL also removes its tokens) and then its sessions
 	if err := service.DeleteAccount(ctx, player.ID, "password123"); err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
-	if len(tokenRepo.deletedPlayers) != 1 || tokenRepo.deletedPlayers[0] != player.ID {
-		t.Errorf("expected API tokens deleted for %q, got %v", player.ID, tokenRepo.deletedPlayers)
+	if players.value.ID != "" || sessions.value.ID != "" {
+		t.Errorf("expected player and sessions deleted, got player %q session %q", players.value.ID, sessions.value.ID)
 	}
 }
 
@@ -915,27 +924,26 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 			chars:     []corecharacter.Character{{ID: "c1", Name: "Hero"}},
 			deleteErr: expectedErr,
 		}
-		svc, _ := NewService(players, &sessionRepositoryStub{}, WithCharacterService(chars))
+		sessions := &sessionRepositoryStub{value: coreplayer.Session{ID: "s1", PlayerID: player.ID}}
+		svc, _ := NewService(players, sessions, WithCharacterService(chars))
 
 		err := svc.DeleteAccount(ctx, player.ID, "password")
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("expected %v, got %v", expectedErr, err)
 		}
+		if players.value.ID == "" || sessions.value.ID == "" {
+			t.Fatal("a failed character deletion must not delete the player or invalidate sessions")
+		}
 	})
 
-	t.Run("sessions and api tokens deletion errors are logged but not blocking", func(t *testing.T) {
+	t.Run("session invalidation errors after commit are logged but not blocking", func(t *testing.T) {
 		players := &playerRepositoryStub{value: player}
 		sessions := &sessionRepositoryStub{deleteByIDErr: errors.New("valkey del error")}
-		tokens := newAPITokenRepositoryStub()
-		tokens.deleteErr = errors.New("token del error")
 		chars := &charServiceStub{
 			chars: []corecharacter.Character{{ID: "c1", Name: "Hero"}},
 		}
 
-		svc, _ := NewService(players, sessions,
-			WithCharacterService(chars),
-			WithAPITokenRepository(tokens),
-		)
+		svc, _ := NewService(players, sessions, WithCharacterService(chars))
 
 		err := svc.DeleteAccount(ctx, player.ID, "password")
 		if err != nil {
@@ -950,7 +958,8 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 		expectedErr := errors.New("tx player delete failed")
 		players := &playerRepositoryStub{value: player, deleteErr: expectedErr}
 		tx := &txProviderStub{}
-		svc, _ := NewService(players, &sessionRepositoryStub{}, WithTransactionProvider(tx))
+		sessions := &sessionRepositoryStub{value: coreplayer.Session{ID: "s1", PlayerID: player.ID}}
+		svc, _ := NewService(players, sessions, WithTransactionProvider(tx))
 
 		err := svc.DeleteAccount(ctx, player.ID, "password")
 		if !errors.Is(err, expectedErr) {
@@ -958,6 +967,9 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 		}
 		if !tx.called {
 			t.Error("expected txProvider to be called")
+		}
+		if sessions.value.ID == "" {
+			t.Error("sessions must survive a rolled-back deletion")
 		}
 	})
 }
@@ -1064,6 +1076,36 @@ func TestService_BanPlayer_And_BannedLogin(t *testing.T) {
 	tokens.Save(ctx, token)
 	if _, err := svc.Authenticate(ctx, rawKey); !errors.Is(err, coreplayer.ErrPlayerBanned) {
 		t.Fatalf("expected ErrPlayerBanned on PAT authenticate, got %v", err)
+	}
+}
+
+func TestService_BanPlayerFailsWithoutInvalidatingSessions(t *testing.T) {
+	ctx := context.Background()
+	p, err := coreplayer.New("bob", "password", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanupErr := errors.New("guild cleanup failed")
+	for name, deps := range map[string]struct {
+		chars   *charServiceStub
+		cleaner *guildMembershipCleanerStub
+		want    error
+	}{
+		"guild cleanup": {&charServiceStub{chars: []corecharacter.Character{{ID: "c1"}}}, &guildMembershipCleanerStub{err: cleanupErr}, cleanupErr},
+		"listing":       {&charServiceStub{findErr: cleanupErr}, &guildMembershipCleanerStub{}, cleanupErr},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tx := &txProviderStub{}
+			sessions := &sessionRepositoryStub{value: coreplayer.Session{ID: "s1", PlayerID: p.ID}}
+			svc, _ := NewService(&playerRepositoryStub{value: p}, sessions,
+				WithCharacterService(deps.chars), WithGuildCleaner(deps.cleaner), WithTransactionProvider(tx))
+			if err := svc.BanPlayer(ctx, p.ID); !errors.Is(err, deps.want) || !tx.called {
+				t.Fatalf("BanPlayer() = %v (tx %v), want %v inside a transaction", err, tx.called, deps.want)
+			}
+			if sessions.value.ID == "" {
+				t.Fatal("sessions must survive a rolled-back ban")
+			}
+		})
 	}
 }
 

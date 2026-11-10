@@ -178,7 +178,7 @@ func TestGuildSuccession_ExceedsLeaveRetryBudget_Succession(t *testing.T) {
 	}
 }
 
-func TestGuildSuccession_ExceedsLeaveRetryBudget_RemoveCharacterFromGuild(t *testing.T) {
+func TestGuildSuccession_ExceedsLeaveRetryBudget_RemoveFromGuilds(t *testing.T) {
 	// Verify that RemoveCharacterFromGuild shares the same fix and disbands without hitting retry limit.
 	f := newActiveAffiliationFixture(t)
 	ctx := context.Background()
@@ -198,7 +198,7 @@ func TestGuildSuccession_ExceedsLeaveRetryBudget_RemoveCharacterFromGuild(t *tes
 	const ineligibleCount = 50
 	ineligibleChars := setupIneligibleCandidates(t, f, ctx, gA.ID, gB.ID, leaderB.ID, ineligibleCount)
 
-	if err := f.service.RemoveCharacterFromGuild(ctx, leaderA.ID); err != nil {
+	if err := f.service.RemoveFromGuilds(ctx, leaderA.ID); err != nil {
 		t.Fatalf("expected RemoveCharacterFromGuild to succeed, got err: %v", err)
 	}
 
@@ -252,7 +252,7 @@ func (r *rosterChangeTriggerRepo) GetGuildForUpdate(ctx context.Context, guildID
 	if err != nil {
 		return g, members, err
 	}
-	// Inject a phantom member not in ineligible map to trigger errRosterChanged in Step 3
+	// Inject an unlocked phantom member, as if it joined after discovery, to trigger errRosterChanged
 	c := r.phantomCount.Add(1)
 	members = append(members, guild.Member{
 		GuildID:     guildID,

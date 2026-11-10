@@ -25,7 +25,7 @@ Any active member may call out; letters go to every roster row in order, **inclu
 
 **Decision (#993, 2026-10-04):** the user chose to restore the legacy roster-based rule (「原典方式へ戻す（再構築方針に沿う推奨案）」). Pending rows count toward survival and can inherit leadership; a selected applicant becomes leader with title `ギルマス` and is no longer pending, without an acceptance letter, while unselected applicants stay pending. Go keeps affiliation only in the membership relation, so the legacy personal-affiliation inconsistency is not reproduced. Roster order is `joined_at`, then character ID (the legacy uses file-row order). A candidate who already joined another guild is skipped; if none remains, the guild dissolves.
 
-Dissolution happens on removal from a roster of at most one row, on manual disbandment and after 20 days of inactivity; the last active member leaving does not by itself dissolve a guild with pending rows. Dissolution news (`ギルド『<GuildName>』が解散しました`) is published only after commit.
+Dissolution happens on removal from a roster of at most one row, on manual disbandment and after 20 days of inactivity; the last active member leaving does not by itself dissolve a guild with pending rows. Dissolution news (`ギルド『<GuildName>』が解散しました`) appears only if the dissolution commits: removal writes it in the same transaction, and manual or inactivity disbandment publishes it after commit.
 
 ## Inactivity and point decay
 

@@ -3,6 +3,7 @@ package guild
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 )
 
@@ -69,390 +70,225 @@ func (s *Service) removeAuthorizedMember(ctx context.Context, guildID, leaderID,
 	return nil
 }
 
-var (
-	errCandidateIneligible = errors.New("candidate ineligible for guild leadership")
-	errRosterChanged       = errors.New("guild roster changed during departure evaluation")
-)
+// errRosterChanged reports membership that changed between unlocked discovery and
+// its locks; the departure is retried with a fresh lock set.
+var errRosterChanged = errors.New("guild roster changed during departure")
 
-// leaveInternal executes the departure workflow for a character leaving a guild.
-// If the character is not the leader, they are removed directly.
-// If the character is the leader:
-//  1. Candidate successors are evaluated (title containing "ギルマス" prioritized first, then roster order).
-//  2. For each candidate, acquires Rank 2 lock on candidate character followed by Rank 7 guild lock,
-//     re-verifies active affiliation under lock, and atomically transfers leadership and removes old leader.
-//  3. If all candidate attempts fail or no candidates exist, disbands the guild and publishes dissolution news.
-//
-// Roster state is verified inside locked transactions to avoid TOCTOU races against concurrent joins/leaves.
-func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID string, ignoreMissing bool) error {
+const maxLeaveAttempts = 50
+
+// Leave removes a character from the guild (join_guild.cgi:dattai).
+// If the character is the sole member, the guild is disbanded and dissolution news is published.
+// If the character is the leader and other members remain, leadership is transferred before removal.
+func (s *Service) Leave(ctx context.Context, guildID string, characterID string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return ErrInvalidGuildID
 	}
 	characterID = strings.TrimSpace(characterID)
 	if characterID == "" {
-		if ignoreMissing {
-			return nil
-		}
 		return ErrCharacterNotFound
 	}
+	return s.depart(ctx, guildID, []string{characterID})
+}
 
-	ineligible := make(map[string]bool)
-	const maxLeaveAttempts = 50
-	retries := 0
+// RemoveFromGuilds removes characters from their active guilds upon admin action or deletion
+// (lib/system.cgi:delete_guild_member), applying Leave's succession and dissolution rules in
+// ascending character ID order. Characters without an active guild are skipped. Inside an
+// ambient transaction every change, including dissolution news, commits with the caller.
+func (s *Service) RemoveFromGuilds(ctx context.Context, characterIDs ...string) error {
+	var ids []string
+	for _, id := range characterIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	ids = slices.Compact(ids)
+	if len(ids) == 0 {
+		return nil
+	}
+	return s.depart(ctx, "", ids)
+}
 
-	for {
+// depart retries departLocked until it observes a stable roster. guildID is the
+// explicit Leave target; empty means each character's active guild.
+func (s *Service) depart(ctx context.Context, guildID string, ids []string) error {
+	for attempt := 0; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if retries >= maxLeaveAttempts {
+		if attempt >= maxLeaveAttempts {
 			return errors.New("guild leave exceeded maximum retry attempts")
 		}
-
-		_, members, err := s.repo.GetGuild(ctx, guildID)
-		if err != nil {
-			if ignoreMissing && (errors.Is(err, ErrGuildNotFound) || errors.Is(err, ErrCharacterNotInGuild)) {
-				return nil
-			}
+		err := s.runInTx(ctx, func(txCtx context.Context) error {
+			return s.departLocked(txCtx, guildID, ids)
+		})
+		if !errors.Is(err, errRosterChanged) {
 			return err
 		}
+	}
+}
 
-		var currentMember *Member
-		for i := range members {
-			if members[i].CharacterID == characterID {
-				currentMember = &members[i]
-				break
-			}
-		}
-		if currentMember == nil {
-			if ignoreMissing {
-				return nil
-			}
-			return ErrCharacterNotInGuild
-		}
-
-		// 1. Non-leader departure workflow under Rank 7 lock
-		if currentMember.Role != RoleLeader {
-			var (
-				disbanded          bool
-				disbandedGuildName string
-			)
-			err := s.runInTx(ctx, func(txCtx context.Context) error {
-				lockedGuild, lockedMembers, err := s.repo.GetGuildForUpdate(txCtx, guildID)
-				if err != nil {
-					return err
-				}
-				var m *Member
-				for i := range lockedMembers {
-					if lockedMembers[i].CharacterID == characterID {
-						m = &lockedMembers[i]
-						break
-					}
-				}
-				if m == nil {
-					if ignoreMissing {
-						return nil
-					}
-					return ErrCharacterNotInGuild
-				}
-				if m.Role == RoleLeader {
-					return errRosterChanged
-				}
-
-				var remainingLocked int
-				for _, lm := range lockedMembers {
-					if lm.CharacterID != characterID {
-						remainingLocked++
-					}
-				}
-				if remainingLocked == 0 {
-					if err := s.repo.DisbandGuild(txCtx, guildID); err != nil {
-						return err
-					}
-					disbanded = true
-					disbandedGuildName = lockedGuild.Name
-					return nil
-				}
-
-				if err := s.repo.RemoveMember(txCtx, guildID, characterID); err != nil {
-					return err
-				}
-				s.touchActive(txCtx, guildID)
-				return nil
-			})
-			if err == nil {
-				if disbanded {
-					s.publishDissolutionNews(ctx, disbandedGuildName, s.nowFunc())
-				}
-				return nil
-			}
-			if errors.Is(err, errRosterChanged) {
-				retries++
-				clear(ineligible)
+// departLocked locks the departing characters and every member of their guilds in
+// ascending ID order (Rank 2), then the guilds in ascending ID order (Rank 7), and
+// applies each departure under those locks. Membership changes lock the character
+// first, so a locked candidate's eligibility cannot change during evaluation.
+func (s *Service) departLocked(ctx context.Context, guildID string, ids []string) error {
+	guildOf := make(map[string]string, len(ids))
+	lockIDs := slices.Clone(ids)
+	var guildIDs []string
+	for _, id := range ids {
+		gid := guildID
+		if gid == "" {
+			g, _, err := s.repo.GetGuildByCharacter(ctx, id)
+			if errors.Is(err, ErrCharacterNotInGuild) || errors.Is(err, ErrGuildNotFound) {
 				continue
 			}
-			return err
-		}
-
-		// 2. Leader departure workflow: evaluate untried candidates in rank order
-		var candidates []Member
-		for _, m := range members {
-			if m.CharacterID != characterID && !ineligible[m.CharacterID] {
-				if strings.Contains(m.Title, "ギルマス") {
-					candidates = append(candidates, m)
-				}
-			}
-		}
-		for _, m := range members {
-			if m.CharacterID != characterID && !ineligible[m.CharacterID] {
-				if !strings.Contains(m.Title, "ギルマス") {
-					candidates = append(candidates, m)
-				}
-			}
-		}
-
-		if len(candidates) > 0 {
-			candID := candidates[0].CharacterID
-			var (
-				disbanded          bool
-				disbandedGuildName string
-			)
-			tErr := s.runInTx(ctx, func(txCtx context.Context) error {
-				// Rank 2: Lock candidate character
-				if err := s.repo.LockCharacterForUpdate(txCtx, candID); err != nil {
-					if errors.Is(err, ErrCharacterNotFound) {
-						return errCandidateIneligible
-					}
-					return err
-				}
-
-				// Rank 7: Lock guild
-				lockedGuild, lockedMembers, err := s.repo.GetGuildForUpdate(txCtx, guildID)
-				if err != nil {
-					return err
-				}
-
-				var leaderInLocked *Member
-				for i := range lockedMembers {
-					if lockedMembers[i].CharacterID == characterID {
-						leaderInLocked = &lockedMembers[i]
-						break
-					}
-				}
-				if leaderInLocked == nil {
-					if ignoreMissing {
-						return nil
-					}
-					return ErrCharacterNotInGuild
-				}
-
-				var remainingLocked int
-				for _, lm := range lockedMembers {
-					if lm.CharacterID != characterID {
-						remainingLocked++
-					}
-				}
-				if remainingLocked == 0 {
-					if err := s.repo.DisbandGuild(txCtx, guildID); err != nil {
-						return err
-					}
-					disbanded = true
-					disbandedGuildName = lockedGuild.Name
-					return nil
-				}
-
-				if leaderInLocked.Role != RoleLeader {
-					if err := s.repo.RemoveMember(txCtx, guildID, characterID); err != nil {
-						return err
-					}
-					s.touchActive(txCtx, guildID)
-					return nil
-				}
-				if lockedGuild.LeaderCharacterID != "" && lockedGuild.LeaderCharacterID != characterID {
-					return ErrUnauthorized
-				}
-
-				var candInLocked *Member
-				for i := range lockedMembers {
-					if lockedMembers[i].CharacterID == candID {
-						candInLocked = &lockedMembers[i]
-						break
-					}
-				}
-				if candInLocked == nil {
-					return errCandidateIneligible
-				}
-
-				if candInLocked.IsPending {
-					activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, candID)
-					if err == nil {
-						if activeGuild.ID != guildID {
-							return errCandidateIneligible
-						}
-					} else if !errors.Is(err, ErrCharacterNotInGuild) {
-						return err
-					}
-				}
-
-				if err := s.repo.TransferLeadership(txCtx, guildID, characterID, candID); err != nil {
-					if errors.Is(err, ErrCharacterAlreadyInGuild) {
-						return errCandidateIneligible
-					}
-					return err
-				}
-
-				if err := s.repo.RemoveMember(txCtx, guildID, characterID); err != nil {
-					return err
-				}
-				s.touchActive(txCtx, guildID)
-				return nil
-			})
-
-			if tErr == nil {
-				if disbanded {
-					s.publishDissolutionNews(ctx, disbandedGuildName, s.nowFunc())
-				}
-				return nil
-			}
-			if errors.Is(tErr, errCandidateIneligible) {
-				ineligible[candID] = true
-				continue
-			}
-			if errors.Is(tErr, errRosterChanged) {
-				retries++
-				clear(ineligible)
-				continue
-			}
-			return tErr
-		}
-
-		// 3. Disband workflow when no untried candidates remain
-		var (
-			disbanded          bool
-			disbandedGuildName string
-		)
-		err = s.runInTx(ctx, func(txCtx context.Context) error {
-			lockedGuild, lockedMembers, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 			if err != nil {
 				return err
 			}
+			gid = g.ID
+		}
+		_, members, err := s.repo.GetGuild(ctx, gid)
+		if err != nil {
+			if guildID == "" && errors.Is(err, ErrGuildNotFound) {
+				return errRosterChanged
+			}
+			return err
+		}
+		guildOf[id] = gid
+		guildIDs = append(guildIDs, gid)
+		for _, m := range members {
+			lockIDs = append(lockIDs, m.CharacterID)
+		}
+	}
 
-			var leaderInLocked *Member
-			for i := range lockedMembers {
-				if lockedMembers[i].CharacterID == characterID {
-					leaderInLocked = &lockedMembers[i]
-					break
-				}
+	slices.Sort(lockIDs)
+	lockIDs = slices.Compact(lockIDs)
+	locked := make(map[string]bool, len(lockIDs))
+	for _, id := range lockIDs {
+		err := s.repo.LockCharacterForUpdate(ctx, id)
+		if err != nil && !errors.Is(err, ErrCharacterNotFound) {
+			return err
+		}
+		locked[id] = err == nil
+	}
+	slices.Sort(guildIDs)
+	for _, gid := range slices.Compact(guildIDs) {
+		if _, _, err := s.repo.GetGuildForUpdate(ctx, gid); err != nil {
+			if guildID == "" && errors.Is(err, ErrGuildNotFound) {
+				return errRosterChanged
 			}
-			if leaderInLocked == nil {
-				if ignoreMissing {
-					return nil
-				}
-				return ErrCharacterNotInGuild
-			}
+			return err
+		}
+	}
 
-			var remainingLocked int
-			for _, lm := range lockedMembers {
-				if lm.CharacterID != characterID {
-					remainingLocked++
-				}
-			}
-
-			if leaderInLocked.Role != RoleLeader {
-				if remainingLocked == 0 {
-					if err := s.repo.DisbandGuild(txCtx, guildID); err != nil {
-						return err
-					}
-					disbanded = true
-					disbandedGuildName = lockedGuild.Name
-					return nil
-				}
-				if err := s.repo.RemoveMember(txCtx, guildID, characterID); err != nil {
-					return err
-				}
-				s.touchActive(txCtx, guildID)
-				return nil
-			}
-			if lockedGuild.LeaderCharacterID != "" && lockedGuild.LeaderCharacterID != characterID {
-				return ErrUnauthorized
-			}
-
-			if remainingLocked == 0 {
-				if err := s.repo.DisbandGuild(txCtx, guildID); err != nil {
-					return err
-				}
-				disbanded = true
-				disbandedGuildName = lockedGuild.Name
-				return nil
-			}
-
-			// Revalidate candidate eligibility under the Rank 7 guild lock before disbanding.
-			// If any remaining member is currently eligible (a formal member, or a pending
-			// applicant with no other active guild affiliation), abort disbandment and retry
-			// candidate succession under Rank 2 -> Rank 7 locks.
-			for _, lm := range lockedMembers {
-				if lm.CharacterID == characterID {
-					continue
-				}
-				if !lm.IsPending {
-					return errRosterChanged
-				}
-				activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, lm.CharacterID)
-				if err != nil {
-					if errors.Is(err, ErrCharacterNotInGuild) {
-						return errRosterChanged
-					}
-					return err
-				}
-				if activeGuild.ID == guildID {
-					return errRosterChanged
-				}
-			}
-
-			if err := s.repo.DisbandGuild(txCtx, guildID); err != nil {
+	if guildID == "" {
+		// Joining or creating a guild locks the character, so membership is now stable.
+		for _, id := range ids {
+			g, _, err := s.repo.GetGuildByCharacter(ctx, id)
+			if err != nil && !errors.Is(err, ErrCharacterNotInGuild) && !errors.Is(err, ErrGuildNotFound) {
 				return err
 			}
-			disbanded = true
-			disbandedGuildName = lockedGuild.Name
-			return nil
-		})
-
-		if err == nil {
-			if disbanded {
-				s.publishDissolutionNews(ctx, disbandedGuildName, s.nowFunc())
+			if g.ID != guildOf[id] {
+				return errRosterChanged
 			}
-			return nil
 		}
-		if errors.Is(err, errRosterChanged) {
-			retries++
-			clear(ineligible)
+	}
+
+	for _, id := range ids {
+		gid, ok := guildOf[id]
+		if !ok {
 			continue
 		}
-		return err
+		if err := s.departOne(ctx, gid, id, locked, guildID != ""); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-// Leave removes a character from the guild (join_guild.cgi:dattai).
-// If the character is the sole member, the guild is disbanded and dissolution news is published.
-// If the character is the leader and other members remain, leadership is transferred before removal.
-func (s *Service) Leave(ctx context.Context, guildID string, characterID string) error {
-	return s.leaveInternal(ctx, guildID, characterID, false)
-}
-
-// RemoveCharacterFromGuild removes a character from their guild upon admin action or deletion (lib/system.cgi:delete_guild_member).
-// If the character is not in a guild, it returns nil.
-// If the character is the sole member, the guild is disbanded and dissolution news is published.
-// If the character is the leader and other members exist, leadership is transferred before removal.
-func (s *Service) RemoveCharacterFromGuild(ctx context.Context, characterID string) error {
-	characterID = strings.TrimSpace(characterID)
-	if characterID == "" {
-		return nil
-	}
-	g, _, err := s.repo.GetGuildByCharacter(ctx, characterID)
+// departOne removes one character from a guild whose members are already locked.
+// A leader hands over to the first eligible member, titles containing "ギルマス"
+// first and then roster order; without one the guild is disbanded.
+func (s *Service) departOne(ctx context.Context, guildID, characterID string, locked map[string]bool, strict bool) error {
+	g, members, err := s.repo.GetGuildForUpdate(ctx, guildID)
 	if err != nil {
-		if errors.Is(err, ErrCharacterNotInGuild) || errors.Is(err, ErrGuildNotFound) {
+		if !strict && errors.Is(err, ErrGuildNotFound) {
 			return nil
 		}
 		return err
 	}
-	return s.leaveInternal(ctx, g.ID, characterID, true)
+	var self *Member
+	var titled, others []Member
+	for i := range members {
+		switch {
+		case members[i].CharacterID == characterID:
+			self = &members[i]
+		case strings.Contains(members[i].Title, "ギルマス"):
+			titled = append(titled, members[i])
+		default:
+			others = append(others, members[i])
+		}
+	}
+	if self == nil {
+		if strict {
+			return ErrCharacterNotInGuild
+		}
+		return nil
+	}
+	candidates := slices.Concat(titled, others)
+	if len(candidates) == 0 {
+		return s.disband(ctx, g)
+	}
+	if self.Role != RoleLeader {
+		return s.removeMember(ctx, guildID, characterID)
+	}
+	if g.LeaderCharacterID != "" && g.LeaderCharacterID != characterID {
+		return ErrUnauthorized
+	}
+
+	for _, c := range candidates {
+		ok, exists := locked[c.CharacterID]
+		if !exists {
+			return errRosterChanged
+		}
+		if !ok {
+			continue
+		}
+		if c.IsPending {
+			active, _, err := s.repo.GetGuildByCharacter(ctx, c.CharacterID)
+			if err != nil && !errors.Is(err, ErrCharacterNotInGuild) {
+				return err
+			}
+			if err == nil && active.ID != guildID {
+				continue
+			}
+		}
+		if err := s.repo.TransferLeadership(ctx, guildID, characterID, c.CharacterID); err != nil {
+			if errors.Is(err, ErrCharacterAlreadyInGuild) {
+				continue
+			}
+			return err
+		}
+		return s.removeMember(ctx, guildID, characterID)
+	}
+	return s.disband(ctx, g)
+}
+
+func (s *Service) removeMember(ctx context.Context, guildID, characterID string) error {
+	if err := s.repo.RemoveMember(ctx, guildID, characterID); err != nil {
+		return err
+	}
+	s.touchActive(ctx, guildID)
+	return nil
+}
+
+// disband dissolves the guild and publishes its news through the same transaction context.
+func (s *Service) disband(ctx context.Context, g Guild) error {
+	if err := s.repo.DisbandGuild(ctx, g.ID); err != nil {
+		return err
+	}
+	s.publishDissolutionNews(ctx, g.Name, s.nowFunc())
+	return nil
 }
