@@ -3,10 +3,12 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -119,6 +121,18 @@ func TestShopCommandsRejectInvalidInputsWithoutWrites(t *testing.T) {
 		}
 		if status != tc.status || (tc.code != "" && failure.Error.Code != tc.code) || f.writes != 0 || f.char.Money != 1000 {
 			t.Fatalf("%s: %d %s", tc.body, status, raw)
+		}
+	}
+}
+
+func TestShopRejectionKeepsStorageFailuresUnexpected(t *testing.T) {
+	if status, _ := shopActionRejection(corecharacter.ErrNotFound); status != 404 {
+		t.Fatalf("missing character: %d", status)
+	}
+	// Unmapped errors take the Gateway's 500 EXECUTION_FAILED path (#2018).
+	for _, err := range []error{errors.New("storage down"), context.Canceled} {
+		if status, _ := shopActionRejection(err); status != 0 {
+			t.Fatalf("%v mapped to known rejection %d", err, status)
 		}
 	}
 }

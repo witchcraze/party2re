@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -44,6 +45,11 @@ func shopNPC(kind shop.ShopType, inspect string) npcProfile {
 // npcProfiles is keyed by scene destination. Lines with item recommendations or
 // capacities ($gems/$ites/$max_depot) are omitted until those facts are wired.
 var npcProfiles = map[string]npcProfile{
+	"auction": {name: auction.NPCName, words: []string{ // auction.cgi @words
+		"ここはオークション会場です。他のプレイヤーとアイテム交換やアイテム売買をする場所です。",
+		"入札や出品のようなシステムはないです。自由に競りをしてください。",
+		"相手が実際にそのアイテムや落札金を持っているのか「＠しらべる」で見ることができます。",
+	}},
 	"bank":           {name: bank.NPCName, words: bank.NPCDialogues},
 	"blackmarket":    {name: "@闇商人", words: blackMarketTalkDialogues, inspect: "…お前の魂で取引したいのか？"},
 	"secretshop":     {name: secretshop.NPCName, words: secretshop.DefaultTalkDialogues, inspect: secretshop.InspectDialogue},

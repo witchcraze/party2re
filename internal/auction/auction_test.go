@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -532,60 +533,84 @@ func TestInspect(t *testing.T) {
 	ctx := context.Background()
 	svc, charRepo, equipRepo, invRepo, _ := setupAuctionService(t)
 
+	charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 1}
 	charRepo.chars["char-2"] = corecharacter.Character{
-		ID:       "char-2",
-		Name:     "Bob",
-		Level:    25,
-		JobID:    "warrior",
-		JobLevel: 3,
-		Money:    12345,
+		ID: "char-2", Name: "Bob", Gender: "m", Level: 25, JobID: "warrior", SP: 4, OldJobID: "mage", OldSP: 2,
+		Tired: 30, Money: 12345, Stats: corecharacter.Stats{MaxHP: 90, MaxMP: 20, Attack: 11, Defense: 12, Agility: 13},
+		WeaponCustomName: "Bobの剣",
 	}
 
 	bobInv, _ := coreinventory.New("char-2")
-	_ = bobInv.Add(coreitem.Instance{ID: "sword-bob", DefinitionID: "sword-1", Quantity: 1, EnhancementLevel: 5})
 	_ = bobInv.Add(coreitem.Instance{ID: "armor-bob", DefinitionID: "armor-1", Quantity: 1, EnhancementLevel: 2})
+	_ = bobInv.Add(coreitem.Instance{ID: "sword-bob", DefinitionID: "sword-1", Quantity: 1, EnhancementLevel: 5})
 	_ = invRepo.Save(ctx, bobInv)
-
 	bobEquip, _ := coreequipment.New("char-2")
-	bobEquip.Slots[coreitem.SlotMainHand] = "sword-bob"
 	bobEquip.Slots[coreitem.SlotBody] = "armor-bob"
 	_ = equipRepo.Save(ctx, bobEquip)
 
-	// Inspect by ID
-	res, err := svc.Inspect(ctx, "char-1", "char-2")
+	// Armor is shown without a weapon, unlike legacy's "if $p{wea}" copy defect.
+	res, err := svc.Inspect(ctx, "char-1", "char-2", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	if res.Name != "Bob" || res.Money != 12345 || res.Level != 25 {
-		t.Errorf("unexpected char info: %+v", res)
+	want := auction.InspectResult{
+		CharacterID: "char-2", Name: "Bob", Gender: "m", Level: 25, JobID: "warrior", SP: 4, OldJobID: "mage", OldSP: 2,
+		Tired: 30, MaxHP: 90, MaxMP: 20, Attack: 11, Defense: 12, Agility: 13,
+		Armor: &auction.EquippedItemInfo{InstanceID: "armor-bob", DefinitionID: "armor-1", Name: "鉄の鎧", EnhancementLevel: 2},
 	}
-	if res.Weapon == nil || res.Weapon.Name != "鋼の剣" || res.Weapon.EnhancementLevel != 5 {
-		t.Errorf("unexpected weapon: %+v", res.Weapon)
-	}
-	if res.Armor == nil || res.Armor.Name != "鉄の鎧" || res.Armor.EnhancementLevel != 2 {
-		t.Errorf("unexpected armor: %+v", res.Armor)
+	if !reflect.DeepEqual(res, want) {
+		t.Fatalf("got %+v, want %+v", res, want)
 	}
 
-	// Inspect by Name
-	resByName, err := svc.InspectByName(ctx, "char-1", "Bob")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	bobEquip.Slots[coreitem.SlotMainHand] = "sword-bob"
+	_ = equipRepo.Save(ctx, bobEquip)
+	res, err = svc.Inspect(ctx, "char-1", "", "Bob")
+	if err != nil || res.CharacterID != "char-2" || res.Weapon == nil || res.Weapon.Name != "鋼の剣" || res.Weapon.CustomName != "Bobの剣" || res.Weapon.EnhancementLevel != 5 {
+		t.Fatalf("by name: %+v %v", res, err)
 	}
-	if resByName.CharacterID != "char-2" {
-		t.Errorf("expected char-2, got %s", resByName.CharacterID)
+
+	// Omitted or missing targets fall back to the inspector (legacy shiraberu).
+	for _, target := range [][2]string{{"", ""}, {"nonexistent", ""}, {"", "NonExistent"}, {"char-1", ""}} {
+		res, err := svc.Inspect(ctx, "char-1", target[0], target[1])
+		if err != nil || res.CharacterID != "char-1" || !res.Self {
+			t.Fatalf("%v: %+v %v", target, res, err)
+		}
 	}
 }
 
-func TestGetVenueInfo(t *testing.T) {
-	svc, _, _, _, _ := setupAuctionService(t)
-	info := svc.GetVenueInfo()
-
-	if info.Title != "オークション会場" {
-		t.Errorf("expected オークション会場, got %s", info.Title)
+func TestInspect_PreservesReadFailures(t *testing.T) {
+	ctx := context.Background()
+	storage := errors.New("storage down")
+	for name, inject := range map[string]func(*mockCharRepo, *mockEquipRepo, *mockInvRepo){
+		"character": func(c *mockCharRepo, _ *mockEquipRepo, _ *mockInvRepo) { c.findErr = storage },
+		"equipment": func(_ *mockCharRepo, e *mockEquipRepo, _ *mockInvRepo) { e.findErr = storage },
+		"inventory": func(_ *mockCharRepo, _ *mockEquipRepo, i *mockInvRepo) { i.findErr = storage },
+	} {
+		t.Run(name, func(t *testing.T) {
+			svc, charRepo, equipRepo, invRepo, _ := setupAuctionService(t)
+			charRepo.chars["char-2"] = corecharacter.Character{ID: "char-2", Name: "Bob"}
+			inject(charRepo, equipRepo, invRepo)
+			if _, err := svc.Inspect(ctx, "char-1", "char-2", ""); !errors.Is(err, storage) {
+				t.Fatalf("got %v, want storage error", err)
+			}
+		})
 	}
-	if info.NPCName != "@ワイルド" {
-		t.Errorf("expected @ワイルド, got %s", info.NPCName)
+}
+
+func TestInspect_AccessoryFallbackName(t *testing.T) {
+	ctx := context.Background()
+	svc, charRepo, equipRepo, invRepo, _ := setupAuctionService(t)
+	charRepo.chars["char-2"] = corecharacter.Character{ID: "char-2", Name: "Bob"}
+	bobInv, _ := coreinventory.New("char-2")
+	_ = bobInv.Add(coreitem.Instance{ID: "acc-1", DefinitionID: "unknown-ring", Quantity: 1})
+	_ = invRepo.Save(ctx, bobInv)
+	bobEquip, _ := coreequipment.New("char-2")
+	bobEquip.Slots[coreitem.SlotAccessory] = "acc-1"
+	_ = equipRepo.Save(ctx, bobEquip)
+
+	res, err := svc.Inspect(ctx, "char-1", "char-2", "")
+	if err != nil || res.Accessory == nil || res.Accessory.Name != "unknown-ring" {
+		t.Fatalf("got %+v %v", res.Accessory, err)
 	}
 }
 
@@ -1054,68 +1079,6 @@ func TestSend_ItemTransactionErrors(t *testing.T) {
 		})
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("expected %v, got %v", expectedErr, err)
-		}
-	})
-}
-
-func TestInspect_ErrorBranchesAndVariations(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("Inspect target not found", func(t *testing.T) {
-		svc, _, _, _, _ := setupAuctionService(t)
-		_, err := svc.Inspect(ctx, "char-1", "nonexistent")
-		if !errors.Is(err, auction.ErrTargetNotFound) {
-			t.Fatalf("expected ErrTargetNotFound, got %v", err)
-		}
-	})
-
-	t.Run("InspectByName target not found", func(t *testing.T) {
-		svc, _, _, _, _ := setupAuctionService(t)
-		_, err := svc.InspectByName(ctx, "char-1", "NonExistent")
-		if !errors.Is(err, auction.ErrTargetNotFound) {
-			t.Fatalf("expected ErrTargetNotFound, got %v", err)
-		}
-	})
-
-	t.Run("Inspect succeeds with accessory and fallback definition name", func(t *testing.T) {
-		svc, charRepo, equipRepo, invRepo, _ := setupAuctionService(t)
-		charRepo.chars["char-2"] = corecharacter.Character{
-			ID:    "char-2",
-			Name:  "Bob",
-			Money: 500,
-		}
-
-		bobInv, _ := coreinventory.New("char-2")
-		_ = bobInv.Add(coreitem.Instance{ID: "acc-1", DefinitionID: "unknown-ring", Quantity: 1})
-		_ = invRepo.Save(ctx, bobInv)
-
-		bobEquip, _ := coreequipment.New("char-2")
-		bobEquip.Slots[coreitem.SlotAccessory] = "acc-1"
-		_ = equipRepo.Save(ctx, bobEquip)
-
-		res, err := svc.Inspect(ctx, "char-1", "char-2")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if res.Accessory == nil || res.Accessory.Name != "unknown-ring" {
-			t.Fatalf("expected accessory with fallback name unknown-ring, got %+v", res.Accessory)
-		}
-	})
-
-	t.Run("Inspect succeeds even if equipRepo fails", func(t *testing.T) {
-		svc, charRepo, equipRepo, _, _ := setupAuctionService(t)
-		charRepo.chars["char-2"] = corecharacter.Character{
-			ID:   "char-2",
-			Name: "Bob",
-		}
-		equipRepo.findErr = errors.New("equip repo fail")
-
-		res, err := svc.Inspect(ctx, "char-1", "char-2")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if res.Weapon != nil || res.Armor != nil || res.Accessory != nil {
-			t.Errorf("expected nil equipment when repo fails")
 		}
 	})
 }

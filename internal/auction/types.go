@@ -11,10 +11,8 @@ import (
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
-const (
-	VenueName = "オークション会場"
-	NPCName   = "@ワイルド"
-)
+// NPCName is the venue NPC (auction.cgi $npc_name).
+const NPCName = "@ワイルド"
 
 var (
 	ErrCannotSendToSelf  = errors.New("cannot send to yourself")
@@ -55,29 +53,35 @@ type TransferredItemInfo struct {
 	EnhancementLevel int    `json:"enhancement_level"`
 }
 
+// InspectResult is the public status other players see; wallet money is not
+// part of legacy shiraberu for another player.
 type InspectResult struct {
 	CharacterID string            `json:"character_id"`
 	Name        string            `json:"name"`
+	Gender      string            `json:"gender"`
 	Level       int               `json:"level"`
 	JobID       string            `json:"job_id"`
-	JobLevel    int               `json:"job_level"`
-	Money       int               `json:"money"`
+	SP          int               `json:"sp"`
+	OldJobID    string            `json:"old_job_id"`
+	OldSP       int               `json:"old_sp"`
+	Tired       int               `json:"tired"`
+	MaxHP       int               `json:"max_hp"`
+	MaxMP       int               `json:"max_mp"`
+	Attack      int               `json:"attack"`
+	Defense     int               `json:"defense"`
+	Agility     int               `json:"agility"`
 	Weapon      *EquippedItemInfo `json:"weapon,omitempty"`
 	Armor       *EquippedItemInfo `json:"armor,omitempty"`
 	Accessory   *EquippedItemInfo `json:"accessory,omitempty"`
-	Message     string            `json:"message,omitempty"`
+	Self        bool              `json:"self"`
 }
 
 type EquippedItemInfo struct {
 	InstanceID       string `json:"instance_id"`
 	DefinitionID     string `json:"definition_id"`
 	Name             string `json:"name"`
+	CustomName       string `json:"custom_name,omitempty"`
 	EnhancementLevel int    `json:"enhancement_level"`
-}
-
-type VenueInfo struct {
-	Title   string `json:"title"`
-	NPCName string `json:"npc_name"`
 }
 
 type CharacterRepository interface {

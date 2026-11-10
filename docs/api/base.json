@@ -3478,6 +3478,7 @@
                         "town",
                         "bank",
                         "alchemy",
+                        "auction",
                         "blackmarket",
                         "blacksmith",
                         "chapel",
@@ -3576,6 +3577,7 @@
                         "town",
                         "bank",
                         "alchemy",
+                        "auction",
                         "blackmarket",
                         "blacksmith",
                         "chapel",
@@ -4891,6 +4893,38 @@
               "type": "object",
               "properties": {
                 "action": {
+                  "const": "player_inspect"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "target_character_id": {
+                      "type": "string"
+                    },
+                    "target_character_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": false,
+                  "description": "Optional non-null target ID or name; ID takes precedence. An omitted or missing target inspects the actor."
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
                   "const": "blacksmith_seal",
                   "type": "string"
                 }
@@ -6170,6 +6204,7 @@
               "town",
               "bank",
               "alchemy",
+              "auction",
               "blackmarket",
               "blacksmith",
               "chapel",
@@ -6296,6 +6331,7 @@
                   "town",
                   "bank",
                   "alchemy",
+                  "auction",
                   "blackmarket",
                   "blacksmith",
                   "chapel",
@@ -8841,95 +8877,6 @@
           "instance_id",
           "definition_id",
           "item_name",
-          "enhancement_level"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AuctionInspectResult": {
-        "properties": {
-          "accessory": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AuctionEquippedItemInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "armor": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AuctionEquippedItemInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "job_id": {
-            "type": "string"
-          },
-          "job_level": {
-            "type": "integer"
-          },
-          "level": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          },
-          "money": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "weapon": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AuctionEquippedItemInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "character_id",
-          "name",
-          "level",
-          "job_id",
-          "job_level",
-          "money"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AuctionEquippedItemInfo": {
-        "properties": {
-          "definition_id": {
-            "type": "string"
-          },
-          "enhancement_level": {
-            "type": "integer"
-          },
-          "instance_id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance_id",
-          "definition_id",
-          "name",
           "enhancement_level"
         ],
         "type": "object",
@@ -17072,6 +17019,167 @@
           "approvals",
           "oppositions"
         ]
+      },
+      "InspectedEquipment": {
+        "properties": {
+          "definition_id": {
+            "type": "string"
+          },
+          "enhancement_level": {
+            "type": "integer"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "custom_name": {
+            "type": "string",
+            "description": "Weapon/armor custom name shown instead of the catalog name when set."
+          }
+        },
+        "required": [
+          "instance_id",
+          "definition_id",
+          "name",
+          "enhancement_level"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "PlayerInspection": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "sp": {
+            "type": "integer"
+          },
+          "old_job_id": {
+            "type": "string"
+          },
+          "old_sp": {
+            "type": "integer"
+          },
+          "tired": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "agility": {
+            "type": "integer"
+          },
+          "weapon": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InspectedEquipment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "armor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InspectedEquipment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accessory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InspectedEquipment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "self": {
+            "type": "boolean",
+            "description": "True when the actor was inspected: target omitted, missing, or the actor."
+          },
+          "guild_id": {
+            "type": "string"
+          },
+          "guild_name": {
+            "type": "string"
+          },
+          "gems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Custom-skill gem IDs in slot order, empty slots omitted."
+          },
+          "login_message": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "Sampled save within the presence window."
+          },
+          "last_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "gender",
+          "level",
+          "job_id",
+          "sp",
+          "old_job_id",
+          "old_sp",
+          "tired",
+          "max_hp",
+          "max_mp",
+          "attack",
+          "defense",
+          "agility",
+          "self",
+          "guild_id",
+          "guild_name",
+          "gems",
+          "login_message",
+          "online",
+          "last_updated_at"
+        ],
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Common しらべる on a player. Wallet money is never included."
       }
     },
     "securitySchemes": {

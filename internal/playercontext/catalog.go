@@ -446,6 +446,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"content"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
+	// Common しらべる on a player (lib/system.cgi shiraberu): usable in every
+	// scene, so it carries no location gate; the private $mes starts no wait.
+	{ID: "player_inspect", Label: "しらべる", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck, WaitExempt: WaitPrivate},
 	{
 		ID:             "rescue_request",
 		WaitExempt:     WaitRecovery,

@@ -903,95 +903,6 @@
         ],
         "type": "object"
       },
-      "AuctionEquippedItemInfo": {
-        "additionalProperties": false,
-        "properties": {
-          "definition_id": {
-            "type": "string"
-          },
-          "enhancement_level": {
-            "type": "integer"
-          },
-          "instance_id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance_id",
-          "definition_id",
-          "name",
-          "enhancement_level"
-        ],
-        "type": "object"
-      },
-      "AuctionInspectResult": {
-        "additionalProperties": false,
-        "properties": {
-          "accessory": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AuctionEquippedItemInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "armor": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AuctionEquippedItemInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "job_id": {
-            "type": "string"
-          },
-          "job_level": {
-            "type": "integer"
-          },
-          "level": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          },
-          "money": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "weapon": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AuctionEquippedItemInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "character_id",
-          "name",
-          "level",
-          "job_id",
-          "job_level",
-          "money"
-        ],
-        "type": "object"
-      },
       "AuctionListing": {
         "properties": {
           "buyout_price": {
@@ -4364,6 +4275,7 @@
                         "town",
                         "bank",
                         "alchemy",
+                        "auction",
                         "blackmarket",
                         "blacksmith",
                         "chapel",
@@ -4490,6 +4402,7 @@
                         "town",
                         "bank",
                         "alchemy",
+                        "auction",
                         "blackmarket",
                         "blacksmith",
                         "chapel",
@@ -5760,6 +5673,38 @@
                     "slot": {
                       "type": "string"
                     },
+                    "target_character_id": {
+                      "type": "string"
+                    },
+                    "target_character_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "player_inspect"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "description": "Optional non-null target ID or name; ID takes precedence. An omitted or missing target inspects the actor.",
+                  "properties": {
                     "target_character_id": {
                       "type": "string"
                     },
@@ -10934,6 +10879,34 @@
         ],
         "type": "object"
       },
+      "InspectedEquipment": {
+        "additionalProperties": false,
+        "properties": {
+          "custom_name": {
+            "description": "Weapon/armor custom name shown instead of the catalog name when set.",
+            "type": "string"
+          },
+          "definition_id": {
+            "type": "string"
+          },
+          "enhancement_level": {
+            "type": "integer"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "definition_id",
+          "name",
+          "enhancement_level"
+        ],
+        "type": "object"
+      },
       "InventoryInventory": {
         "additionalProperties": false,
         "properties": {
@@ -13126,6 +13099,139 @@
         ],
         "type": "object"
       },
+      "PlayerInspection": {
+        "additionalProperties": false,
+        "description": "Common しらべる on a player. Wallet money is never included.",
+        "properties": {
+          "accessory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InspectedEquipment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agility": {
+            "type": "integer"
+          },
+          "armor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InspectedEquipment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "gems": {
+            "description": "Custom-skill gem IDs in slot order, empty slots omitted.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "guild_id": {
+            "type": "string"
+          },
+          "guild_name": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "type": "integer"
+          },
+          "login_message": {
+            "type": "string"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "old_job_id": {
+            "type": "string"
+          },
+          "old_sp": {
+            "type": "integer"
+          },
+          "online": {
+            "description": "Sampled save within the presence window.",
+            "type": "boolean"
+          },
+          "self": {
+            "description": "True when the actor was inspected: target omitted, missing, or the actor.",
+            "type": "boolean"
+          },
+          "sp": {
+            "type": "integer"
+          },
+          "tired": {
+            "type": "integer"
+          },
+          "weapon": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InspectedEquipment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "gender",
+          "level",
+          "job_id",
+          "sp",
+          "old_job_id",
+          "old_sp",
+          "tired",
+          "max_hp",
+          "max_mp",
+          "attack",
+          "defense",
+          "agility",
+          "self",
+          "guild_id",
+          "guild_name",
+          "gems",
+          "login_message",
+          "online",
+          "last_updated_at"
+        ],
+        "type": "object"
+      },
       "PlayerResponse": {
         "properties": {
           "created_at": {
@@ -14239,6 +14345,7 @@
                   "town",
                   "bank",
                   "alchemy",
+                  "auction",
                   "blackmarket",
                   "blacksmith",
                   "chapel",
@@ -14422,6 +14529,7 @@
               "town",
               "bank",
               "alchemy",
+              "auction",
               "blackmarket",
               "blacksmith",
               "chapel",
@@ -17624,7 +17732,7 @@
               }
             }
           },
-          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_withdraw/depot_sell require non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene.",
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_withdraw/depot_sell require non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor.",
           "required": true
         },
         "responses": {
@@ -17636,7 +17744,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gems, login message and presence; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned."
           },
           "400": {
             "content": {
@@ -17863,55 +17971,6 @@
         "summary": "Observe character, selected scene, unfinished work and connected choices",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/auction/hall": {
-      "get": {
-        "operationId": "getAuctionHall",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "dialogue": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "npc_name": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "title",
-                    "npc_name",
-                    "dialogue"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Venue info and NPC dialogue"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get auction hall information and NPC dialogue",
-        "tags": [
-          "Auctions"
         ]
       }
     },
@@ -19407,85 +19466,6 @@
         "summary": "Make a wish for an otherworld travel item (@ねがう)",
         "tags": [
           "Altar"
-        ]
-      }
-    },
-    "/characters/{id}/auction/inspect": {
-      "get": {
-        "operationId": "getCharactersIdAuctionInspect",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Target character ID",
-            "in": "query",
-            "name": "target_character_id",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Target character name",
-            "in": "query",
-            "name": "target_name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuctionInspectResult"
-                }
-              }
-            },
-            "description": "Inspected character information and equipped gear"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Target character not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Inspect another character's stats and equipped gear (@しらべる)",
-        "tags": [
-          "Auctions"
         ]
       }
     },

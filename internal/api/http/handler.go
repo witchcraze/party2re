@@ -149,7 +149,6 @@ type Handler struct {
 	pvp            PvPService
 	gvg            GvGService
 	guild          GuildService
-	auctions       AuctionService
 	eventplaza     EventPlazaService
 	secretshop     SecretShopService
 	tavern         TavernService
@@ -561,8 +560,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/guild", h.handleGetCharacterGuild)
 
 	// Auction Hall (Live P2P Trading, Direct Send & Inspect)
-	mux.HandleFunc("GET /auction/hall", h.handleAuctionVenueInfo)
-	mux.HandleFunc("GET /characters/{id}/auction/inspect", h.handleAuctionInspect)
 
 	// Player Store (Bazaar & Boutique)
 	mux.HandleFunc("POST /towns/{town_id}/stores", h.handleBuildStore)

@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
@@ -308,94 +310,62 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 	return result, nil
 }
 
-func (s *Service) Inspect(ctx context.Context, inspectorID, targetID string) (InspectResult, error) {
-	targetChar, err := s.charRepo.FindByID(ctx, targetID)
+// Inspect projects a player's status for the common しらべる (lib/system.cgi
+// shiraberu). A target that is omitted or does not exist falls back to the
+// inspector's own status, as legacy does; other read failures propagate.
+func (s *Service) Inspect(ctx context.Context, inspectorID, targetID, targetName string) (InspectResult, error) {
+	var (
+		char corecharacter.Character
+		err  = corecharacter.ErrNotFound
+	)
+	switch {
+	case targetID != "":
+		char, err = s.charRepo.FindByID(ctx, targetID)
+	case targetName != "":
+		char, err = s.charRepo.FindByName(ctx, targetName)
+	}
+	if errors.Is(err, corecharacter.ErrNotFound) {
+		char, err = s.charRepo.FindByID(ctx, inspectorID)
+	}
 	if err != nil {
-		return InspectResult{}, ErrTargetNotFound
+		return InspectResult{}, err
 	}
-	return s.buildInspectResult(ctx, targetChar)
-}
-
-func (s *Service) InspectByName(ctx context.Context, inspectorID, targetName string) (InspectResult, error) {
-	targetChar, err := s.charRepo.FindByName(ctx, targetName)
-	if err != nil {
-		return InspectResult{}, ErrTargetNotFound
-	}
-	return s.buildInspectResult(ctx, targetChar)
-}
-
-func (s *Service) buildInspectResult(ctx context.Context, char corecharacter.Character) (InspectResult, error) {
-	res := InspectResult{
-		CharacterID: char.ID,
-		Name:        char.Name,
-		Level:       char.Level,
-		JobID:       char.JobID,
-		JobLevel:    char.JobLevel,
-		Money:       char.Money,
-		Message:     char.Color,
-	}
-
 	equip, err := s.equipRepo.FindByCharacterID(ctx, char.ID)
-	if err == nil {
-		inv, err := s.invRepo.FindByCharacterID(ctx, char.ID)
-		if err == nil {
-			if weaponID, ok := equip.Equipped(coreitem.SlotMainHand); ok {
-				if itemInst, ok := inv.Find(weaponID); ok {
-					name := itemInst.DefinitionID
-					if s.catalog != nil {
-						if def, err := s.catalog.FindByID(itemInst.DefinitionID); err == nil && def.Name != "" {
-							name = def.Name
-						}
-					}
-					res.Weapon = &EquippedItemInfo{
-						InstanceID:       itemInst.ID,
-						DefinitionID:     itemInst.DefinitionID,
-						Name:             name,
-						EnhancementLevel: itemInst.EnhancementLevel,
-					}
-				}
-			}
-			if armorID, ok := equip.Equipped(coreitem.SlotBody); ok {
-				if itemInst, ok := inv.Find(armorID); ok {
-					name := itemInst.DefinitionID
-					if s.catalog != nil {
-						if def, err := s.catalog.FindByID(itemInst.DefinitionID); err == nil && def.Name != "" {
-							name = def.Name
-						}
-					}
-					res.Armor = &EquippedItemInfo{
-						InstanceID:       itemInst.ID,
-						DefinitionID:     itemInst.DefinitionID,
-						Name:             name,
-						EnhancementLevel: itemInst.EnhancementLevel,
-					}
-				}
-			}
-			if accID, ok := equip.Equipped(coreitem.SlotAccessory); ok {
-				if itemInst, ok := inv.Find(accID); ok {
-					name := itemInst.DefinitionID
-					if s.catalog != nil {
-						if def, err := s.catalog.FindByID(itemInst.DefinitionID); err == nil && def.Name != "" {
-							name = def.Name
-						}
-					}
-					res.Accessory = &EquippedItemInfo{
-						InstanceID:       itemInst.ID,
-						DefinitionID:     itemInst.DefinitionID,
-						Name:             name,
-						EnhancementLevel: itemInst.EnhancementLevel,
-					}
-				}
-			}
+	if err != nil {
+		return InspectResult{}, err
+	}
+	inv, err := s.invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		return InspectResult{}, err
+	}
+	// Legacy shows armor only when a weapon is equipped ("if $p{wea}"), a copy
+	// defect; armor is shown whenever equipped.
+	return InspectResult{
+		CharacterID: char.ID, Name: char.Name, Gender: char.Gender, Level: char.Level,
+		JobID: char.JobID, SP: char.SP, OldJobID: char.OldJobID, OldSP: char.OldSP,
+		Tired: char.Tired, MaxHP: char.Stats.MaxHP, MaxMP: char.Stats.MaxMP,
+		Attack: char.Stats.Attack, Defense: char.Stats.Defense, Agility: char.Stats.Agility,
+		Weapon:    s.equippedInfo(equip, inv, coreitem.SlotMainHand, char.WeaponCustomName),
+		Armor:     s.equippedInfo(equip, inv, coreitem.SlotBody, char.ArmorCustomName),
+		Accessory: s.equippedInfo(equip, inv, coreitem.SlotAccessory, ""),
+		Self:      char.ID == inspectorID,
+	}, nil
+}
+
+func (s *Service) equippedInfo(equip coreequipment.Equipment, inv coreinventory.Inventory, slot coreitem.Slot, customName string) *EquippedItemInfo {
+	id, ok := equip.Equipped(slot)
+	if !ok {
+		return nil
+	}
+	inst, ok := inv.Find(id)
+	if !ok {
+		return nil
+	}
+	name := inst.DefinitionID
+	if s.catalog != nil {
+		if def, err := s.catalog.FindByID(inst.DefinitionID); err == nil && def.Name != "" {
+			name = def.Name
 		}
 	}
-
-	return res, nil
-}
-
-func (s *Service) GetVenueInfo() VenueInfo {
-	return VenueInfo{
-		Title:   VenueName,
-		NPCName: NPCName,
-	}
+	return &EquippedItemInfo{InstanceID: inst.ID, DefinitionID: inst.DefinitionID, Name: name, CustomName: customName, EnhancementLevel: inst.EnhancementLevel}
 }
