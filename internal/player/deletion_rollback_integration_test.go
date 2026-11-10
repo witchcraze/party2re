@@ -386,3 +386,143 @@ func TestMutualCharacterDeletionDoesNotDeadlock(t *testing.T) {
 		}
 	}
 }
+
+// lockOrderTx holds locks on a dedicated connection the way a competing operation does.
+type lockOrderTx struct {
+	*sql.Tx
+	thread int64
+}
+
+func beginLockOrderTx(t *testing.T, db *sql.DB) lockOrderTx {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback() })
+	l := lockOrderTx{Tx: tx}
+	if err := tx.QueryRowContext(ctx, `SELECT CONNECTION_ID()`).Scan(&l.thread); err != nil {
+		t.Fatal(err)
+	}
+	return l
+}
+
+func (l lockOrderTx) lock(table, id string) error {
+	var got string
+	return l.QueryRowContext(context.Background(), `SELECT id FROM `+table+` WHERE id = ? FOR UPDATE`, id).Scan(&got)
+}
+
+// lockMonitor opens an admin connection; reading lock waits needs the PROCESS privilege.
+func lockMonitor(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if dsn == "" {
+		t.Skip("PARTY2_TEST_DB_ADMIN_DSN is required to observe lock waits")
+	}
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// waitBlocked returns once another connection is executing a statement matching one of
+// patterns. Callers pass statements that can only be waiting on a lock l holds. PROCESSLIST
+// is used because MariaDB omits primary-key waits (state "Statistics") from INNODB_LOCK_WAITS.
+func (l lockOrderTx) waitBlocked(t *testing.T, db *sql.DB, done <-chan error, patterns ...string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for {
+		for _, p := range patterns {
+			var n int
+			if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.PROCESSLIST
+				WHERE ID <> ? AND INFO LIKE ?`, l.thread, p).Scan(&n); err != nil {
+				t.Fatal(err)
+			}
+			if n > 0 {
+				return
+			}
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("deletion finished without waiting on the competing lock: %v", err)
+		case <-ctx.Done():
+			t.Fatal("deletion never waited on the competing lock")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// BanPlayer locks the player row (Rank 1) before characters. Account deletion takes the
+// player row first too, so a concurrent ban waits instead of deadlocking.
+func TestAccountDeletionSerializesWithBanLockOrder(t *testing.T) {
+	f := newDeletionFixture(t)
+	ctx := context.Background()
+	owner, err := database.CreateTestPlayer(ctx, f.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := f.character(t, owner.ID)
+
+	monitor := lockMonitor(t)
+	ban := beginLockOrderTx(t, f.db)
+	if err := ban.lock("players", owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- f.accounts.DeleteAccount(ctx, owner.ID, "") }()
+	ban.waitBlocked(t, monitor, done,
+		"%FROM players WHERE id = ? FOR UPDATE", // current: player row first
+		"DELETE FROM players WHERE id = ?")      // previous order: player row last
+	if err := ban.lock("characters", a.ID); err != nil {
+		t.Fatalf("ban-order character lock: %v", err)
+	}
+	if err := ban.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("DeleteAccount: %v", err)
+	}
+}
+
+// PurchaseListing locks the listing (Rank 0) before the seller. Character deletion removes
+// listings before locking characters, so a concurrent purchase completes first.
+func TestCharacterDeletionSerializesWithListingPurchase(t *testing.T) {
+	f := newDeletionFixture(t)
+	ctx := context.Background()
+	seller := f.character(t, "")
+	listingID := id.New()
+	if _, err := f.db.ExecContext(ctx, `INSERT INTO fleamarket_listings (id, seller_character_id, seller_name, item_id, item_name, price)
+		VALUES (?, ?, ?, 'potion-01', 'potion', 100)`, listingID, seller.ID, seller.Name); err != nil {
+		t.Fatal(err)
+	}
+
+	monitor := lockMonitor(t)
+	purchase := beginLockOrderTx(t, f.db)
+	if err := purchase.lock("fleamarket_listings", listingID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- f.charSvc.Delete(ctx, seller.PlayerID, seller.ID) }()
+	purchase.waitBlocked(t, monitor, done, "DELETE FROM fleamarket_listings WHERE seller_character_id = ?")
+	if err := purchase.lock("characters", seller.ID); err != nil {
+		t.Fatalf("purchase-order seller lock: %v", err)
+	}
+	if err := purchase.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if f.count(t, `SELECT COUNT(*) FROM fleamarket_listings WHERE id = ?`, listingID) != 0 {
+		t.Fatal("listing survived seller deletion")
+	}
+}

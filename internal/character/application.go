@@ -24,8 +24,8 @@ type Repository interface {
 	FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error)
 	Update(ctx context.Context, value corecharacter.Character) error
 	Delete(ctx context.Context, id string) error
-	// DeleteChallengeAdmissions releases admissions no surviving participant needs (Rank 0).
-	DeleteChallengeAdmissions(ctx context.Context, id string) error
+	// DeleteSharedRows removes the character's Rank 0 rows (listings, sales, unneeded admissions).
+	DeleteSharedRows(ctx context.Context, id string) error
 }
 
 // CleanupHook releases feature-owned associations of characters being deleted. It runs
@@ -456,8 +456,8 @@ func (s *Service) DeleteByPlayerID(ctx context.Context, playerID string) error {
 	})
 }
 
-// deleteCharacters runs inside the caller's transaction in lock-rank order: challenge
-// admissions (Rank 0), cleanup hooks (characters ascending, then feature rows), then
+// deleteCharacters runs inside the caller's transaction in lock-rank order: shared rows
+// (Rank 0), cleanup hooks (characters ascending, then feature rows), then
 // each character's records in ascending ID order.
 func (s *Service) deleteCharacters(ctx context.Context, ids []string) error {
 	if len(ids) == 0 {
@@ -465,7 +465,7 @@ func (s *Service) deleteCharacters(ctx context.Context, ids []string) error {
 	}
 	slices.Sort(ids)
 	for _, id := range ids {
-		if err := s.repository.DeleteChallengeAdmissions(ctx, id); err != nil {
+		if err := s.repository.DeleteSharedRows(ctx, id); err != nil {
 			return err
 		}
 	}

@@ -19,10 +19,11 @@ Character deletion is one SQL transaction: guild departure (succession or
 dissolution, including its news) and the repository's dependent-record cleanup
 commit or roll back together, and a `CleanupHook` error aborts it. The concrete
 table list belongs to the [repository](../../internal/database/character_repository.go)
-and migrations. Locks follow the global rank order: unneeded Challenge admissions
-(Rank 0), then the deleted characters together with every member of their guilds
-in ascending ID order (Rank 2), then those guilds in ascending ID order (Rank 7),
-then dependent rows.
+and migrations. Locks follow the global rank order: the characters' Rank 0 rows
+(flea market listings, store sales and unneeded Challenge admissions), which
+purchases and run transitions lock before characters; then the deleted characters
+together with every member of their guilds in ascending ID order (Rank 2); then
+those guilds in ascending ID order (Rank 7); then dependent rows.
 
 Challenge admission is shared run evidence: deleting a departed original leader
 preserves the admission row while another participant's durable claim remains,
@@ -41,9 +42,11 @@ copies and leaves the counterpart's ([Home letters](home.md#2-player-to-player-l
 
 ### 3.2 Cleanup boundary
 
-One SQL transaction deletes every owned character under the
+One SQL transaction first locks the player row (Rank 1, as a ban does, so the two
+serialize), then deletes every owned character under the
 [character boundary](#22-cleanup-boundary) (one lock pass across all of them) and
-then the player row with its notifications and API tokens. Any failure, including
+finally the player row with its notifications and API tokens. The character Rank 0
+rows follow the player lock; their other lockers never wait on a player row. Any failure, including
 a failed character listing, leaves the account, its characters and guild state
 unchanged.
 

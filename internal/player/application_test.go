@@ -82,6 +82,10 @@ func (r *playerRepositoryStub) FindByID(context.Context, string) (coreplayer.Pla
 	return r.value, nil
 }
 
+func (r *playerRepositoryStub) FindByIDForUpdate(ctx context.Context, id string) (coreplayer.Player, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *playerRepositoryStub) Delete(context.Context, string) error {
 	if r.deleteErr != nil {
 		return r.deleteErr

@@ -35,6 +35,10 @@ func (m *memoryPlayerRepo) FindByUsername(_ context.Context, username string) (c
 	return coreplayer.Player{}, coreplayer.ErrAuthentication
 }
 
+func (m *memoryPlayerRepo) FindByIDForUpdate(ctx context.Context, id string) (coreplayer.Player, error) {
+	return m.FindByID(ctx, id)
+}
+
 func (m *memoryPlayerRepo) FindByID(_ context.Context, id string) (coreplayer.Player, error) {
 	p, ok := m.players[id]
 	if !ok {

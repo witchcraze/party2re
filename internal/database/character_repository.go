@@ -284,9 +284,24 @@ func hideDeletedCharacterLetters(ctx context.Context, exec sqlContextExecutor, i
 	return nil
 }
 
-// DeleteChallengeAdmissions removes the character's admission rows that no other participant
-// still claims. Character deletion calls it before locking characters (Rank 0 first).
-func (r *CharacterRepository) DeleteChallengeAdmissions(ctx context.Context, characterID string) error {
+// DeleteSharedRows removes the character's Rank 0 rows before character deletion locks any
+// character: flea market listings and store sales, which purchases lock before the seller,
+// and admission rows no other participant still claims. Delete repeats the listing/sale
+// cleanup for rows created afterward.
+func (r *CharacterRepository) DeleteSharedRows(ctx context.Context, characterID string) error {
+	exec := ExecutorFromContext(ctx, r.db)
+	for _, q := range []string{
+		`DELETE FROM fleamarket_listings WHERE seller_character_id = ?`,
+		`DELETE FROM store_sales WHERE character_id = ?`,
+	} {
+		if _, err := exec.ExecContext(ctx, q, characterID); err != nil {
+			return err
+		}
+	}
+	return r.deleteChallengeAdmissions(ctx, characterID)
+}
+
+func (r *CharacterRepository) deleteChallengeAdmissions(ctx context.Context, characterID string) error {
 	// Other participants retain admission through terminal publication acknowledgement.
 	const unused = `character_id = ? AND NOT EXISTS (
 		SELECT 1 FROM challenge_character_claims

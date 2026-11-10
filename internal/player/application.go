@@ -21,6 +21,7 @@ type PlayerRepository interface {
 	Save(context.Context, coreplayer.Player) error
 	FindByUsername(context.Context, string) (coreplayer.Player, error)
 	FindByID(context.Context, string) (coreplayer.Player, error)
+	FindByIDForUpdate(context.Context, string) (coreplayer.Player, error)
 	Delete(context.Context, string) error
 	List(ctx context.Context, sort string) ([]coreplayer.Player, error)
 	UpdateBannedAt(ctx context.Context, id string, bannedAt *time.Time) error
@@ -336,6 +337,11 @@ func (s *Service) DeleteAccount(ctx context.Context, playerID, password string) 
 
 	// Characters, guild departures and player rows (including API tokens) commit together.
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		// Rank 1 before characters, as BanPlayer does, so a concurrent ban serializes instead of deadlocking.
+		// Character deletion's Rank 0 rows follow; no Rank 0 holder waits on a player row.
+		if _, err := s.players.FindByIDForUpdate(txCtx, playerID); err != nil {
+			return err
+		}
 		if s.characters != nil {
 			if err := s.characters.DeleteByPlayerID(txCtx, playerID); err != nil {
 				return err

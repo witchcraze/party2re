@@ -81,6 +81,17 @@ func (r *PlayerRepository) FindByID(ctx context.Context, id string) (coreplayer.
 	return value, err
 }
 
+// FindByIDForUpdate locks the player row (Rank 1).
+func (r *PlayerRepository) FindByIDForUpdate(ctx context.Context, id string) (coreplayer.Player, error) {
+	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx,
+		fmt.Sprintf(`SELECT %s FROM players WHERE id = ? FOR UPDATE`, playerSelectColumns), id)
+	value, err := scanPlayer(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return coreplayer.Player{}, ErrPlayerNotFound
+	}
+	return value, err
+}
+
 func (r *PlayerRepository) List(ctx context.Context, sort string) ([]coreplayer.Player, error) {
 	var orderBy string
 	switch strings.ToLower(strings.TrimSpace(sort)) {

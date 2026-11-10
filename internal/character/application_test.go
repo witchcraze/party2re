@@ -114,8 +114,8 @@ func (r *mockRepository) SaveProfile(_ context.Context, profile Profile) error {
 	return nil
 }
 
-func (r *mockRepository) DeleteChallengeAdmissions(_ context.Context, id string) error {
-	r.deletionLog = append(r.deletionLog, "admissions:"+id)
+func (r *mockRepository) DeleteSharedRows(_ context.Context, id string) error {
+	r.deletionLog = append(r.deletionLog, "shared:"+id)
 	return r.err
 }
 
@@ -691,7 +691,7 @@ func TestService_Delete(t *testing.T) {
 		}
 	})
 
-	t.Run("player deletion releases admissions, runs hooks once, then deletes in ascending order", func(t *testing.T) {
+	t.Run("player deletion releases shared rows, runs hooks once, then deletes in ascending order", func(t *testing.T) {
 		repo := newMockRepository()
 		var hooked []string
 		service, _ := NewService(repo, WithCleanupHook(CleanupHookFunc(func(_ context.Context, ids ...string) error {
@@ -706,7 +706,7 @@ func TestService_Delete(t *testing.T) {
 		if err := service.DeleteByPlayerID(ctx, "player-123"); err != nil {
 			t.Fatalf("DeleteByPlayerID() error = %v", err)
 		}
-		want := []string{"admissions:" + lo, "admissions:" + hi, "hook", "delete:" + lo, "delete:" + hi}
+		want := []string{"shared:" + lo, "shared:" + hi, "hook", "delete:" + lo, "delete:" + hi}
 		if !slices.Equal(repo.deletionLog, want) || !slices.Equal(hooked, []string{lo, hi}) {
 			t.Fatalf("deletion order = %v (hook %v), want %v", repo.deletionLog, hooked, want)
 		}
