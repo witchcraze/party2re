@@ -27,15 +27,7 @@ func (r *inactiveInterceptingRepo) ListInactiveGuilds(ctx context.Context, cutof
 }
 
 func TestGuildService_DisbandInactiveGuilds_ReactivatedGuildPreserved_RealDB(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := guildIsolatedDB(t)
 
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {
@@ -118,15 +110,7 @@ func TestGuildService_DisbandInactiveGuilds_ReactivatedGuildPreserved_RealDB(t *
 }
 
 func TestGuildService_DisbandInactiveGuilds_DeterministicInterleaving_RealDB(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := guildIsolatedDB(t)
 
 	realRepo, err := database.NewGuildRepository(db)
 	if err != nil {
@@ -231,15 +215,7 @@ func TestGuildService_DisbandInactiveGuilds_DeterministicInterleaving_RealDB(t *
 }
 
 func TestGuildService_DisbandInactiveGuilds_ConcurrentRace_RealDB(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := guildIsolatedDB(t)
 
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {
