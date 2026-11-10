@@ -125,6 +125,11 @@ func TestDeparturePublication_FailureBoundaries(t *testing.T) {
 					}
 				}
 			}
+			// Warm this departure's Lua scripts before recording logical fault positions.
+			prepare(t)
+			if err := f.svc.LeaveRoom(ctx, f.roomID, f.actors[actor]); err != nil {
+				t.Fatal(err)
+			}
 			prepare(t)
 			if err := f.svc.LeaveRoom(ctx, f.roomID, f.actors[actor]); err != nil {
 				t.Fatal(err)
@@ -141,6 +146,10 @@ func TestDeparturePublication_FailureBoundaries(t *testing.T) {
 					f.fault.failAt = fail + 1
 					leaveErr := f.svc.LeaveRoom(ctx, f.roomID, f.actors[actor])
 					f.fault.failAt = 0
+					attempted := f.fault.getCalls()
+					if len(attempted) <= fail || attempted[fail] != call {
+						t.Fatalf("fault target %d/%s not reached: %v", fail+1, call, attempted)
+					}
 					if !errors.Is(leaveErr, errPublicationFault) || errors.Is(leaveErr, casino.ErrSecondarySync) != (fail > payload) {
 						t.Fatalf("failure at %s misclassified: %v", call, leaveErr)
 					}
