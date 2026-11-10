@@ -34,6 +34,8 @@ func TestGvGRepository(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	now := time.Now().UTC()
+
 	// 1. Create Guild A
 	charA, err := database.CreateTestCharacter(ctx, db, "GvG Leader A")
 	if err != nil {
@@ -51,11 +53,15 @@ func TestGvGRepository(t *testing.T) {
 		Points:            0,
 		Color:             "#FF3333",
 		Notice:            "Guild A",
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		LastActiveAt:      now,
 	}
 	memA := guild.Member{
 		GuildID:     guildA_ID,
 		CharacterID: charA.ID,
 		Role:        guild.RoleLeader,
+		JoinedAt:    now,
 	}
 	if _, _, _, err := guildRepo.CreateGuild(ctx, gA, memA, 5000); err != nil {
 		t.Fatalf("create guild A: %v", err)
@@ -78,11 +84,15 @@ func TestGvGRepository(t *testing.T) {
 		Points:            0,
 		Color:             "#6666FF",
 		Notice:            "Guild B",
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		LastActiveAt:      now,
 	}
 	memB := guild.Member{
 		GuildID:     guildB_ID,
 		CharacterID: charB.ID,
 		Role:        guild.RoleLeader,
+		JoinedAt:    now,
 	}
 	if _, _, _, err := guildRepo.CreateGuild(ctx, gB, memB, 5000); err != nil {
 		t.Fatalf("create guild B: %v", err)
