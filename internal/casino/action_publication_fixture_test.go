@@ -123,6 +123,7 @@ type publicationFixture struct {
 	actors     [2]string
 	game       casino.GameType
 	hookCalls  []publicationHookCall
+	hookErr    error
 }
 
 func newPublicationFixture(t *testing.T, ctx context.Context, db *sql.DB, raw valkeygo.Client, game casino.GameType, coinsB int64) *publicationFixture {
@@ -152,7 +153,7 @@ func newPublicationFixture(t *testing.T, ctx context.Context, db *sql.DB, raw va
 		f.fault.mu.Lock()
 		defer f.fault.mu.Unlock()
 		f.hookCalls = append(f.hookCalls, publicationHookCall{CharacterID: charID, GameName: gameName})
-		return nil
+		return f.hookErr
 	})
 	for i, coins := range []int64{500, coinsB} {
 		ch, err := database.CreateTestCharacterWithFunds(ctx, db, "Wager", int(coins*20))

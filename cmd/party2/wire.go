@@ -114,29 +114,8 @@ func wireHooks(
 		return misc.medal.RecordProgress(ctx, characterID, medal.MetricCasinoGames, 1)
 	})
 
-	cmbt.adv.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
-		_ = misc.medal.RecordProgress(ctx, characterID, medal.MetricAdventureVictories, 1)
-		if monstersDefeated > 0 {
-			_ = misc.medal.RecordProgress(ctx, characterID, medal.MetricMonstersSlain, monstersDefeated)
-		}
-		if goldEarned > 0 {
-			_ = misc.medal.RecordProgress(ctx, characterID, medal.MetricGoldEarned, goldEarned)
-		}
-		return nil
-	})
-
-	cmbt.party.SetVictoryHook(func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error {
-		for _, cID := range characterIDs {
-			_ = misc.medal.RecordProgress(ctx, cID, medal.MetricAdventureVictories, 1)
-			if monstersDefeated > 0 {
-				_ = misc.medal.RecordProgress(ctx, cID, medal.MetricMonstersSlain, monstersDefeated)
-			}
-			if goldEarned > 0 {
-				_ = misc.medal.RecordProgress(ctx, cID, medal.MetricGoldEarned, goldEarned)
-			}
-		}
-		return nil
-	})
+	cmbt.adv.SetVictoryHook(buildAdventureVictoryHook(misc.medal.RecordProgress))
+	cmbt.party.SetVictoryHook(buildPartyVictoryHook(misc.medal.RecordProgress))
 
 	if misc.collection != nil {
 		econ.depot.SetCollectionRecorder(misc.collection)

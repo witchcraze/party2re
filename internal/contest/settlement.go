@@ -252,6 +252,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 
 				if s.news != nil {
 					newsContent := fmt.Sprintf("★第%d回フォトコンテスト%d位 %s★", activeRound.Round, rank, entries[i].CharacterName)
+					//lint:ignore error-swallow best-effort informational news does not invalidate contest prizes
 					_ = s.news.PublishNews(txCtx, "contest", "フォトコンテスト結果発表", newsContent, "ワコール", now)
 				}
 			}

@@ -3,6 +3,8 @@ package collection
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"reflect"
 	"time"
 )
 
@@ -34,7 +36,10 @@ func (s *Service) completeMilestone(ctx context.Context, characterID, kind, lege
 	if newlyCompleted && s.newsPub != nil {
 		charName := s.resolveCharacterName(ctx, characterID)
 		msg := fmt.Sprintf(formatMsg, charName)
-		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
+		//lint:ignore error-swallow best-effort informational news does not invalidate collection completion
+		if err := s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC()); err != nil {
+			slog.WarnContext(ctx, "collection news failed", "error_type", reflect.TypeOf(err).String())
+		}
 	}
 	return nil
 }

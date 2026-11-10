@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"reflect"
 	"time"
 
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/party"
 )
 
@@ -27,6 +30,7 @@ func (s *Service) completeSealingBattle(ctx context.Context, partyID, leaderID s
 	}
 	var receipt *SealingSettlement
 	var original *party.Party
+	var slayerName string
 	known := false
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		var err error
@@ -35,7 +39,7 @@ func (s *Service) completeSealingBattle(ctx context.Context, partyID, leaderID s
 		if err != nil || receipt != nil {
 			return err
 		}
-		receipt, err = s.settleSealingBattle(txCtx, partyID, leaderID, &original)
+		receipt, slayerName, err = s.settleSealingBattle(txCtx, partyID, leaderID, &original)
 		return err
 	})
 	if err != nil && !known {
@@ -65,8 +69,25 @@ func (s *Service) completeSealingBattle(ctx context.Context, partyID, leaderID s
 	if receipt.Lobby.Party.LeaderCharacterID != leaderID {
 		return SealingBattleResult{}, ErrNotPartyLeader
 	}
-	if err := s.partyRepo.CleanupParty(ctx, receipt.Lobby); err != nil {
-		return receipt.Result, fmt.Errorf("sealing committed; cleanup pending: %w", err)
+	result := receipt.Result
+	result.BanquetHeld = false
+	if !known {
+		s.holdVictoryBanquet(ctx, &result, leaderID, slayerName)
 	}
-	return receipt.Result, nil
+	if err := s.partyRepo.CleanupParty(ctx, receipt.Lobby); err != nil {
+		return result, fmt.Errorf("sealing committed; cleanup pending: %w", err)
+	}
+	return result, nil
+}
+
+func (s *Service) holdVictoryBanquet(ctx context.Context, result *SealingBattleResult, slayerID, slayerName string) {
+	if result.Outcome != corebattle.OutcomeWin || s.victoryBanquetHook == nil {
+		return
+	}
+	//lint:ignore error-swallow best-effort ephemeral crowd after SQL commit; never replay an uncertain append
+	if err := s.victoryBanquetHook(ctx, result.StageID, result.StageName, slayerID, slayerName, stageTierFromID(result.StageID)); err != nil {
+		slog.WarnContext(ctx, "boss victory banquet failed", "error_type", reflect.TypeOf(err).String())
+		return
+	}
+	result.BanquetHeld = true
 }

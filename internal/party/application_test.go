@@ -1374,7 +1374,7 @@ func TestPartyService_StartPartyAdventure_PostAdventureHook(t *testing.T) {
 	var hookedCharIDs []string
 	svc.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
 		hookedCharIDs = append(hookedCharIDs, characterID)
-		return nil
+		return errors.New("tavern unavailable")
 	})
 
 	detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{

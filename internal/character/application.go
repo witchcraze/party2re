@@ -341,6 +341,7 @@ func (s *Service) ChangeName(ctx context.Context, characterID, newName string) (
 	if s.news != nil {
 		title := fmt.Sprintf("%sが %s と名前を変更", oldName, newName)
 		content := fmt.Sprintf("冒険者 %s が命名の館にて新しい名『%s』を授かりました。", oldName, newName)
+		//lint:ignore error-swallow best-effort informational news after the name change commits
 		_ = s.news.PublishNews(ctx, "character", title, content, "@マリナン", time.Now().UTC())
 	}
 

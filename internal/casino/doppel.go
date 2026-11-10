@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -341,7 +343,10 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 
 	if len(showdownWinners) > 0 && s.gamePlayedHook != nil {
 		for _, w := range showdownWinners {
-			_ = s.gamePlayedHook(ctx, w, "doppel")
+			//lint:ignore error-swallow best-effort medal progress must not fail a committed game
+			if err := s.gamePlayedHook(ctx, w, "doppel"); err != nil {
+				slog.WarnContext(ctx, "casino doppel progress failed", "error_type", reflect.TypeOf(err).String())
+			}
 		}
 	}
 	if readErr != nil {

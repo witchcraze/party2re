@@ -170,6 +170,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 	committed = true
 
 	if s.news != nil {
+		//lint:ignore error-swallow best-effort informational news after party creation commits
 		_ = s.news.PublishNews(
 			ctx,
 			"party",
