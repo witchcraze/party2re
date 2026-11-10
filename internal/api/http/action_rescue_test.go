@@ -70,6 +70,22 @@ func (f *rescueGatewayFixture) FindLatestByCharacterID(context.Context, string) 
 	return rescue.RescueRecord{}, rescue.ErrNoRescueRecord
 }
 
+func (f *rescueGatewayFixture) MarkApplied(context.Context, string, time.Time) error { return nil }
+
+func (f *rescueGatewayFixture) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return f.FindByID(ctx, id)
+}
+
+func (f *rescueGatewayFixture) RunInTx(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+// visibleRescue drops the internal deadline fields that the JSON result omits.
+func visibleRescue(r rescue.RescueRecord) rescue.RescueRecord {
+	r.SleepUntil, r.AppliedAt = time.Time{}, time.Time{}
+	return r
+}
+
 func (f *rescueGatewayFixture) ClearActiveActions(ctx context.Context, actor string) (bool, error) {
 	f.checkContext(ctx)
 	if actor != "hero" {
@@ -93,7 +109,7 @@ func (f *rescueGatewayFixture) ActivityKinds(ctx context.Context, owner, actor s
 }
 
 func (f *rescueGatewayFixture) router(timers timer.Service) http.Handler {
-	f.service = rescue.NewService(f, f, f, timers)
+	f.service = rescue.NewService(f, f, f, timers, f)
 	f.service.SetActivityReader(f)
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{},
 		WithRescue(f), WithPlayerContext(playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers)),
@@ -144,22 +160,27 @@ func TestRescueGatewaySuccessRecoveryAndRefresh(t *testing.T) {
 						f.profileErr = errors.New("secret profile store")
 					}
 				}
+				hasWork := state == "pending" || state == "processing" || state == "sleeping work"
+				wantClears := 0
+				if hasWork {
+					wantClears = 1
+				}
 				status, got := f.request(f.router(timers), `,"params":{"reason":" stuck "}`)
-				if status != 200 || f.executions != 1 || f.clears != 1 || f.sleepCalls != 0 || string(got["success"]) != "true" {
+				if status != 200 || f.executions != 1 || f.clears != wantClears || f.sleepCalls != 0 || string(got["success"]) != "true" {
 					t.Fatalf("status=%d calls=%d clears=%d: %s", status, f.executions, f.clears, got)
 				}
 				var result rescue.RescueRecord
 				if err := json.Unmarshal(got["result"], &result); err != nil {
 					t.Fatal(err)
 				}
-				if result != f.returned || result.Reason != "stuck" || result.CreatedAt.Before(f.before) || result.CreatedAt.After(f.after) {
+				if result != visibleRescue(f.returned) || result.Reason != "stuck" || result.CreatedAt.Before(f.before) || result.CreatedAt.After(f.after) {
 					t.Fatalf("lost service result: %+v", result)
 				}
 				wantSaves, wantPenalty := 0, 0
-				if state == "pending" || state == "processing" || state == "sleeping work" {
+				if hasWork {
 					wantSaves, wantPenalty = 1, rescue.DefaultPenaltySeconds
 				}
-				if f.saves != wantSaves || result.PenaltySeconds != wantPenalty || (wantSaves == 1 && result != f.saved) {
+				if f.saves != wantSaves || result.PenaltySeconds != wantPenalty || (wantSaves == 1 && result != visibleRescue(f.saved)) {
 					t.Fatalf("wrong rescue result/saves: %+v / %d", result, f.saves)
 				}
 				if refresh != "" {
@@ -234,7 +255,10 @@ func TestRescueGatewayRejectionsAndUnknownFailures(t *testing.T) {
 			f.executionErr = fmt.Errorf("wrapped: %w", rescue.ErrInvalidCharacterID)
 		}},
 		{"missing character", "stuck", "CHARACTER_NOT_FOUND", 404, func(f *rescueGatewayFixture) { f.findErr = fmt.Errorf("wrapped: %w", corecharacter.ErrNotFound) }},
-		{"cleanup failure", "stuck", "EXECUTION_FAILED", 500, func(f *rescueGatewayFixture) { f.clearErr = errors.New("secret cleanup store") }},
+		{"cleanup failure", "stuck", "EXECUTION_FAILED", 500, func(f *rescueGatewayFixture) {
+			f.actions = []scheduling.ScheduledAction{{ID: "work", ActorID: "hero", State: scheduling.StatePending}}
+			f.clearErr = errors.New("secret cleanup store")
+		}},
 		{"feature activity remains", "stuck", "RESCUE_ACTIVITY_REMAINING", 409, func(f *rescueGatewayFixture) {
 			f.actions = []scheduling.ScheduledAction{{ID: "work", ActorID: "hero", State: scheduling.StatePending}}
 			f.remaining = []string{"dungeon"}

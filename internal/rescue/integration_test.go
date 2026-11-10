@@ -3,6 +3,7 @@ package rescue_test
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,12 +14,11 @@ import (
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
-func TestRescueServiceIntegration_WithScheduling(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+// Concurrent rescues of one stuck character share one committed record and add
+// the penalty once to the existing sleep.
+func TestRescueServiceIntegration_ConcurrentRescueAddsOnePenalty(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_DB_DSN and PARTY2_VALKEY_ADDR are required")
 	}
 
 	ctx := context.Background()
@@ -27,6 +27,11 @@ func TestRescueServiceIntegration_WithScheduling(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	valkeyClient, err := vk.NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer valkeyClient.Close()
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -36,66 +41,58 @@ func TestRescueServiceIntegration_WithScheduling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	char, err := database.CreateTestCharacter(ctx, db, "RescueHero")
 	if err != nil {
 		t.Fatal(err)
 	}
+	schedService := scheduling.NewService(scheduling.NewValkeyRepository(valkeyClient))
+	timerSvc := timer.NewService(valkeyClient)
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM rescue_records WHERE character_id = ?`, char.ID)
+		_ = timerSvc.ReleaseLock(context.Background(), timer.CategorySleep, char.ID)
+		_, _ = schedService.CancelByActorID(context.Background(), char.ID)
+	})
 
-	var schedService *scheduling.Service
-	var schedRepo *scheduling.ValkeyRepository
-	var timerSvc timer.Service
-	if os.Getenv("PARTY2_VALKEY_ADDR") != "" {
-		valkeyClient, err := vk.NewClient()
-		if err == nil {
-			defer valkeyClient.Close()
-			schedRepo = scheduling.NewValkeyRepository(valkeyClient)
-			schedService = scheduling.NewService(schedRepo)
-			timerSvc = timer.NewService(valkeyClient)
-
-			// Enqueue a scheduled action for this character
-			_, err = schedService.Schedule(ctx, "adventure:complete", char.ID, map[string]string{"key": "val"}, time.Now().Add(1*time.Hour))
-			if err != nil {
-				t.Fatalf("failed to schedule action: %v", err)
-			}
-		}
+	if err := timerSvc.SetLock(ctx, timer.CategorySleep, char.ID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := schedService.Schedule(ctx, "adventure:complete", char.ID, map[string]string{"key": "val"}, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
 	}
 
-	svc := rescue.NewService(rescueRepo, charRepo, schedService, timerSvc)
-
+	svc := rescue.NewService(rescueRepo, charRepo, schedService, timerSvc, database.NewTransactionProvider(db))
 	now := time.Now().UTC()
-	rec, err := svc.EmergencyRescue(ctx, char.ID, "Stuck during integration test", now)
-	if err != nil {
-		t.Fatalf("EmergencyRescue failed: %v", err)
+	var wg sync.WaitGroup
+	errs := make([]error, 4)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = svc.EmergencyRescue(ctx, char.ID, "stuck", now)
+		}(i)
 	}
-	if rec.CharacterID != char.ID {
-		t.Errorf("expected character ID %s, got %s", char.ID, rec.CharacterID)
-	}
-
-	// Verify timer lock
-	if timerSvc != nil {
-		locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, char.ID)
-		if err != nil || !locked {
-			t.Errorf("expected sleep timer locked, got locked=%v, err=%v", locked, err)
-		}
-	}
-
-	// Verify penalty
-	underPenalty, _, err := svc.IsUnderPenalty(ctx, char.ID, now.Add(10*time.Second))
-	if err != nil || !underPenalty {
-		t.Errorf("expected under penalty, got %v (err: %v)", underPenalty, err)
-	}
-
-	// If valkey was tested, verify actions for this character are canceled/cleared
-	if schedRepo != nil {
-		due, err := schedRepo.FetchDue(ctx, time.Now().Add(2*time.Hour), 10)
+	wg.Wait()
+	for _, err := range errs {
 		if err != nil {
-			t.Fatalf("FetchDue failed: %v", err)
+			t.Fatalf("concurrent rescue failed: %v", err)
 		}
-		for _, action := range due {
-			if action.ActorID == char.ID {
-				t.Errorf("scheduled action for %s was not canceled", char.ID)
-			}
-		}
+	}
+
+	var records, unapplied int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), COUNT(*) - COUNT(applied_at) FROM rescue_records WHERE character_id = ?`, char.ID).Scan(&records, &unapplied); err != nil {
+		t.Fatal(err)
+	}
+	if records != 1 || unapplied != 0 {
+		t.Fatalf("records=%d unapplied=%d, want one confirmed record", records, unapplied)
+	}
+	rem, err := timerSvc.GetRemainingLock(ctx, timer.CategorySleep, char.ID)
+	if err != nil || rem < time.Hour+590*time.Second || rem > time.Hour+600*time.Second {
+		t.Fatalf("sleep remaining = %v (err %v), want existing hour + 600s once", rem, err)
+	}
+	if pending, err := schedService.FindPendingByActorID(ctx, char.ID); err != nil || len(pending) != 0 {
+		t.Fatalf("scheduled work remains: %v (err %v)", pending, err)
+	}
+	if under, remaining, err := svc.IsUnderPenalty(ctx, char.ID, now.Add(10*time.Second)); err != nil || !under || remaining < time.Hour {
+		t.Fatalf("penalty status = %v %v (err %v)", under, remaining, err)
 	}
 }

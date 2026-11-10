@@ -23,10 +23,10 @@ Helper quests (`helper.cgi`) are a request board where players turn in Depot ite
 
 ## Emergency rescue
 
-`rescue.cgi:17–21,53–70` clears saved activity and adds sleep; an idle player gets no penalty. The reconstruction adds 600 seconds to any remaining sleep and never shortens it (`rescue.cgi:58–59`); with nothing to clear there is no penalty, timer or record (`rescue.cgi:56–65`). Rescue is allowed during sleep.
+`rescue.cgi:17–21,53–70` clears saved activity and adds sleep; an idle player gets no penalty. The reconstruction adds 600 seconds to any remaining sleep and never shortens it (`rescue.cgi:58–59`); with no pending scheduled work there is no penalty, timer or record (`rescue.cgi:56–65`). Rescue is allowed during sleep.
 
 **Pitfall:** legacy `refresh_player` empties only the screen module `$m{lib}`; quest/room membership (`$m{quest}`) and its files survive, so rescue never ended activities.
 
 **Decision (#1099):** rescue (player and admin unstuck) clears only scheduled actions. Before any change it reads the same activity facts as the character context (adventure, party, PvP including SQL claims without a live room, GvG, dungeon, challenge, casino); if any remain it returns `RESCUE_ACTIVITY_REMAINING` (admin: 409) and changes nothing. Those activities end only through their owners' commands; rescue adds no forced exit or settlement rule. A PvP claim left after live-room loss has no owner exit yet (#2012).
 
-Open: cleanup, record and timer are not atomic, and a failed sleep read can overwrite existing sleep (#1100).
+**Decision (#1100):** legacy saves the cleared module and the added sleep in one `write_user`; here they span SQL and Valkey without atomicity. Rescue first commits a `rescue_records` row holding the owed deadline (remaining sleep + 600 s), then clears scheduled work, raises the sleep timer to that deadline (never lowers it) and confirms the row. A failed sleep read or save changes nothing; a later failure returns an error with the row unconfirmed, and the next rescue resumes that row instead of charging again. The character row lock makes concurrent requests share one row. The rescue penalty status reports the owed deadline, including an unconfirmed one.

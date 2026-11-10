@@ -303,5 +303,5 @@ handling and bounded traversal follow [terminal recovery](#scheduled-terminal-pe
 Actor cancellation removes queue membership, payload and lock per action before
 deleting the actor index. A failure halts later destructive cleanup, preserves
 the actor index for discovery/retry and returns the error plus successful count.
-An empty/missing index succeeds with zero actions. `ClearActiveActions` reports
-`cleared=false` on failure so Rescue cannot charge a penalty on a false clean slate.
+An empty/missing index succeeds with zero actions. Rescue commits its penalty
+before cancelling and resumes it after a failure ([rescue](../design/rescue-and-helper.md#emergency-rescue)).
