@@ -245,6 +245,32 @@ func TestAccessorySynthesis_MissingMaterials(t *testing.T) {
 	}
 }
 
+func TestAccessorySynthesis_PreservesCharacterReadFailure(t *testing.T) {
+	ctx := context.Background()
+	svc, charRepo, invRepo, depotRepo, _ := setupAccessoryTestService(t)
+	char := corecharacter.Character{ID: "char-synth-fail", JobLevel: 50}
+	_ = charRepo.Update(ctx, char)
+	_ = invRepo.Save(ctx, coreinventory.Inventory{CharacterID: char.ID})
+	dep, _ := depot.NewDepotWithCapacity(char.ID, 50, 0, 0)
+	for _, id := range []string{"item-016", "item-064"} {
+		mat, _ := item.NewInstance(id, 1)
+		_ = dep.AddItem(mat)
+	}
+	_ = depotRepo.Save(ctx, dep)
+
+	if _, err := svc.Synthesize(ctx, "missing", "命の宝珠"); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("missing character: got %v", err)
+	}
+	storage := errors.New("storage down")
+	charRepo.findErr = storage
+	if _, err := svc.Synthesize(ctx, char.ID, "命の宝珠"); !errors.Is(err, storage) || errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("storage failure: got %v", err)
+	}
+	if got, _ := depotRepo.FindByCharacterID(ctx, char.ID); len(got.Items) != 2 {
+		t.Fatalf("materials changed after failed read: %d", len(got.Items))
+	}
+}
+
 func TestAccessorySynthesis_UnknownRecipe(t *testing.T) {
 	ctx := context.Background()
 	svc, charRepo, invRepo, _, _ := setupAccessoryTestService(t)

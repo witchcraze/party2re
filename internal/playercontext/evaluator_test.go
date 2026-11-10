@@ -81,7 +81,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "lottery_takarakuji_buy", "tavern_order", "contest_enter",
 			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
-			"helper_complete", "park_post", "rescue_request",
+			"helper_complete", "park_post", "player_inspect", "rescue_request",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 			"exile_petition", "exile_approve", "exile_oppose",
 		}},
@@ -93,7 +93,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "contest_enter",
 			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
-			"helper_complete", "park_post", "rescue_request",
+			"helper_complete", "park_post", "player_inspect", "rescue_request",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 			"exile_petition", "exile_approve", "exile_oppose",
 		}},
@@ -106,7 +106,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		{"processing", func(s *Snapshot) {
 			s.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StateProcessing}}
 		}, []string{"rescue_request"}},
-		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "secretshop_puffpuff", "rescue_request"}},
+		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "secretshop_puffpuff", "player_inspect", "rescue_request"}},
 		{"all constraints", func(s *Snapshot) {
 			s.Character.Stats.HP = 0
 			s.Character.Tired = 100
@@ -124,7 +124,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 67 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 68 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -144,8 +144,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 60 {
-		t.Fatalf("exhausted action count = %d, want 60", len(got))
+	if len(got) != 61 {
+		t.Fatalf("exhausted action count = %d, want 61", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request"} {
 		if !slices.Contains(got, action) {

@@ -2,84 +2,60 @@ package http
 
 import (
 	"context"
-	"errors"
-	"net/http"
+	"encoding/json"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/auction"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 )
 
-// AuctionService defines the live P2P auction operations exposed over HTTP.
+// AuctionService defines the live P2P auction send exposed through the Gateway.
 type AuctionService interface {
 	Send(ctx context.Context, req auction.SendRequest) (auction.SendResult, error)
-	Inspect(ctx context.Context, inspectorCharacterID, targetCharacterID string) (auction.InspectResult, error)
-	InspectByName(ctx context.Context, inspectorCharacterID, targetName string) (auction.InspectResult, error)
-	GetVenueInfo() auction.VenueInfo
 }
 
-func (h *Handler) handleAuctionInspect(w http.ResponseWriter, r *http.Request) {
-	if h.auctions == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
-		return
+// PlayerInspection is the common しらべる result for another player or the actor
+// (lib/system.cgi shiraberu). Guild, gems, message and presence come from their
+// owning features; gem IDs are the custom skill's non-empty slots in order.
+type PlayerInspection struct {
+	auction.InspectResult
+	GuildID       string     `json:"guild_id"`
+	GuildName     string     `json:"guild_name"`
+	Gems          []string   `json:"gems"`
+	LoginMessage  string     `json:"login_message"`
+	Online        bool       `json:"online"`
+	LastUpdatedAt *time.Time `json:"last_updated_at"`
+}
+
+// PlayerInspector composes PlayerInspection at the composition root. An omitted
+// or missing target inspects the actor, as legacy does.
+type PlayerInspector interface {
+	InspectPlayer(ctx context.Context, actorID, targetID, targetName string) (PlayerInspection, error)
+}
+
+type playerInspectParams struct {
+	TargetCharacterID   string `json:"target_character_id,omitempty"`
+	TargetCharacterName string `json:"target_character_name,omitempty"`
+}
+
+func (p *playerInspectParams) UnmarshalJSON(raw []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
 	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		targetID := r.URL.Query().Get("target_character_id")
-		if targetID == "" {
-			targetID = r.URL.Query().Get("target_id")
-		}
-		targetName := r.URL.Query().Get("target_name")
-
-		if targetID == "" && targetName == "" {
-			writeError(w, http.StatusBadRequest, errors.New("target_id or target_name is required"))
-			return
-		}
-
-		var res auction.InspectResult
-		var err error
-		if targetID != "" {
-			res, err = h.auctions.Inspect(r.Context(), char.ID, targetID)
-		} else {
-			res, err = h.auctions.InspectByName(r.Context(), char.ID, targetName)
-		}
-
-		if err != nil {
-			if errors.Is(err, auction.ErrTargetNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, res)
-	})
-}
-
-var auctionDialogue = []string{
-	"ここはオークション会場です。他のプレイヤーとアイテム交換やアイテム売買をする場所です。",
-	"入札や出品のようなシステムはないです。自由に競りをしてください。",
-	"相手が実際にそのアイテムや落札金を持っているのか「＠しらべる」で見ることができます。",
-}
-
-type auctionVenueInfoResponse struct {
-	Title    string   `json:"title"`
-	NPCName  string   `json:"npc_name"`
-	Dialogue []string `json:"dialogue"`
-}
-
-func (h *Handler) handleAuctionVenueInfo(w http.ResponseWriter, r *http.Request) {
-	if h.auctions == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
-		return
+	present := make([]string, 0, len(fields))
+	for name := range fields {
+		present = append(present, name)
 	}
+	type params playerInspectParams
+	return decodeActionParams(raw, present, (*params)(p))
+}
 
-	info := h.auctions.GetVenueInfo()
-	writeJSON(w, http.StatusOK, auctionVenueInfoResponse{
-		Title:    info.Title,
-		NPCName:  info.NPCName,
-		Dialogue: auctionDialogue,
-	})
+// WithPlayerInspect connects the common player_inspect command.
+func WithPlayerInspect(inspector PlayerInspector) Option {
+	if inspector == nil {
+		return withActionCommand[playerInspectParams]("player_inspect", nil, nil)
+	}
+	return withActionCommand("player_inspect", func(ctx context.Context, actorID string, p playerInspectParams) (any, error) {
+		return inspector.InspectPlayer(ctx, actorID, p.TargetCharacterID, p.TargetCharacterName)
+	}, nil)
 }

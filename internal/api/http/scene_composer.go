@@ -93,6 +93,8 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "depot":
 			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}
 			adapter.read = h.depotSceneData
+		case "auction":
+			adapter.title, adapter.commands = "オークション会場", []string{"auction_send"}
 		case "fleamarket":
 			adapter.title, adapter.commands = "フリーマーケット", []string{"fleamarket_list", "fleamarket_purchase", "fleamarket_cancel"}
 			adapter.read = h.fleaMarketSceneData
@@ -325,7 +327,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			}
 		}
 	}
-	choices = append(choices, "home_wake", "rescue_request")
+	choices = append(choices, "player_inspect", "home_wake", "rescue_request")
 	for _, def := range playercontext.DefaultCatalog {
 		if !slices.Contains(choices, def.ID) {
 			continue

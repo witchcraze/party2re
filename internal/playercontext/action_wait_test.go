@@ -56,9 +56,9 @@ func TestCatalogWaitDispositions(t *testing.T) {
 			if def.WaitExempt != WaitNavigation {
 				t.Errorf("%s: navigation must not start the wait", def.ID)
 			}
-		case def.ID == "npc_inspect":
+		case def.ID == "npc_inspect" || def.ID == "player_inspect":
 			if def.WaitExempt != WaitPrivate {
-				t.Errorf("%s: legacy shiraberu_npc answers with a private $mes", def.ID)
+				t.Errorf("%s: legacy shiraberu answers with a private $mes", def.ID)
 			}
 		case def.ID == "home_wake" || def.ID == "rescue_request":
 			if def.WaitExempt != WaitRecovery {

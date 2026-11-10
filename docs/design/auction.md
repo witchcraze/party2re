@@ -9,8 +9,8 @@ without certifying full legacy parity.
 
 In original Party2, the "Auction Hall" (オークション会場) is not an asynchronous automated auction house with server-side bids, listings, or buyouts. Instead, it is a venue for **live, player-to-player (P2P) trading and unscripted bartering**, overseen by NPC **@ワイルド**.
 
-The HTTP layer owns the venue dialogue in
-[`auction.go`](../../internal/api/http/auction.go).
+The venue is the `auction` scene; `@ワイルド`'s words are an HTTP-owned NPC
+profile in [`action_npc.go`](../../internal/api/http/action_npc.go).
 
 ---
 
@@ -36,11 +36,24 @@ Players negotiate auction terms in real-time chat and settle trades via direct t
   - Target ID takes precedence over target name; positive gold takes precedence
     over an item, and an equipped slot takes precedence over an instance ID.
 
-### 2. Player Inspection (@しらべる / Inspect)
+### 2. Player Inspection (@しらべる)
 
-To prevent trade fraud and verify solvency during bidding:
-- Players can inspect any target player by character ID or name.
-- Returns target character's Level, Job, Job Level, Wallet Money, and currently equipped Weapon, Armor, and Accessory (with enhancement levels).
+`しらべる` on a player is the common `system.cgi` `shiraberu`, available in every
+place, not an Auction rule; the venue words only advertise it. It is the
+scene-independent `player_inspect` command, whose status projection is
+`auction.Service.Inspect` composed with guild, custom-skill gems, login message
+and presence at the composition root.
+
+- **Self fallback:** an omitted or nonexistent target shows the actor's own
+  status, as legacy does (`system.cgi:385`). Self-only legacy facts (money,
+  coins, medals, next-level experience) are already in the actor's context.
+- **No wallet money:** legacy never shows another player's money; the "落札金"
+  in the venue words cannot actually be checked.
+- **Armor defect:** legacy prints armor only `if $p{wea}` (`system.cgi:373,402`),
+  a copy of the weapon condition. Armor is shown whenever equipped.
+- **Gaps:** where an online target currently is (home, quest or place) and gem
+  names are not projected yet ([#2024](https://github.com/witchcraze/party2re/issues/2024));
+  gem IDs are returned in slot order.
 
 ---
 
@@ -63,15 +76,11 @@ instance/definition/name/enhancement and message. The shared
 [command outcome contract](../architecture/client-agent-api.md#command-outcome-and-context-refresh)
 preserves known outcomes when refresh fails; recovery reads context without replay.
 
-| Legacy action / current operation | Disposition |
+| Legacy action | Disposition |
 | --- | --- |
-| `auction.cgi:36–38,42–123`, `おくる` / `okuru` | `auction_send`; replaces both `POST /characters/{id}/auction/send` and the body-sender alias `POST /auction/send`. No body sender override survives. |
-| Common `はなす`, `system.cgi:10–24`; venue dialogue in `auction.cgi:26–30` | Retain public `GET /auction/hall` until a verified context replacement; this route is not a permanent public exception. |
-| Common `しらべる`, `system.cgi:320–395` | Retain owned-viewer `GET /characters/{id}/auction/inspect` with explicit target ID/name; target observation and legacy NPC/self inspection remain separate migration work. |
-
-Command connection does not provide an Auction context scene or certify either
-retained read. Their required fields, errors and visibility still need verification
-under [the Economy migration](https://github.com/witchcraze/party2re/issues/947).
+| `auction.cgi` `おくる` / `okuru` | `auction_send` in the `auction` scene. No body sender override survives. |
+| Common `はなす` (`system.cgi:240–246`), venue words | `npc_talk` in the `auction` scene; NPC `しらべる` is `npc_inspect`. |
+| Common `しらべる` on a player (`system.cgi:320–410`) | `player_inspect` (above). No Auction REST read remains. |
 
 ### Legacy differences still requiring reconciliation
 
@@ -82,6 +91,3 @@ queue/destination and wallet-overflow policy are tracked in
 this transport change does not resolve them. Go additionally accepts explicit
 inventory instances and shield slots; legacy offers the currently equipped weapon,
 armor or accessory.
-Inspection currently projects a smaller set of facts than common legacy
-`shiraberu`; its repository enrichment errors also need correction before its
-replacement observation or route retirement can be certified.

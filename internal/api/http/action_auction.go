@@ -31,21 +31,17 @@ func (p *auctionSendParams) UnmarshalJSON(raw []byte) error {
 	return decodeActionParams(raw, present, (*params)(p))
 }
 
-// WithAuction configures retained Auction reads and its Gateway send command.
+// WithAuction connects the auction_send Gateway command.
 func WithAuction(service AuctionService) Option {
-	return func(h *Handler) {
-		h.auctions = service
-		if service == nil {
-			withActionCommand[auctionSendParams]("auction_send", nil, nil)(h)
-			return
-		}
-		withActionCommand("auction_send", func(ctx context.Context, actorID string, p auctionSendParams) (any, error) {
-			return service.Send(ctx, auction.SendRequest{
-				SenderCharacterID: actorID, TargetCharacterID: p.TargetCharacterID, TargetCharacterName: p.TargetCharacterName,
-				Gold: p.Gold, Slot: p.Slot, InstanceID: p.InstanceID,
-			})
-		}, auctionActionRejection)(h)
+	if service == nil {
+		return withActionCommand[auctionSendParams]("auction_send", nil, nil)
 	}
+	return withActionCommand("auction_send", func(ctx context.Context, actorID string, p auctionSendParams) (any, error) {
+		return service.Send(ctx, auction.SendRequest{
+			SenderCharacterID: actorID, TargetCharacterID: p.TargetCharacterID, TargetCharacterName: p.TargetCharacterName,
+			Gold: p.Gold, Slot: p.Slot, InstanceID: p.InstanceID,
+		})
+	}, auctionActionRejection)
 }
 
 func auctionActionRejection(err error) (int, ErrorDetail) {

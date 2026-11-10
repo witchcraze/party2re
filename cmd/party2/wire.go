@@ -15,7 +15,6 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/contest"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
@@ -344,6 +343,7 @@ func newHTTPHandler(
 		http.WithGvG(cmbt.gvg),
 		http.WithReplay(cmbt.replay),
 		http.WithAuction(econ.auction),
+		http.WithPlayerInspect(playerInspectAdapter{status: econ.auction, guild: soc.guild, skills: cmbt.customSkill, presence: core.presence, now: time.Now}),
 		http.WithNotification(soc.notification),
 		http.WithHome(soc.home),
 		http.WithCustomSkill(cmbt.customSkill),
@@ -369,48 +369,6 @@ func newHTTPHandler(
 	)
 
 	return http.NewHandler(core.playerService, core.charService, cmbt.adv, econ.shop, opts...)
-}
-
-type homePetAdapter struct {
-	monsterRepo    *database.MonsterRepository
-	homeMemberRepo *database.HomeMemberRepository
-}
-
-func (a *homePetAdapter) ListHomePets(ctx context.Context, characterID string) ([]home.HomePet, error) {
-	var res []home.HomePet
-
-	if a.monsterRepo != nil {
-		monsters, err := a.monsterRepo.ListByCharacterIDAndLocation(ctx, characterID, monster.LocationHome)
-		if err != nil {
-			return nil, err
-		}
-		for _, m := range monsters {
-			res = append(res, home.HomePet{
-				ID:         m.ID,
-				CustomName: m.CustomName,
-				MonsterID:  m.MonsterID,
-			})
-		}
-	}
-
-	if a.homeMemberRepo != nil {
-		members, err := a.homeMemberRepo.FindByCharacterID(ctx, characterID)
-		if err != nil {
-			return nil, err
-		}
-		for _, m := range members {
-			if !m.IsNPC {
-				continue
-			}
-			res = append(res, home.HomePet{
-				ID:         m.ID,
-				CustomName: m.Name,
-				MonsterID:  m.Icon,
-			})
-		}
-	}
-
-	return res, nil
 }
 
 type monsterTamerAdapter struct {

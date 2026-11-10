@@ -15,8 +15,9 @@ import (
 )
 
 type characterRepoStub struct {
-	mu    sync.Mutex
-	chars map[string]corecharacter.Character
+	mu      sync.Mutex
+	chars   map[string]corecharacter.Character
+	findErr error // injected read failure
 }
 
 func newCharacterRepoStub() *characterRepoStub {
@@ -26,6 +27,9 @@ func newCharacterRepoStub() *characterRepoStub {
 func (r *characterRepoStub) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.findErr != nil {
+		return corecharacter.Character{}, r.findErr
+	}
 	c, ok := r.chars[id]
 	if !ok {
 		return corecharacter.Character{}, corecharacter.ErrNotFound

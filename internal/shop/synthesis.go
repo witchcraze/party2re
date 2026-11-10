@@ -47,7 +47,7 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeTarg
 		// 1. Lock Character (Rank 2)
 		char, err := s.findCharacter(txCtx, characterID)
 		if err != nil {
-			return corecharacter.ErrNotFound
+			return err
 		}
 
 		// 2. Lock Inventory (Rank 3)

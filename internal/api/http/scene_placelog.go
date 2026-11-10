@@ -28,7 +28,7 @@ type PlaceLogEntry struct {
 // ($this_file in their lib/*.cgi). Owner-scoped places (home, store, guild)
 // connect with their own scenes.
 var placeLogFacilities = map[string]bool{
-	"alchemy": true, "bank": true, "blackmarket": true, "blacksmith": true, "casino": true,
+	"alchemy": true, "auction": true, "bank": true, "blackmarket": true, "blacksmith": true, "casino": true,
 	"chapel": true, "depot": true, "fleamarket": true, "gemstore": true, "secretshop": true,
 	"shop_weapon": true, "shop_armor": true, "shop_item": true, "shop_accessory": true,
 }
