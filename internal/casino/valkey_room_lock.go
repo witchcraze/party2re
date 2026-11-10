@@ -13,6 +13,8 @@ import (
 const (
 	// DefaultRoomLockKeyPrefix is the Valkey key prefix for room-level distributed locks.
 	DefaultRoomLockKeyPrefix = "party2:casino:lock:room:"
+	// DefaultCharacterLockKeyPrefix serializes admission across independently locked rooms.
+	DefaultCharacterLockKeyPrefix = "party2:casino:lock:character:"
 	// DefaultRoomLockTTL is the distributed lock expiration safety TTL.
 	DefaultRoomLockTTL = 10 * time.Second
 	// DefaultRoomLockRetryWait is the backoff sleep between failed lock attempts.
@@ -40,9 +42,31 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 	if isRoomLocked(ctx, roomID) {
 		return fn(ctx)
 	}
+	startWait := time.Now()
+	var startHold time.Time
+	err := v.withLockKey(ctx, DefaultRoomLockKeyPrefix+roomID, func(ctx context.Context) error {
+		startHold = time.Now()
+		return fn(withRoomLockedContext(ctx, roomID))
+	})
+	if roomLockObserver != nil {
+		if startHold.IsZero() {
+			roomLockObserver(time.Since(startWait), 0, false, err)
+		} else {
+			roomLockObserver(startHold.Sub(startWait), time.Since(startHold), true, err)
+		}
+	}
+	return err
+}
 
+// Room locks always precede the character admission lock; admission never locks another room.
+func (v *ValkeyRoomRepository) withAdmissionLock(ctx context.Context, roomID, characterID string, fn func(context.Context) error) error {
+	return v.WithRoomLock(ctx, roomID, func(ctx context.Context) error {
+		return v.withLockKey(ctx, DefaultCharacterLockKeyPrefix+characterID, fn)
+	})
+}
+
+func (v *ValkeyRoomRepository) withLockKey(ctx context.Context, lockKey string, fn func(context.Context) error) error {
 	token := id.New()
-	lockKey := DefaultRoomLockKeyPrefix + roomID
 	lockTTL := int64(DefaultRoomLockTTL.Seconds())
 	if lockTTL < 1 {
 		lockTTL = 1
@@ -53,7 +77,6 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 		deadline = time.Now().Add(DefaultRoomLockTimeout)
 	}
 
-	startWait := time.Now()
 	acquired := false
 	for time.Now().Before(deadline) {
 		cmd := v.client.B().Set().Key(lockKey).Value(token).Nx().ExSeconds(lockTTL).Build()
@@ -74,12 +97,8 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 	}
 
 	if !acquired {
-		if roomLockObserver != nil {
-			roomLockObserver(time.Since(startWait), 0, false, errors.New("timeout"))
-		}
-		return errors.New("failed to acquire casino room lock: timeout")
+		return errors.New("failed to acquire casino lock: timeout")
 	}
-	waitDur := time.Since(startWait)
 
 	defer func() {
 		relCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -87,12 +106,5 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 		_ = releaseRoomLockScript.Exec(relCtx, v.client, []string{lockKey}, []string{token})
 	}()
 
-	lockedCtx := withRoomLockedContext(ctx, roomID)
-	startHold := time.Now()
-	err := fn(lockedCtx)
-	holdDur := time.Since(startHold)
-	if roomLockObserver != nil {
-		roomLockObserver(waitDur, holdDur, true, err)
-	}
-	return err
+	return fn(ctx)
 }
