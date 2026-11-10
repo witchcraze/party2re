@@ -14,13 +14,22 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// gateGuildRepository intercepts GetGuildForUpdate to allow deterministic
-// execution of interleaved operations between succession evaluation and disbandment.
+// gateGuildRepository runs interleaved operations at deterministic points of a
+// departure: after unlocked discovery but before any lock, or before disbandment.
 type gateGuildRepository struct {
 	*database.GuildRepository
 	getGuildForUpdateHook func(ctx context.Context, guildID string, callCount int)
+	beforeLockHook        func()
 	beforeDisbandHook     func(ctx context.Context, guildID string)
 	callCount             atomic.Int64
+	lockCount             atomic.Int64
+}
+
+func (r *gateGuildRepository) LockCharacterForUpdate(ctx context.Context, characterID string) error {
+	if r.lockCount.Add(1) == 1 && r.beforeLockHook != nil {
+		r.beforeLockHook()
+	}
+	return r.GuildRepository.LockCharacterForUpdate(ctx, characterID)
 }
 
 func (r *gateGuildRepository) GetGuildForUpdate(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
@@ -42,8 +51,8 @@ func TestGuildSuccession_RevalidateSuccessor_ApprovedDuringDeparture(t *testing.
 	// Reproduction & Acceptance Criteria #1:
 	// Guild A leader L, Guild B leader LB, character C.
 	// C is pending in A and active in B.
-	// L calls Leave(A, L). C is initially judged ineligible (active in B).
-	// Before Step 3 executes GetGuildForUpdate(A), C leaves B and is approved in A as formal member.
+	// L calls Leave(A, L). After unlocked discovery but before any lock,
+	// C leaves B and is approved in A as formal member.
 	// Leave resumes: must NOT disband A; must promote C to leader and remove L only.
 	f := newActiveAffiliationFixture(t)
 	ctx := context.Background()
@@ -79,13 +88,8 @@ func TestGuildSuccession_RevalidateSuccessor_ApprovedDuringDeparture(t *testing.
 
 	hookExecuted := false
 	gateRepo := &gateGuildRepository{GuildRepository: f.repo}
-	gateRepo.getGuildForUpdateHook = func(hookCtx context.Context, guildID string, callCount int) {
-		if guildID != gA.ID {
-			return
-		}
-		// callCount == 1: Step 2 evaluating candidate (candidate is active in B, rolls back)
-		// callCount == 2: Step 3 about to lock guild for disbandment!
-		if callCount == 2 && !hookExecuted {
+	gateRepo.beforeLockHook = func() {
+		if !hookExecuted {
 			hookExecuted = true
 			// Interleaved operation: C leaves B, L approves C in A as formal member
 			if err := f.service.Leave(ctx, gB.ID, candidate.ID); err != nil {
@@ -136,8 +140,8 @@ func TestGuildSuccession_RevalidateSuccessor_ApprovedDuringDeparture(t *testing.
 func TestGuildSuccession_RevalidateSuccessor_LeftOtherGuildDuringDeparture(t *testing.T) {
 	// Acceptance Criteria #2:
 	// C is pending in A, active in B.
-	// L calls Leave(A, L). C is initially judged ineligible (active in B).
-	// Before Step 3 disbandment, C leaves B only (now pending in A with 0 active guilds).
+	// L calls Leave(A, L). After unlocked discovery but before any lock,
+	// C leaves B only (now pending in A with 0 active guilds).
 	// Leave resumes: must NOT disband A; must promote pending C to leader and remove L only.
 	f := newActiveAffiliationFixture(t)
 	ctx := context.Background()
@@ -169,11 +173,8 @@ func TestGuildSuccession_RevalidateSuccessor_LeftOtherGuildDuringDeparture(t *te
 
 	hookExecuted := false
 	gateRepo := &gateGuildRepository{GuildRepository: f.repo}
-	gateRepo.getGuildForUpdateHook = func(hookCtx context.Context, guildID string, callCount int) {
-		if guildID != gA.ID {
-			return
-		}
-		if callCount == 2 && !hookExecuted {
+	gateRepo.beforeLockHook = func() {
+		if !hookExecuted {
 			hookExecuted = true
 			// Interleaved operation: C leaves B only (C is still pending in A, now 0 active affiliations)
 			if err := f.service.Leave(ctx, gB.ID, candidate.ID); err != nil {
@@ -309,7 +310,7 @@ func (r *errorInjectGateRepo) GetGuildByCharacter(ctx context.Context, character
 
 func TestGuildSuccession_RevalidateSuccessor_DBErrorPropagation(t *testing.T) {
 	// Acceptance Criteria #5:
-	// Database error during GetGuildByCharacter in Step 3 must propagate and abort disbandment.
+	// Database error during the locked candidate check must propagate and abort disbandment.
 	f := newActiveAffiliationFixture(t)
 	ctx := context.Background()
 
@@ -340,7 +341,7 @@ func TestGuildSuccession_RevalidateSuccessor_DBErrorPropagation(t *testing.T) {
 	errRepo := &errorInjectGateRepo{gateGuildRepository: gateRepo}
 	gateRepo.getGuildForUpdateHook = func(hookCtx context.Context, guildID string, callCount int) {
 		if guildID == gA.ID && callCount == 2 {
-			// Enable DB failure right before Step 3's candidate check
+			// Enable DB failure once members and guild are locked, before the candidate check
 			errRepo.failGetGuildByCharacter.Store(true)
 		}
 	}
@@ -361,9 +362,9 @@ func TestGuildSuccession_RevalidateSuccessor_DBErrorPropagation(t *testing.T) {
 	}
 }
 
-func TestGuildSuccession_RevalidateSuccessor_RemoveCharacterFromGuild(t *testing.T) {
+func TestGuildSuccession_RevalidateSuccessor_RemoveFromGuilds(t *testing.T) {
 	// Acceptance Criteria #6:
-	// RemoveCharacterFromGuild shares the revalidation logic.
+	// RemoveFromGuilds shares the locked succession logic.
 	f := newActiveAffiliationFixture(t)
 	ctx := context.Background()
 
@@ -392,11 +393,8 @@ func TestGuildSuccession_RevalidateSuccessor_RemoveCharacterFromGuild(t *testing
 
 	hookExecuted := false
 	gateRepo := &gateGuildRepository{GuildRepository: f.repo}
-	gateRepo.getGuildForUpdateHook = func(hookCtx context.Context, guildID string, callCount int) {
-		if guildID != gA.ID {
-			return
-		}
-		if callCount == 2 && !hookExecuted {
+	gateRepo.beforeLockHook = func() {
+		if !hookExecuted {
 			hookExecuted = true
 			if err := f.service.Leave(ctx, gB.ID, candidate.ID); err != nil {
 				t.Errorf("interleaved Leave(B, C) failed: %v", err)
@@ -412,7 +410,7 @@ func TestGuildSuccession_RevalidateSuccessor_RemoveCharacterFromGuild(t *testing
 		t.Fatal(err)
 	}
 
-	if err := gateService.RemoveCharacterFromGuild(ctx, leaderA.ID); err != nil {
+	if err := gateService.RemoveFromGuilds(ctx, leaderA.ID); err != nil {
 		t.Fatalf("RemoveCharacterFromGuild failed: %v", err)
 	}
 
@@ -526,9 +524,9 @@ func TestGuildSuccession_RevalidateSuccessor_CandidateLeavesOtherGuildPostRevali
 	// Linearizability & Invariant Verification:
 	// Candidate C is pending in Guild A, active in Guild B.
 	// Leader L leaves Guild A.
-	// Step 2 evaluates C: C is active in B -> errCandidateIneligible.
-	// Step 3 revalidates C under Rank 7 lock: GetGuildByCharacter(C) sees C is still active in B.
-	// Post-revalidation & immediately before DisbandGuild(A), C leaves Guild B on an independent transaction.
+	// Under the departure's locks C is still active in B, so A has no eligible successor.
+	// Immediately before DisbandGuild(A), C starts leaving Guild B on an independent transaction,
+	// which waits for C's lock until Leave(A) commits.
 	// DisbandGuild(A) then proceeds and commits.
 	//
 	// Verification targets:
@@ -567,19 +565,14 @@ func TestGuildSuccession_RevalidateSuccessor_CandidateLeavesOtherGuildPostRevali
 	}
 
 	disbandHookFired := false
+	leaveB := make(chan error, 1)
 	gateRepo := &gateGuildRepository{GuildRepository: f.repo}
 	gateRepo.beforeDisbandHook = func(hookCtx context.Context, guildID string) {
 		if guildID == gA.ID {
 			disbandHookFired = true
-			// Interleaved operation immediately before DisbandGuild execution:
-			// C leaves Guild B on an independent transaction.
-			if err := f.service.Leave(ctx, gB.ID, candidate.ID); err != nil {
-				t.Errorf("interleaved Leave(B, C) failed: %v", err)
-			}
-			// At this point, C has 0 active affiliations.
-			if count := f.countActiveAffiliations(t, candidate.ID); count != 0 {
-				t.Errorf("candidate active affiliations after Leave(B, C) = %d, want 0", count)
-			}
+			// C leaves Guild B on an independent transaction. Departure holds C's lock,
+			// so that Leave serializes after Leave(A) commits.
+			go func() { leaveB <- f.service.Leave(ctx, gB.ID, candidate.ID) }()
 		}
 	}
 
@@ -594,6 +587,9 @@ func TestGuildSuccession_RevalidateSuccessor_CandidateLeavesOtherGuildPostRevali
 
 	if !disbandHookFired {
 		t.Fatal("beforeDisbandHook was not fired")
+	}
+	if err := <-leaveB; err != nil {
+		t.Fatalf("interleaved Leave(B, C) failed: %v", err)
 	}
 
 	// Guild A must be disbanded

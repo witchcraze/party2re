@@ -146,7 +146,7 @@ func (c *coreServices) initPlayerAndChar(
 	)
 
 	if guildService != nil {
-		charOpts = append(charOpts, character.WithCleanupHook(character.CleanupHookFunc(guildService.RemoveCharacterFromGuild)))
+		charOpts = append(charOpts, character.WithCleanupHook(character.CleanupHookFunc(guildService.RemoveFromGuilds)))
 	}
 
 	charService, err := character.NewService(

@@ -867,12 +867,12 @@ func TestService_Customization_MarkAndWallpaper(t *testing.T) {
 	})
 }
 
-func TestService_RemoveCharacterFromGuild(t *testing.T) {
+func TestService_RemoveFromGuilds(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("empty id", func(t *testing.T) {
 		svc, _ := guild.NewService(&mockGuildRepo{})
-		if err := svc.RemoveCharacterFromGuild(ctx, "  "); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "  "); err != nil {
 			t.Errorf("expected nil error for empty ID, got %v", err)
 		}
 	})
@@ -884,7 +884,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "c1"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "c1"); err != nil {
 			t.Errorf("expected nil error when character not in guild, got %v", err)
 		}
 	})
@@ -905,7 +905,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 		}
 		news := &mockNewsPublisher{}
 		svc, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
-		if err := svc.RemoveCharacterFromGuild(ctx, "c1"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "c1"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !disbanded {
@@ -941,7 +941,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "c2"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "c2"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if removedID != "c2" {
@@ -971,7 +971,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "leader"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if transferredTo != "mem2" {
@@ -1000,7 +1000,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "leader"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if transferredTo != "mem1" {
@@ -1037,7 +1037,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 		}
 		news := &mockNewsPublisher{}
 		svc, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
-		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "leader"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if transferredTo != "applicant1" {
@@ -1078,7 +1078,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "leader"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if transferredTo != "applicant_first" {
@@ -1112,7 +1112,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "leader"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if transferredTo != "applicant_master" {
@@ -1142,7 +1142,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "leader"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if transferredTo != "applicant_sub" {
@@ -1172,7 +1172,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "leader"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if transferredTo != "mem_sub" {
@@ -1203,7 +1203,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		if err := svc.RemoveCharacterFromGuild(ctx, "applicant1"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "applicant1"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if disbanded {
@@ -1305,7 +1305,7 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 		}
 		news := &mockNewsPublisher{}
 		svc, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
-		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+		if err := svc.RemoveFromGuilds(ctx, "leader"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !disbanded {

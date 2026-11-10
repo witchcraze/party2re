@@ -68,7 +68,7 @@ func (r *HomeRepository) CreateLetter(ctx context.Context, letter home.Letter, l
 // evicted rows are locked in ascending ID order: index scans of the two boxes would otherwise deadlock
 // with sends between other characters that share a row.
 func evictOverflowLetters(ctx context.Context, executor sqlContextExecutor, recipientID, senderID string, logLimit int) error {
-	inbox, err := overflowLetterIDs(ctx, executor, `
+	inbox, err := letterIDs(ctx, executor, `
 		SELECT id FROM character_letters
 		WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE
 		ORDER BY created_at DESC, id DESC
@@ -77,7 +77,7 @@ func evictOverflowLetters(ctx context.Context, executor sqlContextExecutor, reci
 	if err != nil {
 		return err
 	}
-	outbox, err := overflowLetterIDs(ctx, executor, `
+	outbox, err := letterIDs(ctx, executor, `
 		SELECT id FROM character_letters
 		WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE
 		ORDER BY created_at DESC, id DESC
@@ -108,8 +108,8 @@ func evictOverflowLetters(ctx context.Context, executor sqlContextExecutor, reci
 	return nil
 }
 
-func overflowLetterIDs(ctx context.Context, executor sqlContextExecutor, query, ownerID string, logLimit int) ([]string, error) {
-	rows, err := executor.QueryContext(ctx, query, ownerID, logLimit)
+func letterIDs(ctx context.Context, executor sqlContextExecutor, query string, args ...any) ([]string, error) {
+	rows, err := executor.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

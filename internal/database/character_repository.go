@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
+	"slices"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/character"
@@ -191,10 +191,6 @@ func (r *CharacterRepository) SaveProfile(ctx context.Context, profile character
 
 func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 	exec := ExecutorFromContext(ctx, r.db)
-	if err := r.deleteChallengeAdmissions(ctx, id); err != nil {
-		return err
-	}
-
 	queries := []string{
 		`DELETE FROM casino_accounts WHERE character_id = ?`,
 		`DELETE FROM character_lottery WHERE character_id = ?`,
@@ -245,29 +241,52 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM character_presence_snapshots WHERE character_id = ?`,
 		`DELETE FROM character_profiles WHERE character_id = ?`,
 		`DELETE FROM characters WHERE id = ?`,
-		// Letters keep the counterpart's copy (#1094): hide this character's copies, then purge unowned rows.
-		// Running after the character delete holds its row lock, as CreateLetter does, so no letter arrives unflagged.
-		`UPDATE character_letters SET is_deleted_by_sender = TRUE WHERE sender_character_id = ?`,
-		`UPDATE character_letters SET is_deleted_by_recipient = TRUE WHERE recipient_character_id = ?`,
-		`DELETE FROM character_letters WHERE (sender_character_id = ? OR recipient_character_id = ?) AND is_deleted_by_sender AND is_deleted_by_recipient`,
 	}
 
 	for _, q := range queries {
-		if strings.Count(q, "?") == 2 {
-			if _, err := exec.ExecContext(ctx, q, id, id); err != nil {
-				return err
-			}
-		} else {
-			if _, err := exec.ExecContext(ctx, q, id); err != nil {
-				return err
-			}
+		if _, err := exec.ExecContext(ctx, q, id); err != nil {
+			return err
 		}
 	}
+	return hideDeletedCharacterLetters(ctx, exec, id)
+}
 
+// hideDeletedCharacterLetters hides the deleted character's copies and purges rows neither
+// owner keeps. It runs after the character row is deleted and locked, as CreateLetter locks
+// both characters, so no letter arrives unflagged. A letter belongs to two characters, so
+// rows are updated in ascending ID order, like evictOverflowLetters, to avoid deadlocking
+// with the counterpart's concurrent deletion.
+func hideDeletedCharacterLetters(ctx context.Context, exec sqlContextExecutor, id string) error {
+	ids, err := letterIDs(ctx, exec, `
+		SELECT id FROM character_letters WHERE sender_character_id = ?
+		UNION SELECT id FROM character_letters WHERE recipient_character_id = ?
+	`, id, id)
+	if err != nil {
+		return err
+	}
+	slices.Sort(ids)
+	for _, letterID := range ids {
+		if _, err := exec.ExecContext(ctx, `
+			UPDATE character_letters
+			SET is_deleted_by_sender = is_deleted_by_sender OR sender_character_id = ?,
+				is_deleted_by_recipient = is_deleted_by_recipient OR recipient_character_id = ?
+			WHERE id = ?
+		`, id, id, letterID); err != nil {
+			return err
+		}
+		if _, err := exec.ExecContext(ctx, `
+			DELETE FROM character_letters
+			WHERE id = ? AND is_deleted_by_sender AND is_deleted_by_recipient
+		`, letterID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-func (r *CharacterRepository) deleteChallengeAdmissions(ctx context.Context, characterID string) error {
+// DeleteChallengeAdmissions removes the character's admission rows that no other participant
+// still claims. Character deletion calls it before locking characters (Rank 0 first).
+func (r *CharacterRepository) DeleteChallengeAdmissions(ctx context.Context, characterID string) error {
 	// Other participants retain admission through terminal publication acknowledgement.
 	const unused = `character_id = ? AND NOT EXISTS (
 		SELECT 1 FROM challenge_character_claims
