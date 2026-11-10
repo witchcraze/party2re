@@ -15,15 +15,79 @@ import (
 
 type inactiveInterceptingRepo struct {
 	*database.GuildRepository
-	onAfterListInactive func(ctx context.Context, cutoff time.Time, limit int)
+	listCompleted chan<- struct{}
+	resumeCleanup <-chan struct{}
+	intercepted   atomic.Bool
 }
 
 func (r *inactiveInterceptingRepo) ListInactiveGuilds(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error) {
 	list, err := r.GuildRepository.ListInactiveGuilds(ctx, cutoff, limit)
-	if err == nil && r.onAfterListInactive != nil {
-		r.onAfterListInactive(ctx, cutoff, limit)
+	if err == nil {
+		err = r.waitAfterList(ctx)
 	}
 	return list, err
+}
+
+func (r *inactiveInterceptingRepo) waitAfterList(ctx context.Context) error {
+	if !r.intercepted.CompareAndSwap(false, true) {
+		return nil
+	}
+	select {
+	case r.listCompleted <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-r.resumeCleanup:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestInactiveInterceptingRepo_Cancellation(t *testing.T) {
+	for _, stage := range []string{"before_selection", "waiting_for_resume"} {
+		t.Run(stage, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			listCompleted := make(chan struct{})
+			repo := &inactiveInterceptingRepo{
+				listCompleted: listCompleted,
+				resumeCleanup: make(chan struct{}),
+			}
+			result := make(chan error, 1)
+			stopped := make(chan struct{})
+			go func() {
+				defer close(stopped)
+				result <- repo.waitAfterList(ctx)
+			}()
+			t.Cleanup(func() {
+				cancel()
+				select {
+				case <-stopped:
+				case <-time.After(5 * time.Second):
+					t.Error("inactive-list worker did not stop after cancellation")
+					<-stopped
+				}
+			})
+			if stage == "waiting_for_resume" {
+				select {
+				case <-listCompleted:
+				case <-time.After(5 * time.Second):
+					t.Fatal("worker did not reach resume barrier")
+				}
+			}
+			cancel()
+			select {
+			case <-stopped:
+			case <-time.After(5 * time.Second):
+				t.Fatal("worker did not stop after cancellation")
+			}
+			if err := <-result; !errors.Is(err, context.Canceled) {
+				t.Fatalf("expected cancellation, got %v", err)
+			}
+		})
+	}
 }
 
 func TestGuildService_DisbandInactiveGuilds_ReactivatedGuildPreserved_RealDB(t *testing.T) {
@@ -111,6 +175,8 @@ func TestGuildService_DisbandInactiveGuilds_ReactivatedGuildPreserved_RealDB(t *
 
 func TestGuildService_DisbandInactiveGuilds_DeterministicInterleaving_RealDB(t *testing.T) {
 	db := guildIsolatedDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
 
 	realRepo, err := database.NewGuildRepository(db)
 	if err != nil {
@@ -119,16 +185,10 @@ func TestGuildService_DisbandInactiveGuilds_DeterministicInterleaving_RealDB(t *
 
 	listCompleted := make(chan struct{})
 	resumeCleanup := make(chan struct{})
-	var intercepted atomic.Bool
-
 	repo := &inactiveInterceptingRepo{
 		GuildRepository: realRepo,
-		onAfterListInactive: func(ctx context.Context, cutoff time.Time, limit int) {
-			if intercepted.CompareAndSwap(false, true) {
-				listCompleted <- struct{}{}
-				<-resumeCleanup
-			}
-		},
+		listCompleted:   listCompleted,
+		resumeCleanup:   resumeCleanup,
 	}
 
 	txProvider := database.NewTransactionProvider(db)
@@ -136,8 +196,6 @@ func TestGuildService_DisbandInactiveGuilds_DeterministicInterleaving_RealDB(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	ctx := context.Background()
 
 	leaderChar, err := database.CreateTestCharacter(ctx, db, "DetInactiveLdr")
 	if err != nil {
@@ -161,23 +219,34 @@ func TestGuildService_DisbandInactiveGuilds_DeterministicInterleaving_RealDB(t *
 	}
 
 	// 1. Start DisbandInactiveGuilds in background.
-	// It extracts candidate guilds in ListInactiveGuilds and pauses inside onAfterListInactive.
+	// It extracts candidate guilds in ListInactiveGuilds and pauses before deletion.
 	type cleanupResult struct {
-		count     int
 		disbanded []string
 		err       error
 	}
 	cleanupDone := make(chan cleanupResult, 1)
+	workerStopped := make(chan struct{})
 	go func() {
-		c, d, err := service.DisbandInactiveGuilds(ctx, now, 100)
-		cleanupDone <- cleanupResult{count: c, disbanded: d, err: err}
+		defer close(workerStopped)
+		_, d, err := service.DisbandInactiveGuilds(ctx, now, 100)
+		cleanupDone <- cleanupResult{disbanded: d, err: err}
 	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-workerStopped:
+		case <-time.After(5 * time.Second):
+			// Do not tear down a database still used by a stuck worker.
+			t.Error("guild cleanup worker did not stop after cancellation")
+			<-workerStopped
+		}
+	})
 
 	// Wait until candidates are selected
 	select {
 	case <-listCompleted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for candidate selection")
+	case <-ctx.Done():
+		t.Fatalf("waiting for candidate selection: %v", ctx.Err())
 	}
 
 	// 2. Concurrently reactivate the guild while cleanup is paused between candidate selection and deletion!
@@ -191,11 +260,12 @@ func TestGuildService_DisbandInactiveGuilds_DeterministicInterleaving_RealDB(t *
 	var res cleanupResult
 	select {
 	case res = <-cleanupDone:
+		<-workerStopped
 		if res.err != nil {
 			t.Fatalf("DisbandInactiveGuilds returned error: %v", res.err)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for cleanup to complete")
+	case <-ctx.Done():
+		t.Fatalf("waiting for cleanup to complete: %v", ctx.Err())
 	}
 
 	for _, id := range res.disbanded {
