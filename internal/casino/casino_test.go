@@ -183,7 +183,7 @@ func TestCasinoService_SpinSlot(t *testing.T) {
 	}
 }
 
-func TestCasinoService_GamePlayedHook(t *testing.T) {
+func TestCasinoService_GamePlayedHookFailureIsBestEffort(t *testing.T) {
 	ctx := context.Background()
 	var currentCoins int64 = 500
 
@@ -204,7 +204,7 @@ func TestCasinoService_GamePlayedHook(t *testing.T) {
 	var playedGames []string
 	svc.SetGamePlayedHook(func(ctx context.Context, characterID string, gameName string) error {
 		playedGames = append(playedGames, gameName)
-		return nil
+		return errors.New("medal progress unavailable")
 	})
 
 	// 1. Slot

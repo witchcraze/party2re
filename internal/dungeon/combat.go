@@ -3,6 +3,8 @@ package dungeon
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"reflect"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -204,7 +206,10 @@ func (s *Service) resolveMonsterCombat(
 		}
 
 		if s.monsterDefeatedHook != nil {
-			_ = s.monsterDefeatedHook(ctx, char.ID, 1)
+			//lint:ignore error-swallow best-effort medal progress after irreversible Valkey combat publication
+			if err := s.monsterDefeatedHook(ctx, char.ID, 1); err != nil {
+				slog.WarnContext(ctx, "dungeon monster progress failed", "error_type", reflect.TypeOf(err).String())
+			}
 		}
 		return ExpeditionStepResult{
 			Expedition:   stepRes.Expedition,
@@ -337,7 +342,10 @@ func (s *Service) resolveBossCombat(
 		}
 
 		if s.monsterDefeatedHook != nil {
-			_ = s.monsterDefeatedHook(ctx, char.ID, 1)
+			//lint:ignore error-swallow best-effort medal progress after irreversible Valkey combat publication
+			if err := s.monsterDefeatedHook(ctx, char.ID, 1); err != nil {
+				slog.WarnContext(ctx, "dungeon monster progress failed", "error_type", reflect.TypeOf(err).String())
+			}
 		}
 		return s.handleDungeonClear(ctx, &stepRes.Expedition, char, dungeon)
 	}

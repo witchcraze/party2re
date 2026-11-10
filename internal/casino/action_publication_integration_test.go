@@ -205,6 +205,33 @@ func (f *publicationFixture) assertApplied(t *testing.T, ctx context.Context, sc
 	}
 }
 
+func TestActionPublication_GameHookFailureIsBestEffort(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	raw := openIsolatedTestValkey(t, 0)
+	defer raw.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	for _, game := range []casino.GameType{casino.GameTypeIndian, casino.GameTypeHighLow, casino.GameTypeDoppel} {
+		t.Run(string(game), func(t *testing.T) {
+			f := newPublicationFixture(t, ctx, db, raw, game, 500)
+			f.hookErr = errPublicationFault
+			for actor := range f.actors {
+				if err := f.play(ctx, actor, false); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.assertApplied(t, ctx, "settlement", 500, false, false)
+		})
+	}
+}
+
 func TestActionPublication_MultipleWinnersReadFailure(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -222,11 +249,8 @@ func TestActionPublication_MultipleWinnersReadFailure(t *testing.T) {
 	for _, game := range []casino.GameType{casino.GameTypeHighLow, casino.GameTypeDoppel} {
 		t.Run(string(game), func(t *testing.T) {
 			var healthyCalls []string
-			for _, failRead := range []bool{false, true} {
-				mode := "healthy"
-				if failRead {
-					mode = "read-fault"
-				}
+			for _, mode := range []string{"healthy", "read-fault", "hook-fault"} {
+				failRead := mode == "read-fault"
 				t.Run(mode, func(t *testing.T) {
 					fault := &publicationFault{}
 					accounts, err := database.NewCasinoRepository(db)
@@ -254,6 +278,9 @@ func TestActionPublication_MultipleWinnersReadFailure(t *testing.T) {
 					var hooks []publicationHookCall
 					svc.SetGamePlayedHook(func(_ context.Context, charID, gameName string) error {
 						hooks = append(hooks, publicationHookCall{CharacterID: charID, GameName: gameName})
+						if mode == "hook-fault" {
+							return errPublicationFault
+						}
 						return nil
 					})
 

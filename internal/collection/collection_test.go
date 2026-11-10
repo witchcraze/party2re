@@ -2,6 +2,7 @@ package collection_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -328,6 +329,28 @@ func TestCollectionService_MonsterBook(t *testing.T) {
 	bookCount, err := repo.GetMonsterBookCount(ctx, "char1")
 	if err != nil || bookCount != 1 {
 		t.Errorf("expected bookCount 1, got %d (err: %v)", bookCount, err)
+	}
+}
+
+func TestCollectionService_CompletionNewsFailureIsBestEffort(t *testing.T) {
+	repo := &mockCollectionRepo{completions: make(map[string]bool)}
+	legend := &mockLegendInductor{}
+	calls := 0
+	pub := collection.NewsPublisherFunc(func(context.Context, string, string, string, string, time.Time) error {
+		calls++
+		return errors.New("news unavailable")
+	})
+	svc, err := collection.NewService(repo, 1, 0, collection.WithNewsPublisher(pub), collection.WithLegendInductor(legend))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := svc.RecordMonsterDefeat(context.Background(), "hero", collection.DefeatedMonsterRecord{MonsterID: "monster"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !repo.completions["hero:monster_book"] || len(legend.inductions) != 1 || calls != 1 {
+		t.Fatalf("lost completion or replayed notification: completions=%v legends=%d news=%d", repo.completions, len(legend.inductions), calls)
 	}
 }
 

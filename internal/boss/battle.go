@@ -36,8 +36,9 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 	return result, err
 }
 
-func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderCharID string, original **party.Party) (*SealingSettlement, error) {
+func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderCharID string, original **party.Party) (*SealingSettlement, string, error) {
 	var receipt *SealingSettlement
+	var slayerName string
 	err := func() error {
 		// 1. Lock party
 		p, err := s.partyRepo.GetPartyForUpdate(txCtx, partyID)
@@ -194,7 +195,6 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 		var rewardItemID string
 		var newsMsg string
 		var rewardCrystals int
-		banquetHeld := false
 		heroCountGained := 0
 
 		if isWin {
@@ -248,11 +248,8 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 			}
 
 			leaderChar := chars[leaderCharID]
+			slayerName = leaderChar.Name
 			stageTier := stageTierFromID(stage.ID)
-			if s.victoryBanquetHook != nil {
-				_ = s.victoryBanquetHook(txCtx, stage.ID, stage.Name, leaderChar.ID, leaderChar.Name, stageTier)
-				banquetHeld = true
-			}
 			if s.victoryHook != nil {
 				if err := s.victoryHook(txCtx, leaderChar.ID, stage.ID, stageTier); err != nil {
 					return fmt.Errorf("failed to record boss victory progress: %w", err)
@@ -327,12 +324,11 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 			HeroCountGained:   heroCountGained,
 			BanishedMemberIDs: banishedList,
 			NewsMessage:       newsMsg,
-			BanquetHeld:       banquetHeld,
 			BattleResult:      battleRes,
 		}
 		receipt = &SealingSettlement{Lobby: party.LobbyState{Party: p, Members: members}, Result: result}
 		return s.settlementRepo.SaveSealingSettlement(txCtx, *receipt)
 	}()
 
-	return receipt, err
+	return receipt, slayerName, err
 }

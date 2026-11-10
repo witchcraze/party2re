@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -72,7 +74,10 @@ func (s *Service) UnsealDemonKing(ctx context.Context, characterIDs []string) er
 
 	if s.newsPub != nil && len(heroNames) > 0 {
 		newsMsg := fmt.Sprintf("%sによって封印されし者達の封印が解かれました！", strings.Join(heroNames, "、"))
-		_ = s.newsPub.PublishNews(ctx, "boss", newsMsg, newsMsg, "System", time.Now().UTC())
+		//lint:ignore error-swallow best-effort informational news does not invalidate the committed unseal
+		if err := s.newsPub.PublishNews(ctx, "boss", newsMsg, newsMsg, "System", time.Now().UTC()); err != nil {
+			slog.WarnContext(ctx, "boss unseal news failed", "error_type", reflect.TypeOf(err).String())
+		}
 	}
 
 	return nil

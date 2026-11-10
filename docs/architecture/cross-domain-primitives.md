@@ -88,6 +88,17 @@ commit. The current runner has no outer-commit hook, so documentation must not
 promise post-commit delivery in that case. See [the audit](../migration/documentation-audit.md).
 The dispatcher itself cannot detect a SQL commit or provide an atomic outbox.
 
+Auxiliary progression hooks and informational news may be best-effort when
+their owning service explicitly accepts missing records during failures.
+Their failure must not turn an already applied action into a retryable failure;
+this does not relax required reward or milestone persistence.
+
+Boss victory crowds are ephemeral and attempted only after a confirmed SQL
+commit. The production adapter rejects an ambient transaction because its
+caller can still roll back. A failed or interrupted attempt may omit the crowd;
+receipt replay does not repeat the append, and `BanquetHeld` reports confirmed
+publication in the current response rather than historical delivery.
+
 ## Verification
 
 Use the existing runner, repository, and P2P stress tests for balance/capacity,

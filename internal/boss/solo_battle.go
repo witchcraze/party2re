@@ -28,12 +28,14 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 	}
 
 	var result SealingBattleResult
+	var slayerName string
 	startTime := time.Now().UTC()
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
 			return ErrCharacterNotFound
 		}
+		slayerName = char.Name
 		if char.Stats.HP <= 0 {
 			return ErrCharacterUnconscious
 		}
@@ -113,7 +115,6 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		var rewardItemID string
 		var newsMsg string
 		var rewardCrystals int
-		banquetHeld := false
 		heroCountGained := 0
 
 		if isWin {
@@ -157,10 +158,6 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			}
 
 			stageTier := stageTierFromID(stage.ID)
-			if s.victoryBanquetHook != nil {
-				_ = s.victoryBanquetHook(txCtx, stage.ID, stage.Name, char.ID, char.Name, stageTier)
-				banquetHeld = true
-			}
 			if s.victoryHook != nil {
 				if err := s.victoryHook(txCtx, char.ID, stage.ID, stageTier); err != nil {
 					return fmt.Errorf("failed to record boss victory progress: %w", err)
@@ -229,11 +226,13 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			HeroCountGained:   heroCountGained,
 			BanishedMemberIDs: banishedList,
 			NewsMessage:       newsMsg,
-			BanquetHeld:       banquetHeld,
 			BattleResult:      battleRes,
 		}
 		return nil
 	})
 
+	if err == nil {
+		s.holdVictoryBanquet(ctx, &result, characterID, slayerName)
+	}
 	return result, err
 }

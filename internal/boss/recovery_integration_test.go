@@ -341,6 +341,16 @@ func TestSealingCommitBoundaryRecoveryIntegration(t *testing.T) {
 			committed := mode == "commit-response-lost" || mode == "unknown-commit" || mode == "probe-response-lost"
 			tx := &sealingTxFault{TransactionProvider: database.NewTransactionProvider(f.db), commit: committed, unknown: mode == "unknown-rollback" || mode == "unknown-commit", probeLost: mode == "probe-response-lost"}
 			s := f.service(t, f.rooms, tx)
+			banquets := 0
+			hook := func(ctx context.Context, _, _, _, _ string, _ int) error {
+				banquets++
+				if database.TxFromContext(ctx) != nil {
+					t.Fatal("banquet ran inside a SQL transaction")
+				}
+				f.assertAssets(t, true)
+				return nil
+			}
+			s.SetVictoryBanquetHook(hook)
 			if mode == "collection" {
 				s.Configure(boss.WithMonsterDefeatRecorder(&failingRecorder{failOn: 9}))
 			}
@@ -362,6 +372,9 @@ func TestSealingCommitBoundaryRecoveryIntegration(t *testing.T) {
 				t.Fatalf("failure not propagated: %v", err)
 			}
 			f.assertAssets(t, committed)
+			if banquets != 0 {
+				t.Fatal("failed or uncertain commit published a banquet")
+			}
 			if tx.unknown {
 				p, err := f.rooms.GetParty(context.Background(), f.state.Party.ID)
 				if err != nil || p.Status != party.StatusInProgress {
@@ -372,8 +385,17 @@ func TestSealingCommitBoundaryRecoveryIntegration(t *testing.T) {
 			}
 			// Remove faults and resume from authoritative SQL, not the previous process's memory.
 			s = f.service(t, f.rooms, database.NewTransactionProvider(f.db))
-			if _, err := f.start(s); err != nil {
+			s.SetVictoryBanquetHook(hook)
+			res, err := f.start(s)
+			if err != nil {
 				t.Fatalf("retry: %v", err)
+			}
+			wantBanquets := 1
+			if committed {
+				wantBanquets = 0
+			}
+			if banquets != wantBanquets || res.BanquetHeld != !committed {
+				t.Fatalf("retry banquet: calls=%d held=%v priorCommit=%v", banquets, res.BanquetHeld, committed)
 			}
 			wantBattles := int32(2)
 			if committed {

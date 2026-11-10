@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -415,7 +417,10 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 
 	if len(showdownWinners) > 0 && s.gamePlayedHook != nil {
 		for _, w := range showdownWinners {
-			_ = s.gamePlayedHook(ctx, w, "highlow")
+			//lint:ignore error-swallow best-effort medal progress must not fail a committed game
+			if err := s.gamePlayedHook(ctx, w, "highlow"); err != nil {
+				slog.WarnContext(ctx, "casino highlow progress failed", "error_type", reflect.TypeOf(err).String())
+			}
 		}
 	}
 	if readErr != nil {

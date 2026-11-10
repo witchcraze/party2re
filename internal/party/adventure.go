@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"reflect"
 	"sort"
 	"time"
 
@@ -324,12 +326,18 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 		for i, r := range result.Rewards {
 			charIDs[i] = r.CharacterID
 		}
-		_ = s.victoryHook(ctx, charIDs, defeatedMonsterCount, result.TotalGold)
+		//lint:ignore error-swallow best-effort medal progress cannot roll back committed adventure rewards
+		if err := s.victoryHook(ctx, charIDs, defeatedMonsterCount, result.TotalGold); err != nil {
+			slog.WarnContext(ctx, "party victory progress failed", "error_type", reflect.TypeOf(err).String())
+		}
 	}
 
 	if s.postAdventureHook != nil {
 		for _, r := range result.Rewards {
-			_ = s.postAdventureHook(ctx, r.CharacterID)
+			//lint:ignore error-swallow best-effort tavern effects must not fail a committed adventure or skip later members
+			if err := s.postAdventureHook(ctx, r.CharacterID); err != nil {
+				slog.WarnContext(ctx, "party post adventure hook failed", "error_type", reflect.TypeOf(err).String())
+			}
 		}
 	}
 

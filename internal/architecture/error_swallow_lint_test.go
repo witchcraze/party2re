@@ -78,7 +78,8 @@ func isStateMutationMethod(method string) bool {
 }
 
 func isCriticalCall(receiver string, method string) bool {
-	return isRepoReceiver(receiver) || isStorageMutation(receiver, method) || isStateMutationMethod(method)
+	return isRepoReceiver(receiver) || isStorageMutation(receiver, method) || isStateMutationMethod(method) ||
+		(strings.HasSuffix(strings.ToLower(method), "hook") && !strings.HasPrefix(method, "Set") && !strings.HasPrefix(method, "With")) || method == "PublishNews"
 }
 
 func exprToString(e ast.Expr) string {
@@ -262,6 +263,65 @@ func TestErrorSwallowLint_UnitTests(t *testing.T) {
 		code        string
 		expectCount int
 	}{
+		{
+			name: "hook configuration does not return an error",
+			code: `package testpkg
+func foo(s *Service) {
+	s.SetVictoryHook(hook)
+}`,
+			expectCount: 0,
+		},
+		{
+			name: "discarded hook error",
+			code: `package testpkg
+func foo(s *Service) {
+	_ = s.victoryHook(ctx, id)
+}`,
+			expectCount: 1,
+		},
+		{
+			name: "bare hook call",
+			code: `package testpkg
+func foo(s *Service) {
+	s.gamePlayedHook(ctx, id)
+}`,
+			expectCount: 1,
+		},
+		{
+			name: "discarded publisher error",
+			code: `package testpkg
+func foo(s *Service) {
+	_ = s.newsPub.PublishNews(ctx, news)
+}`,
+			expectCount: 1,
+		},
+		{
+			name: "bare publisher call",
+			code: `package testpkg
+func foo(s *Service) {
+	s.newsPub.PublishNews(ctx, news)
+}`,
+			expectCount: 1,
+		},
+		{
+			name: "annotated hook and publisher",
+			code: `package testpkg
+func foo(s *Service) {
+	//lint:ignore error-swallow best-effort post-commit progress
+	_ = s.victoryHook(ctx, id)
+	s.newsPub.PublishNews(ctx, news) //lint:ignore error-swallow informational news
+}`,
+			expectCount: 0,
+		},
+		{
+			name: "handled hook and publisher",
+			code: `package testpkg
+func foo(s *Service) {
+	if err := s.victoryHook(ctx, id); err != nil { warn(err) }
+	if err := s.newsPub.PublishNews(ctx, news); err != nil { warn(err) }
+}`,
+			expectCount: 0,
+		},
 		{
 			name: "blank assignment to repo.Save",
 			code: `package testpkg

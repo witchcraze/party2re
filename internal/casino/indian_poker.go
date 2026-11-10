@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
+	"reflect"
 	"slices"
 	"time"
 )
@@ -345,7 +347,10 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 	}
 
 	if showdownWinner != "" && s.gamePlayedHook != nil {
-		_ = s.gamePlayedHook(ctx, showdownWinner, "indian_poker")
+		//lint:ignore error-swallow best-effort medal progress must not fail a committed game
+		if err := s.gamePlayedHook(ctx, showdownWinner, "indian_poker"); err != nil {
+			slog.WarnContext(ctx, "casino indian poker progress failed", "error_type", reflect.TypeOf(err).String())
+		}
 	}
 	if readErr != nil {
 		return nil, readErr

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/collection"
@@ -11,9 +12,35 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
+
+func buildAdventureVictoryHook(record func(context.Context, string, medal.MetricType, int) error) adventure.VictoryHook {
+	return func(ctx context.Context, characterID string, monstersDefeated, goldEarned int) error {
+		err := record(ctx, characterID, medal.MetricAdventureVictories, 1)
+		if monstersDefeated > 0 {
+			err = errors.Join(err, record(ctx, characterID, medal.MetricMonstersSlain, monstersDefeated))
+		}
+		if goldEarned > 0 {
+			err = errors.Join(err, record(ctx, characterID, medal.MetricGoldEarned, goldEarned))
+		}
+		return err
+	}
+}
+
+func buildPartyVictoryHook(record func(context.Context, string, medal.MetricType, int) error) party.VictoryHook {
+	victory := buildAdventureVictoryHook(record)
+	return func(ctx context.Context, characterIDs []string, monstersDefeated, goldEarned int) error {
+		var err error
+		for _, id := range characterIDs {
+			err = errors.Join(err, victory(ctx, id, monstersDefeated, goldEarned))
+		}
+		return err
+	}
+}
 
 type victoryPlaza interface {
 	RecordVictoryCrowd(context.Context) error
@@ -21,6 +48,10 @@ type victoryPlaza interface {
 
 func buildVictoryBanquetHook(plaza victoryPlaza) boss.VictoryBanquetHook {
 	return func(ctx context.Context, _, _, _, _ string, _ int) error {
+		// An inner RunInTx may have joined an outer transaction that can still roll back.
+		if database.TxFromContext(ctx) != nil {
+			return errors.New("victory banquet requires a committed settlement")
+		}
 		return plaza.RecordVictoryCrowd(ctx)
 	}
 }

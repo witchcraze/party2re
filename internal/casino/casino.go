@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"log/slog"
 	"math"
 	"math/big"
+	"reflect"
 	"slices"
 	"time"
 
@@ -350,7 +352,10 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 	}
 
 	if s.gamePlayedHook != nil {
-		_ = s.gamePlayedHook(ctx, characterID, "slot")
+		//lint:ignore error-swallow best-effort medal progress must not fail a committed game
+		if err := s.gamePlayedHook(ctx, characterID, "slot"); err != nil {
+			slog.WarnContext(ctx, "casino slot progress failed", "error_type", reflect.TypeOf(err).String())
+		}
 	}
 
 	return res, acc, nil

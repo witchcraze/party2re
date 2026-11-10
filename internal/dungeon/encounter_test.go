@@ -71,11 +71,16 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 					}
 					return corebattle.PartyBattleResult{Outcome: outcome, WinnerSide: side, RemainingHP: hp, RemainingMP: map[string]int{"enemy": 4}, RemainingStatus: map[string]string{"enemy": "poison"}}, nil
 				}}
+				hookCalls := 0
 				newService := func() *dungeon.Service {
 					svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog))
 					if err != nil {
 						t.Fatal(err)
 					}
+					svc.SetMonsterDefeatedHook(func(context.Context, string, int) error {
+						hookCalls++
+						return errors.New("medal progress unavailable")
+					})
 					return svc
 				}
 				svc := newService()
@@ -157,6 +162,13 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 				}
 				if len(repo.histories[char.ID]) != 1 {
 					t.Fatal("settlement not exactly once")
+				}
+				wantHooks := 0
+				if ending == "win" || ending == "boss" {
+					wantHooks = 1
+				}
+				if hookCalls != wantHooks {
+					t.Fatalf("progress attempts=%d want=%d", hookCalls, wantHooks)
 				}
 				if _, err = svc.Escape(ctx, char.ID); !errors.Is(err, dungeon.ErrNoActiveExpedition) {
 					t.Fatalf("repeat settlement: %v", err)

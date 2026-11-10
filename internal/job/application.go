@@ -298,6 +298,7 @@ func (s *Service) checkAndNotifyCompletion(ctx context.Context, charName string,
 			if displayName == "" {
 				displayName = state.CharacterID
 			}
+			//lint:ignore error-swallow best-effort informational news does not invalidate job mastery
 			_ = s.news.PublishNews(
 				ctx,
 				"job",
