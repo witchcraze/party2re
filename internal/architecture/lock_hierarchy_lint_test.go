@@ -182,10 +182,11 @@ func analyzeASTFileLocks(fset *token.FileSet, fileNode *ast.File, relPath string
 func checkDirectBlockLocks(fset *token.FileSet, body *ast.BlockStmt, relPath string) []lockViolation {
 	var violations []lockViolation
 	var lockCalls []lockCall
+	orderedCallbacks := make(map[*ast.FuncLit]bool)
 
 	ast.Inspect(body, func(n ast.Node) bool {
-		// Do not traverse into nested function literals; each closure has its own scope
-		if fnLit, ok := n.(*ast.FuncLit); ok && fnLit.Body != body {
+		// LockInOrder runs its callback synchronously at the call site's rank.
+		if fnLit, ok := n.(*ast.FuncLit); ok && fnLit.Body != body && !orderedCallbacks[fnLit] {
 			return false
 		}
 
@@ -197,6 +198,15 @@ func checkDirectBlockLocks(fset *token.FileSet, body *ast.BlockStmt, relPath str
 		sel, ok := call.Fun.(*ast.SelectorExpr)
 		if !ok {
 			return true
+		}
+		if sel.Sel.Name == "LockInOrder" && len(call.Args) == 3 {
+			switch lock := call.Args[2].(type) {
+			case *ast.FuncLit:
+				orderedCallbacks[lock] = true
+				return true
+			case *ast.SelectorExpr:
+				sel = lock
+			}
 		}
 
 		methodName := sel.Sel.Name

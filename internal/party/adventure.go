@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
-	"sort"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -63,10 +63,9 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			for i, m := range members {
 				charIDs[i] = m.CharacterID
 			}
-			sort.Strings(charIDs)
-
 			charMap := make(map[string]corecharacter.Character, len(charIDs))
-			for _, cID := range charIDs {
+			var orderedIDs []string
+			if err := economy.LockInOrder(txCtx, charIDs, func(txCtx context.Context, cID string) error {
 				c, err := s.charRepo.FindByIDForUpdate(txCtx, cID)
 				if err != nil {
 					return err
@@ -78,7 +77,12 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 					return ErrCharacterExhausted
 				}
 				charMap[c.ID] = c
+				orderedIDs = append(orderedIDs, cID)
+				return nil
+			}); err != nil {
+				return err
 			}
+			charIDs = orderedIDs
 			if s.activityCheck != nil {
 				for _, cID := range charIDs {
 					if err := s.activityCheck(txCtx, cID); err != nil {

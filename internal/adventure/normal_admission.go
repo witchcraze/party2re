@@ -12,6 +12,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 func normalRunID(generation string) string {
@@ -117,6 +118,7 @@ func (s *NormalRunService) enter(ctx context.Context, player string, a NormalAdm
 	if len(a.CharacterIDs) < 1 || len(a.CharacterIDs) > 4 || a.CharacterIDs[0] != a.ActorID {
 		return RunReceipt{}, ErrNoParticipants
 	}
+	// Admission must reject duplicate/empty participants rather than deduplicate them.
 	ids := slices.Clone(a.CharacterIDs)
 	slices.Sort(ids)
 	for i, id := range ids {
@@ -144,7 +146,7 @@ func (s *NormalRunService) enter(ctx context.Context, player string, a NormalAdm
 			return nil
 		}
 		r := NormalRun{ID: cmd.RunID, Encoding: 1, Version: 1, Admission: a, Mode: mode, LeaderID: a.ActorID, Roster: slices.Clone(a.CharacterIDs), LastActions: map[string]time.Time{}, Recipients: map[string]RunRecipient{}, StartedAt: s.cfg.Clock.Now(), LastActivity: s.cfg.Clock.Now()}
-		for _, id := range ids {
+		if err := economy.LockInOrder(ctx, ids, func(ctx context.Context, id string) error {
 			c, err := s.cfg.Characters.FindByIDForUpdate(ctx, id)
 			if err != nil {
 				return err
@@ -162,6 +164,9 @@ func (s *NormalRunService) enter(ctx context.Context, player string, a NormalAdm
 				return ErrRunForbidden
 			}
 			r.Recipients[id] = RunRecipient{PlayerID: c.PlayerID}
+			return nil
+		}); err != nil {
+			return err
 		}
 		for _, id := range ids {
 			active, err := s.cfg.Store.FindActorRun(ctx, id)

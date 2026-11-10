@@ -8,6 +8,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 // Command serializes one explicit operation; observation never calls it.
@@ -54,10 +55,9 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 		if r.TimedOut {
 			return ErrRunRecovery
 		}
-		ids := slices.Clone(r.Roster)
+		var ids []string
 		ctx = context.WithValue(ctx, normalMutationContext{}, r.ID)
-		slices.Sort(ids)
-		for _, id := range ids {
+		if err := economy.LockInOrder(ctx, r.Roster, func(ctx context.Context, id string) error {
 			c, err := s.cfg.Characters.FindByIDForUpdate(ctx, id)
 			if err != nil {
 				return err
@@ -65,6 +65,10 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			if c.PlayerID != r.Recipients[id].PlayerID {
 				return ErrRunForbidden
 			}
+			ids = append(ids, id)
+			return nil
+		}); err != nil {
+			return err
 		}
 		now := s.cfg.Clock.Now()
 		releaseStock := r.Mode != CrawlModeTry || cmd.Action == "exit"

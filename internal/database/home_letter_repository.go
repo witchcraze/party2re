@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
 )
 
@@ -22,16 +23,15 @@ func (r *HomeRepository) CreateLetter(ctx context.Context, letter home.Letter, l
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 		lockIDs := []string{letter.SenderCharacterID, letter.RecipientCharacterID}
-		slices.Sort(lockIDs)
-		for _, characterID := range slices.Compact(lockIDs) {
+		if err := economy.LockInOrder(txCtx, lockIDs, func(txCtx context.Context, characterID string) error {
 			var lockedID string
 			err := executor.QueryRowContext(txCtx, `SELECT id FROM characters WHERE id = ? FOR UPDATE`, characterID).Scan(&lockedID)
 			if errors.Is(err, sql.ErrNoRows) {
 				return home.ErrCharacterNotFound
 			}
-			if err != nil {
-				return err
-			}
+			return err
+		}); err != nil {
+			return err
 		}
 
 		var latestSenderID string
@@ -88,8 +88,7 @@ func evictOverflowLetters(ctx context.Context, executor sqlContextExecutor, reci
 	}
 
 	ids := slices.Concat(inbox, outbox)
-	slices.Sort(ids)
-	for _, id := range slices.Compact(ids) {
+	return economy.LockInOrder(ctx, ids, func(ctx context.Context, id string) error {
 		if _, err := executor.ExecContext(ctx, `
 			UPDATE character_letters
 			SET is_deleted_by_recipient = is_deleted_by_recipient OR ?,
@@ -104,8 +103,8 @@ func evictOverflowLetters(ctx context.Context, executor sqlContextExecutor, reci
 		`, id); err != nil {
 			return err
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func letterIDs(ctx context.Context, executor sqlContextExecutor, query string, args ...any) ([]string, error) {

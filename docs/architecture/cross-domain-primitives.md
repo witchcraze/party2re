@@ -52,6 +52,9 @@ Rank order applies to acquiring new locks, not merely the textual order of
 updates to rows already locked. The complete hierarchy is owned by
 [the database rules](../../.agents/rules/05-database-and-caching.md).
 
+Same-table multi-row acquisition uses [`economy.LockInOrder`](../../internal/economy/locking.go);
+callers retain transaction ownership and domain-specific missing-row decisions.
+
 Daily guild GP decay and GvG settlement acquire guild row locks in ascending ID
 order. Decay includes zero-balance guilds in this order, applying its formula and
 changing timestamps only for current positive balances under lock. This includes
