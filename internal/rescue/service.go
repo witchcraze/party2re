@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	corescheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 )
@@ -15,15 +16,21 @@ import (
 type RescueRepository interface {
 	Save(ctx context.Context, record RescueRecord) error
 	FindLatestByCharacterID(ctx context.Context, characterID string) (RescueRecord, error)
+	MarkApplied(ctx context.Context, id string, at time.Time) error
 }
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
-	Update(ctx context.Context, c corecharacter.Character) error
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
 type ActionCleaner interface {
 	ClearActiveActions(ctx context.Context, characterID string) (bool, error)
+	FindPendingByActorID(ctx context.Context, actorID string) ([]corescheduling.ScheduledAction, error)
+}
+
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 // ActivityReader lists feature activities still owned by the character.
@@ -41,6 +48,7 @@ type Service struct {
 	characters CharacterRepository
 	cleaner    ActionCleaner
 	timer      TimerService
+	tx         TransactionProvider
 	activities ActivityReader
 }
 
@@ -69,12 +77,14 @@ func NewService(
 	characters CharacterRepository,
 	cleaner ActionCleaner,
 	timer TimerService,
+	tx TransactionProvider,
 ) *Service {
 	return &Service{
 		rescues:    rescues,
 		characters: characters,
 		cleaner:    cleaner,
 		timer:      timer,
+		tx:         tx,
 	}
 }
 
@@ -104,14 +114,20 @@ func (s *Service) Unstuck(ctx context.Context, characterID string) error {
 	return nil
 }
 
-// EmergencyRescue resets player character state when stuck or encountering errors, applying a sleep penalty cooldown.
-// If the character is safe in town with no active actions, returns early with 0 penalty cooldown per legacy rescue.cgi:56-65.
-// Feature activity the scheduler cannot end returns ErrActivityRemaining without changes.
+// EmergencyRescue clears scheduled work and adds the penalty to any remaining sleep.
+// With no pending work it returns a 0-second result without changes (legacy rescue.cgi:56-65).
+// Feature activity the scheduler cannot end returns ErrActivityRemaining without changes,
+// except that an unconfirmed penalty whose work is already cleared still receives its sleep.
+//
+// The owed deadline is committed to rescue_records before Valkey is touched; clearing and
+// the sleep timer follow and the record is confirmed last. Any failure leaves the record
+// unconfirmed and the next rescue resumes it with the same deadline (#1100).
 func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (RescueRecord, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return RescueRecord{}, ErrInvalidCharacterID
 	}
-	if strings.TrimSpace(reason) == "" {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
 		return RescueRecord{}, ErrInvalidReason
 	}
 
@@ -119,57 +135,95 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 	if err != nil {
 		return RescueRecord{}, err
 	}
-	if err := s.ensureNoActivity(ctx, char); err != nil {
+	activityErr := s.ensureNoActivity(ctx, char)
+	if activityErr != nil && !errors.Is(activityErr, ErrActivityRemaining) {
+		return RescueRecord{}, activityErr
+	}
+
+	rec, err := s.recordPenalty(ctx, char.ID, reason, now, activityErr)
+	if err != nil || rec.ID == "" {
+		return rec, err
+	}
+	if err := s.applyPenalty(ctx, rec, now, activityErr == nil); err != nil {
 		return RescueRecord{}, err
 	}
-
-	// Clear active scheduled actions or ongoing activities
-	var cleared bool
-	if s.cleaner != nil {
-		cleared, err = s.cleaner.ClearActiveActions(ctx, characterID)
-		if err != nil {
-			return RescueRecord{}, err
-		}
-	}
-
-	// Character is already safe in town (no ongoing or stuck activity to clear);
-	// return safe status with 0 penalty cooldown without recording a new penalty.
-	if !cleared {
-		return RescueRecord{
-			CharacterID:    char.ID,
-			Reason:         strings.TrimSpace(reason),
-			PenaltySeconds: 0,
-			CreatedAt:      now,
-		}, nil
-	}
-
-	recID := id.New()
-	rec := RescueRecord{
-		ID:             recID,
-		CharacterID:    char.ID,
-		Reason:         strings.TrimSpace(reason),
-		PenaltySeconds: DefaultPenaltySeconds,
-		CreatedAt:      now,
-	}
-
-	if err := s.rescues.Save(ctx, rec); err != nil {
-		return RescueRecord{}, err
-	}
-
-	if s.timer != nil {
-		duration := time.Duration(DefaultPenaltySeconds) * time.Second
-		if rem, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, char.ID); err == nil && rem > 0 {
-			duration += rem
-		}
-		if err := s.timer.SetLock(ctx, timer.CategorySleep, char.ID, duration); err != nil {
-			return RescueRecord{}, err
-		}
-	}
-
 	return rec, nil
 }
 
-// IsUnderPenalty checks if the character is currently restricted by a rescue penalty cooldown.
+// recordPenalty returns the unconfirmed penalty to resume, a new committed one, or an
+// idle result without ID. The character row lock makes concurrent rescues share one record.
+// Remaining activity (activityErr) only permits resuming a penalty whose work is already gone:
+// a player who started an activity after a failed sleep write still owes that sleep.
+func (s *Service) recordPenalty(ctx context.Context, characterID, reason string, now time.Time, activityErr error) (RescueRecord, error) {
+	rec := RescueRecord{CharacterID: characterID, Reason: reason, CreatedAt: now}
+	err := s.tx.RunInTx(ctx, func(ctx context.Context) error {
+		if _, err := s.characters.FindByIDForUpdate(ctx, characterID); err != nil {
+			return err
+		}
+		latest, err := s.rescues.FindLatestByCharacterID(ctx, characterID)
+		resume := err == nil && latest.AppliedAt.IsZero()
+		if err != nil && !errors.Is(err, ErrNoRescueRecord) {
+			return err
+		}
+		if resume && activityErr == nil {
+			rec = latest
+			return nil
+		}
+		if !resume && activityErr != nil {
+			return activityErr
+		}
+		pending, err := s.cleaner.FindPendingByActorID(ctx, characterID)
+		if err != nil {
+			return err
+		}
+		if resume {
+			if len(pending) > 0 {
+				return activityErr
+			}
+			rec = latest
+			return nil
+		}
+		if len(pending) == 0 {
+			return nil
+		}
+		remaining, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, characterID)
+		if err != nil {
+			return err
+		}
+		rec.ID = id.New()
+		rec.PenaltySeconds = DefaultPenaltySeconds
+		rec.SleepUntil = now.Add(remaining + DefaultPenaltySeconds*time.Second)
+		return s.rescues.Save(ctx, rec)
+	})
+	if err != nil {
+		return RescueRecord{}, err
+	}
+	return rec, nil
+}
+
+// applyPenalty repeats safely: clearing is idempotent and the timer only moves toward SleepUntil.
+// clear is false while feature activity remains, so its new scheduled work is never touched.
+func (s *Service) applyPenalty(ctx context.Context, rec RescueRecord, now time.Time, clear bool) error {
+	if clear {
+		if _, err := s.cleaner.ClearActiveActions(ctx, rec.CharacterID); err != nil {
+			return err
+		}
+	}
+	if owed := rec.SleepUntil.Sub(now); owed > 0 {
+		remaining, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, rec.CharacterID)
+		if err != nil {
+			return err
+		}
+		if remaining < owed {
+			if err := s.timer.SetLock(ctx, timer.CategorySleep, rec.CharacterID, owed); err != nil {
+				return err
+			}
+		}
+	}
+	return s.rescues.MarkApplied(ctx, rec.ID, now)
+}
+
+// IsUnderPenalty reports the latest rescue's owed sleep, including an unconfirmed one.
 func (s *Service) IsUnderPenalty(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return false, 0, ErrInvalidCharacterID
@@ -183,22 +237,8 @@ func (s *Service) IsUnderPenalty(ctx context.Context, characterID string, now ti
 		return false, 0, err
 	}
 
-	if rec.IsActive(now) {
-		remaining := rec.ExpiresAt().Sub(now)
+	if remaining := rec.SleepUntil.Sub(now); remaining > 0 {
 		return true, remaining, nil
 	}
-
 	return false, 0, nil
-}
-
-// CheckActionAllowed returns ErrCharacterUnderPenalty if the character is currently under rescue penalty.
-func (s *Service) CheckActionAllowed(ctx context.Context, characterID string, now time.Time) error {
-	underPenalty, _, err := s.IsUnderPenalty(ctx, characterID, now)
-	if err != nil {
-		return err
-	}
-	if underPenalty {
-		return ErrCharacterUnderPenalty
-	}
-	return nil
 }

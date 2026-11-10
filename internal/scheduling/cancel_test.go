@@ -224,12 +224,9 @@ func (s *statefulValkeyAdapter) toMockClient() valkey.Client {
 
 		case "SMEMBERS":
 			key := cmdStrs[1]
-			set := s.actorSets[key]
-			if set == nil || len(set) == 0 {
-				return valkeytest.MakeNilResult()
-			}
-			var members []string
-			for m := range set {
+			// Valkey answers SMEMBERS on a missing key with an empty set, not nil.
+			members := []string{}
+			for m := range s.actorSets[key] {
 				members = append(members, m)
 			}
 			return valkeytest.MakeStringSliceResult(members)
@@ -384,6 +381,21 @@ func (r *memoryRescueRepo) Save(_ context.Context, record rescue.RescueRecord) e
 	return nil
 }
 
+func (r *memoryRescueRepo) MarkApplied(_ context.Context, id string, at time.Time) error {
+	for i := range r.saved {
+		if r.saved[i].ID == id {
+			r.saved[i].AppliedAt = at
+		}
+	}
+	return nil
+}
+
+type passthroughTx struct{}
+
+func (passthroughTx) RunInTx(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
 func (r *memoryRescueRepo) FindLatestByCharacterID(_ context.Context, characterID string) (rescue.RescueRecord, error) {
 	for i := len(r.saved) - 1; i >= 0; i-- {
 		if r.saved[i].CharacterID == characterID {
@@ -405,9 +417,8 @@ func (r *memoryCharRepo) FindByID(_ context.Context, id string) (core_character.
 	return c, nil
 }
 
-func (r *memoryCharRepo) Update(_ context.Context, c core_character.Character) error {
-	r.chars[c.ID] = c
-	return nil
+func (r *memoryCharRepo) FindByIDForUpdate(ctx context.Context, id string) (core_character.Character, error) {
+	return r.FindByID(ctx, id)
 }
 
 func TestEmergencyRescue_WithRealSchedulingCleaner_FailureAndRecovery(t *testing.T) {
@@ -428,7 +439,7 @@ func TestEmergencyRescue_WithRealSchedulingCleaner_FailureAndRecovery(t *testing
 		},
 	}
 
-	rescueService := rescue.NewService(rescueRepo, charRepo, schedSvc, timerSvc)
+	rescueService := rescue.NewService(rescueRepo, charRepo, schedSvc, timerSvc, passthroughTx{})
 
 	// 1. Enqueue action for hero-1
 	_, err := schedSvc.Schedule(ctx, "adventure:step", "hero-1", nil, now.Add(time.Hour))
@@ -440,7 +451,7 @@ func TestEmergencyRescue_WithRealSchedulingCleaner_FailureAndRecovery(t *testing
 	injectedErr := errors.New("valkey write connection reset")
 	adapter.failZrem = injectedErr
 
-	// 3. EmergencyRescue MUST return execution failure and record NO penalty
+	// 3. EmergencyRescue MUST return execution failure, keeping the owed penalty unconfirmed
 	rec, err := rescueService.EmergencyRescue(ctx, "hero-1", "Screen frozen", now)
 	if err == nil {
 		t.Fatalf("expected EmergencyRescue to fail on cancellation error, got rec=%+v", rec)
@@ -448,12 +459,12 @@ func TestEmergencyRescue_WithRealSchedulingCleaner_FailureAndRecovery(t *testing
 	if !errors.Is(err, injectedErr) {
 		t.Fatalf("expected injected error %v, got %v", injectedErr, err)
 	}
-	if len(rescueRepo.saved) != 0 {
-		t.Fatalf("expected 0 rescue records saved after prerequisite failure, got %d", len(rescueRepo.saved))
+	if len(rescueRepo.saved) != 1 || !rescueRepo.saved[0].AppliedAt.IsZero() {
+		t.Fatalf("expected one unconfirmed rescue record after cancellation failure, got %+v", rescueRepo.saved)
 	}
 	locked, _ := timerSvc.IsLocked(ctx, timer.CategorySleep, "hero-1")
 	if locked {
-		t.Fatalf("expected sleep timer not locked after prerequisite failure")
+		t.Fatalf("expected sleep timer not locked after cancellation failure")
 	}
 
 	// 4. Healthy cancellation after error resolved
@@ -465,8 +476,8 @@ func TestEmergencyRescue_WithRealSchedulingCleaner_FailureAndRecovery(t *testing
 	if recSuccess.PenaltySeconds != rescue.DefaultPenaltySeconds {
 		t.Errorf("expected penalty %d, got %d", rescue.DefaultPenaltySeconds, recSuccess.PenaltySeconds)
 	}
-	if len(rescueRepo.saved) != 1 {
-		t.Fatalf("expected 1 rescue record saved, got %d", len(rescueRepo.saved))
+	if len(rescueRepo.saved) != 1 || recSuccess.ID != rescueRepo.saved[0].ID || rescueRepo.saved[0].AppliedAt.IsZero() {
+		t.Fatalf("expected the retry to confirm the same record, got %+v", rescueRepo.saved)
 	}
 
 	// 5. Idle character (no actions remaining) returns 0 penalty cooldown without recording

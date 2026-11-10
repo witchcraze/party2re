@@ -7,14 +7,19 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	corescheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 )
 
 type stubRescueRepo struct {
-	records []RescueRecord
+	records          []RescueRecord
+	saveErr, markErr error
 }
 
 func (r *stubRescueRepo) Save(_ context.Context, record RescueRecord) error {
+	if r.saveErr != nil {
+		return r.saveErr
+	}
 	r.records = append([]RescueRecord{record}, r.records...)
 	return nil
 }
@@ -28,8 +33,21 @@ func (r *stubRescueRepo) FindLatestByCharacterID(_ context.Context, characterID 
 	return RescueRecord{}, ErrNoRescueRecord
 }
 
+func (r *stubRescueRepo) MarkApplied(_ context.Context, id string, at time.Time) error {
+	if r.markErr != nil {
+		return r.markErr
+	}
+	for i := range r.records {
+		if r.records[i].ID == id && r.records[i].AppliedAt.IsZero() {
+			r.records[i].AppliedAt = at
+		}
+	}
+	return nil
+}
+
 type stubCharRepo struct {
 	characters map[string]corecharacter.Character
+	locks      int
 }
 
 func (r *stubCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
@@ -40,15 +58,27 @@ func (r *stubCharRepo) FindByID(_ context.Context, id string) (corecharacter.Cha
 	return c, nil
 }
 
-func (r *stubCharRepo) Update(_ context.Context, c corecharacter.Character) error {
-	r.characters[c.ID] = c
-	return nil
+func (r *stubCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	r.locks++
+	return r.FindByID(ctx, id)
 }
 
+// stubActionCleaner holds pending scheduled work per character; nil stuckCharacters means every character has work.
 type stubActionCleaner struct {
 	clearedCharacters []string
 	stuckCharacters   map[string]bool
 	err               error
+}
+
+func (c *stubActionCleaner) hasWork(characterID string) bool {
+	return c.stuckCharacters == nil || c.stuckCharacters[characterID]
+}
+
+func (c *stubActionCleaner) FindPendingByActorID(_ context.Context, characterID string) ([]corescheduling.ScheduledAction, error) {
+	if !c.hasWork(characterID) {
+		return nil, nil
+	}
+	return []corescheduling.ScheduledAction{{ID: "work", ActorID: characterID, State: corescheduling.StatePending}}, nil
 }
 
 func (c *stubActionCleaner) ClearActiveActions(_ context.Context, characterID string) (bool, error) {
@@ -56,199 +86,243 @@ func (c *stubActionCleaner) ClearActiveActions(_ context.Context, characterID st
 	if c.err != nil {
 		return false, c.err
 	}
-	if c.stuckCharacters != nil {
-		return c.stuckCharacters[characterID], nil
+	cleared := c.hasWork(characterID)
+	if c.stuckCharacters == nil {
+		c.stuckCharacters = map[string]bool{}
 	}
-	return true, nil
+	c.stuckCharacters[characterID] = false
+	return cleared, nil
+}
+
+type stubTx struct{}
+
+func (stubTx) RunInTx(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
+
+// faultyTimer injects sleep-timer read/write failures over a real in-memory timer.
+type faultyTimer struct {
+	timer.Service
+	getErr, setErr error
+}
+
+func (t *faultyTimer) GetRemainingLock(ctx context.Context, category, id string) (time.Duration, error) {
+	if t.getErr != nil {
+		return 0, t.getErr
+	}
+	return t.Service.GetRemainingLock(ctx, category, id)
+}
+
+func (t *faultyTimer) SetLock(ctx context.Context, category, id string, d time.Duration) error {
+	if t.setErr != nil {
+		return t.setErr
+	}
+	return t.Service.SetLock(ctx, category, id, d)
+}
+
+func newTestService(repo RescueRepository, chars CharacterRepository, cleaner ActionCleaner, timers TimerService) *Service {
+	return NewService(repo, chars, cleaner, timers, stubTx{})
+}
+
+func heroRepo() *stubCharRepo {
+	return &stubCharRepo{characters: map[string]corecharacter.Character{"char-1": {ID: "char-1", Name: "StuckHero"}}}
+}
+
+func assertSleep(t *testing.T, timers timer.Service, want time.Duration) {
+	t.Helper()
+	rem, err := timers.GetRemainingLock(context.Background(), timer.CategorySleep, "char-1")
+	if err != nil || rem < want-10*time.Second || rem > want {
+		t.Fatalf("sleep remaining = %v (err %v), want ~%v", rem, err, want)
+	}
 }
 
 func TestEmergencyRescueSuccess(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
-
 	rescueRepo := &stubRescueRepo{}
-	charRepo := &stubCharRepo{
-		characters: map[string]corecharacter.Character{
-			"char-1": {ID: "char-1", Name: "StuckHero"},
-		},
-	}
 	cleaner := &stubActionCleaner{}
 	timerSvc := timer.NewService(nil)
+	svc := newTestService(rescueRepo, heroRepo(), cleaner, timerSvc)
 
-	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
-
-	rec, err := svc.EmergencyRescue(ctx, "char-1", "Screen frozen", now)
+	rec, err := svc.EmergencyRescue(ctx, "char-1", " Screen frozen ", now)
 	if err != nil {
 		t.Fatalf("EmergencyRescue failed: %v", err)
 	}
-
-	if rec.CharacterID != "char-1" {
-		t.Errorf("expected char-1, got %s", rec.CharacterID)
-	}
-	if rec.PenaltySeconds != DefaultPenaltySeconds {
-		t.Errorf("expected penalty %d, got %d", DefaultPenaltySeconds, rec.PenaltySeconds)
+	if rec.CharacterID != "char-1" || rec.Reason != "Screen frozen" || rec.PenaltySeconds != DefaultPenaltySeconds {
+		t.Fatalf("unexpected record %+v", rec)
 	}
 	if len(cleaner.clearedCharacters) != 1 || cleaner.clearedCharacters[0] != "char-1" {
-		t.Errorf("expected action cleaner called for char-1")
+		t.Fatalf("expected action cleaner called for char-1, got %v", cleaner.clearedCharacters)
+	}
+	assertSleep(t, timerSvc, 600*time.Second)
+	if len(rescueRepo.records) != 1 || rescueRepo.records[0].AppliedAt.IsZero() {
+		t.Fatalf("expected one confirmed record, got %+v", rescueRepo.records)
 	}
 
-	// Verify timer.CategorySleep lock was set for 600s
-	locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "char-1")
-	if err != nil || !locked {
-		t.Errorf("expected timer.CategorySleep locked, got locked=%v, err=%v", locked, err)
+	underPenalty, remaining, err := svc.IsUnderPenalty(ctx, "char-1", now.Add(time.Minute))
+	if err != nil || !underPenalty || remaining != 9*time.Minute {
+		t.Fatalf("after 1 min: under=%v remaining=%v err=%v", underPenalty, remaining, err)
 	}
-	lockRem, err := timerSvc.GetRemainingLock(ctx, timer.CategorySleep, "char-1")
-	if err != nil || lockRem <= 590*time.Second || lockRem > 600*time.Second {
-		t.Errorf("expected ~600s remaining lock, got %v (err: %v)", lockRem, err)
-	}
-
-	// Character is under penalty immediately after rescue
-	underPenalty, remaining, err := svc.IsUnderPenalty(ctx, "char-1", now.Add(1*time.Minute))
-	if err != nil || !underPenalty || remaining <= 0 {
-		t.Errorf("expected under penalty after 1 min, got %v (remaining: %v)", underPenalty, remaining)
-	}
-
-	err = svc.CheckActionAllowed(ctx, "char-1", now.Add(1*time.Minute))
-	if !errors.Is(err, ErrCharacterUnderPenalty) {
-		t.Errorf("expected ErrCharacterUnderPenalty, got %v", err)
-	}
-
-	// Penalty expires after 10 minutes (600 seconds)
-	underPenalty, _, err = svc.IsUnderPenalty(ctx, "char-1", now.Add(11*time.Minute))
-	if err != nil || underPenalty {
-		t.Errorf("expected penalty expired after 11 min, got under penalty: %v", underPenalty)
-	}
-
-	err = svc.CheckActionAllowed(ctx, "char-1", now.Add(11*time.Minute))
-	if err != nil {
-		t.Errorf("expected action allowed after penalty expiry, got %v", err)
+	if underPenalty, _, err := svc.IsUnderPenalty(ctx, "char-1", now.Add(11*time.Minute)); err != nil || underPenalty {
+		t.Fatalf("after 11 min: under=%v err=%v", underPenalty, err)
 	}
 }
 
 func TestEmergencyRescue_ConsecutiveRescuesDoNotDoublePenalty(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
-
-	rescueRepo := &stubRescueRepo{
-		records: []RescueRecord{
-			{
-				ID:             "rec-0",
-				CharacterID:    "char-1",
-				Reason:         "First rescue",
-				PenaltySeconds: DefaultPenaltySeconds,
-				CreatedAt:      now.Add(-2 * time.Hour),
-			},
-		},
-	}
-	charRepo := &stubCharRepo{
-		characters: map[string]corecharacter.Character{
-			"char-1": {ID: "char-1", Name: "StuckHero"},
-		},
-	}
-	cleaner := &stubActionCleaner{
-		stuckCharacters: map[string]bool{"char-1": true},
-	}
+	rescueRepo := &stubRescueRepo{records: []RescueRecord{{
+		ID: "rec-0", CharacterID: "char-1", Reason: "First rescue", PenaltySeconds: DefaultPenaltySeconds,
+		CreatedAt: now.Add(-2 * time.Hour), SleepUntil: now.Add(-110 * time.Minute), AppliedAt: now.Add(-2 * time.Hour),
+	}}}
 	timerSvc := timer.NewService(nil)
-
-	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
+	svc := newTestService(rescueRepo, heroRepo(), &stubActionCleaner{}, timerSvc)
 
 	rec, err := svc.EmergencyRescue(ctx, "char-1", "Second stuck", now)
 	if err != nil {
 		t.Fatalf("EmergencyRescue failed: %v", err)
 	}
-
-	if rec.PenaltySeconds != DefaultPenaltySeconds {
-		t.Errorf("expected flat penalty %d (no doubling), got %d", DefaultPenaltySeconds, rec.PenaltySeconds)
+	if rec.ID == "rec-0" || rec.PenaltySeconds != DefaultPenaltySeconds {
+		t.Fatalf("expected a new flat penalty, got %+v", rec)
 	}
+	assertSleep(t, timerSvc, 600*time.Second)
+
+	// The work is gone now: a repeated request is idle and adds nothing.
+	again, err := svc.EmergencyRescue(ctx, "char-1", "Third click", now)
+	if err != nil || again.ID != "" || again.PenaltySeconds != 0 || len(rescueRepo.records) != 2 {
+		t.Fatalf("repeat rescue = %+v, %v (records %d)", again, err, len(rescueRepo.records))
+	}
+	assertSleep(t, timerSvc, 600*time.Second)
 }
 
 func TestEmergencyRescue_AccumulatesSleepTimerWhenAlreadyLocked(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
-
-	rescueRepo := &stubRescueRepo{}
-	charRepo := &stubCharRepo{
-		characters: map[string]corecharacter.Character{
-			"char-1": {ID: "char-1", Name: "StuckHero"},
-		},
-	}
-	cleaner := &stubActionCleaner{
-		stuckCharacters: map[string]bool{"char-1": true},
-	}
 	timerSvc := timer.NewService(nil)
-
-	// Pre-lock with 200 seconds of sleep
 	if err := timerSvc.SetLock(ctx, timer.CategorySleep, "char-1", 200*time.Second); err != nil {
-		t.Fatalf("failed to pre-lock timer: %v", err)
+		t.Fatal(err)
 	}
+	svc := newTestService(&stubRescueRepo{}, heroRepo(), &stubActionCleaner{}, timerSvc)
 
-	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
-
-	_, err := svc.EmergencyRescue(ctx, "char-1", "Rescue during active sleep", now)
+	rec, err := svc.EmergencyRescue(ctx, "char-1", "Rescue during active sleep", now)
 	if err != nil {
 		t.Fatalf("EmergencyRescue failed: %v", err)
 	}
-
-	rem, err := timerSvc.GetRemainingLock(ctx, timer.CategorySleep, "char-1")
-	if err != nil {
-		t.Fatalf("GetRemainingLock failed: %v", err)
-	}
-	// Expected ~800 seconds (200s + 600s)
-	if rem < 790*time.Second || rem > 805*time.Second {
-		t.Errorf("expected accumulated lock (~800s), got %v", rem)
+	assertSleep(t, timerSvc, 800*time.Second)
+	if owed := rec.SleepUntil.Sub(now); owed < 790*time.Second || owed > 800*time.Second {
+		t.Fatalf("recorded deadline = now+%v, want ~800s", owed)
 	}
 }
 
 func TestEmergencyRescue_IdleCharacterReturnsEarlyWithZeroPenalty(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
-
 	rescueRepo := &stubRescueRepo{}
-	charRepo := &stubCharRepo{
-		characters: map[string]corecharacter.Character{
-			"char-idle": {ID: "char-idle", Name: "TownHero"},
-		},
-	}
-	cleaner := &stubActionCleaner{
-		stuckCharacters: map[string]bool{"char-idle": false}, // not stuck
-	}
-	timerSvc := timer.NewService(nil)
+	cleaner := &stubActionCleaner{stuckCharacters: map[string]bool{}}
+	timerSvc := &faultyTimer{Service: timer.NewService(nil), getErr: errors.New("idle rescue must not read sleep")}
+	svc := newTestService(rescueRepo, heroRepo(), cleaner, timerSvc)
 
-	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
-
-	rec, err := svc.EmergencyRescue(ctx, "char-idle", "Accidental click in town", now)
+	rec, err := svc.EmergencyRescue(ctx, "char-1", "Accidental click in town", now)
 	if err != nil {
 		t.Fatalf("EmergencyRescue failed: %v", err)
 	}
+	if rec.ID != "" || rec.PenaltySeconds != 0 || rec.CharacterID != "char-1" {
+		t.Fatalf("expected idle result, got %+v", rec)
+	}
+	if len(rescueRepo.records) != 0 || len(cleaner.clearedCharacters) != 0 {
+		t.Fatalf("idle rescue changed state: records=%v cleared=%v", rescueRepo.records, cleaner.clearedCharacters)
+	}
+	if locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "char-1"); err != nil || locked {
+		t.Fatalf("expected no sleep for idle character, got locked=%v err=%v", locked, err)
+	}
+	if underPenalty, remaining, err := svc.IsUnderPenalty(ctx, "char-1", now); err != nil || underPenalty || remaining != 0 {
+		t.Fatalf("expected no penalty, got %v %v %v", underPenalty, remaining, err)
+	}
+}
 
-	if rec.PenaltySeconds != 0 {
-		t.Errorf("expected 0 penalty seconds for idle character, got %d", rec.PenaltySeconds)
-	}
-	if rec.CharacterID != "char-idle" {
-		t.Errorf("expected char-idle, got %s", rec.CharacterID)
-	}
+// Every failure point keeps existing sleep and leaves either no change or an
+// unconfirmed record; the retry resumes it with exactly one penalty.
+func TestEmergencyRescue_PartialFailuresResumeWithOnePenalty(t *testing.T) {
+	ctx := context.Background()
+	injected := errors.New("injected store failure")
+	for _, tc := range []struct {
+		name          string
+		inject        func(*stubRescueRepo, *stubActionCleaner, *faultyTimer)
+		wantRecord    bool
+		wantCleared   bool
+		wantFullSleep bool // the penalty already reached the timer before the failure
+	}{
+		{"remaining sleep read", func(_ *stubRescueRepo, _ *stubActionCleaner, tm *faultyTimer) { tm.getErr = injected }, false, false, false},
+		{"record save", func(r *stubRescueRepo, _ *stubActionCleaner, _ *faultyTimer) { r.saveErr = injected }, false, false, false},
+		{"scheduled work clear", func(_ *stubRescueRepo, c *stubActionCleaner, _ *faultyTimer) { c.err = injected }, true, false, false},
+		{"sleep timer write", func(_ *stubRescueRepo, _ *stubActionCleaner, tm *faultyTimer) { tm.setErr = injected }, true, true, false},
+		{"confirmation", func(r *stubRescueRepo, _ *stubActionCleaner, _ *faultyTimer) { r.markErr = injected }, true, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			repo := &stubRescueRepo{}
+			cleaner := &stubActionCleaner{}
+			base := timer.NewService(nil)
+			if err := base.SetLock(ctx, timer.CategorySleep, "char-1", time.Hour); err != nil {
+				t.Fatal(err)
+			}
+			tm := &faultyTimer{Service: base}
+			svc := newTestService(repo, heroRepo(), cleaner, tm)
+			tc.inject(repo, cleaner, tm)
 
-	// Must NOT record a penalty record into the repository
-	if len(rescueRepo.records) != 0 {
-		t.Errorf("expected 0 saved rescue records, got %d", len(rescueRepo.records))
-	}
+			rec, err := svc.EmergencyRescue(ctx, "char-1", "stuck", now)
+			if !errors.Is(err, injected) || rec.ID != "" || rec.PenaltySeconds != 0 {
+				t.Fatalf("failure surfaced as %+v, %v", rec, err)
+			}
+			if tc.wantFullSleep {
+				assertSleep(t, base, time.Hour+600*time.Second)
+			} else {
+				assertSleep(t, base, time.Hour)
+			}
+			if got := len(repo.records) == 1 && repo.records[0].AppliedAt.IsZero(); got != tc.wantRecord || (!tc.wantRecord && len(repo.records) != 0) {
+				t.Fatalf("records after failure: %+v", repo.records)
+			}
+			if cleared := !cleaner.hasWork("char-1"); cleared != tc.wantCleared {
+				t.Fatalf("work cleared = %v, want %v", cleared, tc.wantCleared)
+			}
+			if under, _, err := svc.IsUnderPenalty(ctx, "char-1", now); err != nil || under != tc.wantRecord {
+				t.Fatalf("owed penalty visible = %v (err %v), want %v", under, err, tc.wantRecord)
+			}
 
-	// Timer lock must NOT be set for idle character
-	locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "char-idle")
-	if err != nil || locked {
-		t.Errorf("expected timer not locked for idle character, got locked=%v, err=%v", locked, err)
+			*repo = stubRescueRepo{records: repo.records}
+			cleaner.err, tm.getErr, tm.setErr = nil, nil, nil
+			rec, err = svc.EmergencyRescue(ctx, "char-1", "retry", now.Add(time.Second))
+			if err != nil || rec.PenaltySeconds != DefaultPenaltySeconds {
+				t.Fatalf("retry = %+v, %v", rec, err)
+			}
+			if len(repo.records) != 1 || repo.records[0].AppliedAt.IsZero() || repo.records[0].ID != rec.ID {
+				t.Fatalf("retry must confirm exactly one record: %+v", repo.records)
+			}
+			if tc.wantRecord && rec.Reason != "stuck" {
+				t.Fatalf("retry did not resume the unconfirmed record: %+v", rec)
+			}
+			assertSleep(t, base, time.Hour+600*time.Second)
+		})
 	}
+}
 
-	// Character is not under penalty
-	underPenalty, remaining, err := svc.IsUnderPenalty(ctx, "char-idle", now)
-	if err != nil || underPenalty || remaining != 0 {
-		t.Errorf("expected not under penalty, got underPenalty=%v, remaining=%v", underPenalty, remaining)
+// A resumed record whose deadline is shorter than the current sleep is confirmed without shortening it.
+func TestEmergencyRescue_ResumeNeverShortensSleep(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	repo := &stubRescueRepo{records: []RescueRecord{{
+		ID: "rec-0", CharacterID: "char-1", Reason: "old", PenaltySeconds: DefaultPenaltySeconds,
+		CreatedAt: now.Add(-5 * time.Minute), SleepUntil: now.Add(5 * time.Minute),
+	}}}
+	timerSvc := timer.NewService(nil)
+	if err := timerSvc.SetLock(ctx, timer.CategorySleep, "char-1", time.Hour); err != nil {
+		t.Fatal(err)
 	}
+	svc := newTestService(repo, heroRepo(), &stubActionCleaner{stuckCharacters: map[string]bool{}}, timerSvc)
 
-	// Character can perform actions immediately
-	if err := svc.CheckActionAllowed(ctx, "char-idle", now); err != nil {
-		t.Errorf("expected action allowed for safe character, got %v", err)
+	rec, err := svc.EmergencyRescue(ctx, "char-1", "retry", now)
+	if err != nil || rec.ID != "rec-0" || repo.records[0].AppliedAt.IsZero() {
+		t.Fatalf("resume = %+v, %v (%+v)", rec, err, repo.records)
 	}
+	assertSleep(t, timerSvc, time.Hour)
 }
 
 func TestService_Unstuck(t *testing.T) {
@@ -262,7 +336,7 @@ func TestService_Unstuck(t *testing.T) {
 	}
 	cleaner := &stubActionCleaner{}
 	timerSvc := timer.NewService(nil)
-	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
+	svc := newTestService(rescueRepo, charRepo, cleaner, timerSvc)
 
 	t.Run("success", func(t *testing.T) {
 		err := svc.Unstuck(ctx, "char-unstuck")
@@ -292,65 +366,6 @@ func TestService_Unstuck(t *testing.T) {
 			t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
 		}
 	})
-}
-
-func TestEmergencyRescueInvokesActionCleaner(t *testing.T) {
-	ctx := context.Background()
-	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
-
-	rescueRepo := &stubRescueRepo{}
-	charRepo := &stubCharRepo{
-		characters: map[string]corecharacter.Character{
-			"char-42": {ID: "char-42", Name: "StuckHero"},
-		},
-	}
-	cleaner := &stubActionCleaner{}
-	timerSvc := timer.NewService(nil)
-	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
-
-	_, err := svc.EmergencyRescue(ctx, "char-42", "Stuck in infinite task", now)
-	if err != nil {
-		t.Fatalf("EmergencyRescue failed: %v", err)
-	}
-
-	if len(cleaner.clearedCharacters) != 1 || cleaner.clearedCharacters[0] != "char-42" {
-		t.Fatalf("expected cleaner invoked with char-42, got %v", cleaner.clearedCharacters)
-	}
-}
-
-func TestEmergencyRescueActionCleanerFailure(t *testing.T) {
-	ctx := context.Background()
-	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
-
-	cleanerErr := errors.New("valkey cleanup failure")
-	rescueRepo := &stubRescueRepo{}
-	charRepo := &stubCharRepo{
-		characters: map[string]corecharacter.Character{
-			"char-cleaner-fail": {ID: "char-cleaner-fail", Name: "FailHero"},
-		},
-	}
-	cleaner := &stubActionCleaner{err: cleanerErr}
-	timerSvc := timer.NewService(nil)
-	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
-
-	rec, err := svc.EmergencyRescue(ctx, "char-cleaner-fail", "Screen stuck", now)
-	if !errors.Is(err, cleanerErr) {
-		t.Fatalf("expected cleanerErr %v, got %v", cleanerErr, err)
-	}
-	if rec.CharacterID != "" || rec.PenaltySeconds != 0 {
-		t.Fatalf("expected empty rescue record, got %+v", rec)
-	}
-
-	// Verify no rescue record was saved
-	if len(rescueRepo.records) != 0 {
-		t.Fatalf("expected 0 rescue records saved after cleaner failure, got %d", len(rescueRepo.records))
-	}
-
-	// Verify no timer lock was set
-	locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "char-cleaner-fail")
-	if err != nil || locked {
-		t.Fatalf("expected timer not locked, got locked=%v, err=%v", locked, err)
-	}
 }
 
 type stubActivityReader struct {
@@ -384,7 +399,7 @@ func TestRescueRejectsRemainingFeatureActivity(t *testing.T) {
 			if err := timerSvc.SetLock(ctx, timer.CategorySleep, "char-1", time.Hour); err != nil {
 				t.Fatal(err)
 			}
-			svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
+			svc := newTestService(rescueRepo, charRepo, cleaner, timerSvc)
 			svc.SetActivityReader(tc.reader)
 
 			if _, err := svc.EmergencyRescue(ctx, "char-1", "stuck", now); !errors.Is(err, tc.wantErr) {
@@ -407,11 +422,48 @@ func TestRescueRejectsRemainingFeatureActivity(t *testing.T) {
 
 	t.Run("no activity keeps idle rescue free", func(t *testing.T) {
 		charRepo := &stubCharRepo{characters: map[string]corecharacter.Character{"char-1": {ID: "char-1"}}}
-		svc := NewService(&stubRescueRepo{}, charRepo, &stubActionCleaner{stuckCharacters: map[string]bool{}}, timer.NewService(nil))
+		svc := newTestService(&stubRescueRepo{}, charRepo, &stubActionCleaner{stuckCharacters: map[string]bool{}}, timer.NewService(nil))
 		svc.SetActivityReader(&stubActivityReader{kinds: []string{}})
 		rec, err := svc.EmergencyRescue(ctx, "char-1", "stuck", now)
 		if err != nil || rec.PenaltySeconds != 0 {
 			t.Fatalf("idle rescue = %+v, %v", rec, err)
 		}
 	})
+}
+
+// After work was cleared but sleep failed, a newly started activity must not hide the owed sleep.
+func TestEmergencyRescue_ResumeAppliesOwedSleepDuringNewActivity(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	repo := &stubRescueRepo{}
+	cleaner := &stubActionCleaner{}
+	base := timer.NewService(nil)
+	tm := &faultyTimer{Service: base, setErr: errors.New("sleep write failed")}
+	svc := newTestService(repo, heroRepo(), cleaner, tm)
+
+	if _, err := svc.EmergencyRescue(ctx, "char-1", "stuck", now); err == nil {
+		t.Fatal("expected the sleep write failure")
+	}
+	tm.setErr = nil
+	activity := &stubActivityReader{kinds: []string{"dungeon"}}
+	svc.SetActivityReader(activity)
+
+	rec, err := svc.EmergencyRescue(ctx, "char-1", "retry", now.Add(time.Second))
+	if err != nil || rec.Reason != "stuck" || repo.records[0].AppliedAt.IsZero() {
+		t.Fatalf("resume during activity = %+v, %v (%+v)", rec, err, repo.records)
+	}
+	assertSleep(t, base, 599*time.Second)
+	if len(cleaner.clearedCharacters) != 1 {
+		t.Fatalf("resume during activity must not clear work again: %v", cleaner.clearedCharacters)
+	}
+
+	// Uncleared work with an activity is still rejected without change.
+	repo.records[0].AppliedAt = time.Time{}
+	cleaner.stuckCharacters["char-1"] = true
+	if _, err := svc.EmergencyRescue(ctx, "char-1", "again", now); !errors.Is(err, ErrActivityRemaining) {
+		t.Fatalf("uncleared work during activity = %v, want ErrActivityRemaining", err)
+	}
+	if len(cleaner.clearedCharacters) != 1 || !repo.records[0].AppliedAt.IsZero() {
+		t.Fatalf("rejected resume changed state: cleared=%v records=%+v", cleaner.clearedCharacters, repo.records)
+	}
 }

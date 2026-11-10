@@ -10,11 +10,10 @@ const (
 )
 
 var (
-	ErrInvalidCharacterID    = errors.New("invalid character ID")
-	ErrInvalidReason         = errors.New("rescue reason cannot be empty")
-	ErrCharacterUnderPenalty = errors.New("character is currently under rescue penalty cooldown")
-	ErrNoRescueRecord        = errors.New("no rescue record found")
-	ErrActivityRemaining     = errors.New("character still has unrecovered feature activity")
+	ErrInvalidCharacterID = errors.New("invalid character ID")
+	ErrInvalidReason      = errors.New("rescue reason cannot be empty")
+	ErrNoRescueRecord     = errors.New("no rescue record found")
+	ErrActivityRemaining  = errors.New("character still has unrecovered feature activity")
 )
 
 type RescueRecord struct {
@@ -23,14 +22,8 @@ type RescueRecord struct {
 	Reason         string    `json:"reason"`
 	PenaltySeconds int       `json:"penalty_seconds"`
 	CreatedAt      time.Time `json:"created_at"`
-}
-
-// ExpiresAt returns the timestamp when the rescue penalty expires.
-func (r RescueRecord) ExpiresAt() time.Time {
-	return r.CreatedAt.Add(time.Duration(r.PenaltySeconds) * time.Second)
-}
-
-// IsActive returns true if the rescue penalty is still active at the given time.
-func (r RescueRecord) IsActive(now time.Time) bool {
-	return now.Before(r.ExpiresAt())
+	// SleepUntil is the owed sleep deadline: prior remaining sleep plus the penalty.
+	SleepUntil time.Time `json:"-"`
+	// AppliedAt is zero until scheduled work is cleared and SleepUntil reaches the sleep timer.
+	AppliedAt time.Time `json:"-"`
 }
