@@ -179,25 +179,47 @@ to blindly delete arbitrary financial/session state on any type error.
 
 Casino room persistence and writer-side partial failure boundary:
 
-Indian Poker, HighLow, Doppel and departure actions hold the room lock while
+Indian Poker, HighLow and Doppel actions hold the room lock while
 staging the complete room/member result, including next-round resets,
 eliminations, leader succession and disband. Required reads, wagers, payouts,
-win updates and departure fatigue run inside the SQL transaction
+and win updates run inside the SQL transaction
 before `UpdateRoomDetail` publishes that result with one authoritative payload
 `SET`. No intermediate accepted turn or removal is published. This keeps a
 rejected action from later settling against a rolled-back wager.
 
 - **Before publication**: A required read, SQL mutation or rejected payload write returns its error and rolls back SQL; the previously published room/member snapshot remains unchanged and no winner progression hook runs.
 - **After publication**: `saveRoomDetail` synchronizes the active index (`party2:casino:rooms:active` ZADD/ZREM) and renews reverse mappings (`party2:casino:character:<character_id>`) for every still-admitted participant and spectator whose mapping still targets the mutating room (or removes them on disband); `UpdateRoomDetail` then removes eliminated characters' reverse mappings when still mapped to that room. Admission writes (`CreateRoom`, `AddMember`) avoid overwriting a different live room mapping, and missing/expired mappings are not resurrected by renewal. These post-payload synchronization failures return `SecondarySyncError` / `ErrSecondarySync`. The action permits SQL to commit because the complete payload already applied. Secondary synchronization/cleanup is attempted across all members even when an earlier index or mapping update fails.
-- **Departure outcome**: A confirmed secondary-sync failure still commits participant fatigue with the published roster, leader and status; spectators incur no fatigue. `LeaveRoom` returns the mutation outcome directly, without a subsequent observation that could replace it. Observe the room and character before a new command; a departed member's retry rejects without another fatigue increment. If SQL finalization also fails, both errors remain observable, and the published roster alone does not prove fatigue committed.
 - **Observation and replay**: Once the transaction and `UpdateRoomDetail` succeed without a secondary-sync failure, the masked response snapshot is read reentrantly under the same room lock; if that snapshot read fails, the committed round's winner progression hook (`gamePlayedHook` -> `medal.MetricCasinoGames`) still runs before the read error is returned. Secondary errors and response-read errors remain observable by callers (HTTP 500). Refresh room/account observations before deciding a new action; never blindly replay an unconfirmed command. Indian Poker/HighLow reject an already submitted turn; Doppel permits reselection before settlement without another wager. Settled rooms reject further game actions. A successful renewal restores the active index and extends matching reverse mappings; failed reverse-mapping cleanup can leave a stale room pointer, which `GetCharacterRoomView` resolves as absent once live roster admission is gone while unreadable or blank mappings return an error.
 
-This boundary handles confirmed command failures; it is not crash-proof
-cross-store atomicity. A lost SET acknowledgement, SQL commit failure after
-payload publication, process crash, or Valkey data loss still requires a
-separately designed durable recovery protocol
-([departure recovery scope](https://github.com/witchcraze/party2re/issues/1997)).
-There is no settlement ledger or automatic replay/reconciliation guarantee.
+This game-action boundary handles confirmed failures, without crash-proof
+cross-store settlement or automatic wager replay. Unknown SET acknowledgements,
+SQL finalization failures and lost game state still require separate settlement
+recovery.
+
+**Departure recovery** uses the SQL-first publication pattern described for
+[PvP](transient-run-state.md#pvp-financial-publication), limited to Casino departure.
+SQL commits participant fatigue and the admission's complete departure outcome
+together before room publication; spectators incur no fatigue. The latest receipt
+per room is retained indefinitely and replaced only by a later committed departure.
+Pending roster claims survive Valkey loss and are released only after all room,
+index and conditional mapping writes are acknowledged. Admission and departure
+claims serialize on character SQL row locks: admission rechecks pending evidence
+before publishing, and departure rejects a roster that has moved to another room.
+Subsequent Casino room
+commands resume pending publication under the existing room lock without replaying
+fatigue, wagers or progression, preserving later character updates. Recovery can
+restore lost pending room state only until the original departure deadline; after
+that it finishes cleanup without resurrecting the room. Already acknowledged
+receipts never republish or renew a room. A retry of the latest departure succeeds
+without another fatigue increment; after a new admission, an identity-free leave
+request denotes a new departure, as in PvP. Older outcomes superseded by another
+member's departure are not replayable. Owned activity/view GETs remain read-only
+and surface pending recovery rather than false idle state. Publication or SQL
+acknowledgement failures retain evidence and remain observable as
+`ErrDepartureRecovery` with the underlying error (HTTP 500). This protocol retains
+the existing room-lease boundary; broader multi-instance fencing remains outside
+its guarantee ([#1574](https://github.com/witchcraze/party2re/issues/1574)).
+
 Room creation/start and admission
 operations retain their own publication boundaries. `AddMember` / `RemoveMember`
 also publish payloads before synchronizing reverse mappings.

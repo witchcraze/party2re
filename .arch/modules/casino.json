@@ -1,7 +1,7 @@
 {
   "module": "casino",
-  "domain": "Casino multiplayer wagers",
-  "description": "C1: SQL accounts and character wins; C3: shared pots. Room coordination precedes ordinary account reads, atomic SQL account mutations and winner character SELECT FOR UPDATE (rank 2). Staged Valkey publication precedes SQL commit, without cross-store atomicity. Failure limits: docs/architecture/valkey-keyspace.md.",
+  "domain": "Casino multiplayer wagers and departure",
+  "description": "C1: SQL accounts, character wins and departure evidence; C2: departure claim (rank 0) -> roster characters (rank 2, ascending ID) -> pending roster claims (rank 8, ascending ID); admission checks pending evidence under the same character SQL lock. C3: shared pots. Wagers publish staged Valkey state before SQL commit. Departure delegates to CommitDeparture, then publishes after SQL commit; room commands resume pending publication and owned GETs stay read-only. Failure limits: docs/architecture/valkey-keyspace.md.",
   "entrypoint": "internal/casino/casino.go",
   "dependencies": [
     {
@@ -23,6 +23,11 @@
       "module": "valkey",
       "relation_type": "repository",
       "source_ref": "internal/casino/room.go#RoomRepository"
+    },
+    {
+      "module": "database",
+      "relation_type": "repository",
+      "source_ref": "internal/casino/departure.go#DepartureRepository"
     }
   ],
   "transaction_flows": [
@@ -40,6 +45,16 @@
       "flow": "Doppel selection, reselection and settlement",
       "tx_mode": "RunInTx",
       "source_ref": "internal/casino/doppel.go#Service.PlayDoppelAction"
+    },
+    {
+      "flow": "Departure evidence and fatigue commit; publication follows this boundary",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/database/casino_departure_repository.go#CasinoRepository.CommitDeparture"
+    },
+    {
+      "flow": "Departure acknowledgement releases pending roster claims",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/database/casino_departure_repository.go#CasinoRepository.AcknowledgeDeparture"
     }
   ]
 }

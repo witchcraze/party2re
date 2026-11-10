@@ -145,7 +145,7 @@ func newPublicationFixture(t *testing.T, ctx context.Context, db *sql.DB, raw va
 	}
 	f.svc, err = casino.NewService(publicationAccounts{Repository: f.accounts, fault: f.fault},
 		casino.WithCharacterRepository(publicationCharacters{CharacterRepository: f.characters, fault: f.fault}),
-		casino.WithTransactionProvider(database.NewTransactionProvider(db)), casino.WithRoomRepository(f.rooms))
+		casino.WithTransactionProvider(database.NewTransactionProvider(db)), casino.WithDepartureRepository(f.accounts), casino.WithRoomRepository(f.rooms))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,7 +3,6 @@ package casino
 import (
 	"context"
 	"errors"
-	"slices"
 	"time"
 )
 
@@ -20,7 +19,7 @@ func (s *Service) JoinRoom(ctx context.Context, roomID string, characterID strin
 	}
 
 	var detail *RoomDetail
-	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	err := s.withRoomMutationLock(ctx, roomID, characterID, func(lockedCtx context.Context) error {
 		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
@@ -71,6 +70,9 @@ func (s *Service) JoinRoom(ctx context.Context, roomID string, characterID strin
 				UpdatedAt:   now,
 			}
 
+			if err := s.checkAdmissionDeparture(txCtx, characterID); err != nil {
+				return err
+			}
 			return s.roomRepo.AddMember(txCtx, newMember)
 		})
 		if txErr != nil {
@@ -97,7 +99,7 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 	}
 
 	var detail *RoomDetail
-	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	err := s.withRoomMutationLock(ctx, roomID, characterID, func(lockedCtx context.Context) error {
 		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
@@ -128,6 +130,9 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 				JoinedAt:    now,
 				UpdatedAt:   now,
 			}
+			if err := s.checkAdmissionDeparture(txCtx, characterID); err != nil {
+				return err
+			}
 			return s.roomRepo.AddMember(txCtx, spectator)
 		})
 		if txErr != nil {
@@ -144,67 +149,6 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 	return detail, nil
 }
 
-// LeaveRoom removes a character from a room, transferring leader or disbanding if empty (party2/lib/_casino.cgi:193-239).
-func (s *Service) LeaveRoom(ctx context.Context, roomID string, characterID string) error {
-	if characterID == "" {
-		return ErrInvalidCharacterID
-	}
-	if s.roomRepo == nil {
-		return errors.New("room repository is required")
-	}
-
-	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		var secondarySyncErr error
-		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
-			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
-			if err != nil {
-				return err
-			}
-			members, err := s.roomRepo.ListMembersForUpdate(txCtx, roomID)
-			if err != nil {
-				return err
-			}
-			index := slices.IndexFunc(members, func(m RoomMember) bool { return m.CharacterID == characterID })
-			if index < 0 {
-				return ErrMemberNotFound
-			}
-			member := members[index]
-			remaining := slices.Delete(members, index, index+1)
-
-			// Participating player leaving room incurs fatigue penalty (party2/lib/_casino.cgi:216-218)
-			if !member.IsSpectator && s.charRepo != nil {
-				char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
-				if err != nil {
-					return err
-				}
-				char.AddTired(1)
-				if err := s.charRepo.Update(txCtx, char); err != nil {
-					return err
-				}
-			}
-
-			if !member.IsSpectator {
-				firstActive := slices.IndexFunc(remaining, func(m RoomMember) bool { return !m.IsSpectator })
-				if firstActive < 0 {
-					room.Status = RoomStatusDisbanded
-				} else if room.LeaderCharacterID == characterID {
-					room.LeaderCharacterID = remaining[firstActive].CharacterID
-				}
-			}
-			room.UpdatedAt = time.Now().UTC()
-			if err := s.roomRepo.UpdateRoomDetail(txCtx, RoomDetail{Room: *room, Members: remaining}); err != nil {
-				if errors.Is(err, ErrSecondarySync) {
-					secondarySyncErr = err
-				} else {
-					return err
-				}
-			}
-			return nil
-		})
-		return errors.Join(txErr, secondarySyncErr)
-	})
-}
-
 // KickMember allows leader to kick a non-leader member while round is 0 (party2/lib/_casino.cgi:148-187).
 func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error {
 	if leaderID == "" || targetID == "" {
@@ -217,7 +161,7 @@ func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string
 		return errors.New("room repository is required")
 	}
 
-	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	return s.withRoomMutationLock(ctx, roomID, leaderID, func(lockedCtx context.Context) error {
 		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {

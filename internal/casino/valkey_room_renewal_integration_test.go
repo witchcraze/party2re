@@ -410,7 +410,7 @@ func TestValkeyRoomRenewal_PreservesAdmissionDiscoveryAcrossOriginalDeadline(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	svc, err := casino.NewService(casinoRepo, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -588,7 +588,7 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	svc, err := casino.NewService(casinoRepo, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -633,9 +633,7 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 		t.Fatalf("kicked spectator resurrected: %+v %v", view, err)
 	}
 
-	// 2. If secondary DEL fails on LeaveRoom, error is ErrSecondarySync, GetCharacterRoomView
-	// still reports nil, nil (not forbidden) because live roster no longer admits peerA,
-	// and joining roomB overwrites the stale roomA mapping.
+	// 2. A failed departure mapping deletion stays pending until the next command repairs it.
 	faultClient.failCharDel.Store(true)
 	leaveErr := svc.LeaveRoom(ctx, roomA, peerA)
 	faultClient.failCharDel.Store(false)
@@ -645,8 +643,8 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 	if mapped, err := repo.GetCharacterRoom(ctx, peerA); err != nil || mapped != roomA {
 		t.Fatalf("expected stale mapping to roomA before rejoin, got %q err=%v", mapped, err)
 	}
-	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+peerA, peerA); err != nil || view != nil {
-		t.Fatalf("stale mapping after leave should resolve to nil, nil, got view=%+v err=%v", view, err)
+	if _, err := svc.GetCharacterRoomView(ctx, "owner-"+peerA, peerA); !errors.Is(err, casino.ErrDepartureRecovery) {
+		t.Fatalf("pending departure must remain visible: %v", err)
 	}
 	if _, err := svc.JoinRoom(ctx, roomB, peerA, "", 0); err != nil {
 		t.Fatalf("rejoin roomB after stale mapping failed: %v", err)
@@ -864,7 +862,8 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	departures := casino.NewMemoryDepartureRepository()
+	svc, err := casino.NewService(casinoRepo, casino.WithDepartureRepository(departures), casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -964,7 +963,7 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	hookSvc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(hookRepo), casino.WithCharacterRepository(chars))
+	hookSvc, err := casino.NewService(casinoRepo, casino.WithDepartureRepository(departures), casino.WithRoomRepository(hookRepo), casino.WithCharacterRepository(chars))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1010,8 +1009,7 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 		}
 	}
 
-	// Deterministic Interleaving B: LeaveRoom(roomA, mover) updates roomA payload, then pauses before
-	// delete_character_room.lua while mover joins roomB; roomA's delayed delete must not remove roomB's mapping.
+	// Interleaving B: a new admission resumes only after pending departure cleanup.
 	pauseDeleteOnRoomA.Store(true)
 	raceErrs = testutil.RunRace(
 		func() error {
@@ -1019,8 +1017,8 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 		},
 		func() error {
 			<-deletePaused
-			_, err := hookSvc.JoinRoom(ctx, roomB, mover, "", 0)
 			close(deleteRelease)
+			_, err := hookSvc.JoinRoom(ctx, roomB, mover, "", 0)
 			return err
 		},
 	)

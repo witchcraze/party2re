@@ -81,6 +81,9 @@ func (s *Service) GetRoomView(ctx context.Context, roomID, playerID, characterID
 	}
 	var view *RoomView
 	err = s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		if err := s.checkPendingDeparture(lockedCtx, characterID); err != nil {
+			return err
+		}
 		detail, err := s.getRoomDetail(lockedCtx, roomID, characterID)
 		if err != nil {
 			return err

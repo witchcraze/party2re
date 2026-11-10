@@ -46,7 +46,7 @@ func (s *Service) StartIndianPoker(ctx context.Context, roomID string, leaderID 
 	}
 
 	var detail *RoomDetail
-	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	err := s.withRoomMutationLock(ctx, roomID, leaderID, func(lockedCtx context.Context) error {
 		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
@@ -143,7 +143,7 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 	var showdownWinner string
 	var secondarySyncErr error
 
-	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	err := s.withRoomMutationLock(ctx, roomID, characterID, func(lockedCtx context.Context) error {
 		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
