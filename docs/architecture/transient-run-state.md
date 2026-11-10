@@ -84,14 +84,17 @@ mapping deletion compares the room ID so it cannot erase newer membership. Final
 round retries return the stored result. Password hashes and financial versions use
 private persistence fields and remain absent from public room responses.
 
-These records have no automatic expiry. Recovery covers committed financial
-transitions awaiting publication; it does not reconstruct later team/round changes
-after an already published lobby expires or is evicted, or identify losses from
-older deployments. Active claims survive that loss, preventing another debit but
-requiring explicit recovery rather than silently abandoning the escrow; the
-character context reports such a claim without a live room as a PvP activity, so
-rescue does not treat it as idle. This adds
-no timeout refund rule. Retry after a new join/leave cycle is a new operation; the
+These records have no automatic expiry. Pending financial publication is recovered
+before interpreting a missing live room as loss. For an already published room
+that expires or is evicted, PvP leave verifies the requesting participant against
+SQL and closes the room without refunding bets, whether recruiting or in progress.
+The terminal record retains members and bet as forfeiture evidence; all room
+claims are released after publication succeeds. The character context exposes
+`pvp_leave` for a claim without a live room as `recovery_pending`; rescue still
+requires the PvP owner to finish recovery. This does not reconstruct lost combat
+or add a sleep penalty for arbitrary missing state; the legacy inactivity-cleanup
+gap is tracked in [#2046](https://github.com/witchcraze/party2re/issues/2046).
+Retry after a new join/leave cycle is a new operation; the
 API has no client request identity to distinguish a delayed request across cycles.
 SQL versions protect the financial claim; live combat and publication still use
 the existing room lease, whose wider multi-instance guarantees are unresolved in

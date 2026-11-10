@@ -95,7 +95,7 @@ func TestPvPClaimWithoutLiveRoomIsNotIdle(t *testing.T) {
 	r := contextActivityReaders{party: f, pvp: pv, gvg: gv, dungeon: f, challenge: f, casino: f}
 	ctx := context.Background()
 	facts, err := r.read(ctx, "owner", "hero")
-	if err != nil || len(facts) != 1 || facts[0].Kind != "pvp" || facts[0].ID != "lost-room" || facts[0].Phase != "recovery_pending" || len(facts[0].Actions) != 0 {
+	if err != nil || len(facts) != 1 || facts[0].Kind != "pvp" || facts[0].ID != "lost-room" || facts[0].Phase != "recovery_pending" || !slices.Equal(facts[0].Actions, []string{"pvp_leave"}) {
 		t.Fatalf("unpublished claim: %+v %v", facts, err)
 	}
 	if kinds, err := r.ActivityKinds(ctx, "owner", "hero"); err != nil || !slices.Equal(kinds, []string{"pvp"}) {
