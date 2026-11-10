@@ -167,7 +167,7 @@ func TestCasinoService_EndToEndWithValkeyRoomRepository(t *testing.T) {
 	casinoRepo.accounts[charLeader] = casino.Account{CharacterID: charLeader, Coins: 1000}
 	casinoRepo.accounts[charGuest] = casino.Account{CharacterID: charGuest, Coins: 1000}
 
-	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(valkeyRepo))
+	svc, err := casino.NewService(casinoRepo, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(valkeyRepo))
 	if err != nil {
 		t.Fatalf("failed to create casino service: %v", err)
 	}

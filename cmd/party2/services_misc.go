@@ -305,6 +305,7 @@ func newMiscServices(
 	}
 	casinoService, err := casino.NewService(
 		casinoRepo,
+		casino.WithDepartureRepository(casinoRepo),
 		casino.WithTransactionProvider(core.txProvider),
 		casino.WithEconomy(core.economy),
 		casino.WithDepotRepository(econ.depotRepo),

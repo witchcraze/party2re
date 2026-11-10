@@ -98,6 +98,7 @@ type Service struct {
 	mutationCheck    func(context.Context, string) error
 	repo             Repository
 	roomRepo         RoomRepository
+	departures       DepartureRepository
 	depotRepo        DepotRepository
 	charRepo         CharacterRepository
 	invRepo          InventoryRepository

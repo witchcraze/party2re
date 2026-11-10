@@ -14,6 +14,9 @@ func (s *Service) HasCharacterRoom(ctx context.Context, characterID string) (boo
 	if s.roomRepo == nil {
 		return false, errors.New("casino activity reader is required")
 	}
+	if err := s.checkPendingDeparture(ctx, characterID); err != nil {
+		return false, err
+	}
 	roomID, err := s.roomRepo.GetCharacterRoom(ctx, characterID)
 	if errors.Is(err, ErrRoomNotFound) {
 		return false, nil
@@ -61,6 +64,9 @@ func (s *Service) GetCharacterRoomView(ctx context.Context, playerID, characterI
 	}
 	if char.ID != characterID || char.PlayerID != playerID {
 		return nil, ErrRoomViewForbidden
+	}
+	if err := s.checkPendingDeparture(ctx, characterID); err != nil {
+		return nil, err
 	}
 	roomID, err := s.roomRepo.GetCharacterRoom(ctx, characterID)
 	if errors.Is(err, ErrRoomNotFound) {

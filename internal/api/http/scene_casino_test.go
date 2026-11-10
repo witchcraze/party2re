@@ -109,7 +109,7 @@ func newCasinoSceneFixture(t *testing.T) *casinoSceneFixture {
 	f := &casinoSceneFixture{gatewayFixture: newGatewayFixture(t), rooms: casino.NewMemoryRoomRepository(), accounts: &casinoSceneAccounts{}, store: &gatewayNavigationStore{selection: playercontext.Selection{Destination: "casino"}}}
 	f.characters = &casinoSceneCharacters{f: f.gatewayFixture}
 	var err error
-	f.service, err = casino.NewService(f.accounts, casino.WithRoomRepository(f.rooms), casino.WithCharacterRepository(f.characters))
+	f.service, err = casino.NewService(f.accounts, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(f.rooms), casino.WithCharacterRepository(f.characters))
 	if err != nil {
 		t.Fatal(err)
 	}

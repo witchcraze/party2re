@@ -145,6 +145,7 @@ type Room struct {
 	WinnerCharacterID *string    `json:"winner_character_id,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
+	DepartureVersion  int        `json:"-"`
 }
 
 type RoomMember struct {
@@ -203,6 +204,7 @@ type RoomRepository interface {
 	RoomLifecycleRepository
 	RoomMemberRepository
 	RoomLockRepository
+	DeparturePublisher
 }
 
 func hashPassword(pass string) string {
@@ -252,6 +254,9 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	}
 
 	var detail *RoomDetail
+	if err := s.recoverCharacterDeparture(ctx, characterID); err != nil {
+		return nil, err
+	}
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		existing, err := s.roomRepo.GetRoomByName(txCtx, req.Name)
 		if err != nil && !errors.Is(err, ErrRoomNotFound) {
@@ -360,6 +365,9 @@ func (s *Service) StartGame(ctx context.Context, roomID string, leaderID string)
 	if s.roomRepo == nil {
 		return nil, errors.New("room repository is required")
 	}
+	if err := s.withRoomMutationLock(ctx, roomID, leaderID, func(context.Context) error { return nil }); err != nil {
+		return nil, err
+	}
 	room, err := s.roomRepo.GetRoom(ctx, roomID)
 	if err != nil {
 		return nil, err
@@ -385,6 +393,9 @@ type RoomActionRequest struct {
 func (s *Service) PlayRoomAction(ctx context.Context, roomID string, characterID string, req RoomActionRequest) (*RoomDetail, error) {
 	if s.roomRepo == nil {
 		return nil, errors.New("room repository is required")
+	}
+	if err := s.withRoomMutationLock(ctx, roomID, characterID, func(context.Context) error { return nil }); err != nil {
+		return nil, err
 	}
 	room, err := s.roomRepo.GetRoom(ctx, roomID)
 	if err != nil {

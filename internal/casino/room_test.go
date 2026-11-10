@@ -18,7 +18,7 @@ func TestCasinoRoomLobby(t *testing.T) {
 	casinoRepo := newMockPrizeCasinoRepo()
 	roomRepo := casino.NewMemoryRoomRepository()
 
-	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(roomRepo))
+	svc, err := casino.NewService(casinoRepo, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(roomRepo))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestRoom_LeaveRoomFatigue(t *testing.T) {
 
 	svc, err := casino.NewService(
 		casinoRepo,
-		casino.WithRoomRepository(roomRepo),
+		casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(roomRepo),
 		casino.WithCharacterRepository(charRepo),
 	)
 	if err != nil {

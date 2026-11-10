@@ -25,9 +25,10 @@ var (
 var _ RoomRepository = (*ValkeyRoomRepository)(nil)
 
 type valkeyRoomDetailDTO struct {
-	Room         Room         `json:"room"`
-	PasswordHash string       `json:"password_hash,omitempty"`
-	Members      []RoomMember `json:"members"`
+	Room             Room         `json:"room"`
+	PasswordHash     string       `json:"password_hash,omitempty"`
+	Members          []RoomMember `json:"members"`
+	DepartureVersion int          `json:"departure_version,omitempty"`
 }
 
 // ValkeyRoomRepository persists casino multiplayer room and turn state in Valkey Master (Candidate C).
@@ -138,6 +139,7 @@ func (v *ValkeyRoomRepository) getRoomDetail(ctx context.Context, roomID string)
 	if dto.PasswordHash != "" {
 		dto.Room.PasswordHash = dto.PasswordHash
 	}
+	dto.Room.DepartureVersion = dto.DepartureVersion
 	return &dto, nil
 }
 
@@ -154,14 +156,19 @@ func (v *ValkeyRoomRepository) saveRoomDetail(ctx context.Context, dto *valkeyRo
 }
 
 func (v *ValkeyRoomRepository) saveRoomDetailExcluding(ctx context.Context, dto *valkeyRoomDetailDTO, skipCharacterID string) error {
+	return v.saveRoomDetailWithTTL(ctx, dto, skipCharacterID, DefaultLobbyTTL)
+}
+
+func (v *ValkeyRoomRepository) saveRoomDetailWithTTL(ctx context.Context, dto *valkeyRoomDetailDTO, skipCharacterID string, ttl time.Duration) error {
 	dto.PasswordHash = dto.Room.PasswordHash
+	dto.DepartureVersion = dto.Room.DepartureVersion
 	data, err := json.Marshal(dto)
 	if err != nil {
 		return err
 	}
 
 	roomKey := DefaultRoomKeyPrefix + dto.Room.ID
-	setCmd := v.client.B().Set().Key(roomKey).Value(string(data)).Ex(DefaultLobbyTTL).Build()
+	setCmd := v.client.B().Set().Key(roomKey).Value(string(data)).Px(ttl).Build()
 	if err := v.client.Do(ctx, setCmd).Error(); err != nil {
 		return err
 	}

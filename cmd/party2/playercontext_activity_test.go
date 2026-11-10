@@ -402,7 +402,7 @@ func TestCasinoActivityReaderPreservesDiscoveryAcrossRoomRenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	casinoSvc, err := casino.NewService(accounts, casino.WithRoomRepository(roomRepo), casino.WithCharacterRepository(chars))
+	casinoSvc, err := casino.NewService(accounts, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(roomRepo), casino.WithCharacterRepository(chars))
 	if err != nil {
 		t.Fatal(err)
 	}

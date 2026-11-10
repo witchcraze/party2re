@@ -38,7 +38,7 @@ func TestCharacterAdmission_StaleMappingRejoin(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			svc, err := casino.NewService(accounts, casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+			svc, err := casino.NewService(accounts, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -67,6 +67,13 @@ func TestCharacterAdmission_StaleMappingRejoin(t *testing.T) {
 			}
 			if mapped, err := repo.GetCharacterRoom(ctx, mover); err != nil || mapped != a.Room.ID {
 				t.Fatalf("stale mapping=%q, %v", mapped, err)
+			}
+			// Finish the durable departure, then seed a stale pointer for the admission race itself.
+			if err := svc.LeaveRoom(ctx, a.Room.ID, mover); err != nil {
+				t.Fatal(err)
+			}
+			if err := raw.Do(ctx, raw.B().Set().Key(casino.DefaultCharacterKeyPrefix+mover).Value(a.Room.ID).Ex(casino.DefaultLobbyTTL).Build()).Error(); err != nil {
+				t.Fatal(err)
 			}
 			if contender == "absent-mapping" {
 				if err := raw.Do(ctx, raw.B().Del().Key(casino.DefaultCharacterKeyPrefix+mover).Build()).Error(); err != nil {
@@ -113,7 +120,7 @@ func TestCharacterAdmission_StaleMappingRejoin(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				s, err := casino.NewService(accounts, casino.WithRoomRepository(r), casino.WithCharacterRepository(chars))
+				s, err := casino.NewService(accounts, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(r), casino.WithCharacterRepository(chars))
 				if err != nil {
 					t.Fatal(err)
 				}
