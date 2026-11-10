@@ -92,6 +92,8 @@ Architecture Review
 
 という観点を重視します。
 
+開発ルールは AI コーディングエージェントの利用を前提に [`AGENTS.md`](AGENTS.md) で管理しており、人間の開発者にも同じルールが適用されます。参加方法は [`CONTRIBUTING.md`](CONTRIBUTING.md) を参照してください。
+
 ## ライセンス
 
 ソフトウェアのライセンスは現時点では確定していません。
@@ -106,6 +108,8 @@ Architecture Review
 
 画像などのクリエイティブアセットについては、Creative Commons系ライセンスを候補とします。
 
+ライセンス確定までの間、コントリビューションは MIT License で受け付けます（[`CONTRIBUTING.md`](CONTRIBUTING.md#ライセンス) を参照）。
+
 依存ソフトウェアやアセットを追加する際には、ライセンスと出所を確認します。
 
 利用している外部ソフトウェアとライセンスは
@@ -114,34 +118,9 @@ READMEには方針と参照先のみを記載し、詳細な依存関係や配�
 同ファイルに記録します。画像・フォントなどのクリエイティブアセットは
 [`docs/assets/`](docs/assets/)で別途管理します。
 
-## 開発環境 (Development Environment)
+## 開発環境
 
-ローカル開発環境の全体的な手順（サービスの起動・スキーマ準備・APIサーバー起動・ヘルスチェック確認・停止）の正本は [`docs/development/development-environment.md`](docs/development/development-environment.md) を参照してください。
-
-### 推奨環境: Docker Compose を利用
-プロジェクトにはローカル開発用の `compose.yaml` が用意されています。Docker がインストールされていれば、以下のコマンドだけでデータベース (MariaDB) とキャッシュ (Valkey) を含む開発環境が立ち上がります。
-
-```bash
-make up
-make db-migrate
-```
-コンテナ起動後は、ホストマシン側で `make test-integration` などを実行することで、透過的にコンテナ内のDBへアクセスしてテストを行うことができます。APIサーバーの起動や検証ステージに応じた手順の詳細は [`docs/development/development-environment.md`](docs/development/development-environment.md) および [`docs/development/testing.md`](docs/development/testing.md) を参照してください。
-
-### 代替環境: ホストネイティブでの構築 (Dockerを使用しない場合)
-Docker を使用しない環境でも開発は可能です。その場合は、ホストマシンに直接以下のミドルウェアをインストールして起動してください。
-
-1. **MariaDB** (または互換性のあるMySQL)
-2. **Valkey** (または互換性のあるRedis)
-
-起動後、テスト実行時に環境変数として接続先 (DSN) を指定することで、フルスタックの検証が可能になります。専用データベース分離を必要とするテストを実行するには、データベース作成・削除権限を持つ `PARTY2_TEST_DB_ADMIN_DSN` も指定してください（詳細は [`docs/development/testing.md#52-dedicated-database-setup`](docs/development/testing.md#52-dedicated-database-setup) を参照）。
-
-```bash
-PARTY2_DB_DSN="user:pass@tcp(127.0.0.1:3306)/party2?parseTime=true" \
-PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:3306)/?parseTime=true" \
-PARTY2_VALKEY_ADDR="127.0.0.1:6379" \
-go test -count=1 ./...
-```
-
+コントリビューションの手順は [`CONTRIBUTING.md`](CONTRIBUTING.md)、開発環境の構築例は [`docs/development/development-environment.md`](docs/development/development-environment.md) を参照してください。
 
 ## デプロイ
 
@@ -159,12 +138,7 @@ ghcr.io/witchcraze/party2re:v1.0.0      # リリースタグ
 
 ### 実行環境変数
 
-| 変数 | 区分 | 説明 | 設定例 |
-| :--- | :--- | :--- | :--- |
-| `PARTY2_DB_DSN` | **必須** | MariaDB 接続DSN | `party2:pass@tcp(db:3306)/party2?parseTime=true` |
-| `PARTY2_VALKEY_ADDR` | **必須** | Valkey 接続アドレス。未設定時は別名 `VALKEY_ADDR` を参照し、どちらもない場合は `localhost:6379` に接続します。 | `valkey:6379` |
-
-任意の環境変数は [`docs/development/environment-variables.md`](docs/development/environment-variables.md) を参照してください。
+必須・任意の環境変数は [`docs/development/environment-variables.md`](docs/development/environment-variables.md) を参照してください。
 
 ### Worker プロセスについて
 
@@ -247,13 +221,15 @@ docker run --rm \
 プロジェクトの設計・開発方針は以下にまとめています。
 
 - [`AGENTS.md`](AGENTS.md) — AIエージェントを含む開発者向けの基本方針
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — コントリビューションの入口
 - [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) — 再構築時の機能・画像棚卸し記録（固定スナップショット）
 - [`docs/design/game-overview.md`](docs/design/game-overview.md) — ゲームの概要・設計上の理解
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — アーキテクチャ概要
 - [`docs/architecture/components.md`](docs/architecture/components.md) — コンポーネント定義
 - [`docs/architecture/components.md#feature-modules`](docs/architecture/components.md#feature-modules) — Feature Moduleの設計
 - [`docs/architecture/interfaces.md`](docs/architecture/interfaces.md) — コンポーネント間のインターフェースと契約
-- [`docs/development/development-environment.md`](docs/development/development-environment.md) — コンテナ化された開発環境
+- [`docs/development/development-environment.md`](docs/development/development-environment.md) — 開発環境の構築例
+- [`docs/development/environment-variables.md`](docs/development/environment-variables.md) — 環境変数
 - [`docs/development/testing.md`](docs/development/testing.md) — テスト・整形・静的解析の実行方法
 
 ## 開発フェーズ
