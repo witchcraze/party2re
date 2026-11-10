@@ -2,19 +2,58 @@
 
 ## Purpose
 
-This document describes the reproducible local development environment for
-Party2 Re, including backing service startup, database schema preparation,
-application daemon execution, and host API reachability verification.
+This document is a **Linux example** of a working development environment for
+Party2 Re: required software, a clone-to-`make check` sequence, running the
+server, and resetting local data. Other platforms and setups work when they meet
+the [environment contract](#environment-contract); they are not documented step
+by step.
 
-Local `make fmt`, `make test`, and the normal `make check` path use the host Go toolchain. Docker provides MariaDB, Valkey and a Go development container; `make test-docker` runs tests in that container. See [`testing.md`](testing.md) for verification stages.
+See [`testing.md`](testing.md) for verification stages and
+[`environment-variables.md`](environment-variables.md) for application settings.
+
+## Required software
+
+Install these with your distribution's standard packages or the linked official
+guides. Versions are not listed here; the Go version is defined by
+[`go.mod`](../../go.mod).
+
+- [Go](https://go.dev/doc/install)
+- [Docker Engine](https://docs.docker.com/engine/install/) with the
+  [Compose plugin](https://docs.docker.com/compose/install/linux/) (`docker compose`)
+- [git](https://git-scm.com/downloads/linux), GNU make and bash
+
+**When Go is used.** Changing code requires host Go: `make fmt`, `make test`,
+`make check`, `make check-changed` and the pre-push hook run it (`make check`
+formats code, regenerates the OpenAPI bundles and tests against the isolated
+test stack). Running the application without changing code (`make up`,
+`make db-migrate`, `make run`, `make test-docker`) works in containers without
+host Go. Without host Go, `make check` currently stops at its first `gofmt`
+call.
+
+## Example: from clone to a passing `make check`
+
+```sh
+git clone https://github.com/witchcraze/party2re.git
+cd party2re
+make setup-hooks   # run make check's verification before every push
+make up            # start the development MariaDB and Valkey
+make db-migrate    # apply the schema to the development database
+make check         # format, analyze and run the full test suite
+```
+
+`make check` takes several minutes on its first run and ends with
+`==> ALL VERIFICATION CHECKS PASSED!`. It starts its own disposable
+[test stack](testing.md#4-container-roles), so it does not change the
+development database.
 
 ## Services
 
-Docker Compose provides:
+[`compose.yaml`](../../compose.yaml) defines the development stack; image tags
+and published ports are defined there:
 
-- `app` — Go 1.26.7 development container; exposes port `127.0.0.1:8080:8080` for host access when run with published ports (`-p 127.0.0.1:8080:8080` or `--service-ports`);
-- `mariadb` — MariaDB using the `latest` image, exposing `127.0.0.1:3306:3306`;
-- `valkey` — Valkey (Redis-compatible) used for the ScheduledAction queue, exposing `127.0.0.1:6379:6379`. Configured with both AOF and RDB persistence so pending scheduled actions survive container restarts. The `app` service connects via `PARTY2_VALKEY_ADDR: valkey:6379`.
+- `app` — Go development container built from [`Dockerfile.dev`](../../Dockerfile.dev); used by `make run` and `make test-docker`;
+- `mariadb` — MariaDB holding the development database;
+- `valkey` — Valkey (Redis-compatible) used for the ScheduledAction queue, configured with AOF and RDB persistence so pending scheduled actions survive container restarts.
 
 ### Runtime Dependency Contract
 
@@ -30,7 +69,6 @@ Start MariaDB and Valkey containers in the background:
 
 ```sh
 make up
-# Or: docker compose up -d --wait mariadb valkey
 ```
 
 The command returns once both services are healthy and fails if they do not become healthy. The `app` service also waits for both health checks.
@@ -58,34 +96,17 @@ below; it is not an automatic migration repair.
 
 ### 3. Start the Application Daemon
 
-Start the server process with host port publishing on `127.0.0.1:8080`:
-
-**Using the container runner (primary):**
+Start the server process in the `app` container, published on localhost:
 
 ```sh
 make run
-# Or: docker compose run --rm -p 127.0.0.1:8080:8080 app go run ./cmd/party2
 ```
 
-The `-p 127.0.0.1:8080:8080` flag exposes the daemon's listening port to localhost on port 8080. (Alternatively, `docker compose run --rm --service-ports app go run ./cmd/party2` utilizes the port mapping defined in `compose.yaml`.) To bind to a custom host port, specify `PORT`:
-
-```sh
-make run PORT=8088
-```
-
-**Using host Go (alternative):**
-
-If running directly on the host Go toolchain:
-
-```sh
-PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" \
-PARTY2_VALKEY_ADDR="127.0.0.1:6379" \
-go run ./cmd/party2
-```
+The host port is the Makefile `PORT` variable (default `8080`); override it with `make run PORT=8088`.
 
 ### 4. Verify Host HTTP Reachability
 
-From a separate terminal on the host machine, query the `/health` endpoint:
+From a separate terminal on the host machine, query the `/health` endpoint (adjust the port if you overrode it):
 
 ```sh
 curl -i http://127.0.0.1:8080/health
@@ -108,26 +129,25 @@ A `200 OK` response with `{"status":"ok"}` confirms that the daemon is listening
 2. **Stop backing services**:
    ```sh
    make down
-   # Or: docker compose down
    ```
 
 > [!IMPORTANT]
-> `make down` (and `docker compose down`) terminates and removes containers while preserving the persistent named volumes (`mariadb-data`, `valkey-data`). Your database data and cache entries remain intact for subsequent sessions.
+> `make down` terminates and removes containers while preserving the persistent named volumes (`mariadb-data`, `valkey-data`). Your database data and cache entries remain intact for subsequent sessions.
 >
 > `make check` and `make check-changed` leave the separate [test stack](testing.md#4-container-roles) running, using about 540MB of memory. `make down` also stops it and discards its tmpfs data; `docker compose down` does not stop it.
 >
 > Do **NOT** use `docker compose down -v` unless you explicitly want to discard and wipe all local database and cache data.
 
-## Application configuration
+## Environment contract
 
-`PARTY2_DB_DSN` and `PARTY2_VALKEY_ADDR` are required; see the [README](../../README.md#実行環境変数). Optional settings are listed in [Optional Environment Variables](environment-variables.md).
+Use this section to build your own setup, such as services installed directly on the host. It names the files that define each value instead of repeating them.
 
-## Database configuration
-
-The development connection string is supplied to the application through
-`PARTY2_DB_DSN` in `compose.yaml`.
-
-Running outside Compose also requires `PARTY2_DB_DSN`; startup fails when it is unset. For host execution, supply a DSN pointing to the local MariaDB service at `127.0.0.1:3306` (e.g. `party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true`). For host tests requiring dedicated database isolation, also configure `PARTY2_TEST_DB_ADMIN_DSN` with database creation/drop privileges (e.g. `root:root@tcp(127.0.0.1:3306)/?parseTime=true`). See [`testing.md`](testing.md#52-dedicated-database-setup).
+- **Services**: MariaDB (or compatible MySQL) and Valkey (or compatible Redis) are mandatory at startup (see the [runtime dependency contract](#runtime-dependency-contract)).
+- **Development stack**: [`compose.yaml`](../../compose.yaml) defines services, credentials and published ports. `make test-integration` in the [`Makefile`](../../Makefile) shows the matching host connection settings.
+- **Test stack**: [`compose.test.yaml`](../../compose.test.yaml) defines the disposable stack used by `make check`; [`scripts/test_services.sh`](../../scripts/test_services.sh) defines its port overrides and its fallback to the development stack when it cannot start.
+- **Connection settings**: the application and tests read the variables in [`environment-variables.md`](environment-variables.md). DB-backed tests skip when connection variables are absent; tests requiring a dedicated database also need `PARTY2_TEST_DB_ADMIN_DSN` (see [Dedicated Database Setup](testing.md#52-dedicated-database-setup)).
+- **Schema**: `migrations/*.sql` are applied in filename order and recorded in the `schema_migrations` table by [`scripts/migrate.sh`](../../scripts/migrate.sh).
+- **Tooling**: Make targets that manage services or the schema call `docker compose`. A setup without Docker must apply the schema itself, then run `go test -count=1 ./...` or `go run ./cmd/party2` with the connection variables set.
 
 ## Database initialization and migration
 
@@ -161,4 +181,5 @@ docker compose up -d --wait mariadb valkey
 ## Related documents
 
 - [`testing.md`](testing.md) — canonical formatting, test, and analysis commands.
+- [`environment-variables.md`](environment-variables.md) — required and optional application settings.
 - [`dependency-policy.md`](dependency-policy.md) — dependency and license rules.

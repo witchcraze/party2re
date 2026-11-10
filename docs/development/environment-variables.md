@@ -1,6 +1,15 @@
-# Optional Environment Variables
+# Environment Variables
 
-This document lists the optional settings of the application daemon. Required settings and the base Docker Compose example are in the [README](../../README.md#実行環境変数).
+This document owns the settings of the application daemon. The development stack sets them in [`compose.yaml`](../../compose.yaml).
+
+## Required variables
+
+| Variable | Requirement | Description | Example |
+| :--- | :--- | :--- | :--- |
+| `PARTY2_DB_DSN` | **Required** | MariaDB connection DSN. Startup fails when unset. | `party2:pass@tcp(db:3306)/party2?parseTime=true` |
+| `PARTY2_VALKEY_ADDR` | **Required** | Valkey address. When unset, the alias `VALKEY_ADDR` is used; without either, the daemon connects to `localhost:6379`. | `valkey:6379` |
+
+## Optional variables
 
 Set a value under the `environment` key of the `app` service:
 

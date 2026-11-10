@@ -15,11 +15,13 @@ import (
 )
 
 const (
-	envDocsReadme         = "README.md"
-	envDocsOptional       = "docs/development/environment-variables.md"
-	envDocsTableHeading   = "### 実行環境変数"
-	envDocsComposeHeading = "### Docker Compose での起動例"
-	envDocsIgnore         = "//lint:ignore env-docs"
+	envDocsFile            = "docs/development/environment-variables.md"
+	envDocsRequiredHeading = "## Required variables"
+	envDocsOptionalHeading = "## Optional variables"
+	envDocsRequiredMarker  = "**Required**"
+	envDocsComposeFile     = "README.md"
+	envDocsComposeHeading  = "### Docker Compose での起動例"
+	envDocsIgnore          = "//lint:ignore env-docs"
 )
 
 var (
@@ -195,39 +197,36 @@ func parseEnvTable(markdown string) envTable {
 	return table
 }
 
-// findEnvDocProblems compares the variables read by code with the README and optional-variable documents.
-func findEnvDocProblems(reads []envRead, readme, optionalDoc string) []string {
-	required := parseEnvTable(markdownSection(readme, envDocsTableHeading))
-	optional := parseEnvTable(optionalDoc)
-	compose := markdownSection(readme, envDocsComposeHeading)
+// findEnvDocProblems compares the variables read by code with the variable tables and the Compose example.
+func findEnvDocProblems(reads []envRead, envDoc, composeDoc string) []string {
+	required := parseEnvTable(markdownSection(envDoc, envDocsRequiredHeading))
+	optional := parseEnvTable(markdownSection(envDoc, envDocsOptionalHeading))
+	compose := markdownSection(composeDoc, envDocsComposeHeading)
 
 	var problems []string
 	readNames := map[string]bool{}
 	for _, read := range reads {
 		readNames[read.Name] = true
 		if !required.Mentioned[read.Name] && !optional.Mentioned[read.Name] {
-			problems = append(problems, fmt.Sprintf("%s: %s is not documented; add it to %s, or to the %s table in %s if required", read.Location, read.Name, envDocsOptional, envDocsTableHeading, envDocsReadme))
+			problems = append(problems, fmt.Sprintf("%s: %s is not documented; add it to %q or %q in %s", read.Location, read.Name, envDocsOptionalHeading, envDocsRequiredHeading, envDocsFile))
 		}
 	}
-	for _, table := range []struct {
-		doc   string
-		table envTable
-	}{{envDocsReadme, required}, {envDocsOptional, optional}} {
-		for name := range table.table.Mentioned {
+	for _, table := range []envTable{required, optional} {
+		for name := range table.Mentioned {
 			if !readNames[name] {
-				problems = append(problems, fmt.Sprintf("%s: %s is documented but production code does not read it", table.doc, name))
+				problems = append(problems, fmt.Sprintf("%s: %s is documented but production code does not read it", envDocsFile, name))
 			}
 		}
 	}
 	for name, row := range required.Rows {
-		if !strings.Contains(row, "必須") {
-			problems = append(problems, fmt.Sprintf("%s: optional variable %s belongs in %s", envDocsReadme, name, envDocsOptional))
+		if !strings.Contains(row, envDocsRequiredMarker) {
+			problems = append(problems, fmt.Sprintf("%s: optional variable %s belongs in %q", envDocsFile, name, envDocsOptionalHeading))
 		}
 		if !strings.Contains(compose, name+":") {
-			problems = append(problems, fmt.Sprintf("%s: required variable %s is missing from the Compose example", envDocsReadme, name))
+			problems = append(problems, fmt.Sprintf("%s: required variable %s is missing from the Compose example", envDocsComposeFile, name))
 		}
 		if _, duplicated := optional.Rows[name]; duplicated {
-			problems = append(problems, fmt.Sprintf("%s: %s is also listed in %s; keep one entry", envDocsOptional, name, envDocsReadme))
+			problems = append(problems, fmt.Sprintf("%s: %s is listed in both %q and %q; keep one entry", envDocsFile, name, envDocsRequiredHeading, envDocsOptionalHeading))
 		}
 	}
 	sort.Strings(problems)
@@ -246,15 +245,15 @@ func TestEnvironmentVariablesAreDocumented(t *testing.T) {
 	if len(reads) == 0 {
 		t.Fatal("no environment variable reads found; the scan is broken")
 	}
-	readme, err := os.ReadFile(filepath.Join(repoRoot, envDocsReadme))
+	envDoc, err := os.ReadFile(filepath.Join(repoRoot, envDocsFile))
 	if err != nil {
 		t.Fatal(err)
 	}
-	optionalDoc, err := os.ReadFile(filepath.Join(repoRoot, envDocsOptional))
+	composeDoc, err := os.ReadFile(filepath.Join(repoRoot, envDocsComposeFile))
 	if err != nil {
 		t.Fatal(err)
 	}
-	problems = append(problems, findEnvDocProblems(reads, string(readme), string(optionalDoc))...)
+	problems = append(problems, findEnvDocProblems(reads, string(envDoc), string(composeDoc))...)
 	for _, problem := range problems {
 		t.Error(problem)
 	}
@@ -299,30 +298,31 @@ func ignored(key string) string {
 
 func TestFindEnvDocProblems(t *testing.T) {
 	const compose = envDocsComposeHeading + "\n\n```yaml\n# comment\n      REQ: value\n```\n"
-	readme := func(rows string) string {
-		return envDocsTableHeading + "\n\n" + rows + "\n\n" + compose
+	envDoc := func(required, optional string) string {
+		return "# Environment Variables\n\n" + envDocsRequiredHeading + "\n\n" + required + "\n\n" + envDocsOptionalHeading + "\n\n" + optional + "\n"
 	}
-	const requiredRow = "| `REQ` | **必須** | Alias `REQ_ALIAS` | `x` |"
+	const requiredRow = "| `REQ` | **Required** | Alias `REQ_ALIAS` | `x` |"
+	const optionalRow = "| `OPT` | Optional | `1` |"
 	reads := []envRead{{Name: "REQ", Location: "a.go:1"}, {Name: "REQ_ALIAS", Location: "a.go:2"}, {Name: "OPT", Location: "b.go:3"}}
 
 	for _, tc := range []struct {
-		name     string
-		reads    []envRead
-		readme   string
-		optional string
-		want     string
+		name    string
+		reads   []envRead
+		envDoc  string
+		compose string
+		want    string
 	}{
-		{name: "complete", reads: reads, readme: readme(requiredRow), optional: "| `OPT` | Optional | `1` |"},
-		{name: "undocumented read names the location", reads: reads, readme: readme(requiredRow), want: "b.go:3: OPT is not documented"},
-		{name: "undocumented alias", reads: reads, readme: readme("| `REQ` | **必須** | x | `x` |"), optional: "| `OPT` | Optional | `1` |", want: "a.go:2: REQ_ALIAS is not documented"},
-		{name: "stale entry", reads: reads, readme: readme(requiredRow), optional: "| `OPT` | Optional | `1` |\n| `OLD` | Gone | `1` |", want: "OLD is documented but production code does not read it"},
-		{name: "stale alias", reads: reads[:2], readme: readme(requiredRow), optional: "| `REQ_ALIAS` | x | `1` |\n| `OPT` | x | `1` |", want: "OPT is documented but production code does not read it"},
-		{name: "optional row in README", reads: []envRead{{Name: "REQ", Location: "a.go:1"}, {Name: "OPT", Location: "b.go:3"}}, readme: readme("| `REQ` | **必須** | x | `x` |\n| `OPT` | 任意 | x | `1` |"), want: "optional variable OPT belongs in"},
-		{name: "required missing from Compose", reads: reads, readme: envDocsTableHeading + "\n\n" + requiredRow + "\n", optional: "| `OPT` | x | `1` |", want: "required variable REQ is missing from the Compose example"},
-		{name: "listed in both documents", reads: reads, readme: readme(requiredRow), optional: "| `REQ` | x | `1` |\n| `OPT` | x | `1` |", want: "REQ is also listed in"},
+		{name: "complete", reads: reads, envDoc: envDoc(requiredRow, optionalRow), compose: compose},
+		{name: "undocumented read names the location", reads: reads, envDoc: envDoc(requiredRow, ""), compose: compose, want: "b.go:3: OPT is not documented"},
+		{name: "undocumented alias", reads: reads, envDoc: envDoc("| `REQ` | **Required** | x | `x` |", optionalRow), compose: compose, want: "a.go:2: REQ_ALIAS is not documented"},
+		{name: "stale entry", reads: reads, envDoc: envDoc(requiredRow, optionalRow+"\n| `OLD` | Gone | `1` |"), compose: compose, want: "OLD is documented but production code does not read it"},
+		{name: "stale alias", reads: reads[:2], envDoc: envDoc(requiredRow, "| `REQ_ALIAS` | x | `1` |\n"+optionalRow), compose: compose, want: "OPT is documented but production code does not read it"},
+		{name: "optional row in required table", reads: []envRead{{Name: "REQ", Location: "a.go:1"}, {Name: "OPT", Location: "b.go:3"}}, envDoc: envDoc("| `REQ` | **Required** | x | `x` |\n| `OPT` | Optional | x | `1` |", ""), compose: compose, want: "optional variable OPT belongs in"},
+		{name: "required missing from Compose", reads: reads, envDoc: envDoc(requiredRow, optionalRow), compose: envDocsComposeHeading + "\n", want: "required variable REQ is missing from the Compose example"},
+		{name: "listed in both tables", reads: reads, envDoc: envDoc(requiredRow, "| `REQ` | x | `1` |\n"+optionalRow), compose: compose, want: "REQ is listed in both"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			problems := findEnvDocProblems(tc.reads, tc.readme, tc.optional)
+			problems := findEnvDocProblems(tc.reads, tc.envDoc, tc.compose)
 			joined := strings.Join(problems, "\n")
 			if tc.want == "" {
 				if len(problems) != 0 {

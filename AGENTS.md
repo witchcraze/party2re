@@ -23,6 +23,7 @@ Use the documents according to these roles:
 
 - `AGENTS.md` & `.agents/rules/*.md` — mandatory rules for agents and development.
 - `README.md` — human-facing project introduction.
+- `CONTRIBUTING.md` — human-facing contribution entry point.
 - `docs/architecture/` — enduring software architecture.
 - `docs/design/` — enduring game/domain design.
 - `docs/development/` — enduring development procedures.
