@@ -135,7 +135,9 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 				return fmt.Errorf("failed to add boss currency reward: %w", err)
 			}
 			if battleRes.TotalReward.Experience > 0 {
-				_, _ = progression.ApplyExperience(&char, battleRes.TotalReward.Experience)
+				if _, err := progression.ApplyExperience(&char, battleRes.TotalReward.Experience); err != nil {
+					return fmt.Errorf("failed to add boss experience reward: %w", err)
+				}
 			}
 			if rewardCrystals > 0 {
 				if err := char.AddCrystal(rewardCrystals); err != nil {
@@ -145,7 +147,9 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 
 			newsMsg = fmt.Sprintf("勇者%sが%sを封印する", char.Name, stage.Name)
 			if s.newsPub != nil {
-				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", s.now())
+				if err := s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", s.now()); err != nil {
+					return fmt.Errorf("failed to publish boss news: %w", err)
+				}
 			}
 
 			if err := s.recordBossDefeats(txCtx, stage, char.ID, cloneRecords); err != nil {
@@ -158,7 +162,9 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 				banquetHeld = true
 			}
 			if s.victoryHook != nil {
-				_ = s.victoryHook(txCtx, char.ID, stage.ID, stageTier)
+				if err := s.victoryHook(txCtx, char.ID, stage.ID, stageTier); err != nil {
+					return fmt.Errorf("failed to record boss victory progress: %w", err)
+				}
 			}
 		}
 
