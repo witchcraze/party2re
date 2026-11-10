@@ -25,6 +25,7 @@ import (
 )
 
 type cmbtServices struct {
+	gems        customskill.GemProvider
 	pvp         *pvp.Service
 	gvg         *gvg.Service
 	boss        *boss.Service
@@ -391,6 +392,7 @@ func newCmbtServices(
 	})
 
 	return &cmbtServices{
+		gems:        customSkillGemCatalog{catalog: gemCatalog},
 		pvp:         pvpService,
 		gvg:         gvgService,
 		boss:        bossService,

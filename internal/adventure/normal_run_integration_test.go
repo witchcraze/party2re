@@ -297,6 +297,9 @@ func TestNormalRunAdmissionReceiptRestart(t *testing.T) {
 		if _, err := f.svc.GetActorRun(context.Background(), c.PlayerID, c.ID); err != nil {
 			t.Fatal(err)
 		}
+		if active, err := f.svc.HasActiveRun(context.Background(), c.ID); err != nil || !active {
+			t.Fatalf("public admission: %v %v", active, err)
+		}
 	}
 	r, err = f.store.FindRun(context.Background(), r.ID)
 	if err != nil || !reflect.DeepEqual(before, *r) {

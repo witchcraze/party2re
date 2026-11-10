@@ -74,5 +74,5 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		})
 	}
 	readers := newContextActivityReaders(cmbt, misc)
-	return playercontext.NewService(core.charRepo, soc.schedRepo, contextSleepReader{TimerReader: soc.timer, home: soc.home}, append([]func(*playercontext.Service){playercontext.WithNavigation(core.navigation, scenes...), playercontext.WithActivities(readers.read)}, options...)...)
+	return playercontext.NewService(core.charRepo, soc.schedRepo, contextSleepReader{TimerReader: soc.timer, home: soc.home}, append([]func(*playercontext.Service){playercontext.WithNavigation(core.navigation, scenes...), playercontext.WithActivities(readers.read), playercontext.WithPublicActivities(readers.publicActivity)}, options...)...)
 }

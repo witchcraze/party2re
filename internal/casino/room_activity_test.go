@@ -30,6 +30,9 @@ func TestCharacterRoomObservationUsesActualAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, actor := range []string{"actor", "spectator"} {
+		if active, err := svc.HasCharacterRoom(ctx, actor); err != nil || !active {
+			t.Fatalf("public admission: %v %v", active, err)
+		}
 		view, err := svc.GetCharacterRoomView(ctx, "owner", actor)
 		if err != nil || view == nil || view.Room.ID != "room" {
 			t.Fatalf("admitted: %+v %v", view, err)
@@ -40,11 +43,28 @@ func TestCharacterRoomObservationUsesActualAdmission(t *testing.T) {
 			}
 		}
 	}
+	if active, err := svc.HasCharacterRoom(ctx, "other"); err != nil || active {
+		t.Fatalf("unadmitted: %v %v", active, err)
+	}
 	if got, err := svc.GetCharacterRoomView(ctx, "owner", "other"); got != nil || !errors.Is(err, casino.ErrRoomViewForbidden) {
 		t.Fatalf("unowned: %+v %v", got, err)
 	}
 	if after, err := repo.GetRoom(ctx, "room"); err != nil || !reflect.DeepEqual(room, *after) {
 		t.Fatalf("GET advanced/renewed room: %+v %v", after, err)
+	}
+	for _, state := range []string{"expired", "disbanded"} {
+		room.UpdatedAt = time.Now()
+		if state == "expired" {
+			room.UpdatedAt = time.Now().Add(-casino.IdleRoomTimeout - time.Hour)
+		} else {
+			room.Status = casino.RoomStatusDisbanded
+		}
+		if err := repo.UpdateRoom(ctx, room); err != nil {
+			t.Fatal(err)
+		}
+		if active, err := svc.HasCharacterRoom(ctx, "actor"); err != nil || active {
+			t.Fatalf("%s admission: %v %v", state, active, err)
+		}
 	}
 }
 
@@ -73,6 +93,9 @@ func TestCharacterRoomObservationPropagatesIndexFailure(t *testing.T) {
 	if got, err := svc.GetCharacterRoomView(context.Background(), "owner", "actor"); got != nil || !errors.Is(err, want) || repo.calls != 1 {
 		t.Fatalf("hidden index failure: %+v %v", got, err)
 	}
+	if active, err := svc.HasCharacterRoom(context.Background(), "actor"); active || !errors.Is(err, want) {
+		t.Fatalf("public index failure: %v %v", active, err)
+	}
 
 	blankRepo := &failedActivityIndex{RoomRepository: casino.NewMemoryRoomRepository(), err: nil}
 	blankSvc, err := casino.NewService(newMockPrizeCasinoRepo(), casino.WithRoomRepository(blankRepo), casino.WithCharacterRepository(chars))
@@ -81,5 +104,8 @@ func TestCharacterRoomObservationPropagatesIndexFailure(t *testing.T) {
 	}
 	if got, err := blankSvc.GetCharacterRoomView(context.Background(), "owner", "actor"); got != nil || !errors.Is(err, casino.ErrInvalidRoomMapping) {
 		t.Fatalf("blank mapping treated as absence: %+v %v", got, err)
+	}
+	if active, err := blankSvc.HasCharacterRoom(context.Background(), "actor"); active || !errors.Is(err, casino.ErrInvalidRoomMapping) {
+		t.Fatalf("public blank index: %v %v", active, err)
 	}
 }
