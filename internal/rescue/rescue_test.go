@@ -430,3 +430,40 @@ func TestRescueRejectsRemainingFeatureActivity(t *testing.T) {
 		}
 	})
 }
+
+// After work was cleared but sleep failed, a newly started activity must not hide the owed sleep.
+func TestEmergencyRescue_ResumeAppliesOwedSleepDuringNewActivity(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	repo := &stubRescueRepo{}
+	cleaner := &stubActionCleaner{}
+	base := timer.NewService(nil)
+	tm := &faultyTimer{Service: base, setErr: errors.New("sleep write failed")}
+	svc := newTestService(repo, heroRepo(), cleaner, tm)
+
+	if _, err := svc.EmergencyRescue(ctx, "char-1", "stuck", now); err == nil {
+		t.Fatal("expected the sleep write failure")
+	}
+	tm.setErr = nil
+	activity := &stubActivityReader{kinds: []string{"dungeon"}}
+	svc.SetActivityReader(activity)
+
+	rec, err := svc.EmergencyRescue(ctx, "char-1", "retry", now.Add(time.Second))
+	if err != nil || rec.Reason != "stuck" || repo.records[0].AppliedAt.IsZero() {
+		t.Fatalf("resume during activity = %+v, %v (%+v)", rec, err, repo.records)
+	}
+	assertSleep(t, base, 599*time.Second)
+	if len(cleaner.clearedCharacters) != 1 {
+		t.Fatalf("resume during activity must not clear work again: %v", cleaner.clearedCharacters)
+	}
+
+	// Uncleared work with an activity is still rejected without change.
+	repo.records[0].AppliedAt = time.Time{}
+	cleaner.stuckCharacters["char-1"] = true
+	if _, err := svc.EmergencyRescue(ctx, "char-1", "again", now); !errors.Is(err, ErrActivityRemaining) {
+		t.Fatalf("uncleared work during activity = %v, want ErrActivityRemaining", err)
+	}
+	if len(cleaner.clearedCharacters) != 1 || !repo.records[0].AppliedAt.IsZero() {
+		t.Fatalf("rejected resume changed state: cleared=%v records=%+v", cleaner.clearedCharacters, repo.records)
+	}
+}

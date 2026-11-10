@@ -116,7 +116,8 @@ func (s *Service) Unstuck(ctx context.Context, characterID string) error {
 
 // EmergencyRescue clears scheduled work and adds the penalty to any remaining sleep.
 // With no pending work it returns a 0-second result without changes (legacy rescue.cgi:56-65).
-// Feature activity the scheduler cannot end returns ErrActivityRemaining without changes.
+// Feature activity the scheduler cannot end returns ErrActivityRemaining without changes,
+// except that an unconfirmed penalty whose work is already cleared still receives its sleep.
 //
 // The owed deadline is committed to rescue_records before Valkey is touched; clearing and
 // the sleep timer follow and the record is confirmed last. Any failure leaves the record
@@ -134,15 +135,16 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 	if err != nil {
 		return RescueRecord{}, err
 	}
-	if err := s.ensureNoActivity(ctx, char); err != nil {
-		return RescueRecord{}, err
+	activityErr := s.ensureNoActivity(ctx, char)
+	if activityErr != nil && !errors.Is(activityErr, ErrActivityRemaining) {
+		return RescueRecord{}, activityErr
 	}
 
-	rec, err := s.recordPenalty(ctx, char.ID, reason, now)
+	rec, err := s.recordPenalty(ctx, char.ID, reason, now, activityErr)
 	if err != nil || rec.ID == "" {
 		return rec, err
 	}
-	if err := s.applyPenalty(ctx, rec, now); err != nil {
+	if err := s.applyPenalty(ctx, rec, now, activityErr == nil); err != nil {
 		return RescueRecord{}, err
 	}
 	return rec, nil
@@ -150,23 +152,39 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 
 // recordPenalty returns the unconfirmed penalty to resume, a new committed one, or an
 // idle result without ID. The character row lock makes concurrent rescues share one record.
-func (s *Service) recordPenalty(ctx context.Context, characterID, reason string, now time.Time) (RescueRecord, error) {
+// Remaining activity (activityErr) only permits resuming a penalty whose work is already gone:
+// a player who started an activity after a failed sleep write still owes that sleep.
+func (s *Service) recordPenalty(ctx context.Context, characterID, reason string, now time.Time, activityErr error) (RescueRecord, error) {
 	rec := RescueRecord{CharacterID: characterID, Reason: reason, CreatedAt: now}
 	err := s.tx.RunInTx(ctx, func(ctx context.Context) error {
 		if _, err := s.characters.FindByIDForUpdate(ctx, characterID); err != nil {
 			return err
 		}
 		latest, err := s.rescues.FindLatestByCharacterID(ctx, characterID)
-		if err == nil && latest.AppliedAt.IsZero() {
-			rec = latest
-			return nil
-		}
+		resume := err == nil && latest.AppliedAt.IsZero()
 		if err != nil && !errors.Is(err, ErrNoRescueRecord) {
 			return err
 		}
+		if resume && activityErr == nil {
+			rec = latest
+			return nil
+		}
+		if !resume && activityErr != nil {
+			return activityErr
+		}
 		pending, err := s.cleaner.FindPendingByActorID(ctx, characterID)
-		if err != nil || len(pending) == 0 {
+		if err != nil {
 			return err
+		}
+		if resume {
+			if len(pending) > 0 {
+				return activityErr
+			}
+			rec = latest
+			return nil
+		}
+		if len(pending) == 0 {
+			return nil
 		}
 		remaining, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, characterID)
 		if err != nil {
@@ -184,9 +202,12 @@ func (s *Service) recordPenalty(ctx context.Context, characterID, reason string,
 }
 
 // applyPenalty repeats safely: clearing is idempotent and the timer only moves toward SleepUntil.
-func (s *Service) applyPenalty(ctx context.Context, rec RescueRecord, now time.Time) error {
-	if _, err := s.cleaner.ClearActiveActions(ctx, rec.CharacterID); err != nil {
-		return err
+// clear is false while feature activity remains, so its new scheduled work is never touched.
+func (s *Service) applyPenalty(ctx context.Context, rec RescueRecord, now time.Time, clear bool) error {
+	if clear {
+		if _, err := s.cleaner.ClearActiveActions(ctx, rec.CharacterID); err != nil {
+			return err
+		}
 	}
 	if owed := rec.SleepUntil.Sub(now); owed > 0 {
 		remaining, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, rec.CharacterID)
