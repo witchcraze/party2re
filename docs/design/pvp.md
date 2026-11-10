@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Colosseum PvP Module (`internal/pvp`) faithfully reproduces the original Party2 real-time multiplayer arena specification (`party2/lib/vs_player.cgi` and `party2/lib/quest.cgi:type=4`).
+The Colosseum PvP Module (`internal/pvp`) reconstructs the original Party2 real-time multiplayer arena specification (`party2/lib/vs_player.cgi` and `party2/lib/quest.cgi:type=4`).
 
 Unlike modern asynchronous snapshot Elo ladders, authentic Party2 PvP features real-time 2-to-8 player lobby rooms where participants wager gold, divide into up to 9 distinct color teams, battle across multi-round party combats using the shared Core Battle engine (`internal/core/battle`), and split the aggregated prize pool among the winning team members.
 
@@ -48,10 +48,9 @@ A character can host a Colosseum room with configurable parameters:
      - `#6666FF` (ブルー / Blue)
      - `#CC66FF` (パープル / Purple)
      - `#CCCCCC` (グレイ / Gray)
-3. **Leaving & Disband (`@にげる`)**:
-   - While recruiting, non-leaders can leave, receiving a full refund of their bet.
-   - If the leader leaves during recruitment, the room is disbanded and all participants receive full refunds.
-   - Leaving is strictly prohibited once a match has started.
+3. **Live-room departure (`@にげる`)**: participant exit, leader handover and bet disposition still diverge from legacy; correction is tracked in [#2045](https://github.com/witchcraze/party2re/issues/2045).
+
+**Recovery decision:** use the legacy missing-member-file path (`_battle.cgi:453-461`) for arbitrary live-room loss, so neither a refund nor an inactivity penalty is inferred from missing state. Deliberate inactivity deletion instead adds 3600 seconds of sleep without refunding bets (`quest.cgi:50,85-90,172-184`); recoverable cleanup remains [#2046](https://github.com/witchcraze/party2re/issues/2046). SQL/Valkey recovery ownership is defined by [financial publication](../architecture/transient-run-state.md#pvp-financial-publication).
 
 ### 3. Match Progression & Start Invariants (`@かいし`)
 
@@ -81,7 +80,7 @@ A character can host a Colosseum room with configurable parameters:
    - The victory hook is executed, advancing medal achievements (`MetricPvPVictories`).
 2. **Forced Draw & 10-Round Limit**:
    - If round 10 concludes without any team reaching `target_wins`, the match is terminated as a draw.
-   - All participants receive a full refund of their original `bet`.
+   - The current implementation refunds all original bets; legacy post-start departure does not. This settlement difference is part of [#2045](https://github.com/witchcraze/party2re/issues/2045).
 
 ---
 

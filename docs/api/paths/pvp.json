@@ -254,6 +254,7 @@
   },
   "/characters/{id}/pvp/rooms/{room_id}/leave": {
     "post": {
+      "description": "Leave a live room or recover a SQL participation claim after published live state is lost. Missing-room recovery closes all room claims without refunding bets, in both recruiting and in-progress phases. Pending financial publication is recovered first. The Gateway pvp_leave command exposes the same operation for recovery_pending activity.",
       "operationId": "postCharactersIdPvpRoomsRoomIdLeave",
       "parameters": [
         {

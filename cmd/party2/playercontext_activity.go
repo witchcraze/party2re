@@ -137,13 +137,13 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		}
 		facts = append(facts, a)
 	} else {
-		// A SQL claim without a live room is unpublished financial state, not idle.
+		// A SQL claim without a live room still requires PvP-owned recovery.
 		roomID, err := r.pvp.GetCharacterClaim(ctx, actor)
 		if err != nil {
 			return nil, fmt.Errorf("pvp claim activity: %w", err)
 		}
 		if roomID != "" {
-			facts = append(facts, playercontext.Activity{Kind: "pvp", ID: roomID, Phase: "recovery_pending", Role: "member", Actions: []string{}})
+			facts = append(facts, playercontext.Activity{Kind: "pvp", ID: roomID, Phase: "recovery_pending", Role: "member", Actions: []string{"pvp_leave"}})
 		}
 	}
 	gv, err := r.gvg.GetCharacterRoom(ctx, actor)

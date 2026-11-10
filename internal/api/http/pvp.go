@@ -26,6 +26,7 @@ type PvPService interface {
 func WithPvP(p PvPService) Option {
 	return func(h *Handler) {
 		h.pvp = p
+		pvpLeaveCommand(p)(h)
 	}
 }
 

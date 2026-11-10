@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -369,7 +370,13 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 		if last.Kind == "disband" && last.ActorID == characterID {
 			return nil
 		}
+		if last.Kind == "abandon" && slices.Contains(last.RemovedIDs, characterID) {
+			return nil
+		}
 		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		if errors.Is(err, ErrRoomNotFound) {
+			return s.abandonLostRoom(lockedCtx, characterID, last)
+		}
 		if err != nil {
 			return err
 		}
