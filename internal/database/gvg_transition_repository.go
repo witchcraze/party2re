@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/gvg"
 )
 
@@ -74,10 +74,8 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 		if transition.Settlement != nil {
 			guildIDs = append(guildIDs, transition.Settlement.GuildIDs...)
 		}
-		slices.Sort(guildIDs)
-		guildIDs = slices.Compact(guildIDs)
 		guilds := GuildRepository{db: r.db}
-		for _, guildID := range guildIDs {
+		if err := economy.LockInOrder(txCtx, guildIDs, func(txCtx context.Context, guildID string) error {
 			var lockedID string
 			if err := executor.QueryRowContext(txCtx, "SELECT id FROM guilds WHERE id = ? FOR UPDATE", guildID).Scan(&lockedID); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
@@ -90,8 +88,11 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 					return err
 				}
 			}
+			return nil
+		}); err != nil {
+			return err
 		}
-		for _, guildID := range guildIDs {
+		if err := economy.LockInOrder(txCtx, guildIDs, func(txCtx context.Context, guildID string) error {
 			if _, err := r.GetOrCreateStanding(txCtx, guildID); err != nil {
 				return err
 			}
@@ -106,6 +107,9 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 					return err
 				}
 			}
+			return nil
+		}); err != nil {
+			return err
 		}
 		if transition.Settlement != nil {
 			if err := r.recordMatchSettlement(txCtx, *transition.Settlement); err != nil {

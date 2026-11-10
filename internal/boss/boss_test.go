@@ -1148,8 +1148,8 @@ func TestUnsealDemonKing_Success(t *testing.T) {
 	}
 	service.Configure(boss.WithNewsPublisher(newsPub))
 
-	// Call with unordered IDs including an NPC
-	err = service.UnsealDemonKing(ctx, []string{"c2", "@summoned_pet", "c1"})
+	// Normalized duplicates must increment and publish each hero only once.
+	err = service.UnsealDemonKing(ctx, []string{"c2", "@summoned_pet", "c1", " c2 ", "", " c1"})
 	if err != nil {
 		t.Fatalf("UnsealDemonKing failed: %v", err)
 	}

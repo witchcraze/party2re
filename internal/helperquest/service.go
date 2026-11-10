@@ -4,12 +4,12 @@ package helperquest
 import (
 	"context"
 	"errors"
-	"slices"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type QuestRepository interface {
@@ -156,21 +156,20 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 		if questID != "" {
 			ids = append(ids, questID)
 		}
-		slices.Sort(ids)
 		var target Quest
 		var expired []Quest
 		// Acquire every shared row before character assets; recheck stale candidates under lock.
-		for _, id := range slices.Compact(ids) {
+		if err := economy.LockInOrder(txCtx, ids, func(txCtx context.Context, id string) error {
 			q, err := s.quests.FindByIDForUpdate(txCtx, id)
 			if id == questID {
 				if err != nil {
 					return err
 				}
 				target = q
-				continue
+				return nil
 			}
 			if errors.Is(err, ErrQuestNotFound) {
-				continue // exchanged concurrently
+				return nil // exchanged concurrently
 			}
 			if err != nil {
 				return err
@@ -178,6 +177,9 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 			if q.CompletedAt == nil && now.After(q.ExpiresAt) {
 				expired = append(expired, q)
 			}
+			return nil
+		}); err != nil {
+			return err
 		}
 		if questID != "" {
 			res, err = s.completeQuest(txCtx, characterID, target, now)

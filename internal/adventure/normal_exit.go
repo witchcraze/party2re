@@ -63,6 +63,7 @@ func (s *NormalRunService) writeHistory(ctx context.Context, r *NormalRun, actor
 }
 
 func (s *NormalRunService) timeout(ctx context.Context, r *NormalRun, now time.Time) error {
+	// Command already holds the character locks; preserve history write order.
 	ids := slices.Clone(r.Roster)
 	slices.Sort(ids)
 	for _, id := range ids {
@@ -107,13 +108,16 @@ func (s *NormalRunService) RecoverTimeout(ctx context.Context, player, actor, ru
 		if !r.TimedOut {
 			return ErrRunConflict
 		}
-		ids := slices.Clone(r.Roster)
+		var ids []string
 		ctx = context.WithValue(ctx, normalMutationContext{}, r.ID)
-		slices.Sort(ids)
-		for _, id := range ids {
+		if err := economy.LockInOrder(ctx, r.Roster, func(ctx context.Context, id string) error {
 			if _, err := s.cfg.Characters.FindByIDForUpdate(ctx, id); err != nil {
 				return err
 			}
+			ids = append(ids, id)
+			return nil
+		}); err != nil {
+			return err
 		}
 		for _, id := range ids {
 			p := r.Recipients[id]

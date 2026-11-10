@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/party"
 )
@@ -80,10 +80,9 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 		for i, m := range members {
 			charIDs[i] = m.CharacterID
 		}
-		sort.Strings(charIDs)
-
 		chars := make(map[string]corecharacter.Character, len(charIDs))
-		for _, cID := range charIDs {
+		var orderedIDs []string
+		if err := economy.LockInOrder(txCtx, charIDs, func(txCtx context.Context, cID string) error {
 			c, err := s.characterRepo.FindByIDForUpdate(txCtx, cID)
 			if err != nil {
 				return ErrCharacterNotFound
@@ -98,7 +97,12 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 				return ErrNeedJoinNotMet
 			}
 			chars[cID] = c
+			orderedIDs = append(orderedIDs, cID)
+			return nil
+		}); err != nil {
+			return err
 		}
+		charIDs = orderedIDs
 
 		// Hide the active room from ordinary admission; the SQL receipt guards settlement retries.
 		claimed := p

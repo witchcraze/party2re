@@ -5,6 +5,8 @@ import (
 	"errors"
 	"slices"
 	"strings"
+
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 // removeAuthorizedMember shares the locked removal workflow for expulsion and rejection.
@@ -102,6 +104,7 @@ func (s *Service) RemoveFromGuilds(ctx context.Context, characterIDs ...string) 
 			ids = append(ids, id)
 		}
 	}
+	// Normalize departure order; departLocked separately orders the full lock set.
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
 	if len(ids) == 0 {
@@ -163,24 +166,27 @@ func (s *Service) departLocked(ctx context.Context, guildID string, ids []string
 		}
 	}
 
-	slices.Sort(lockIDs)
-	lockIDs = slices.Compact(lockIDs)
 	locked := make(map[string]bool, len(lockIDs))
-	for _, id := range lockIDs {
+	if err := economy.LockInOrder(ctx, lockIDs, func(ctx context.Context, id string) error {
 		err := s.repo.LockCharacterForUpdate(ctx, id)
 		if err != nil && !errors.Is(err, ErrCharacterNotFound) {
 			return err
 		}
 		locked[id] = err == nil
+		return nil
+	}); err != nil {
+		return err
 	}
-	slices.Sort(guildIDs)
-	for _, gid := range slices.Compact(guildIDs) {
+	if err := economy.LockInOrder(ctx, guildIDs, func(ctx context.Context, gid string) error {
 		if _, _, err := s.repo.GetGuildForUpdate(ctx, gid); err != nil {
 			if guildID == "" && errors.Is(err, ErrGuildNotFound) {
 				return errRosterChanged
 			}
 			return err
 		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	if guildID == "" {

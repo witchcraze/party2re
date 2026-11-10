@@ -117,6 +117,7 @@ func (r *NormalAdventureRepository) EnrollRun(ctx context.Context, run adventure
 	if ctx.Value(normalAdventureLock{}) != run.ID {
 		return adventure.ErrRunConflict
 	}
+	// These are paired enrollment/recipient inserts, not a same-table row-lock pass.
 	ids := slices.Clone(run.Roster)
 	slices.Sort(ids)
 	e := ExecutorFromContext(ctx, r.db)

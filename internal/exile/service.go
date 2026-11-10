@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/validation"
 )
@@ -273,14 +273,17 @@ func (s *Service) projectSentences(ctx context.Context, now time.Time) {
 // lockCharacters locks rows in ascending ID order after the board, so renames
 // (which lock the character, then check involvement) serialize with board writes.
 func (s *Service) lockCharacters(ctx context.Context, ids ...string) (map[string]corecharacter.Character, error) {
-	slices.Sort(ids)
 	locked := make(map[string]corecharacter.Character, len(ids))
-	for _, id := range ids {
+	err := economy.LockInOrder(ctx, ids, func(ctx context.Context, id string) error {
 		c, err := s.characters.FindByIDForUpdate(ctx, id)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		locked[id] = c
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return locked, nil
 }
