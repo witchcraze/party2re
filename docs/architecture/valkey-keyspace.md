@@ -202,7 +202,10 @@ SQL commits participant fatigue and the admission's complete departure outcome
 together before room publication; spectators incur no fatigue. The latest receipt
 per room is retained indefinitely and replaced only by a later committed departure.
 Pending roster claims survive Valkey loss and are released only after all room,
-index and conditional mapping writes are acknowledged. Subsequent Casino room
+index and conditional mapping writes are acknowledged. Admission and departure
+claims serialize on character SQL row locks: admission rechecks pending evidence
+before publishing, and departure rejects a roster that has moved to another room.
+Subsequent Casino room
 commands resume pending publication under the existing room lock without replaying
 fatigue, wagers or progression, preserving later character updates. Recovery can
 restore lost pending room state only until the original departure deadline; after

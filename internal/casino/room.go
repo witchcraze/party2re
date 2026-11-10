@@ -310,6 +310,9 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 			UpdatedAt:   now,
 		}
 
+		if err := s.checkAdmissionDeparture(txCtx, characterID); err != nil {
+			return err
+		}
 		if err := s.roomRepo.CreateRoom(txCtx, r, leader); err != nil {
 			return err
 		}

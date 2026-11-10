@@ -1,7 +1,7 @@
 {
   "module": "casino",
   "domain": "Casino multiplayer wagers and departure",
-  "description": "C1: SQL accounts, character wins and departure evidence; C2: departure claim (rank 0) -> character fatigue (rank 2) -> pending roster claims (rank 8, ascending ID); C3: shared pots. Wagers publish staged Valkey state before SQL commit. Departure delegates to CommitDeparture, then publishes after SQL commit; room commands resume pending publication and owned GETs stay read-only. Failure limits: docs/architecture/valkey-keyspace.md.",
+  "description": "C1: SQL accounts, character wins and departure evidence; C2: departure claim (rank 0) -> roster characters (rank 2, ascending ID) -> pending roster claims (rank 8, ascending ID); admission checks pending evidence under the same character SQL lock. C3: shared pots. Wagers publish staged Valkey state before SQL commit. Departure delegates to CommitDeparture, then publishes after SQL commit; room commands resume pending publication and owned GETs stay read-only. Failure limits: docs/architecture/valkey-keyspace.md.",
   "entrypoint": "internal/casino/casino.go",
   "dependencies": [
     {

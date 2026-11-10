@@ -45,7 +45,7 @@ func (r *CasinoRepository) FindPendingDeparture(ctx context.Context, characterID
 
 // CommitDeparture owns commit: publication must never precede an outer transaction's commit.
 // Transaction: RunInTx
-// Lock Order: casino_departures(0) -> characters(2) -> casino_departure_claims(8, ascending ID)
+// Lock Order: casino_departures(0) -> characters(2, ascending ID) -> casino_departure_claims(8, ascending ID)
 func (r *CasinoRepository) CommitDeparture(ctx context.Context, d casino.Departure, mutate func(context.Context) error) error {
 	if TxFromContext(ctx) != nil || d.Detail.Room.ID == "" || d.Member.CharacterID == "" || d.Version < 1 || !d.Pending || mutate == nil {
 		return casino.ErrDepartureRecovery

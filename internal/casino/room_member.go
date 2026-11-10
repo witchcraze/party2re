@@ -70,6 +70,9 @@ func (s *Service) JoinRoom(ctx context.Context, roomID string, characterID strin
 				UpdatedAt:   now,
 			}
 
+			if err := s.checkAdmissionDeparture(txCtx, characterID); err != nil {
+				return err
+			}
 			return s.roomRepo.AddMember(txCtx, newMember)
 		})
 		if txErr != nil {
@@ -126,6 +129,9 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 				Card:        -1,
 				JoinedAt:    now,
 				UpdatedAt:   now,
+			}
+			if err := s.checkAdmissionDeparture(txCtx, characterID); err != nil {
+				return err
 			}
 			return s.roomRepo.AddMember(txCtx, spectator)
 		})

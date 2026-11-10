@@ -5,6 +5,9 @@ import (
 	"errors"
 	"slices"
 	"time"
+
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 var ErrDepartureRecovery = errors.New("casino departure requires recovery")
@@ -98,6 +101,19 @@ func (s *Service) checkPendingDeparture(ctx context.Context, characterID string)
 	return nil
 }
 
+// The caller's transaction holds this lock through admission, excluding new departure claims.
+func (s *Service) checkAdmissionDeparture(ctx context.Context, characterID string) error {
+	if s.departures == nil {
+		return nil
+	}
+	if s.charRepo != nil {
+		if _, err := s.charRepo.FindByIDForUpdate(ctx, characterID); err != nil {
+			return err
+		}
+	}
+	return s.checkPendingDeparture(ctx, characterID)
+}
+
 // LeaveRoom commits fatigue and the complete departure before any room publication.
 func (s *Service) LeaveRoom(ctx context.Context, roomID, characterID string) error {
 	if characterID == "" {
@@ -155,12 +171,34 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID, characterID string) err
 			PasswordHash: room.PasswordHash, ClaimedIDs: claimed, Pending: true}
 		if err := s.departures.CommitDeparture(lockedCtx, d, func(txCtx context.Context) error {
 			return s.runInTx(txCtx, func(txCtx context.Context) error {
-				if member.IsSpectator || s.charRepo == nil {
+				if s.charRepo == nil {
 					return nil
 				}
-				char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
-				if err != nil {
+				var char corecharacter.Character
+				if err := economy.LockInOrder(txCtx, claimed, func(txCtx context.Context, actorID string) error {
+					locked, err := s.charRepo.FindByIDForUpdate(txCtx, actorID)
+					if actorID == characterID {
+						char = locked
+					}
+					if err != nil {
+						return err
+					}
+					currentRoom, err := s.roomRepo.GetCharacterRoom(txCtx, actorID)
+					if errors.Is(err, ErrRoomNotFound) {
+						return nil
+					}
+					if err != nil {
+						return err
+					}
+					if currentRoom != roomID {
+						return ErrDepartureRecovery
+					}
+					return nil
+				}); err != nil {
 					return err
+				}
+				if member.IsSpectator {
+					return nil
 				}
 				char.AddTired(1)
 				return s.charRepo.Update(txCtx, char)
