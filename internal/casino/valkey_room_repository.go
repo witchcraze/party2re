@@ -60,7 +60,7 @@ func NewValkeyRoomRepository(client valkey.Client, opts ...ValkeyRoomRepositoryO
 
 // CreateRoom registers a new room and its leader in Valkey with 1800s sliding TTL.
 func (v *ValkeyRoomRepository) CreateRoom(ctx context.Context, room Room, leaderMember RoomMember) error {
-	return v.WithRoomLock(ctx, room.ID, func(lockedCtx context.Context) error {
+	return v.withAdmissionLock(ctx, room.ID, leaderMember.CharacterID, func(lockedCtx context.Context) error {
 		now := time.Now().UTC()
 		if room.CreatedAt.IsZero() {
 			room.CreatedAt = now
@@ -264,7 +264,7 @@ func (v *ValkeyRoomRepository) GetRoomByName(ctx context.Context, name string) (
 
 // AddMember adds or updates a participant in the room.
 func (v *ValkeyRoomRepository) AddMember(ctx context.Context, member RoomMember) error {
-	return v.WithRoomLock(ctx, member.RoomID, func(lockedCtx context.Context) error {
+	return v.withAdmissionLock(ctx, member.RoomID, member.CharacterID, func(lockedCtx context.Context) error {
 		dto, err := v.getRoomDetail(lockedCtx, member.RoomID)
 		if err != nil {
 			return err

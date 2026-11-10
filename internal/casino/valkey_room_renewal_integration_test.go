@@ -931,9 +931,8 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 		return nil
 	}
 
-	// Deterministic Interleaving A: Both JoinRoom(roomA) and JoinRoom(roomB) observe GET char == nil
-	// before either writes its room payload; atomic claim_character_room.lua serializes the winner
-	// and rolls back the loser's roster.
+	// Deterministic Interleaving A: absent-mapping contenders reach the character
+	// admission lock together; only one can publish membership.
 	var barrierPreClaim atomic.Bool
 	preClaimArrived := make(chan struct{}, 2)
 	preClaimRelease := make(chan struct{})
@@ -944,9 +943,13 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 	hookClient := &hookValkeyClient{
 		Client: rawClient,
 		beforeDo: func(cmds []string) error {
-			if barrierPreClaim.Load() && len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+mover {
+			if barrierPreClaim.Load() && len(cmds) > 2 && cmds[0] == "SET" && cmds[1] == casino.DefaultCharacterLockKeyPrefix+mover {
 				preClaimArrived <- struct{}{}
-				<-preClaimRelease
+				select {
+				case <-preClaimRelease:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 			if pauseDeleteOnRoomA.Load() && len(cmds) == 5 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+mover && cmds[4] == roomA {
 				if pauseDeleteOnRoomA.CompareAndSwap(true, false) {
@@ -1131,7 +1134,7 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 	}
 }
 
-func TestValkeyRoomRenewal_ConcurrentCreateRoomRollbackBlocksJoinAndPropagatesErrors(t *testing.T) {
+func TestValkeyRoomRenewal_CreateRoomClaimConflictBlocksJoinAndPropagatesErrors(t *testing.T) {
 	rawClient := openIsolatedTestValkey(t, 0)
 	defer rawClient.Close()
 
@@ -1151,58 +1154,33 @@ func TestValkeyRoomRenewal_ConcurrentCreateRoomRollbackBlocksJoinAndPropagatesEr
 		casinoRepo.accounts[actor] = casino.Account{CharacterID: actor, Coins: 5000}
 	}
 
-	var createClaimCount atomic.Int32
-	var winnerRoomID atomic.Value
 	var loserRoomID atomic.Value
-	bothPublished := make(chan struct{})
-	winnerClaimed := make(chan struct{})
-	var winnerClaimedOnce sync.Once
-	loserHoldRelease := make(chan struct{})
+	loserPublished := make(chan struct{})
 	joinerAttemptedLock := make(chan struct{})
-	var notifyJoinerLock atomic.Bool
+	var publishedOnce, attemptedOnce sync.Once
 	var injectRollbackErr atomic.Bool
 	errCompensatoryFault := errors.New("injected compensatory rollback failure")
-
+	wID := prefix + "-winner"
 	hookClient := &hookValkeyClient{
 		Client: rawClient,
 		beforeDo: func(cmds []string) error {
-			// Detect creatorC's claim_character_room.lua calls during concurrent CreateRoom.
-			if len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+creatorC {
-				n := createClaimCount.Add(1)
-				switch n {
-				case 1:
-					winnerRoomID.Store(cmds[4])
-					<-bothPublished
-				case 2:
-					loserRoomID.Store(cmds[4])
-					close(bothPublished)
-					<-loserHoldRelease
+			// A foreign writer bypasses admission serialization; CAS rollback must still be safe.
+			if len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+creatorC && cmds[4] != wID {
+				loserRoomID.Store(cmds[4])
+				publishedOnce.Do(func() { close(loserPublished) })
+				select {
+				case <-joinerAttemptedLock:
+				case <-ctx.Done():
+					return ctx.Err()
 				}
+				return rawClient.Do(ctx, rawClient.B().Set().Key(casino.DefaultCharacterKeyPrefix+creatorC).Value(wID).Ex(casino.DefaultLobbyTTL).Build()).Error()
 			}
-			// Detect joinerD's room lock acquisition attempt on loserRoom while CreateRoom holds loserRoom's lock.
-			if notifyJoinerLock.Load() && len(cmds) >= 3 && cmds[0] == "SET" {
-				if lID, ok := loserRoomID.Load().(string); ok && lID != "" && cmds[1] == casino.DefaultRoomLockKeyPrefix+lID {
-					if notifyJoinerLock.CompareAndSwap(true, false) {
-						close(joinerAttemptedLock)
-					}
+			if len(cmds) > 2 && cmds[0] == "SET" {
+				if lID, ok := loserRoomID.Load().(string); ok && cmds[1] == casino.DefaultRoomLockKeyPrefix+lID {
+					attemptedOnce.Do(func() { close(joinerAttemptedLock) })
 				}
-			}
-			// Inject compensatory rollback failure when requested.
-			if injectRollbackErr.Load() && len(cmds) >= 2 && cmds[0] == "DEL" && strings.HasPrefix(cmds[1], casino.DefaultRoomKeyPrefix) {
-				return errCompensatoryFault
-			}
-			if injectRollbackErr.Load() && len(cmds) >= 2 && cmds[0] == "SET" && strings.HasPrefix(cmds[1], casino.DefaultRoomKeyPrefix) {
-				return errCompensatoryFault
 			}
 			return nil
-		},
-		// The loser is released only after the winner's claim succeeds; otherwise it could claim first and become live.
-		afterDo: func(cmds []string, err error) {
-			if err == nil && len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+creatorC {
-				if wID, ok := winnerRoomID.Load().(string); ok && cmds[4] == wID {
-					winnerClaimedOnce.Do(func() { close(winnerClaimed) })
-				}
-			}
 		},
 	}
 
@@ -1227,51 +1205,36 @@ func TestValkeyRoomRenewal_ConcurrentCreateRoomRollbackBlocksJoinAndPropagatesEr
 		}
 	})
 
-	// 1. Concurrent CreateRoom(Room 1) and CreateRoom(Room 2) by creatorC while joinerD attempts
-	// JoinRoom(loserRoom) after loserRoom's payload and active index have been written to Valkey.
+	// Seed a real winner; remove its mapping so the contender reaches publication.
+	now := time.Now().UTC()
+	if err := repo.CreateRoom(ctx, casino.Room{ID: wID, Name: "Winner-" + prefix, LeaderCharacterID: creatorC, Status: casino.RoomStatusWaiting, UpdatedAt: now}, casino.RoomMember{RoomID: wID, CharacterID: creatorC}); err != nil {
+		t.Fatal(err)
+	}
+	createdRooms = append(createdRooms, wID)
+	if err := rawClient.Do(ctx, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+creatorC).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 	joinDone := make(chan error, 1)
-	go func() {
-		<-bothPublished
-		lID := loserRoomID.Load().(string)
-		notifyJoinerLock.Store(true)
-		go func() {
-			_, jErr := svc.JoinRoom(ctx, lID, joinerD, "", 0)
-			joinDone <- jErr
-		}()
-		<-joinerAttemptedLock
-		<-winnerClaimed
-		close(loserHoldRelease)
-	}()
-
 	createErrs := testutil.RunRace(
 		func() error {
-			_, cErr := svc.CreateRoom(ctx, creatorC, casino.CreateRoomRequest{
-				Name: "Create1-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
-			})
-			return cErr
+			_, err := svc.CreateRoom(ctx, creatorC, casino.CreateRoomRequest{Name: "Loser-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true})
+			return err
 		},
 		func() error {
-			_, cErr := svc.CreateRoom(ctx, creatorC, casino.CreateRoomRequest{
-				Name: "Create2-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
-			})
-			return cErr
+			select {
+			case <-loserPublished:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			_, err := svc.JoinRoom(ctx, loserRoomID.Load().(string), joinerD, "", 0)
+			joinDone <- err
+			return nil
 		},
 	)
-
-	wID := winnerRoomID.Load().(string)
 	lID := loserRoomID.Load().(string)
-	createdRooms = append(createdRooms, wID, lID)
-
-	createWins := 0
-	for idx, cErr := range createErrs {
-		if cErr == nil {
-			createWins++
-		} else if !errors.Is(cErr, casino.ErrAlreadyInRoom) {
-			t.Fatalf("CreateRoom goroutine %d unexpected error: %v", idx, cErr)
-		}
-	}
-	if createWins != 1 {
-		t.Fatalf("expected exactly 1 CreateRoom winner, got %d (errs=%v)", createWins, createErrs)
+	createdRooms = append(createdRooms, lID)
+	if !errors.Is(createErrs[0], casino.ErrAlreadyInRoom) || createErrs[1] != nil {
+		t.Fatalf("create/join race=%v", createErrs)
 	}
 
 	joinErr := <-joinDone
@@ -1337,7 +1300,7 @@ func TestValkeyRoomRenewal_ConcurrentCreateRoomRollbackBlocksJoinAndPropagatesEr
 		return nil
 	}
 
-	now := time.Now().UTC()
+	now = time.Now().UTC()
 	createRollbackErr := repo.CreateRoom(ctx, casino.Room{
 		ID: failRollbackRoomID, Name: "FailRB-" + prefix, GameType: casino.GameTypeIndian, LeaderCharacterID: joinerD,
 		Speed: casino.SpeedFast, MaxPlayers: 2, Rate: 10, Status: casino.RoomStatusWaiting, CreatedAt: now, UpdatedAt: now,
