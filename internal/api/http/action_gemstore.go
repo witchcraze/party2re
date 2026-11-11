@@ -109,8 +109,8 @@ func gemStoreActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_INVALID_RECIPE_ID", Message: "Invalid recipe ID."}
 	case errors.Is(err, gemstore.ErrItemNotOwned):
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_ITEM_NOT_OWNED", Message: "Item is not owned."}
-	case errors.Is(err, gemstore.ErrLevelTooLow):
-		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_JOB_LEVEL_TOO_LOW", Message: "Job level is too low for this gem."}
+	case errors.Is(err, gemstore.ErrGemNotForSale):
+		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_GEM_NOT_FOR_SALE", Message: "This gem is not on sale at your job level."}
 	case errors.Is(err, gemstore.ErrInsufficientFunds):
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_INSUFFICIENT_FUNDS", Message: "Insufficient wallet funds."}
 	case errors.Is(err, gemstore.ErrInsufficientMaterials):

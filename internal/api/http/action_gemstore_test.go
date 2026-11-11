@@ -218,7 +218,7 @@ func TestGemStoreGatewayErrors(t *testing.T) {
 		{gemstore.ErrInvalidGemID, "GEMSTORE_INVALID_GEM_ID", 400},
 		{gemstore.ErrInvalidRecipeID, "GEMSTORE_INVALID_RECIPE_ID", 400},
 		{gemstore.ErrItemNotOwned, "GEMSTORE_ITEM_NOT_OWNED", 400},
-		{gemstore.ErrLevelTooLow, "GEMSTORE_JOB_LEVEL_TOO_LOW", 400},
+		{gemstore.ErrGemNotForSale, "GEMSTORE_GEM_NOT_FOR_SALE", 400},
 		{gemstore.ErrInsufficientFunds, "GEMSTORE_INSUFFICIENT_FUNDS", 400},
 		{gemstore.ErrInsufficientMaterials, "GEMSTORE_INSUFFICIENT_MATERIALS", 400},
 		{gemstore.ErrCannotSendToSelf, "GEMSTORE_SELF_TRANSFER", 400},

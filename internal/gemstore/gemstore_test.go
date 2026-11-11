@@ -214,10 +214,10 @@ func TestGemStore_BuyGem(t *testing.T) {
 		t.Errorf("expected 1 gem box item, got %d", len(res.GemBox.Items))
 	}
 
-	// 2. Failure: Level too low for Lv50 gem (gem_atk_2)
+	// 2. Failure: gem_atk_2 is not on sale below job_lv 100
 	_, err = svc.BuyGem(ctx, "char_1", "gem_atk_2")
-	if err != gemstore.ErrLevelTooLow {
-		t.Errorf("expected ErrLevelTooLow, got: %v", err)
+	if err != gemstore.ErrGemNotForSale {
+		t.Errorf("expected ErrGemNotForSale, got: %v", err)
 	}
 
 	// 3. Failure: Insufficient funds

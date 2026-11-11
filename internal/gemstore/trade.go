@@ -38,9 +38,8 @@ func (s *Service) BuyGem(ctx context.Context, characterID, gemID string) (BuyRes
 			return err
 		}
 
-		// Unlock requirement is based on job_lv (transfer count)
-		if gem.RequiredJobLevel > 1 && char.JobLevel < gem.RequiredJobLevel {
-			return ErrLevelTooLow
+		if !s.catalog.IsOnSale(gem.ID, char.JobLevel) {
+			return ErrGemNotForSale
 		}
 
 		box, err := s.getOrCreateGemBoxForUpdate(txCtx, char)

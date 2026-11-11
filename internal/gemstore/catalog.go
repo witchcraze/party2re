@@ -10,6 +10,9 @@ import (
 //go:embed data/gems.json
 var rawGemsJSON []byte
 
+//go:embed data/sales.json
+var rawSalesJSON []byte
+
 //go:embed data/recipes.json
 var rawRecipesJSON []byte
 
@@ -18,14 +21,18 @@ var rawOrbAppraisalsJSON []byte
 
 // Gem represents a gem or jewel orb available in the gem store.
 type Gem struct {
-	ID               string `json:"id"`
-	Name             string `json:"name"`
-	Price            int    `json:"price"`
-	RequiredJobLevel int    `json:"required_job_level,omitempty"`
-	RequiredLevel    int    `json:"required_level"`
-	SlotCost         int    `json:"slot_cost"`
-	MPCost           int    `json:"mp_cost"`
-	Description      string `json:"description"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Price       int    `json:"price"`
+	SlotCost    int    `json:"slot_cost"`
+	MPCost      int    `json:"mp_cost"`
+	Description string `json:"description"`
+}
+
+// salesTier lists the gems on sale from MinJobLevel (transfer count) up to the next tier.
+type salesTier struct {
+	MinJobLevel int      `json:"min_job_level"`
+	GemIDs      []string `json:"gem_ids"`
 }
 
 // Recipe represents a synthesis formula for creating advanced gems.
@@ -59,6 +66,8 @@ type Catalog struct {
 	recipesByMat map[string]Recipe
 	orbPools     map[string][]string
 	orbPoolDefs  []OrbAppraisalPool
+	salesTiers   []salesTier // descending MinJobLevel; the last tier starts at 0
+	salesByTier  []map[string]bool
 }
 
 // DefaultCatalog parses and returns the embedded gem store catalog.
@@ -71,6 +80,11 @@ func DefaultCatalog() (*Catalog, error) {
 	var recipes []Recipe
 	if err := json.Unmarshal(rawRecipesJSON, &recipes); err != nil {
 		return nil, fmt.Errorf("unmarshal recipes catalog: %w", err)
+	}
+
+	var tiers []salesTier
+	if err := json.Unmarshal(rawSalesJSON, &tiers); err != nil {
+		return nil, fmt.Errorf("unmarshal gem sales tiers: %w", err)
 	}
 
 	var orbPools []OrbAppraisalPool
@@ -91,15 +105,26 @@ func DefaultCatalog() (*Catalog, error) {
 	}
 
 	for i, g := range gems {
-		if g.RequiredJobLevel == 0 && g.RequiredLevel > 0 {
-			g.RequiredJobLevel = g.RequiredLevel
-		}
-		c.allGems[i] = g
 		c.gemsByID[g.ID] = g
 		c.gemsByName[g.Name] = g
 		c.gemRanks[g.ID] = i
 		c.gemRanks[g.Name] = i
 	}
+
+	for i, t := range tiers {
+		if (i > 0 && t.MinJobLevel >= tiers[i-1].MinJobLevel) || (i == len(tiers)-1 && t.MinJobLevel != 0) {
+			return nil, fmt.Errorf("gem sales tiers must descend to min_job_level 0")
+		}
+		set := make(map[string]bool, len(t.GemIDs))
+		for _, id := range t.GemIDs {
+			if _, ok := c.gemsByID[id]; !ok {
+				return nil, fmt.Errorf("invalid gem_id %q in sales tier %d", id, t.MinJobLevel)
+			}
+			set[id] = true
+		}
+		c.salesByTier = append(c.salesByTier, set)
+	}
+	c.salesTiers = tiers
 
 	for _, r := range recipes {
 		c.recipesByID[r.ID] = r
@@ -156,23 +181,26 @@ func (c *Catalog) GemRank(idOrName string) int {
 	return 9999
 }
 
-// GetGemsForJobLevel returns gems that a character of given job_lv (transfer count) is eligible to purchase.
+// GetGemsForJobLevel returns the gems on sale at the given job_lv (transfer count), in catalog order.
 func (c *Catalog) GetGemsForJobLevel(jobLevel int) []Gem {
 	var eligible []Gem
 	for _, g := range c.allGems {
-		req := g.RequiredJobLevel
-		if req <= 1 {
-			eligible = append(eligible, g)
-		} else if jobLevel >= req {
+		if c.IsOnSale(g.ID, jobLevel) {
 			eligible = append(eligible, g)
 		}
 	}
 	return eligible
 }
 
-// GetGemsForLevel returns gems that a character of given level is eligible to purchase (delegates to GetGemsForJobLevel).
-func (c *Catalog) GetGemsForLevel(level int) []Gem {
-	return c.GetGemsForJobLevel(level)
+// IsOnSale reports whether the gem is in the sales list of the tier for jobLevel.
+// Tiers are explicit lists, not thresholds: a higher tier may drop a gem a lower tier sells.
+func (c *Catalog) IsOnSale(gemID string, jobLevel int) bool {
+	for i, t := range c.salesTiers {
+		if jobLevel >= t.MinJobLevel {
+			return c.salesByTier[i][gemID]
+		}
+	}
+	return false
 }
 
 // FindRecipeByID finds a recipe by its ID.
