@@ -81,19 +81,20 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 			return fmt.Errorf("failed to update character after meal: %w", err)
 		}
 
-		// Award lottery tickets
-		totalTickets := 0
+		ticketsAwarded, totalTickets := 0, 0
 		if s.lotteryRepo != nil && item.Tickets > 0 {
-			newTickets, err := s.lotteryRepo.AddRaffleTickets(txCtx, charID, item.Tickets)
-			if err == nil {
-				totalTickets = newTickets
+			totalTickets, err = s.lotteryRepo.AddRaffleTickets(txCtx, charID, item.Tickets)
+			if err != nil {
+				return fmt.Errorf("failed to award raffle tickets: %w", err)
 			}
+			ticketsAwarded = item.Tickets
 		}
 
-		// Award guild points (+2 GP, bar.cgi:118)
+		// +2 GP for the affiliated guild (bar.cgi:118).
 		if s.guildPoints != nil {
-			//lint:ignore error-swallow best-effort guild points bonus
-			_ = s.guildPoints.AddGuildPoints(txCtx, charID, 2)
+			if err := s.guildPoints.AddGuildPoints(txCtx, charID, 2); err != nil {
+				return fmt.Errorf("failed to award guild points: %w", err)
+			}
 		}
 
 		// Update tavern status
@@ -116,8 +117,8 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 		} else if mpHealed > 0 {
 			msg += fmt.Sprintf(" MPが%d回復した！", mpHealed)
 		}
-		if item.Tickets > 0 {
-			msg += fmt.Sprintf(" 福引券を%d枚もらった！", item.Tickets)
+		if ticketsAwarded > 0 {
+			msg += fmt.Sprintf(" 福引券を%d枚もらった！", ticketsAwarded)
 		}
 
 		result = OrderResult{
@@ -128,7 +129,7 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 			CurrentHP:      char.Stats.HP,
 			CurrentMP:      char.Stats.MP,
 			RemainingGold:  char.Money,
-			TicketsAwarded: item.Tickets,
+			TicketsAwarded: ticketsAwarded,
 			TotalTickets:   totalTickets,
 			Message:        msg,
 		}
