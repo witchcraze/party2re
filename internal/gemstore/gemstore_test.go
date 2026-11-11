@@ -142,6 +142,15 @@ type mockDepotRepo struct {
 	depots map[string]depot.Depot
 }
 
+// depotHolding seeds a Depot, the only place legacy kantei appraises from.
+func depotHolding(characterID string, items ...coreitem.Instance) *mockDepotRepo {
+	repo := newMockDepotRepo()
+	dep, _ := depot.NewDepot(characterID)
+	dep.Items = items
+	repo.depots[characterID] = dep
+	return repo
+}
+
 func newMockDepotRepo() *mockDepotRepo {
 	return &mockDepotRepo{
 		depots: make(map[string]depot.Depot),
@@ -484,7 +493,7 @@ func TestGemStore_SynthesizeGem_Depot_StackedMaterial(t *testing.T) {
 	}
 }
 
-func TestGemStore_AppraiseItem(t *testing.T) {
+func TestGemStore_AppraiseItem_IgnoresHandSlots(t *testing.T) {
 	catalog, err := gemstore.DefaultCatalog()
 	if err != nil {
 		t.Fatalf("failed to load catalog: %v", err)
@@ -496,7 +505,6 @@ func TestGemStore_AppraiseItem(t *testing.T) {
 	char := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Hero"}
 	charRepo.characters[char.ID] = char
 
-	// Inventory with unidentified orb "光る宝珠" and normal sword
 	itemProvider := &mockItemProvider{
 		items: map[string]coreitem.Definition{
 			"unidentified_glowing_orb": {ID: "unidentified_glowing_orb", Name: "光る宝珠"},
@@ -515,37 +523,21 @@ func TestGemStore_AppraiseItem(t *testing.T) {
 		catalog,
 		charRepo,
 		invRepo,
+		gemstore.WithDepotRepository(newMockDepotRepo()),
 		gemstore.WithItemDefinitionProvider(itemProvider),
-		gemstore.WithRandomSource(fixedRandomSource{value: 0}), // index 0 in 光る宝珠 pool -> gem_sky_atk_1
+		gemstore.WithRandomSource(fixedRandomSource{value: 0}),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	ctx := context.Background()
-
-	// 1. Appraise unidentified orb -> converts to Gem
-	resOrb, err := svc.AppraiseItem(ctx, "char_1", orbInst.ID)
-	if err != nil {
-		t.Fatalf("expected AppraiseItem success on orb, got: %v", err)
+	for _, target := range []string{orbInst.ID, swordInst.ID, "光る宝珠"} {
+		if _, err := svc.AppraiseItem(context.Background(), "char_1", target); !errors.Is(err, gemstore.ErrItemNotOwned) {
+			t.Fatalf("AppraiseItem(%q) error = %v, want ErrItemNotOwned", target, err)
+		}
 	}
-	if !resOrb.IsGem {
-		t.Errorf("expected IsGem to be true")
-	}
-	if resOrb.IdentifiedGem == nil || resOrb.IdentifiedGem.ID != "gem_sky_atk_1" {
-		t.Errorf("expected revealed gem_sky_atk_1, got %+v", resOrb.IdentifiedGem)
-	}
-
-	// 2. Appraise regular item -> reveals name
-	resSword, err := svc.AppraiseItem(ctx, "char_1", swordInst.ID)
-	if err != nil {
-		t.Fatalf("expected AppraiseItem success on sword, got: %v", err)
-	}
-	if resSword.IsGem {
-		t.Errorf("expected IsGem to be false for sword")
-	}
-	if resSword.IdentifiedName != "鉄の剣" {
-		t.Errorf("expected identified name 鉄の剣, got %s", resSword.IdentifiedName)
+	if got := invRepo.inventories["char_1"]; len(got.Items) != 2 {
+		t.Fatalf("hand slots changed: %+v", got.Items)
 	}
 }
 
@@ -751,15 +743,14 @@ func TestGemStore_AppraiseItem_AllOrbs_AllCandidateOutcomes(t *testing.T) {
 				},
 			}
 
-			inv, _ := coreinventory.New("char_test")
 			orbInst, _ := coreitem.NewInstance("orb_item", 1)
-			_ = inv.Add(orbInst)
-			invRepo.inventories["char_test"] = inv
+			depots := depotHolding("char_test", orbInst)
 
 			svc, err := gemstore.NewService(
 				catalog,
 				charRepo,
 				invRepo,
+				gemstore.WithDepotRepository(depots),
 				gemstore.WithItemDefinitionProvider(itemProvider),
 				gemstore.WithRandomSource(fixedRandomSource{value: idx}),
 			)
@@ -799,15 +790,14 @@ func TestGemStore_AppraiseItem_RandomSourceError(t *testing.T) {
 		},
 	}
 
-	inv, _ := coreinventory.New("char_1")
 	orbInst, _ := coreitem.NewInstance("orb_item", 1)
-	_ = inv.Add(orbInst)
-	invRepo.inventories["char_1"] = inv
+	depots := depotHolding("char_1", orbInst)
 
 	svc, err := gemstore.NewService(
 		catalog,
 		charRepo,
 		invRepo,
+		gemstore.WithDepotRepository(depots),
 		gemstore.WithItemDefinitionProvider(itemProvider),
 		gemstore.WithRandomSource(errRandomSource{}),
 	)
@@ -845,15 +835,14 @@ func TestGemStore_AppraiseItem_Concurrency(t *testing.T) {
 				},
 			}
 
-			inv, _ := coreinventory.New(charID)
 			orbInst, _ := coreitem.NewInstance("orb", 1)
-			_ = inv.Add(orbInst)
-			invRepo.inventories[charID] = inv
+			depots := depotHolding(charID, orbInst)
 
 			svc, err := gemstore.NewService(
 				catalog,
 				charRepo,
 				invRepo,
+				gemstore.WithDepotRepository(depots),
 				gemstore.WithItemDefinitionProvider(itemProvider),
 				gemstore.WithRandomSource(gemstore.DefaultRandomSource()),
 			)

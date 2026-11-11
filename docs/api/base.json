@@ -5933,7 +5933,7 @@
                   "properties": {
                     "item_id": {
                       "type": "string",
-                      "description": "Owned inventory or depot item instance ID, definition ID or name. One unit is consumed; the identified gem enters the gem box."
+                      "description": "Owned depot item instance ID, definition ID or name; hand-slot inventory items are not appraised. An unidentified orb loses one unit and its identified gem enters the gem box; other items are only named."
                     }
                   },
                   "additionalProperties": false,

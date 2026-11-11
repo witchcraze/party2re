@@ -14,6 +14,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
@@ -349,5 +350,83 @@ func TestGemStoreGatewayConcurrentSendConservesGem(t *testing.T) {
 	}
 	if len(sender.Items) != 1 || sender.Items[0].ID != items[1].ID || len(received.Items) != 1 || received.Items[0].DefinitionID != "gem_atk_2" {
 		t.Fatalf("gem not conserved: %+v %+v", sender, received)
+	}
+}
+
+func TestGemStoreGatewayAppraisesDepotNotEquippedHandSlot(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	router, actor, _, boxes, _ := gemStoreDBRouter(t, ctx)
+	held, err := item.NewInstance("item-251", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := item.NewInstance("item-251", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateTestInventoryWithItems(ctx, boxes.db, actor.ID, []item.Instance{held}); err != nil {
+		t.Fatal(err)
+	}
+	equip, err := database.NewEquipmentRepository(boxes.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := equip.Save(ctx, coreequipment.Equipment{CharacterID: actor.ID, Slots: map[item.Slot]string{item.SlotAccessory: held.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateTestDepot(ctx, boxes.db, actor.ID, 0, []item.Instance{stored}); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := database.NewInventoryRepository(boxes.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depots, err := database.NewDepotRepository(boxes.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHandKept := func() {
+		t.Helper()
+		owned, err := inv.FindByCharacterID(ctx, actor.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		eq, err := equip.FindByCharacterID(ctx, actor.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(owned.Items) != 1 || owned.Items[0].ID != held.ID || eq.Slots[item.SlotAccessory] != held.ID {
+			t.Fatalf("hand slot changed: %+v %+v", owned.Items, eq.Slots)
+		}
+	}
+
+	// Legacy kantei never reads the hand slots.
+	status, got := gatewayRequest(t, router, actor.ID, "session", "application/json", saleGatewayBody("gemstore_appraise", fmt.Sprintf(`{"item_id":%q}`, held.ID)), ctx)
+	if status != 400 {
+		t.Fatalf("hand-slot appraisal: %d %s", status, got)
+	}
+	assertGatewayError(t, got, "GEMSTORE_ITEM_NOT_OWNED")
+	assertHandKept()
+
+	before, err := boxes.FindByCharacterID(ctx, actor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, got = gatewayRequest(t, router, actor.ID, "session", "application/json", saleGatewayBody("gemstore_appraise", `{"item_id":"光る宝珠"}`), ctx)
+	if status != 200 {
+		t.Fatalf("depot appraisal by name: %d %s", status, got)
+	}
+	assertHandKept()
+	dep, err := depots.FindByCharacterID(ctx, actor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := boxes.FindByCharacterID(ctx, actor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dep.Items) != 0 || len(after.Items) != len(before.Items)+1 {
+		t.Fatalf("depot orb not appraised: depot=%+v box=%+v", dep.Items, after.Items)
 	}
 }
