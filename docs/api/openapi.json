@@ -113,15 +113,6 @@
         ],
         "type": "object"
       },
-      "AddInteriorRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "furniture_id": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "AdminBanPlayerResponse": {
         "properties": {
           "message": {
@@ -2239,25 +2230,6 @@
         ],
         "type": "object"
       },
-      "BuildStoreRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "house_style": {
-            "type": "string"
-          },
-          "store_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "house_style"
-        ],
-        "type": "object"
-      },
       "BuyTakarakujiTicketResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3707,24 +3679,6 @@
         ],
         "type": "object"
       },
-      "ChangeStoreNameRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "store_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ChangeWallpaperRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "wallpaper": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "ChapelBlessingInfo": {
         "additionalProperties": false,
         "properties": {
@@ -4291,7 +4245,11 @@
                         "home_inbox",
                         "home_outbox",
                         "casino",
-                        "secretshop"
+                        "secretshop",
+                        "town1",
+                        "town2",
+                        "town3",
+                        "town4"
                       ],
                       "type": "string"
                     }
@@ -4326,7 +4284,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "target_id": {
-                      "description": "Public Home, available shop item or Casino room ID, validated by the selected adapter. Room selection never grants admission.",
+                      "description": "Public Home, available shop item, Casino room or town store ID, validated by the selected adapter. Room selection never grants admission.",
                       "pattern": "^[a-zA-Z0-9_-]{1,128}$",
                       "type": "string"
                     },
@@ -4334,7 +4292,8 @@
                       "enum": [
                         "item",
                         "home",
-                        "room"
+                        "room",
+                        "store"
                       ],
                       "type": "string"
                     }
@@ -4418,7 +4377,11 @@
                         "home_inbox",
                         "home_outbox",
                         "casino",
-                        "secretshop"
+                        "secretshop",
+                        "town1",
+                        "town2",
+                        "town3",
+                        "town4"
                       ],
                       "type": "string"
                     },
@@ -6075,6 +6038,409 @@
               "required": [
                 "params"
               ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_build",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "house_style": {
+                      "description": "House style from the observed store_terms.house_styles. Funds, town capacity and ownership stay service-owned.",
+                      "type": "string"
+                    },
+                    "town_id": {
+                      "description": "Town scene ID (town1..town4) from the store_build template.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "town_id",
+                    "house_style"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_list_gold",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "Owned Depot instance ID. One unit is listed.",
+                      "type": "string"
+                    },
+                    "price": {
+                      "description": "Price in gold. The 1 to 999999 range and the listing limit stay service-owned.",
+                      "format": "int64",
+                      "maximum": 9223372036854775807,
+                      "minimum": -9223372036854775808,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "item_id",
+                    "price"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_list_barter",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "Owned Depot instance ID. One unit is listed.",
+                      "type": "string"
+                    },
+                    "wish_item_name": {
+                      "description": "Exact name of an existing weapon, armor or item wanted in exchange.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id",
+                    "wish_item_name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_withdraw",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sale_id": {
+                      "description": "Owned listing from the observed store sales; it returns to the Depot.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sale_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_buy",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sale_id": {
+                      "description": "Gold listing from the observed store sales. Funds and self-purchase stay service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sale_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_trade",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "Owned Depot instance whose item name matches the listing's wish_item_name.",
+                      "type": "string"
+                    },
+                    "sale_id": {
+                      "description": "Barter listing from the observed store sales.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sale_id",
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_rename",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "store_name": {
+                      "description": "New signboard name; legacy character rules and uniqueness stay service-owned. Requires a 5,000 G balance without deduction.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "store_name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_wallpaper",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "wallpaper": {
+                      "description": "Wallpaper key; its price is deducted.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "wallpaper"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_interior_add",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "furniture_id": {
+                      "description": "Furniture ID. Requires a 1,000 G balance without deduction; at most five pieces.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "furniture_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_interior_rename",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "interior_id": {
+                      "description": "Interior from the observed store interiors.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "New interior name; legacy character rules stay service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "interior_id",
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "store_interior_clean",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
               "type": "object"
             }
           },
@@ -11174,30 +11540,6 @@
         ],
         "type": "object"
       },
-      "ListBarterItemRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "depot_item_instance_id": {
-            "type": "string"
-          },
-          "wish_item_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ListGoldItemRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "depot_item_instance_id": {
-            "type": "string"
-          },
-          "price": {
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
       "ListWishesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -14184,15 +14526,6 @@
         },
         "type": "object"
       },
-      "RenameInteriorRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "ReplayBattleReplay": {
         "additionalProperties": false,
         "properties": {
@@ -14455,7 +14788,11 @@
                   "home_inbox",
                   "home_outbox",
                   "casino",
-                  "secretshop"
+                  "secretshop",
+                  "town1",
+                  "town2",
+                  "town3",
+                  "town4"
                 ],
                 "type": "string"
               }
@@ -14639,7 +14976,11 @@
               "home_inbox",
               "home_outbox",
               "casino",
-              "secretshop"
+              "secretshop",
+              "town1",
+              "town2",
+              "town3",
+              "town4"
             ],
             "type": "string"
           },
@@ -14754,6 +15095,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/ExileSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TownDistrictSceneData"
                     }
                   ]
                 }
@@ -14792,6 +15136,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/SecretShopProductSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StoreSceneData"
                     }
                   ]
                 }
@@ -15373,6 +15720,76 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/ExileSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "enum": [
+                    "town1",
+                    "town2",
+                    "town3",
+                    "town4"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TownDistrictSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subject"
+                },
+                "location_id": {
+                  "enum": [
+                    "town1",
+                    "town2",
+                    "town3",
+                    "town4"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/StoreSceneData"
                 },
                 "support": {
                   "properties": {
@@ -16457,48 +16874,30 @@
         ],
         "type": "object"
       },
-      "StoreCheckResult": {
+      "StoreBuildTerms": {
         "additionalProperties": false,
         "properties": {
-          "character_id": {
-            "type": "string"
+          "cycle_days": {
+            "type": "integer"
           },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
+          "house_styles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
-          "house_style": {
-            "type": "string"
+          "max_stores": {
+            "type": "integer"
           },
-          "message": {
-            "type": "string"
-          },
-          "owner_name": {
-            "type": "string"
-          },
-          "store_name": {
-            "type": "string"
-          },
-          "town_id": {
-            "type": "string"
-          },
-          "town_name": {
-            "type": "string"
-          },
-          "wallpaper": {
-            "type": "string"
+          "price": {
+            "type": "integer"
           }
         },
         "required": [
-          "character_id",
-          "owner_name",
-          "town_id",
-          "town_name",
-          "store_name",
-          "house_style",
-          "wallpaper",
-          "expires_at",
-          "message"
+          "price",
+          "cycle_days",
+          "max_stores",
+          "house_styles"
         ],
         "type": "object"
       },
@@ -16509,10 +16908,7 @@
             "items": {
               "$ref": "#/components/schemas/StoreInterior"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "max_sales": {
             "type": "integer"
@@ -16524,10 +16920,7 @@
             "items": {
               "$ref": "#/components/schemas/StoreSale"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "store": {
             "$ref": "#/components/schemas/Store"
@@ -16719,6 +17112,33 @@
           "price",
           "wish_item_name",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "StoreSceneData": {
+        "additionalProperties": false,
+        "description": "Selected store with listings in legacy order. is_owner selects the owner or visitor commands.",
+        "properties": {
+          "details": {
+            "$ref": "#/components/schemas/StoreDetails"
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "parent": {
+            "enum": [
+              "town1",
+              "town2",
+              "town3",
+              "town4"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "details",
+          "is_owner"
         ],
         "type": "object"
       },
@@ -16964,6 +17384,71 @@
         ],
         "type": "object"
       },
+      "TownDistrictSceneData": {
+        "additionalProperties": false,
+        "description": "One legacy town: its active stores in construction order and the ＠みせ terms.",
+        "properties": {
+          "parent": {
+            "const": "town"
+          },
+          "store_terms": {
+            "$ref": "#/components/schemas/StoreBuildTerms"
+          },
+          "stores": {
+            "items": {
+              "$ref": "#/components/schemas/Store"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "town": {
+            "$ref": "#/components/schemas/TownInfo"
+          }
+        },
+        "required": [
+          "parent",
+          "town",
+          "stores",
+          "store_terms"
+        ],
+        "type": "object"
+      },
+      "TownInfo": {
+        "additionalProperties": false,
+        "description": "Legacy town (town1..town4) with its house construction terms.",
+        "properties": {
+          "cycle_days": {
+            "type": "integer"
+          },
+          "house_styles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "max_houses": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "price",
+          "cycle_days",
+          "max_houses",
+          "house_styles"
+        ],
+        "type": "object"
+      },
       "TownSceneData": {
         "additionalProperties": false,
         "properties": {
@@ -16982,15 +17467,6 @@
           "destinations",
           "page"
         ],
-        "type": "object"
-      },
-      "TradeItemRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "depot_item_instance_id": {
-            "type": "string"
-          }
-        },
         "type": "object"
       },
       "UnreadCountResponse": {
@@ -28087,907 +28563,6 @@
         ]
       }
     },
-    "/characters/{id}/store": {
-      "get": {
-        "operationId": "getCharactersIdStore",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/StoreCheckResult"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "410": {
-            "$ref": "#/components/responses/Error",
-            "description": "Gone"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Check Store",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/interiors": {
-      "delete": {
-        "operationId": "deleteCharactersIdStoreInteriors",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Clean Interiors",
-        "tags": [
-          "Character"
-        ]
-      },
-      "post": {
-        "operationId": "postCharactersIdStoreInteriors",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddInteriorRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/StoreInterior"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Add Interior",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/interiors/{interior_id}/name": {
-      "put": {
-        "operationId": "putCharactersIdStoreInteriorsInteriorIdName",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "interior_id parameter",
-            "in": "path",
-            "name": "interior_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenameInteriorRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Rename Interior",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/listings/barter": {
-      "post": {
-        "operationId": "postCharactersIdStoreListingsBarter",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ListBarterItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/StoreSale"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List Barter Item",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/listings/gold": {
-      "post": {
-        "operationId": "postCharactersIdStoreListingsGold",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ListGoldItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/StoreSale"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List Gold Item",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/listings/{sale_id}": {
-      "delete": {
-        "operationId": "deleteCharactersIdStoreListingsSaleId",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "sale_id parameter",
-            "in": "path",
-            "name": "sale_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Withdraw Listing",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/name": {
-      "post": {
-        "operationId": "postCharactersIdStoreName",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChangeStoreNameRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Change Store Name",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/sales/{sale_id}/buy": {
-      "post": {
-        "operationId": "postCharactersIdStoreSalesSaleIdBuy",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "sale_id parameter",
-            "in": "path",
-            "name": "sale_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Buy Store Item",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/sales/{sale_id}/trade": {
-      "post": {
-        "operationId": "postCharactersIdStoreSalesSaleIdTrade",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "sale_id parameter",
-            "in": "path",
-            "name": "sale_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TradeItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Trade Store Item",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/store/wallpaper": {
-      "post": {
-        "operationId": "postCharactersIdStoreWallpaper",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChangeWallpaperRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Change Wallpaper",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
     "/characters/{id}/tavern": {
       "get": {
         "description": "Returns current character stats, fullness status, and active delivery reservation at the tavern.",
@@ -37368,62 +36943,6 @@
         ]
       }
     },
-    "/stores/{store_id}": {
-      "get": {
-        "operationId": "getStoresStoreId",
-        "parameters": [
-          {
-            "description": "store_id parameter",
-            "in": "path",
-            "name": "store_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/StoreDetails"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "410": {
-            "$ref": "#/components/responses/Error",
-            "description": "Gone"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get Store",
-        "tags": [
-          "Stores"
-        ]
-      }
-    },
     "/tavern/menu": {
       "get": {
         "description": "Returns the complete catalog of foods, drinks, and courses available at the tavern.",
@@ -37592,137 +37111,6 @@
           }
         ],
         "summary": "Build House",
-        "tags": [
-          "Towns"
-        ]
-      }
-    },
-    "/towns/{town_id}/stores": {
-      "get": {
-        "operationId": "getTownsTownIdStores",
-        "parameters": [
-          {
-            "description": "town_id parameter",
-            "in": "path",
-            "name": "town_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Store"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List Town Stores",
-        "tags": [
-          "Towns"
-        ]
-      },
-      "post": {
-        "operationId": "postTownsTownIdStores",
-        "parameters": [
-          {
-            "description": "town_id parameter",
-            "in": "path",
-            "name": "town_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BuildStoreRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/StoreCheckResult"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Build Store",
         "tags": [
           "Towns"
         ]

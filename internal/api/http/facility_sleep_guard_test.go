@@ -81,7 +81,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithBlackMarket(&stubBlackMarketService{}),
 		apihttp.WithSecretShop(&stubSecretShopService{}),
 		apihttp.WithBlacksmith(&stubBlacksmithService{}),
-		apihttp.WithStore(&stubStoreService{}),
+		apihttp.WithStore(noopStoreService{}),
 		apihttp.WithPark(&mockParkService{}),
 		apihttp.WithMonster(&stubMonsterService{}),
 		apihttp.WithOracleShop(&stubOracleShopService{}),
@@ -175,17 +175,17 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"home_forget_phrase", http.MethodDelete, "/homes/char-1/companion/phrases/phrase-1", ``},
 		{"home_clear_notices", http.MethodPost, "/homes/char-1/notices/clear", `{}`},
 		// Store
-		{"store_build", http.MethodPost, "/towns/town1/stores", `{"character_id":"char-1","house_style":"001","store_name":"マイショップ"}`},
-		{"store_list_gold", http.MethodPost, "/characters/char-1/store/listings/gold", `{"depot_item_instance_id":"inst-1","price":1000}`},
-		{"store_list_barter", http.MethodPost, "/characters/char-1/store/listings/barter", `{"depot_item_instance_id":"inst-1","wish_item_name":"やくそう"}`},
-		{"store_withdraw_listing", http.MethodDelete, "/characters/char-1/store/listings/sale-1", ``},
-		{"store_buy", http.MethodPost, "/characters/char-1/store/sales/sale-1/buy", ``},
-		{"store_trade", http.MethodPost, "/characters/char-1/store/sales/sale-1/trade", `{"depot_item_instance_id":"inst-barter"}`},
-		{"store_change_name", http.MethodPost, "/characters/char-1/store/name", `{"store_name":"新看板"}`},
-		{"store_change_wallpaper", http.MethodPost, "/characters/char-1/store/wallpaper", `{"wallpaper":"farm"}`},
-		{"store_add_interior", http.MethodPost, "/characters/char-1/store/interiors", `{"furniture_id":"001"}`},
-		{"store_rename_interior", http.MethodPut, "/characters/char-1/store/interiors/int-1/name", `{"name":"お気に入りの机"}`},
-		{"store_clean_interiors", http.MethodDelete, "/characters/char-1/store/interiors", ``},
+		{"store_build", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_build","params":{"town_id":"town1","house_style":"001"}}`},
+		{"store_list_gold", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_list_gold","params":{"item_id":"inst-1","price":1000}}`},
+		{"store_list_barter", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_list_barter","params":{"item_id":"inst-1","wish_item_name":"やくそう"}}`},
+		{"store_withdraw", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_withdraw","params":{"sale_id":"sale-1"}}`},
+		{"store_buy", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_buy","params":{"sale_id":"sale-1"}}`},
+		{"store_trade", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_trade","params":{"sale_id":"sale-1","item_id":"inst-barter"}}`},
+		{"store_rename", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_rename","params":{"store_name":"新看板"}}`},
+		{"store_wallpaper", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_wallpaper","params":{"wallpaper":"farm"}}`},
+		{"store_interior_add", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_add","params":{"furniture_id":"001"}}`},
+		{"store_interior_rename", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_rename","params":{"interior_id":"int-1","name":"お気に入りの机"}}`},
+		{"store_interior_clean", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_clean"}`},
 		// Park
 		{"park_post_message", http.MethodPost, "/park/posts", `{"character_id":"char-1","content":"hello"}`},
 		{"park_npc_talk", http.MethodPost, "/park/npc/talk", `{"character_id":"char-1"}`},
@@ -867,4 +867,27 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			}
 		}
 	})
+}
+
+// noopStoreService accepts every store command so awake cases reach execution.
+type noopStoreService struct{ apihttp.StoreService }
+
+func (noopStoreService) BuildStore(context.Context, string, string, string) (*store.StoreCheckResult, error) {
+	return &store.StoreCheckResult{}, nil
+}
+func (noopStoreService) ListGoldItem(context.Context, string, string, int) (*store.Sale, error) {
+	return &store.Sale{}, nil
+}
+func (noopStoreService) ListBarterItem(context.Context, string, string, string) (*store.Sale, error) {
+	return &store.Sale{}, nil
+}
+func (noopStoreService) WithdrawListing(context.Context, string, string) error        { return nil }
+func (noopStoreService) BuyItem(context.Context, string, string) error                { return nil }
+func (noopStoreService) TradeItem(context.Context, string, string, string) error      { return nil }
+func (noopStoreService) ChangeStoreName(context.Context, string, string) error        { return nil }
+func (noopStoreService) ChangeWallpaper(context.Context, string, string) error        { return nil }
+func (noopStoreService) RenameInterior(context.Context, string, string, string) error { return nil }
+func (noopStoreService) CleanInteriors(context.Context, string) error                 { return nil }
+func (noopStoreService) AddInterior(context.Context, string, string) (*store.Interior, error) {
+	return &store.Interior{}, nil
 }

@@ -1,10 +1,11 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"slices"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -160,21 +161,15 @@ func (s *Service) wireCostumeClaimChecker() {
 	}
 }
 
-// BuildStore builds a new store in the specified town for 50,000 G and 90 days.
-func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyle, storeName string) (*StoreCheckResult, error) {
+// BuildStore builds the actor's store in townID (legacy ＠みせ: only a house
+// style is chosen). A rebuilt store keeps its registered name.
+func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyle string) (*StoreCheckResult, error) {
 	t, ok := town.GetTown(townID)
 	if !ok {
 		return nil, ErrInvalidTownID
 	}
 	if !town.IsValidHouseStyle(townID, houseStyle) {
 		return nil, ErrInvalidHouseStyle
-	}
-
-	cleanStoreName := strings.TrimSpace(storeName)
-	if cleanStoreName != "" {
-		if err := ValidateStoreName(cleanStoreName); err != nil {
-			return nil, err
-		}
 	}
 
 	now := s.nowFunc().UTC()
@@ -192,17 +187,10 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 			return err
 		}
 
+		// Legacy rejection order: funds, town capacity, already-owned store.
 		if char.Money < StorePrice {
 			return ErrInsufficientFunds
 		}
-
-		// 1-store globally check
-		existing, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
-		if err == nil && existing.IsActive(now) {
-			return ErrAlreadyOwnsStore
-		}
-
-		// Max 10 stores per town check
 		count, err := s.repo.CountActiveTownStores(txCtx, townID, now)
 		if err != nil {
 			return err
@@ -210,16 +198,18 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 		if count >= MaxTownStores {
 			return ErrTownMaxStoresReached
 		}
-
-		resolvedName := cleanStoreName
-		if resolvedName == "" {
-			resolvedName = char.Name + "の店"
+		existing, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
+		if err != nil && !errors.Is(err, ErrStoreNotFound) {
+			return err
+		}
+		if err == nil && existing.IsActive(now) {
+			return ErrAlreadyOwnsStore
 		}
 
-		// Check name collision with another active store
-		namedStore, err := s.repo.GetStoreByName(txCtx, resolvedName)
-		if err == nil && namedStore.CharacterID != characterID && namedStore.IsActive(now) {
-			return ErrStoreNameTaken
+		// Legacy keeps the name, wallpaper, interiors and listings of an expired store.
+		storeID, storeName, wallpaper := existing.ID, existing.StoreName, existing.Wallpaper
+		if storeID == "" {
+			storeID, storeName, wallpaper = s.idGen(), "@"+char.Name+"の店@", "none"
 		}
 
 		if err := char.DeductMoney(StorePrice); err != nil {
@@ -228,26 +218,20 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 		if err := s.charRepo.Save(txCtx, char); err != nil {
 			return err
 		}
-
-		// Award guild points if applicable: 90 days * 10 = 900 GP
 		if s.guildPoints != nil {
-			//lint:ignore error-swallow best-effort guild points bonus
-			_ = s.guildPoints.AddGuildPoints(txCtx, characterID, StoreCycleDays*10)
+			if err := s.guildPoints.AddGuildPoints(txCtx, characterID, StoreCycleDays*10); err != nil {
+				return err
+			}
 		}
 
 		expiresAt := now.Add(time.Duration(StoreCycleDays) * 24 * time.Hour)
-		storeID := existing.ID
-		if storeID == "" {
-			storeID = s.idGen()
-		}
-
 		storeObj := Store{
 			ID:          storeID,
 			CharacterID: characterID,
 			TownID:      townID,
-			StoreName:   resolvedName,
+			StoreName:   storeName,
 			HouseStyle:  houseStyle,
-			Wallpaper:   "none",
+			Wallpaper:   wallpaper,
 			ExpiresAt:   expiresAt,
 			CreatedAt:   now,
 			UpdatedAt:   now,
@@ -257,19 +241,17 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 		}
 
 		jstExpires := expiresAt.In(timer.JST)
-		msg := fmt.Sprintf("%s の店を建てました！店の所有期間は %d月%d日%d時 までです",
-			char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
-
 		res = &StoreCheckResult{
 			CharacterID: characterID,
 			OwnerName:   char.Name,
 			TownID:      townID,
 			TownName:    t.Name,
-			StoreName:   resolvedName,
+			StoreName:   storeName,
 			HouseStyle:  houseStyle,
 			Wallpaper:   storeObj.Wallpaper,
 			ExpiresAt:   expiresAt,
-			Message:     msg,
+			Message: fmt.Sprintf("%s の店を建てました！店の所有期間は %d月%d日%d時 までです",
+				char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour()),
 		}
 		return nil
 	})
@@ -296,35 +278,29 @@ func (s *Service) GetStore(ctx context.Context, storeID string) (*StoreDetails, 
 	}
 
 	char, err := s.charRepo.FindByID(ctx, st.CharacterID)
-	ownerName := "Unknown"
-	maxSales := BaseMaxListings
-	if err == nil {
-		ownerName = char.Name
-		maxSales = MaxListings(char.OverStore)
+	if err != nil {
+		return nil, err
 	}
 
 	sales, err := s.repo.GetSalesByStoreID(ctx, storeID)
 	if err != nil {
 		return nil, err
 	}
-	if sales == nil {
-		sales = []Sale{}
+	if err := s.sortSalesLegacy(sales); err != nil {
+		return nil, err
 	}
 
 	interiors, err := s.repo.GetInteriorsByStoreID(ctx, storeID)
 	if err != nil {
 		return nil, err
 	}
-	if interiors == nil {
-		interiors = []Interior{}
-	}
 
 	return &StoreDetails{
 		Store:     st,
-		OwnerName: ownerName,
-		Sales:     sales,
-		Interiors: interiors,
-		MaxSales:  maxSales,
+		OwnerName: char.Name,
+		Sales:     append([]Sale{}, sales...),
+		Interiors: append([]Interior{}, interiors...),
+		MaxSales:  MaxListings(char.OverStore),
 	}, nil
 }
 
@@ -334,50 +310,33 @@ func (s *Service) GetTownStores(ctx context.Context, townID string) ([]Store, er
 	return s.repo.ListActiveStoresInTown(ctx, townID, now)
 }
 
-// CheckStore retrieves the active store status and expiration for a character.
-func (s *Service) CheckStore(ctx context.Context, characterID string) (*StoreCheckResult, error) {
-	now := s.nowFunc().UTC()
-	st, err := s.repo.GetStoreByCharacterID(ctx, characterID)
-	if err != nil {
-		return nil, ErrStoreNotFound
+// sortSalesLegacy applies legacy list_sort: gold before barter, then stored
+// kind and number, then gold price, then listing number.
+func (s *Service) sortSalesLegacy(sales []Sale) error {
+	type key struct{ kind, no int }
+	keys := make(map[string]key, len(sales))
+	for _, sale := range sales {
+		def, err := s.itemCatalog.FindByID(sale.ItemDefinitionID)
+		if err != nil {
+			return fmt.Errorf("store sale %s: %w", sale.ID, err)
+		}
+		kind, no, err := def.LegacyStorageKey()
+		if err != nil {
+			return fmt.Errorf("store sale %s: %w", sale.ID, err)
+		}
+		keys[sale.ID] = key{kind, no}
 	}
-	if !st.IsActive(now) {
-		return nil, ErrStoreExpired
-	}
-
-	char, err := s.charRepo.FindByID(ctx, characterID)
-	ownerName := characterID
-	if err == nil {
-		ownerName = char.Name
-	}
-
-	t, _ := town.GetTown(st.TownID)
-	jstExpires := st.ExpiresAt.In(timer.JST)
-	msg := fmt.Sprintf("%sの所有期間は %d月%d日%d時 までです",
-		st.StoreName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
-
-	return &StoreCheckResult{
-		CharacterID: characterID,
-		OwnerName:   ownerName,
-		TownID:      st.TownID,
-		TownName:    t.Name,
-		StoreName:   st.StoreName,
-		HouseStyle:  st.HouseStyle,
-		Wallpaper:   st.Wallpaper,
-		ExpiresAt:   st.ExpiresAt,
-		Message:     msg,
-	}, nil
+	slices.SortStableFunc(sales, func(a, b Sale) int {
+		ka, kb := keys[a.ID], keys[b.ID]
+		return cmp.Or(cmp.Compare(saleTypeRank(a.SaleType), saleTypeRank(b.SaleType)), cmp.Compare(ka.kind, kb.kind),
+			cmp.Compare(ka.no, kb.no), cmp.Compare(a.Price, b.Price), cmp.Compare(a.SlotNumber, b.SlotNumber))
+	})
+	return nil
 }
 
-func (s *Service) resolveItemInfo(defID, fallbackName string) (string, string) {
-	cat, name := "item", fallbackName
-	if s.itemCatalog != nil {
-		if def, err := s.itemCatalog.FindByID(defID); err == nil {
-			cat = def.Category()
-			if def.Name != "" {
-				name = def.Name
-			}
-		}
+func saleTypeRank(t string) int {
+	if t == SaleTypeGold {
+		return 0
 	}
-	return name, cat
+	return 1
 }

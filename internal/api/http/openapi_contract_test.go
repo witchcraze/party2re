@@ -166,7 +166,6 @@ func TestOpenAPIConstraintBoundaries(t *testing.T) {
 		{"AlchemyCompendium", "entries", `[]`, true},
 		{"AlchemyCompendium", "entries", `[{}]`, false},
 		{"CasinoRoomView", "room", `{"password_hash":"secret"}`, false},
-		{"BuildStoreRequest", "", `{"character_id":"c1","house_style":"001"}`, true},
 		{"UseHomeItemRequest", "", `{"instance_id":"item-1"}`, true},
 		{"CasinoRoomActionRequest", "", `{"mark":"0"}`, true},
 		{"PlantationSowRequest", "", `{"seed_id":"red"}`, true},

@@ -2340,6 +2340,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/ExileSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TownDistrictSceneData"
                     }
                   ]
                 }
@@ -2383,6 +2386,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/SecretShopProductSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StoreSceneData"
                     }
                   ]
                 }
@@ -2974,6 +2980,76 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "enum": [
+                    "town1",
+                    "town2",
+                    "town3",
+                    "town4"
+                  ]
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TownDistrictSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "enum": [
+                    "town1",
+                    "town2",
+                    "town3",
+                    "town4"
+                  ]
+                },
+                "kind": {
+                  "const": "subject"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/StoreSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3494,7 +3570,11 @@
                         "home_inbox",
                         "home_outbox",
                         "casino",
-                        "secretshop"
+                        "secretshop",
+                        "town1",
+                        "town2",
+                        "town3",
+                        "town4"
                       ]
                     }
                   },
@@ -3532,13 +3612,14 @@
                       "enum": [
                         "item",
                         "home",
-                        "room"
+                        "room",
+                        "store"
                       ]
                     },
                     "target_id": {
                       "type": "string",
                       "pattern": "^[a-zA-Z0-9_-]{1,128}$",
-                      "description": "Public Home, available shop item or Casino room ID, validated by the selected adapter. Room selection never grants admission."
+                      "description": "Public Home, available shop item, Casino room or town store ID, validated by the selected adapter. Room selection never grants admission."
                     }
                   },
                   "required": [
@@ -3593,7 +3674,11 @@
                         "home_inbox",
                         "home_outbox",
                         "casino",
-                        "secretshop"
+                        "secretshop",
+                        "town1",
+                        "town2",
+                        "town3",
+                        "town4"
                       ]
                     },
                     "offset": {
@@ -5285,6 +5370,409 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "store_build"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "town_id": {
+                      "type": "string",
+                      "description": "Town scene ID (town1..town4) from the store_build template."
+                    },
+                    "house_style": {
+                      "type": "string",
+                      "description": "House style from the observed store_terms.house_styles. Funds, town capacity and ownership stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "town_id",
+                    "house_style"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_list_gold"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "description": "Owned Depot instance ID. One unit is listed."
+                    },
+                    "price": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": -9223372036854775808,
+                      "maximum": 9223372036854775807,
+                      "description": "Price in gold. The 1 to 999999 range and the listing limit stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id",
+                    "price"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_list_barter"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "description": "Owned Depot instance ID. One unit is listed."
+                    },
+                    "wish_item_name": {
+                      "type": "string",
+                      "description": "Exact name of an existing weapon, armor or item wanted in exchange."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id",
+                    "wish_item_name"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_withdraw"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "sale_id": {
+                      "type": "string",
+                      "description": "Owned listing from the observed store sales; it returns to the Depot."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "sale_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_buy"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "sale_id": {
+                      "type": "string",
+                      "description": "Gold listing from the observed store sales. Funds and self-purchase stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "sale_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_trade"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "sale_id": {
+                      "type": "string",
+                      "description": "Barter listing from the observed store sales."
+                    },
+                    "item_id": {
+                      "type": "string",
+                      "description": "Owned Depot instance whose item name matches the listing's wish_item_name."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "sale_id",
+                    "item_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_rename"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "store_name": {
+                      "type": "string",
+                      "description": "New signboard name; legacy character rules and uniqueness stay service-owned. Requires a 5,000 G balance without deduction."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "store_name"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_wallpaper"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "wallpaper": {
+                      "type": "string",
+                      "description": "Wallpaper key; its price is deducted."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "wallpaper"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_interior_add"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "furniture_id": {
+                      "type": "string",
+                      "description": "Furniture ID. Requires a 1,000 G balance without deduction; at most five pieces."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "furniture_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_interior_rename"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "interior_id": {
+                      "type": "string",
+                      "description": "Interior from the observed store interiors."
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "New interior name; legacy character rules stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "interior_id",
+                    "name"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "store_interior_clean"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "gemstore_sell"
                 }
               },
@@ -6220,7 +6708,11 @@
               "home_inbox",
               "home_outbox",
               "casino",
-              "secretshop"
+              "secretshop",
+              "town1",
+              "town2",
+              "town3",
+              "town4"
             ]
           },
           "offset": {
@@ -6347,7 +6839,11 @@
                   "home_inbox",
                   "home_outbox",
                   "casino",
-                  "secretshop"
+                  "secretshop",
+                  "town1",
+                  "town2",
+                  "town3",
+                  "town4"
                 ]
               }
             },
@@ -11796,51 +12292,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "StoreCheckResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "house_style": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "owner_name": {
-            "type": "string"
-          },
-          "store_name": {
-            "type": "string"
-          },
-          "town_id": {
-            "type": "string"
-          },
-          "town_name": {
-            "type": "string"
-          },
-          "wallpaper": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "owner_name",
-          "town_id",
-          "town_name",
-          "store_name",
-          "house_style",
-          "wallpaper",
-          "expires_at",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "StoreInterior": {
         "properties": {
           "character_id": {
@@ -11875,24 +12326,6 @@
           "slot_index",
           "created_at"
         ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AddInteriorRequest": {
-        "properties": {
-          "furniture_id": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
-      "RenameInteriorRequest": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
         "type": "object",
         "additionalProperties": false
       },
@@ -11950,57 +12383,6 @@
           "wish_item_name",
           "created_at"
         ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ListBarterItemRequest": {
-        "properties": {
-          "depot_item_instance_id": {
-            "type": "string"
-          },
-          "wish_item_name": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ListGoldItemRequest": {
-        "properties": {
-          "depot_item_instance_id": {
-            "type": "string"
-          },
-          "price": {
-            "type": "integer"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ChangeStoreNameRequest": {
-        "properties": {
-          "store_name": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
-      "TradeItemRequest": {
-        "properties": {
-          "depot_item_instance_id": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ChangeWallpaperRequest": {
-        "properties": {
-          "wallpaper": {
-            "type": "string"
-          }
-        },
         "type": "object",
         "additionalProperties": false
       },
@@ -16054,10 +16436,7 @@
             "items": {
               "$ref": "#/components/schemas/StoreInterior"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "max_sales": {
             "type": "integer"
@@ -16069,10 +16448,7 @@
             "items": {
               "$ref": "#/components/schemas/StoreSale"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "store": {
             "$ref": "#/components/schemas/Store"
@@ -16189,25 +16565,6 @@
             "type": "string"
           },
           "house_style": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_id",
-          "house_style"
-        ],
-        "additionalProperties": false
-      },
-      "BuildStoreRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "house_style": {
-            "type": "string"
-          },
-          "store_name": {
             "type": "string"
           }
         },
@@ -17273,6 +17630,125 @@
             ],
             "additionalProperties": false
           }
+        ]
+      },
+      "StoreBuildTerms": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "price": {
+            "type": "integer"
+          },
+          "cycle_days": {
+            "type": "integer"
+          },
+          "max_stores": {
+            "type": "integer"
+          },
+          "house_styles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "price",
+          "cycle_days",
+          "max_stores",
+          "house_styles"
+        ]
+      },
+      "TownInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Legacy town (town1..town4) with its house construction terms.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "integer"
+          },
+          "cycle_days": {
+            "type": "integer"
+          },
+          "max_houses": {
+            "type": "integer"
+          },
+          "house_styles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "price",
+          "cycle_days",
+          "max_houses",
+          "house_styles"
+        ]
+      },
+      "TownDistrictSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One legacy town: its active stores in construction order and the ＠みせ terms.",
+        "properties": {
+          "parent": {
+            "const": "town"
+          },
+          "town": {
+            "$ref": "#/components/schemas/TownInfo"
+          },
+          "stores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Store"
+            },
+            "maxItems": 10
+          },
+          "store_terms": {
+            "$ref": "#/components/schemas/StoreBuildTerms"
+          }
+        },
+        "required": [
+          "parent",
+          "town",
+          "stores",
+          "store_terms"
+        ]
+      },
+      "StoreSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Selected store with listings in legacy order. is_owner selects the owner or visitor commands.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "enum": [
+              "town1",
+              "town2",
+              "town3",
+              "town4"
+            ]
+          },
+          "details": {
+            "$ref": "#/components/schemas/StoreDetails"
+          },
+          "is_owner": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "parent",
+          "details",
+          "is_owner"
         ]
       }
     },

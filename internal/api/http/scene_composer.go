@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/town"
 )
 
 var errSceneNotConfigured = errors.New("selected scene adapter not configured")
@@ -72,6 +73,10 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "town":
 			adapter.title, adapter.commands = "始まりの街", []string{"adventure_start"}
 			adapter.read = func(_ context.Context, r playercontext.Result) (any, error) { return h.townSceneData(r), nil }
+		case "town1", "town2", "town3", "town4":
+			t, _ := town.GetTown(definition.ID)
+			adapter.title = t.Name
+			adapter.read = h.townDistrictSceneData
 		case "alchemy":
 			adapter.title, adapter.commands = "錬金場", []string{"alchemy_synthesize"}
 			adapter.read = h.alchemySceneData
@@ -290,6 +295,17 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		case SecretShopProductSceneData:
 			scene.Support.Observation, scene.Title = "details", data.Title
 			templates["secretshop_purchase"] = map[string]any{"item_id": data.Product.PurchaseParams.ItemID}
+		case TownDistrictSceneData:
+			scene.Support.Observation = "details"
+			choices = append(choices, "store_build")
+			templates["store_build"] = map[string]any{"town_id": data.Town.ID}
+		case StoreSceneData:
+			scene.Support.Observation, scene.Title = "details", data.Details.Store.StoreName
+			commands := storeVisitorCommands
+			if data.IsOwner {
+				commands = storeOwnerCommands
+			}
+			choices = append(choices, commands...)
 		case HomeSceneData:
 			scene.Support.Observation = "details"
 			scene.Title = data.View.Owner.Name + "の家"

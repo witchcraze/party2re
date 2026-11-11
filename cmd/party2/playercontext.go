@@ -10,6 +10,8 @@ import (
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
 	"github.com/witchcraze/party2re/internal/shop"
+	"github.com/witchcraze/party2re/internal/store"
+	"github.com/witchcraze/party2re/internal/town"
 )
 
 func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, cmbt *cmbtServices, misc *miscServices, options ...func(*playercontext.Service)) *playercontext.Service {
@@ -55,6 +57,21 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 			}
 			return false, nil
 		}},
+	}
+	for _, t := range town.AllTowns() {
+		scenes = append(scenes, playercontext.SceneDefinition{
+			ID: t.ID, Parent: "town", SubjectKind: "store",
+			SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
+				details, err := econ.store.GetStore(ctx, target)
+				if errors.Is(err, store.ErrStoreNotFound) || errors.Is(err, store.ErrStoreExpired) {
+					return false, nil
+				}
+				if err != nil {
+					return false, err
+				}
+				return details.Store.TownID == t.ID, nil
+			},
+		})
 	}
 	for _, kind := range []shop.ShopType{shop.ShopTypeWeapon, shop.ShopTypeArmor, shop.ShopTypeItem, shop.ShopTypeAccessory} {
 		scenes = append(scenes, playercontext.SceneDefinition{
