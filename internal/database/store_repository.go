@@ -66,6 +66,15 @@ func (r *StoreRepository) queryStore(ctx context.Context, query string, arg inte
 	return s, nil
 }
 
+// LockTownCapacityForUpdate takes the town's capacity row lock, creating the row if absent.
+func (r *StoreRepository) LockTownCapacityForUpdate(ctx context.Context, townID string) error {
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT INTO store_town_capacity_lock (town_id) VALUES (?)
+		ON DUPLICATE KEY UPDATE town_id = town_id
+	`, townID)
+	return err
+}
+
 func (r *StoreRepository) CountActiveTownStores(ctx context.Context, townID string, now time.Time) (int, error) {
 	var count int
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `

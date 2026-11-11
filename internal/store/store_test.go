@@ -54,6 +54,8 @@ func (m *mockStoreRepo) GetStoreByName(ctx context.Context, storeName string) (s
 	return store.Store{}, store.ErrStoreNotFound
 }
 
+func (m *mockStoreRepo) LockTownCapacityForUpdate(context.Context, string) error { return nil }
+
 func (m *mockStoreRepo) CountActiveTownStores(ctx context.Context, townID string, now time.Time) (int, error) {
 	count := 0
 	for _, s := range m.stores {

@@ -176,6 +176,10 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 	var res *StoreCheckResult
 
 	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+		// Rank 0: concurrent builders in one town must not both see a free slot.
+		if err := s.repo.LockTownCapacityForUpdate(txCtx, townID); err != nil {
+			return err
+		}
 		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
 			if errors.Is(err, corecharacter.ErrNotFound) {
