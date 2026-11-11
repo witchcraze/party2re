@@ -16,7 +16,7 @@ var (
 	ErrNilDependency         = errors.New("gemstore dependency is nil")
 	ErrGemNotFound           = errors.New("gem not found in catalog")
 	ErrRecipeNotFound        = errors.New("recipe not found in catalog")
-	ErrLevelTooLow           = errors.New("character job level too low to purchase gem")
+	ErrGemNotForSale         = errors.New("gem is not on sale at the character's job level")
 	ErrInsufficientFunds     = errors.New("insufficient funds to purchase gem")
 	ErrItemNotOwned          = errors.New("item not found in gem box")
 	ErrCannotSendToSelf      = errors.New("cannot send gem to self")

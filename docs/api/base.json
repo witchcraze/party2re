@@ -13852,12 +13852,6 @@
           "price": {
             "type": "integer"
           },
-          "required_job_level": {
-            "type": "integer"
-          },
-          "required_level": {
-            "type": "integer"
-          },
           "slot_cost": {
             "type": "integer"
           }
@@ -13866,7 +13860,6 @@
           "id",
           "name",
           "price",
-          "required_level",
           "slot_cost",
           "mp_cost",
           "description"
