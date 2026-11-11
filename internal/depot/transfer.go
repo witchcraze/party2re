@@ -80,6 +80,9 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 			Amount: amount, Source: RemittanceDepotTransfer, SenderName: sender.Name}); err != nil {
 			return err
 		}
+		if err := s.notifyMoneySent(txCtx, toCharacterID); err != nil {
+			return err
+		}
 
 		sDep, err := s.findOrCreateDepot(txCtx, fromCharacterID, sender)
 		if err != nil {
@@ -96,7 +99,7 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 
 // SendItem transfers an item from sender's inventory to recipient's depot using strict lock hierarchy:
 // Transaction: RunInTx.
-// Lock Order: characters(2, ascending IDs) -> sender inventory/equipment(3) -> recipient/sender Depot(5).
+// Lock Order: characters(2, ascending IDs) -> sender inventory/equipment(3) -> recipient/sender Depot(5) -> notice insert.
 func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, itemInstanceID string) (Depot, error) {
 	fromCharacterID = strings.TrimSpace(fromCharacterID)
 	toCharacterID = strings.TrimSpace(toCharacterID)
@@ -181,6 +184,9 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 			return err
 		}
 		if err := s.saveDepot(txCtx, recDepot); err != nil {
+			return err
+		}
+		if err := s.notifyItemSent(txCtx, toCharacterID, sender.Name, itemInst); err != nil {
 			return err
 		}
 

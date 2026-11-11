@@ -127,7 +127,7 @@ Stored items sell at floor(base price × 0.5) per unit without withdrawal. Legac
 
 ### 5. Mailing Items and Money (`おくる`)
 
-Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Sent gold leaves the sender's wallet and is [held](#6-held-gold) for the recipient. Open: recipient Home delivery notices (#1110).
+Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Sent gold leaves the sender's wallet and is [held](#6-held-gold) for the recipient.
 
 ### 6. Held Gold
 

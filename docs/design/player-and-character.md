@@ -160,7 +160,7 @@ server's injected UTC clock with retention, but keep separate presence records:
 - Use UTC epoch seconds at recording and observation boundaries, monotonically
   advancing stored clocks under concurrency. List and count use one observation
   instant and the same distinct-character predicate. Home consumes this count
-  under its [sleep duration, acquisition and failure contract](home.md#6-resting--sleeping-sleepcgi-homecgi),
+  under its [sleep duration, acquisition and failure contract](home.md#5-resting--sleeping-sleepcgi-homecgi),
   without redefining presence.
 
 **Message and safety.** Default to `""`; an explicit empty string clears it. Besides entry, Home item 058 sets it inside its own transaction without publishing a snapshot ([Home dispatch](home.md#legacy-dispatch-and-consumption-contract)).

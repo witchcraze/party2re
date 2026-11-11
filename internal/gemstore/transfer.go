@@ -2,11 +2,22 @@ package gemstore
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/id"
 )
+
+// DeliveryNotifier records the recipient's Home notice inside the send transaction.
+type DeliveryNotifier interface {
+	AddDeliveryNotice(ctx context.Context, characterID, noticeType, message string) error
+}
+
+// SetDeliveryNotifier enables recipient notices for gem sends; configure before serving requests.
+func (s *Service) SetDeliveryNotifier(notifier DeliveryNotifier) {
+	s.notifier = notifier
+}
 
 // SendGem transfers a gem from sender's Gem Box to recipient's Gem Box with deterministic deadlock-free locking.
 func (s *Service) SendGem(ctx context.Context, senderID, recipientID, itemInstanceOrDefID string) (SendResult, error) {
@@ -102,6 +113,13 @@ func (s *Service) SendGem(ctx context.Context, senderID, recipientID, itemInstan
 		}
 		if err := s.gemBoxes.Save(txCtx, recipientBox); err != nil {
 			return err
+		}
+		if s.notifier != nil {
+			// send_gem reuses send_item's Depot wording for the Gem Box (system.cgi:1463–1479).
+			if err := s.notifier.AddDeliveryNotice(txCtx, recipientID, "item_transfer",
+				fmt.Sprintf("預かり所に%sから%sが届いています", senderChar.Name, gem.Name)); err != nil {
+				return err
+			}
 		}
 
 		res = SendResult{
