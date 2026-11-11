@@ -4,7 +4,19 @@ import (
 	"context"
 	"fmt"
 	"sort"
+
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
+
+// PrizeRemitter holds a prize and raises its money notice in the caller's transaction.
+// The caller holds all winners' character locks before delivery.
+type PrizeRemitter interface {
+	HoldPrize(ctx context.Context, characterID, arenaName string, amount int) error
+}
+
+func WithPrizeRemitter(remitter PrizeRemitter) Option {
+	return func(s *Service) { s.prizes = remitter }
+}
 
 // TransactionProvider can be injected into Service to orchestrate database transactions.
 type TransactionProvider interface {
@@ -74,21 +86,28 @@ func (s *Service) refundMembers(ctx context.Context, memberIDs []string, amount 
 }
 
 // awardPrizes uses the financial transition's transaction and ascending Rank 2 locks.
-func (s *Service) awardPrizes(ctx context.Context, winnerIDs []string, prizePerMember int) error {
+func (s *Service) awardPrizes(ctx context.Context, winnerIDs []string, arenaName string, prizePerMember int) error {
 	sortedIDs := sortCharacterIDs(winnerIDs)
+	if len(sortedIDs) > 0 && prizePerMember > 0 && s.prizes == nil {
+		return ErrInvalidDependencies
+	}
+	winners := make([]corecharacter.Character, 0, len(sortedIDs))
 	for _, id := range sortedIDs {
 		wChar, err := s.characters.FindByIDForUpdate(ctx, id)
 		if err != nil {
 			return fmt.Errorf("find winner character %s for prize: %w", id, err)
 		}
+		winners = append(winners, wChar)
+	}
+	for _, wChar := range winners {
 		if prizePerMember > 0 {
-			if err := wChar.AddMoney(prizePerMember); err != nil {
-				return fmt.Errorf("add prize money to %s: %w", id, err)
+			if err := s.prizes.HoldPrize(ctx, wChar.ID, arenaName, prizePerMember); err != nil {
+				return fmt.Errorf("hold prize money for %s: %w", wChar.ID, err)
 			}
 		}
 		wChar.PvPWins++
 		if err := s.characters.Update(ctx, wChar); err != nil {
-			return fmt.Errorf("update winner character %s: %w", id, err)
+			return fmt.Errorf("update winner character %s: %w", wChar.ID, err)
 		}
 	}
 	return nil

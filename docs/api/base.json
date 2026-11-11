@@ -17707,14 +17707,15 @@
           "source": {
             "type": "string",
             "enum": [
-              "depot_transfer"
+              "depot_transfer",
+              "pvp_prize"
             ],
             "description": "Why the gold is held; clients render the receipt message."
           },
           "sender_name": {
             "type": "string",
-            "maxLength": 32,
-            "description": "Sender's character name when the gold was sent."
+            "maxLength": 50,
+            "description": "Sender's character name, or the arena name for pvp_prize, when the gold was sent."
           }
         },
         "required": [

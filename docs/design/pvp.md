@@ -71,16 +71,7 @@ A character can host a Colosseum room with configurable parameters:
 
 ### 5. Match Settlement & Prize Pool Split
 
-1. **Decisive Victory**:
-   - When any team reaches `target_wins`, the match completes immediately.
-   - **Prize Split**: The entire aggregated `prize_pool` is split evenly among all participants in the winning team:
-     $$\text{Prize Per Member} = \left\lfloor \frac{\text{Prize Pool}}{\text{Winning Team Member Count}} \right\rfloor$$
-   - Each winning member's wallet is credited via `char.AddMoney(...)`.
-   - Each winning member's `pvp_wins` counter is incremented by 1 (legacy `$m{kill_p}++`).
-   - The victory hook is executed, advancing medal achievements (`MetricPvPVictories`).
-2. **Forced Draw & 10-Round Limit**:
-   - If round 10 concludes without any team reaching `target_wins`, the match is terminated as a draw.
-   - The current implementation refunds all original bets; legacy post-start departure does not. This settlement difference is part of [#2045](https://github.com/witchcraze/party2re/issues/2045).
+The current implementation refunds all original bets on an undecided maximum-round termination; legacy post-start departure does not. This settlement difference is part of [#2045](https://github.com/witchcraze/party2re/issues/2045).
 
 ---
 

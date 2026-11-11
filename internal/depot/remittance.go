@@ -13,6 +13,8 @@ type RemittanceSource string
 
 const RemittanceDepotTransfer RemittanceSource = "depot_transfer"
 
+const RemittancePvPPrize RemittanceSource = "pvp_prize"
+
 // Remittance is gold held for CharacterID until collected at the Depot.
 type Remittance struct {
 	ID          string

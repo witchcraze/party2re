@@ -14,10 +14,18 @@ import (
 type mockCharRepo struct {
 	mu         sync.Mutex
 	characters map[string]corecharacter.Character
+	prizes     map[string]int
 }
 
 func newMockCharRepo() *mockCharRepo {
-	return &mockCharRepo{characters: make(map[string]corecharacter.Character)}
+	return &mockCharRepo{characters: make(map[string]corecharacter.Character), prizes: make(map[string]int)}
+}
+
+func (m *mockCharRepo) HoldPrize(_ context.Context, characterID, _ string, amount int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.prizes[characterID] += amount
+	return nil
 }
 
 func (m *mockCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
@@ -78,7 +86,7 @@ func setupService(battleOutcome corebattle.Outcome) (*pvp.Service, *mockCharRepo
 			Logs:    []corebattle.TurnLog{{Turn: 1, Message: "Round combat concluded."}},
 		},
 	}
-	svc, _ := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))
+	svc, _ := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()), pvp.WithPrizeRemitter(charRepo))
 	return svc, charRepo, roomRepo
 }
 
@@ -313,10 +321,10 @@ func TestColosseum_AdvanceRoundAndMatchVictory(t *testing.T) {
 		t.Errorf("expected prize 200G awarded, got %d", res.PrizePerMember)
 	}
 
-	// Verify Alice's wallet has original 500 - 100 bet + 200 prize = 600G
+	// The 200G prize is held separately from Alice's wallet.
 	updatedAlice, _ := charRepo.FindByID(ctx, c1.ID)
-	if updatedAlice.Money != 600 {
-		t.Errorf("expected Alice money 600, got %d", updatedAlice.Money)
+	if updatedAlice.Money != 400 || charRepo.prizes[c1.ID] != 200 {
+		t.Errorf("expected wallet 400 and held prize 200, got %d / %d", updatedAlice.Money, charRepo.prizes[c1.ID])
 	}
 	if updatedAlice.PvPWins != 1 {
 		t.Errorf("expected Alice PvPWins 1, got %d", updatedAlice.PvPWins)
@@ -402,16 +410,16 @@ func TestColosseum_MultiRound_2v2TeamBattle(t *testing.T) {
 	}
 
 	updatedAlice, _ := charRepo.FindByID(ctx, c1.ID)
-	if updatedAlice.Money != 1100 { // 1000 - 100 + 200 = 1100
-		t.Errorf("expected Alice money 1100, got %d", updatedAlice.Money)
+	if updatedAlice.Money != 900 || charRepo.prizes[c1.ID] != 200 {
+		t.Errorf("expected wallet 900 and held prize 200, got %d / %d", updatedAlice.Money, charRepo.prizes[c1.ID])
 	}
 	if updatedAlice.PvPWins != 1 {
 		t.Errorf("expected Alice PvPWins 1, got %d", updatedAlice.PvPWins)
 	}
 
 	updatedCharlie, _ := charRepo.FindByID(ctx, c3.ID)
-	if updatedCharlie.Money != 1100 {
-		t.Errorf("expected Charlie money 1100, got %d", updatedCharlie.Money)
+	if updatedCharlie.Money != 900 || charRepo.prizes[c3.ID] != 200 {
+		t.Errorf("expected wallet 900 and held prize 200, got %d / %d", updatedCharlie.Money, charRepo.prizes[c3.ID])
 	}
 	if updatedCharlie.PvPWins != 1 {
 		t.Errorf("expected Charlie PvPWins 1, got %d", updatedCharlie.PvPWins)
