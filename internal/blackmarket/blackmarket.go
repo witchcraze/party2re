@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -31,6 +32,12 @@ type DepotRepository interface {
 	Save(ctx context.Context, value depot.Depot) error
 }
 
+type EquipmentRepository interface {
+	FindByCharacterID(ctx context.Context, characterID string) (coreequipment.Equipment, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreequipment.Equipment, error)
+	Save(ctx context.Context, value coreequipment.Equipment) error
+}
+
 type BlackMarketRepository interface {
 	GetCharacterPoints(ctx context.Context, characterID string) (CharacterPoints, error)
 	GetCharacterPointsForUpdate(ctx context.Context, characterID string) (CharacterPoints, error)
@@ -47,6 +54,7 @@ type Service struct {
 	characterRepo   CharacterRepository
 	inventoryRepo   InventoryRepository
 	depotRepo       DepotRepository
+	equipRepo       EquipmentRepository
 	blackMarketRepo BlackMarketRepository
 	catalog         *Catalog
 	itemDefs        ItemDefinitionProvider
@@ -70,6 +78,12 @@ func WithItemDefinitionProvider(itemDefs ItemDefinitionProvider) ServiceOption {
 func WithDepotRepository(depotRepo DepotRepository) ServiceOption {
 	return func(s *Service) {
 		s.depotRepo = depotRepo
+	}
+}
+
+func WithEquipmentRepository(equipRepo EquipmentRepository) ServiceOption {
+	return func(s *Service) {
+		s.equipRepo = equipRepo
 	}
 }
 
@@ -101,6 +115,13 @@ func NewService(
 	}
 
 	return svc, nil
+}
+
+func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if s.txProvider == nil {
+		return fn(ctx)
+	}
+	return s.txProvider.RunInTx(ctx, fn)
 }
 
 // accessibleCharacter keeps storage failures distinct from a missing character.
@@ -173,14 +194,24 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (*Status, e
 	}, nil
 }
 
-// sacrificeCandidates lists eligible inventory items before depot items, the
-// order SacrificeItem resolves them in. A depot row that does not exist yet is empty.
+// sacrificeCandidates lists equipped items first, as the legacy list does, then
+// other inventory items and depot items. A depot row that does not exist yet is empty.
 func (s *Service) sacrificeCandidates(ctx context.Context, characterID string) ([]SacrificeCandidate, error) {
 	inv, err := s.inventoryRepo.FindByCharacterID(ctx, characterID)
 	if err != nil {
 		return nil, err
 	}
-	candidates := []SacrificeCandidate{}
+	equipped := map[string]bool{}
+	if s.equipRepo != nil {
+		eq, err := s.equipRepo.FindByCharacterID(ctx, characterID)
+		if err != nil {
+			return nil, err
+		}
+		for _, instanceID := range eq.Slots {
+			equipped[instanceID] = true
+		}
+	}
+	held, candidates := []SacrificeCandidate{}, []SacrificeCandidate{}
 	add := func(source string, items []coreitem.Instance) {
 		for _, it := range items {
 			yield, eligible := s.catalog.GetSacrificeYield(it.DefinitionID)
@@ -193,10 +224,16 @@ func (s *Service) sacrificeCandidates(ctx context.Context, characterID string) (
 					name = def.Name
 				}
 			}
-			candidates = append(candidates, SacrificeCandidate{
+			candidate := SacrificeCandidate{
 				ItemInstanceID: it.ID, ItemDefinitionID: it.DefinitionID, ItemName: name, Source: source,
 				Quantity: it.Quantity, RarePoints: yield.RarePoints, URarePoints: yield.URarePoints,
-			})
+				Equipped: source == SourceInventory && equipped[it.ID],
+			}
+			if candidate.Equipped {
+				held = append(held, candidate)
+			} else {
+				candidates = append(candidates, candidate)
+			}
 		}
 	}
 	add(SourceInventory, inv.Items)
@@ -207,10 +244,12 @@ func (s *Service) sacrificeCandidates(ctx context.Context, characterID string) (
 		}
 		add(SourceDepot, dep.Items)
 	}
-	return candidates, nil
+	return append(held, candidates...), nil
 }
 
 // SacrificeItem consumes an eligible rare item instance from character inventory or depot and credits points.
+// Transaction: RunInTx
+// Lock Order: characters(2) -> inventory_items/equipment_slots(3) -> character_depots(5) -> blackmarket_character_points(8)
 func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemInstanceID string) (*SacrificeResult, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return nil, ErrCharacterNotFound
@@ -240,6 +279,13 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 			return err
 		}
 
+		var eq coreequipment.Equipment
+		if s.equipRepo != nil {
+			if eq, err = s.equipRepo.FindByCharacterIDForUpdate(txCtx, characterID); err != nil {
+				return err
+			}
+		}
+
 		// 3. Lock depot (Tier 5)
 		var dep depot.Depot
 		if s.depotRepo != nil {
@@ -260,6 +306,22 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 		yield, eligible := s.catalog.GetSacrificeYield(targetDefID)
 		if !eligible {
 			return ErrNotSacrificeEligible
+		}
+
+		// equipment_slots references inventory_items: unlink before the row is deleted.
+		if s.equipRepo != nil && resolved.Location == depot.LocationInventory {
+			detached, err := eq.Detach(&char, itemInstanceID)
+			if err != nil {
+				return err
+			}
+			if detached {
+				if err := s.characterRepo.Update(txCtx, char); err != nil {
+					return err
+				}
+				if err := s.equipRepo.Save(txCtx, eq); err != nil {
+					return err
+				}
+			}
 		}
 
 		// Consume the item
@@ -317,16 +379,9 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 		return nil
 	}
 
-	if s.txProvider != nil {
-		if err := s.txProvider.RunInTx(ctx, operation); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := operation(ctx); err != nil {
-			return nil, err
-		}
+	if err := s.runInTx(ctx, operation); err != nil {
+		return nil, err
 	}
-
 	return result, nil
 }
 
@@ -431,15 +486,8 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 		return nil
 	}
 
-	if s.txProvider != nil {
-		if err := s.txProvider.RunInTx(ctx, operation); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := operation(ctx); err != nil {
-			return nil, err
-		}
+	if err := s.runInTx(ctx, operation); err != nil {
+		return nil, err
 	}
-
 	return result, nil
 }

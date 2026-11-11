@@ -5,7 +5,6 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
-	"github.com/witchcraze/party2re/internal/core/item"
 )
 
 type EquipmentRepository interface {
@@ -23,7 +22,7 @@ func (s *Service) detachEquipment(ctx context.Context, char *corecharacter.Chara
 	if err != nil || eq == nil {
 		return false, err
 	}
-	changed, err := unequipInstance(eq, char, instanceID)
+	changed, err := eq.Detach(char, instanceID)
 	if err != nil || !changed {
 		return false, err
 	}
@@ -44,26 +43,4 @@ func (s *Service) lockEquipment(ctx context.Context, characterID string) (*coree
 		return nil, err
 	}
 	return &eq, nil
-}
-
-// unequipInstance unlinks every slot holding instanceID, clearing weapon or
-// armor customization with its slot, and reports whether anything changed.
-func unequipInstance(eq *coreequipment.Equipment, char *corecharacter.Character, instanceID string) (bool, error) {
-	changed := false
-	for slot, equippedID := range eq.Slots {
-		if equippedID != instanceID {
-			continue
-		}
-		if _, err := eq.Unequip(slot); err != nil {
-			return false, err
-		}
-		switch slot {
-		case item.SlotMainHand:
-			char.ClearWeaponCustomization()
-		case item.SlotBody:
-			char.ClearArmorCustomization()
-		}
-		changed = true
-	}
-	return changed, nil
 }

@@ -24,6 +24,12 @@
       "source_ref": "internal/blackmarket/blackmarket.go#DepotRepository"
     },
     {
+      "name": "equipment_repository",
+      "target_module": "core/equipment",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blackmarket/blackmarket.go#EquipmentRepository"
+    },
+    {
       "name": "blackmarket_repository",
       "target_module": "blackmarket",
       "relation_type": "consumer_interface",
@@ -53,6 +59,12 @@
           "tier": 3,
           "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
           "note": "Lock inventory to verify ownership and deduct sacrificed rare item"
+        },
+        {
+          "table": "equipment_slots",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock equipment to unlink a sacrificed equipped instance before its inventory row is deleted"
         },
         {
           "table": "character_depots",

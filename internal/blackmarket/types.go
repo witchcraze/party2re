@@ -54,6 +54,7 @@ type SacrificeCandidate struct {
 	Quantity         int    `json:"quantity"`
 	RarePoints       int    `json:"rare_points"`
 	URarePoints      int    `json:"u_rare_points"`
+	Equipped         bool   `json:"equipped"`
 }
 
 type SacrificeResult struct {

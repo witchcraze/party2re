@@ -5,6 +5,7 @@ import (
 	"maps"
 	"strings"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 )
 
@@ -64,6 +65,28 @@ func (e *Equipment) Unequip(slot item.Slot) (string, error) {
 	}
 	delete(e.Slots, slot)
 	return instanceID, nil
+}
+
+// Detach unlinks every slot holding instanceID before its inventory row is
+// consumed, clearing the weapon or armor customization tied to that slot.
+func (e *Equipment) Detach(char *corecharacter.Character, instanceID string) (bool, error) {
+	changed := false
+	for slot, equippedID := range e.Slots {
+		if equippedID != instanceID {
+			continue
+		}
+		if _, err := e.Unequip(slot); err != nil {
+			return false, err
+		}
+		switch slot {
+		case item.SlotMainHand:
+			char.ClearWeaponCustomization()
+		case item.SlotBody:
+			char.ClearArmorCustomization()
+		}
+		changed = true
+	}
+	return changed, nil
 }
 
 func (e *Equipment) Equipped(slot item.Slot) (string, bool) {

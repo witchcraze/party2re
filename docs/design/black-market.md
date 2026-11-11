@@ -17,21 +17,7 @@ In authentic Party2, the Black Market is not a gold shop. It operates purely as 
 
 ---
 
-### 2. Rare Point & U-Rare Point Sacrifice System (`SacrificeItem` / `@ささげる`)
-
-- **Dual-Source Sacrifice**: Characters can sacrifice eligible rare weapons, armor, or items directly from either active character inventory or Depot (`預かり所`).
-- **Sacrifice Eligibility & Yields**:
-  - **46 Authentic Eligible Items**: Defined across regular weapons, armors, accessories, and consumables.
-  - **Regular Rare Items**: Yields **+1 Rare Point** (e.g. `weapon-29`〜`weapon-40`, `armor-35`〜`armor-40`, `item-028`〜`item-109`).
-  - **Ultra-Rare Artifacts**: Yields **+1 to +50 U-Rare Points** (e.g. `item-263`〜`item-268`).
-  - **Ineligible Items**: Non-rare items are rejected (`ErrNotSacrificeEligible` / HTTP 400).
-- **Transaction & Locking**:
-  - Pessimistic lock ordering: Tier 2 `characters` -> Tier 3 `inventory_items` -> Tier 5 `character_depots` -> Tier 8 `blackmarket_character_points`.
-  - Atomically consumes the item from inventory or depot and credits points to `blackmarket_character_points`.
-
----
-
-### 3. Exclusive Prize Trade Exchange (`TradePrize` / `@とりひき`)
+### 2. Exclusive Prize Trade Exchange (`TradePrize` / `@とりひき`)
 
 - **Prize Redemption**: Accumulated points can be exchanged for exclusive weapons, armor, accessories, and consumables across two catalogs:
   - **12 Regular Rare Prizes**:
@@ -67,7 +53,7 @@ In authentic Party2, the Black Market is not a gold shop. It operates purely as 
 
 ---
 
-### 4. Authentic Underworld NPC `@闇商人` Dialogue
+### 3. Authentic Underworld NPC `@闇商人` Dialogue
 
 - **Presentation Decoupling**: In adherence to `.agents/rules/03-architecture.md §5`, domain service results return pure structured data (`CharacterID`, `NPCName`), while human-facing dialogue lines are formatted at the HTTP transport/presentation layer (`internal/api/http`).
 - **Atmospheric Talk (`Talk`)**: Formats authentic atmospheric underworld quotes matching the legacy CGI:
@@ -82,7 +68,7 @@ In authentic Party2, the Black Market is not a gold shop. It operates purely as 
 
 ---
 
-## 5. Gateway and Retained Routes
+## 4. Gateway and Retained Routes
 
 Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and a paged list of eligible sacrifice candidates through character context. Observation never sacrifices, trades, chooses dialogue or creates a Depot. A required read failure fails the whole observation, and a qualification loss shows `selection_unavailable` with a safe back. See the [context and recovery contract](../architecture/client-agent-api.md).
 
@@ -100,8 +86,8 @@ Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and
 | `header_html` (97–106) | `rare_points`, `u_rare_points` | Equipped names are not repeated in the scene. |
 | `とりひき` without a target (132–152) | `prizes`, `u_prizes`; `u_prizes` is empty while U-Rare points are zero | None for listing visibility. |
 | `とりひき` with a target (116–125, 135–144) | `blackmarket_trade` | Explicit prize ID replaces the name. A U-Rare trade at zero points rejects instead of redisplaying the list; neither moves assets. A full Depot still receives the prize ([delivery capacity](depot.md#delivery-capacity-by-caller)). |
-| `ささげる` without a target (168–172, 200–250, 310) | `sacrifice_candidates` | Lists eligible instances only, inventory then Depot; legacy lists every owned item and rejects common ones when offered. The empty-handed message is an empty array. |
-| `ささげる` with a target (179–300) | `blackmarket_sacrifice` | Explicit instance ID replaces legacy's Depot-first name match. Sacrificing an equipped item is still blocked by #1140, and the candidate list does not mark equipped rows. |
+| `ささげる` without a target (168–172, 200–250, 310) | `sacrifice_candidates` | Lists eligible instances only, inventory then Depot; equipped instances come first with `equipped`, as legacy lists the hand slots first. Legacy lists every owned item and rejects common ones when offered. The empty-handed message is an empty array. |
+| `ささげる` with a target (179–300) | `blackmarket_sacrifice` | Explicit instance ID replaces legacy's Depot-first name match. |
 | Shared `はなす` (`lib/system.cgi:240–246`), `shiraberu_npc` (81–83) | `npc_talk`, `npc_inspect` | None: talk logs the word and starts the wait; inspect is private. |
 
 Legacy successful actions also apply the shared action wait and write `npc_com` to the facility log, while list views set `$act_time = 0`. The Gateway now applies the [action wait](../architecture/place-log.md#action-wait-1939); writing these commands' log rows remains [#1941](https://github.com/witchcraze/party2re/issues/1941), and presence remains open.
