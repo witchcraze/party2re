@@ -404,7 +404,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleTavernOrder":           "tavern.go",
 		"handleTavernReserveDelivery": "tavern.go",
 		"handleTavernCancelDelivery":  "tavern.go",
-		"handleTavernClaimDelivery":   "tavern.go",
 		"handleTavernTalk":            "tavern.go",
 		// Custom Skill
 		"handleSetCustomSkill": "custom_skill.go",

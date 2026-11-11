@@ -46,16 +46,14 @@
       ]
     },
     {
-      "flow": "ClaimDelivery (配達受取・消費)",
+      "flow": "ClaimDelivery (冒険完了フックでの常設出前精算)",
       "tx_mode": "RunInTx",
       "source_ref": "internal/tavern/delivery.go#Service.ClaimDelivery",
       "lock_sequence": [
         {"step": 1, "target": "tavern_deliveries", "method": "Repository.GetDelivery"},
         {"step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate"},
         {"step": 3, "target": "characters", "method": "CharacterRepository.Update"},
-        {"step": 4, "target": "character_lottery", "method": "LotteryRepository.AddRaffleTickets", "optional": true},
-        {"step": 5, "target": "tavern_character_status", "lock_order": 8, "method": "Repository.UpsertCharacterStatus"},
-        {"step": 6, "target": "tavern_deliveries", "lock_order": 8, "method": "Repository.DeleteDelivery"}
+        {"step": 4, "target": "tavern_character_status", "lock_order": 8, "method": "Repository.UpsertCharacterStatus"}
       ]
     }
   ]

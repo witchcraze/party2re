@@ -145,7 +145,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"tavern_order", http.MethodPost, "/characters/char-1/tavern/order", `{"item_id":"ale"}`},
 		{"tavern_reserve_delivery", http.MethodPost, "/characters/char-1/tavern/delivery", `{"item_id":"ale"}`},
 		{"tavern_cancel_delivery", http.MethodDelete, "/characters/char-1/tavern/delivery", ``},
-		{"tavern_claim_delivery", http.MethodPost, "/characters/char-1/tavern/delivery/claim", `{}`},
 		{"tavern_talk", http.MethodPost, "/characters/char-1/tavern/talk", `{}`},
 		// Custom Skill
 		{"custom_skill_set", http.MethodPost, "/characters/char-1/custom-skills", `{"name":"Skill","comment":"Desc","gems":["g1","g2","g3"]}`},

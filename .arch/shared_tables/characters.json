@@ -95,7 +95,7 @@
       "caller_method": "internal/tavern/delivery.go#Service.ClaimDelivery",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
-      "purpose": "Lock character to restore HP/MP and update fullness"
+      "purpose": "Lock character to deduct the standing delivery price and restore HP/MP"
     },
     {
       "module": "adventure",

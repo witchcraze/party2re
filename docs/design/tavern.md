@@ -44,21 +44,9 @@ When ordering food or drinks directly inside the tavern:
 
 ---
 
-### 3. Delivery Reservation System (`ReserveDelivery` / `ClaimDelivery`)
+### 3. Standing Delivery Order
 
-To allow characters heading out to adventure to secure an automatic meal upon return:
-- **Standing Order Reservation (`POST /characters/{id}/tavern/delivery`)**:
-  - Validates menu item selection and character existence without requiring current meal funds (`party2/lib/bar.cgi:134-158`).
-  - Saves recurring standing order into `tavern_deliveries` (0G reservation and overwrite supported without funds deduction).
-  - Can be inspected with `GET` or cancelled with `DELETE` (`party2/lib/bar.cgi:149-152`).
-- **Claim & Consume (`POST /characters/{id}/tavern/delivery/claim`)**:
-  - Validates gold funds at claim time inside a pessimistic transaction.
-  - Deducts gold and restores HP/MP when funds are sufficient.
-  - Does NOT set `is_full = true` and does NOT award raffle tickets (`party2/lib/_battle.cgi:1348-1376`).
-  - Does NOT delete the reservation; the standing order remains active for future adventures.
-- **Automated Post-Adventure Arrival & Fullness Reset (Solo & Party)**:
-  - When a solo or party adventure concludes, the registered `PostAdventureHook` automatically executes `ResetFullness` (clearing `is_full = false` / legacy `$m{is_eat} = 0` per `_battle.cgi:1214`), allowing characters to dine at the counter again immediately.
-  - The hook then executes `ClaimDelivery` to restore each participating adventurer with reserved delivery food. Insufficient funds gracefully skip delivery without cancelling the order or impeding adventure completion.
+A delivery reservation is a standing order; reserving needs no funds. Each solo or party adventure completion resets fullness and then settles the order once per participant. There is no standalone settlement request: the legacy `でりばりー` action only stores the order, and settlement happens solely at battle end. Settlement neither sets fullness nor awards raffle tickets, and an unaffordable meal is skipped while the order stays active.
 
 ---
 
