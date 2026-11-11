@@ -101,8 +101,8 @@ this delivery path under the existing [trajectory gap](../design/player-and-char
 #### CL-02D: Towns & Construction
 
 - **Scope / Legacy**: `lib/town1.cgi`〜`lib/town4.cgi`、`lib/_town.cgi`の`たてる` / `ちぇっく` / `みせ` / `はいる`。町の探索、住宅/商店の建設、容量、価格、所有期限、GP連動、所有者への遷移を確認する。
-- **Go / HTTP**: `internal/town/`、`internal/home/estate.go`の住宅建設/期限確認、`internal/store/service.go`の商店建設、`internal/api/http/home_estate.go`、`internal/api/http/store.go`。
-- **Contracts**: [design/home.md](../design/home.md)、[design/store.md](../design/store.md)、[api/paths/towns.json](../api/paths/towns.json)、[api/paths/houses.json](../api/paths/houses.json)、[api/paths/stores.json](../api/paths/stores.json)。
+- **Go / HTTP**: `internal/town/`、`internal/home/estate.go`の住宅建設/期限確認、`internal/store/service.go`の商店建設、`internal/api/http/home_estate.go`、`internal/api/http/scene_store.go`・`action_store.go`（町シーンと商店コマンド）。
+- **Contracts**: [design/home.md](../design/home.md)、[design/store.md](../design/store.md)、[api/paths/towns.json](../api/paths/towns.json)、[api/paths/houses.json](../api/paths/houses.json)。
 - **Open follow-ups**: [#1113](https://github.com/witchcraze/party2re/issues/1113) (住宅上限)、[#1114](https://github.com/witchcraze/party2re/issues/1114) (商店上限)、[#1122](https://github.com/witchcraze/party2re/issues/1122) (住宅GP)。
 - **Boundary**: 商店の建設・入店までが本単位で、出品/購入/内装販売はCL-03。私有Homeへの訪問・睡眠と有料の町住宅契約を同一条件にしない。
 
@@ -132,7 +132,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/sleep.cgi` | 睡眠 (無料全快・日次リセット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json) | Reconciling | CL-02B (#1117〜#1119, #1822)。有料宿屋は非存在。時間/人数・起床義務・訪問条件の契約は CL-02B および [design/home.md](../design/home.md) 参照。 |
 | `lib/park.cgi` | 交流広場 (@町娘) | `internal/park/` | [design/town_park.md](../design/town_park.md)<br/>[api/paths/park.json](../api/paths/park.json) | Reconciling | CL-02A (#1126)。占い（22entry・27色）、NPC会話、チャット。文字数/log契約は未確定。10G回復は非存在。 |
 | `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | [design/depot.md](../design/depot.md) | Reconciling | CL-02C (#1109, #1111, #1112) と通知連動#1110。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |
-| `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (住宅建設)<br/>`internal/town/`<br/>`internal/store/` (商店建設)<br/>Client Presentation | [design/home.md](../design/home.md)<br/>[design/store.md](../design/store.md)<br/>[api/paths/towns.json](../api/paths/towns.json)<br/>[api/paths/houses.json](../api/paths/houses.json)<br/>[api/paths/stores.json](../api/paths/stores.json) | Reconciling | CL-02D (#1113, #1114, #1122)。町別上限・GP配線に未解決差分があり、設定/guardはCL-02A/Bと連動確認する。 |
+| `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (住宅建設)<br/>`internal/town/`<br/>`internal/store/` (商店建設)<br/>Client Presentation | [design/home.md](../design/home.md)<br/>[design/store.md](../design/store.md)<br/>[api/paths/towns.json](../api/paths/towns.json)<br/>[api/paths/houses.json](../api/paths/houses.json) | Reconciling | CL-02D (#1113, #1114, #1122)。町別上限・GP配線に未解決差分があり、設定/guardはCL-02A/Bと連動確認する。 |
 
 
 ---
@@ -153,7 +153,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/secret.cgi` | 秘密の店 (@ヒミツジ) | `internal/secretshop/` | [design/shops.md](../design/shops.md) | Review against source | 転職7回以上(`job_lv >= 7`)、原典8種3倍価格、手持ち直接購入時の図鑑自動登録連携(`RecordItemDiscovered`)、満杯時Depot転送(`depot.FindOrCreate`)、ぱふぱふ会話のみ |
 | `lib/black_market.cgi` | 闇市場 (@闇商人) | `internal/blackmarket/` | [design/black-market.md](../design/black-market.md) | Review against source | `job_lv>=15` で入場、純粋レアポイント物々交換、手持ち/Depot生贄、24種景品Depot直送、原典台詞 |
 | `lib/gem_store.cgi` | 宝石店 (@ジェマ) | `internal/gemstore/` | [design/gemstore.md](../design/gemstore.md) | Review against source | 宝石購入(5倍価格・GemBox格納)、売却(50%)、56種加工レシピ、5種未鑑定オーブ鑑定。ギフト時のメール通知のみ未実装 |
-| `lib/store.cgi`, `lib/goods.cgi` | プレイヤーストア・オラクル屋 | `internal/store/` | [design/store.md](../design/store.md)<br/>[api/paths/stores.json](../api/paths/stores.json) | Review against source | 店舗建設(50,000G/90日)、ゴールド・物々交換出品、壁紙50種（最大50,000G実控除）・看板(5,000G残高要・控除なし)・家具15種内装(1,000G残高要・控除なし)。詳細は [design/store.md](../design/store.md#customization-charges-1146) 参照。 |
+| `lib/store.cgi`, `lib/goods.cgi` | プレイヤーストア・オラクル屋 | `internal/store/` | [design/store.md](../design/store.md) | Review against source | 店舗建設(50,000G/90日)、ゴールド・物々交換出品、壁紙50種（最大50,000G実控除）・看板(5,000G残高要・控除なし)・家具15種内装(1,000G残高要・控除なし)。詳細は [design/store.md](../design/store.md#customization-charges-1146) 参照。 |
 | `lib/bar.cgi` | ルイーダの酒場 (@ルイーダ) | `internal/tavern/` | [design/tavern.md](../design/tavern.md)<br/>[api/paths/tavern.json](../api/paths/tavern.json) | Review against source | 食事注文・福引券付与、出前予約・冒険完了時自動配達フック（架空NPCおつかい・小包便撤廃） |
 | `lib/bank.cgi` | ゴールド銀行 (@タクシード) | `internal/bank/` | [design/bank.md](../design/bank.md) | Review against source | 預金・引出、上限99兆G、所持金999,999G上限クランプ＆超過預金返還。架空の日次利息は非存在 |
 | `lib/auction.cgi` | オークション (@ワイルド) | `internal/auction/` | [design/auction.md](../design/auction.md)<br/>[api/paths/auction.json](../api/paths/auction.json) | Review against source | リアルタイムP2P送金・装備/アイテムDepot直送譲渡(`＠おくる`)、他PC調査(`＠しらべる`)。架空の入札・競売システムは非存在 |

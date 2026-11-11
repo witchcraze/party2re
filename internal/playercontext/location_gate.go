@@ -16,5 +16,7 @@ func (LocationGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
 	if snapshot.LocationID == LocationTown {
 		return true
 	}
-	return strings.HasPrefix(action.ID, snapshot.LocationID+"_") || (strings.HasPrefix(snapshot.LocationID, "shop_") && strings.HasPrefix(action.ID, "shop_"))
+	return strings.HasPrefix(action.ID, snapshot.LocationID+"_") || (strings.HasPrefix(snapshot.LocationID, "shop_") && strings.HasPrefix(action.ID, "shop_")) ||
+		// Legacy player stores stand in the four towns (town1..town4).
+		(strings.HasPrefix(snapshot.LocationID, LocationTown) && strings.HasPrefix(action.ID, "store_"))
 }

@@ -2,12 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
 // ChangeStoreName updates the store's signboard name (requires 5,000 G balance, 0 G deducted).
-func (s *Service) ChangeStoreName(ctx context.Context, characterID, newName string) error {
-	cleanName := strings.TrimSpace(newName)
+func (s *Service) ChangeStoreName(ctx context.Context, characterID, cleanName string) error {
 	if err := ValidateStoreName(cleanName); err != nil {
 		return err
 	}
@@ -29,15 +29,18 @@ func (s *Service) ChangeStoreName(ctx context.Context, characterID, newName stri
 
 		st, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
 		if err != nil {
-			return ErrStoreNotFound
+			return err
 		}
 		if !st.IsActive(now) {
 			return ErrStoreExpired
 		}
 
-		// Check name collision
+		// Legacy rejects any active store with the name, including the actor's own.
 		namedStore, err := s.repo.GetStoreByName(txCtx, cleanName)
-		if err == nil && namedStore.CharacterID != characterID && namedStore.IsActive(now) {
+		if err != nil && !errors.Is(err, ErrStoreNotFound) {
+			return err
+		}
+		if err == nil && namedStore.IsActive(now) {
 			return ErrStoreNameTaken
 		}
 
@@ -74,7 +77,7 @@ func (s *Service) ChangeWallpaper(ctx context.Context, characterID, wallpaper st
 
 		st, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
 		if err != nil {
-			return ErrStoreNotFound
+			return err
 		}
 		if !st.IsActive(now) {
 			return ErrStoreExpired
@@ -84,7 +87,7 @@ func (s *Service) ChangeWallpaper(ctx context.Context, characterID, wallpaper st
 			if err := char.DeductMoney(cost); err != nil {
 				return ErrInsufficientFunds
 			}
-			if err := s.charRepo.Save(txCtx, char); err != nil {
+			if err := s.charRepo.Update(txCtx, char); err != nil {
 				return err
 			}
 		}
@@ -122,7 +125,7 @@ func (s *Service) AddInterior(ctx context.Context, characterID, furnitureID stri
 
 		st, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
 		if err != nil {
-			return ErrStoreNotFound
+			return err
 		}
 		if !st.IsActive(now) {
 			return ErrStoreExpired
@@ -159,8 +162,7 @@ func (s *Service) AddInterior(ctx context.Context, characterID, furnitureID stri
 }
 
 // RenameInterior gives a custom name to a placed interior furniture item.
-func (s *Service) RenameInterior(ctx context.Context, characterID, interiorID, newName string) error {
-	cleanName := strings.TrimSpace(newName)
+func (s *Service) RenameInterior(ctx context.Context, characterID, interiorID, cleanName string) error {
 	if err := ValidateInteriorName(cleanName); err != nil {
 		return err
 	}
@@ -168,9 +170,12 @@ func (s *Service) RenameInterior(ctx context.Context, characterID, interiorID, n
 	now := s.nowFunc().UTC()
 
 	return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 		st, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
 		if err != nil {
-			return ErrStoreNotFound
+			return err
 		}
 		if !st.IsActive(now) {
 			return ErrStoreExpired
@@ -201,9 +206,12 @@ func (s *Service) CleanInteriors(ctx context.Context, characterID string) error 
 	now := s.nowFunc().UTC()
 
 	return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := s.checkMutation(txCtx, characterID); err != nil {
+			return err
+		}
 		st, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
 		if err != nil {
-			return ErrStoreNotFound
+			return err
 		}
 		if !st.IsActive(now) {
 			return ErrStoreExpired

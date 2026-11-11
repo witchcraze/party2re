@@ -43,7 +43,7 @@ type StoreRepository interface {
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
-	Save(ctx context.Context, char corecharacter.Character) error
+	Update(ctx context.Context, char corecharacter.Character) error
 }
 
 type DepotRepository interface {

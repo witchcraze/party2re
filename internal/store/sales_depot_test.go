@@ -86,7 +86,7 @@ func TestBuyItem_WithUninitializedBuyerDepot(t *testing.T) {
 	ctx := context.Background()
 
 	// Seller opens a store and lists an item (seller has depot with item)
-	_, err := f.svc.BuildStore(ctx, "c_seller", "town1", "001", "店一号")
+	_, err := f.svc.BuildStore(ctx, "c_seller", "town1", "001")
 	if err != nil {
 		t.Fatalf("BuildStore failed: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestCancelSale_WithUninitializedDepot(t *testing.T) {
 	f := setupSalesDepotFixture(t)
 	ctx := context.Background()
 
-	_, err := f.svc.BuildStore(ctx, "c_seller", "town1", "001", "店一号")
+	_, err := f.svc.BuildStore(ctx, "c_seller", "town1", "001")
 	if err != nil {
 		t.Fatalf("BuildStore failed: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestListGoldItem_WithUninitializedDepot(t *testing.T) {
 	f := setupSalesDepotFixture(t)
 	ctx := context.Background()
 
-	_, err := f.svc.BuildStore(ctx, "c_seller", "town1", "001", "店一号")
+	_, err := f.svc.BuildStore(ctx, "c_seller", "town1", "001")
 	if err != nil {
 		t.Fatalf("BuildStore failed: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestTradeItem_WithUninitializedDepot(t *testing.T) {
 	f := setupSalesDepotFixture(t)
 	ctx := context.Background()
 
-	_, err := f.svc.BuildStore(ctx, "c_seller", "town1", "001", "店一号")
+	_, err := f.svc.BuildStore(ctx, "c_seller", "town1", "001")
 	if err != nil {
 		t.Fatalf("BuildStore failed: %v", err)
 	}

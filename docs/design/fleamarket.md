@@ -63,7 +63,7 @@ classDiagram
 1. **Server-Wide Active Listing Ceiling**: The market enforces a strict server-wide ceiling of at most 120 simultaneous active listings (`ServerMaxListings = 120`, matching `$MAX = 120` in `free.cgi`). If 120 active listings are present, `CreateListing` returns `ErrServerMaxListingsReached`. Creators serialize on the `fleamarket_capacity_lock` row before counting. Locking listing rows cannot do this because READ COMMITTED has no gap locks. Purchase and cancel only free slots, so they do not take it.
 2. **Depot-Backed Item Storage**: In accordance with the original Perl implementation, items listed in the flea market originate from the player's Depot (倉庫), are delivered to the buyer's Depot on purchase, and return to the seller's Depot on cancellation. If the recipient's Depot is full, operations return `ErrDepotFull`.
    - Depot auto-initialization on purchase via `depot.FindOrCreate`.
-   - Item discovery recording on listing creation via `CollectionRecorder` (legacy `free.cgi:130-132`).
+   - Listing records the listed item in the seller's collection, while legacy `free.cgi:130-132` calls `add_collection`, which registers the seller's equipped items (#2057).
 3. **Seller Listing Capacity & OverFlea Expansion**: A character can maintain at most `5 + OverFlea` active listings simultaneously (`MaxListingsPerCharacter = 5`, expanded up to 10 via character `OverFlea` capacity flag).
 4. **Price Range Enforcement**: Listing price must be between 1 G and 999,999 G (`MinListingPrice = 1`, `MaxListingPrice = 999999`).
 5. **Pessimistic Locking & Deadlock-Free Ordering**:

@@ -18,7 +18,6 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/playercontext"
-	"github.com/witchcraze/party2re/internal/store"
 )
 
 type inMemoryRealTimer struct {
@@ -210,7 +209,6 @@ func setupRealHomeGuardTest(
 	bankRepo *inMemoryRealBankRepo,
 	charRepo *inMemoryRealCharRepo,
 	parkSvc *mockParkService,
-	storeSvc *stubStoreService,
 ) (http.Handler, *home.Service) {
 	t.Helper()
 
@@ -259,7 +257,6 @@ func setupRealHomeGuardTest(
 		apihttp.WithBank(bankSvc),
 		apihttp.WithPlayerContext(playercontext.NewService(readers, readers, timer.NewService(nil))),
 		apihttp.WithPark(parkSvc),
-		apihttp.WithStore(storeSvc),
 	)
 	if err != nil {
 		t.Fatalf("apihttp.NewHandler failed: %v", err)
@@ -269,7 +266,7 @@ func setupRealHomeGuardTest(
 }
 
 func TestAuditRealHomeSleepGuard(t *testing.T) {
-	t.Run("Asleep lookup failure halts execution with 5xx without mutating Bank, Park or Store", func(t *testing.T) {
+	t.Run("Asleep lookup failure halts execution with 5xx without mutating Bank or Park", func(t *testing.T) {
 		charRepo := &inMemoryRealCharRepo{
 			char: corecharacter.Character{
 				ID:       "hero",
@@ -301,15 +298,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			},
 		}
 
-		storeBuilt := false
-		mockStore := &stubStoreService{
-			buildStoreFn: func(ctx context.Context, characterID, townID, houseStyle, storeName string) (*store.StoreCheckResult, error) {
-				storeBuilt = true
-				return nil, nil
-			},
-		}
-
-		router, homeSvc := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark, mockStore)
+		router, homeSvc := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark)
 
 		// 1. Bank deposit fails with 500 and does NOT mutate wallet or deposit
 		{
@@ -340,22 +329,6 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			}
 			if parkPosted {
 				t.Errorf("expected park post not to be created on asleep lookup error")
-			}
-		}
-
-		// 3. Representative Store action fails with 500 and does NOT invoke callback
-		{
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/towns/town1/stores", bytes.NewReader([]byte(`{"character_id":"hero","house_style":"001","store_name":"Hero Shop"}`)))
-			req.Header.Set("Authorization", "Bearer valid-session")
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusInternalServerError {
-				t.Fatalf("expected 500 Internal Server Error for store build on asleep error, got %d: %s", rec.Code, rec.Body.String())
-			}
-			if storeBuilt {
-				t.Errorf("expected store build callback not to be invoked on asleep lookup error")
 			}
 		}
 
@@ -411,15 +384,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			},
 		}
 
-		storeBuilt := false
-		mockStore := &stubStoreService{
-			buildStoreFn: func(ctx context.Context, characterID, townID, houseStyle, storeName string) (*store.StoreCheckResult, error) {
-				storeBuilt = true
-				return nil, nil
-			},
-		}
-
-		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark, mockStore)
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark)
 
 		// Bank deposit returns 409 Conflict
 		{
@@ -455,22 +420,6 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 				t.Errorf("expected park post not to be created when pending recovery")
 			}
 		}
-
-		// Store build returns 409 Conflict
-		{
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/towns/town1/stores", bytes.NewReader([]byte(`{"character_id":"hero","house_style":"001","store_name":"Hero Shop"}`)))
-			req.Header.Set("Authorization", "Bearer valid-session")
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusConflict {
-				t.Fatalf("expected 409 Conflict for store build when pending recovery, got %d: %s", rec.Code, rec.Body.String())
-			}
-			if storeBuilt {
-				t.Errorf("expected store build callback not to be invoked when pending recovery")
-			}
-		}
 	})
 
 	t.Run("Active sleep contrast returns 409 Conflict without mutating state", func(t *testing.T) {
@@ -503,7 +452,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			},
 		}
 
-		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark, nil)
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark)
 
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/hero/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":10}}`))
@@ -552,7 +501,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			},
 		}
 
-		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark, nil)
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark)
 
 		// Bank deposit succeeds with 200 and mutates wallet=90, deposit=1010
 		{
@@ -588,7 +537,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		}
 	})
 
-	t.Run("SQL pending_wake read failure in Home.GetSleepStatus halts REST and Gateway guards with 500 without mutating Bank, Park or Store", func(t *testing.T) {
+	t.Run("SQL pending_wake read failure in Home.GetSleepStatus halts REST and Gateway guards with 500 without mutating Bank or Park", func(t *testing.T) {
 		charRepo := &inMemoryRealCharRepo{
 			char: corecharacter.Character{
 				ID:          "hero",
@@ -619,15 +568,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			},
 		}
 
-		storeBuilt := false
-		mockStore := &stubStoreService{
-			buildStoreFn: func(ctx context.Context, characterID, townID, houseStyle, storeName string) (*store.StoreCheckResult, error) {
-				storeBuilt = true
-				return nil, nil
-			},
-		}
-
-		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark, mockStore)
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark)
 
 		// Contrast 1: With readable SQL pending_wake=true and no Valkey locks, Gateway bank_deposit and REST mutations return 409 Conflict
 		{
@@ -677,22 +618,6 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			}
 			if parkPosted {
 				t.Errorf("expected park post callback not invoked on SQL pending_wake read failure")
-			}
-		}
-
-		// 3. REST Store build fails closed with 500 and 0 mutations
-		{
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/towns/town1/stores", bytes.NewReader([]byte(`{"character_id":"hero","house_style":"001","store_name":"Hero Shop"}`)))
-			req.Header.Set("Authorization", "Bearer valid-session")
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusInternalServerError {
-				t.Fatalf("expected 500 Internal Server Error for store build on SQL pending_wake read failure, got %d: %s", rec.Code, rec.Body.String())
-			}
-			if storeBuilt {
-				t.Errorf("expected store build callback not invoked on SQL pending_wake read failure")
 			}
 		}
 	})

@@ -34,7 +34,7 @@ func (s *Service) ListGoldItem(ctx context.Context, characterID, depotItemInstan
 
 		st, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
 		if err != nil {
-			return ErrStoreNotFound
+			return err
 		}
 		if !st.IsActive(now) {
 			return ErrStoreExpired
@@ -138,7 +138,7 @@ func (s *Service) ListBarterItem(ctx context.Context, characterID, depotItemInst
 
 		st, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
 		if err != nil {
-			return ErrStoreNotFound
+			return err
 		}
 		if !st.IsActive(now) {
 			return ErrStoreExpired
@@ -211,7 +211,7 @@ func (s *Service) WithdrawListing(ctx context.Context, characterID, saleID strin
 		// Rank 0: shared sale lock
 		sale, err := s.repo.GetSaleByIDForUpdate(txCtx, saleID)
 		if err != nil {
-			return ErrListingNotFound
+			return err
 		}
 		if sale.CharacterID != characterID {
 			return ErrListingNotFound
@@ -224,6 +224,15 @@ func (s *Service) WithdrawListing(ctx context.Context, characterID, saleID strin
 		}
 		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
+		}
+
+		// Owner commands need an active store, as legacy owners act inside it.
+		st, err := s.repo.GetStoreByCharacterID(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+		if !st.IsActive(s.nowFunc().UTC()) {
+			return ErrStoreExpired
 		}
 
 		// Rank 5: depot lock
@@ -252,13 +261,17 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 		// Rank 0: shared sale lock
 		sale, err := s.repo.GetSaleByIDForUpdate(txCtx, saleID)
 		if err != nil {
-			return ErrListingNotFound
+			return err
 		}
 		if sale.SaleType != SaleTypeGold {
 			return ErrListingNotFound
 		}
 		if sale.CharacterID == buyerCharacterID {
 			return ErrCannotBuyOwnItem
+		}
+		// Legacy visitors can only enter a standing store.
+		if err := s.checkSaleStoreActive(txCtx, sale); err != nil {
+			return err
 		}
 
 		sellerID := sale.CharacterID
@@ -316,10 +329,10 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 			return err
 		}
 
-		if err := s.charRepo.Save(txCtx, *buyerChar); err != nil {
+		if err := s.charRepo.Update(txCtx, *buyerChar); err != nil {
 			return err
 		}
-		if err := s.charRepo.Save(txCtx, *sellerChar); err != nil {
+		if err := s.charRepo.Update(txCtx, *sellerChar); err != nil {
 			return err
 		}
 
@@ -337,13 +350,6 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 			return err
 		}
 
-		if s.collection != nil {
-			itemName, cat := s.resolveItemInfo(sale.ItemDefinitionID, sale.ItemName)
-			if err := s.collection.RecordItemDiscovered(txCtx, buyerCharacterID, sale.ItemDefinitionID, itemName, cat); err != nil {
-				return err
-			}
-		}
-
 		return nil
 	})
 }
@@ -354,13 +360,17 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 		// Rank 0: shared sale lock
 		sale, err := s.repo.GetSaleByIDForUpdate(txCtx, saleID)
 		if err != nil {
-			return ErrListingNotFound
+			return err
 		}
 		if sale.SaleType != SaleTypeBarter {
 			return ErrListingNotFound
 		}
 		if sale.CharacterID == buyerCharacterID {
 			return ErrCannotTradeOwnItem
+		}
+		// Legacy visitors can only enter a standing store.
+		if err := s.checkSaleStoreActive(txCtx, sale); err != nil {
+			return err
 		}
 
 		sellerID := sale.CharacterID
@@ -456,13 +466,17 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 			return err
 		}
 
-		if s.collection != nil {
-			itemName, cat := s.resolveItemInfo(sale.ItemDefinitionID, sale.ItemName)
-			if err := s.collection.RecordItemDiscovered(txCtx, buyerCharacterID, sale.ItemDefinitionID, itemName, cat); err != nil {
-				return err
-			}
-		}
-
 		return nil
 	})
+}
+
+func (s *Service) checkSaleStoreActive(ctx context.Context, sale Sale) error {
+	st, err := s.repo.GetStoreByID(ctx, sale.StoreID)
+	if err != nil {
+		return err
+	}
+	if !st.IsActive(s.nowFunc().UTC()) {
+		return ErrStoreExpired
+	}
+	return nil
 }

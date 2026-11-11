@@ -23,7 +23,7 @@ func TestCatalogNavigationContracts(t *testing.T) {
 		}
 		switch id {
 		case "scene_select":
-			if !slices.Equal(params.Properties["target_kind"].Enum, []any{"item", "home", "room"}) || params.Properties["target_id"].Pattern != `^[a-zA-Z0-9_-]{1,128}$` {
+			if !slices.Equal(params.Properties["target_kind"].Enum, []any{"item", "home", "room", "store"}) || params.Properties["target_id"].Pattern != `^[a-zA-Z0-9_-]{1,128}$` {
 				t.Fatal("subject registry/bound drift")
 			}
 		case "scene_page":

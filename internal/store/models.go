@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -159,37 +160,25 @@ func MaxListings(overStore int) int {
 	return BaseMaxListings + overStore*2
 }
 
-// ValidateStoreName validates a custom store name according to legacy store.cgi:kanban rules:
-// - Max 8 characters
-// - No spaces or empty
-// - No forbidden characters: , ; " ' & < > \ / @ ＠
+// ValidateStoreName applies the legacy ＠かんばん rules: 1..8 characters, no
+// whitespace and none of , ; " ' & < > \ / @ ＠.
 func ValidateStoreName(name string) error {
-	trimmed := strings.TrimSpace(name)
-	if trimmed == "" {
-		return ErrInvalidStoreName
-	}
-	if utf8.RuneCountInString(trimmed) > MaxStoreNameLen {
-		return ErrInvalidStoreName
-	}
-	if strings.ContainsAny(trimmed, " ,;\"'&<>/\\@　") || strings.Contains(trimmed, "＠") {
+	if !validLegacyName(name, MaxStoreNameLen, ",;\"'&<>\\/@＠") {
 		return ErrInvalidStoreName
 	}
 	return nil
 }
 
-// ValidateInteriorName validates custom interior name according to legacy store.cgi:nazukeru rules:
-// - Max 8 characters
-// - No forbidden characters: , ; " ' & < > @ ＠ and spaces
+// ValidateInteriorName applies the legacy ＠なづける rules: 1..8 characters,
+// no whitespace and none of , ; " ' & < > ＠ (ASCII @ and / are allowed).
 func ValidateInteriorName(name string) error {
-	trimmed := strings.TrimSpace(name)
-	if trimmed == "" {
-		return ErrInvalidInteriorName
-	}
-	if utf8.RuneCountInString(trimmed) > MaxInteriorNameLen {
-		return ErrInvalidInteriorName
-	}
-	if strings.ContainsAny(trimmed, " ,;\"'&<>@　") || strings.Contains(trimmed, "＠") {
+	if !validLegacyName(name, MaxInteriorNameLen, ",;\"'&<>＠") {
 		return ErrInvalidInteriorName
 	}
 	return nil
+}
+
+func validLegacyName(name string, maxLen int, forbidden string) bool {
+	n := utf8.RuneCountInString(name)
+	return n > 0 && n <= maxLen && !strings.ContainsAny(name, forbidden) && !strings.ContainsFunc(name, unicode.IsSpace)
 }

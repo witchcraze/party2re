@@ -238,6 +238,17 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "fleamarket_list", Label: "フリーマーケット出品", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "price"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "fleamarket_purchase", Label: "フリーマーケット購入", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
 	{ID: "fleamarket_cancel", Label: "フリーマーケット出品取消", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_build", Label: "みせ", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"town_id", "house_style"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
+	{ID: "store_list_gold", Label: "しゅっぴん", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "price"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_list_barter", Label: "こうかん（出品）", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "wish_item_name"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_withdraw", Label: "もどす", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"sale_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_buy", Label: "かう", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"sale_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
+	{ID: "store_trade", Label: "こうかん", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"sale_id", "item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_rename", Label: "かんばん", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"store_name"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_wallpaper", Label: "かべがみ", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"wallpaper"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_interior_add", Label: "いんてりあ", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"furniture_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_interior_rename", Label: "なづける", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"interior_id", "name"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "store_interior_clean", Label: "かたづけ", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
 	// Category: shop (Commerce & Specialty Stores)

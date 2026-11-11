@@ -167,6 +167,10 @@ func (m *mockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corech
 	return m.FindByID(ctx, id)
 }
 
+func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character) error {
+	return m.Save(ctx, char)
+}
+
 func (m *mockCharRepo) Save(ctx context.Context, char corecharacter.Character) error {
 	m.chars[char.ID] = char
 	return nil
@@ -259,12 +263,12 @@ func TestBuildStore(t *testing.T) {
 	ctx := context.Background()
 
 	// Success
-	res, err := svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	res, err := svc.BuildStore(ctx, "c1", "town1", "001")
 	if err != nil {
 		t.Fatalf("BuildStore failed: %v", err)
 	}
-	if res.StoreName != "マイショップ" {
-		t.Errorf("expected store name マイショップ, got %s", res.StoreName)
+	if res.StoreName != "@Player1の店@" {
+		t.Errorf("expected legacy default store name, got %s", res.StoreName)
 	}
 	c1, _ := charRepo.FindByID(ctx, "c1")
 	if c1.Money != 50000 {
@@ -272,19 +276,19 @@ func TestBuildStore(t *testing.T) {
 	}
 
 	// Already owns store
-	_, err = svc.BuildStore(ctx, "c1", "town1", "001", "二号店")
+	_, err = svc.BuildStore(ctx, "c1", "town1", "001")
 	if err != store.ErrAlreadyOwnsStore {
 		t.Errorf("expected ErrAlreadyOwnsStore, got %v", err)
 	}
 
 	// Invalid house style
-	_, err = svc.BuildStore(ctx, "c2", "town1", "999", "店")
+	_, err = svc.BuildStore(ctx, "c2", "town1", "999")
 	if err != store.ErrInvalidHouseStyle {
 		t.Errorf("expected ErrInvalidHouseStyle, got %v", err)
 	}
 
 	// Invalid town
-	_, err = svc.BuildStore(ctx, "c2", "town99", "001", "店")
+	_, err = svc.BuildStore(ctx, "c2", "town99", "001")
 	if err != store.ErrInvalidTownID {
 		t.Errorf("expected ErrInvalidTownID, got %v", err)
 	}
@@ -293,9 +297,206 @@ func TestBuildStore(t *testing.T) {
 	c2, _ := charRepo.FindByID(ctx, "c2")
 	_ = c2.DeductMoney(95000)
 	_ = charRepo.Save(ctx, c2)
-	_, err = svc.BuildStore(ctx, "c2", "town1", "001", "店")
+	_, err = svc.BuildStore(ctx, "c2", "town1", "001")
 	if err != store.ErrInsufficientFunds {
 		t.Errorf("expected ErrInsufficientFunds, got %v", err)
+	}
+}
+
+type failingGuildPoints struct{ err error }
+
+func (f failingGuildPoints) AddGuildPoints(context.Context, string, int) error { return f.err }
+
+func TestBuildStore_LegacyRules(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("rebuild keeps registered name and wallpaper", func(t *testing.T) {
+		svc, repo, charRepo, _, _ := setupTestService(t)
+		if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+			t.Fatal(err)
+		}
+		c1, _ := charRepo.FindByID(ctx, "c1")
+		_ = c1.AddMoney(100000)
+		_ = charRepo.Save(ctx, c1)
+		if err := svc.ChangeStoreName(ctx, "c1", "新店名"); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ChangeWallpaper(ctx, "c1", "farm"); err != nil {
+			t.Fatal(err)
+		}
+		st, _ := repo.GetStoreByCharacterID(ctx, "c1")
+		st.ExpiresAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		_ = repo.SaveStore(ctx, st)
+		res, err := svc.BuildStore(ctx, "c1", "town2", "005")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := repo.GetStoreByCharacterID(ctx, "c1")
+		if res.StoreName != "新店名" || got.ID != st.ID || got.Wallpaper != "farm" || got.TownID != "town2" {
+			t.Fatalf("rebuild = %+v / %+v", res, got)
+		}
+	})
+
+	t.Run("capacity is checked before an owned store", func(t *testing.T) {
+		svc, repo, _, _, _ := setupTestService(t)
+		if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+			t.Fatal(err)
+		}
+		for i := range store.MaxTownStores - 1 {
+			_ = repo.SaveStore(ctx, store.Store{ID: fmt.Sprintf("other-%d", i), CharacterID: fmt.Sprintf("o%d", i), TownID: "town1",
+				ExpiresAt: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)})
+		}
+		if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); !errors.Is(err, store.ErrTownMaxStoresReached) {
+			t.Fatalf("err = %v, want town capacity first", err)
+		}
+	})
+
+	t.Run("guild point failure rolls the build back", func(t *testing.T) {
+		svc, repo, _, _, _ := setupTestService(t)
+		gpErr := errors.New("guild down")
+		store.WithGuildPoints(failingGuildPoints{gpErr})(svc)
+		if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); !errors.Is(err, gpErr) {
+			t.Fatalf("err = %v, want %v", err, gpErr)
+		}
+		_ = repo
+	})
+}
+
+func TestStoreNames_LegacyValidation(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, _, _, _ := setupTestService(t)
+	if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{" 店", "店\t", "a/b", "店@"} {
+		if err := svc.ChangeStoreName(ctx, "c1", name); !errors.Is(err, store.ErrInvalidStoreName) {
+			t.Errorf("ChangeStoreName(%q) = %v", name, err)
+		}
+	}
+	if err := svc.ChangeStoreName(ctx, "c1", "@Player1の店@"); !errors.Is(err, store.ErrInvalidStoreName) {
+		t.Errorf("own default name contains @: %v", err)
+	}
+	if err := svc.ChangeStoreName(ctx, "c1", "新店名"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ChangeStoreName(ctx, "c1", "新店名"); !errors.Is(err, store.ErrStoreNameTaken) {
+		t.Errorf("own current name = %v, want taken", err)
+	}
+	if err := store.ValidateInteriorName("a@b/c"); err != nil {
+		t.Errorf("interior ASCII @ and / are legacy-valid: %v", err)
+	}
+	for _, name := range []string{" 机", "机＠", "机;"} {
+		if err := store.ValidateInteriorName(name); !errors.Is(err, store.ErrInvalidInteriorName) {
+			t.Errorf("ValidateInteriorName(%q) = %v", name, err)
+		}
+	}
+	_ = repo
+}
+
+type erroringStoreRepo struct {
+	*mockStoreRepo
+	err error
+}
+
+func (r erroringStoreRepo) GetStoreByCharacterID(context.Context, string) (store.Store, error) {
+	return store.Store{}, r.err
+}
+
+func TestStore_ReadErrorsPropagate(t *testing.T) {
+	ctx := context.Background()
+	dbErr := errors.New("db down")
+
+	t.Run("owner lookup in mutations", func(t *testing.T) {
+		_, repo, charRepo, depotRepo, catalog := setupTestService(t)
+		svc := store.NewService(erroringStoreRepo{repo, dbErr}, charRepo, depotRepo, catalog, &mockTxProvider{})
+		for name, err := range map[string]error{
+			"build":  func() error { _, err := svc.BuildStore(ctx, "c1", "town1", "001"); return err }(),
+			"rename": svc.ChangeStoreName(ctx, "c1", "店"),
+			"clean":  svc.CleanInteriors(ctx, "c1"),
+		} {
+			if !errors.Is(err, dbErr) {
+				t.Errorf("%s err = %v, want %v", name, err, dbErr)
+			}
+		}
+	})
+
+	t.Run("store owner read", func(t *testing.T) {
+		svc, repo, charRepo, _, _ := setupTestService(t)
+		if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+			t.Fatal(err)
+		}
+		st, _ := repo.GetStoreByCharacterID(ctx, "c1")
+		delete(charRepo.chars, "c1")
+		if _, err := svc.GetStore(ctx, st.ID); !errors.Is(err, corecharacter.ErrNotFound) {
+			t.Fatalf("GetStore err = %v", err)
+		}
+	})
+}
+
+func TestStore_ExpiredStoreRejectsVisitorsAndOwner(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, _, depotRepo, _ := setupTestService(t)
+	if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+		t.Fatal(err)
+	}
+	_ = depotRepo.Save(ctx, depot.Depot{CharacterID: "c1", Capacity: 10, Items: []coreitem.Instance{
+		{ID: "a", DefinitionID: "wpn_001", Quantity: 1}, {ID: "b", DefinitionID: "wpn_002", Quantity: 1}}})
+	_ = depotRepo.Save(ctx, depot.Depot{CharacterID: "c2", Capacity: 10, Items: []coreitem.Instance{{ID: "herb", DefinitionID: "itm_001", Quantity: 1}}})
+	gold, err := svc.ListGoldItem(ctx, "c1", "a", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	barter, err := svc.ListBarterItem(ctx, "c1", "b", "やくそう")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ := repo.GetStoreByCharacterID(ctx, "c1")
+	st.ExpiresAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	_ = repo.SaveStore(ctx, st)
+	for name, err := range map[string]error{
+		"buy":      svc.BuyItem(ctx, "c2", gold.ID),
+		"trade":    svc.TradeItem(ctx, "c2", barter.ID, "herb"),
+		"withdraw": svc.WithdrawListing(ctx, "c1", gold.ID),
+	} {
+		if !errors.Is(err, store.ErrStoreExpired) {
+			t.Errorf("%s err = %v, want ErrStoreExpired", name, err)
+		}
+	}
+	if len(repo.sales) != 2 {
+		t.Fatalf("listings changed: %d", len(repo.sales))
+	}
+}
+
+func TestGetStore_LegacySaleOrder(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, _, _, catalog := setupTestService(t)
+	for _, id := range []string{"weapon-001", "weapon-002", "item-001"} {
+		catalog.items[id] = coreitem.Definition{ID: id, Name: id}
+	}
+	if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := repo.GetStoreByCharacterID(ctx, "c1")
+	for _, sale := range []store.Sale{
+		{ID: "barter", SlotNumber: 1, ItemDefinitionID: "weapon-001", SaleType: store.SaleTypeBarter},
+		{ID: "item", SlotNumber: 2, ItemDefinitionID: "item-001", SaleType: store.SaleTypeGold, Price: 1},
+		{ID: "sword-cheap", SlotNumber: 3, ItemDefinitionID: "weapon-002", SaleType: store.SaleTypeGold, Price: 10},
+		{ID: "stick", SlotNumber: 4, ItemDefinitionID: "weapon-001", SaleType: store.SaleTypeGold, Price: 99},
+		{ID: "sword-dear", SlotNumber: 5, ItemDefinitionID: "weapon-002", SaleType: store.SaleTypeGold, Price: 5},
+	} {
+		sale.StoreID = st.ID
+		_ = repo.SaveSale(ctx, sale)
+	}
+	details, err := svc.GetStore(ctx, st.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, sale := range details.Sales {
+		got = append(got, sale.ID)
+	}
+	if want := []string{"stick", "sword-dear", "sword-cheap", "item", "barter"}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("order = %v, want %v", got, want)
 	}
 }
 
@@ -304,7 +505,7 @@ func TestStoreSalesAndTrading(t *testing.T) {
 	ctx := context.Background()
 
 	// Build store for c1
-	_, err := svc.BuildStore(ctx, "c1", "town1", "001", "店一号")
+	_, err := svc.BuildStore(ctx, "c1", "town1", "001")
 	if err != nil {
 		t.Fatalf("BuildStore failed: %v", err)
 	}
@@ -405,7 +606,7 @@ func TestWithdrawListing(t *testing.T) {
 	svc, _, _, depotRepo, _ := setupTestService(t)
 	ctx := context.Background()
 
-	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "店")
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001")
 	dep, _ := depotRepo.FindByCharacterID(ctx, "c1")
 	dep.Items = []coreitem.Instance{{ID: "i1", DefinitionID: "wpn_001", Quantity: 1}}
 	_ = depotRepo.Save(ctx, dep)
@@ -430,7 +631,7 @@ func TestStoreCustomization(t *testing.T) {
 	svc, _, charRepo, _, _ := setupTestService(t)
 	ctx := context.Background()
 
-	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "元店名")
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001")
 
 	// ChangeStoreName (requires 5,000 G balance, 0 G deducted)
 	err := svc.ChangeStoreName(ctx, "c1", "新店名")
@@ -482,7 +683,7 @@ func TestStoreCustomization_ZeroCostAndBoundary(t *testing.T) {
 	svc, _, charRepo, _, _ := setupTestService(t)
 	ctx := context.Background()
 
-	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001")
 
 	// 1. Signboard renaming boundary tests
 	// Insufficient funds: 4,999 G (< 5,000 G)
@@ -573,7 +774,7 @@ func TestStoreService_BuyItem_HighJobLevel_ExceedsInitialCapacity(t *testing.T) 
 	ctx := context.Background()
 
 	// Seller c1 has store and listed item
-	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001")
 	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
 	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "inst_wpn1", DefinitionID: "wpn_001", Quantity: 1})
 	_ = depotRepo.Save(ctx, dep1)
@@ -615,7 +816,7 @@ func TestStoreService_BuyItem_Stackable_WhenDepotAtCapacity(t *testing.T) {
 	ctx := context.Background()
 
 	// Seller c1 has store and listed stackable item itm_001 (やくそう)
-	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001")
 	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
 	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "inst_herb1", DefinitionID: "itm_001", Quantity: 2})
 	_ = depotRepo.Save(ctx, dep1)
@@ -674,7 +875,7 @@ func TestStoreService_WithdrawListing_HighJobLevel_ExceedsInitialCapacity(t *tes
 	c1.JobLevel = 20
 	charRepo.chars["c1"] = c1
 
-	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001")
 	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
 	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "inst_wpn1", DefinitionID: "wpn_001", Quantity: 1})
 	_ = depotRepo.Save(ctx, dep1)
@@ -720,7 +921,7 @@ func TestStoreService_TradeItem_HighJobLevel_ExceedsInitialCapacity(t *testing.T
 	c2.JobLevel = 20
 	charRepo.chars["c2"] = c2
 
-	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001")
 	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
 	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "inst_wpn2", DefinitionID: "wpn_002", Quantity: 1})
 	_ = depotRepo.Save(ctx, dep1)
@@ -772,135 +973,35 @@ func TestStoreService_TradeItem_HighJobLevel_ExceedsInitialCapacity(t *testing.T
 	}
 }
 
-func TestStoreService_CollectionRecordingOnBuyAndTrade(t *testing.T) {
+// Legacy kau/kokan_other do not call add_collection for the buyer.
+func TestStoreService_BuyAndTradeDoNotRecordCollection(t *testing.T) {
 	ctx := context.Background()
-	svc, _, charRepo, depotRepo, catalog := setupTestService(t)
-
-	// Enrich catalog definitions with slots so categories resolve cleanly
-	catalog.items["wpn_001"] = coreitem.Definition{
-		ID:    "wpn_001",
-		Name:  "ひのきのぼう",
-		Price: 100,
-		Slot:  coreitem.SlotMainHand,
-	}
-	catalog.items["arm_001"] = coreitem.Definition{
-		ID:    "arm_001",
-		Name:  "布の服",
-		Price: 200,
-		Slot:  coreitem.SlotBody,
-	}
-	catalog.items["itm_001"] = coreitem.Definition{
-		ID:    "itm_001",
-		Name:  "やくそう",
-		Price: 10,
-		Slot:  coreitem.SlotNone,
-	}
-
+	svc, _, _, depotRepo, _ := setupTestService(t)
 	collector := &mockCollectionRecorder{}
 	svc.SetCollectionRecorder(collector)
-
-	// Build a store for c1
-	if _, err := svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ"); err != nil {
+	if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
 		t.Fatalf("BuildStore failed: %v", err)
 	}
-
-	// 1. Test BuyItem collection recording
-	// Populate c1 depot with wpn_001
-	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
-	dep1.Items = []coreitem.Instance{
-		{ID: "c1_wpn", DefinitionID: "wpn_001", Quantity: 1},
-	}
-	_ = depotRepo.Save(ctx, dep1)
-
-	// c1 lists wpn_001 for 1000G
+	_ = depotRepo.Save(ctx, depot.Depot{CharacterID: "c1", Capacity: 10, Items: []coreitem.Instance{
+		{ID: "c1_wpn", DefinitionID: "wpn_001", Quantity: 1}, {ID: "c1_wpn2", DefinitionID: "wpn_002", Quantity: 1}}})
+	_ = depotRepo.Save(ctx, depot.Depot{CharacterID: "c2", Capacity: 10, Items: []coreitem.Instance{{ID: "c2_herb", DefinitionID: "itm_001", Quantity: 1}}})
 	sale, err := svc.ListGoldItem(ctx, "c1", "c1_wpn", 1000)
 	if err != nil {
 		t.Fatalf("ListGoldItem failed: %v", err)
 	}
-
-	// c2 buys wpn_001
-	if err := svc.BuyItem(ctx, "c2", sale.ID); err != nil {
-		t.Fatalf("BuyItem failed: %v", err)
-	}
-
-	if len(collector.calls) != 1 {
-		t.Fatalf("expected 1 collection record call after BuyItem, got %d", len(collector.calls))
-	}
-	buyCall := collector.calls[0]
-	if buyCall.CharacterID != "c2" || buyCall.ItemID != "wpn_001" || buyCall.ItemName != "ひのきのぼう" || buyCall.Category != "weapon" {
-		t.Errorf("unexpected collection call after BuyItem: %+v", buyCall)
-	}
-
-	// 2. Test TradeItem collection recording
-	// Populate c1 depot with arm_001
-	dep1, _ = depotRepo.FindByCharacterID(ctx, "c1")
-	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "c1_arm", DefinitionID: "arm_001", Quantity: 1})
-	_ = depotRepo.Save(ctx, dep1)
-
-	// c1 lists arm_001 for barter wishing for "やくそう"
-	barterSale, err := svc.ListBarterItem(ctx, "c1", "c1_arm", "やくそう")
+	barter, err := svc.ListBarterItem(ctx, "c1", "c1_wpn2", "やくそう")
 	if err != nil {
 		t.Fatalf("ListBarterItem failed: %v", err)
 	}
-
-	// Populate c2 depot with itm_001
-	dep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
-	dep2.Items = append(dep2.Items, coreitem.Instance{ID: "c2_herb", DefinitionID: "itm_001", Quantity: 1})
-	_ = depotRepo.Save(ctx, dep2)
-
-	// c2 trades for arm_001
-	if err := svc.TradeItem(ctx, "c2", barterSale.ID, "c2_herb"); err != nil {
+	if err := svc.BuyItem(ctx, "c2", sale.ID); err != nil {
+		t.Fatalf("BuyItem failed: %v", err)
+	}
+	if err := svc.TradeItem(ctx, "c2", barter.ID, "c2_herb"); err != nil {
 		t.Fatalf("TradeItem failed: %v", err)
 	}
-
-	if len(collector.calls) != 2 {
-		t.Fatalf("expected 2 collection record calls after TradeItem, got %d", len(collector.calls))
+	if len(collector.calls) != 0 {
+		t.Fatalf("collection calls = %+v, want none", collector.calls)
 	}
-	tradeCall := collector.calls[1]
-	if tradeCall.CharacterID != "c2" || tradeCall.ItemID != "arm_001" || tradeCall.ItemName != "布の服" || tradeCall.Category != "armor" {
-		t.Errorf("unexpected collection call after TradeItem: %+v", tradeCall)
-	}
-
-	// 3. Test Error-Propagation: collection failure must abort purchase or barter
-	colErr := fmt.Errorf("database collection failure")
-	collector.err = colErr
-
-	// c1 lists another wpn_001
-	dep1, _ = depotRepo.FindByCharacterID(ctx, "c1")
-	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "c1_wpn2", DefinitionID: "wpn_001", Quantity: 1})
-	_ = depotRepo.Save(ctx, dep1)
-
-	sale2, err := svc.ListGoldItem(ctx, "c1", "c1_wpn2", 500)
-	if err != nil {
-		t.Fatalf("ListGoldItem 2 failed: %v", err)
-	}
-
-	// BuyItem should fail with collector error
-	if err := svc.BuyItem(ctx, "c2", sale2.ID); !errors.Is(err, colErr) {
-		t.Errorf("BuyItem expected collection error %v, got: %v", colErr, err)
-	}
-
-	// c1 lists arm_001 for barter
-	dep1, _ = depotRepo.FindByCharacterID(ctx, "c1")
-	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "c1_arm2", DefinitionID: "arm_001", Quantity: 1})
-	_ = depotRepo.Save(ctx, dep1)
-
-	barterSale2, err := svc.ListBarterItem(ctx, "c1", "c1_arm2", "やくそう")
-	if err != nil {
-		t.Fatalf("ListBarterItem 2 failed: %v", err)
-	}
-
-	dep2, _ = depotRepo.FindByCharacterID(ctx, "c2")
-	dep2.Items = append(dep2.Items, coreitem.Instance{ID: "c2_herb2", DefinitionID: "itm_001", Quantity: 1})
-	_ = depotRepo.Save(ctx, dep2)
-
-	// TradeItem should fail with collector error
-	if err := svc.TradeItem(ctx, "c2", barterSale2.ID, "c2_herb2"); !errors.Is(err, colErr) {
-		t.Errorf("TradeItem expected collection error %v, got: %v", colErr, err)
-	}
-
-	// Suppress unused charRepo warning
-	_ = charRepo
 }
 
 func TestStoreService_ChangeWallpaper_RestoredChoices(t *testing.T) {
@@ -921,7 +1022,7 @@ func TestStoreService_ChangeWallpaper_RestoredChoices(t *testing.T) {
 			svc, repo, charRepo, _, _ := setupTestService(t)
 			ctx := context.Background()
 
-			_, err := svc.BuildStore(ctx, "c1", "town1", "001", "テスト店")
+			_, err := svc.BuildStore(ctx, "c1", "town1", "001")
 			if err != nil {
 				t.Fatalf("BuildStore failed: %v", err)
 			}
@@ -965,7 +1066,7 @@ func TestStoreService_ChangeWallpaper_RestoredChoices(t *testing.T) {
 	t.Run("invalid_key_rejected", func(t *testing.T) {
 		svc, repo, charRepo, _, _ := setupTestService(t)
 		ctx := context.Background()
-		_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "テスト店")
+		_, _ = svc.BuildStore(ctx, "c1", "town1", "001")
 		char, _ := charRepo.FindByID(ctx, "c1")
 		char.Money = 50000
 		_ = charRepo.Save(ctx, char)
