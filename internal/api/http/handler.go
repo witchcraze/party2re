@@ -455,7 +455,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/tavern/delivery", h.handleTavernReserveDelivery)
 	mux.HandleFunc("GET /characters/{id}/tavern/delivery", h.handleGetTavernDelivery)
 	mux.HandleFunc("DELETE /characters/{id}/tavern/delivery", h.handleTavernCancelDelivery)
-	mux.HandleFunc("POST /characters/{id}/tavern/delivery/claim", h.handleTavernClaimDelivery)
 	mux.HandleFunc("POST /characters/{id}/tavern/talk", h.handleTavernTalk)
 
 	// Plantation

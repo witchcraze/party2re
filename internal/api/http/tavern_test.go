@@ -21,7 +21,6 @@ type stubTavernService struct {
 	reserveDeliveryFn func(ctx context.Context, characterID string, itemID string) (tavern.DeliveryReservation, error)
 	getDeliveryFn     func(ctx context.Context, characterID string) (tavern.DeliveryReservation, error)
 	cancelDeliveryFn  func(ctx context.Context, characterID string) error
-	claimDeliveryFn   func(ctx context.Context, characterID string) (tavern.OrderResult, error)
 	talkFn            func(ctx context.Context, characterID string) (tavern.TalkResult, error)
 	resetFullnessFn   func(ctx context.Context, characterID string) error
 }
@@ -114,22 +113,6 @@ func (s *stubTavernService) CancelDelivery(ctx context.Context, characterID stri
 		return s.cancelDeliveryFn(ctx, characterID)
 	}
 	return nil
-}
-
-func (s *stubTavernService) ClaimDelivery(ctx context.Context, characterID string) (tavern.OrderResult, error) {
-	if s.claimDeliveryFn != nil {
-		return s.claimDeliveryFn(ctx, characterID)
-	}
-	return tavern.OrderResult{
-		CharacterID:   characterID,
-		Item:          tavern.MenuItem{ID: "tavern_omelet_rice", Name: "ふわとろオムライス", Price: 750},
-		HPHealed:      80,
-		MPHealed:      30,
-		CurrentHP:     100,
-		CurrentMP:     50,
-		RemainingGold: 250,
-		Message:       "配達完了！",
-	}, nil
 }
 
 func (s *stubTavernService) Talk(ctx context.Context, characterID string) (tavern.TalkResult, error) {
@@ -256,14 +239,14 @@ func TestTavern_DeliveryHTTP(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d: %s", recGet.Code, recGet.Body.String())
 	}
 
-	// 3. Claim delivery
+	// 3. Delivery settles only through the adventure-completion hook; no standalone claim route exists.
 	reqClaim := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/tavern/delivery/claim", nil)
 	reqClaim.Header.Set("Authorization", "Bearer valid-token")
 	recClaim := httptest.NewRecorder()
 	router.ServeHTTP(recClaim, reqClaim)
 
-	if recClaim.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d: %s", recClaim.Code, recClaim.Body.String())
+	if recClaim.Code != http.StatusNotFound {
+		t.Fatalf("expected standalone claim to be 404, got %d: %s", recClaim.Code, recClaim.Body.String())
 	}
 
 	// 4. Cancel delivery

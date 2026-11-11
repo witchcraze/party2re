@@ -18,7 +18,6 @@ type TavernService interface {
 	ReserveDelivery(ctx context.Context, characterID string, itemID string) (tavern.DeliveryReservation, error)
 	GetDelivery(ctx context.Context, characterID string) (tavern.DeliveryReservation, error)
 	CancelDelivery(ctx context.Context, characterID string) error
-	ClaimDelivery(ctx context.Context, characterID string) (tavern.OrderResult, error)
 	Talk(ctx context.Context, characterID string) (tavern.TalkResult, error)
 	ResetFullness(ctx context.Context, characterID string) error
 }
@@ -154,24 +153,6 @@ func (h *Handler) handleTavernCancelDelivery(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusOK, map[string]any{
 			"message": "delivery reservation cancelled successfully",
 		})
-	})
-}
-
-func (h *Handler) handleTavernClaimDelivery(w http.ResponseWriter, r *http.Request) {
-	if h.tavern == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("tavern service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		result, err := h.tavern.ClaimDelivery(r.Context(), char.ID)
-		if err != nil {
-			h.writeTavernError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, result)
 	})
 }
 
