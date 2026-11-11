@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/gemstore"
@@ -57,10 +56,9 @@ func TestSynthesizeGem_ItemMaterials(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name, recipe, gem, item, want string
-		inDepot                       bool
 	}{
-		{"renamed item in depot", "recipe_burst_sky", "gem_sky_atk_2", "item-059", "gem_burst_sky", true},
-		{"unchanged item in inventory", "recipe_dance_combo", "gem_combo_1", "item-008", "gem_dance_combo", false},
+		{"renamed item", "recipe_burst_sky", "gem_sky_atk_2", "item-059", "gem_burst_sky"},
+		{"unchanged item", "recipe_dance_combo", "gem_combo_1", "item-008", "gem_dance_combo"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -74,18 +72,10 @@ func TestSynthesizeGem_ItemMaterials(t *testing.T) {
 				t.Fatal(err)
 			}
 			mat, _ := coreitem.NewInstance(tc.item, 1)
-			if tc.inDepot {
-				dep, _ := depot.NewDepot(char.ID)
-				dep.Items = append(dep.Items, mat)
-				if err := depotRepo.Save(ctx, dep); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				inv, _ := coreinventory.New(char.ID)
-				if err := inv.Add(mat); err != nil {
-					t.Fatal(err)
-				}
-				invRepo.inventories[char.ID] = inv
+			dep, _ := depot.NewDepot(char.ID)
+			dep.Items = append(dep.Items, mat)
+			if err := depotRepo.Save(ctx, dep); err != nil {
+				t.Fatal(err)
 			}
 
 			svc, err := gemstore.NewService(catalog, charRepo, invRepo,
@@ -102,7 +92,7 @@ func TestSynthesizeGem_ItemMaterials(t *testing.T) {
 			}
 			box, _ := boxRepo.FindByCharacterID(ctx, char.ID)
 			inv, _ := invRepo.FindByCharacterID(ctx, char.ID)
-			dep, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+			dep, _ = depotRepo.FindByCharacterID(ctx, char.ID)
 			if res.CreatedGem.ID != tc.want || len(box.Items) != 1 || box.Items[0].DefinitionID != tc.want ||
 				len(inv.Items) != 0 || len(dep.Items) != 0 {
 				t.Fatalf("want only %s left, got box=%+v inv=%+v depot=%+v", tc.want, box.Items, inv.Items, dep.Items)

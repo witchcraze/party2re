@@ -80,6 +80,10 @@ func gemStoreDBRouter(t *testing.T, ctx context.Context) (http.Handler, corechar
 	if err != nil {
 		t.Fatal(err)
 	}
+	depots, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	items := make([]item.Instance, 2)
 	for i, def := range []string{"gem_atk_2", "gem_atk_1"} {
 		items[i], err = item.NewInstance(def, 1)
@@ -91,7 +95,7 @@ func gemStoreDBRouter(t *testing.T, ctx context.Context) (http.Handler, corechar
 		t.Fatal(err)
 	}
 	storage := &gemStoreGatewayBoxes{GemBoxRepository: boxes, db: db}
-	svc, err := gemstore.NewService(catalog, chars, inv, gemstore.WithGemBoxRepository(storage), gemstore.WithTransactionProvider(database.NewTransactionProvider(db)), gemstore.WithItemDefinitionProvider(itemCatalog))
+	svc, err := gemstore.NewService(catalog, chars, inv, gemstore.WithGemBoxRepository(storage), gemstore.WithTransactionProvider(database.NewTransactionProvider(db)), gemstore.WithItemDefinitionProvider(itemCatalog), gemstore.WithDepotRepository(depots))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,11 +182,11 @@ func TestGemStoreGatewaySynthesisWithRenamedItemRollsBack(t *testing.T) {
 			if err := boxes.GemBoxRepository.Save(ctx, gemstore.GemBox{CharacterID: actor.ID, Capacity: 5, Items: []item.Instance{gem}}); err != nil {
 				t.Fatal(err)
 			}
-			invRepo, err := database.NewInventoryRepository(boxes.db)
+			depots, err := database.NewDepotRepository(boxes.db)
 			if err != nil {
 				t.Fatal(err)
 			}
-			inv, err := invRepo.FindByCharacterID(ctx, actor.ID)
+			dep, err := depots.FindByCharacterID(ctx, actor.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -190,10 +194,10 @@ func TestGemStoreGatewaySynthesisWithRenamedItemRollsBack(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := inv.Add(reins); err != nil {
+			if err := dep.AddItem(reins); err != nil {
 				t.Fatal(err)
 			}
-			if err := invRepo.Save(ctx, inv); err != nil {
+			if err := depots.Save(ctx, dep); err != nil {
 				t.Fatal(err)
 			}
 			boxBefore, err := boxes.FindByCharacterID(ctx, actor.ID)
@@ -206,19 +210,19 @@ func TestGemStoreGatewaySynthesisWithRenamedItemRollsBack(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			invAfter, err := invRepo.FindByCharacterID(ctx, actor.ID)
+			depAfter, err := depots.FindByCharacterID(ctx, actor.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if fail {
 				assertGatewayError(t, got, "EXECUTION_FAILED")
-				if status != 500 || !reflect.DeepEqual(boxBefore, boxAfter) || !reflect.DeepEqual(inv.Items, invAfter.Items) {
-					t.Fatalf("partial mutation: %d box=%+v inv=%+v", status, boxAfter, invAfter)
+				if status != 500 || !reflect.DeepEqual(boxBefore, boxAfter) || !reflect.DeepEqual(dep.Items, depAfter.Items) {
+					t.Fatalf("partial mutation: %d box=%+v depot=%+v", status, boxAfter, depAfter)
 				}
 				return
 			}
-			if status != 200 || len(boxAfter.Items) != 1 || boxAfter.Items[0].DefinitionID != "gem_burst_sky" || len(invAfter.Items) != 0 {
-				t.Fatalf("synthesis lost assets: %d %s box=%+v inv=%+v", status, got, boxAfter, invAfter)
+			if status != 200 || len(boxAfter.Items) != 1 || boxAfter.Items[0].DefinitionID != "gem_burst_sky" || len(depAfter.Items) != 0 {
+				t.Fatalf("synthesis lost assets: %d %s box=%+v depot=%+v", status, got, boxAfter, depAfter)
 			}
 		})
 	}
