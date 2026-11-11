@@ -1,74 +1,12 @@
 # Town Black Market, Rare Point Barter & NPC @闇商人 Design
 
-## Overview
+The Black Market (`internal/blackmarket`, legacy `party2/lib/black_market.cgi`, NPC `@闇商人` at `闇市場`) is a barter exchange, not a gold shop: characters sacrifice rare items for Rare/U-Rare points and trade those points for prizes delivered to their Depot. Eligible items, yields and prizes are owned by `internal/blackmarket/data/`.
 
-The Black Market module (`internal/blackmarket`) is a clean-room reconstruction of the underground black market barter system matching the original Party2 Perl CGI specification (`party2/lib/black_market.cgi`), located at `闇市場` and operated by NPC `@闇商人`.
+## Access
 
-In authentic Party2, the Black Market is not a gold shop. It operates purely as a barter exchange where characters sacrifice rare items in exchange for Rare Points and U-Rare Points, and redeem those points for exclusive equipment and artifacts that are sent directly to the character's Depot (`預かり所`).
+Legacy `闇市場` is reachable only through the Oracle's hidden `＠やみいちば` action, which returns without moving the character below `job_lv` 15 (`lib/goods.cgi:51–56`). `CheckEligibility` applies the same threshold to scene entry, town discovery, the two commands and the retained NPC operations; rejected operations return `ErrAccessDenied` without moving assets.
 
----
-
-## Domain Rules & Systems
-
-### 1. Eligibility & Access Control
-
-- **Discovery requirement**: Legacy `闇市場` is reachable only through the Oracle's hidden `＠やみいちば` action, which returns without moving the character below `job_lv` 15 (`lib/goods.cgi:51–56`). `CheckEligibility` applies the same threshold to scene entry, town discovery, the two commands and the retained NPC operations; rejected operations return `ErrAccessDenied` without moving assets.
-- **Authentication**: All operations require character ownership authentication.
-
----
-
-### 2. Exclusive Prize Trade Exchange (`TradePrize` / `@とりひき`)
-
-- **Prize Redemption**: Accumulated points can be exchanged for exclusive weapons, armor, accessories, and consumables across two catalogs:
-  - **12 Regular Rare Prizes**:
-    - `bm_prize_087` (時の砂, `item-087`): 1 Rare Point
-    - `bm_prize_057` (気合の霊薬, `item-057`): 4 Rare Points
-    - `bm_prize_060` (シルバーオーブ, `item-060`): 2 Rare Points
-    - `bm_prize_061` (レッドオーブ, `item-061`): 2 Rare Points
-    - `bm_prize_062` (ブルーオーブ, `item-062`): 2 Rare Points
-    - `bm_prize_063` (グリーンオーブ, `item-063`): 2 Rare Points
-    - `bm_prize_064` (イエローオーブ, `item-064`): 2 Rare Points
-    - `bm_prize_065` (パープルオーブ, `item-065`): 2 Rare Points
-    - `bm_prize_237` (歴戦の褒章, `item-237`): 2 Rare Points
-    - `bm_prize_216` (モノリス, `item-216`): 3 Rare Points
-    - `bm_prize_243` (陽炎の追憶記, `item-243`): 3 Rare Points
-    - `bm_prize_207` (未来のカケラ, `item-207`): 10 Rare Points
-  - **12 Ultra-Rare Prizes**:
-    - `bm_uprize_059` (天馬のたづな, `item-059`): 5 U-Rare Points
-    - `bm_uprize_199` (太古の財宝, `item-199`): 5 U-Rare Points
-    - `bm_uprize_246` (クリスタルミラー, `item-246`): 5 U-Rare Points
-    - `bm_uprize_185` (封光鏡, `item-185`): 10 U-Rare Points
-    - `bm_uprize_194` (廻光鏡, `item-194`): 10 U-Rare Points
-    - `bm_uprize_195` (幻光鏡, `item-195`): 10 U-Rare Points
-    - `bm_uprize_258` (異封の箱, `item-258`): 10 U-Rare Points
-    - `bm_uprize_259` (異封の鍵, `item-259`): 10 U-Rare Points
-    - `bm_uprize_255` (妖しい宝珠, `item-255`): 15 U-Rare Points
-    - `bm_uprize_210` (智浄衣, `item-210`): 15 U-Rare Points
-    - `bm_uprize_204` (無心慧, `item-204`): 15 U-Rare Points
-    - `bm_uprize_262` (黒い天馬のたづな, `item-262`): 20 U-Rare Points
-- **Depot Delivery & Capacity Verification**:
-  - Prizes are delivered directly into the character's Depot (`預かり所`), NOT character inventory.
-  - A full Depot still receives the prize, past capacity if needed (`black_market.cgi:118,137`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
-  - Transaction lock sequence: Tier 2 `characters` -> Tier 5 `character_depots` -> Tier 8 `blackmarket_character_points`.
-
----
-
-### 3. Authentic Underworld NPC `@闇商人` Dialogue
-
-- **Presentation Decoupling**: In adherence to `.agents/rules/03-architecture.md §5`, domain service results return pure structured data (`CharacterID`, `NPCName`), while human-facing dialogue lines are formatted at the HTTP transport/presentation layer (`internal/api/http`).
-- **Atmospheric Talk (`Talk`)**: Formats authentic atmospheric underworld quotes matching the legacy CGI:
-  - `"よく来たな…。ここは闇市場だ…"`
-  - `"表の世界では手に入れられない物を取引している…"`
-  - `"物の取引は金では買えないもの…。つまり、魂…ゴホッゴホッ…ではなく、レアアイテムだ…"`
-  - `"お前の魂…ではなく、お前が装備しているレアアイテムをささげろ…"`
-  - `"レアアイテムをささげることによって…お前のレアポイントが増える…"`
-  - `"レアポイントにより取引できるアイテムが違う…"`
-- **Inspection (`Inspect`)**: Formats legacy CGI inspection quote:
-  - `"…お前の魂で取引したいのか？"`
-
----
-
-## 4. Gateway and Retained Routes
+## Gateway and Retained Routes
 
 Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and a paged list of eligible sacrifice candidates through character context. Observation never sacrifices, trades, chooses dialogue or creates a Depot. A required read failure fails the whole observation, and a qualification loss shows `selection_unavailable` with a safe back. See the [context and recovery contract](../architecture/client-agent-api.md).
 
@@ -91,11 +29,3 @@ Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and
 | Shared `はなす` (`lib/system.cgi:240–246`), `shiraberu_npc` (81–83) | `npc_talk`, `npc_inspect` | None: talk logs the word and starts the wait; inspect is private. |
 
 Legacy successful actions also apply the shared action wait and write `npc_com` to the facility log, while list views set `$act_time = 0`. The Gateway now applies the [action wait](../architecture/place-log.md#action-wait-1939); writing these commands' log rows remains [#1941](https://github.com/witchcraze/party2re/issues/1941), and presence remains open.
-
----
-
-## Persistence Architecture
-
-### MariaDB Schemas
-
-SQL definitions are owned by [migrations](../../migrations/).

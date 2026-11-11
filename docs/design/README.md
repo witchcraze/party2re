@@ -101,7 +101,7 @@ graph TD
 - [`fleamarket.md`](fleamarket.md) — Player-to-player free market stalls (server-wide 120 listing ceiling, direct depot transfer).
 - [`auction.md`](auction.md) — Live P2P trade hall (`@おくる`/`@しらべる`) with uninitialized recipient depot auto-provisioning.
 - [`bank.md`](bank.md) — Gold savings deposits and withdrawals with 999,999G wallet clamp.
-- [`black-market.md`](black-market.md) — Rare item sacrifice recycling for Rare Points and 24 equipment/item rewards.
+- [`black-market.md`](black-market.md) — Rare item sacrifice for Rare/U-Rare points and Depot-delivered prizes.
 - [`gemstore.md`](gemstore.md) — Dedicated gem box storage, 55+ synthesis formulas, and Depot orb appraisal.
 - [`medal.md`](medal.md) — Small Medal depot exchange and character lifetime milestone achievements.
 - [`achievements.md`](achievements.md) — Lifetime gameplay milestones, achievement categories, and tracking criteria.
