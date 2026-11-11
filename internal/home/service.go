@@ -54,6 +54,7 @@ type Service struct {
 	onlineCounter          OnlineCounter
 	baseSleepDuration      time.Duration
 	runner                 TransactionRunner
+	txProvider             TransactionProvider
 	petReader              HomePetReader
 	wakeClaimTTL           time.Duration
 	wakeClaimRenewInterval time.Duration

@@ -105,6 +105,15 @@ func (r *HomeRepository) UpdateCompanionName(ctx context.Context, characterID, c
 	return stored, nil
 }
 
+// LockTownHouseCapacityForUpdate takes the town's house capacity row lock, creating the row if absent.
+func (r *HomeRepository) LockTownHouseCapacityForUpdate(ctx context.Context, townID string) error {
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT INTO house_town_capacity_lock (town_id) VALUES (?)
+		ON DUPLICATE KEY UPDATE town_id = town_id
+	`, townID)
+	return err
+}
+
 // CountActiveTownHouses returns the count of active houses in the specified town.
 func (r *HomeRepository) CountActiveTownHouses(ctx context.Context, townID string, now time.Time) (int, error) {
 	var count int

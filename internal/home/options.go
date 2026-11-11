@@ -200,6 +200,18 @@ func WithTransactionRunner(runner TransactionRunner) ServiceOption {
 	}
 }
 
+// TransactionProvider starts an outer transaction that the runner joins.
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// WithTransactionProvider lets BuildHouse take its town lock before the runner locks the character.
+func WithTransactionProvider(p TransactionProvider) ServiceOption {
+	return func(s *Service) {
+		s.txProvider = p
+	}
+}
+
 // WithEconomy sets the economy service as the transaction runner.
 func WithEconomy(eco *economy.Service) ServiceOption {
 	return func(s *Service) {

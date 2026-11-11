@@ -1037,6 +1037,7 @@ var wireHomeGuildPointsRequiredTables = []string{
 	"characters",
 	"character_depots",
 	"character_homes",
+	"house_town_capacity_lock",
 	"guilds",
 	"guild_members",
 }

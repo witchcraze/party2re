@@ -13,6 +13,8 @@ type EstateRepository interface {
 	GetHome(ctx context.Context, characterID string) (CharacterHome, error)
 	SaveHome(ctx context.Context, home CharacterHome) error
 	UpdateCompanionName(ctx context.Context, characterID, companionName string, updatedAt time.Time) (CharacterHome, error)
+	// LockTownHouseCapacityForUpdate serializes house construction in one town (Rank 0).
+	LockTownHouseCapacityForUpdate(ctx context.Context, townID string) error
 	CountActiveTownHouses(ctx context.Context, townID string, now time.Time) (int, error)
 	FindActiveHomeByCharacterID(ctx context.Context, characterID string, now time.Time) (CharacterHome, error)
 	FindActiveHomeByCharacterName(ctx context.Context, characterName string, now time.Time) (CharacterHome, corecharacter.Character, error)

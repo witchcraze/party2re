@@ -41,44 +41,52 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 	var ownerName string
 	expiresAt := now.Add(time.Duration(t.CycleDays) * 24 * time.Hour)
 
-	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-		ownerName = tc.Character.Name
-
-		// 1-house rule globally: check existing home
-		existingHome, err := s.repo.GetHome(tc.Context, characterID)
-		if err != nil {
+	err := s.inTx(ctx, func(txCtx context.Context) error {
+		// Rank 0 before the runner's character lock: concurrent builders in one
+		// town must not both see a free slot.
+		if err := s.repo.LockTownHouseCapacityForUpdate(txCtx, townID); err != nil {
 			return err
 		}
-		if existingHome.IsActive(now) {
-			return ErrAlreadyOwnsHouse
-		}
+		_, err := s.runner.ExecuteTransaction(txCtx, req, func(tc *economy.TxContext) error {
+			ownerName = tc.Character.Name
 
-		// Max 10 houses in town
-		count, err := s.repo.CountActiveTownHouses(tc.Context, townID, now)
-		if err != nil {
-			return err
-		}
-		if count >= t.MaxHouses {
-			return ErrTownMaxHousesReached
-		}
-
-		// Award guild points if applicable: cycle_days * 10
-		if s.guildPoints != nil {
-			if err := s.guildPoints.AddGuildPoints(tc.Context, characterID, t.CycleDays*10); err != nil {
+			// 1-house rule globally: check existing home
+			existingHome, err := s.repo.GetHome(tc.Context, characterID)
+			if err != nil {
 				return err
 			}
-		}
+			if existingHome.IsActive(now) {
+				return ErrAlreadyOwnsHouse
+			}
 
-		existingHome.CharacterID = characterID
-		existingHome.TownID = t.ID
-		existingHome.HouseStyle = houseStyle
-		existingHome.ExpiresAt = &expiresAt
-		existingHome.UpdatedAt = now
-		if existingHome.CompanionName == "" {
-			existingHome.CompanionName = DefaultCompanionName
-		}
+			// Max 10 houses in town
+			count, err := s.repo.CountActiveTownHouses(tc.Context, townID, now)
+			if err != nil {
+				return err
+			}
+			if count >= t.MaxHouses {
+				return ErrTownMaxHousesReached
+			}
 
-		return s.repo.SaveHome(tc.Context, existingHome)
+			// Award guild points if applicable: cycle_days * 10
+			if s.guildPoints != nil {
+				if err := s.guildPoints.AddGuildPoints(tc.Context, characterID, t.CycleDays*10); err != nil {
+					return err
+				}
+			}
+
+			existingHome.CharacterID = characterID
+			existingHome.TownID = t.ID
+			existingHome.HouseStyle = houseStyle
+			existingHome.ExpiresAt = &expiresAt
+			existingHome.UpdatedAt = now
+			if existingHome.CompanionName == "" {
+				existingHome.CompanionName = DefaultCompanionName
+			}
+
+			return s.repo.SaveHome(tc.Context, existingHome)
+		})
+		return err
 	})
 	if err != nil {
 		if errors.Is(err, economy.ErrInsufficientGold) {
@@ -206,4 +214,13 @@ func (s *Service) SetCharacterColor(ctx context.Context, characterID, color stri
 		return ErrCharacterNotFound
 	}
 	return err
+}
+
+// inTx runs fn in an outer transaction when a provider is configured.
+// shortcut: without a provider (in-memory unit tests) fn runs untransacted; production wires one.
+func (s *Service) inTx(ctx context.Context, fn func(context.Context) error) error {
+	if s.txProvider == nil {
+		return fn(ctx)
+	}
+	return s.txProvider.RunInTx(ctx, fn)
 }
