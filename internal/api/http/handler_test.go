@@ -736,6 +736,18 @@ func TestHandleStartAdventure_Success(t *testing.T) {
 	if resp["floors_cleared"] != float64(10) {
 		t.Errorf("floors_cleared = %v, want 10", resp["floors_cleared"])
 	}
+	adv.PostAdventureMessages = map[string]string{"c1": "酒場からスープが届きました！ HPが20回復した！"}
+	rec = httptest.NewRecorder()
+	req = jsonRequest(t, http.MethodPost, "/adventures", `{"character_id":"c1","stage_id":"stage-01"}`)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	h.Router().ServeHTTP(rec, req)
+	var delivered struct {
+		PostAdventureMessages map[string]string `json:"post_adventure_messages"`
+	}
+	decodeResponseBody(t, rec.Body.Bytes(), &delivered)
+	if rec.Code != http.StatusCreated || delivered.PostAdventureMessages["c1"] != adv.PostAdventureMessages["c1"] {
+		t.Fatalf("delivery message missing: status=%d body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestHandleStartAdventure_Forbidden_DifferentPlayer(t *testing.T) {

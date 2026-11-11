@@ -35,8 +35,13 @@ type VictoryHook func(ctx context.Context, characterID string, monstersDefeated 
 
 // PostAdventureHook is called after an adventure concludes and state is applied.
 // It is invoked as a best-effort side-effect notification.
+// A nonempty message is included in the participant's completion result on success.
 // Hook execution errors are logged via Logger without failing the completed adventure.
-type PostAdventureHook func(ctx context.Context, characterID string) error
+type PostAdventureHook func(ctx context.Context, characterID string) (string, error)
+
+func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
+	s.postAdventureHook = hook
+}
 
 type partyBattleResolver interface {
 	ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)

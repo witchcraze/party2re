@@ -54,31 +54,32 @@ type DungeonCrawlRequest struct {
 
 // DungeonCrawlResult contains the complete summary of a 10-floor dungeon crawl and treasure room.
 type DungeonCrawlResult struct {
-	AdventureIDs    map[string]string                     `json:"adventure_ids"` // characterID -> adventureID
-	StageID         string                                `json:"stage_id"`
-	StageName       string                                `json:"stage_name"`
-	Season          string                                `json:"season,omitempty"`
-	SeasonalSubID   int                                   `json:"seasonal_sub_id,omitempty"`
-	Mode            string                                `json:"mode,omitempty"`
-	Round           int                                   `json:"round"`
-	ExitFatigue     int                                   `json:"exit_fatigue"`
-	FloorsCleared   int                                   `json:"floors_cleared"`
-	StageCleared    bool                                  `json:"stage_cleared"`
-	Outcome         corebattle.Outcome                    `json:"outcome"`
-	TotalTurns      int                                   `json:"total_turns"`
-	TotalEXP        int                                   `json:"total_exp"`
-	TotalGold       int                                   `json:"total_gold"`
-	TotalCrystals   int                                   `json:"total_crystals"`
-	FloorResults    []DungeonFloorResult                  `json:"floor_results"`
-	TreasureBoxes   []TreasureBox                         `json:"treasure_boxes,omitempty"`
-	InspectedBoxes  map[string]int                        `json:"inspected_boxes,omitempty"`
-	PartySize       int                                   `json:"party_size"`
-	ParticipantHPs  map[string]int                        `json:"participant_hps"`
-	ParticipantMPs  map[string]int                        `json:"participant_mps,omitempty"`
-	ConsumedItems   map[string][]corebattle.ConsumedItem  `json:"consumed_items,omitempty"`
-	LostDrops       map[string][]string                   `json:"lost_drops,omitempty"`
-	MonsterTames    map[string][]battle.MonsterTameResult `json:"monster_tames,omitempty"`
-	UnsealDemonKing bool                                  `json:"unseal_demon_king,omitempty"`
+	PostAdventureMessages map[string]string                     `json:"post_adventure_messages,omitempty"`
+	AdventureIDs          map[string]string                     `json:"adventure_ids"` // characterID -> adventureID
+	StageID               string                                `json:"stage_id"`
+	StageName             string                                `json:"stage_name"`
+	Season                string                                `json:"season,omitempty"`
+	SeasonalSubID         int                                   `json:"seasonal_sub_id,omitempty"`
+	Mode                  string                                `json:"mode,omitempty"`
+	Round                 int                                   `json:"round"`
+	ExitFatigue           int                                   `json:"exit_fatigue"`
+	FloorsCleared         int                                   `json:"floors_cleared"`
+	StageCleared          bool                                  `json:"stage_cleared"`
+	Outcome               corebattle.Outcome                    `json:"outcome"`
+	TotalTurns            int                                   `json:"total_turns"`
+	TotalEXP              int                                   `json:"total_exp"`
+	TotalGold             int                                   `json:"total_gold"`
+	TotalCrystals         int                                   `json:"total_crystals"`
+	FloorResults          []DungeonFloorResult                  `json:"floor_results"`
+	TreasureBoxes         []TreasureBox                         `json:"treasure_boxes,omitempty"`
+	InspectedBoxes        map[string]int                        `json:"inspected_boxes,omitempty"`
+	PartySize             int                                   `json:"party_size"`
+	ParticipantHPs        map[string]int                        `json:"participant_hps"`
+	ParticipantMPs        map[string]int                        `json:"participant_mps,omitempty"`
+	ConsumedItems         map[string][]corebattle.ConsumedItem  `json:"consumed_items,omitempty"`
+	LostDrops             map[string][]string                   `json:"lost_drops,omitempty"`
+	MonsterTames          map[string][]battle.MonsterTameResult `json:"monster_tames,omitempty"`
+	UnsealDemonKing       bool                                  `json:"unseal_demon_king,omitempty"`
 }
 
 // CrawlSession tracks step-by-step state across the 10-floor dungeon crawl and Floor 11 treasure room.

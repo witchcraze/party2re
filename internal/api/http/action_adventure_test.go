@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -150,7 +151,7 @@ func TestAdventureGatewaySuccessAndRefreshFailure(t *testing.T) {
 			if err := json.Unmarshal(got["result"], &result); err != nil {
 				t.Fatal(err)
 			}
-			if result != toAdventureResponse(f.saved) || result.StageID != "stage-01" || !result.Resolved || !result.IsCleared || result.FloorsCleared != 10 || result.ExperienceReward == 0 {
+			if !reflect.DeepEqual(result, toAdventureResponse(f.saved)) || result.StageID != "stage-01" || !result.Resolved || !result.IsCleared || result.FloorsCleared != 10 || result.ExperienceReward == 0 {
 				t.Fatalf("lost stage-start result: %+v", result)
 			}
 			// Stage start resolves immediately; it creates no scheduled expedition.
@@ -174,6 +175,47 @@ func TestAdventureGatewaySuccessAndRefreshFailure(t *testing.T) {
 			}
 			if observation.Character.Gold != f.char.Money || f.char.Money <= 100 || len(observation.OngoingActions) != 0 {
 				t.Fatalf("stale observation: %+v", observation)
+			}
+		})
+	}
+}
+
+func TestAdventureGatewayPostAdventureMessages(t *testing.T) {
+	for _, message := range []string{"酒場からスープが届きました！ HPが20回復した！", "酒場から出前が届きましたが、お金が足りませんでした", ""} {
+		t.Run(message, func(t *testing.T) {
+			f := newAdventureGatewayFixture(t)
+			f.char.Level = 10
+			f.expectedContext = context.Background()
+			router := f.router(timer.NewService(nil))
+			f.service.SetPostAdventureHook(func(_ context.Context, id string) (string, error) {
+				if id != "hero" {
+					t.Fatalf("unexpected participant %q", id)
+				}
+				return message, nil
+			})
+			status, response := f.request(router, `{"stage_id":"stage-01"}`)
+			if status != http.StatusOK {
+				t.Fatalf("status=%d response=%s", status, response)
+			}
+			var result map[string]json.RawMessage
+			if err := json.Unmarshal(response["result"], &result); err != nil {
+				t.Fatal(err)
+			}
+			if message == "" {
+				if _, ok := result["post_adventure_messages"]; ok {
+					t.Fatalf("empty messages not omitted: %s", response)
+				}
+				return
+			}
+			var messages map[string]string
+			if err := json.Unmarshal(result["post_adventure_messages"], &messages); err != nil {
+				t.Fatal(err)
+			}
+			if messages["hero"] != message || len(messages) != 1 {
+				t.Fatalf("messages=%v", messages)
+			}
+			if f.saved.PostAdventureMessages != nil {
+				t.Fatal("completion messages must not be persisted")
 			}
 		})
 	}

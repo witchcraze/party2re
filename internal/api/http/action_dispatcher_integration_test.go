@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -247,7 +248,7 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			if err := json.Unmarshal(got["result"], &crawl); err != nil {
 				t.Fatal(err)
 			}
-			if f.adventure.saves != 1 || crawl != toAdventureResponse(f.adventure.saved) ||
+			if f.adventure.saves != 1 || !reflect.DeepEqual(crawl, toAdventureResponse(f.adventure.saved)) ||
 				crawl.CharacterID != "hero" || crawl.StageID != "stage-01" || !crawl.Resolved || !crawl.IsCleared ||
 				crawl.FloorsCleared != 10 || f.char.Money <= 60 || f.char.Deposit != 1040 {
 				t.Fatalf("adventure did not persist/settle its result: %+v; stored: %+v", crawl, f.char)

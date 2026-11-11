@@ -61,16 +61,22 @@ type postAdventureTavern interface {
 	ClaimDelivery(ctx context.Context, characterID string) (tavern.OrderResult, error)
 }
 
-func buildPostAdventureHook(t postAdventureTavern) func(ctx context.Context, characterID string) error {
-	return func(ctx context.Context, characterID string) error {
+func buildPostAdventureHook(t postAdventureTavern) func(ctx context.Context, characterID string) (string, error) {
+	return func(ctx context.Context, characterID string) (string, error) {
 		if err := t.ResetFullness(ctx, characterID); err != nil {
-			return err
+			return "", err
 		}
-		_, err := t.ClaimDelivery(ctx, characterID)
-		if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
-			return nil
+		result, err := t.ClaimDelivery(ctx, characterID)
+		if errors.Is(err, tavern.ErrNoActiveDelivery) {
+			return "", nil
 		}
-		return err
+		if errors.Is(err, tavern.ErrInsufficientFunds) {
+			return "酒場から出前が届きましたが、お金が足りませんでした", nil
+		}
+		if err != nil {
+			return "", err
+		}
+		return result.Message, nil
 	}
 }
 

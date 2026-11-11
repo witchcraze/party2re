@@ -135,21 +135,22 @@ type MemberRewardSummary struct {
 }
 
 type PartyAdventureResult struct {
-	PartyID             string                   `json:"party_id"`
-	StageID             string                   `json:"stage_id"`
-	Outcome             string                   `json:"outcome"`
-	Round               int                      `json:"round,omitempty"`
-	ExitFatigue         int                      `json:"exit_fatigue,omitempty"`
-	FloorsCleared       int                      `json:"floors_cleared"`
-	Turns               int                      `json:"turns"`
-	TotalEXP            int                      `json:"total_exp"`
-	TotalGold           int                      `json:"total_gold"`
-	TotalCrystals       int                      `json:"total_crystals,omitempty"`
-	SynergyBonusPercent int                      `json:"synergy_bonus_percent"`
-	Rewards             []MemberRewardSummary    `json:"rewards"`
-	TreasureBoxes       []adventure.TreasureBox  `json:"treasure_boxes,omitempty"`
-	BattleResult        battle.PartyBattleResult `json:"battle_result"`
-	LostDrops           map[string][]string      `json:"lost_drops,omitempty"`
+	PostAdventureMessages map[string]string        `json:"post_adventure_messages,omitempty"`
+	PartyID               string                   `json:"party_id"`
+	StageID               string                   `json:"stage_id"`
+	Outcome               string                   `json:"outcome"`
+	Round                 int                      `json:"round,omitempty"`
+	ExitFatigue           int                      `json:"exit_fatigue,omitempty"`
+	FloorsCleared         int                      `json:"floors_cleared"`
+	Turns                 int                      `json:"turns"`
+	TotalEXP              int                      `json:"total_exp"`
+	TotalGold             int                      `json:"total_gold"`
+	TotalCrystals         int                      `json:"total_crystals,omitempty"`
+	SynergyBonusPercent   int                      `json:"synergy_bonus_percent"`
+	Rewards               []MemberRewardSummary    `json:"rewards"`
+	TreasureBoxes         []adventure.TreasureBox  `json:"treasure_boxes,omitempty"`
+	BattleResult          battle.PartyBattleResult `json:"battle_result"`
+	LostDrops             map[string][]string      `json:"lost_drops,omitempty"`
 }
 
 type PartyAdventureLog struct {

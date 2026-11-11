@@ -44,20 +44,21 @@ func ValidateCombatItem(def item.Definition) error {
 // Adventure represents a completed or active dungeon crawl record.
 // Fictional 1-hour expedition timer fields (AvailableAt, Claimed) are purged per Issue #478.
 type Adventure struct {
-	ID               string
-	CharacterID      string
-	Type             string
-	StageID          string
-	Season           string
-	SeasonalSubID    int
-	MonsterID        string
-	StartedAt        time.Time
-	FloorsCleared    int
-	IsCleared        bool
-	PartySize        int
-	ExperienceReward int
-	BattleResult     corebattle.Result
-	Resolved         bool
+	PostAdventureMessages map[string]string
+	ID                    string
+	CharacterID           string
+	Type                  string
+	StageID               string
+	Season                string
+	SeasonalSubID         int
+	MonsterID             string
+	StartedAt             time.Time
+	FloorsCleared         int
+	IsCleared             bool
+	PartySize             int
+	ExperienceReward      int
+	BattleResult          corebattle.Result
+	Resolved              bool
 }
 
 type Repository interface {
@@ -116,10 +117,6 @@ func (s *Service) now() time.Time {
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
 	s.victoryHook = hook
-}
-
-func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
-	s.postAdventureHook = hook
 }
 
 func (s *Service) SetBlessingProvider(provider BlessingProvider) {
@@ -233,7 +230,12 @@ func (s *Service) StartStage(ctx context.Context, characterID string, stageID st
 	}
 
 	advID := crawlRes.AdventureIDs[characterID]
-	return s.adventures.FindByID(ctx, advID)
+	adv, err := s.adventures.FindByID(ctx, advID)
+	if err != nil {
+		return Adventure{}, err
+	}
+	adv.PostAdventureMessages = crawlRes.PostAdventureMessages
+	return adv, nil
 }
 
 // ExecuteCrawl runs the authentic 10-floor dungeon crawl and Floor 11 treasure room (vs_monster.cgi).
@@ -475,8 +477,13 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		}
 
 		if s.postAdventureHook != nil {
-			if err := s.postAdventureHook(ctx, c.ID); err != nil {
+			if message, err := s.postAdventureHook(ctx, c.ID); err != nil {
 				s.logger.Warn("post adventure hook failed for character %s: %v", c.ID, err)
+			} else if message != "" {
+				if result.PostAdventureMessages == nil {
+					result.PostAdventureMessages = make(map[string]string)
+				}
+				result.PostAdventureMessages[c.ID] = message
 			}
 		}
 	}
