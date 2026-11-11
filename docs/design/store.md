@@ -5,7 +5,6 @@
 Player stores (`store.cgi`) are boutiques built in the four towns, listing Depot items for gold or for barter, with signboard, wallpaper and furniture customization. Prices, limits and transport are owned by code and [OpenAPI](../api/openapi.json).
 
 - Store deliveries (purchase, both sides of a barter, withdrawal) go to the Depot past capacity if needed (`store.cgi:386–394,468–476,544–555`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
-- Open: the ten-store town limit is not enforced across concurrent builders (#1114).
 - Open: legacy `kau` pays the owner through `send_money` as a pending remittance (`<buyer>から店の支払い`) and `kokan_other` sends both parties a Depot delivery notice; Go credits the wallet at once and sends no notice (#2056).
 
 ## Town scenes and commands

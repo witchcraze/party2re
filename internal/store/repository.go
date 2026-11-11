@@ -14,6 +14,8 @@ type StoreBaseRepository interface {
 	GetStoreByCharacterID(ctx context.Context, characterID string) (Store, error)
 	GetStoreByID(ctx context.Context, storeID string) (Store, error)
 	GetStoreByName(ctx context.Context, storeName string) (Store, error)
+	// LockTownCapacityForUpdate serializes construction in one town (Rank 0).
+	LockTownCapacityForUpdate(ctx context.Context, townID string) error
 	CountActiveTownStores(ctx context.Context, townID string, now time.Time) (int, error)
 	ListActiveStoresInTown(ctx context.Context, townID string, now time.Time) ([]Store, error)
 	SaveStore(ctx context.Context, s Store) error
