@@ -171,6 +171,7 @@ func newSocServices(
 		home.WithDepotManager(depotMgr),
 		home.WithItemCatalog(core.itemCatalog),
 		home.WithEconomy(core.economy),
+		home.WithTransactionProvider(core.txProvider),
 		home.WithGuildPoints(guildRepo),
 	)
 	if err != nil {

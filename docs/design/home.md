@@ -22,7 +22,7 @@ Home and estate REST routes remain until their replacements are verified: comman
 
 ### 1. Town house estate
 
-Four towns have different prices, lease cycles and style ranges, with at most ten houses per town and one house per character; house construction awards the guild `cycle days × 10` points in the same transaction. House construction and color changes are rejected during sleep or pending wake. Open: the ten-house limit is not enforced across concurrent builders (#1113).
+Four towns have different prices, lease cycles and style ranges, with at most ten houses per town and one house per character; house construction awards the guild `cycle days × 10` points in the same transaction. House construction and color changes are rejected during sleep or pending wake.
 
 ### 2. Player-to-player letters
 

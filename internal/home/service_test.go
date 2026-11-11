@@ -145,6 +145,8 @@ func (r *buildBeforeWriteRepo) UpdateCompanionName(ctx context.Context, characte
 	return r.mockHomeRepo.UpdateCompanionName(ctx, characterID, companionName, updatedAt)
 }
 
+func (m *mockHomeRepo) LockTownHouseCapacityForUpdate(context.Context, string) error { return nil }
+
 func (m *mockHomeRepo) CountActiveTownHouses(ctx context.Context, townID string, now time.Time) (int, error) {
 	count := 0
 	for _, h := range m.homes {
