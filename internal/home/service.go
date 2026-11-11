@@ -456,6 +456,17 @@ func (s *Service) AddDeliveryNotice(ctx context.Context, characterID, noticeType
 	return s.repo.AddDeliveryNotice(ctx, notice)
 }
 
+// AddDeliveryFlag records a notice unless one of the same type is uncleared,
+// as legacy money_flag.cgi shows one message for any number of remittances.
+// Callers serialize on the recipient's character lock.
+func (s *Service) AddDeliveryFlag(ctx context.Context, characterID, noticeType, message string) error {
+	pending, err := s.repo.HasUnclearedDeliveryNotice(ctx, characterID, noticeType)
+	if err != nil || pending {
+		return err
+	}
+	return s.AddDeliveryNotice(ctx, characterID, noticeType, message)
+}
+
 // ListDeliveryNotices returns delivery notices for a character.
 func (s *Service) ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]DeliveryNotice, error) {
 	return s.repo.ListDeliveryNotices(ctx, characterID, unclearedOnly)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -327,6 +328,8 @@ func TestGemStore_SendGem(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
+	notices := &gemNoticeRecorder{}
+	svc.SetDeliveryNotifier(notices)
 	ctx := context.Background()
 
 	buyRes, err := svc.BuyGem(ctx, "char_1", "gem_heal_1")
@@ -358,6 +361,18 @@ func TestGemStore_SendGem(t *testing.T) {
 	if len(recipBox.Items) != 1 {
 		t.Errorf("expected recipient 1 item, got %d", len(recipBox.Items))
 	}
+	// send_gem keeps send_item's Depot wording (system.cgi:1463–1479); only the recipient is notified.
+	want := []string{"char_2 item_transfer 預かり所にSenderから" + res.Gem.Name + "が届いています"}
+	if !reflect.DeepEqual(notices.got, want) {
+		t.Errorf("notices = %q", notices.got)
+	}
+}
+
+type gemNoticeRecorder struct{ got []string }
+
+func (r *gemNoticeRecorder) AddDeliveryNotice(_ context.Context, characterID, noticeType, message string) error {
+	r.got = append(r.got, characterID+" "+noticeType+" "+message)
+	return nil
 }
 
 func TestGemStore_SynthesizeGem(t *testing.T) {

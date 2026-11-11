@@ -42,6 +42,8 @@ type PhraseRepository interface {
 
 type DeliveryNoticeRepository interface {
 	AddDeliveryNotice(ctx context.Context, notice DeliveryNotice) error
+	// HasUnclearedDeliveryNotice locks matching uncleared notices so a concurrent clear is not missed.
+	HasUnclearedDeliveryNotice(ctx context.Context, characterID, noticeType string) (bool, error)
 	ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]DeliveryNotice, error)
 	ClearDeliveryNotices(ctx context.Context, characterID string) error
 }

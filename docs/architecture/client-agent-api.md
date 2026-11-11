@@ -612,7 +612,7 @@ Only explicitly mapped 4xx errors are known rejections; every other execution er
 
 ### Feature command contracts
 
-Bank, Shop, SecretShop, stage adventure, rescue and Home sleep/wake commands keep their feature owners' rules ([Bank](../design/bank.md), [Shop](../design/shops.md#10-shop-scenes-and-commands), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration), [Adventure](../design/adventure.md), [Rescue](../design/rescue-and-helper.md#emergency-rescue), [Home recovery](../design/home.md#6-resting--sleeping-sleepcgi-homecgi)). Cross-cutting points:
+Bank, Shop, SecretShop, stage adventure, rescue and Home sleep/wake commands keep their feature owners' rules ([Bank](../design/bank.md), [Shop](../design/shops.md#10-shop-scenes-and-commands), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration), [Adventure](../design/adventure.md), [Rescue](../design/rescue-and-helper.md#emergency-rescue), [Home recovery](../design/home.md#5-resting--sleeping-sleepcgi-homecgi)). Cross-cutting points:
 
 - `adventure_start` keeps the immediate batch crawl; its Gateway connection certifies neither parity nor a delayed expedition.
 - `rescue_request` bypasses ordinary entry and Sleep/CanWake gates and does not guarantee that sleep is removed.

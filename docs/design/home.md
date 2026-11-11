@@ -52,7 +52,7 @@ Resident companions combine ranch monsters at home and Heaven Wish NPC companion
 
 ### 4. Remote Depot & Inventory Item Usage (`＠つかう`)
 
-Equipment is inspected without consumption. Home recovery uses [Sleep](#6-resting--sleeping-sleepcgi-homecgi), not combat recovery items.
+Equipment is inspected without consumption. Home recovery uses [Sleep](#5-resting--sleeping-sleepcgi-homecgi), not combat recovery items.
 
 #### Legacy dispatch and consumption contract
 
@@ -81,11 +81,7 @@ Open items (`lib/_data.cgi` lines):
 
 Appearance and wallpaper items use newly authored assets ([asset contract](https://github.com/witchcraze/party2re/issues/654), [resolution](https://github.com/witchcraze/party2re/issues/729)), not legacy images.
 
-### 5. Delivery notices
-
-Viewing never clears the ledger; acknowledgment is an explicit bulk operation.
-
-### 6. Resting & Sleeping (`sleep.cgi`, `home.cgi`)
+### 5. Resting & Sleeping (`sleep.cgi`, `home.cgi`)
 
 Recovery is free and happens at one's own or a visited home. Sleeping at another home requires only that the host character exists: `lib/home.cgi:1–7` checks the user directory and `lib/system.cgi:418–435` the private `home.cgi`, both created at registration, not a town lease.
 

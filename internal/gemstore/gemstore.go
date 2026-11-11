@@ -91,6 +91,7 @@ type Service struct {
 	txProvider    TransactionProvider
 	randomSource  RandomSource
 	economy       *economy.Service
+	notifier      DeliveryNotifier
 }
 
 // NewService creates a new GemStore service instance.

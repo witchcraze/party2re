@@ -10,7 +10,7 @@ import (
 )
 
 // SendMoney moves gold from the sender's wallet into a remittance held for the
-// recipient, under 2-character ascending row locks.
+// recipient, under 2-character ascending row locks, then Depot(5) and notice rows(8).
 func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID string, amount int) (Depot, error) {
 	fromCharacterID = strings.TrimSpace(fromCharacterID)
 	toCharacterID = strings.TrimSpace(toCharacterID)
@@ -86,7 +86,8 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 			return err
 		}
 		senderDepot = sDep
-		return nil
+		// Notice rows (Rank 8) follow every Depot lock (Rank 5).
+		return s.notifyMoneySent(txCtx, toCharacterID)
 	})
 	if err != nil {
 		return Depot{}, err
@@ -96,7 +97,7 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 
 // SendItem transfers an item from sender's inventory to recipient's depot using strict lock hierarchy:
 // Transaction: RunInTx.
-// Lock Order: characters(2, ascending IDs) -> sender inventory/equipment(3) -> recipient/sender Depot(5).
+// Lock Order: characters(2, ascending IDs) -> sender inventory/equipment(3) -> recipient/sender Depot(5) -> notice insert.
 func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, itemInstanceID string) (Depot, error) {
 	fromCharacterID = strings.TrimSpace(fromCharacterID)
 	toCharacterID = strings.TrimSpace(toCharacterID)
@@ -189,7 +190,8 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 			return err
 		}
 		senderDepot = sDep
-		return nil
+		// Notice rows (Rank 8) follow every Depot lock (Rank 5).
+		return s.notifyItemSent(txCtx, toCharacterID, sender.Name, itemInst)
 	})
 	if err != nil {
 		return Depot{}, err

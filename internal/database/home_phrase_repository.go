@@ -107,6 +107,22 @@ func (r *HomeRepository) AddDeliveryNotice(ctx context.Context, notice home.Deli
 	return err
 }
 
+// HasUnclearedDeliveryNotice reports an uncleared notice of the type, locking
+// the matching rows so a concurrent clear commits first or waits.
+func (r *HomeRepository) HasUnclearedDeliveryNotice(ctx context.Context, characterID, noticeType string) (bool, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
+		SELECT id FROM character_delivery_notices
+		WHERE character_id = ? AND is_cleared = FALSE AND notice_type = ?
+		FOR UPDATE
+	`, characterID, noticeType)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	found := rows.Next()
+	return found, rows.Err()
+}
+
 // ListDeliveryNotices retrieves delivery notices for a character, optionally filtering uncleared notices only.
 func (r *HomeRepository) ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error) {
 	query := `

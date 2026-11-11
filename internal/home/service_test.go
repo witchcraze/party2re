@@ -361,6 +361,15 @@ func (m *mockHomeRepo) AddDeliveryNotice(ctx context.Context, notice DeliveryNot
 	return nil
 }
 
+func (m *mockHomeRepo) HasUnclearedDeliveryNotice(ctx context.Context, characterID, noticeType string) (bool, error) {
+	for _, n := range m.notices[characterID] {
+		if !n.IsCleared && n.NoticeType == noticeType {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (m *mockHomeRepo) ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]DeliveryNotice, error) {
 	var list []DeliveryNotice
 	for _, n := range m.notices[characterID] {
@@ -813,6 +822,25 @@ func TestHomeService(t *testing.T) {
 		notices, _ = service.ListDeliveryNotices(ctx, "char-1", true)
 		if len(notices) != 0 {
 			t.Errorf("expected 0 uncleared notices, got %d", len(notices))
+		}
+
+		// A flag adds one notice until it is cleared.
+		for range 2 {
+			if err := service.AddDeliveryFlag(ctx, "char-1", "money_transfer", "flag"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if notices, _ = service.ListDeliveryNotices(ctx, "char-1", true); len(notices) != 1 {
+			t.Fatalf("flag notices = %d, want 1", len(notices))
+		}
+		if err := service.ClearDeliveryNotices(ctx, "char-1"); err != nil {
+			t.Fatal(err)
+		}
+		if err := service.AddDeliveryFlag(ctx, "char-1", "money_transfer", "flag"); err != nil {
+			t.Fatal(err)
+		}
+		if notices, _ = service.ListDeliveryNotices(ctx, "char-1", true); len(notices) != 1 {
+			t.Fatalf("flag after clear = %d, want 1", len(notices))
 		}
 	})
 }

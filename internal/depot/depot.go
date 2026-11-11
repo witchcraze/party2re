@@ -371,6 +371,7 @@ type Service struct {
 	collector     CollectionRecorder
 	equipment     EquipmentRepository
 	remittances   RemittanceRepository
+	notifier      DeliveryNotifier
 }
 
 func NewService(depotRepo Repository, charRepo CharacterRepository, invRepo InventoryRepository, opts ...Option) (*Service, error) {

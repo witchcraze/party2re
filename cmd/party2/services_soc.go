@@ -177,6 +177,12 @@ func newSocServices(
 	if err != nil {
 		return nil, err
 	}
+	if econ != nil && econ.depot != nil {
+		econ.depot.SetDeliveryNotifier(homeService)
+	}
+	if econ != nil && econ.gemStore != nil {
+		econ.gemStore.SetDeliveryNotifier(homeService)
+	}
 
 	guildService, err := guild.NewService(
 		guildRepo,
