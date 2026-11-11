@@ -173,7 +173,48 @@ func TestWireDepotGatewaySendMoneyConcurrency_Integration(t *testing.T) {
 		return nil
 	})
 	after := f.state(t)
-	if result.Failures != 0 || sent.Load() != 3 || after.sender.Money != 100 || after.recipient.Money != 2900 {
-		t.Fatalf("result=%+v sent=%d sender=%d recipient=%d", result, sent.Load(), after.sender.Money, after.recipient.Money)
+	if held := heldGold(t, f.econ.depot, f.recipient.ID); result.Failures != 0 || sent.Load() != 3 || after.sender.Money != 100 || after.recipient.Money != 2000 || held != 900 {
+		t.Fatalf("result=%+v sent=%d sender=%d recipient=%d held=%d", result, sent.Load(), after.sender.Money, after.recipient.Money, held)
+	}
+}
+
+func heldGold(t *testing.T, svc *depot.Service, characterID string) int {
+	t.Helper()
+	values, err := svc.PendingRemittances(context.Background(), characterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := 0
+	for _, v := range values {
+		total += v.Amount
+	}
+	return total
+}
+
+// Concurrent sends and collections neither lose nor duplicate held gold.
+func TestWireDepotRemittanceSendAndCollectConcurrency_Integration(t *testing.T) {
+	f := newDepotEquipmentFixture(t, item.SlotMainHand, false)
+	ctx := context.Background()
+	before := f.state(t)
+	var collected atomic.Int64
+	result := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
+		if (worker+op)%2 == 0 {
+			_, err := f.econ.depot.SendMoney(ctx, f.sender.ID, f.recipient.ID, 1)
+			return err
+		}
+		_, got, err := f.econ.depot.WithdrawItem(ctx, f.recipient.ID, "")
+		if errors.Is(err, depot.ErrInvalidItemInstanceID) {
+			return nil // Nothing was held yet.
+		}
+		for _, r := range got {
+			collected.Add(int64(r.Amount))
+		}
+		return err
+	})
+	after := f.state(t)
+	held := heldGold(t, f.econ.depot, f.recipient.ID)
+	sent := before.sender.Money - after.sender.Money
+	if result.Failures != 0 || sent != int(result.TotalOps+1)/2 || after.recipient.Money-before.recipient.Money != int(collected.Load()) || int(collected.Load())+held != sent {
+		t.Fatalf("result=%+v sent=%d collected=%d held=%d", result, sent, collected.Load(), held)
 	}
 }

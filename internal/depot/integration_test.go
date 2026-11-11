@@ -91,7 +91,7 @@ func TestDepotLifecycle_Integration(t *testing.T) {
 	}
 
 	// 4. Withdraw Item (stack of 3 -> 1 unit in hand with new ID, 2 remaining in depot)
-	dep, err = depotService.WithdrawItem(ctx, createdChar.ID, potion.ID)
+	dep, _, err = depotService.WithdrawItem(ctx, createdChar.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem error = %v", err)
 	}
@@ -196,7 +196,7 @@ func TestDepotStackWithdrawRollbackAndConcurrent_Integration(t *testing.T) {
 	}
 
 	// 1. Rollback on N>=2 stack withdrawal preserves all 3 units in depot and 0 in hand
-	if _, err := svc.WithdrawItem(ctx, char.ID, stack.ID); err == nil {
+	if _, _, err := svc.WithdrawItem(ctx, char.ID, stack.ID); err == nil {
 		t.Fatal("expected WithdrawItem to fail on inductor error")
 	}
 	depAfterFail, err := depotRepo.FindByCharacterID(ctx, char.ID)
@@ -212,7 +212,7 @@ func TestDepotStackWithdrawRollbackAndConcurrent_Integration(t *testing.T) {
 	// held unit to the stack, so every call succeeds and units are conserved.
 	inductor.err = nil
 	res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
-		_, err := svc.WithdrawItem(ctx, char.ID, stack.ID)
+		_, _, err := svc.WithdrawItem(ctx, char.ID, stack.ID)
 		return err
 	})
 	if res.Failures != 0 || res.Deadlocks != 0 || res.Successes != res.TotalOps {
@@ -381,7 +381,7 @@ func TestDepotIntegration_MandatoryInductionRollback(t *testing.T) {
 	}
 
 	// 1. Initial withdrawal fails due to legend induction failure
-	_, err = depotService.WithdrawItem(ctx, char.ID, weaponInst.ID)
+	_, _, err = depotService.WithdrawItem(ctx, char.ID, weaponInst.ID)
 	if err == nil {
 		t.Fatal("expected WithdrawItem to fail when collection legend induction fails")
 	}
@@ -406,7 +406,7 @@ func TestDepotIntegration_MandatoryInductionRollback(t *testing.T) {
 
 	// 3. Resolve failure and retry withdrawal
 	inductor.err = nil
-	_, err = depotService.WithdrawItem(ctx, char.ID, weaponInst.ID)
+	_, _, err = depotService.WithdrawItem(ctx, char.ID, weaponInst.ID)
 	if err != nil {
 		t.Fatalf("expected WithdrawItem to succeed after resolving inductor failure: %v", err)
 	}

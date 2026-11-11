@@ -224,7 +224,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		Label:          "預かり所からアイテムを引き出す",
 		Category:       "economy",
 		OperationID:    "executeCharacterAction",
-		RequiredParams: []string{"item_id"},
+		RequiredParams: []string{}, // item_id is optional while held gold is collected first.
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{

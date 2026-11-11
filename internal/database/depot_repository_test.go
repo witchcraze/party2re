@@ -221,7 +221,7 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 	}
 
 	// 3. Withdraw item
-	dep, err = service.WithdrawItem(ctx, char.ID, potion.ID)
+	dep, _, err = service.WithdrawItem(ctx, char.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem error: %v", err)
 	}

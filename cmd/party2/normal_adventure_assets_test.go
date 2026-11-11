@@ -275,7 +275,8 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 				t.Fatal(err)
 			}
 			after, err = core.charRepo.FindByID(ctx, actor.ID)
-			if err != nil || after.Money != before.Money+25 {
+			// The Depot send is held for collection rather than credited.
+			if err != nil || after.Money != before.Money+20 || heldGold(t, econ.depot, actor.ID) != 5 {
 				t.Fatal("exit lost incoming credits", after, err)
 			}
 			creditedDepot, err := econ.depotRepo.FindByCharacterID(ctx, actor.ID)
@@ -337,6 +338,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	heldBefore := heldGold(t, econ.depot, actor.ID)
 	result := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		if (worker+op)%2 == 0 {
 			_, err := econ.depot.SendMoney(ctx, actor.ID, peer.ID, 1)
@@ -359,7 +361,8 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterActor.Money+afterPeer.Money != beforeActor.Money+beforePeer.Money || afterActor.Money-beforeActor.Money != int(result.TotalOps/2) {
+	held := heldGold(t, econ.depot, actor.ID) - heldBefore
+	if afterActor.Money != beforeActor.Money || afterPeer.Money+held != beforePeer.Money || held != int(result.TotalOps/2) {
 		t.Fatal("credits/debits not conserved", beforeActor.Money, beforePeer.Money, afterActor.Money, afterPeer.Money)
 	}
 	if _, err := combat.normal.Command(ctx, adventure.RunCommand{PlayerID: actor.PlayerID, ActorID: actor.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {

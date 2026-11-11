@@ -61,7 +61,7 @@ func TestWireDepotWithdrawSwapsEquippedWeapon_Integration(t *testing.T) {
 	f := newDepotEquipmentFixture(t, item.SlotMainHand, true)
 	rows := withSwapStorage(t, f, "armor-01", "weapon-02")
 	before := f.state(t)
-	if _, err := f.econ.depot.WithdrawItem(context.Background(), f.sender.ID, rows[1].ID); err != nil {
+	if _, _, err := f.econ.depot.WithdrawItem(context.Background(), f.sender.ID, rows[1].ID); err != nil {
 		t.Fatal(err)
 	}
 	f.assertWeaponSwapped(t, before, rows[0], rows[1])
@@ -90,13 +90,13 @@ func TestWireDepotWithdrawSwapRollback_Integration(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := f.state(t)
-			if _, err := svc.WithdrawItem(context.Background(), f.sender.ID, rows[1].ID); !errors.Is(err, errDepotEquipmentPersistence) {
+			if _, _, err := svc.WithdrawItem(context.Background(), f.sender.ID, rows[1].ID); !errors.Is(err, errDepotEquipmentPersistence) {
 				t.Fatalf("error = %v", err)
 			}
 			if after := f.state(t); !reflect.DeepEqual(before, after) {
 				t.Fatalf("failed %s changed state:\nbefore=%+v\nafter=%+v", stage, before, after)
 			}
-			if _, err := f.econ.depot.WithdrawItem(context.Background(), f.sender.ID, rows[1].ID); err != nil {
+			if _, _, err := f.econ.depot.WithdrawItem(context.Background(), f.sender.ID, rows[1].ID); err != nil {
 				t.Fatalf("retry: %v", err)
 			}
 			f.assertWeaponSwapped(t, before, rows[0], rows[1])
@@ -112,7 +112,7 @@ func TestWireDepotWithdrawSwapConcurrency_Integration(t *testing.T) {
 	defer cancel()
 	res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		// Whole-row swaps keep identities; only the weapon currently held is absent.
-		_, err := f.econ.depot.WithdrawItem(ctx, f.sender.ID, weapons[(worker+op)%3])
+		_, _, err := f.econ.depot.WithdrawItem(ctx, f.sender.ID, weapons[(worker+op)%3])
 		if errors.Is(err, depot.ErrItemNotFound) {
 			return nil
 		}

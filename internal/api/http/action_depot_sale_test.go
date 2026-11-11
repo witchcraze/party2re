@@ -27,6 +27,7 @@ type depotSaleFixture struct {
 	batch      bool
 	recipient  string
 	activities []playercontext.Activity
+	collected  []depot.Remittance
 }
 
 func (f *depotSaleFixture) DepositItem(ctx context.Context, actor, id string) (depot.Depot, error) {
@@ -34,9 +35,10 @@ func (f *depotSaleFixture) DepositItem(ctx context.Context, actor, id string) (d
 	return f.Expand(ctx, actor)
 }
 
-func (f *depotSaleFixture) WithdrawItem(ctx context.Context, actor, id string) (depot.Depot, error) {
+func (f *depotSaleFixture) WithdrawItem(ctx context.Context, actor, id string) (depot.Depot, []depot.Remittance, error) {
 	f.ids, f.batch = []string{id}, false
-	return f.Expand(ctx, actor)
+	dep, err := f.Expand(ctx, actor)
+	return dep, f.collected, err
 }
 
 func (f *depotSaleFixture) SendItem(ctx context.Context, actor, recipient, id string) (depot.Depot, error) {
@@ -80,7 +82,10 @@ func saleGatewayBody(action, params string) string {
 
 func TestDepotItemGatewayInputs(t *testing.T) {
 	for _, action := range []string{"depot_deposit", "depot_withdraw", "depot_send_item", "depot_sell", "depot_sell_batch"} {
-		invalid := []string{"", `null`, `{}`, `[]`, `1`, `{"item_id":null}`, `{"item_ids":null}`}
+		invalid := []string{`null`, `[]`, `1`, `{"item_id":null}`, `{"item_ids":null}`}
+		if action != "depot_withdraw" { // Withdrawal collects held gold without a target.
+			invalid = append(invalid, "", `{}`)
+		}
 		valid := `{"item_id":"one"}`
 		if action != "depot_sell_batch" {
 			invalid = append(invalid, `{"item_id":1}`, `{"item_id":[]}`, `{"item_ids":["one"]}`)
@@ -291,7 +296,11 @@ func TestDepotItemGatewayGuardsAndDiscovery(t *testing.T) {
 			if err := json.Unmarshal(a.ParamsSchema, &schema); err != nil {
 				t.Fatal(err)
 			}
-			if !slices.Equal(a.RequiredParams, fields) || !slices.Equal(schema.Required, fields) || len(schema.Properties) != len(fields) || schema.AdditionalProperties || schema.Properties[field].Type != kind || len(a.ParamsTemplate) != 0 || (kind == "array" && schema.Properties[field].Items.Type != "string") {
+			required := fields
+			if action == "depot_withdraw" {
+				required = nil
+			}
+			if !slices.Equal(a.RequiredParams, required) || !slices.Equal(schema.Required, required) || len(schema.Properties) != len(fields) || schema.AdditionalProperties || schema.Properties[field].Type != kind || len(a.ParamsTemplate) != 0 || (kind == "array" && schema.Properties[field].Items.Type != "string") {
 				t.Fatalf("incorrect sale params: %+v %s", a, a.ParamsSchema)
 			}
 			if action == "depot_send_item" && schema.Properties["recipient_character_id"].Type != "string" {
@@ -316,5 +325,23 @@ func TestDepotItemGatewayGuardsAndDiscovery(t *testing.T) {
 				assertGatewayError(t, got, "ACTION_NOT_IMPLEMENTED")
 			}
 		})
+	}
+}
+
+// A withdrawal that collected held gold reports each amount instead of moving items.
+func TestDepotWithdrawGatewayReportsCollectedRemittances(t *testing.T) {
+	f, _, _, router := depotSaleRouter(t)
+	f.collected = []depot.Remittance{{ID: "private", CharacterID: "hero", Amount: 150, Source: depot.RemittanceDepotTransfer, SenderName: "Ann"}}
+	status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("depot_withdraw", ""), nil)
+	var result struct {
+		Items     []depotItemResponse  `json:"items"`
+		Collected []remittanceResponse `json:"collected_remittances"`
+	}
+	if err := json.Unmarshal(got["result"], &result); err != nil {
+		t.Fatal(err)
+	}
+	if status != 200 || len(f.ids) != 1 || f.ids[0] != "" || len(result.Items) != 1 ||
+		!reflect.DeepEqual(result.Collected, []remittanceResponse{{Amount: 150, Source: "depot_transfer", SenderName: "Ann"}}) {
+		t.Fatalf("collection result: %d %s", status, got["result"])
 	}
 }

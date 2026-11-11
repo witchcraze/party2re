@@ -47,8 +47,7 @@ specification remain as close to the original as possible. On that basis, the
 contract preserves the verified delivery and winner counts:
 
 - Gold is a pending claim belonging to the placed entrant, not immediate wallet
-  income. Reuse the pending-remittance/receipt contract owned by
-  [#1109](https://github.com/witchcraze/party2re/issues/1109); preserve unpaid Gold
+  income. Reuse the Depot [held-gold](depot.md#6-held-gold) contract; preserve unpaid Gold
   at the wallet cap and on failures/retries. Contest awards do not inherit the
   player-to-player sender's Depot-full rejection.
 - Medals are `item-023` delivered to each recipient's Depot, not direct counter
@@ -69,4 +68,4 @@ This deliberately excludes erroneous extra delivery when a package-global
 9 / 5 / 2 was the original author's intent, or that 10 / 6 / 3 was actually
 delivered. Increasing the winner awards to the prize table is not approved.
 
-Open (#1496): settlement still credits the wallet and medal counter directly; pending remittances (adopting #1109) and the contest item delivery are not implemented.
+Open (#1496): settlement still credits the wallet and medal counter directly; held gold (adopting the [Depot contract](depot.md#6-held-gold)) and the contest item delivery are not implemented.

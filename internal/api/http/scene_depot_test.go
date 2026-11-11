@@ -28,6 +28,20 @@ type depotSceneFixture struct {
 	reads, writes         int
 	repoErr, depotCharErr error
 	timers                timer.Service
+	pending               []depot.Remittance
+}
+
+type depotSceneRemittances struct {
+	depot.RemittanceRepository
+	f *depotSceneFixture
+}
+
+func (r depotSceneRemittances) ListRemittances(ctx context.Context, actor string) ([]depot.Remittance, error) {
+	r.f.checkContext(ctx)
+	if actor != "hero" {
+		r.f.t.Fatal("wrong remittance owner")
+	}
+	return r.f.pending, nil
 }
 
 type depotSceneRepository struct {
@@ -69,7 +83,7 @@ func depotSceneRouter(t *testing.T, options ...func(*playercontext.Service)) (*d
 			{ID: "z", DefinitionID: "weapon-01", Quantity: 1, EnhancementLevel: 6},
 			{ID: "a", DefinitionID: "item-010", Quantity: 8},
 		}}}
-	service, err := depot.NewService(depotSceneRepository{f: f}, depotSceneCharacters{f: f}, &struct{ depot.InventoryRepository }{})
+	service, err := depot.NewService(depotSceneRepository{f: f}, depotSceneCharacters{f: f}, &struct{ depot.InventoryRepository }{}, depot.WithRemittanceRepository(depotSceneRemittances{f: f}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,6 +108,7 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 		t.Run(fmt.Sprint(tc.capacity), func(t *testing.T) {
 			f, store, router := depotSceneRouter(t)
 			f.char.JobLevel, f.char.OverDepot, f.dep.ExDepot = tc.job, tc.over, tc.expanded
+			f.pending = []depot.Remittance{{ID: "private", CharacterID: "hero", Amount: 300, Source: depot.RemittanceDepotTransfer, SenderName: "Ann"}}
 			status, observation := navigationGET(t, router)
 			if status != 200 || observation.Scene.Kind != "facility" || observation.Scene.LocationID != "depot" || observation.Scene.Support.Observation != "details" {
 				t.Fatalf("Depot projection: %d %+v", status, observation)
@@ -101,6 +116,9 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 			data := decodeShopScene[DepotSceneData](t, observation)
 			if data.Parent != "town" || data.CharacterID != "hero" || data.Capacity != tc.capacity || data.ExDepot != tc.expanded || data.ItemCount != 2 || len(data.Items) != 2 || data.Items[0].ID != "z" || data.Items[0].DefinitionID != "weapon-01" || data.Items[0].Quantity != 1 || data.Items[0].EnhancementLevel != 6 || data.Items[1].ID != "a" || data.Items[1].Quantity != 8 || data.Items[1].EnhancementLevel != 0 {
 				t.Fatalf("lost facts or changed reader order: %+v", data)
+			}
+			if want := []remittanceResponse{{Amount: 300, Source: "depot_transfer", SenderName: "Ann"}}; !reflect.DeepEqual(data.PendingRemittances, want) {
+				t.Fatalf("held gold: %+v", data.PendingRemittances)
 			}
 			for _, action := range observation.AvailableActions {
 				if !slices.Contains([]string{"scene_back", "npc_talk", "npc_inspect", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw"}, action.Action) {

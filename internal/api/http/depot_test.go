@@ -16,8 +16,12 @@ func (s *stubDepotService) DepositItem(ctx context.Context, characterID, itemID 
 	return depot.Depot{CharacterID: characterID, Capacity: 50}, nil
 }
 
-func (s *stubDepotService) WithdrawItem(ctx context.Context, characterID, itemID string) (depot.Depot, error) {
-	return depot.Depot{CharacterID: characterID, Capacity: 50}, nil
+func (s *stubDepotService) WithdrawItem(ctx context.Context, characterID, itemID string) (depot.Depot, []depot.Remittance, error) {
+	return depot.Depot{CharacterID: characterID, Capacity: 50}, nil, nil
+}
+
+func (s *stubDepotService) PendingRemittances(ctx context.Context, characterID string) ([]depot.Remittance, error) {
+	return nil, nil
 }
 
 func (s *stubDepotService) SellItem(ctx context.Context, characterID, itemID string) (depot.Depot, int, error) {

@@ -27,6 +27,12 @@ type depotExpansionFixture struct {
 	readErr error
 	reads   int
 	sorts   int
+	pending []depot.Remittance
+}
+
+func (f *depotExpansionFixture) PendingRemittances(ctx context.Context, actor string) ([]depot.Remittance, error) {
+	f.checkContext(ctx)
+	return f.pending, nil
 }
 
 func (f *depotExpansionFixture) SortItems(ctx context.Context, actor string) (depot.Depot, error) {

@@ -161,15 +161,28 @@ func (s *Service) DepositItem(ctx context.Context, characterID string, itemInsta
 // (weapon, armor or held item; depot.cgi:208–288 hikidasu). The previous
 // occupant returns to that row without a capacity check, gear is equipped,
 // weapon/armor customization is cleared and the unit is recorded in the
-// Collection book, all in one transaction.
+// Collection book, all in one transaction. While held gold fits in the wallet,
+// hikidasu collects it instead (depot.cgi:211–215): the collected amounts are
+// returned, items are untouched and itemInstanceID may be empty.
 // Lock Order: characters(2) -> inventory_items/equipment_slots(3) -> character_depots/depot_items(5).
-func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInstanceID string) (Depot, error) {
-	if err := validateItemOp(characterID, itemInstanceID); err != nil {
-		return Depot{}, err
+func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInstanceID string) (Depot, []Remittance, error) {
+	if strings.TrimSpace(characterID) == "" {
+		return Depot{}, nil, ErrInvalidCharacterID
 	}
 	var resultDepot Depot
+	var collected []Remittance
 	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: true}
 	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		var err error
+		if collected, err = s.collectRemittances(tc.Context, &tc.Character); err != nil || len(collected) > 0 {
+			if err == nil {
+				resultDepot, err = s.findOrCreateDepot(tc.Context, characterID, tc.Character)
+			}
+			return err
+		}
+		if strings.TrimSpace(itemInstanceID) == "" {
+			return ErrInvalidItemInstanceID
+		}
 		eq, err := s.lockEquipment(tc.Context, characterID)
 		if err != nil {
 			return err
@@ -266,9 +279,9 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 		return nil
 	})
 	if err != nil {
-		return Depot{}, mapEconomyError(err)
+		return Depot{}, nil, mapEconomyError(err)
 	}
-	return resultDepot, nil
+	return resultDepot, collected, nil
 }
 
 // SellItem sells a single item from the depot for 50% of its base catalog price.

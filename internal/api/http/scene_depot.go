@@ -24,6 +24,8 @@ type DepotSceneData struct {
 	ItemCount         int              `json:"item_count"`
 	Items             []DepotSceneItem `json:"items"`
 	Page              ScenePage        `json:"page"`
+	// PendingRemittances is held gold that depot_withdraw collects before items.
+	PendingRemittances []remittanceResponse `json:"pending_remittances"`
 }
 
 func (h *Handler) depotSceneData(ctx context.Context, r playercontext.Result) (any, error) {
@@ -31,6 +33,10 @@ func (h *Handler) depotSceneData(ctx context.Context, r playercontext.Result) (a
 		return nil, errSceneNotConfigured
 	}
 	dep, err := h.depot.GetDepot(ctx, r.Snapshot.Character.ID)
+	if err != nil {
+		return nil, err
+	}
+	pending, err := h.depot.PendingRemittances(ctx, r.Snapshot.Character.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -56,5 +62,5 @@ func (h *Handler) depotSceneData(ctx context.Context, r playercontext.Result) (a
 		page.Next = &playercontext.PageParams{Destination: n.Destination, Offset: end, Limit: limit}
 	}
 	return DepotSceneData{Parent: "town", CharacterID: dep.CharacterID, Capacity: dep.Capacity, ExDepot: dep.ExDepot,
-		NextExpansionCost: nextCost, ItemCount: len(dep.Items), Items: items, Page: page}, nil
+		NextExpansionCost: nextCost, ItemCount: len(dep.Items), Items: items, Page: page, PendingRemittances: toRemittanceResponses(pending)}, nil
 }

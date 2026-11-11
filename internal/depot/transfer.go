@@ -9,7 +9,8 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
-// SendMoney sends gold from sender to recipient using 2-character ascending row locks.
+// SendMoney moves gold from the sender's wallet into a remittance held for the
+// recipient, under 2-character ascending row locks.
 func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID string, amount int) (Depot, error) {
 	fromCharacterID = strings.TrimSpace(fromCharacterID)
 	toCharacterID = strings.TrimSpace(toCharacterID)
@@ -21,6 +22,9 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 	}
 	if amount <= 0 {
 		return Depot{}, ErrInvalidAmount
+	}
+	if s.remittances == nil {
+		return Depot{}, errRemittancesUnconfigured
 	}
 
 	firstID, secondID := id.Sort2(fromCharacterID, toCharacterID)
@@ -68,14 +72,12 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 		if err := sender.DeductMoney(amount); err != nil {
 			return ErrInsufficientFunds
 		}
-		if err := recipient.AddMoney(amount); err != nil {
-			return err
-		}
-
 		if err := s.charRepo.Update(txCtx, sender); err != nil {
 			return err
 		}
-		if err := s.charRepo.Update(txCtx, recipient); err != nil {
+		// send_money holds the gold until the recipient collects it (system.cgi:842–855).
+		if err := s.remittances.AddRemittance(txCtx, Remittance{ID: id.New(), CharacterID: toCharacterID,
+			Amount: amount, Source: RemittanceDepotTransfer, SenderName: sender.Name}); err != nil {
 			return err
 		}
 

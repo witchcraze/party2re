@@ -5451,18 +5451,14 @@
                   "additionalProperties": false,
                   "properties": {
                     "item_id": {
+                      "description": "Depot row to withdraw. Optional: while held gold fits in the wallet, the command collects it instead and leaves items untouched.",
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "item_id"
-                  ],
+                  "required": [],
                   "type": "object"
                 }
               },
-              "required": [
-                "params"
-              ],
               "type": "object"
             }
           },
@@ -8605,54 +8601,31 @@
         ],
         "type": "object"
       },
-      "DepotItemResponse": {
+      "DepotRemittance": {
         "additionalProperties": false,
+        "description": "Gold held for the character until collected by depot_withdraw.",
         "properties": {
-          "definition_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "quantity": {
+          "amount": {
+            "minimum": 1,
             "type": "integer"
+          },
+          "sender_name": {
+            "description": "Sender's character name when the gold was sent.",
+            "maxLength": 32,
+            "type": "string"
+          },
+          "source": {
+            "description": "Why the gold is held; clients render the receipt message.",
+            "enum": [
+              "depot_transfer"
+            ],
+            "type": "string"
           }
         },
         "required": [
-          "id",
-          "definition_id",
-          "quantity"
-        ],
-        "type": "object"
-      },
-      "DepotResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "capacity": {
-            "type": "integer"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "ex_depot": {
-            "type": "integer"
-          },
-          "item_count": {
-            "type": "integer"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DepotItemResponse"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "character_id",
-          "capacity",
-          "ex_depot",
-          "item_count",
-          "items"
+          "amount",
+          "source",
+          "sender_name"
         ],
         "type": "object"
       },
@@ -8704,6 +8677,13 @@
           "parent": {
             "const": "town",
             "type": "string"
+          },
+          "pending_remittances": {
+            "description": "Held gold, oldest first. depot_withdraw collects it before items while the wallet has room; the excess over the wallet cap stays held.",
+            "items": {
+              "$ref": "#/components/schemas/DepotRemittance"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -8714,7 +8694,8 @@
           "item_count",
           "items",
           "page",
-          "next_expansion_cost"
+          "next_expansion_cost",
+          "pending_remittances"
         ],
         "type": "object"
       },
@@ -16190,26 +16171,6 @@
         ],
         "type": "object"
       },
-      "SendItemResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "depot": {
-            "$ref": "#/components/schemas/DepotResponse"
-          },
-          "item_id": {
-            "type": "string"
-          },
-          "recipient_character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "depot",
-          "recipient_character_id",
-          "item_id"
-        ],
-        "type": "object"
-      },
       "SessionResponse": {
         "properties": {
           "expires_at": {
@@ -18300,7 +18261,7 @@
               }
             }
           },
-          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_withdraw/depot_sell require non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor.",
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_sell require non-null string item_id; depot_withdraw accepts an optional non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor.",
           "required": true
         },
         "responses": {

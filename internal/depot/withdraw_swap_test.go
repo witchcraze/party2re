@@ -71,7 +71,7 @@ func newSwapFixture(t *testing.T, hand []item.Instance, slots map[item.Slot]stri
 	dep, _ := NewDepot(f.char.ID)
 	dep.Items = stored
 	f.depots.depots[f.char.ID] = dep
-	f.service, err = NewService(f.depots, f.chars, f.invs, WithItemDefinitionProvider(catalog), WithEquipmentRepository(f.equip))
+	f.service, err = NewService(f.depots, f.chars, f.invs, WithItemDefinitionProvider(catalog), WithEquipmentRepository(f.equip), WithRemittanceRepository(f.depots))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestWithdrawItem_SwapsSameLegacyHand(t *testing.T) {
 		map[item.Slot]string{item.SlotMainHand: oldSword.ID},
 		[]item.Instance{before, newSword, after})
 
-	dep, err := f.service.WithdrawItem(ctx, f.char.ID, newSword.ID)
+	dep, _, err := f.service.WithdrawItem(ctx, f.char.ID, newSword.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestWithdrawItem_ArmorIntoEmptyHandClearsOnlyArmorName(t *testing.T) {
 	mail := item.Instance{ID: "mail", DefinitionID: "armor-01", Quantity: 1}
 	f := newSwapFixture(t, nil, nil, []item.Instance{mail})
 
-	dep, err := f.service.WithdrawItem(ctx, f.char.ID, mail.ID)
+	dep, _, err := f.service.WithdrawItem(ctx, f.char.ID, mail.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestWithdrawItem_ShieldAndConsumableShareHeldHand(t *testing.T) {
 		map[item.Slot]string{item.SlotOffHand: shield.ID},
 		[]item.Instance{herbs})
 
-	dep, err := f.service.WithdrawItem(ctx, f.char.ID, herbs.ID)
+	dep, _, err := f.service.WithdrawItem(ctx, f.char.ID, herbs.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestWithdrawItem_FullDepotNeverRejectsSwap(t *testing.T) {
 		held := item.Instance{ID: "held", DefinitionID: "item-001", Quantity: 1}
 		stack := item.Instance{ID: "stack", DefinitionID: "item-001", Quantity: 2}
 		f := newSwapFixture(t, []item.Instance{held}, nil, append(fill(MinDepotCapacity-1), stack))
-		dep, err := f.service.WithdrawItem(ctx, f.char.ID, stack.ID)
+		dep, _, err := f.service.WithdrawItem(ctx, f.char.ID, stack.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -211,7 +211,7 @@ func TestWithdrawItem_FullDepotNeverRejectsSwap(t *testing.T) {
 		held := item.Instance{ID: "held", DefinitionID: "item-002", Quantity: 1}
 		stack := item.Instance{ID: "stack", DefinitionID: "item-001", Quantity: 2}
 		f := newSwapFixture(t, []item.Instance{held}, nil, append(fill(MinDepotCapacity-1), stack))
-		dep, err := f.service.WithdrawItem(ctx, f.char.ID, stack.ID)
+		dep, _, err := f.service.WithdrawItem(ctx, f.char.ID, stack.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -229,7 +229,7 @@ func TestWithdrawItem_RejectsWithoutChange(t *testing.T) {
 		a := item.Instance{ID: "a", DefinitionID: "item-002", Quantity: 1}
 		b := item.Instance{ID: "b", DefinitionID: "item-071", Quantity: 1}
 		f := newSwapFixture(t, []item.Instance{a, b}, nil, []item.Instance{herb})
-		if _, err := f.service.WithdrawItem(ctx, f.char.ID, herb.ID); !errors.Is(err, ErrInventoryFull) {
+		if _, _, err := f.service.WithdrawItem(ctx, f.char.ID, herb.ID); !errors.Is(err, ErrInventoryFull) {
 			t.Fatalf("err = %v", err)
 		}
 		if !equalIDs(f.depots.depots[f.char.ID].Items, "herb") {
@@ -240,7 +240,7 @@ func TestWithdrawItem_RejectsWithoutChange(t *testing.T) {
 	t.Run("unclassifiable held item", func(t *testing.T) {
 		odd := item.Instance{ID: "odd", DefinitionID: "unknown-1", Quantity: 1}
 		f := newSwapFixture(t, []item.Instance{odd}, nil, []item.Instance{herb})
-		if _, err := f.service.WithdrawItem(ctx, f.char.ID, herb.ID); err == nil {
+		if _, _, err := f.service.WithdrawItem(ctx, f.char.ID, herb.ID); err == nil {
 			t.Fatal("expected catalog error")
 		}
 	})
@@ -251,7 +251,7 @@ func TestWithdrawItem_RejectsWithoutChange(t *testing.T) {
 		f := newSwapFixture(t, []item.Instance{sword}, map[item.Slot]string{item.SlotMainHand: sword.ID}, []item.Instance{next})
 		boom := errors.New("equip save")
 		f.equip.saveErr = boom
-		if _, err := f.service.WithdrawItem(ctx, f.char.ID, next.ID); !errors.Is(err, boom) {
+		if _, _, err := f.service.WithdrawItem(ctx, f.char.ID, next.ID); !errors.Is(err, boom) {
 			t.Fatalf("err = %v", err)
 		}
 		// Rollback needs a real transaction: cmd/party2/depot_equipment_test.go.
@@ -263,7 +263,7 @@ func TestEquipmentUnlinkErrorsAbortMoves(t *testing.T) {
 	sword := item.Instance{ID: "sword", DefinitionID: "weapon-01", Quantity: 1}
 	next := item.Instance{ID: "next", DefinitionID: "weapon-02", Quantity: 1}
 	for name, move := range map[string]func(f swapFixture) error{
-		"withdraw": func(f swapFixture) error { _, err := f.service.WithdrawItem(ctx, f.char.ID, next.ID); return err },
+		"withdraw": func(f swapFixture) error { _, _, err := f.service.WithdrawItem(ctx, f.char.ID, next.ID); return err },
 		"deposit":  func(f swapFixture) error { _, err := f.service.DepositItem(ctx, f.char.ID, sword.ID); return err },
 	} {
 		t.Run(name, func(t *testing.T) {
