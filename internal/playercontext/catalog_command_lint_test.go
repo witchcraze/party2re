@@ -121,7 +121,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"blackmarket_trade", "prize_id", "string", true},
 		{"depot_sell", "item_id", "string", true},
 		{"depot_deposit", "item_id", "string", true},
-		{"depot_withdraw", "item_id", "string", true},
+		{"depot_withdraw", "item_id", "string", false},
 		{"depot_sell_batch", "item_ids", "array", true},
 	}
 	for _, tc := range tests {

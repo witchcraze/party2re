@@ -4769,18 +4769,14 @@
                   "type": "object",
                   "properties": {
                     "item_id": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Depot row to withdraw. Optional: while held gold fits in the wallet, the command collects it instead and leaves items untouched."
                     }
                   },
                   "additionalProperties": false,
-                  "required": [
-                    "item_id"
-                  ]
+                  "required": []
                 }
               },
-              "required": [
-                "params"
-              ],
               "type": "object"
             }
           },
@@ -8226,6 +8222,13 @@
                 "type": "null"
               }
             ]
+          },
+          "pending_remittances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepotRemittance"
+            },
+            "description": "Held gold, oldest first. depot_withdraw collects it before items while the wallet has room; the excess over the wallet cap stays held."
           }
         },
         "required": [
@@ -8236,7 +8239,8 @@
           "item_count",
           "items",
           "page",
-          "next_expansion_cost"
+          "next_expansion_cost",
+          "pending_remittances"
         ],
         "description": "Owned read-only Depot inventory/capacity. Offset pages preserve GetDepot order (currently instance ID ascending in persistence); no cross-page snapshot is promised. Missing depots remain empty in-memory projections. GET never creates, sorts or saves storage. REST operations remain registered pending verified mutation replacements."
       },
@@ -13135,77 +13139,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "DepotResponse": {
-        "properties": {
-          "capacity": {
-            "type": "integer"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "ex_depot": {
-            "type": "integer"
-          },
-          "item_count": {
-            "type": "integer"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DepotItemResponse"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "character_id",
-          "capacity",
-          "ex_depot",
-          "item_count",
-          "items"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "DepotItemResponse": {
-        "properties": {
-          "definition_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "definition_id",
-          "quantity"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "SendItemResponse": {
-        "properties": {
-          "depot": {
-            "$ref": "#/components/schemas/DepotResponse"
-          },
-          "item_id": {
-            "type": "string"
-          },
-          "recipient_character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "depot",
-          "recipient_character_id",
-          "item_id"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "SendItemRequest": {
         "properties": {
           "item_id": {
@@ -17748,6 +17681,34 @@
           "details",
           "is_owner"
         ]
+      },
+      "DepotRemittance": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "depot_transfer"
+            ],
+            "description": "Why the gold is held; clients render the receipt message."
+          },
+          "sender_name": {
+            "type": "string",
+            "maxLength": 32,
+            "description": "Sender's character name when the gold was sent."
+          }
+        },
+        "required": [
+          "amount",
+          "source",
+          "sender_name"
+        ],
+        "description": "Gold held for the character until collected by depot_withdraw."
       }
     },
     "securitySchemes": {

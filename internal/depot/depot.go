@@ -370,6 +370,7 @@ type Service struct {
 	itemDefs      ItemDefinitionProvider
 	collector     CollectionRecorder
 	equipment     EquipmentRepository
+	remittances   RemittanceRepository
 }
 
 func NewService(depotRepo Repository, charRepo CharacterRepository, invRepo InventoryRepository, opts ...Option) (*Service, error) {

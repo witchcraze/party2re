@@ -14,12 +14,48 @@ import (
 )
 
 type memoryDepotRepo struct {
-	mu     sync.Mutex
-	depots map[string]Depot
+	mu          sync.Mutex
+	depots      map[string]Depot
+	remittances []Remittance
 }
 
 func newMemoryDepotRepo() *memoryDepotRepo {
 	return &memoryDepotRepo{depots: make(map[string]Depot)}
+}
+
+func (r *memoryDepotRepo) AddRemittance(_ context.Context, value Remittance) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.remittances = append(r.remittances, value)
+	return nil
+}
+
+func (r *memoryDepotRepo) ListRemittances(_ context.Context, characterID string) ([]Remittance, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []Remittance
+	for _, v := range r.remittances {
+		if v.CharacterID == characterID {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+func (r *memoryDepotRepo) SetRemittanceAmount(_ context.Context, characterID, remittanceID string, amount int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, v := range r.remittances {
+		if v.ID == remittanceID && v.CharacterID == characterID {
+			if amount == 0 {
+				r.remittances = append(r.remittances[:i], r.remittances[i+1:]...)
+			} else {
+				r.remittances[i].Amount = amount
+			}
+			return nil
+		}
+	}
+	return errors.New("remittance not found")
 }
 
 func (r *memoryDepotRepo) FindByCharacterID(_ context.Context, characterID string) (Depot, error) {
@@ -457,7 +493,7 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	}
 
 	// Withdraw potion (succeeds into empty inventory: moves 1 unit to hand with a new ID, leaves 2 in depot)
-	dep, err = service.WithdrawItem(ctx, char.ID, potion.ID)
+	dep, _, err = service.WithdrawItem(ctx, char.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem error: %v", err)
 	}
@@ -490,7 +526,7 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	singleItem, _ := item.NewInstance("item-002", 1)
 	dep.Items = []item.Instance{singleItem}
 	_ = depotRepo.Save(ctx, dep)
-	dep, err = service.WithdrawItem(ctx, char.ID, singleItem.ID)
+	dep, _, err = service.WithdrawItem(ctx, char.ID, singleItem.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem N=1 error: %v", err)
 	}
@@ -529,7 +565,7 @@ func TestWithdrawItem_PropagatesCollectionError(t *testing.T) {
 		WithCollectionRecorder(collector),
 	)
 
-	_, err := service.WithdrawItem(ctx, char.ID, potion.ID)
+	_, _, err := service.WithdrawItem(ctx, char.ID, potion.ID)
 	if !errors.Is(err, colErr) {
 		t.Fatalf("expected collection error %v, got: %v", colErr, err)
 	}
@@ -583,7 +619,7 @@ func TestDepositAndWithdrawItem_EnhancedEquipment(t *testing.T) {
 	}
 
 	// Withdraw the +7 sword
-	dep, err = service.WithdrawItem(ctx, char.ID, sword7.ID)
+	dep, _, err = service.WithdrawItem(ctx, char.ID, sword7.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem sword7 error: %v", err)
 	}
@@ -721,7 +757,7 @@ func TestSendMoneyAndItem(t *testing.T) {
 	_ = inv.Add(sword)
 	invRepo.inventories[sender.ID] = inv
 
-	service, _ := NewService(depotRepo, charRepo, invRepo, WithTransactionProvider(txProv))
+	service, _ := NewService(depotRepo, charRepo, invRepo, WithTransactionProvider(txProv), WithRemittanceRepository(depotRepo))
 
 	// Send money
 	_, err := service.SendMoney(ctx, sender.ID, recipient.ID, 300)
@@ -730,8 +766,9 @@ func TestSendMoneyAndItem(t *testing.T) {
 	}
 	upSender, _ := charRepo.FindByID(ctx, sender.ID)
 	upRecipient, _ := charRepo.FindByID(ctx, recipient.ID)
-	if upSender.Money != 700 || upRecipient.Money != 350 {
-		t.Errorf("unexpected money balances: sender %d, recipient %d", upSender.Money, upRecipient.Money)
+	held, _ := service.PendingRemittances(ctx, recipient.ID)
+	if upSender.Money != 700 || upRecipient.Money != 50 || len(held) != 1 || held[0].Amount != 300 || held[0].SenderName != "Sender" {
+		t.Errorf("sender %d, recipient %d, held %+v", upSender.Money, upRecipient.Money, held)
 	}
 
 	// Send money - self transfer rejected
@@ -779,7 +816,7 @@ func TestSendToFullRecipientDepotIsRejected(t *testing.T) {
 		full.Items = append(full.Items, item.Instance{ID: "row-" + strconv.Itoa(i), DefinitionID: "item-00" + strconv.Itoa(i+1), Quantity: 1})
 	}
 	_ = depotRepo.Save(ctx, full)
-	service, _ := NewService(depotRepo, charRepo, invRepo, WithTransactionProvider(&memoryTxProvider{}))
+	service, _ := NewService(depotRepo, charRepo, invRepo, WithTransactionProvider(&memoryTxProvider{}), WithRemittanceRepository(depotRepo))
 
 	if _, err := service.SendMoney(ctx, sender.ID, recipient.ID, 100); !errors.Is(err, ErrRecipientDepotFull) {
 		t.Fatalf("gold to full depot: %v", err)
@@ -790,7 +827,7 @@ func TestSendToFullRecipientDepotIsRejected(t *testing.T) {
 	}
 	upSender, _ := charRepo.FindByID(ctx, sender.ID)
 	recDep, _ := depotRepo.FindByCharacterID(ctx, recipient.ID)
-	if upSender.Money != 1000 || recDep.Quantity("item-001") != 1 {
+	if held, _ := service.PendingRemittances(ctx, recipient.ID); upSender.Money != 1000 || recDep.Quantity("item-001") != 1 || len(held) != 0 {
 		t.Fatal("rejected sends must not move assets")
 	}
 }

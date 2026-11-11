@@ -57,11 +57,11 @@ func WithDepot(service DepotService) Option {
 			return toDepotResponse(value), nil
 		}, depotActionRejection)(h)
 		withActionCommand("depot_withdraw", func(ctx context.Context, actorID string, params withdrawItemRequest) (any, error) {
-			value, err := service.WithdrawItem(ctx, actorID, params.ItemID)
+			value, collected, err := service.WithdrawItem(ctx, actorID, params.ItemID)
 			if err != nil {
 				return nil, err
 			}
-			return toDepotResponse(value), nil
+			return withdrawResponse{depotResponse: toDepotResponse(value), CollectedRemittances: toRemittanceResponses(collected)}, nil
 		}, depotActionRejection)(h)
 		withActionCommand("depot_send_item", func(ctx context.Context, actorID string, params sendItemRequest) (any, error) {
 			recipientID, itemID := strings.TrimSpace(params.RecipientCharacterID), strings.TrimSpace(params.ItemID)

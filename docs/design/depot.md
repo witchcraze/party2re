@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Depot (預かり所) stores item instances outside the inventory (`depot.cgi`, `system.cgi:get_depot_c`). Withdrawal swaps with the legacy hand fields; gold stays in purses and the bank. Shapes, prices and transport are owned by code and [OpenAPI](../api/openapi.json).
+The Depot (預かり所) stores item instances outside the inventory (`depot.cgi`, `system.cgi:get_depot_c`). Withdrawal swaps with the legacy hand fields. Gold sent to a character is [held](#6-held-gold) until collected here. Shapes, prices and transport are owned by code and [OpenAPI](../api/openapi.json).
 
 ## Capacity Formula
 
@@ -91,9 +91,8 @@ native combat book execution
     unlinks the occupant before its inventory row is deleted and links new gear
     after its row exists; any failure rolls back hand, equipment, customization,
     storage and collection together.
-  - Legacy `hikidasu` first collects pending remittances
-    ([#1109](https://github.com/witchcraze/party2re/issues/1109)) and selects rows
-    by name; Go selects an explicit instance ID.
+  - Held gold is collected before any item ([§6](#6-held-gold)). Legacy selects
+    rows by name; Go selects an explicit instance ID.
 
 Depositing or sending an equipped instance unlinks its equipment slots before
 removing it from inventory. Removing main-hand equipment clears the sender's
@@ -128,7 +127,13 @@ Stored items sell at floor(base price × 0.5) per unit without withdrawal. Legac
 
 ### 5. Mailing Items and Money (`おくる`)
 
-Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Legacy gold goes through `send_money` as a pending remittance, while Go credits the recipient's wallet at once (#1109). Open: recipient Home delivery notices (#1110).
+Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Sent gold leaves the sender's wallet and is [held](#6-held-gold) for the recipient. Open: recipient Home delivery notices (#1110).
+
+### 6. Held Gold
+
+Legacy `send_money` (`system.cgi:842–855`) queues gold for the recipient, and `hikidasu` collects the whole queue before any item. `_get_money` (`depot.cgi:290–307`) empties the queue after adding every entry, and `write_user` then clamps the wallet at 999,999 (`system.cgi:71`), so gold over the cap is lost.
+
+Approved departure (#1109): collection takes entries oldest first only up to the wallet cap and keeps the remainder held. When nothing fits, the withdrawal proceeds as an item withdrawal, so a full wallet never blocks items. Entries store the sender name and source instead of a rendered message.
 
 ## Gateway Observation and Retained Operations
 
