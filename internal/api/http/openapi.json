@@ -6581,7 +6581,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "recipe_id": {
-                      "description": "Explicit recipe ID from the observed recipes. Material ownership across gem box, inventory and depot plus gem-box capacity stay service-owned.",
+                      "description": "Explicit recipe ID from the observed recipes. Materials are matched by definition ID in the gem box, then depot; hand slots are excluded. The created gem enters the gem box without a capacity check.",
                       "type": "string"
                     }
                   },
@@ -9954,9 +9954,20 @@
             "type": "string"
           },
           "material_1": {
+            "description": "Material definition ID (gem ID or item ID).",
+            "type": "string"
+          },
+          "material_1_name": {
             "type": "string"
           },
           "material_2": {
+            "description": "Material definition ID (gem ID or item ID).",
+            "type": "string"
+          },
+          "material_2_name": {
+            "type": "string"
+          },
+          "result_id": {
             "type": "string"
           },
           "result_name": {
@@ -9967,7 +9978,10 @@
           "id",
           "result_name",
           "material_1",
-          "material_2"
+          "material_2",
+          "result_id",
+          "material_1_name",
+          "material_2_name"
         ],
         "type": "object"
       },

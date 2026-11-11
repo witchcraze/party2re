@@ -175,7 +175,6 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	gemStoreService, err := gemstore.NewService(
 		gemCatalog,
 		core.charRepo,
-		core.invRepo,
 		gemstore.WithItemDefinitionProvider(core.itemCatalog),
 		gemstore.WithTransactionProvider(core.txProvider),
 		gemstore.WithGemBoxRepository(gemBoxRepo),

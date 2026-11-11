@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/gemstore"
@@ -52,43 +51,6 @@ func (m *mockCharacterRepo) Update(ctx context.Context, character corecharacter.
 		return m.updateFn(ctx, character)
 	}
 	m.characters[character.ID] = character
-	return nil
-}
-
-type mockInventoryRepo struct {
-	mu          sync.RWMutex
-	inventories map[string]coreinventory.Inventory
-	saveFn      func(ctx context.Context, inv coreinventory.Inventory) error
-}
-
-func newMockInventoryRepo() *mockInventoryRepo {
-	return &mockInventoryRepo{
-		inventories: make(map[string]coreinventory.Inventory),
-	}
-}
-
-func (m *mockInventoryRepo) FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	inv, ok := m.inventories[characterID]
-	if !ok {
-		inv, _ = coreinventory.New(characterID)
-		m.inventories[characterID] = inv
-	}
-	return inv, nil
-}
-
-func (m *mockInventoryRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	return m.FindByCharacterID(ctx, characterID)
-}
-
-func (m *mockInventoryRepo) Save(ctx context.Context, inventory coreinventory.Inventory) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.saveFn != nil {
-		return m.saveFn(ctx, inventory)
-	}
-	m.inventories[inventory.CharacterID] = inventory
 	return nil
 }
 
@@ -191,7 +153,6 @@ func TestGemStore_BuyGem(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	char := corecharacter.Character{
 		ID:       "char_1",
@@ -202,7 +163,7 @@ func TestGemStore_BuyGem(t *testing.T) {
 	}
 	charRepo.characters[char.ID] = char
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
+	svc, err := gemstore.NewService(catalog, charRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -258,7 +219,6 @@ func TestGemStore_SellGem(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	char := corecharacter.Character{
 		ID:       "char_1",
@@ -270,7 +230,7 @@ func TestGemStore_SellGem(t *testing.T) {
 	}
 	charRepo.characters[char.ID] = char
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
+	svc, err := gemstore.NewService(catalog, charRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -316,14 +276,13 @@ func TestGemStore_SendGem(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	char1 := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Sender", JobLevel: 10, Money: 1000}
 	char2 := corecharacter.Character{ID: "char_2", PlayerID: "p2", Name: "Recipient", JobLevel: 10, Money: 1000}
 	charRepo.characters[char1.ID] = char1
 	charRepo.characters[char2.ID] = char2
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
+	svc, err := gemstore.NewService(catalog, charRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -382,12 +341,11 @@ func TestGemStore_SynthesizeGem(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	char := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Hero", JobLevel: 10, Money: 10000}
 	charRepo.characters[char.ID] = char
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
+	svc, err := gemstore.NewService(catalog, charRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -436,7 +394,7 @@ func TestGemStore_SynthesizeGem_Depot_StackedMaterial(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
+
 	depotRepo := newMockDepotRepo()
 
 	char := corecharacter.Character{ID: "char_depot_synth", PlayerID: "p1", Name: "Hero", JobLevel: 10, Money: 10000}
@@ -457,7 +415,6 @@ func TestGemStore_SynthesizeGem_Depot_StackedMaterial(t *testing.T) {
 	svc, err := gemstore.NewService(
 		catalog,
 		charRepo,
-		invRepo,
 		gemstore.WithDepotRepository(depotRepo),
 	)
 	if err != nil {
@@ -508,14 +465,13 @@ func TestGemStore_SynthesizeGem_Depot_StackedMaterial(t *testing.T) {
 	}
 }
 
-func TestGemStore_AppraiseItem_IgnoresHandSlots(t *testing.T) {
+func TestGemStore_AppraiseItem_RequiresDepotItem(t *testing.T) {
 	catalog, err := gemstore.DefaultCatalog()
 	if err != nil {
 		t.Fatalf("failed to load catalog: %v", err)
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	char := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Hero"}
 	charRepo.characters[char.ID] = char
@@ -527,17 +483,9 @@ func TestGemStore_AppraiseItem_IgnoresHandSlots(t *testing.T) {
 		},
 	}
 
-	inv, _ := coreinventory.New("char_1")
-	orbInst, _ := coreitem.NewInstance("unidentified_glowing_orb", 1)
-	swordInst, _ := coreitem.NewInstance("iron_sword", 1)
-	_ = inv.Add(orbInst)
-	_ = inv.Add(swordInst)
-	invRepo.inventories["char_1"] = inv
-
 	svc, err := gemstore.NewService(
 		catalog,
 		charRepo,
-		invRepo,
 		gemstore.WithDepotRepository(newMockDepotRepo()),
 		gemstore.WithItemDefinitionProvider(itemProvider),
 		gemstore.WithRandomSource(fixedRandomSource{value: 0}),
@@ -546,13 +494,10 @@ func TestGemStore_AppraiseItem_IgnoresHandSlots(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	for _, target := range []string{orbInst.ID, swordInst.ID, "光る宝珠"} {
+	for _, target := range []string{"hand-orb", "hand-sword", "光る宝珠"} {
 		if _, err := svc.AppraiseItem(context.Background(), "char_1", target); !errors.Is(err, gemstore.ErrItemNotOwned) {
 			t.Fatalf("AppraiseItem(%q) error = %v, want ErrItemNotOwned", target, err)
 		}
-	}
-	if got := invRepo.inventories["char_1"]; len(got.Items) != 2 {
-		t.Fatalf("hand slots changed: %+v", got.Items)
 	}
 }
 
@@ -563,7 +508,7 @@ func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
+
 	depotRepo := newMockDepotRepo()
 	boxRepo := newMockGemBoxRepo()
 
@@ -577,10 +522,6 @@ func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
 		},
 	}
 
-	// Empty inventory
-	inv, _ := coreinventory.New(char.ID)
-	invRepo.inventories[char.ID] = inv
-
 	// Depot with stacked unidentified orb (qty 3) and normal sword
 	dep, _ := depot.NewDepot(char.ID)
 	dep.Items = append(dep.Items,
@@ -592,7 +533,6 @@ func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
 	svc, err := gemstore.NewService(
 		catalog,
 		charRepo,
-		invRepo,
 		gemstore.WithGemBoxRepository(boxRepo),
 		gemstore.WithDepotRepository(depotRepo),
 		gemstore.WithItemDefinitionProvider(itemProvider),
@@ -747,7 +687,6 @@ func TestGemStore_AppraiseItem_AllOrbs_AllCandidateOutcomes(t *testing.T) {
 
 		for idx, expectedGemID := range gemIDs {
 			charRepo := newMockCharacterRepo()
-			invRepo := newMockInventoryRepo()
 
 			char := corecharacter.Character{ID: "char_test", PlayerID: "p_test", Name: "Tester"}
 			charRepo.characters[char.ID] = char
@@ -764,7 +703,6 @@ func TestGemStore_AppraiseItem_AllOrbs_AllCandidateOutcomes(t *testing.T) {
 			svc, err := gemstore.NewService(
 				catalog,
 				charRepo,
-				invRepo,
 				gemstore.WithDepotRepository(depots),
 				gemstore.WithItemDefinitionProvider(itemProvider),
 				gemstore.WithRandomSource(fixedRandomSource{value: idx}),
@@ -794,7 +732,6 @@ func TestGemStore_AppraiseItem_RandomSourceError(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	char := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Hero"}
 	charRepo.characters[char.ID] = char
@@ -811,7 +748,6 @@ func TestGemStore_AppraiseItem_RandomSourceError(t *testing.T) {
 	svc, err := gemstore.NewService(
 		catalog,
 		charRepo,
-		invRepo,
 		gemstore.WithDepotRepository(depots),
 		gemstore.WithItemDefinitionProvider(itemProvider),
 		gemstore.WithRandomSource(errRandomSource{}),
@@ -838,7 +774,6 @@ func TestGemStore_AppraiseItem_Concurrency(t *testing.T) {
 	for i := 0; i < workerCount; i++ {
 		go func(workerID int) {
 			charRepo := newMockCharacterRepo()
-			invRepo := newMockInventoryRepo()
 
 			charID := fmt.Sprintf("char_%d", workerID)
 			char := corecharacter.Character{ID: charID, PlayerID: "p", Name: "Worker"}
@@ -856,7 +791,6 @@ func TestGemStore_AppraiseItem_Concurrency(t *testing.T) {
 			svc, err := gemstore.NewService(
 				catalog,
 				charRepo,
-				invRepo,
 				gemstore.WithDepotRepository(depots),
 				gemstore.WithItemDefinitionProvider(itemProvider),
 				gemstore.WithRandomSource(gemstore.DefaultRandomSource()),
@@ -931,9 +865,8 @@ func TestGemStore_GetCatalogAndRecipes(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
+	svc, err := gemstore.NewService(catalog, charRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -1025,14 +958,14 @@ func TestService_SellGem_LockHierarchy(t *testing.T) {
 		t.Fatalf("failed to load default catalog: %v", err)
 	}
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
+
 	boxRepo := newMockGemBoxRepo()
 	var lockOrder []string
 
 	trackedCharRepo := &orderTrackingCharRepo{mockCharacterRepo: charRepo, lockOrder: &lockOrder}
 	trackedBoxRepo := &orderTrackingGemBoxRepo{mockGemBoxRepo: boxRepo, lockOrder: &lockOrder}
 
-	svc, err := gemstore.NewService(catalog, trackedCharRepo, invRepo,
+	svc, err := gemstore.NewService(catalog, trackedCharRepo,
 		gemstore.WithGemBoxRepository(trackedBoxRepo),
 		gemstore.WithTransactionProvider(&mockTxProvider{}),
 	)
@@ -1072,10 +1005,10 @@ func TestService_Concurrent_SellGem_And_BuyGem(t *testing.T) {
 		t.Fatalf("failed to load default catalog: %v", err)
 	}
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
+
 	boxRepo := newMockGemBoxRepo()
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo,
+	svc, err := gemstore.NewService(catalog, charRepo,
 		gemstore.WithGemBoxRepository(boxRepo),
 		gemstore.WithTransactionProvider(&mockTxProvider{}),
 	)

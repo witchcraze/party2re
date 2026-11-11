@@ -11,6 +11,8 @@ import (
 )
 
 // SynthesizeGem synthesizes two ingredient items/gems into an advanced gem stored in the Gem Box.
+// Transaction: RunInTx
+// Lock Order: characters(2) -> character_depots(5) -> character_gem_boxes(8)
 func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID string) (SynthesizeResult, error) {
 	characterID = strings.TrimSpace(characterID)
 	recipeID = strings.TrimSpace(recipeID)
@@ -26,12 +28,9 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 		return SynthesizeResult{}, ErrRecipeNotFound
 	}
 
-	resultGem, ok := s.catalog.FindGemByName(recipe.ResultName)
+	resultGem, ok := s.catalog.FindGemByID(recipe.ResultID)
 	if !ok {
-		resultGem, ok = s.catalog.FindGemByID(recipe.ResultName)
-		if !ok {
-			return SynthesizeResult{}, ErrGemNotFound
-		}
+		return SynthesizeResult{}, ErrGemNotFound
 	}
 
 	var res SynthesizeResult
@@ -41,11 +40,6 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 			return err
 		}
 		if err := s.checkMutation(txCtx, characterID); err != nil {
-			return err
-		}
-
-		inv, err := s.inventories.FindByCharacterIDForUpdate(txCtx, characterID)
-		if err != nil {
 			return err
 		}
 
@@ -65,25 +59,12 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 			return err
 		}
 
-		// Consume material 1 (try GemBox first, then inventory, then depot)
-		if _, err := removeMaterialFromGemBox(&box, recipe.Material1, s.catalog, s.items); err != nil {
-			mat1Query := depot.QueryByMatch(func(inst coreitem.Instance) bool {
-				name := resolveItemName(inst.DefinitionID, s.catalog, s.items)
-				return name == recipe.Material1 || inst.DefinitionID == recipe.Material1
-			})
-			if _, err := depot.ConsumeItem(&inv, &dep, mat1Query, depot.PriorityInventoryFirst, 1); err != nil {
-				return fmt.Errorf("%w: missing %s", ErrInsufficientMaterials, recipe.Material1)
-			}
-		}
-
-		// Consume material 2 (try GemBox first, then inventory, then depot)
-		if _, err := removeMaterialFromGemBox(&box, recipe.Material2, s.catalog, s.items); err != nil {
-			mat2Query := depot.QueryByMatch(func(inst coreitem.Instance) bool {
-				name := resolveItemName(inst.DefinitionID, s.catalog, s.items)
-				return name == recipe.Material2 || inst.DefinitionID == recipe.Material2
-			})
-			if _, err := depot.ConsumeItem(&inv, &dep, mat2Query, depot.PriorityInventoryFirst, 1); err != nil {
-				return fmt.Errorf("%w: missing %s", ErrInsufficientMaterials, recipe.Material2)
+		// Legacy synthesis searches the Gem Box, then Depot; hand slots are excluded.
+		for _, materialID := range []string{recipe.Material1, recipe.Material2} {
+			if _, err := removeMaterialFromGemBox(&box, materialID); err != nil {
+				if _, err := depot.ConsumeItem(nil, &dep, depot.QueryByDefinitionID(materialID), depot.PriorityDepotFirst, 1); err != nil {
+					return &InsufficientMaterialsError{Recipe: recipe}
+				}
 			}
 		}
 
@@ -93,9 +74,6 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 		}
 		box.Deliver(newInstance) // gem_store.cgi:309 send_gem ignores capacity
 
-		if err := s.inventories.Save(txCtx, inv); err != nil {
-			return err
-		}
 		if s.depots != nil && dep.CharacterID != "" {
 			if err := s.depots.Save(txCtx, dep); err != nil {
 				return err
@@ -108,7 +86,6 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 		res = SynthesizeResult{
 			Character:    char,
 			GemBox:       box,
-			Inventory:    inv,
 			CreatedGem:   resultGem,
 			Recipe:       recipe,
 			ItemInstance: newInstance,
@@ -256,15 +233,9 @@ func resolveItemName(defID string, catalog *Catalog, items ItemDefinitionProvide
 	return defID
 }
 
-func removeMaterialFromGemBox(
-	box *GemBox,
-	matName string,
-	catalog *Catalog,
-	items ItemDefinitionProvider,
-) (coreitem.Instance, error) {
+func removeMaterialFromGemBox(box *GemBox, definitionID string) (coreitem.Instance, error) {
 	for i, inst := range box.Items {
-		name := resolveItemName(inst.DefinitionID, catalog, items)
-		if inst.ID == matName || inst.DefinitionID == matName || name == matName {
+		if inst.DefinitionID == definitionID {
 			removed := inst
 			box.Items = append(box.Items[:i], box.Items[i+1:]...)
 			return removed, nil

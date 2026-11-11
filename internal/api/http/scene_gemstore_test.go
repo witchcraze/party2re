@@ -19,6 +19,7 @@ type gemStoreSceneService struct {
 	boxErr       error
 	catalogLevel int
 	mutations    int
+	recipes      []gemstore.Recipe
 }
 
 func (s *gemStoreSceneService) GetGemBox(_ context.Context, actor string) (gemstore.GemBox, error) {
@@ -34,7 +35,7 @@ func (s *gemStoreSceneService) GetCatalog(jobLevel int) []gemstore.Gem {
 }
 
 func (s *gemStoreSceneService) GetRecipes() []gemstore.Recipe {
-	return []gemstore.Recipe{{ID: "recipe-1"}}
+	return s.recipes
 }
 func (s *gemStoreSceneService) BuyGem(context.Context, string, string) (gemstore.BuyResult, error) {
 	s.mutations++
@@ -60,7 +61,12 @@ func gemStoreSceneRouter(t *testing.T, service GemStoreService, destination stri
 }
 
 func TestGemStoreSceneObservesOwnedFactsWithoutWrites(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
 	service := &gemStoreSceneService{box: gemstore.GemBox{CharacterID: "hero", Capacity: 15, Items: []coreitem.Instance{{ID: "owned-gem", DefinitionID: "gem_atk_1", Quantity: 1}}}}
+	service.recipes = catalog.AllRecipes()
 	f, store, router := gemStoreSceneRouter(t, service, "gemstore")
 	f.char.JobLevel = 30
 	status, observation := navigationGET(t, router)
@@ -69,8 +75,27 @@ func TestGemStoreSceneObservesOwnedFactsWithoutWrites(t *testing.T) {
 	}
 	data := decodeShopScene[GemStoreSceneData](t, observation)
 	if data.Parent != "town" || data.GemBox.Capacity != 15 || len(data.GemBox.Items) != 1 || data.GemBox.Items[0].ID != "owned-gem" ||
-		len(data.Catalog) != 1 || len(data.Recipes) != 1 || service.catalogLevel != 30 {
+		len(data.Catalog) != 1 || len(data.Recipes) != 56 || service.catalogLevel != 30 {
 		t.Fatalf("lost facts: %+v (catalog level %d)", data, service.catalogLevel)
+	}
+	items, err := coreitem.DefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, recipe := range data.Recipes {
+		gem, ok := catalog.FindGemByID(recipe.ResultID)
+		if !ok || recipe.ResultName != gem.Name {
+			t.Fatalf("missing result identity/name: %+v", recipe)
+		}
+		for _, material := range [][2]string{{recipe.Material1, recipe.Material1Name}, {recipe.Material2, recipe.Material2Name}} {
+			if gem, ok := catalog.FindGemByID(material[0]); ok {
+				if material[1] != gem.Name {
+					t.Fatalf("missing gem name: %+v", recipe)
+				}
+			} else if item, err := items.FindByID(material[0]); err != nil || material[1] != item.Name {
+				t.Fatalf("missing item name: %+v", recipe)
+			}
+		}
 	}
 	for _, action := range []string{"gemstore_buy", "gemstore_sell", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "gemstore_sort", "scene_back"} {
 		if !slices.ContainsFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == action }) {

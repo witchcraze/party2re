@@ -112,7 +112,7 @@ func TestGemStore_BuyGem_EnforcesSalesTier(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			charRepo := newMockCharacterRepo()
 			charRepo.characters["c"] = corecharacter.Character{ID: "c", JobLevel: tt.jobLevel, Money: 100000}
-			svc, err := gemstore.NewService(c, charRepo, newMockInventoryRepo())
+			svc, err := gemstore.NewService(c, charRepo)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 )
 
 //go:embed data/gems.json
@@ -37,10 +39,13 @@ type salesTier struct {
 
 // Recipe represents a synthesis formula for creating advanced gems.
 type Recipe struct {
-	ID         string `json:"id"`
-	ResultName string `json:"result_name"`
-	Material1  string `json:"material_1"`
-	Material2  string `json:"material_2"`
+	ID            string `json:"id"`
+	ResultID      string `json:"result_id"`
+	ResultName    string `json:"result_name"`
+	Material1     string `json:"material_1"`
+	Material1Name string `json:"material_1_name"`
+	Material2     string `json:"material_2"`
+	Material2Name string `json:"material_2_name"`
 }
 
 // OrbAppraisalCandidate represents a single gem outcome and its relative weight within an orb pool.
@@ -57,17 +62,16 @@ type OrbAppraisalPool struct {
 
 // Catalog provides in-memory access to gem definitions, synthesis recipes, and orb appraisal pools.
 type Catalog struct {
-	gemsByID     map[string]Gem
-	gemsByName   map[string]Gem
-	allGems      []Gem
-	gemRanks     map[string]int
-	recipesByID  map[string]Recipe
-	allRecipes   []Recipe
-	recipesByMat map[string]Recipe
-	orbPools     map[string][]string
-	orbPoolDefs  []OrbAppraisalPool
-	salesTiers   []salesTier // descending MinJobLevel; the last tier starts at 0
-	salesByTier  []map[string]bool
+	gemsByID    map[string]Gem
+	gemsByName  map[string]Gem
+	allGems     []Gem
+	gemRanks    map[string]int
+	recipesByID map[string]Recipe
+	allRecipes  []Recipe
+	orbPools    map[string][]string
+	orbPoolDefs []OrbAppraisalPool
+	salesTiers  []salesTier // descending MinJobLevel; the last tier starts at 0
+	salesByTier []map[string]bool
 }
 
 // DefaultCatalog parses and returns the embedded gem store catalog.
@@ -93,15 +97,12 @@ func DefaultCatalog() (*Catalog, error) {
 	}
 
 	c := &Catalog{
-		gemsByID:     make(map[string]Gem, len(gems)),
-		gemsByName:   make(map[string]Gem, len(gems)),
-		allGems:      gems,
-		gemRanks:     make(map[string]int, len(gems)),
-		recipesByID:  make(map[string]Recipe, len(recipes)),
-		allRecipes:   recipes,
-		recipesByMat: make(map[string]Recipe, len(recipes)),
-		orbPools:     make(map[string][]string, len(orbPools)),
-		orbPoolDefs:  orbPools,
+		gemsByID:    make(map[string]Gem, len(gems)),
+		gemsByName:  make(map[string]Gem, len(gems)),
+		allGems:     gems,
+		gemRanks:    make(map[string]int, len(gems)),
+		orbPools:    make(map[string][]string, len(orbPools)),
+		orbPoolDefs: orbPools,
 	}
 
 	for i, g := range gems {
@@ -126,12 +127,12 @@ func DefaultCatalog() (*Catalog, error) {
 	}
 	c.salesTiers = tiers
 
-	for _, r := range recipes {
-		c.recipesByID[r.ID] = r
-		key1 := fmt.Sprintf("%s|%s", r.Material1, r.Material2)
-		key2 := fmt.Sprintf("%s|%s", r.Material2, r.Material1)
-		c.recipesByMat[key1] = r
-		c.recipesByMat[key2] = r
+	items, err := coreitem.DefaultCatalog()
+	if err != nil {
+		return nil, fmt.Errorf("load recipe item definitions: %w", err)
+	}
+	if err := c.loadRecipes(recipes, items); err != nil {
+		return nil, err
 	}
 
 	for _, p := range orbPools {
@@ -206,13 +207,6 @@ func (c *Catalog) IsOnSale(gemID string, jobLevel int) bool {
 // FindRecipeByID finds a recipe by its ID.
 func (c *Catalog) FindRecipeByID(id string) (Recipe, bool) {
 	r, ok := c.recipesByID[id]
-	return r, ok
-}
-
-// FindRecipeByMaterials finds a recipe matching two material names (order independent).
-func (c *Catalog) FindRecipeByMaterials(mat1, mat2 string) (Recipe, bool) {
-	key := fmt.Sprintf("%s|%s", strings.TrimSpace(mat1), strings.TrimSpace(mat2))
-	r, ok := c.recipesByMat[key]
 	return r, ok
 }
 

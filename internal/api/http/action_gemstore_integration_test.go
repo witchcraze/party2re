@@ -54,10 +54,6 @@ func gemStoreDBRouter(t *testing.T, ctx context.Context) (http.Handler, corechar
 	if err != nil {
 		t.Fatal(err)
 	}
-	inv, err := database.NewInventoryRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	boxes, err := database.NewGemBoxRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +92,7 @@ func gemStoreDBRouter(t *testing.T, ctx context.Context) (http.Handler, corechar
 		t.Fatal(err)
 	}
 	storage := &gemStoreGatewayBoxes{GemBoxRepository: boxes, db: db}
-	svc, err := gemstore.NewService(catalog, chars, inv, gemstore.WithGemBoxRepository(storage), gemstore.WithTransactionProvider(database.NewTransactionProvider(db)), gemstore.WithItemDefinitionProvider(itemCatalog), gemstore.WithDepotRepository(depots))
+	svc, err := gemstore.NewService(catalog, chars, gemstore.WithGemBoxRepository(storage), gemstore.WithTransactionProvider(database.NewTransactionProvider(db)), gemstore.WithItemDefinitionProvider(itemCatalog), gemstore.WithDepotRepository(depots))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,8 +167,8 @@ func TestGemStoreGatewayPersistenceAndRollback(t *testing.T) {
 }
 
 func TestGemStoreGatewaySynthesisWithRenamedItemRollsBack(t *testing.T) {
-	for _, fail := range []bool{false, true} {
-		t.Run(fmt.Sprintf("fail=%t", fail), func(t *testing.T) {
+	for _, outcome := range []string{"success", "save failure", "missing material", "hand only"} {
+		t.Run(outcome, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 			router, actor, _, boxes, _ := gemStoreDBRouter(t, ctx)
@@ -195,8 +191,25 @@ func TestGemStoreGatewaySynthesisWithRenamedItemRollsBack(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := dep.AddItem(reins); err != nil {
+			inventories, err := database.NewInventoryRepository(boxes.db)
+			if err != nil {
 				t.Fatal(err)
+			}
+			invBefore, err := inventories.FindByCharacterID(ctx, actor.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if outcome == "hand only" {
+				if err := invBefore.Add(reins); err != nil {
+					t.Fatal(err)
+				}
+				if err := inventories.Save(ctx, invBefore); err != nil {
+					t.Fatal(err)
+				}
+			} else if outcome != "missing material" {
+				if err := dep.AddItem(reins); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := depots.Save(ctx, dep); err != nil {
 				t.Fatal(err)
@@ -205,7 +218,7 @@ func TestGemStoreGatewaySynthesisWithRenamedItemRollsBack(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			boxes.fail = fail
+			boxes.fail = outcome == "save failure"
 			status, got := gatewayRequest(t, router, actor.ID, "session", "application/json", saleGatewayBody("gemstore_synthesize", `{"recipe_id":"recipe_burst_sky"}`), ctx)
 			boxAfter, err := boxes.FindByCharacterID(ctx, actor.ID)
 			if err != nil {
@@ -215,9 +228,20 @@ func TestGemStoreGatewaySynthesisWithRenamedItemRollsBack(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if fail {
-				assertGatewayError(t, got, "EXECUTION_FAILED")
-				if status != 500 || !reflect.DeepEqual(boxBefore, boxAfter) || !reflect.DeepEqual(dep.Items, depAfter.Items) {
+			invAfter, err := inventories.FindByCharacterID(ctx, actor.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(invBefore, invAfter) {
+				t.Fatalf("synthesis changed hand slots: before=%+v after=%+v", invBefore, invAfter)
+			}
+			if outcome != "success" {
+				wantStatus, wantCode := 400, "GEMSTORE_INSUFFICIENT_MATERIALS"
+				if boxes.fail {
+					wantStatus, wantCode = 500, "EXECUTION_FAILED"
+				}
+				assertGatewayError(t, got, wantCode)
+				if status != wantStatus || !reflect.DeepEqual(boxBefore, boxAfter) || !reflect.DeepEqual(dep.Items, depAfter.Items) {
 					t.Fatalf("partial mutation: %d box=%+v depot=%+v", status, boxAfter, depAfter)
 				}
 				return

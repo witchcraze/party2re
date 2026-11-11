@@ -123,6 +123,24 @@ func TestGemStoreGatewayInputs(t *testing.T) {
 	}
 }
 
+func TestGemStoreGatewayMissingMaterialsNames(t *testing.T) {
+	f := &gemStoreGatewayFixture{gatewayFixture: newGatewayFixture(t)}
+	f.executionErr = fmt.Errorf("wrapped: %w", &gemstore.InsufficientMaterialsError{Recipe: gemstore.Recipe{
+		Material1Name: "攻撃の天珠Ⅱ", Material2Name: "天馬のたづな",
+	}})
+	status, got := gatewayRequest(t, f.router(t, timer.NewService(nil)), "hero", "session", "application/json",
+		saleGatewayBody("gemstore_synthesize", `{"recipe_id":"recipe_burst_sky"}`), nil)
+	if status != 400 {
+		t.Fatalf("status=%d: %s", status, got)
+	}
+	assertGatewayError(t, got, "GEMSTORE_INSUFFICIENT_MATERIALS")
+	for _, name := range []string{"攻撃の天珠Ⅱ", "天馬のたづな"} {
+		if !strings.Contains(string(got["error"]), name) {
+			t.Fatalf("missing material name %q: %s", name, got)
+		}
+	}
+}
+
 func TestGemStoreGatewayOutcomes(t *testing.T) {
 	for _, input := range gemStoreInputs {
 		for _, refreshFailure := range []bool{false, true} {

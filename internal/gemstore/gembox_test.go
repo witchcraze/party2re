@@ -91,12 +91,11 @@ func TestGemStore_SortGemBox(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	char := corecharacter.Character{ID: "char_1", JobLevel: 10, Money: 10000}
 	charRepo.characters[char.ID] = char
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
+	svc, err := gemstore.NewService(catalog, charRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -146,13 +145,12 @@ func TestGemStore_BuyGem_GemBoxFull(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	// JobLevel 0 -> Capacity 5
 	char := corecharacter.Character{ID: "char_full", JobLevel: 0, Money: 50000}
 	charRepo.characters[char.ID] = char
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
+	svc, err := gemstore.NewService(catalog, charRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -180,14 +178,13 @@ func TestGemStore_SendGem_UsesSenderJobLevelLimit(t *testing.T) {
 	}
 
 	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
 
 	sender := corecharacter.Character{ID: "sender", JobLevel: 1, Money: 10000}
 	recipient := corecharacter.Character{ID: "recipient", JobLevel: 0, Money: 10000} // Cap 5
 	charRepo.characters[sender.ID] = sender
 	charRepo.characters[recipient.ID] = recipient
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
+	svc, err := gemstore.NewService(catalog, charRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
