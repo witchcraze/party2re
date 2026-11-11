@@ -453,6 +453,13 @@
           "party_size": {
             "type": "integer"
           },
+          "post_adventure_messages": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Post-adventure settlement messages keyed by participant character ID. Omitted when no messages exist; present only in the completion response, without persisted history.",
+            "type": "object"
+          },
           "resolved": {
             "type": "boolean"
           },
@@ -12821,6 +12828,13 @@
           },
           "party_id": {
             "type": "string"
+          },
+          "post_adventure_messages": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Post-adventure settlement messages keyed by participant character ID. Omitted when no messages exist; present only in the completion response, without persisted history.",
+            "type": "object"
           },
           "rewards": {
             "items": {

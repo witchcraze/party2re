@@ -318,9 +318,9 @@ func TestAdventure_PostAdventureHook(t *testing.T) {
 	service, _, _, characters := newTestService(t)
 
 	var postAdvCharID string
-	service.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
+	service.SetPostAdventureHook(func(ctx context.Context, characterID string) (string, error) {
 		postAdvCharID = characterID
-		return nil
+		return "", nil
 	})
 
 	_, err := service.Start(context.Background(), characters.value.ID)
@@ -618,8 +618,8 @@ func TestExecuteCrawl_HookErrorHandling(t *testing.T) {
 	service.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
 		return errors.New("simulated victory hook error")
 	})
-	service.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
-		return errors.New("simulated post adventure hook error")
+	service.SetPostAdventureHook(func(ctx context.Context, characterID string) (string, error) {
+		return "", errors.New("simulated post adventure hook error")
 	})
 
 	res, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{

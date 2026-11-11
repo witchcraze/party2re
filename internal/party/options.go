@@ -61,7 +61,8 @@ func WithParticipantBuilder(builder ParticipantBuilder) Option {
 }
 
 // PostAdventureHook is called after an adventure concludes and state is applied.
-type PostAdventureHook func(ctx context.Context, characterID string) error
+// Successful nonempty messages are included per participant; errors do not fail completion.
+type PostAdventureHook func(ctx context.Context, characterID string) (string, error)
 
 // WithPostAdventureHook configures the post-adventure hook.
 func WithPostAdventureHook(hook PostAdventureHook) Option {

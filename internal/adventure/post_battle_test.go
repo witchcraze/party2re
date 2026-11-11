@@ -955,9 +955,9 @@ func TestAdventure_ExitFatigue_NormalAndCalm_SettlerAndFallback(t *testing.T) {
 		}
 
 		isFull := map[string]bool{c1.ID: true, c2.ID: true}
-		svc.SetPostAdventureHook(func(_ context.Context, characterID string) error {
+		svc.SetPostAdventureHook(func(_ context.Context, characterID string) (string, error) {
 			isFull[characterID] = false
-			return nil
+			return "", nil
 		})
 
 		resNorm, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
@@ -1017,9 +1017,9 @@ func TestAdventure_ExitFatigue_NormalAndCalm_SettlerAndFallback(t *testing.T) {
 		}
 
 		isFull := map[string]bool{w1.ID: true, w2.ID: true}
-		svc.SetPostAdventureHook(func(_ context.Context, characterID string) error {
+		svc.SetPostAdventureHook(func(_ context.Context, characterID string) (string, error) {
 			isFull[characterID] = false
-			return nil
+			return "", nil
 		})
 
 		res1, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{

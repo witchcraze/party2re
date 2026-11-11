@@ -878,15 +878,16 @@ type startAdventureRequest struct {
 }
 
 type adventureResponse struct {
-	ID               string    `json:"id"`
-	CharacterID      string    `json:"character_id"`
-	StageID          string    `json:"stage_id"`
-	StartedAt        time.Time `json:"started_at"`
-	FloorsCleared    int       `json:"floors_cleared"`
-	IsCleared        bool      `json:"is_cleared"`
-	PartySize        int       `json:"party_size"`
-	Resolved         bool      `json:"resolved"`
-	ExperienceReward int       `json:"experience_reward"`
+	PostAdventureMessages map[string]string `json:"post_adventure_messages,omitempty"`
+	ID                    string            `json:"id"`
+	CharacterID           string            `json:"character_id"`
+	StageID               string            `json:"stage_id"`
+	StartedAt             time.Time         `json:"started_at"`
+	FloorsCleared         int               `json:"floors_cleared"`
+	IsCleared             bool              `json:"is_cleared"`
+	PartySize             int               `json:"party_size"`
+	Resolved              bool              `json:"resolved"`
+	ExperienceReward      int               `json:"experience_reward"`
 }
 
 func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
@@ -908,15 +909,16 @@ func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 
 func toAdventureResponse(adv adventure.Adventure) adventureResponse {
 	return adventureResponse{
-		ID:               adv.ID,
-		CharacterID:      adv.CharacterID,
-		StageID:          adv.StageID,
-		StartedAt:        adv.StartedAt,
-		FloorsCleared:    adv.FloorsCleared,
-		IsCleared:        adv.IsCleared,
-		PartySize:        adv.PartySize,
-		Resolved:         adv.Resolved,
-		ExperienceReward: adv.ExperienceReward,
+		PostAdventureMessages: adv.PostAdventureMessages,
+		ID:                    adv.ID,
+		CharacterID:           adv.CharacterID,
+		StageID:               adv.StageID,
+		StartedAt:             adv.StartedAt,
+		FloorsCleared:         adv.FloorsCleared,
+		IsCleared:             adv.IsCleared,
+		PartySize:             adv.PartySize,
+		Resolved:              adv.Resolved,
+		ExperienceReward:      adv.ExperienceReward,
 	}
 }
 

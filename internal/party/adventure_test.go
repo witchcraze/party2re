@@ -1176,9 +1176,9 @@ func TestPartyAdventure_ExitFatigueAndMealReset(t *testing.T) {
 				charRepo.chars[ally.ID] = ally
 
 				isFull := map[string]bool{leader.ID: true, ally.ID: true}
-				svc.SetPostAdventureHook(func(_ context.Context, characterID string) error {
+				svc.SetPostAdventureHook(func(_ context.Context, characterID string) (string, error) {
 					isFull[characterID] = false
-					return nil
+					return "", nil
 				})
 
 				pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
@@ -1249,9 +1249,9 @@ func TestPartyAdventure_ExitFatigueAndMealReset(t *testing.T) {
 		partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, ally)
 
 		isFull := map[string]bool{leader.ID: true, ally.ID: true}
-		svc.SetPostAdventureHook(func(_ context.Context, characterID string) error {
+		svc.SetPostAdventureHook(func(_ context.Context, characterID string) (string, error) {
 			isFull[characterID] = false
-			return nil
+			return "", nil
 		})
 
 		// 1. Persistence failure rolls back transaction and does not reset meal flag

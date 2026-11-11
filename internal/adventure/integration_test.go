@@ -301,13 +301,18 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	advService.SetPostAdventureHook(func(hookCtx context.Context, characterID string) error {
-		_ = tavernService.ResetFullness(hookCtx, characterID)
-		_, err := tavernService.ClaimDelivery(hookCtx, characterID)
-		if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
-			return nil
+	advService.SetPostAdventureHook(func(hookCtx context.Context, characterID string) (string, error) {
+		if err := tavernService.ResetFullness(hookCtx, characterID); err != nil {
+			return "", err
 		}
-		return err
+		result, err := tavernService.ClaimDelivery(hookCtx, characterID)
+		if errors.Is(err, tavern.ErrNoActiveDelivery) {
+			return "", nil
+		}
+		if errors.Is(err, tavern.ErrInsufficientFunds) {
+			return "酒場から出前が届きましたが、お金が足りませんでした", nil
+		}
+		return result.Message, err
 	})
 
 	// 3. Start adventure (immediate execution + PostAdventureHook)
@@ -317,6 +322,10 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 	}
 	if !claimedAdv.Resolved {
 		t.Fatal("expected adventure to be resolved")
+	}
+
+	if claimedAdv.PostAdventureMessages[char.ID] == "" {
+		t.Fatal("expected successful delivery message in adventure result")
 	}
 
 	// 4. Verify Post-Adventure delivery effects
@@ -484,13 +493,18 @@ func TestAdventurePostAdventureHook_TavernDelivery_ZeroFundsLifecycle(t *testing
 		t.Fatal(err)
 	}
 
-	advService.SetPostAdventureHook(func(hookCtx context.Context, characterID string) error {
-		_ = tavernService.ResetFullness(hookCtx, characterID)
-		_, err := tavernService.ClaimDelivery(hookCtx, characterID)
-		if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
-			return nil
+	advService.SetPostAdventureHook(func(hookCtx context.Context, characterID string) (string, error) {
+		if err := tavernService.ResetFullness(hookCtx, characterID); err != nil {
+			return "", err
 		}
-		return err
+		result, err := tavernService.ClaimDelivery(hookCtx, characterID)
+		if errors.Is(err, tavern.ErrNoActiveDelivery) {
+			return "", nil
+		}
+		if errors.Is(err, tavern.ErrInsufficientFunds) {
+			return "酒場から出前が届きましたが、お金が足りませんでした", nil
+		}
+		return result.Message, err
 	})
 
 	// 5. Start adventure: character finishes with small reward (< 750G)
@@ -500,6 +514,10 @@ func TestAdventurePostAdventureHook_TavernDelivery_ZeroFundsLifecycle(t *testing
 	}
 	if !claimedAdv.Resolved {
 		t.Fatal("expected adventure to be resolved")
+	}
+
+	if got := claimedAdv.PostAdventureMessages[char.ID]; got != "酒場から出前が届きましたが、お金が足りませんでした" {
+		t.Fatalf("unexpected insufficient-funds message: %q", got)
 	}
 
 	// Verify post-adventure state: delivery was skipped due to insufficient funds, but reservation remains
@@ -533,6 +551,10 @@ func TestAdventurePostAdventureHook_TavernDelivery_ZeroFundsLifecycle(t *testing
 	}
 	if !claimedAdv2.Resolved {
 		t.Fatal("expected second adventure to be resolved")
+	}
+
+	if claimedAdv2.PostAdventureMessages[char.ID] == "" {
+		t.Fatal("expected delivery message after earning sufficient funds")
 	}
 
 	// Verify delivery was successfully claimed and deducted
@@ -1003,9 +1025,9 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		victoryHooks++
 		return nil
 	})
-	advService.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
+	advService.SetPostAdventureHook(func(ctx context.Context, characterID string) (string, error) {
 		postHooks++
-		return nil
+		return "", nil
 	})
 
 	// 1. Solo history save error rolls back rewards, exit fatigue, inventory drops, and chronicle
@@ -1096,12 +1118,12 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		}
 		return errors.New("victory hook failure after commit")
 	})
-	advService.SetPostAdventureHook(func(hookCtx context.Context, _ string) error {
+	advService.SetPostAdventureHook(func(hookCtx context.Context, _ string) (string, error) {
 		postHooks++
 		if database.TxFromContext(hookCtx) != nil {
 			t.Errorf("expected postAdventureHook context to have no active transaction")
 		}
-		return errors.New("post adventure hook failure after commit")
+		return "", errors.New("post adventure hook failure after commit")
 	})
 
 	adv, err := advService.StartStage(ctx, hero1.ID, adventure.StarterAdventure)

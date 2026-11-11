@@ -8686,6 +8686,13 @@
       },
       "PartyAdventureResult": {
         "properties": {
+          "post_adventure_messages": {
+            "description": "Post-adventure settlement messages keyed by participant character ID. Omitted when no messages exist; present only in the completion response, without persisted history.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "battle_result": {
             "$ref": "#/components/schemas/BattlePartyBattleResult"
           },
@@ -9092,6 +9099,13 @@
       },
       "AdventureResponse": {
         "properties": {
+          "post_adventure_messages": {
+            "description": "Post-adventure settlement messages keyed by participant character ID. Omitted when no messages exist; present only in the completion response, without persisted history.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "character_id": {
             "type": "string"
           },

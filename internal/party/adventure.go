@@ -339,8 +339,13 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 	if s.postAdventureHook != nil {
 		for _, r := range result.Rewards {
 			//lint:ignore error-swallow best-effort tavern effects must not fail a committed adventure or skip later members
-			if err := s.postAdventureHook(ctx, r.CharacterID); err != nil {
+			if message, err := s.postAdventureHook(ctx, r.CharacterID); err != nil {
 				slog.WarnContext(ctx, "party post adventure hook failed", "error_type", reflect.TypeOf(err).String())
+			} else if message != "" {
+				if result.PostAdventureMessages == nil {
+					result.PostAdventureMessages = make(map[string]string)
+				}
+				result.PostAdventureMessages[r.CharacterID] = message
 			}
 		}
 	}
