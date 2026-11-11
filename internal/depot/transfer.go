@@ -10,7 +10,7 @@ import (
 )
 
 // SendMoney moves gold from the sender's wallet into a remittance held for the
-// recipient, under 2-character ascending row locks.
+// recipient, under 2-character ascending row locks, then Depot(5) and notice rows(8).
 func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID string, amount int) (Depot, error) {
 	fromCharacterID = strings.TrimSpace(fromCharacterID)
 	toCharacterID = strings.TrimSpace(toCharacterID)
@@ -80,16 +80,14 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 			Amount: amount, Source: RemittanceDepotTransfer, SenderName: sender.Name}); err != nil {
 			return err
 		}
-		if err := s.notifyMoneySent(txCtx, toCharacterID); err != nil {
-			return err
-		}
 
 		sDep, err := s.findOrCreateDepot(txCtx, fromCharacterID, sender)
 		if err != nil {
 			return err
 		}
 		senderDepot = sDep
-		return nil
+		// Notice rows (Rank 8) follow every Depot lock (Rank 5).
+		return s.notifyMoneySent(txCtx, toCharacterID)
 	})
 	if err != nil {
 		return Depot{}, err
@@ -186,16 +184,14 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 		if err := s.saveDepot(txCtx, recDepot); err != nil {
 			return err
 		}
-		if err := s.notifyItemSent(txCtx, toCharacterID, sender.Name, itemInst); err != nil {
-			return err
-		}
 
 		sDep, err := s.findOrCreateDepot(txCtx, fromCharacterID, sender)
 		if err != nil {
 			return err
 		}
 		senderDepot = sDep
-		return nil
+		// Notice rows (Rank 8) follow every Depot lock (Rank 5).
+		return s.notifyItemSent(txCtx, toCharacterID, sender.Name, itemInst)
 	})
 	if err != nil {
 		return Depot{}, err
