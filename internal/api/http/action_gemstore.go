@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -114,6 +115,10 @@ func gemStoreActionRejection(err error) (int, ErrorDetail) {
 	case errors.Is(err, gemstore.ErrInsufficientFunds):
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_INSUFFICIENT_FUNDS", Message: "Insufficient wallet funds."}
 	case errors.Is(err, gemstore.ErrInsufficientMaterials):
+		var missing *gemstore.InsufficientMaterialsError
+		if errors.As(err, &missing) {
+			return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_INSUFFICIENT_MATERIALS", Message: fmt.Sprintf("%s と %s をお持ちでないようですね", missing.Recipe.Material1Name, missing.Recipe.Material2Name)}
+		}
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_INSUFFICIENT_MATERIALS", Message: "Recipe materials are not owned."}
 	case errors.Is(err, gemstore.ErrCannotSendToSelf):
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_SELF_TRANSFER", Message: "Cannot send a gem to yourself."}

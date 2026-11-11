@@ -9,7 +9,6 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type inMemoryGemBoxRepo struct {
@@ -84,13 +83,11 @@ type Service struct {
 	mutationCheck func(context.Context, string) error
 	catalog       *Catalog
 	characters    CharacterRepository
-	inventories   InventoryRepository
 	depots        DepotRepository
 	gemBoxes      GemBoxRepository
 	items         ItemDefinitionProvider
 	txProvider    TransactionProvider
 	randomSource  RandomSource
-	economy       *economy.Service
 	notifier      DeliveryNotifier
 }
 
@@ -98,17 +95,15 @@ type Service struct {
 func NewService(
 	catalog *Catalog,
 	characters CharacterRepository,
-	inventories InventoryRepository,
 	opts ...Option,
 ) (*Service, error) {
-	if catalog == nil || characters == nil || inventories == nil {
+	if catalog == nil || characters == nil {
 		return nil, ErrNilDependency
 	}
 
 	s := &Service{
 		catalog:      catalog,
 		characters:   characters,
-		inventories:  inventories,
 		gemBoxes:     newInMemoryGemBoxRepo(),
 		randomSource: DefaultRandomSource(),
 	}
@@ -116,16 +111,6 @@ func NewService(
 	for _, opt := range opts {
 		opt(s)
 	}
-
-	var ecoOpts []economy.Option
-	if s.txProvider != nil {
-		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
-	}
-	eco, err := economy.NewService(characters, inventories, ecoOpts...)
-	if err != nil {
-		return nil, err
-	}
-	s.economy = eco
 
 	return s, nil
 }

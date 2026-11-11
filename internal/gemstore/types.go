@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -25,6 +26,17 @@ var (
 	ErrInvalidGemID          = errors.New("invalid gem ID")
 	ErrInvalidRecipeID       = errors.New("invalid recipe ID")
 )
+
+// InsufficientMaterialsError identifies both required materials for presentation.
+type InsufficientMaterialsError struct {
+	Recipe Recipe
+}
+
+func (e *InsufficientMaterialsError) Error() string {
+	return fmt.Sprintf("%s: %s, %s", ErrInsufficientMaterials, e.Recipe.Material1Name, e.Recipe.Material2Name)
+}
+
+func (e *InsufficientMaterialsError) Unwrap() error { return ErrInsufficientMaterials }
 
 // ShopPriceMultiplier is the shop price multiplier applied to base gem price (legacy standard: 5x).
 const ShopPriceMultiplier = 5
@@ -57,13 +69,6 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 	Update(ctx context.Context, character corecharacter.Character) error
-}
-
-// InventoryRepository defines inventory persistence methods required by gemstore.
-type InventoryRepository interface {
-	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	Save(ctx context.Context, inventory coreinventory.Inventory) error
 }
 
 // DepotRepository defines depot persistence methods if available for materials.
@@ -113,7 +118,6 @@ type SendResult struct {
 type SynthesizeResult struct {
 	Character    corecharacter.Character `json:"character"`
 	GemBox       GemBox                  `json:"gem_box"`
-	Inventory    coreinventory.Inventory `json:"inventory,omitempty"`
 	CreatedGem   Gem                     `json:"created_gem"`
 	Recipe       Recipe                  `json:"recipe"`
 	ItemInstance coreitem.Instance       `json:"item_instance"`

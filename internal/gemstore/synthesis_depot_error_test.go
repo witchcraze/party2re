@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/gemstore"
@@ -56,16 +55,10 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 
 	char := corecharacter.Character{ID: "char_synth_err", PlayerID: "p1", Name: "Hero", JobLevel: 10, Money: 10000}
 
-	// 1. Temporary SQL Error: must propagate and not mutate state even if materials exist in inventory
+	// 1. Temporary SQL Error: must propagate and not mutate state
 	t.Run("transient SQL error aborts and prevents mutation", func(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
-
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		_ = inv.Add(coreitem.Instance{ID: "inv-mat-1", DefinitionID: "gem_atk_1", Quantity: 1})
-		_ = inv.Add(coreitem.Instance{ID: "inv-mat-2", DefinitionID: "gem_atk_1", Quantity: 1})
-		invRepo.inventories[char.ID] = inv
 
 		baseDepotRepo := newMockDepotRepo()
 		depotErr := errors.New("sql: connection refused")
@@ -76,7 +69,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -92,12 +84,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		}
 		if !errors.Is(err, depotErr) {
 			t.Fatalf("expected error %v, got %v", depotErr, err)
-		}
-
-		// Verify Inventory is unchanged
-		savedInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
-		if len(savedInv.Items) != 2 {
-			t.Fatalf("expected 2 items in inventory, got %d", len(savedInv.Items))
 		}
 
 		// Verify GemBox is unchanged
@@ -118,11 +104,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
 
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		_ = inv.Add(coreitem.Instance{ID: "inv-mat-1", DefinitionID: "gem_atk_1", Quantity: 2})
-		invRepo.inventories[char.ID] = inv
-
 		baseDepotRepo := newMockDepotRepo()
 		depotRepo := &errorInjectingDepotRepo{mockDepotRepo: baseDepotRepo}
 		boxRepo := newMockGemBoxRepo()
@@ -130,7 +111,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -150,12 +130,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 			t.Fatalf("expected context.Canceled, got %v", err)
 		}
 
-		// Verify Inventory is unchanged
-		savedInv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-		if len(savedInv.Items) != 1 || savedInv.Items[0].Quantity != 2 {
-			t.Fatalf("expected 1 slot with quantity 2 in inventory, got %+v", savedInv.Items)
-		}
-
 		// Verify GemBox is unchanged
 		box, _ := boxRepo.FindByCharacterID(context.Background(), char.ID)
 		if len(box.Items) != 0 {
@@ -164,23 +138,23 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 	})
 
 	// 3. Depot Not Found (ErrNotFound): allowed, uncreated depot treated as empty
-	t.Run("uncreated depot ErrNotFound succeeds when inventory has materials", func(t *testing.T) {
+	t.Run("uncreated depot ErrNotFound succeeds when gem box has materials", func(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
-
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		_ = inv.Add(coreitem.Instance{ID: "inv-mat-1", DefinitionID: "gem_atk_1", Quantity: 2})
-		invRepo.inventories[char.ID] = inv
 
 		baseDepotRepo := newMockDepotRepo()
 		depotRepo := &errorInjectingDepotRepo{mockDepotRepo: baseDepotRepo, findErr: depot.ErrNotFound}
 		boxRepo := newMockGemBoxRepo()
+		if err := boxRepo.Save(context.Background(), gemstore.GemBox{CharacterID: char.ID, Capacity: 5, Items: []coreitem.Instance{
+			{ID: "box-mat-1", DefinitionID: "gem_atk_1", Quantity: 1},
+			{ID: "box-mat-2", DefinitionID: "gem_atk_1", Quantity: 1},
+		}}); err != nil {
+			t.Fatal(err)
+		}
 
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -198,12 +172,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 			t.Errorf("expected created gem_atk_2, got %s", res.CreatedGem.ID)
 		}
 
-		// Inventory should have consumed the 2 gems
-		savedInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
-		if len(savedInv.Items) != 0 {
-			t.Fatalf("expected 0 items in inventory, got %d", len(savedInv.Items))
-		}
-
 		// GemBox should contain the created gem
 		box, _ := boxRepo.FindByCharacterID(ctx, char.ID)
 		if len(box.Items) != 1 || box.Items[0].DefinitionID != "gem_atk_2" {
@@ -216,10 +184,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
 
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		invRepo.inventories[char.ID] = inv
-
 		baseDepotRepo := newMockDepotRepo()
 		depotRepo := &errorInjectingDepotRepo{mockDepotRepo: baseDepotRepo, findErr: depot.ErrNotFound}
 		boxRepo := newMockGemBoxRepo()
@@ -227,7 +191,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -243,14 +206,10 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		}
 	})
 
-	// 5. Depot SQL error when materials missing from inventory -> returns SQL error, not ErrInsufficientMaterials
+	// 5. Depot SQL error when materials are only in depot -> returns SQL error, not ErrInsufficientMaterials
 	t.Run("transient SQL error when materials only in depot returns SQL error not ErrInsufficientMaterials", func(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
-
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		invRepo.inventories[char.ID] = inv
 
 		baseDepotRepo := newMockDepotRepo()
 		dep, _ := depot.NewDepot(char.ID)
@@ -264,7 +223,6 @@ func TestSynthesizeGem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -292,15 +250,10 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 
 	char := corecharacter.Character{ID: "char_appraise_err", PlayerID: "p1", Name: "Hero", JobLevel: 10}
 
-	// 1. Temporary SQL Error: must propagate and not mutate state even if item exists in inventory
+	// 1. Temporary SQL Error: must propagate and not mutate state
 	t.Run("transient SQL error aborts and prevents mutation", func(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
-
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		_ = inv.Add(coreitem.Instance{ID: "inv-orb-1", DefinitionID: "unidentified_glowing_orb", Quantity: 1})
-		invRepo.inventories[char.ID] = inv
 
 		baseDepotRepo := newMockDepotRepo()
 		depotErr := errors.New("sql: database connection timeout")
@@ -311,7 +264,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -330,12 +282,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 			t.Fatalf("expected error %v, got %v", depotErr, err)
 		}
 
-		// Verify Inventory is unchanged
-		savedInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
-		if len(savedInv.Items) != 1 || savedInv.Items[0].ID != "inv-orb-1" {
-			t.Fatalf("expected orb to remain in inventory, got %+v", savedInv.Items)
-		}
-
 		// Verify GemBox is unchanged
 		box, _ := boxRepo.FindByCharacterID(ctx, char.ID)
 		if len(box.Items) != 0 {
@@ -348,11 +294,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
 
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		_ = inv.Add(coreitem.Instance{ID: "inv-orb-1", DefinitionID: "unidentified_glowing_orb", Quantity: 1})
-		invRepo.inventories[char.ID] = inv
-
 		baseDepotRepo := newMockDepotRepo()
 		depotRepo := &errorInjectingDepotRepo{mockDepotRepo: baseDepotRepo}
 		boxRepo := newMockGemBoxRepo()
@@ -360,7 +301,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -381,12 +321,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 			t.Fatalf("expected context.Canceled, got %v", err)
 		}
 
-		// Verify Inventory is unchanged
-		savedInv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-		if len(savedInv.Items) != 1 {
-			t.Fatalf("expected 1 item in inventory, got %d", len(savedInv.Items))
-		}
-
 		// Verify GemBox is unchanged
 		box, _ := boxRepo.FindByCharacterID(context.Background(), char.ID)
 		if len(box.Items) != 0 {
@@ -399,10 +333,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
 
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		invRepo.inventories[char.ID] = inv
-
 		baseDepotRepo := newMockDepotRepo()
 		depotRepo := &errorInjectingDepotRepo{mockDepotRepo: baseDepotRepo, findErr: depot.ErrNotFound}
 		boxRepo := newMockGemBoxRepo()
@@ -410,7 +340,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -431,11 +360,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
 
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		_ = inv.Add(coreitem.Instance{ID: "inv-sword-1", DefinitionID: "iron_sword", Quantity: 1})
-		invRepo.inventories[char.ID] = inv
-
 		baseDepotRepo := newMockDepotRepo()
 		depotErr := errors.New("sql: statement timeout")
 		depotRepo := &errorInjectingDepotRepo{mockDepotRepo: baseDepotRepo, findErr: depotErr}
@@ -445,7 +369,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
@@ -469,10 +392,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		charRepo := newMockCharacterRepo()
 		charRepo.characters[char.ID] = char
 
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		invRepo.inventories[char.ID] = inv
-
 		baseDepotRepo := newMockDepotRepo()
 		dep, _ := depot.NewDepot(char.ID)
 		_ = dep.AddItem(coreitem.Instance{ID: "depot-orb-1", DefinitionID: "unidentified_glowing_orb", Quantity: 1})
@@ -485,7 +404,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		svc, err := gemstore.NewService(
 			catalog,
 			charRepo,
-			invRepo,
 			gemstore.WithDepotRepository(depotRepo),
 			gemstore.WithGemBoxRepository(boxRepo),
 			gemstore.WithItemDefinitionProvider(itemProvider),
