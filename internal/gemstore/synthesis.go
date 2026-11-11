@@ -129,7 +129,7 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 	return res, nil
 }
 
-// AppraiseItem appraises an unidentified orb or equipment in character inventory, placing revealed gems into the Gem Box.
+// AppraiseItem appraises a Depot item: an unidentified orb is consumed and its gem enters the Gem Box; other items are only named.
 func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrDefID string) (AppraiseResult, error) {
 	characterID = strings.TrimSpace(characterID)
 	itemInstanceOrDefID = strings.TrimSpace(itemInstanceOrDefID)
@@ -150,11 +150,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 			return err
 		}
 
-		inv, err := s.inventories.FindByCharacterIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
+		// Legacy kantei reads only depot.cgi; hand slots are never appraised.
 		var dep depot.Depot
 		if s.depots != nil {
 			d, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
@@ -177,7 +173,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 			}
 			return resolveItemName(inst.DefinitionID, s.catalog, s.items) == itemInstanceOrDefID
 		})
-		resolved, err := depot.ResolveItem(&inv, &dep, targetQuery, depot.PriorityInventoryFirst)
+		resolved, err := depot.ResolveItem(nil, &dep, targetQuery, depot.PriorityDepotFirst)
 		if err != nil {
 			return ErrItemNotOwned
 		}
@@ -189,8 +185,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 		if gem, isUnidentified, err := s.catalog.AppraiseUnidentifiedItem(itemName, s.randomSource); err != nil {
 			return err
 		} else if isUnidentified {
-			consumeRes, err := depot.ConsumeItem(&inv, &dep, depot.QueryByInstanceID(targetItem.ID), depot.PriorityInventoryFirst, 1)
-			if err != nil {
+			if _, err := dep.Consume(targetItem.ID, 1); err != nil {
 				return err
 			}
 
@@ -201,7 +196,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 
 			box.Deliver(gemInstance) // gem_store.cgi:374 send_gem ignores capacity
 
-			if err := depot.SaveConsumptionResult(txCtx, s.inventories, s.depots, consumeRes, inv, dep); err != nil {
+			if err := s.depots.Save(txCtx, dep); err != nil {
 				return err
 			}
 			if err := s.gemBoxes.Save(txCtx, box); err != nil {
@@ -211,7 +206,6 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 			res = AppraiseResult{
 				Character:      char,
 				GemBox:         box,
-				Inventory:      inv,
 				Depot:          dep,
 				IsGem:          true,
 				IdentifiedGem:  &gem,
@@ -225,7 +219,6 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 		res = AppraiseResult{
 			Character:      char,
 			GemBox:         box,
-			Inventory:      inv,
 			Depot:          dep,
 			IsGem:          false,
 			IdentifiedName: itemName,

@@ -123,7 +123,6 @@ type SynthesizeResult struct {
 type AppraiseResult struct {
 	Character      corecharacter.Character `json:"character"`
 	GemBox         GemBox                  `json:"gem_box"`
-	Inventory      coreinventory.Inventory `json:"inventory,omitempty"`
 	Depot          depot.Depot             `json:"depot,omitempty"`
 	IsGem          bool                    `json:"is_gem"`
 	IdentifiedGem  *Gem                    `json:"identified_gem,omitempty"`

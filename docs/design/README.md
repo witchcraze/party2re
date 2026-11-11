@@ -102,7 +102,7 @@ graph TD
 - [`auction.md`](auction.md) — Live P2P trade hall (`@おくる`/`@しらべる`) with uninitialized recipient depot auto-provisioning.
 - [`bank.md`](bank.md) — Gold savings deposits and withdrawals with 999,999G wallet clamp.
 - [`black-market.md`](black-market.md) — Rare item sacrifice recycling for Rare Points and 24 equipment/item rewards.
-- [`gemstore.md`](gemstore.md) — Dedicated gem box storage, 55+ synthesis formulas, and dual-source orb appraisal.
+- [`gemstore.md`](gemstore.md) — Dedicated gem box storage, 55+ synthesis formulas, and Depot orb appraisal.
 - [`medal.md`](medal.md) — Small Medal depot exchange and character lifetime milestone achievements.
 - [`achievements.md`](achievements.md) — Lifetime gameplay milestones, achievement categories, and tracking criteria.
 

@@ -394,55 +394,6 @@ func TestAppraiseItem_DepotReadFailure_PropagationAndNoMutation(t *testing.T) {
 		}
 	})
 
-	// 3. Depot Not Found (ErrNotFound): allowed, uncreated depot treated as empty
-	t.Run("uncreated depot ErrNotFound succeeds when inventory has orb", func(t *testing.T) {
-		charRepo := newMockCharacterRepo()
-		charRepo.characters[char.ID] = char
-
-		invRepo := newMockInventoryRepo()
-		inv, _ := coreinventory.New(char.ID)
-		_ = inv.Add(coreitem.Instance{ID: "inv-orb-1", DefinitionID: "unidentified_glowing_orb", Quantity: 1})
-		invRepo.inventories[char.ID] = inv
-
-		baseDepotRepo := newMockDepotRepo()
-		depotRepo := &errorInjectingDepotRepo{mockDepotRepo: baseDepotRepo, findErr: depot.ErrNotFound}
-		boxRepo := newMockGemBoxRepo()
-
-		svc, err := gemstore.NewService(
-			catalog,
-			charRepo,
-			invRepo,
-			gemstore.WithDepotRepository(depotRepo),
-			gemstore.WithGemBoxRepository(boxRepo),
-			gemstore.WithItemDefinitionProvider(itemProvider),
-			gemstore.WithRandomSource(fixedRandomSource{value: 0}),
-		)
-		if err != nil {
-			t.Fatalf("failed to create service: %v", err)
-		}
-
-		ctx := context.Background()
-		res, err := svc.AppraiseItem(ctx, char.ID, "inv-orb-1")
-		if err != nil {
-			t.Fatalf("expected AppraiseItem success with ErrNotFound depot, got %v", err)
-		}
-		if !res.IsGem {
-			t.Errorf("expected IsGem to be true")
-		}
-
-		// Inventory should have consumed the orb
-		savedInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
-		if len(savedInv.Items) != 0 {
-			t.Fatalf("expected 0 items in inventory, got %d", len(savedInv.Items))
-		}
-
-		// GemBox should contain the identified gem
-		box, _ := boxRepo.FindByCharacterID(ctx, char.ID)
-		if len(box.Items) != 1 {
-			t.Fatalf("expected 1 gem in gem box, got %d", len(box.Items))
-		}
-	})
-
 	// 4. Depot Not Found when item missing -> returns ErrItemNotOwned
 	t.Run("uncreated depot ErrNotFound reports ErrItemNotOwned when item missing", func(t *testing.T) {
 		charRepo := newMockCharacterRepo()
