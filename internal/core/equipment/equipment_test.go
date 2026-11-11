@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 )
@@ -55,5 +56,29 @@ func TestEquipmentUnequipsItem(t *testing.T) {
 	_, _ = equipment.Equip(&value, weapon, instance.ID)
 	if got, err := equipment.Unequip(item.SlotMainHand); err != nil || got != instance.ID {
 		t.Fatalf("Unequip() = %q, %v", got, err)
+	}
+}
+
+func TestEquipmentDetachClearsOnlyTheVacatedSlotCustomization(t *testing.T) {
+	named := corecharacter.Character{WeaponCustomName: "blade", WeaponSeal: 2, ArmorCustomName: "mail"}
+	for _, tc := range []struct {
+		slot item.Slot
+		want corecharacter.Character
+	}{
+		{item.SlotMainHand, corecharacter.Character{ArmorCustomName: "mail"}},
+		{item.SlotBody, corecharacter.Character{WeaponCustomName: "blade", WeaponSeal: 2}},
+		{item.SlotOffHand, named},
+	} {
+		equipment := Equipment{CharacterID: "character-1", Slots: map[item.Slot]string{tc.slot: "target", item.SlotAccessory: "other"}}
+		char := named
+		if changed, err := equipment.Detach(&char, "target"); err != nil || !changed {
+			t.Fatalf("%s Detach() = %v, %v", tc.slot, changed, err)
+		}
+		if _, ok := equipment.Equipped(tc.slot); ok || equipment.Slots[item.SlotAccessory] != "other" || char != tc.want {
+			t.Fatalf("%s: slots=%v char=%+v", tc.slot, equipment.Slots, char)
+		}
+		if changed, err := equipment.Detach(&char, "target"); err != nil || changed {
+			t.Fatalf("%s repeated Detach() = %v, %v", tc.slot, changed, err)
+		}
 	}
 }

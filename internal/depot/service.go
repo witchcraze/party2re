@@ -212,7 +212,7 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 		unlinked := false
 		for _, old := range occupants {
 			if eq != nil {
-				if unlinked, err = unequipInstance(eq, &tc.Character, old.ID); err != nil {
+				if unlinked, err = eq.Detach(&tc.Character, old.ID); err != nil {
 					return err
 				}
 			}

@@ -1540,6 +1540,10 @@
         "additionalProperties": false,
         "description": "Owned eligible instance and the points one sacrifice yields.",
         "properties": {
+          "equipped": {
+            "description": "Inventory instance occupying an equipment slot; equipped rows are listed first.",
+            "type": "boolean"
+          },
           "item_definition_id": {
             "maxLength": 128,
             "type": "string"
@@ -1577,7 +1581,8 @@
           "source",
           "quantity",
           "rare_points",
-          "u_rare_points"
+          "u_rare_points",
+          "equipped"
         ],
         "type": "object"
       },

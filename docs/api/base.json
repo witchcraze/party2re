@@ -17002,6 +17002,10 @@
           "u_rare_points": {
             "type": "integer",
             "minimum": 0
+          },
+          "equipped": {
+            "type": "boolean",
+            "description": "Inventory instance occupying an equipment slot; equipped rows are listed first."
           }
         },
         "required": [
@@ -17011,7 +17015,8 @@
           "source",
           "quantity",
           "rare_points",
-          "u_rare_points"
+          "u_rare_points",
+          "equipped"
         ]
       },
       "BlackMarketSceneData": {

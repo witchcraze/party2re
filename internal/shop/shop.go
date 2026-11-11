@@ -342,7 +342,8 @@ func (s *Service) Sell(ctx context.Context, characterID string, shopType ShopTyp
 	var result SaleResult
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// 1. Lock Character first (Deterministic lock order: characters -> inventory_items)
-		if _, err := s.findCharacter(txCtx, characterID); err != nil {
+		char, err := s.findCharacter(txCtx, characterID)
+		if err != nil {
 			return err
 		}
 
@@ -379,29 +380,14 @@ func (s *Service) Sell(ctx context.Context, characterID string, shopType ShopTyp
 			if err != nil {
 				return err
 			}
-			unlinked := false
-			for slot, eqID := range eq.Slots {
-				if eqID == itemInstanceID {
-					if _, err := eq.Unequip(slot); err != nil {
-						return err
-					}
-					unlinked = true
-					char, err := s.findCharacter(txCtx, characterID)
-					if err != nil {
-						return err
-					}
-					switch slot {
-					case item.SlotMainHand:
-						char.ClearWeaponCustomization()
-					case item.SlotBody:
-						char.ClearArmorCustomization()
-					}
-					if err := s.characters.Update(txCtx, char); err != nil {
-						return err
-					}
-				}
+			unlinked, err := eq.Detach(&char, itemInstanceID)
+			if err != nil {
+				return err
 			}
 			if unlinked {
+				if err := s.characters.Update(txCtx, char); err != nil {
+					return err
+				}
 				if err := s.equipment.Save(txCtx, eq); err != nil {
 					return err
 				}
