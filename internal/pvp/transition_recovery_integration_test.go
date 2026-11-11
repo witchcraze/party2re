@@ -100,7 +100,7 @@ func TestPvPValkeyCommandRejectionIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			if kind == "settle" {
-				f.assertFunds(t, 1100, 900, 1, 0)
+				f.assertFunds(t, 900, 900, 1, 0)
 			} else {
 				f.assertFunds(t, 1000, 1000, 0, 0)
 			}

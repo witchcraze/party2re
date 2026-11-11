@@ -255,7 +255,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		}
 		if matchCompleted {
 			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &result}, func(txCtx context.Context) error {
-				if err := s.awardPrizes(txCtx, awardedIDs, prizePerMember); err != nil {
+				if err := s.awardPrizes(txCtx, awardedIDs, detail.Room.Name, prizePerMember); err != nil {
 					return err
 				}
 				if err := s.refundMembers(txCtx, refundIDs, refundAmount); err != nil {

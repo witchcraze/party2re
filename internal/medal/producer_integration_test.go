@@ -27,6 +27,13 @@ type mockIntegrationDepotRepo struct {
 	depots map[string]depot.Depot
 }
 
+type integrationPrizeRemitter struct{ amount int }
+
+func (r *integrationPrizeRemitter) HoldPrize(_ context.Context, _, _ string, amount int) error {
+	r.amount += amount
+	return nil
+}
+
 func (m *mockIntegrationDepotRepo) FindByCharacterID(_ context.Context, charID string) (depot.Depot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -531,11 +538,13 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 
 	// --- PvP ---
 	pvpRepo := pvp.NewMemoryRoomRepository()
+	prizes := &integrationPrizeRemitter{}
 	pvpService, err := pvp.NewService(
 		pvpRepo,
 		charRepo,
 		integrationBattleEngine{result: corebattle.Result{Outcome: corebattle.OutcomeWin, WinnerID: hero.ID, LoserID: opponent.ID}},
 		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
+		pvp.WithPrizeRemitter(prizes),
 	)
 	if err != nil {
 		t.Fatalf("failed to create pvp service: %v", err)
@@ -625,6 +634,9 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	}
 	if _, err := pvpService.AdvanceRound(ctx, hero.ID, pvpRoom.Room.ID); err != nil {
 		t.Fatalf("failed to advance pvp round: %v", err)
+	}
+	if prizes.amount != 20 {
+		t.Fatalf("held prize=%d, want 20", prizes.amount)
 	}
 
 	// (d) Casino Game

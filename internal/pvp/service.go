@@ -60,6 +60,7 @@ type Service struct {
 	participantBuilder ParticipantBuilder
 	txProvider         TransactionProvider
 	transitions        TransitionRepository
+	prizes             PrizeRemitter
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {

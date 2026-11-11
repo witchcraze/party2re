@@ -15,7 +15,13 @@ import (
 )
 
 type captureEngine struct {
-	lastReq corebattle.PartyBattleRequest
+	lastReq   corebattle.PartyBattleRequest
+	heldPrize int
+}
+
+func (c *captureEngine) HoldPrize(_ context.Context, _, _ string, amount int) error {
+	c.heldPrize += amount
+	return nil
 }
 
 func (c *captureEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
@@ -80,6 +86,7 @@ func TestCombatWiring_PvPEquippedParticipant(t *testing.T) {
 		charRepo,
 		capture,
 		pvp.WithParticipantBuilder(battleAdapter),
+		pvp.WithPrizeRemitter(capture),
 		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
@@ -122,6 +129,9 @@ func TestCombatWiring_PvPEquippedParticipant(t *testing.T) {
 	_, err = pvpService.AdvanceRound(ctx, "char-pvp", detail.Room.ID)
 	if err != nil {
 		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+	if capture.heldPrize != 200 {
+		t.Fatalf("held prize=%d, want 200", capture.heldPrize)
 	}
 
 	// Verify that participant passed into engine had equipped stats (atk: 30+14=44, def: 20+24=44, agi: 25-9-8=8)

@@ -245,7 +245,7 @@ func (f *transitionFixture) restart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := pvp.NewService(f.rooms, f.chars, f.battle, pvp.WithTransactionProvider(database.NewTransactionProvider(f.db)), pvp.WithTransitionRepository(store))
+	svc, err := pvp.NewService(f.rooms, f.chars, f.battle, pvp.WithTransactionProvider(database.NewTransactionProvider(f.db)), pvp.WithTransitionRepository(store), pvp.WithPrizeRemitter(newSQLPrizeRemitter(t, f.db)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,17 @@ func (f *transitionFixture) assertFunds(t *testing.T, leaderMoney, memberMoney, 
 	if actualPool != pool {
 		t.Fatalf("durable escrow=%d; want %d", actualPool, pool)
 	}
-	if leader.Money+member.Money+actualPool != 2000 {
+	var held, notices, receipts int
+	if err := f.db.QueryRowContext(ctx, "SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM character_pending_remittances WHERE character_id IN (?, ?)", f.leader.ID, f.member.ID).Scan(&held, &receipts); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM character_delivery_notices WHERE character_id IN (?, ?) AND is_cleared = FALSE", f.leader.ID, f.member.ID).Scan(&notices); err != nil {
+		t.Fatal(err)
+	}
+	if held != wins*200 || notices != wins || receipts != wins {
+		t.Fatalf("held=%d receipts=%d notices=%d; wins=%d", held, receipts, notices, wins)
+	}
+	if leader.Money+member.Money+actualPool+held != 2000 {
 		t.Fatal("assets not conserved")
 	}
 }
@@ -382,7 +392,7 @@ func TestPvPFinancialPublicationIntegration(t *testing.T) {
 					case "disband", "draw":
 						f.assertFunds(t, 1000, 1000, 0, 0)
 					case "settle":
-						f.assertFunds(t, 1100, 900, 1, 0)
+						f.assertFunds(t, 900, 900, 1, 0)
 					}
 					if kind == "settle" || kind == "draw" {
 						if err := f.act(t, kind); err != nil {
@@ -474,7 +484,7 @@ func TestPvPFinancialConcurrentIntegration(t *testing.T) {
 			case "disband", "draw":
 				f.assertFunds(t, 1000, 1000, 0, 0)
 			case "settle":
-				f.assertFunds(t, 1100, 900, 1, 0)
+				f.assertFunds(t, 900, 900, 1, 0)
 			}
 		})
 	}

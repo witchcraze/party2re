@@ -17,13 +17,22 @@ type transactionalCharRepo struct {
 	characters    map[string]corecharacter.Character
 	failUpdateIDs map[string]error
 	lockCalls     []string
+	prizes        map[string]int
 }
 
 func newTransactionalCharRepo() *transactionalCharRepo {
 	return &transactionalCharRepo{
 		characters:    make(map[string]corecharacter.Character),
 		failUpdateIDs: make(map[string]error),
+		prizes:        make(map[string]int),
 	}
+}
+
+func (r *transactionalCharRepo) HoldPrize(_ context.Context, characterID, _ string, amount int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.prizes[characterID] += amount
+	return nil
 }
 
 func (r *transactionalCharRepo) add(c corecharacter.Character) {
@@ -69,12 +78,17 @@ func (r *transactionalCharRepo) RunInTx(ctx context.Context, fn func(ctx context
 	for k, v := range r.characters {
 		snapshot[k] = v
 	}
+	prizes := make(map[string]int, len(r.prizes))
+	for k, v := range r.prizes {
+		prizes[k] = v
+	}
 	r.mu.Unlock()
 
 	err := fn(ctx)
 	if err != nil {
 		r.mu.Lock()
 		r.characters = snapshot
+		r.prizes = prizes
 		r.mu.Unlock()
 		return err
 	}
@@ -279,6 +293,7 @@ func TestSettlement_AdvanceRound_PrizeDistribution_RollbackOnFailure(t *testing.
 		charRepo,
 		battleEngine,
 		pvp.WithTransactionProvider(charRepo),
+		pvp.WithPrizeRemitter(charRepo),
 		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
@@ -324,6 +339,10 @@ func TestSettlement_AdvanceRound_PrizeDistribution_RollbackOnFailure(t *testing.
 	}
 	if charA.PvPWins != 0 {
 		t.Fatalf("expected char-a PvPWins 0 after rollback, got %d", charA.PvPWins)
+	}
+
+	if len(charRepo.prizes) != 0 {
+		t.Fatalf("rollback left held prizes: %v", charRepo.prizes)
 	}
 
 	// Room should not be marked as completed, prize pool must remain 300

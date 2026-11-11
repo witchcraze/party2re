@@ -50,6 +50,7 @@ func TestPvPIntegration_DisbandRefundTransactional(t *testing.T) {
 		charRepo,
 		battleEngine,
 		pvp.WithTransactionProvider(txProvider),
+		pvp.WithPrizeRemitter(newSQLPrizeRemitter(t, db)),
 		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
@@ -140,6 +141,7 @@ func TestPvPIntegration_MatchPrizeDistributionTransactional(t *testing.T) {
 		charRepo,
 		battleEngine,
 		pvp.WithTransactionProvider(txProvider),
+		pvp.WithPrizeRemitter(newSQLPrizeRemitter(t, db)),
 		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
@@ -173,11 +175,15 @@ func TestPvPIntegration_MatchPrizeDistributionTransactional(t *testing.T) {
 		t.Fatal("expected match to end")
 	}
 
-	// Total prize pool was 200G. Winner c1 should have 400 + 200 = 600G and PvPWins=1
+	// The 200G prize is held while the wallet stays at 400G and PvPWins increases.
 	c1DB, _ := charRepo.FindByID(ctx, c1.ID)
 	c2DB, _ := charRepo.FindByID(ctx, c2.ID)
-	if c1DB.Money != 600 {
-		t.Fatalf("expected winner money 600 in DB, got %d", c1DB.Money)
+	if c1DB.Money != 400 {
+		t.Fatalf("expected winner money 400 in DB, got %d", c1DB.Money)
+	}
+	held, err := newSQLPrizeRemitter(t, db).depot.ListRemittances(ctx, c1.ID)
+	if err != nil || len(held) != 1 || held[0].Amount != 200 {
+		t.Fatalf("held prize = %+v: %v", held, err)
 	}
 	if c1DB.PvPWins != 1 {
 		t.Fatalf("expected winner PvPWins 1 in DB, got %d", c1DB.PvPWins)

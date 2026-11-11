@@ -111,6 +111,7 @@ func newCmbtServices(
 		pvp.WithParticipantBuilder(battleAdapter),
 		pvp.WithTransactionProvider(core.txProvider),
 		pvp.WithTransitionRepository(pvpTransitions),
+		pvp.WithPrizeRemitter(pvpPrizeRemitter{remittances: econ.depotRepo, notifier: soc.home}),
 	)
 	if err != nil {
 		return nil, err
