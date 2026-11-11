@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -638,6 +639,177 @@ func TestTavern_RealDatabase_ResetFullness_Concurrency(t *testing.T) {
 		if int64(reloadedChar.Money)+finalStatus.TotalGoldSpent != 10000 {
 			t.Errorf("total asset conservation violated: money=%d + spent=%d != 10000",
 				reloadedChar.Money, finalStatus.TotalGoldSpent)
+		}
+	})
+}
+
+type failingLotteryRepo struct {
+	*database.LotteryRepository
+	err error
+}
+
+func (r *failingLotteryRepo) AddRaffleTickets(ctx context.Context, id string, count int) (int, error) {
+	if r.err != nil {
+		return 0, r.err
+	}
+	return r.LotteryRepository.AddRaffleTickets(ctx, id, count)
+}
+
+type countingGuildPoints struct {
+	err   error
+	added atomic.Int32
+}
+
+func (g *countingGuildPoints) AddGuildPoints(_ context.Context, _ string, points int) error {
+	if g.err != nil {
+		return g.err
+	}
+	g.added.Add(int32(points))
+	return nil
+}
+
+// TestTavern_RealDatabase_OrderMealRewards verifies that a meal's tickets and guild points commit or roll back with its price, healing and history (#1145).
+func TestTavern_RealDatabase_OrderMealRewards(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tavernRepo, err := database.NewTavernRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	realLottery, err := database.NewLotteryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := tavern.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, ok := catalog.GetItem("tavern_herb_tea")
+	if !ok || item.Tickets == 0 {
+		t.Fatal("tavern_herb_tea must award tickets")
+	}
+
+	newCase := func(t *testing.T, name string) (*tavern.Service, *failingLotteryRepo, *countingGuildPoints, string) {
+		t.Helper()
+		char, err := database.CreateTestCharacterWithFunds(ctx, db, name, 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			cleanupCtx := context.Background()
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_lottery WHERE character_id = ?", char.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
+		})
+		char.Stats.HP = 1
+		if err := charRepo.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+		lottery := &failingLotteryRepo{LotteryRepository: realLottery}
+		guild := &countingGuildPoints{}
+		svc, err := tavern.NewService(catalog, tavernRepo, charRepo, database.NewTransactionProvider(db),
+			tavern.WithLotteryRepository(lottery), tavern.WithGuildPointAwarder(guild))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc, lottery, guild, char.ID
+	}
+
+	// assertState checks persisted money, HP, fullness/history and tickets.
+	assertState := func(t *testing.T, id string, money, hp int, meals, tickets int) {
+		t.Helper()
+		c, err := charRepo.FindByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st, err := tavernRepo.GetCharacterStatus(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := realLottery.GetRaffleTickets(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Money != money || c.Stats.HP != hp || st.TotalMealsEaten != meals || st.IsFull != (meals > 0) || got != tickets {
+			t.Fatalf("money=%d hp=%d meals=%d full=%v tickets=%d; want money=%d hp=%d meals=%d tickets=%d",
+				c.Money, c.Stats.HP, st.TotalMealsEaten, st.IsFull, got, money, hp, meals, tickets)
+		}
+	}
+
+	sentinel := errors.New("simulated reward failure")
+
+	t.Run("ticket_failure_rolls_back", func(t *testing.T) {
+		svc, lottery, guild, id := newCase(t, "TavernTicketFail")
+		lottery.err = sentinel
+		if _, err := svc.OrderMeal(ctx, id, item.ID); !errors.Is(err, sentinel) {
+			t.Fatalf("expected ticket failure, got %v", err)
+		}
+		assertState(t, id, 10000, 1, 0, 0)
+		if guild.added.Load() != 0 {
+			t.Fatalf("guild points awarded on failed order")
+		}
+	})
+
+	t.Run("guild_point_failure_rolls_back_tickets", func(t *testing.T) {
+		svc, _, guild, id := newCase(t, "TavernGPFail")
+		guild.err = sentinel
+		if _, err := svc.OrderMeal(ctx, id, item.ID); !errors.Is(err, sentinel) {
+			t.Fatalf("expected guild point failure, got %v", err)
+		}
+		assertState(t, id, 10000, 1, 0, 0)
+	})
+
+	t.Run("success_reports_persisted_tickets", func(t *testing.T) {
+		svc, _, guild, id := newCase(t, "TavernRewardOK")
+		res, err := svc.OrderMeal(ctx, id, item.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.TicketsAwarded != item.Tickets || res.TotalTickets != item.Tickets {
+			t.Fatalf("tickets awarded=%d total=%d, want %d", res.TicketsAwarded, res.TotalTickets, item.Tickets)
+		}
+		assertState(t, id, 10000-item.Price, res.CurrentHP, 1, item.Tickets)
+		if guild.added.Load() != 2 {
+			t.Fatalf("guild points = %d, want 2", guild.added.Load())
+		}
+	})
+
+	t.Run("concurrent_orders_award_once", func(t *testing.T) {
+		svc, _, guild, id := newCase(t, "TavernRewardRace")
+		order := func() error {
+			_, err := svc.OrderMeal(ctx, id, item.ID)
+			return err
+		}
+		err1, err2 := testutil.RunRace2(order, order)
+		if (err1 == nil) == (err2 == nil) {
+			t.Fatalf("expected exactly one success: %v / %v", err1, err2)
+		}
+		if lost := errors.Join(err1, err2); !errors.Is(lost, tavern.ErrAlreadyFull) {
+			t.Fatalf("expected the loser to be full, got %v", lost)
+		}
+		c, err := charRepo.FindByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertState(t, id, 10000-item.Price, c.Stats.HP, 1, item.Tickets)
+		if guild.added.Load() != 2 {
+			t.Fatalf("guild points = %d, want 2", guild.added.Load())
 		}
 	})
 }

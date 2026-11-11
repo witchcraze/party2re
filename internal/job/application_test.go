@@ -164,9 +164,13 @@ func (r *inventoryRepoStub) Save(_ context.Context, value coreinventory.Inventor
 
 type guildAwarderStub struct {
 	points map[string]int
+	err    error
 }
 
 func (g *guildAwarderStub) AddGuildPoints(_ context.Context, characterID string, points int) error {
+	if g.err != nil {
+		return g.err
+	}
 	g.points[characterID] += points
 	return nil
 }
@@ -302,6 +306,21 @@ func TestServiceChangeJobAwardsGuildPoints(t *testing.T) {
 	// Legacy job_change.cgi:195 awards +50 GP
 	if guildAwarder.points["character-1"] != 50 {
 		t.Fatalf("expected 50 guild points, got %d", guildAwarder.points["character-1"])
+	}
+
+	// A GP failure fails the job change inside its transaction (#2087).
+	failing := &guildAwarderStub{err: errors.New("guild points unavailable")}
+	svc, err = NewService(
+		&repositoryStub{value: state},
+		WithCharacterRepository(&charRepoStub{char: char}),
+		WithInventoryRepository(&inventoryRepoStub{}),
+		WithGuildPointAwarder(failing),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.ChangeJob(context.Background(), "character-1", "job-01"); !errors.Is(err, failing.err) {
+		t.Fatalf("expected guild points error, got %v", err)
 	}
 }
 

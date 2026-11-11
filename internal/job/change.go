@@ -130,6 +130,11 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 				return err
 			}
 		}
+		if s.guildPoints != nil {
+			if err := s.guildPoints.AddGuildPoints(tc.Context, characterID, 50); err != nil {
+				return err
+			}
+		}
 		updated, updatedState = tc.Character, currentState
 		return nil
 	})
@@ -138,10 +143,6 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
 		}
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	if s.guildPoints != nil {
-		//lint:ignore error-swallow best-effort guild points bonus
-		_ = s.guildPoints.AddGuildPoints(ctx, characterID, 50)
 	}
 	if s.costume != nil {
 		//lint:ignore error-swallow best-effort costume rental return on job change
