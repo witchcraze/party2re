@@ -167,6 +167,10 @@ func (m *mockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corech
 	return m.FindByID(ctx, id)
 }
 
+func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character) error {
+	return m.Save(ctx, char)
+}
+
 func (m *mockCharRepo) Save(ctx context.Context, char corecharacter.Character) error {
 	m.chars[char.ID] = char
 	return nil

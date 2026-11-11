@@ -87,7 +87,7 @@ func (s *Service) ChangeWallpaper(ctx context.Context, characterID, wallpaper st
 			if err := char.DeductMoney(cost); err != nil {
 				return ErrInsufficientFunds
 			}
-			if err := s.charRepo.Save(txCtx, char); err != nil {
+			if err := s.charRepo.Update(txCtx, char); err != nil {
 				return err
 			}
 		}

@@ -215,7 +215,7 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 		if err := char.DeductMoney(StorePrice); err != nil {
 			return ErrInsufficientFunds
 		}
-		if err := s.charRepo.Save(txCtx, char); err != nil {
+		if err := s.charRepo.Update(txCtx, char); err != nil {
 			return err
 		}
 		if s.guildPoints != nil {

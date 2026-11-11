@@ -132,4 +132,4 @@ Sending gold or an item rejects a full recipient Depot before any change, even w
 
 ## Gateway Observation and Retained Operations
 
-Depot is a pageable town destination observed through character context (`depot.cgi:49–99`; capacity and occupied-row rule `system.cgi:1267–1288`). A stack occupies one slot. GET never creates or saves a Depot, sorts it or moves items. All Depot operations, including gold sending (`depot_send_money` with explicit `amount` and `recipient_character_id`), use Gateway commands; no Depot REST route remains. Command place-log echoes (#1941), presence and legacy parity remain open.
+Depot is a pageable town destination observed through character context (`depot.cgi:49–99`; capacity and occupied-row rule `system.cgi:1267–1288`). A stack occupies one slot. GET never creates or saves a Depot, sorts it or moves items. All Depot operations, including gold sending (`depot_send_money` with explicit `amount` and `recipient_character_id`), use Gateway commands; no Depot REST route remains. Command place-log echoes (#1941) and presence (#1943) remain open.

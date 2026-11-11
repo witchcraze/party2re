@@ -51,7 +51,7 @@
         {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
         {"step": 2, "target": "character_stores", "method": "StoreRepository.CountActiveTownStores", "mode": "SELECT"},
         {"step": 3, "target": "character_stores", "method": "StoreRepository.GetStoreByCharacterID", "mode": "SELECT"},
-        {"step": 4, "target": "characters", "method": "CharacterRepository.Save", "mode": "UPDATE"},
+        {"step": 4, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE"},
         {"step": 5, "target": "guilds", "method": "GuildPointsRegistrar.AddGuildPoints", "mode": "UPDATE"},
         {"step": 6, "target": "character_stores", "method": "StoreRepository.SaveStore", "mode": "UPSERT"}
       ]
@@ -93,7 +93,7 @@
       "lock_sequence": [
         {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
         {"step": 2, "target": "character_depots / depot_items", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate (overflow only)", "mode": "SELECT ... FOR UPDATE"},
-        {"step": 3, "target": "characters", "method": "CharacterRepository.Save", "mode": "UPDATE"},
+        {"step": 3, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE"},
         {"step": 4, "target": "character_depots / depot_items", "method": "DepotRepository.Save (overflow only)", "mode": "UPDATE"}
       ]
     },

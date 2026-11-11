@@ -329,10 +329,10 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 			return err
 		}
 
-		if err := s.charRepo.Save(txCtx, *buyerChar); err != nil {
+		if err := s.charRepo.Update(txCtx, *buyerChar); err != nil {
 			return err
 		}
-		if err := s.charRepo.Save(txCtx, *sellerChar); err != nil {
+		if err := s.charRepo.Update(txCtx, *sellerChar); err != nil {
 			return err
 		}
 

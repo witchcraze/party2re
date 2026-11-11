@@ -57,7 +57,7 @@ type nor an existing seal supplies an additional rejection.
 - Allows players to assign a personalized name to their equipped weapon or armor.
 - The Go service accepts an explicit empty name to reset to the catalog name;
   legacy `nazukeru` instead opens the naming prompt for an empty name. This
-  existing difference is retained by transport migration, not certified as parity.
+  existing difference is retained by transport migration, not certified as parity (#2060).
 - Custom names are stored on the character record (`wea_name`, `arm_name`) and preserved across weapon deposits/withdrawals.
 
 ### Sanitization & Validation Rules
@@ -145,7 +145,7 @@ Legacy `system.cgi:9–25` also registers `br`, `いどう`, `まち`, `ほー�
 `ぎるど`, `ささやき`, `はなす`, `しらべる`, `ろぐあうと` and `すくしょ`.
 Layout separators and screenshots belong to presentation; session logout replaces
 the logout action; navigation, Home, Guild and whisper retain their shared
-migration owners (#947/#949/#950), rather than becoming equipment commands.
+migration owners (#949/#950), rather than becoming equipment commands.
 Legacy `はなす` (`@words`, `blacksmith.cgi:17–19`) and NPC `しらべる` map to the
 shared `npc_talk` / `npc_inspect` commands.
 
@@ -154,7 +154,7 @@ naming, leading/trailing whitespace trimming and ASCII `@` rejection. Legacy
 differs on these points, uses a wall-clock action cooldown and venue comment/NPC
 logs (`system.cgi:639–680`), and includes weapon names in storage dialogue.
 The Gateway applies the [action wait](../architecture/place-log.md#action-wait-1939);
-the commands' log rows (#1941), presence and the naming differences remain open,
+the commands' log rows (#1941), presence (#1943) and the naming differences (#2060) remain open,
 so there is no full gameplay-parity claim.
 
 `WithdrawWeapon` checks only the main-hand slot and does not reject a full

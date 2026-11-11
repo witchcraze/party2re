@@ -326,7 +326,7 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 		if err := char.DeductMoney(selected.Price); err != nil {
 			return ErrInsufficientFunds
 		}
-		if err := s.charRepo.Save(txCtx, char); err != nil {
+		if err := s.charRepo.Update(txCtx, char); err != nil {
 			return err
 		}
 
@@ -445,7 +445,7 @@ func (s *Service) BuyHomeWallpaper(ctx context.Context, characterID string, wall
 			if err := char.DeductMoney(price); err != nil {
 				return ErrInsufficientFunds
 			}
-			if err := s.charRepo.Save(txCtx, char); err != nil {
+			if err := s.charRepo.Update(txCtx, char); err != nil {
 				return err
 			}
 		}
