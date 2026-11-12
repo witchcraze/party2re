@@ -1,117 +1,16 @@
 # Endgame Wishes & Limit Breaks Design (天界・裏天界)
 
-## 1. Overview
+The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wish per audience in Heaven (`@神`, reached with item059) or the Underworld (`@神?`, reached with item262). The wish catalog, costs and effects are owned by `internal/god`; this document keeps decisions and non-obvious legacy findings. A granted wish returns the character home; a rejected or joke wish (`wish_lover`) mutates nothing and stays.
 
-The God system (`internal/god`, legacy `party2/lib/god.cgi` and `party2/lib/u_god.cgi`) provides endgame characters with celestial audiences in Heaven (天界) and Underworld (裏天界). Players can choose permanent character enhancements, resource grants, home companions/customizations, item rewards sent to depot, and limit breaks exceeding standard system ceilings.
+## Heaven wishes
 
-Upon successfully granting a wish, the character is automatically returned to their home location (`NextLocation: "home"`, reflecting legacy `$m{lib} = 'home'`), except for joke wishes (`wish_lover`) which return dialogue without state mutation or teleportation.
+- `wish_stats` is refused while limit-broken and adds to maximum stats only; current HP/MP are unchanged.
+- `wish_refresh` subtracts 150 fatigue with no lower bound, so fatigue can go negative and absorb later fatigue; HP/MP are unchanged. The HP/MP restore near it in `god.cgi` belongs to `job_change` and is not reached. **Decision:** `wish_full_recovery` has no legacy origin and is rejected as an unknown wish (#1167).
+- `wish_all_orbs` replaces the orb string, overwriting Ramia's awakened state, so the character must pray at the [Altar of Rebirth](altar-of-rebirth.md) again before its travel wishes unlock.
+- `wish_limit_break_level` is blocked only by a temporary job memory (item243); a persistent memory (item168) does not block it (`god.cgi:121`). Level-cap effects are owned by [Progression](progression.md#celestial-overlevel-天界限界突破).
+- `wish_celestial_dragon` changes to job70 through the same transition as a normal change: the departing job's SP and first-time mastery are recorded, a mastered job70's retained SP is restored, and the job history and current job move with the character ([Jobs and Skills](jobs-and-skills.md#job-changes)). The normal change's level 20, item, guild-point and weekly-ranking effects live in `job_change.cgi`'s caller and do not apply. Unlike a normal cross-job change it keeps the limit-break flag.
+- **Pitfall:** the legacy wish path checks job completion as exactly `$#jobs − 1` (86) mastered jobs against the flag shared with the normal 72-job check, so it practically never fires. **Decision:** the wish does not evaluate completion; the next normal departure does, using the 72-job rule.
 
----
+## Underworld wishes
 
-## 2. Realms & NPC Dialogues
-
-1. **Heaven (天界)**:
-   - **NPC**: `@神`
-   - **Legacy Location**: Accessible via Pegasus Reins (`天馬のたづな`, Item No. 59).
-   - **Theme**: Attribute growth, currency/resource rewards, home/guild customizations, depot item gifts, and level cap limit breaks.
-2. **Underworld (裏天界 / 天界?)**:
-   - **NPC**: `@神?`
-   - **Legacy Location**: Accessible via Black Pegasus Reins (`黒い天馬のたづな`, Item No. 262).
-   - **Theme**: System capacity limit breaks (depot, monster box, job memory, flea market listings, shop listings).
-
-> [!NOTE]
-> Per `.agents/rules/03-architecture.md §5`, all NPC god dialogues (`NPCSpeech`) are decoupled from the domain model (`WishResult`) and formatted exclusively at the HTTP presentation layer (`internal/api/http/god.go`).
-
----
-
-## 3. Wishes Catalog & Rules
-
-### 3.1 Heaven Wishes (天界の願い事 - 全19種)
-
-The Heaven catalog comprises 18 standard wishes plus 1 conditional level-cap wish determined by character state:
-
-| Wish ID | Name (和名) | Description (説明) | Condition (出現/実行条件) | Effect (効果) |
-| :--- | :--- | :--- | :--- | :--- |
-| `wish_stats` | 強くなりたい | 全ステータス 40 アップ | `!OverLevel` | $\text{MaxHP} + 40, \text{MaxMP} + 40, \text{Attack} + 40, \text{Defense} + 40, \text{Agility} + 40$ (現在HP・MPは加算せず維持) |
-| `wish_sp` | スキルを覚えたい | Sp 50 アップ | None | $\text{SP} + 50$ (via `char.AddSP(50)`) |
-| `wish_money` | お金がほしい | 10 万G | None | $\text{Money} + 100,000\text{ G}$ (via `char.AddMoney(100000)`) |
-| `wish_casino_coins` | カジノコインがほしい | 5 万枚 | None | Casino Coins $+ 50,000$ (via `casino.AdjustCoins`) |
-| `wish_small_medals` | 小さなメダルがほしい | 20 枚 | None | $\text{SmallMedals} + 20$ (via `char.AddSmallMedals(20)`) |
-| `wish_lottery_tickets` | 福引券がほしい | 1000 枚 | None | Lottery Tickets $+ 1,000$ (via `lottery.AddRaffleTickets`) |
-| `wish_guild_rank` | ギルドランクをあげたい | 1000 ポイント | Must belong to a guild | Guild EXP $+ 1,000$ (recalculates guild level) |
-| `wish_guild_gorgeous` | ギルドをゴージャスにしたい | ギルドが… | Must belong to a guild | Guild `bgimg` set to `"god.gif"` |
-| `wish_refresh` | 元気いっぱいになりたい | 疲労度 -150 % | None | $\text{Tired} = \text{Tired} - 150$ (現在HP・MPは維持) |
-| `wish_all_orbs` | 新しい冒険場所に行きたい | 全オーブ | None | Replaces orb state with all 6 standard orbs (`byrpgs` / `ValidOrbRunes`), overwriting any prior orbs or awakened 'G' state |
-| `wish_celestial_dragon` | 天竜人になりたい | 転職 (空竜の民) | `JobID != "job-70" && OldJobID != "job-70"` | Job changed to `"job-70"` (Job reset & base stats applied; `OverLevel` flag preserved) |
-| `wish_god_of_new_world` | 新世界の神になりたい | 自分の家が… | None | Avatar set to `"chr/052.gif"`, home `bgimg` set to `"god.gif"` |
-| `wish_ortega` | オルテガを生き返らして | 自分の家に… | None | Adds NPC companion "オルテガ" (`chr/029.gif`) to `home_members` |
-| `wish_cat` | 猫を飼いたい | 自分の家に… | None | Adds NPC companion "白猫" (`chr/030.gif`) or "黒猫" (`chr/031.gif`) (50% random) |
-| `wish_secret_maid` | メイドを雇いたい | お世話係 | Maid not already in `home_members` | Adds NPC companion "メイド" (`chr/026.gif`) to `home_members` |
-| `wish_erotic_book` | エッチな本がほしい | アイテム (預かり所へ送致) | Depot available | Delivers `item-058` to player Depot (`character_depots`) |
-| `wish_alchemy_recipe` | 錬金レシピがほしい | アイテム (預かり所へ送致) | Depot available | Delivers `item-128` or `item-129` (50% random) to player Depot |
-| `wish_lover` | 素敵な恋人がほしい | 恋人が…？ | None | Rejection joke message ("それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…"); no mutation, no teleport |
-| `wish_limit_break_level` | もっと強くなりたい | Lv上限を上げる | $\text{Level} \ge 99 \land \lnot\text{OverLevel} \land \lnot\text{JobMemory.IsTemporary()}$ | $\text{OverLevel} = \text{true}$ (raises max level from 99 to 150) |
-| `wish_restore_level_limit` | もとの強さに戻りたい | Lv上限を元に戻す | $\text{OverLevel} = \text{true}$ | $\text{OverLevel} = \text{false}$ (restores level cap to 99) |
-
-NPC companions granted by `wish_ortega`, `wish_cat`, and `wish_secret_maid` are stored in `home_members` (`is_npc = true`), displayed in `HomeView.ResidentPets`, and participate in Monster Grandpa ranch operations (`DepositToBox`, `BringToHome`, duplicate-name checks, and the 8-pet Home capacity limit; see [Monster Design](monster.md)).
-
-### 3.2 Underworld Wishes (裏天界の願い事)
-
-Each Underworld limit break can be upgraded up to 5 tiers (`0/5` to `5/5`):
-
-| Wish ID | Name (和名) | Condition | Effect per Tier |
-| :--- | :--- | :--- | :--- |
-| `wish_expand_depot` | もっとアイテムを預けたい | $\text{OverDepot} < 5$ | $\text{OverDepot} + 1$, Depot Capacity $+50$ (Base 50 $\to$ Max 300) |
-| `wish_expand_monster` | もっとモンスターを預けたい | $\text{OverMonster} < 5$ | $\text{OverMonster} + 1$, Monster box capacity $+50$ |
-| `wish_expand_job_memory` | もっと職業を覚えたい | $\text{OverFuture} < 5$ | $\text{OverFuture} + 1$, Future job memory slot $+1$ |
-| `wish_expand_flea_market` | もっとフリーマーケットで出品したい | $\text{OverFlea} < 5$ | $\text{OverFlea} + 1$, Max active listings $+1$ (Base 5 $\to$ Max 10) |
-| `wish_expand_shop_store` | もっとお店で出品したい | $\text{OverStore} < 5$ | $\text{OverStore} + 1$, Player shop listings $+1$ |
-
-### 3.3 Fatigue Recovery (疲労度回復) Parity
-
-In legacy Party2 (`party2/lib/god.cgi:57`):
-```perl
-['元気いっぱいになりたい', '疲労度 -150 %', sub { $m{tired} -= 150; }]
-```
-- `wish_refresh` deducts 150 from `Character.Tired` with no lower bound, so fatigue can drop below 0 and buffer later fatigue. Current HP and MP do not change. Example: Tired 80, HP 10/300, MP 0/150 becomes Tired -70, HP 10/300, MP 0/150.
-- The HP/MP restoration at `god.cgi:213-214` belongs to `job_change` and is not reached by this wish.
-- `wish_refresh` is the only public ID. `wish_full_recovery` had no legacy origin and is rejected like any other unknown wish ID (project owner decision, #1167).
-
-### 3.4 All Orbs Grant (全オーブ付与) Parity
-
-In legacy Party2 (`party2/lib/god.cgi:58`):
-```perl
-[ '新しい冒険場所に行きたい', '全オーブ', sub { $m{orb} = 'byrpgs'; } ]
-```
-- In Party2Re, `wish_all_orbs` replaces the character's orb collection with all 6 standard elemental orbs via `char.SetAllOrbs()` (`characters.orb = "srbgyp"`).
-- Any pre-existing orb state (empty, partial, or Ramia awakened `"G"`) is overwritten rather than appended.
-- Consequently, Ramia is not awakened (`IsRamiaAwakened() == false`) immediately after the wish, and the character qualifies for sacred prayer at the Altar of Rebirth (`@いのる` / `POST /characters/{id}/altar/pray`), while secret otherworld travel item wishes (`@ねがう` / `POST /characters/{id}/altar/wish`) remain locked until prayer is offered.
-
-### 3.5 Level Limit Break Guard (もっと強くなりたい) Parity
-
-In legacy Party2 (`party2/lib/god.cgi:121`):
-```perl
-if ( $m{lv} == 99 && !$m{over_lv} && !( -e "$userdir/$id/tmp_job_memory.cgi" ) )
-```
-- In Party2Re, `wish_limit_break_level` requires `char.Level >= 99`, `!char.OverLevel`, and absence of active temporary job memory (`char.JobMemory == nil || !char.JobMemory.IsTemporary()`).
-- Persistent job memory (`item-168`, `job_memory.cgi`) does not block level limit break. Only temporary job memory (`item-243`, `tmp_job_memory.cgi`) prohibits the wish.
-
----
-
-## 4. Level Cap Limit Break Formula
-
-For a character with $\text{OverLevel} = \text{true}$:
-- **Level Ceiling**:
-  $$\text{MaxLevel} = \begin{cases} 150 & \text{if } \text{OverLevel} = \text{true} \\ 99 & \text{otherwise} \end{cases}$$
-- **Required Experience for Advancement**:
-  $$\text{ExpThreshold}(L) = L^2 \times 10 \quad (1 \le L < \text{MaxLevel})$$
-
----
-
-## 5. Security & Idempotency
-
-- All wish grants are executed within transactional Unit of Work boundaries (`RunInTx`) with strict pessimistic lock ordering:
-  1. Rank 2: `characters` (`FindByIDForUpdate`)
-  2. Rank 5: `character_depots` (`FindByCharacterIDForUpdate`)
-- Character ownership is strictly validated against the authenticated session player (`PlayerID`), preventing IDOR.
-- Post-wish routing redirects players safely to their home (`NextLocation: "home"`), ending celestial session state.
+Each Underworld wish raises one of `OverDepot`, `OverMonster`, `OverFuture`, `OverFlea` or `OverStore` by one tier up to 5; the capacity each tier adds is owned by the affected feature.

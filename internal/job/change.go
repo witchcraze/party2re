@@ -98,11 +98,7 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		if err != nil {
 			return err
 		}
-		currentJobID := currentState.CurrentJobID
-		if currentDef, err := s.GetDefinition(currentJobID); err == nil {
-			currentState.RecordMastery(currentJobID, tc.Character.SP, s.masterySP(currentDef))
-		}
-		if err := currentState.RecordJobSP(currentJobID, tc.Character.SP); err != nil {
+		if err := s.recordDeparture(&currentState, tc.Character.SP); err != nil {
 			return err
 		}
 		s.checkAndNotifyCompletion(tc.Context, tc.Character.Name, &currentState)
@@ -110,14 +106,8 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 			return err
 		}
 		targetSPValue := targetSP(currentState, tc.Character, targetJobID)
-		oldJobID := tc.Character.JobID
-		oldLevel := tc.Character.Level
-		gender := tc.Character.Gender
-		if s.jobPopularity != nil {
-			points := oldLevel / 2
-			if err := s.jobPopularity.RecordJobPopularity(tc.Context, oldJobID, gender, points); err != nil {
-				return err
-			}
+		if err := s.recordPopularity(tc.Context, tc.Character); err != nil {
+			return err
 		}
 		if err := tc.Character.ApplyJobChange(targetJobID, targetSPValue); err != nil {
 			return err
@@ -149,6 +139,51 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		_ = s.costume.ResetCostume(ctx, characterID)
 	}
 	return updated, updatedState, nil
+}
+
+// ApplyGrantedJobChange applies a job change another facility awards (god.cgi
+// 天竜人) to char inside the caller's transaction, which must also persist char.
+// Like ChangeJob it records the departing job and restores retained target SP,
+// but applies no eligibility, item, guild-point, weekly-ranking or completion
+// effects; the next ChangeJob departure evaluates completion.
+func (s *Service) ApplyGrantedJobChange(ctx context.Context, char *corecharacter.Character, targetJobID string) error {
+	targetDef, err := s.GetDefinition(targetJobID)
+	if err != nil {
+		return err
+	}
+	state, err := s.loadState(ctx, *char)
+	if err != nil {
+		return err
+	}
+	if err := s.recordDeparture(&state, char.SP); err != nil {
+		return err
+	}
+	if err := state.Grant(targetDef); err != nil {
+		return err
+	}
+	if err := s.recordPopularity(ctx, *char); err != nil {
+		return err
+	}
+	if err := char.ApplyJobChange(targetJobID, targetSP(state, *char, targetJobID)); err != nil {
+		return err
+	}
+	return s.repository.Save(ctx, state)
+}
+
+// recordDeparture stores the leaving job's latest SP and first-time mastery.
+func (s *Service) recordDeparture(state *corejob.CharacterJob, sp int) error {
+	jobID := state.CurrentJobID
+	if def, err := s.GetDefinition(jobID); err == nil {
+		state.RecordMastery(jobID, sp, s.masterySP(def))
+	}
+	return state.RecordJobSP(jobID, sp)
+}
+
+func (s *Service) recordPopularity(ctx context.Context, char corecharacter.Character) error {
+	if s.jobPopularity == nil {
+		return nil
+	}
+	return s.jobPopularity.RecordJobPopularity(ctx, char.JobID, char.Gender, char.Level/2)
 }
 
 // buildChangeContextNoItems assembles corejob.ChangeContext for ValidateRequirements calls.

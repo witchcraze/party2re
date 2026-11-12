@@ -146,11 +146,25 @@ func (c *CharacterJob) ChangeTo(target Definition, level int, gender string) err
 	if target.ID == SuppinJobID && !c.AllJobsMastered {
 		return ErrJobUnavailable
 	}
-	if target.ID != c.CurrentJobID {
-		c.History = append(c.History, Change{FromJobID: c.CurrentJobID, ToJobID: target.ID})
-		c.CurrentJobID = target.ID
-	}
+	c.transitionTo(target.ID)
 	return nil
+}
+
+// Grant moves to target without ChangeTo eligibility, for changes another
+// facility awards unconditionally (god.cgi 天竜人).
+func (c *CharacterJob) Grant(target Definition) error {
+	if c == nil || c.CharacterID == "" || c.CurrentJobID == "" || target.ID == "" {
+		return ErrInvalidCharacter
+	}
+	c.transitionTo(target.ID)
+	return nil
+}
+
+func (c *CharacterJob) transitionTo(targetID string) {
+	if targetID != c.CurrentJobID {
+		c.History = append(c.History, Change{FromJobID: c.CurrentJobID, ToJobID: targetID})
+		c.CurrentJobID = targetID
+	}
 }
 
 // RestoreCurrentJob sets the active job identifier without validating level or
