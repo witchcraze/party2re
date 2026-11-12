@@ -16,7 +16,7 @@ func TestActiveEncounterSharedResolver(t *testing.T) {
 	ctx := context.Background()
 	char := createTestChar("hero", 10, 5000, 10, 0)
 	monster := dungeon.DungeonMonster{ID: "enemy", HP: 750, Attack: 0, ExpReward: 17, GoldReward: 23}
-	catalog := []dungeon.Dungeon{{ID: "real", MaxTurnsPerFloor: 20, Floors: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
+	catalog := []dungeon.Dungeon{{ID: "real", RoundLimit: 21, Variants: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
 	expectedEnemyHP := 750
 	calls := 0
 	engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
@@ -74,7 +74,7 @@ func TestActiveEncounterPartyLeaderFallen(t *testing.T) {
 			repo := newMockDungeonRepo()
 			chars := &mockCharRepo{chars: map[string]corecharacter.Character{leader.ID: leader, ally.ID: ally}}
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23}
-			catalog := []dungeon.Dungeon{{ID: "party", MaxTurnsPerFloor: 20, Floors: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
+			catalog := []dungeon.Dungeon{{ID: "party", RoundLimit: 21, Variants: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
 			calls := 0
 			engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 				calls++
@@ -89,7 +89,7 @@ func TestActiveEncounterPartyLeaderFallen(t *testing.T) {
 				}
 				return corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, WinnerSide: "allies", RemainingHP: map[string]int{ally.ID: 50, "enemy": 0}, RemainingMP: map[string]int{ally.ID: 2}}, nil
 			}}
-			svc, err := dungeon.NewService(repo, chars, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithAdmission(approvedRoster{}))
+			svc, err := dungeon.NewService(repo, chars, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithAdmission(approvedRoster{}), dungeon.WithRNG(&minimalRandomSource{}))
 			if err != nil {
 				t.Fatal(err)
 			}

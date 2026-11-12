@@ -24,10 +24,9 @@ func TestPartyCombat_MultiMemberBattleAndVitalityTracking(t *testing.T) {
 	}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dg-multi-combat",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 20,
-		Floors: []dungeon.Floor{
+		ID:         "dg-multi-combat",
+		RoundLimit: 21,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -78,6 +77,7 @@ func TestPartyCombat_MultiMemberBattleAndVitalityTracking(t *testing.T) {
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
 	)
 	if err != nil {
@@ -135,10 +135,9 @@ func TestPartyCombat_LeaderKilledAllySurvivesAndWins_ExplorationContinues(t *tes
 	}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dg-leader-death-check",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 20,
-		Floors: []dungeon.Floor{
+		ID:         "dg-leader-death-check",
+		RoundLimit: 21,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -187,6 +186,7 @@ func TestPartyCombat_LeaderKilledAllySurvivesAndWins_ExplorationContinues(t *tes
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
 	)
 	if err != nil {
@@ -247,10 +247,9 @@ func TestPartyCombat_AllMembersKilled_WipesOut(t *testing.T) {
 	}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dg-all-killed",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 20,
-		Floors: []dungeon.Floor{
+		ID:         "dg-all-killed",
+		RoundLimit: 21,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -299,6 +298,7 @@ func TestPartyCombat_AllMembersKilled_WipesOut(t *testing.T) {
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
 	)
 	if err != nil {
@@ -323,77 +323,6 @@ func TestPartyCombat_AllMembersKilled_WipesOut(t *testing.T) {
 	}
 }
 
-func TestPartyTrap_LeaderKilledAllySurvives_ExplorationContinues(t *testing.T) {
-	ctx := context.Background()
-	repo := newMockDungeonRepo()
-
-	c1 := createTestChar("lead-trap", 10, 5, 40, 25)   // 5 HP < 9-12 trap damage
-	c2 := createTestChar("ally-trap", 10, 100, 40, 25) // 100 HP > 30 trap damage
-
-	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{
-		c1.ID: c1,
-		c2.ID: c2,
-	}}
-
-	customDungeon := dungeon.Dungeon{
-		ID:               "dg-party-trap",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 20,
-		Floors: []dungeon.Floor{
-			{
-				FloorNumber: 1,
-				Width:       3,
-				Height:      3,
-				StartX:      0,
-				StartY:      0,
-				Grid: []string{
-					"SX0",
-					"000",
-					"00D",
-				},
-			},
-		},
-	}
-
-	svc, err := dungeon.NewService(
-		repo,
-		charRepo,
-		&corebattle.Engine{},
-		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
-		dungeon.WithAdmission(approvedRoster{}),
-	)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	_, err = svc.StartPartyExpedition(ctx, "lead-trap", []string{"lead-trap", "ally-trap"}, "dg-party-trap", "party-1")
-	if err != nil {
-		t.Fatalf("StartPartyExpedition failed: %v", err)
-	}
-
-	// Move east onto trap
-	res, err := svc.Move(ctx, "lead-trap", dungeon.DirectionEast)
-	if err != nil {
-		t.Fatalf("Move failed: %v", err)
-	}
-
-	if res.EventType != dungeon.EventTrap {
-		t.Fatalf("expected EventTrap, got %v", res.EventType)
-	}
-	if res.IsFinished {
-		t.Error("expected expedition NOT finished when ally survived trap")
-	}
-	if res.Expedition.Status != dungeon.StatusExploring {
-		t.Errorf("expected StatusExploring, got %v", res.Expedition.Status)
-	}
-	if res.Expedition.Members[0].CurrentHP != 0 {
-		t.Errorf("expected leader dead (0 HP), got %d", res.Expedition.Members[0].CurrentHP)
-	}
-	if res.Expedition.Members[1].CurrentHP <= 0 || res.Expedition.Members[1].CurrentHP >= 100 {
-		t.Errorf("expected ally damaged but alive (0 < HP < 100), got %d", res.Expedition.Members[1].CurrentHP)
-	}
-}
-
 func TestPartySettlement_EscapeWithFallenLeader(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockDungeonRepo()
@@ -407,10 +336,9 @@ func TestPartySettlement_EscapeWithFallenLeader(t *testing.T) {
 	}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dg-party-esc",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 20,
-		Floors: []dungeon.Floor{
+		ID:         "dg-party-esc",
+		RoundLimit: 21,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -433,6 +361,7 @@ func TestPartySettlement_EscapeWithFallenLeader(t *testing.T) {
 		&corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithActiveExpeditionStore(activeStore),
 	)
 	if err != nil {

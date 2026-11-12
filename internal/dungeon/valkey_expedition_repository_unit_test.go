@@ -113,7 +113,7 @@ func TestValkeyExpeditionRepository_SaveActiveExpedition(t *testing.T) {
 				MaxHP:       80,
 			},
 		},
-		DungeonID:         "dungeon-01",
+		DungeonID:         dungeon.NativeMap0ID,
 		CurrentFloor:      2,
 		PosX:              3,
 		PosY:              4,

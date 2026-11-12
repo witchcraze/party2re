@@ -15,21 +15,12 @@ import (
 
 type errorInjectingDungeonRepo struct {
 	*mockDungeonRepo
-	errGetRecord          error
 	errFinalizeExpedition error
-}
-
-func (e *errorInjectingDungeonRepo) GetRecord(ctx context.Context, characterID string) (dungeon.CharacterDungeonRecord, error) {
-	if e.errGetRecord != nil {
-		return dungeon.CharacterDungeonRecord{}, e.errGetRecord
-	}
-	return e.mockDungeonRepo.GetRecord(ctx, characterID)
 }
 
 func (e *errorInjectingDungeonRepo) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
-	record dungeon.CharacterDungeonRecord,
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
@@ -37,77 +28,20 @@ func (e *errorInjectingDungeonRepo) FinalizeExpedition(
 	if e.errFinalizeExpedition != nil {
 		return e.errFinalizeExpedition
 	}
-	return e.mockDungeonRepo.FinalizeExpedition(ctx, history, record, character, rewardItems, members...)
+	return e.mockDungeonRepo.FinalizeExpedition(ctx, history, character, rewardItems, members...)
 }
 
 func customSettlementDungeons() []dungeon.Dungeon {
-	return []dungeon.Dungeon{
-		{
-			ID:               "test-dg-01",
-			Name:             "テストダンジョン",
-			MinLevel:         1,
-			Tier:             1,
-			MaxTurnsPerFloor: 25,
-			ClearExpBonus:    100,
-			ClearGoldBonus:   200,
-			Floors: []dungeon.Floor{
-				{
-					FloorNumber: 1,
-					Width:       3,
-					Height:      2,
-					StartX:      0,
-					StartY:      0,
-					Grid: []string{
-						"S00",
-						"D00",
-					},
-				},
-				{
-					FloorNumber: 2,
-					Width:       3,
-					Height:      1,
-					StartX:      0,
-					StartY:      0,
-					Grid: []string{
-						"SBD",
-					},
-					Boss: &dungeon.DungeonMonster{
-						ID:         "floor-boss",
-						Name:       "階層ボス",
-						HP:         40,
-						Attack:     10,
-						Defense:    5,
-						ExpReward:  150,
-						GoldReward: 300,
-						DropItemID: "boss-orb",
-					},
-				},
-			},
-		},
-		{
-			ID:               "test-dg-bossless",
-			Name:             "ボス不在迷宮",
-			MinLevel:         1,
-			Tier:             2,
-			MaxTurnsPerFloor: 10,
-			ClearExpBonus:    50,
-			ClearGoldBonus:   50,
-			Floors: []dungeon.Floor{
-				{
-					FloorNumber: 1,
-					Width:       3,
-					Height:      1,
-					StartX:      0,
-					StartY:      0,
-					Grid: []string{
-						"SBD",
-					},
-					Boss:     nil,
-					Monsters: nil,
-				},
-			},
-		},
-	}
+	return []dungeon.Dungeon{{
+		ID:         "test-dg-01",
+		Name:       "テストダンジョン",
+		RoundLimit: 26,
+		Variants: []dungeon.Floor{{
+			FloorNumber: 1, Width: 3, Height: 1,
+			Grid: []string{"SB0"},
+			Boss: &dungeon.DungeonMonster{ID: "floor-boss", Name: "階層ボス", HP: 40, Attack: 10, Defense: 5, ExpReward: 150, GoldReward: 300, DropItemID: "boss-orb"},
+		}},
+	}}
 }
 
 func setupSettlementTest(t *testing.T) (*errorInjectingDungeonRepo, *mockCharRepo, dungeon.ActiveExpeditionStore, *dungeon.Service) {
@@ -240,25 +174,6 @@ func TestEscape_ErrorPropagation(t *testing.T) {
 		}
 	})
 
-	t.Run("get record repository error propagates", func(t *testing.T) {
-		repo, _, activeStore, service := setupSettlementTest(t)
-		now := time.Now().UTC()
-		repo.errGetRecord = errors.New("simulated db connection timeout on GetRecord")
-
-		_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-			CharacterID: "hero",
-			DungeonID:   "test-dg-01",
-			Status:      dungeon.StatusExploring,
-			StartedAt:   now,
-			UpdatedAt:   now,
-		})
-
-		_, err := service.Escape(ctx, "hero")
-		if err == nil || !strings.Contains(err.Error(), "getting dungeon record") {
-			t.Fatalf("expected getting dungeon record error, got: %v", err)
-		}
-	})
-
 	t.Run("finalize expedition repository error propagates", func(t *testing.T) {
 		repo, _, activeStore, service := setupSettlementTest(t)
 		now := time.Now().UTC()
@@ -316,85 +231,10 @@ func TestEscape_ErrorPropagation(t *testing.T) {
 			t.Errorf("expected medals %d, got %d", charRepo.chars["hero"].SmallMedals+2, savedChar.SmallMedals)
 		}
 
-		// Verify record updated
-		rec, _ := repo.GetRecord(ctx, "hero")
-		if rec.TotalExpeditions != 1 || rec.TotalFloorsCleared != 3 {
-			t.Errorf("record mismatch: %+v", rec)
-		}
-
 		// Verify active expedition deleted from store
 		active, _ := activeStore.GetActiveExpedition(ctx, "hero")
 		if active != nil {
 			t.Errorf("expected active expedition purged, got %+v", active)
-		}
-	})
-}
-
-func TestDungeonClear_ErrorPropagation(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("experience error during clear propagates", func(t *testing.T) {
-		_, charRepo, _, service := setupSettlementTest(t)
-
-		_, err := service.StartExpedition(ctx, "hero", "test-dg-bossless")
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Mutate hero in charRepo to invalid level so progression.ApplyExperience fails on clear
-		badChar := charRepo.chars["hero"]
-		badChar.Level = 0
-		charRepo.chars["hero"] = badChar
-
-		_, err = service.Move(ctx, "hero", dungeon.DirectionEast)
-		if err == nil || !strings.Contains(err.Error(), "applying experience") {
-			t.Fatalf("expected applying experience error on clear, got: %v", err)
-		}
-	})
-
-	t.Run("currency error during clear propagates", func(t *testing.T) {
-		_, _, activeStore, service := setupSettlementTest(t)
-
-		exp, err := service.StartExpedition(ctx, "hero", "test-dg-bossless")
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Set negative gold so total reward is negative (< 0)
-		exp.AccumulatedGold = -1000
-		_ = activeStore.SaveActiveExpedition(ctx, *exp)
-
-		_, err = service.Move(ctx, "hero", dungeon.DirectionEast)
-		if err == nil || !strings.Contains(err.Error(), "adding gold") {
-			t.Fatalf("expected adding gold error on clear, got: %v", err)
-		}
-	})
-
-	t.Run("get record error during clear propagates", func(t *testing.T) {
-		repo, _, _, service := setupSettlementTest(t)
-
-		_, err := service.StartExpedition(ctx, "hero", "test-dg-bossless")
-		if err != nil {
-			t.Fatal(err)
-		}
-		repo.errGetRecord = errors.New("simulated db error on clear GetRecord")
-
-		_, err = service.Move(ctx, "hero", dungeon.DirectionEast)
-		if err == nil || !strings.Contains(err.Error(), "getting dungeon record") {
-			t.Fatalf("expected getting dungeon record error on clear, got: %v", err)
-		}
-	})
-
-	t.Run("finalize expedition error during clear propagates", func(t *testing.T) {
-		repo, _, _, service := setupSettlementTest(t)
-
-		_, err := service.StartExpedition(ctx, "hero", "test-dg-bossless")
-		if err != nil {
-			t.Fatal(err)
-		}
-		repo.errFinalizeExpedition = errors.New("simulated db error on clear FinalizeExpedition")
-
-		_, err = service.Move(ctx, "hero", dungeon.DirectionEast)
-		if err == nil || !strings.Contains(err.Error(), "simulated db error on clear FinalizeExpedition") {
-			t.Fatalf("expected finalize expedition error on clear, got: %v", err)
 		}
 	})
 }
@@ -490,27 +330,6 @@ func TestEscape_IdempotentOnDeleteFailureRetry(t *testing.T) {
 func TestWipeout_ErrorPropagation(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("get record error during wipeout propagates", func(t *testing.T) {
-		repo, _, _, service := setupSettlementTest(t)
-
-		// Start on test-dg-01 with weak character
-		_, err := service.StartExpedition(ctx, "weak", "test-dg-01")
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Move down stairs to 2F
-		_, _ = service.Move(ctx, "weak", dungeon.DirectionSouth)
-
-		// Inject DB error before boss wipeout
-		repo.errGetRecord = errors.New("simulated db error on wipeout GetRecord")
-
-		// Move East to fight boss and trigger wipeout
-		_, err = service.Move(ctx, "weak", dungeon.DirectionEast)
-		if err == nil || !strings.Contains(err.Error(), "getting dungeon record") {
-			t.Fatalf("expected getting dungeon record error on wipeout, got: %v", err)
-		}
-	})
-
 	t.Run("finalize expedition error during wipeout propagates", func(t *testing.T) {
 		repo, _, _, service := setupSettlementTest(t)
 
@@ -518,7 +337,6 @@ func TestWipeout_ErrorPropagation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, _ = service.Move(ctx, "weak", dungeon.DirectionSouth)
 
 		repo.errFinalizeExpedition = errors.New("simulated db error on wipeout FinalizeExpedition")
 

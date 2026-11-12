@@ -31,60 +31,6 @@ func NewDungeonRepository(db *sql.DB) (*DungeonRepository, error) {
 	return &DungeonRepository{db: db}, nil
 }
 
-func (r *DungeonRepository) GetRecord(ctx context.Context, characterID string) (dungeon.CharacterDungeonRecord, error) {
-	var rec dungeon.CharacterDungeonRecord
-	executor := ExecutorFromContext(ctx, r.db)
-	query := `
-		SELECT character_id, highest_dungeon_cleared, total_expeditions,
-		       total_floors_cleared, total_chests_opened, total_monsters_slain,
-		       created_at, updated_at
-		FROM character_dungeon_records
-		WHERE character_id = ?
-	`
-	err := executor.QueryRowContext(ctx, query, characterID).Scan(
-		&rec.CharacterID,
-		&rec.HighestDungeonCleared,
-		&rec.TotalExpeditions,
-		&rec.TotalFloorsCleared,
-		&rec.TotalChestsOpened,
-		&rec.TotalMonstersSlain,
-		&rec.CreatedAt,
-		&rec.UpdatedAt,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		now := time.Now().UTC()
-		insertQuery := `
-			INSERT INTO character_dungeon_records (
-				character_id, highest_dungeon_cleared, total_expeditions,
-				total_floors_cleared, total_chests_opened, total_monsters_slain,
-				created_at, updated_at
-			) VALUES (?, 0, 0, 0, 0, 0, ?, ?)
-			ON DUPLICATE KEY UPDATE character_id = VALUES(character_id)
-		`
-		if _, err := executor.ExecContext(ctx, insertQuery, characterID, now, now); err != nil {
-			return dungeon.CharacterDungeonRecord{}, err
-		}
-		err = executor.QueryRowContext(ctx, query, characterID).Scan(
-			&rec.CharacterID,
-			&rec.HighestDungeonCleared,
-			&rec.TotalExpeditions,
-			&rec.TotalFloorsCleared,
-			&rec.TotalChestsOpened,
-			&rec.TotalMonstersSlain,
-			&rec.CreatedAt,
-			&rec.UpdatedAt,
-		)
-		if err != nil {
-			return dungeon.CharacterDungeonRecord{}, err
-		}
-		return rec, nil
-	}
-	if err != nil {
-		return dungeon.CharacterDungeonRecord{}, err
-	}
-	return rec, nil
-}
-
 func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error) {
 	query := `
 		SELECT id, character_id, party_id, dungeon_id, current_floor, pos_x, pos_y,
@@ -202,25 +148,19 @@ func (r *DungeonRepository) DeleteActiveExpedition(ctx context.Context, characte
 }
 
 // FinalizeExpedition claims expedition completion once by history.ID (run ID) inside a SQL transaction.
-// Lock order: Rank 2 (characters FOR UPDATE in ascending ID order) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items) -> Rank 5 (character_depots) -> Rank 8 (character_dungeon_records).
+// Lock order: Rank 2 (characters FOR UPDATE in ascending ID order) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items) -> Rank 5 (character_depots).
 // Returns dungeon.ErrExpeditionAlreadyFinished if history.ID has already been settled.
 func (r *DungeonRepository) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
-	record dungeon.CharacterDungeonRecord,
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
 ) error {
 	charID := history.CharacterID
-	if charID == "" {
-		charID = record.CharacterID
-	}
-	if charID == "" || (record.CharacterID != "" && record.CharacterID != charID) || (character != nil && character.ID != "" && character.ID != charID) {
+	if charID == "" || (character != nil && character.ID != "" && character.ID != charID) {
 		return dungeon.ErrForbidden
 	}
-	record.CharacterID = charID
-	history.CharacterID = charID
 	if history.ID == "" {
 		history.ID = id.New()
 	}
@@ -261,9 +201,8 @@ func (r *DungeonRepository) FinalizeExpedition(
 
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
-		now := time.Now().UTC()
 
-		// 1. Lock Character (Rank 2) before dependent inventory/depot or secondary records
+		// 1. Lock Character (Rank 2) before dependent inventory/depot
 		charRepo := &CharacterRepository{db: r.db}
 		for _, m := range sortedMembers {
 			if _, err := charRepo.FindByIDForUpdate(txCtx, m.CharacterID); err != nil {
@@ -348,7 +287,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 		for i := range sortedMembers {
 			m := &sortedMembers[i]
 			c := applied.UpdatedCharacters[m.CharacterID]
-			if history.Outcome == dungeon.StatusCleared || history.Outcome == dungeon.StatusEscaped {
+			if history.Outcome == dungeon.StatusEscaped {
 				earnedExp := m.AccumulatedExp
 				earnedGold := m.AccumulatedGold
 				if legacyFallback {
@@ -392,43 +331,8 @@ func (r *DungeonRepository) FinalizeExpedition(
 			}
 		}
 
-		// 6. Upsert Character Dungeon Record (Rank 8)
-		upsertRecordQuery := `
-			INSERT INTO character_dungeon_records (
-				character_id, highest_dungeon_cleared, total_expeditions,
-				total_floors_cleared, total_chests_opened, total_monsters_slain,
-				created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-			ON DUPLICATE KEY UPDATE
-				highest_dungeon_cleared = GREATEST(highest_dungeon_cleared, VALUES(highest_dungeon_cleared)),
-				total_expeditions = total_expeditions + 1,
-				total_floors_cleared = total_floors_cleared + ?,
-				total_chests_opened = GREATEST(total_chests_opened, VALUES(total_chests_opened)),
-				total_monsters_slain = GREATEST(total_monsters_slain, VALUES(total_monsters_slain)),
-				updated_at = VALUES(updated_at)
-		`
-		floorDelta := 0
-		if history.Outcome == dungeon.StatusCleared || history.Outcome == dungeon.StatusEscaped {
-			floorDelta = history.FloorsReached
-		}
-		if _, err := executor.ExecContext(
-			txCtx,
-			upsertRecordQuery,
-			record.CharacterID,
-			record.HighestDungeonCleared,
-			record.TotalExpeditions,
-			record.TotalFloorsCleared,
-			record.TotalChestsOpened,
-			record.TotalMonstersSlain,
-			now,
-			now,
-			floorDelta,
-		); err != nil {
-			return err
-		}
-
-		// 7. Delete only this owner's finalized run, preserving any replacement.
-		if err := r.DeleteActiveExpedition(txCtx, record.CharacterID, history.ID); err != nil {
+		// 6. Delete only this owner's finalized run, preserving any replacement.
+		if err := r.DeleteActiveExpedition(txCtx, charID, history.ID); err != nil {
 			return err
 		}
 

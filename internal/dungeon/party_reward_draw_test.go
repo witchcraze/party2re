@@ -39,10 +39,9 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 	}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dg-reward-parity",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 30,
-		Floors: []dungeon.Floor{
+		ID:         "dg-reward-parity",
+		RoundLimit: 31,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       4,
@@ -133,6 +132,7 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 		engine,
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
 	)
 	if err != nil {
@@ -154,7 +154,7 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 	}
 
 	// In fight 1, fallen died (0 HP) so per original Party2 defeat logic, it gets 0.
-	// lead and survivor survived so they got 50 EXP, 30 Gold.
+	// lead and survivor survived. The pinned RNG selects Monster 1 for both fights.
 	active1, err := svc.GetActiveExpedition(ctx, "lead")
 	if err != nil {
 		t.Fatal(err)
@@ -169,13 +169,13 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 				t.Errorf("fallen died in combat, expected 0 EXP/Gold, got exp=%d gold=%d", m.AccumulatedExp, m.AccumulatedGold)
 			}
 		case "lead", "survivor":
-			if m.AccumulatedExp != 100 || m.AccumulatedGold != 60 {
-				t.Errorf("member %s expected 100 EXP 60 Gold, got exp=%d gold=%d", m.CharacterID, m.AccumulatedExp, m.AccumulatedGold)
+			if m.AccumulatedExp != 50 || m.AccumulatedGold != 30 {
+				t.Errorf("member %s expected 50 EXP 30 Gold, got exp=%d gold=%d", m.CharacterID, m.AccumulatedExp, m.AccumulatedGold)
 			}
 		}
 	}
 
-	// 2. Move to (2, 0) -> Fight 2 (Monster 2: 100 EXP, 60 Gold)
+	// 2. Move to (2, 0) -> Fight 2 (Monster 1 again: 50 EXP, 30 Gold)
 	res2, err := svc.Move(ctx, "lead", dungeon.DirectionEast)
 	if err != nil {
 		t.Fatalf("Move 2 failed: %v", err)
@@ -196,9 +196,8 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 				t.Errorf("fallen member erroneously received Fight 2 rewards! got exp=%d gold=%d", m.AccumulatedExp, m.AccumulatedGold)
 			}
 		case "lead", "survivor":
-			// Living members got 50 + 100 = 150 EXP and 30 + 60 = 90 Gold!
-			if m.AccumulatedExp != 150 || m.AccumulatedGold != 90 {
-				t.Errorf("surviving member %s expected 150 EXP 90 Gold, got exp=%d gold=%d", m.CharacterID, m.AccumulatedExp, m.AccumulatedGold)
+			if m.AccumulatedExp != 100 || m.AccumulatedGold != 60 {
+				t.Errorf("surviving member %s expected 100 EXP 60 Gold, got exp=%d gold=%d", m.CharacterID, m.AccumulatedExp, m.AccumulatedGold)
 			}
 		}
 	}
@@ -215,8 +214,8 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 	if savedFallen.Money != 0 {
 		t.Errorf("expected fallen character to have 0 money reward, got %d", savedFallen.Money)
 	}
-	if savedSurv.Money != 90 {
-		t.Errorf("expected survivor character to have 90 money reward, got %d", savedSurv.Money)
+	if savedSurv.Money != 60 {
+		t.Errorf("expected survivor character to have 60 money reward, got %d", savedSurv.Money)
 	}
 }
 
@@ -233,10 +232,9 @@ func TestPartyCombat_OutcomeDraw_DoesNotWipeOut_PreventsMovement(t *testing.T) {
 	}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dg-draw-test",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 20,
-		Floors: []dungeon.Floor{
+		ID:         "dg-draw-test",
+		RoundLimit: 21,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -298,6 +296,7 @@ func TestPartyCombat_OutcomeDraw_DoesNotWipeOut_PreventsMovement(t *testing.T) {
 		engine,
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
 	)
 	if err != nil {
@@ -329,9 +328,9 @@ func TestPartyCombat_OutcomeDraw_DoesNotWipeOut_PreventsMovement(t *testing.T) {
 		t.Errorf("expected StatusExploring, got %v", res.Expedition.Status)
 	}
 
-	// 3. Player MUST NOT advance past or into the enemy tile: position remains at StartX (0, 0)!
-	if res.Expedition.PosX != 0 || res.Expedition.PosY != 0 {
-		t.Errorf("expected player position to remain at (0, 0), got (%d, %d)", res.Expedition.PosX, res.Expedition.PosY)
+	// 3. The party already stands on the encounter tile (vs_dungeon.cgi _susumu).
+	if res.Expedition.PosX != 1 || res.Expedition.PosY != 0 {
+		t.Errorf("expected player position (1, 0), got (%d, %d)", res.Expedition.PosX, res.Expedition.PosY)
 	}
 
 	// 4. Turns budget is consumed (-1)
@@ -363,10 +362,9 @@ func TestPartyCombat_OutcomeDraw_MutualWipeout_WipesOut(t *testing.T) {
 	}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dg-draw-mutual-death",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 20,
-		Floors: []dungeon.Floor{
+		ID:         "dg-draw-mutual-death",
+		RoundLimit: 21,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -422,6 +420,7 @@ func TestPartyCombat_OutcomeDraw_MutualWipeout_WipesOut(t *testing.T) {
 		engine,
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
 	)
 	if err != nil {

@@ -155,7 +155,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	*f.casino = before
 	// Current owner buffers remain observable even after the gameplay phase ends;
 	// observation never replays their pending settlement.
-	f.exp.Status, f.session.Status = dungeon.StatusCleared, challenge.StatusDefeated
+	f.exp.Status, f.session.Status = dungeon.StatusEscaped, challenge.StatusDefeated
 	got, err := r.read(ctx, "owner", "hero")
 	if err != nil || len(got) != 6 || !slices.Equal(got[3].Actions, []string{"dungeon_fight", "dungeon_escape"}) || len(got[4].Actions) != 0 {
 		t.Fatalf("terminal buffers: %+v %v", got, err)
@@ -287,7 +287,6 @@ func TestDungeonActivityEncounterAndTerminalCandidates(t *testing.T) {
 		{dungeon.StatusExploring, false, 10, []string{"dungeon_move", "dungeon_escape"}},
 		{dungeon.StatusExploring, true, 10, []string{"dungeon_fight", "dungeon_escape"}},
 		{dungeon.StatusExploring, false, 0, []string{"dungeon_escape"}},
-		{dungeon.StatusCleared, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 		{dungeon.StatusEscaped, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 		{dungeon.StatusWipedOut, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 	} {

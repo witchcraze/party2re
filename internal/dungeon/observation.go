@@ -16,7 +16,7 @@ func (exp ActiveExpedition) Controls(actor string) ContinuationControls {
 	switch exp.Status {
 	case StatusExploring:
 		return ContinuationControls{CanMove: !exp.Encounter.blocking() && exp.TurnsRemaining > 0, CanFight: exp.Encounter.hostile(), CanEscape: true}
-	case StatusCleared, StatusEscaped, StatusWipedOut:
+	case StatusEscaped, StatusWipedOut:
 		// Both operations retry the frozen outcome without fighting or changing it.
 		return ContinuationControls{CanFight: true, CanEscape: true}
 	default:
@@ -34,8 +34,8 @@ type ExpeditionObservation struct {
 	Status         ExpeditionStatus     `json:"status"`
 	CurrentFloor   int                  `json:"current_floor"`
 	TurnsRemaining int                  `json:"turns_remaining"`
-	Round          int                  `json:"round,omitempty"`       // native maps only
-	RoundLimit     int                  `json:"round_limit,omitempty"` // native maps only
+	Round          int                  `json:"round,omitempty"`
+	RoundLimit     int                  `json:"round_limit,omitempty"`
 	Map            *MapView             `json:"map"`
 	Directions     []Direction          `json:"directions"`
 	Controls       ContinuationControls `json:"controls"`
@@ -57,28 +57,15 @@ func (s *Service) ObserveExpedition(ctx context.Context, actor string) (*Expedit
 		return nil, err
 	}
 	view.Map = &m
-	d, floor, err := s.activeFloor(exp)
+	d, _, err := s.activeFloor(exp)
 	if err != nil {
 		return nil, err
 	}
-	if d.native() {
-		view.Round, view.RoundLimit = d.RoundLimit-exp.TurnsRemaining, d.RoundLimit
-		// Legacy registers all four directions; walls are rejected on use, so
-		// the list cannot reveal a hidden passage.
-		if view.Controls.CanMove {
-			view.Directions = []Direction{DirectionNorth, DirectionSouth, DirectionEast, DirectionWest}
-		}
-		return view, nil
-	}
+	view.Round, view.RoundLimit = d.RoundLimit-exp.TurnsRemaining, d.RoundLimit
+	// Legacy registers all four directions; walls are rejected on use, so
+	// the list cannot reveal a hidden passage.
 	if view.Controls.CanMove {
-		for _, step := range []struct {
-			dir  Direction
-			x, y int
-		}{{DirectionNorth, exp.PosX, exp.PosY - 1}, {DirectionSouth, exp.PosX, exp.PosY + 1}, {DirectionEast, exp.PosX + 1, exp.PosY}, {DirectionWest, exp.PosX - 1, exp.PosY}} {
-			if step.x >= 0 && step.y >= 0 && step.x < floor.Width && step.y < floor.Height && floor.Grid[step.y][step.x] != '1' {
-				view.Directions = append(view.Directions, step.dir)
-			}
-		}
+		view.Directions = []Direction{DirectionNorth, DirectionSouth, DirectionEast, DirectionWest}
 	}
 	return view, nil
 }

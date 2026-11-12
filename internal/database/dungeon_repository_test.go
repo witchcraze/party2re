@@ -39,15 +39,6 @@ func TestDungeonRepository(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. GetRecord (initial empty record)
-	rec, err := dungeonRepo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("GetRecord failed: %v", err)
-	}
-	if rec.CharacterID != char.ID || rec.HighestDungeonCleared != 0 {
-		t.Errorf("unexpected initial record: %#v", rec)
-	}
-
 	// 2. SaveActiveExpedition & GetActiveExpedition
 	now := time.Now().UTC()
 	expID := fmt.Sprintf("exp_%016x", now.UnixNano())
@@ -81,11 +72,6 @@ func TestDungeonRepository(t *testing.T) {
 	}
 
 	// 3. FinalizeExpedition
-	rec.HighestDungeonCleared = 1
-	rec.TotalExpeditions = 1
-	rec.TotalFloorsCleared = 2
-	rec.TotalChestsOpened = 1
-	rec.TotalMonstersSlain = 3
 
 	histID := expID
 	history := dungeon.DungeonExpeditionHistory{
@@ -93,7 +79,7 @@ func TestDungeonRepository(t *testing.T) {
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
 		FloorsReached:    2,
-		Outcome:          dungeon.StatusCleared,
+		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        450,
 		GoldReward:       800,
 		ItemsRewardCount: 2,
@@ -109,7 +95,7 @@ func TestDungeonRepository(t *testing.T) {
 		},
 	}
 
-	err = dungeonRepo.FinalizeExpedition(ctx, history, rec, &char, rewardItems)
+	err = dungeonRepo.FinalizeExpedition(ctx, history, &char, rewardItems)
 	if err != nil {
 		t.Fatalf("FinalizeExpedition failed: %v", err)
 	}
@@ -120,18 +106,12 @@ func TestDungeonRepository(t *testing.T) {
 		t.Errorf("expected active expedition to be nil after finalize, got %#v", clearedExp)
 	}
 
-	// 5. Verify Record Updated
-	updatedRec, err := dungeonRepo.GetRecord(ctx, char.ID)
-	if err != nil || updatedRec.HighestDungeonCleared != 1 || updatedRec.TotalExpeditions != 1 {
-		t.Errorf("unexpected updated record: %#v", updatedRec)
-	}
-
 	// 6. Verify History
 	histories, err := dungeonRepo.GetHistory(ctx, char.ID, 5)
 	if err != nil || len(histories) != 1 {
 		t.Fatalf("GetHistory failed: %v, len=%d", err, len(histories))
 	}
-	if histories[0].Outcome != dungeon.StatusCleared || histories[0].GoldReward != 800 {
+	if histories[0].Outcome != dungeon.StatusEscaped || histories[0].GoldReward != 800 {
 		t.Errorf("unexpected history entry: %#v", histories[0])
 	}
 }
@@ -166,11 +146,6 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec, err := dungeonRepo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	now := time.Now().UTC()
 
 	// 1. Finalize with first item -> goes into inventory
@@ -179,7 +154,7 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
 		FloorsReached:    1,
-		Outcome:          dungeon.StatusCleared,
+		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        100,
 		GoldReward:       200,
 		ItemsRewardCount: 1,
@@ -192,7 +167,7 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 			Quantity:     1,
 		},
 	}
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist1, rec, &char, item1); err != nil {
+	if err := dungeonRepo.FinalizeExpedition(ctx, hist1, &char, item1); err != nil {
 		t.Fatalf("FinalizeExpedition item1 failed: %v", err)
 	}
 
@@ -210,7 +185,7 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
 		FloorsReached:    2,
-		Outcome:          dungeon.StatusCleared,
+		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        100,
 		GoldReward:       200,
 		ItemsRewardCount: 1,
@@ -223,7 +198,7 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 			Quantity:     1,
 		},
 	}
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist2, rec, &char, item2); err != nil {
+	if err := dungeonRepo.FinalizeExpedition(ctx, hist2, &char, item2); err != nil {
 		t.Fatalf("FinalizeExpedition item2 overflow failed: %v", err)
 	}
 
@@ -258,7 +233,7 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
 		FloorsReached:    3,
-		Outcome:          dungeon.StatusCleared,
+		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        100,
 		GoldReward:       200,
 		ItemsRewardCount: 1,
@@ -271,7 +246,7 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 			Quantity:     1,
 		},
 	}
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist3, rec, &char, item3); err != nil {
+	if err := dungeonRepo.FinalizeExpedition(ctx, hist3, &char, item3); err != nil {
 		t.Fatalf("FinalizeExpedition with full depot should succeed as lost drop: %v", err)
 	}
 
@@ -317,10 +292,6 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec, err := dungeonRepo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Simulate an external wallet update (e.g. +500G and +3 SmallMedals) that committed after
 	// the dungeon service read its stale character snapshot (`staleChar`).
@@ -331,9 +302,6 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 
 	runID := "exp_claim_" + id.New()
 	now := time.Now().UTC()
-	rec.HighestDungeonCleared = 2
-	rec.TotalExpeditions = 1
-	rec.TotalFloorsCleared = 3
 
 	hist := dungeon.DungeonExpeditionHistory{
 		ID:               runID,
@@ -360,7 +328,7 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 	staleChar.Money += 400
 	staleChar.SmallMedals += 2
 
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist, rec, &staleChar, rewardItems); err != nil {
+	if err := dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar, rewardItems); err != nil {
 		t.Fatalf("first FinalizeExpedition failed: %v", err)
 	}
 
@@ -372,7 +340,7 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 			Quantity:     1,
 		},
 	}
-	err = dungeonRepo.FinalizeExpedition(ctx, hist, rec, &staleChar, dupItems)
+	err = dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar, dupItems)
 	if !errors.Is(err, dungeon.ErrExpeditionAlreadyFinished) {
 		t.Fatalf("expected ErrExpeditionAlreadyFinished on duplicate run ID, got %v", err)
 	}
@@ -407,13 +375,6 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 	if err != nil || len(histories) != 1 {
 		t.Fatalf("expected 1 history record, got %d (err: %v)", len(histories), err)
 	}
-	finalRec, err := dungeonRepo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if finalRec.TotalExpeditions != 1 || finalRec.TotalFloorsCleared != 3 {
-		t.Errorf("expected TotalExpeditions=1, TotalFloorsCleared=3, got %+v", finalRec)
-	}
 }
 
 func TestDungeonRepository_RollbackOnRewardFailure(t *testing.T) {
@@ -442,10 +403,6 @@ func TestDungeonRepository_RollbackOnRewardFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec, err := dungeonRepo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	runID := "exp_rb_" + id.New()
 	now := time.Now().UTC()
@@ -469,7 +426,7 @@ func TestDungeonRepository_RollbackOnRewardFailure(t *testing.T) {
 		},
 	}
 
-	err = dungeonRepo.FinalizeExpedition(ctx, hist, rec, &char, invalidRewardItems)
+	err = dungeonRepo.FinalizeExpedition(ctx, hist, &char, invalidRewardItems)
 	if err == nil {
 		t.Fatal("expected FinalizeExpedition to fail on invalid reward item delivery")
 	}
@@ -539,11 +496,6 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec, err := dungeonRepo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	runID := "exp_race_" + id.New()
 	now := time.Now().UTC()
 
@@ -575,9 +527,6 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 				ItemsRewardCount: 1,
 				CreatedAt:        now,
 			}
-			r := rec
-			r.TotalExpeditions = 1
-			r.TotalFloorsCleared = 2
 			items := []coreitem.Instance{
 				{
 					ID:           fmt.Sprintf("item_race_%s_%d", id.New()[:8], workerIdx),
@@ -585,7 +534,7 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 					Quantity:     1,
 				},
 			}
-			return dungeonRepo.FinalizeExpedition(ctx, h, r, &staleSnapshot, items)
+			return dungeonRepo.FinalizeExpedition(ctx, h, &staleSnapshot, items)
 		})
 	}
 
@@ -666,12 +615,5 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 	}
 	if len(inv.Items)+len(dep.Items) != 1 {
 		t.Errorf("expected 1 total reward item delivered, got inv=%d depot=%d", len(inv.Items), len(dep.Items))
-	}
-	finalRec, err := dungeonRepo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if finalRec.TotalExpeditions != 1 || finalRec.TotalFloorsCleared != 2 {
-		t.Errorf("expected TotalExpeditions=1, TotalFloorsCleared=2, got %+v", finalRec)
 	}
 }

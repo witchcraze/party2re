@@ -128,7 +128,6 @@ func (s *stubBossService) GetCharacterRecord(ctx context.Context, characterID st
 
 type stubDungeonService struct {
 	fightFn           func(context.Context, string) (dungeon.ExpeditionStepResult, error)
-	listDungeonsFn    func(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
 	startExpeditionFn func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
 	moveFn            func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
 	escapeFn          func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
@@ -137,11 +136,8 @@ type stubDungeonService struct {
 	observeExpeditionFn    func(ctx context.Context, characterID string) (*dungeon.ExpeditionObservation, error)
 }
 
-func (s *stubDungeonService) ListDungeons(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error) {
-	if s.listDungeonsFn != nil {
-		return s.listDungeonsFn(ctx, characterID)
-	}
-	return []dungeon.DungeonOverview{{Dungeon: dungeon.Dungeon{ID: "d1", Name: "Cave"}, IsUnlocked: true}}, nil
+func (s *stubDungeonService) ListDungeons() []dungeon.Dungeon {
+	return []dungeon.Dungeon{{ID: "d1", Name: "Cave"}}
 }
 func (s *stubDungeonService) StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error) {
 	if s.startExpeditionFn != nil {

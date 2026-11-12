@@ -165,13 +165,9 @@ else
         final_status = 'wiped_out'
     end
 end
--- Native maps keep exhausted runs active; only catalog runs wipe out on turns.
-local map_variant = redis.call('HGET', state_key, 'map_variant') or ''
-if turns_remaining <= 0 then
+-- Exhausted runs stay active; Escape remains available.
+if turns_remaining < 0 then
     turns_remaining = 0
-    if map_variant == '' then
-        final_status = 'wiped_out'
-    end
 end
 
 if ARGV[22] and ARGV[22] ~= '' then
@@ -323,5 +319,5 @@ return {
     tostring(event_consumed),
     encounter,
     tostring(revision),
-    map_variant
+    redis.call('HGET', state_key, 'map_variant') or ''
 }

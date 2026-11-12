@@ -226,14 +226,14 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 	})
 	t.Run("dungeon party lost acknowledgement", func(t *testing.T) {
 		useAdmission("lost-ack")
-		run, err := combat.dungeon.StartPartyExpedition(ctx, leader.ID, nil, "dungeon-01", lobby.Party.ID)
+		run, err := combat.dungeon.StartPartyExpedition(ctx, leader.ID, nil, dungeon.NativeMap0ID, lobby.Party.ID)
 		if err != nil || run == nil {
 			t.Fatalf("published run must be returned: %+v %v", run, err)
 		}
 		if active, err := combat.dungeon.GetActiveExpedition(ctx, member.ID); err != nil || active == nil || active.ID != run.ID {
 			t.Fatalf("member lost the run: %+v %v", active, err)
 		}
-		if _, err := combat.dungeon.StartPartyExpedition(ctx, leader.ID, nil, "dungeon-01", lobby.Party.ID); !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+		if _, err := combat.dungeon.StartPartyExpedition(ctx, leader.ID, nil, dungeon.NativeMap0ID, lobby.Party.ID); !errors.Is(err, dungeon.ErrActiveExpeditionExists) {
 			t.Fatalf("no duplicate run: %v", err)
 		}
 		if err := ds.DeleteActiveExpedition(ctx, leader.ID, run.ID); err != nil {

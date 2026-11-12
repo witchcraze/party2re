@@ -67,13 +67,9 @@ func TestDungeonRepository_RunQualifiedCleanup(t *testing.T) {
 		}
 		assertReplacement()
 	}
-	record, err := repo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
 	history := dungeon.DungeonExpeditionHistory{ID: old.ID, CharacterID: char.ID, DungeonID: old.DungeonID, Outcome: dungeon.StatusEscaped, GoldReward: 100, CreatedAt: time.Now().UTC()}
 	for i := 0; i < 2; i++ {
-		err := repo.FinalizeExpedition(ctx, history, record, &char, nil)
+		err := repo.FinalizeExpedition(ctx, history, &char, nil)
 		if (i == 0 && err != nil) || (i == 1 && !errors.Is(err, dungeon.ErrExpeditionAlreadyFinished)) {
 			t.Fatalf("finalization %d: %v", i, err)
 		}

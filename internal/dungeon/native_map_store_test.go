@@ -67,18 +67,6 @@ func nativeStoreContract(t *testing.T, store dungeon.ActiveExpeditionStore, char
 	if out.EventConsumed || out.Expedition.Encounter != nil || out.Status != dungeon.StatusExploring {
 		t.Fatalf("consumed replay %+v", out)
 	}
-
-	// Catalog runs keep their turn-limit wipeout.
-	catalog := sampleExpedition("catalog-"+charID, charID, "dungeon-01")
-	catalog.TurnsRemaining = 1
-	if err := store.SaveActiveExpedition(ctx, catalog); err != nil {
-		t.Fatal(err)
-	}
-	rev := 0
-	out, err = store.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: catalog.ID, ExpectedRevision: &rev, NewFloor: 1, TurnsDelta: -1, Now: time.Now().UTC()})
-	if err != nil || out.Status != dungeon.StatusWipedOut || out.Expedition.MapVariant != 0 {
-		t.Fatalf("catalog regression %+v err=%v", out, err)
-	}
 }
 
 func TestNativeMap0_StoreContract(t *testing.T) {

@@ -71,16 +71,14 @@ round limit permits it. Escape is a separate action, not permission to move
 past unopened chests. This contract preserves the legacy behavior; allowing
 ordinary chest abandonment by movement would require an approved departure.
 
-## Catalog dungeons
+## Retired synthetic catalog
 
-The synthetic catalog dungeons (`dungeon-01`–`dungeon-03`) use a generic `T/X/D/B/E` event model with batch combat. It does not reproduce map-owned events; its turn-limit wipeout, trap bases and treasure generation are implementation differences, not canonical rules. Native maps replace it map by map; retiring the catalog is undecided (#1958). Scouting is actor-only: a party member's bonus never expands another actor's view ([context contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract)).
+**Decision (#1958).** The synthetic `dungeon-01`–`dungeon-03` catalog had no legacy counterpart and was removed, together with its per-character record table. `dungeon_expedition_history` keeps old catalog rows because it is the settlement claim; history reads never resolve `dungeon_id` against the catalog.
 
 ## Native map contract
 
 **Decision (#1202).** It extends the existing Dungeon owner and ports, without a
-script engine, legacy runtime or a second run store. The existing `dungeon-01`
-through `dungeon-03` catalog remains available; adding native maps does not
-authorize deletion, reinterpretation of saved runs, or automatic catalog cutover.
+script engine, legacy runtime or a second run store.
 Native map geometry and presentation must be independently authored, preserving
 verified dimensions and event behavior without copying legacy grids or assets.
 
@@ -97,7 +95,7 @@ in their own units.
 | Accepted event transition | Save position, round, event state and resulting encounter/reward facts together through the existing revision-checked step contract. A rejected limit move changes none of them and consumes no encounter RNG. Reload and stale competing requests must not regenerate an accepted one-time event. |
 | Pending encounter | Distinguish hostile combat from unopened treasure for resolution, while both block ordinary Dungeon movement whenever living enemy-side members remain. Treasure generation is distinct from actor-authorized inspection and delivery; it does not activate the isolated `$event == '宝'` exception. Discovery must withhold movement choices and direct movement calls must reject the same state. Persist any accepted random choice needed to resume without redrawing it. |
 | Movement availability | Derive exhausted movement from current round and the selected map's limit, independently of terminal status. An exhausted expedition remains active, retaining vitality and stock; Escape and required combat/inspection continuations remain available. A genuine defeat remains a distinct outcome. |
-| Terminal settlement | Reuse frozen outcomes and the SQL run-ID settlement claim. A map boss trigger does not by itself authorize the current generic boss-victory clear bonus, medals, or forced expedition completion. Exit parity beyond the movement-limit guard remains separately scoped below. |
+| Terminal settlement | Reuse frozen outcomes and the SQL run-ID settlement claim. Exit parity beyond the movement-limit guard remains separately scoped below. |
 
 For map0, initialize the round to 1 as part of accepted start, representing the
 leader's initial advance through the existing Start use case. Do not add a new
@@ -133,7 +131,7 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 | `すすむ` → `susumu` (`vs_dungeon.cgi:33–36,57–67`) | Superseded by atomic start, which initializes round 1 and keeps leader admission |
 | `にし`/`きた`/`みなみ`/`ひがし` (`39–43,70–73`) | Move in that direction; map-owned dispatch follows admission |
 | `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
-| Treasure `しらべる` → `shiraberu(target)` (`45–48`; `_npc_action.cgi:6–84`) | Open: native inspection with per-actor eligibility and delivery (#1762). Generic `T` rewards do not implement it |
+| Treasure `しらべる` → `shiraberu(target)` (`45–48`; `_npc_action.cgi:6–84`) | Open: native inspection with per-actor eligibility and delivery (#1762) |
 | `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Open: map16 mining (#1777) |
 | Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Existing Escape, available after exhaustion with stock kept. Open: per-character departure, fatigue and exit equipment effects (#1956); whole-party Escape is not equivalent |
 
@@ -152,7 +150,7 @@ Native map0 has six independently authored 5×5 layouts (legacy has six initial 
 
 - Passage spawn draws `r = 2 × U[0,1)` and spawns iff `r <= 1`; start, hidden passage and consumed one-time cells draw nothing.
 - Treasure chests (one per living member, plus `1 + rand(2)` for an acting job78 leader) block all movement until opened; they grant nothing by themselves and are never auto-opened.
-- Boss victory grants the monster's rewards only, with no clear bonus, medals or completion.
+- Boss victory grants the monster's rewards only and does not complete the expedition.
 - The hidden passage is always shown as a wall; observation lists all four directions while movement is allowed, so it reveals nothing.
 - Legacy dungeon 0 has no job-level gate, so native map0 has none.
 
@@ -307,8 +305,7 @@ This decision does not certify the whole Dungeon cluster. Native treasure
 inspection/delivery is scoped in [#1762](https://github.com/witchcraze/party2re/issues/1762), covering actor claims,
 extra-open item 215, treasure counts/pools and failure recovery. Legacy treasure
 creation is not reward delivery (`vs_dungeon.cgi:131–135`,
-`_npc_action.cgi:6–84,498–552`); its actor eligibility must not be inferred from
-the current automatic `T` reward path.
+`_npc_action.cgi:6–84,498–552`).
 Per-character combat action dispatch is scoped in
 [#1865](https://github.com/witchcraze/party2re/issues/1865). Independent participant
 departure and fatigue/equipment exit effects remain unscheduled gaps; whole-party

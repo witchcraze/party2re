@@ -27,7 +27,7 @@ func (s *failedCleanupStore) DeleteActiveExpedition(ctx context.Context, actor, 
 
 func TestEncounterFrozenSettlementRetry(t *testing.T) {
 	for _, kind := range []string{"memory", "valkey"} {
-		for _, ending := range []string{"escape", "boss", "wipeout"} {
+		for _, ending := range []string{"escape", "wipeout"} {
 			t.Run(kind+"/"+ending, func(t *testing.T) {
 				ctx := context.Background()
 				store := &failedCleanupStore{ActiveExpeditionStore: encounterStore(t, kind)}
@@ -36,9 +36,6 @@ func TestEncounterFrozenSettlementRetry(t *testing.T) {
 				exp := sampleExpedition(id.New(), char.ID, "retry")
 				monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23}
 				exp.Encounter = &dungeon.ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: dungeon.EventBattle, X: 1}
-				if ending == "boss" {
-					exp.Encounter.EventType = dungeon.EventBoss
-				}
 				if err := store.SaveActiveExpedition(ctx, exp); err != nil {
 					t.Fatal(err)
 				}
@@ -54,7 +51,7 @@ func TestEncounterFrozenSettlementRetry(t *testing.T) {
 					}
 					return corebattle.PartyBattleResult{Outcome: outcome, WinnerSide: side, RemainingHP: map[string]int{char.ID: hp, "enemy": 0}}, nil
 				}}
-				catalog := []dungeon.Dungeon{{ID: "retry", Tier: 1, ClearExpBonus: 7, ClearGoldBonus: 11}}
+				catalog := []dungeon.Dungeon{{ID: "retry"}}
 				svc, err := dungeon.NewService(repo, &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog))
 				if err != nil {
 					t.Fatal(err)
@@ -73,10 +70,6 @@ func TestEncounterFrozenSettlementRetry(t *testing.T) {
 				}
 				expectedStatus := dungeon.StatusEscaped
 				expectedGold, expectedExp := 0, 0
-				if ending == "boss" {
-					expectedStatus = dungeon.StatusCleared
-					expectedGold, expectedExp = 34, 24
-				}
 				if ending == "wipeout" {
 					expectedStatus = dungeon.StatusWipedOut
 				}
@@ -88,7 +81,7 @@ func TestEncounterFrozenSettlementRetry(t *testing.T) {
 				}
 				repo.errFinalizeExpedition = nil
 				store.fail = true
-				// A retry through Escape must honor an already frozen clear/wipeout outcome.
+				// A retry through Escape must honor an already frozen wipeout outcome.
 				res, err := svc.Escape(ctx, char.ID)
 				if err != nil || res.Expedition.Status != expectedStatus {
 					t.Fatalf("retry changed outcome: %+v %v", res, err)
@@ -117,7 +110,7 @@ func TestEncounterEscapeFencesPausedFight(t *testing.T) {
 			store := encounterStore(t, kind)
 			char := createTestChar(id.New(), 10, 100, 30, 20)
 			repo := &errorInjectingDungeonRepo{mockDungeonRepo: newMockDungeonRepo(), errFinalizeExpedition: errors.New("SQL unavailable")}
-			exp := sampleExpedition(id.New(), char.ID, "dungeon-01")
+			exp := sampleExpedition(id.New(), char.ID, dungeon.NativeMap0ID)
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, GoldReward: 23}
 			exp.Encounter = &dungeon.ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: dungeon.EventBattle, X: 1}
 			if err := store.SaveActiveExpedition(ctx, exp); err != nil {

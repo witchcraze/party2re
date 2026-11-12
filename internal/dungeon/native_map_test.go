@@ -116,8 +116,8 @@ func strongHero(id string) corecharacter.Character {
 
 func TestNativeMap0_LayoutsAreIndependentFiveByFiveVariants(t *testing.T) {
 	d := nativeMap0Def(t)
-	if d.RoundLimit != 20 || len(d.Variants) != 6 || len(d.Floors) != 0 {
-		t.Fatalf("limit=%d variants=%d floors=%d", d.RoundLimit, len(d.Variants), len(d.Floors))
+	if d.RoundLimit != 20 || len(d.Variants) != 6 {
+		t.Fatalf("limit=%d variants=%d", d.RoundLimit, len(d.Variants))
 	}
 	for i, f := range d.Variants {
 		counts := map[byte]int{}

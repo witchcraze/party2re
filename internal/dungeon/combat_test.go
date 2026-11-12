@@ -53,10 +53,9 @@ func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dungeon-lethal-draw-check",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 10,
-		Floors: []dungeon.Floor{
+		ID:         "dungeon-lethal-draw-check",
+		RoundLimit: 11,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       2,
@@ -85,7 +84,7 @@ func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 		charRepo,
 		corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
-		dungeon.WithRNG(random.NewDeterministic(1)),
+		dungeon.WithRNG(&minimalRandomSource{}),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -138,10 +137,9 @@ func TestDungeonSolo_ParticipantWithSkillsUsesSkills(t *testing.T) {
 
 	// High defense monster that physical attack cannot hurt effectively, but magic skill defeats
 	customDungeon := dungeon.Dungeon{
-		ID:               "dungeon-magic-test",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 10,
-		Floors: []dungeon.Floor{
+		ID:         "dungeon-magic-test",
+		RoundLimit: 11,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       2,
@@ -198,7 +196,7 @@ func TestDungeonSolo_ParticipantWithSkillsUsesSkills(t *testing.T) {
 		corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithParticipantBuilder(builder),
-		dungeon.WithRNG(random.NewDeterministic(1)),
+		dungeon.WithRNG(&minimalRandomSource{}),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -271,10 +269,9 @@ func TestDungeonSolo_CustomRNGWithoutIntN(t *testing.T) {
 	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dungeon-rng-test",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 10,
-		Floors: []dungeon.Floor{
+		ID:         "dungeon-rng-test",
+		RoundLimit: 11,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       2,
@@ -332,6 +329,20 @@ func TestDungeonSolo_CustomRNGWithoutIntN(t *testing.T) {
 	}
 }
 
+// spawnNext forces the next passage roll to spawn and leaves battle draws to the inner source.
+type spawnNext struct {
+	dungeon.RandomSource
+	next bool
+}
+
+func (r *spawnNext) Float64() float64 {
+	if r.next {
+		r.next = false
+		return 0
+	}
+	return r.RandomSource.Float64()
+}
+
 func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockDungeonRepo()
@@ -343,7 +354,7 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 		Stats: corecharacter.Stats{
 			HP:      100,
 			MaxHP:   100,
-			Attack:  30,
+			Attack:  60,
 			Defense: 0,
 			Agility: 10, // Slower than monsters so monsters get an attack in
 		},
@@ -352,10 +363,9 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 
 	// A 3-tile path: Start at (0,0), monster at (1,0), monster at (2,0)
 	customDungeon := dungeon.Dungeon{
-		ID:               "dungeon-consecutive",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 10,
-		Floors: []dungeon.Floor{
+		ID:         "dungeon-consecutive",
+		RoundLimit: 11,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -389,12 +399,13 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 		},
 	}
 
+	rng := &spawnNext{RandomSource: random.NewDeterministic(1)}
 	service, err := dungeon.NewService(
 		repo,
 		charRepo,
 		corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
-		dungeon.WithRNG(random.NewDeterministic(1)),
+		dungeon.WithRNG(rng),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -408,7 +419,8 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 		t.Fatalf("expected initial HP 100, got %d", exp.CurrentHP)
 	}
 
-	// Step 1: Move East to (1,0) - encounters monster-2 (1%2 = 1)
+	// Step 1: Move East to (1,0)
+	rng.next = true
 	res1, err := service.Move(ctx, char.ID, dungeon.DirectionEast)
 	if err != nil {
 		t.Fatalf("Move 1 failed: %v", err)
@@ -421,7 +433,8 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 		t.Fatalf("expected reduced HP after battle 1, got %d", hpAfterBattle1)
 	}
 
-	// Step 2: Move East to (2,0) - encounters monster-1 (2%2 = 0)
+	// Step 2: Move East to (2,0)
+	rng.next = true
 	res2, err := service.Move(ctx, char.ID, dungeon.DirectionEast)
 	if err != nil {
 		t.Fatalf("Move 2 failed: %v", err)

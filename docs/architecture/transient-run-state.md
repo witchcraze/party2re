@@ -314,8 +314,8 @@ distributed two-phase commit across MariaDB and Valkey**.
 History and run/session identifiers must protect retries from duplicate grants.
 Do not assert that an endpoint is exactly-once solely because it uses `RunInTx`.
 Inspect the owning finalizer, durable idempotency guard, and failure tests when
-changing this boundary. Durable records include `character_dungeon_records`,
-`dungeon_expedition_history`, and `character_challenge_records`; legacy SQL
+changing this boundary. Durable records include `dungeon_expedition_history` and
+`character_challenge_records`; legacy SQL
 active-state migrations are historical work, not a remaining rollout plan.
 
 ### Dungeon finalization
@@ -327,8 +327,8 @@ expedition member characters in ascending ID order (`SELECT ... FOR UPDATE`, Ran
 claims the history row, delegates surviving vitality persistence (HP/MP, 1 HP floor for
 fallen characters) and consumable inventory item deduction to shared post-battle settlement
 (`battle.ApplyPostBattleResult`), applies experience and gold rewards to each participating
-member, awards small medals to the expedition leader, delivers reward items to inventory/depot
-(Rank 3/5), and atomically increments `character_dungeon_records` (Rank 8). Pre-cutover
+member, awards small medals to the expedition leader, and delivers reward items to inventory/depot
+(Rank 3/5). Pre-cutover
 expedition `members` payloads that omit `current_mp` distinguish missing MP from explicit
 `"current_mp": 0` (`ExpeditionMember.HasCurrentMP()`): combat participant construction
 passes `nil` MP to `BuildParticipantWithState` so stored character MP is used and updated

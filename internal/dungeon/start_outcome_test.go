@@ -73,10 +73,10 @@ func TestStartAfterPublicationFailureKeepsVerifiedRun(t *testing.T) {
 		start func(*dungeon.Service) (*dungeon.ActiveExpedition, error)
 	}{
 		{"solo", func(s *dungeon.Service) (*dungeon.ActiveExpedition, error) {
-			return s.StartExpedition(ctx, "char-1", "dungeon-01")
+			return s.StartExpedition(ctx, "char-1", dungeon.NativeMap0ID)
 		}},
 		{"party", func(s *dungeon.Service) (*dungeon.ActiveExpedition, error) {
-			return s.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2"}, "dungeon-01", "party-01")
+			return s.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2"}, dungeon.NativeMap0ID, "party-01")
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -122,7 +122,7 @@ func TestStartAfterPublicationFailureReportsUnknownWhenRunUnverifiable(t *testin
 		t.Run(tc.name, func(t *testing.T) {
 			store := &readFailStore{ActiveExpeditionStore: dungeon.NewMemoryExpeditionRepository()}
 			svc := newOutcomeService(t, tc.setup(store), store)
-			run, err := svc.StartExpedition(ctx, "char-1", "dungeon-01")
+			run, err := svc.StartExpedition(ctx, "char-1", dungeon.NativeMap0ID)
 			if run != nil || !errors.Is(err, dungeon.ErrStartOutcomeUnknown) || !errors.Is(err, failure) {
 				t.Fatalf("expected unknown outcome wrapping the cause, got %+v %v", run, err)
 			}
