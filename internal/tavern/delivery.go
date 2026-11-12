@@ -67,7 +67,10 @@ func (s *Service) GetDelivery(ctx context.Context, characterID string) (Delivery
 
 	delivery, err := s.repo.GetDelivery(ctx, charID)
 	if err != nil {
-		return DeliveryReservation{}, ErrNoActiveDelivery
+		if errors.Is(err, ErrNoActiveDelivery) {
+			return DeliveryReservation{}, ErrNoActiveDelivery
+		}
+		return DeliveryReservation{}, err
 	}
 	return delivery, nil
 }
@@ -81,7 +84,10 @@ func (s *Service) CancelDelivery(ctx context.Context, characterID string) error 
 
 	_, err := s.repo.GetDelivery(ctx, charID)
 	if err != nil {
-		return ErrNoActiveDelivery
+		if errors.Is(err, ErrNoActiveDelivery) {
+			return ErrNoActiveDelivery
+		}
+		return err
 	}
 
 	return s.repo.DeleteDelivery(ctx, charID)
@@ -98,7 +104,13 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 
 	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
 		delivery, err := s.repo.GetDelivery(txCtx, charID)
-		if err != nil || delivery.ItemID == "" {
+		if err != nil {
+			if errors.Is(err, ErrNoActiveDelivery) {
+				return ErrNoActiveDelivery
+			}
+			return err
+		}
+		if delivery.ItemID == "" {
 			return ErrNoActiveDelivery
 		}
 
