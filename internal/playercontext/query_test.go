@@ -67,11 +67,11 @@ func TestQuery_ReadStateAndAvailability(t *testing.T) {
 		wantActions  []string
 	}{
 		{name: "awake"},
-		{name: "sleeping", remaining: time.Minute, asleep: true, wantSleeping: true, wantActions: []string{"rescue_request"}},
-		{name: "penalty timer without asleep flag", remaining: time.Minute, wantSleeping: true, wantActions: []string{"rescue_request"}},
-		{name: "ready to wake", asleep: true, wantSleeping: true, wantWake: true, wantActions: []string{"home_wake", "rescue_request"}},
-		{name: "pending work", actions: []scheduling.ScheduledAction{{ID: "pending", ActorID: "character", State: scheduling.StatePending}}, wantActions: []string{"rescue_request"}},
-		{name: "processing work", actions: []scheduling.ScheduledAction{{ID: "processing", ActorID: "character", State: scheduling.StateProcessing}}, wantActions: []string{"rescue_request"}},
+		{name: "sleeping", remaining: time.Minute, asleep: true, wantSleeping: true, wantActions: []string{"rescue_request", "presence_refresh"}},
+		{name: "penalty timer without asleep flag", remaining: time.Minute, wantSleeping: true, wantActions: []string{"rescue_request", "presence_refresh"}},
+		{name: "ready to wake", asleep: true, wantSleeping: true, wantWake: true, wantActions: []string{"home_wake", "rescue_request", "presence_refresh"}},
+		{name: "pending work", actions: []scheduling.ScheduledAction{{ID: "pending", ActorID: "character", State: scheduling.StatePending}}, wantActions: []string{"rescue_request", "presence_refresh"}},
+		{name: "processing work", actions: []scheduling.ScheduledAction{{ID: "processing", ActorID: "character", State: scheduling.StateProcessing}}, wantActions: []string{"rescue_request", "presence_refresh"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), struct{}{}, tc.name)
@@ -147,11 +147,11 @@ func TestQuery_ExistingTimerLifecycle(t *testing.T) {
 			t.Fatalf("actions=%v, err=%v, want %v", got.AvailableActions, err, want)
 		}
 	}
-	assertActions([]string{"rescue_request"})
+	assertActions([]string{"rescue_request", "presence_refresh"})
 	if err := timers.ReleaseLock(ctx, timer.CategorySleep, char.ID); err != nil {
 		t.Fatal(err)
 	}
-	assertActions([]string{"home_wake", "rescue_request"})
+	assertActions([]string{"home_wake", "rescue_request", "presence_refresh"})
 	if err := timers.ReleaseLock(ctx, timer.CategoryAsleep, char.ID); err != nil {
 		t.Fatal(err)
 	}

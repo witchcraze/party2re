@@ -233,6 +233,9 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			if scene.PlaceLog, err = h.readPlaceLog(ctx, n.Destination, result.Snapshot.Character.ID); err != nil {
 				return err
 			}
+			if scene.Members, err = h.readPlaceMembers(ctx, n.Destination); err != nil {
+				return err
+			}
 		}
 		switch data := data.(type) {
 		case BankSceneData, BlacksmithSceneData, ChapelSceneData, ExileSceneData, GemStoreSceneData:
@@ -345,7 +348,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			}
 		}
 	}
-	choices = append(choices, "player_inspect", "home_wake", "rescue_request")
+	choices = append(choices, "player_inspect", "home_wake", "rescue_request", "presence_refresh")
 	for _, def := range playercontext.DefaultCatalog {
 		if !slices.Contains(choices, def.ID) {
 			continue

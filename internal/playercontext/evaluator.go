@@ -52,7 +52,7 @@ func evaluate(catalog []ActionDefinition, snapshot *Snapshot, evaluators []Evalu
 			}
 			continue
 		}
-		if location != "" && action.ID != "home_wake" && action.ID != "rescue_request" {
+		if location != "" && action.ID != "home_wake" && action.ID != "rescue_request" && action.ID != "presence_refresh" {
 			continue
 		}
 		allowed := true

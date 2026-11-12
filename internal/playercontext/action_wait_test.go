@@ -22,7 +22,7 @@ func TestActionWaitGateBlocksAllButRecovery(t *testing.T) {
 	got := Evaluate(waiting)
 	for _, id := range got {
 		def, _ := findAction(id)
-		if def.WaitExempt != WaitRecovery {
+		if def.WaitExempt != WaitRecovery && def.WaitExempt != WaitReload {
 			t.Fatalf("%s offered during the wait", id)
 		}
 	}
@@ -71,6 +71,10 @@ func TestCatalogWaitDispositions(t *testing.T) {
 		case def.ID == "alchemy_recipes":
 			if def.WaitExempt != WaitNavigation {
 				t.Errorf("%s: the reshipi list view sets act_time = 0", def.ID)
+			}
+		case def.ID == "presence_refresh":
+			if def.WaitExempt != WaitReload {
+				t.Errorf("%s: a page reload carries no ＠ action", def.ID)
 			}
 		case def.ID == "home_wake" || def.ID == "rescue_request":
 			if def.WaitExempt != WaitRecovery {
@@ -142,7 +146,7 @@ func TestQueryReadsAndClaimsActionWait(t *testing.T) {
 
 	enabled := NewService(waitChars{}, waitActions{}, timers, WithActionWait(timers, DefaultActionWait))
 	r, err := enabled.Query(ctx, "c", "p")
-	if err != nil || r.Snapshot.ActionWait != 3*time.Second || !slices.Equal(r.AvailableActions, []string{"place_say", "rescue_request"}) {
+	if err != nil || r.Snapshot.ActionWait != 3*time.Second || !slices.Equal(r.AvailableActions, []string{"place_say", "rescue_request", "presence_refresh"}) {
 		t.Fatalf("enabled read: %v %v %v", r.Snapshot.ActionWait, r.AvailableActions, err)
 	}
 	claim, ok, err := enabled.ClaimActionWait(ctx, "c")

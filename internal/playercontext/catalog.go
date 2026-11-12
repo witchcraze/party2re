@@ -45,7 +45,7 @@ type ActionDefinition struct {
 	ActivityKind   string    `json:"activity_kind,omitempty"`
 	Recovery       bool      `json:"recovery,omitempty"`
 	// WaitExempt explains why success does not start the legacy action wait;
-	// empty means it does. WaitRecovery and WaitSpeech are also never blocked.
+	// empty means it does. WaitRecovery, WaitSpeech and WaitReload are also never blocked.
 	WaitExempt WaitExemption `json:"-"`
 }
 
@@ -67,6 +67,7 @@ const (
 	WaitWhisper WaitExemption = "whisper"
 	// WaitSpeech: plain input is not a ＠ action (party.cgi:20-26).
 	WaitSpeech WaitExemption = "speech"
+	WaitReload WaitExemption = "reload" // a page reload carries no ＠ action (party.cgi:19-21)
 )
 
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
@@ -477,6 +478,8 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		// Note: Emergency rescue can be invoked while dead or asleep to unstick state.
 		RequiredGates: 0,
 	},
+	// The legacy page reload; its only effect is the dispatcher's member refresh.
+	{ID: "presence_refresh", Label: "更新", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, WaitExempt: WaitReload},
 }, casinoCatalog...), exileCatalog...), continuationCatalog...)
 
 // AllActions returns a slice copy of the canonical default action catalog.

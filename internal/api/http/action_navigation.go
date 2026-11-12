@@ -77,12 +77,17 @@ func (h *Handler) registerNavigation(service *playercontext.Service) {
 		if err != nil {
 			return sceneEnterResult{}, err
 		}
+		h.leavePlace(ctx, actor)
 		return h.deliverOnEntry(ctx, actor, selection)
 	})
 	navigationCommand(h, "scene_select", service.Select)
 	navigationCommand(h, "scene_page", service.Page)
 	navigationCommand(h, "scene_back", func(ctx context.Context, owner, actor string, _ struct{}) (playercontext.Selection, error) {
-		return service.Back(ctx, owner, actor)
+		selection, err := service.Back(ctx, owner, actor)
+		if err == nil {
+			h.leavePlace(ctx, actor)
+		}
+		return selection, err
 	})
 }
 

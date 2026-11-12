@@ -25,7 +25,7 @@ type ActionWaitWriter interface {
 type ActionWaitGate struct{}
 
 func (ActionWaitGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
-	return snapshot.ActionWait <= 0 || action.WaitExempt == WaitRecovery || action.WaitExempt == WaitSpeech
+	return snapshot.ActionWait <= 0 || action.WaitExempt == WaitRecovery || action.WaitExempt == WaitSpeech || action.WaitExempt == WaitReload
 }
 
 // WithActionWait enables the legacy action wait. A non-positive duration or a

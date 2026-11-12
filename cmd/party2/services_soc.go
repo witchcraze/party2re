@@ -87,6 +87,7 @@ type socServices struct {
 	worker       *scheduling.Worker
 	timer        timer.Service
 	placeLog     *placelog.Log
+	placeMembers *placelog.Members
 	exile        *exile.Service
 	exileRepo    *database.ExileRepository
 }
