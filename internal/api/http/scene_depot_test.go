@@ -121,7 +121,7 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 				t.Fatalf("held gold: %+v", data.PendingRemittances)
 			}
 			for _, action := range observation.AvailableActions {
-				if !slices.Contains([]string{"scene_back", "npc_talk", "npc_inspect", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw"}, action.Action) {
+				if !slices.Contains([]string{"scene_back", "npc_talk", "npc_inspect", "place_say", "place_whisper", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw"}, action.Action) {
 					t.Fatalf("unconnected mutation offered: %+v", action)
 				}
 			}

@@ -45,7 +45,7 @@ type ActionDefinition struct {
 	ActivityKind   string    `json:"activity_kind,omitempty"`
 	Recovery       bool      `json:"recovery,omitempty"`
 	// WaitExempt explains why success does not start the legacy action wait;
-	// empty means it does. WaitRecovery is also never blocked by the wait.
+	// empty means it does. WaitRecovery and WaitSpeech are also never blocked.
 	WaitExempt WaitExemption `json:"-"`
 }
 
@@ -63,6 +63,10 @@ const (
 	// WaitPrivate: the result is a private $mes (e.g. NPC しらべる), which
 	// writes no log and starts no wait (lib/system.cgi:322-328,413,651).
 	WaitPrivate WaitExemption = "private"
+	// WaitWhisper: ＠ささやき sets act_time = 0 (lib/system.cgi:261).
+	WaitWhisper WaitExemption = "whisper"
+	// WaitSpeech: plain input is not a ＠ action (party.cgi:20-26).
+	WaitSpeech WaitExemption = "speech"
 )
 
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
@@ -141,6 +145,8 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	// Shared NPC interaction in the current facility (docs/architecture/place-log.md).
 	{ID: "npc_talk", Label: "はなす", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "npc_inspect", Label: "しらべる", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitPrivate},
+	{ID: "place_say", Label: "発言する", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"text"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitSpeech},
+	{ID: "place_whisper", Label: "ささやく", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"recipient_name", "text"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitWhisper},
 	{
 		ID:             "chapel_pray",
 		Label:          "礼拝堂で祈る（祈願）",

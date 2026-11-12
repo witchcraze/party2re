@@ -296,7 +296,7 @@ func newHTTPHandler(
 		opts = append(opts, http.WithTrustedProxies(prefixes...))
 	}
 	if soc.placeLog != nil {
-		opts = append(opts, http.WithPlaceLog(soc.placeLog))
+		opts = append(opts, http.WithPlaceLog(soc.placeLog), http.WithCharacterNames(core.charRepo))
 	}
 	pc := newPlayerContext(core, soc, econ, cmbt, misc, playercontext.WithActionWait(soc.timer, cfg.ActionWait))
 	if soc.schedRepo != nil {

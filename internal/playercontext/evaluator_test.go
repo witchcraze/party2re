@@ -75,7 +75,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	}{
 		{"dead", func(s *Snapshot) { s.Character.Stats.HP = 0 }, []string{
 			"scene_enter", "scene_select", "scene_page", "scene_back",
-			"home_sleep", "chapel_pray",
+			"home_sleep", "place_say", "place_whisper", "chapel_pray",
 			"bank_deposit", "bank_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_purchase", "fleamarket_cancel",
 			"store_build", "store_list_gold", "store_list_barter", "store_withdraw", "store_buy", "store_trade", "store_rename", "store_wallpaper", "store_interior_add", "store_interior_rename", "store_interior_clean",
 			"shop_purchase", "shop_sell", "shop_batch_purchase", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_buy", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "secretshop_purchase", "blackmarket_sacrifice", "blackmarket_trade",
@@ -88,7 +88,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		}},
 		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{
 			"scene_enter", "scene_select", "scene_page", "scene_back",
-			"home_sleep", "chapel_pray",
+			"home_sleep", "place_say", "place_whisper", "chapel_pray",
 			"bank_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_cancel",
 			"store_list_gold", "store_list_barter", "store_withdraw", "store_trade", "store_rename", "store_wallpaper", "store_interior_add", "store_interior_rename", "store_interior_clean",
 			"shop_sell", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "blackmarket_sacrifice", "blackmarket_trade",
@@ -108,7 +108,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		{"processing", func(s *Snapshot) {
 			s.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StateProcessing}}
 		}, []string{"rescue_request"}},
-		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "secretshop_puffpuff", "player_inspect", "rescue_request"}},
+		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "place_say", "place_whisper", "secretshop_puffpuff", "player_inspect", "rescue_request"}},
 		{"all constraints", func(s *Snapshot) {
 			s.Character.Stats.HP = 0
 			s.Character.Tired = 100
@@ -126,7 +126,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 79 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 81 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -146,8 +146,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 72 {
-		t.Fatalf("exhausted action count = %d, want 72", len(got))
+	if len(got) != 74 {
+		t.Fatalf("exhausted action count = %d, want 74", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request"} {
 		if !slices.Contains(got, action) {

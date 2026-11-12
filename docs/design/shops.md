@@ -20,7 +20,7 @@ Access requires job level 7 or more (`item.cgi:57–69`); the secret shop sells 
 
 ### 7.4. Purchase Transport and Remaining Migration
 
-Purchase uses the Gateway's `secretshop_purchase` with explicit item and quantity ([command contract](../architecture/client-agent-api.md#secretshop-purchase-command-contract)). Puff-puff uses `secretshop_puffpuff`, an NPC act with no inputs: like legacy `pafupafu` (`$to_name = $m`), its actor row and NPC row are private to the actor ([NPC interaction](../architecture/place-log.md#npc-interaction-1940)). No SecretShop REST route remains. **Known difference:** legacy `kau` (`secret.cgi:34–82`) buys one item, while Go accepts 1–99 and sends bulk quantities to the Depot; this is not an approved replacement of the single-purchase rule.
+Purchase uses the Gateway's `secretshop_purchase` with explicit item and quantity ([command contract](../architecture/client-agent-api.md#secretshop-purchase-command-contract)). Puff-puff uses `secretshop_puffpuff`, an NPC act with no inputs: like legacy `pafupafu` (`$to_name = $m`), its actor row and NPC row are private to the actor ([NPC interaction](../architecture/place-log.md#npc-interaction)). No SecretShop REST route remains. **Known difference:** legacy `kau` (`secret.cgi:34–82`) buys one item, while Go accepts 1–99 and sends bulk quantities to the Depot; this is not an approved replacement of the single-purchase rule.
 
 ## 10. Shop scenes and commands
 

@@ -332,7 +332,7 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` through `scene_enter` and public Home targets through `scene_select` → Home.GetHomeView. Query authenticates the actor; unavailable targets remain explicit. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
 | Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh derives owned activity/recovery before ordinary selection. Expired sleep requires explicit Wake; conflicting activities remain explicit. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
-| `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Shared `npc_talk`/`npc_inspect` in facility scenes ([place log](place-log.md#npc-interaction-1940)); speech/whisper remain #1942. `しらべる` on a player is the scene-independent `player_inspect` ([Auction design](../design/auction.md#2-player-inspection-しらべる)). Facilities outside Economy keep their REST dialogue until migrated. |
+| `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Shared `npc_talk`/`npc_inspect` in facility scenes ([place log](place-log.md#npc-interaction)); plain speech and `ささやき` are `place_say`/`place_whisper` in places with a log ([speech and whisper](place-log.md#writers)). `しらべる` on a player is the scene-independent `player_inspect` ([Auction design](../design/auction.md#2-player-inspection-しらべる)). Facilities outside Economy keep their REST dialogue until migrated. |
 | `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. |
 | `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Stored photo acquisition/Contest reconciliation remains #949; client rendering belongs to #140. Separator superseded by structured actions. |
 | Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes. Place logs, the action wait and per-place members follow the planned [place-log contract](place-log.md). No room join/leave, recovery or settlement is introduced here. |
@@ -581,8 +581,8 @@ operation therefore does not remove its migrated command's validation; route
 retirement still requires the tracked replacement verification.
 
 Re-read current entry eligibility before execution; reject an ineligible entry
-with `409 ACTION_UNAVAILABLE`. While the legacy [action wait](place-log.md#action-wait-1939)
-runs, every command except rescue and wake is rejected first with
+with `409 ACTION_UNAVAILABLE`. While the legacy [action wait](place-log.md#action-wait)
+runs, every command except rescue, wake and speech is rejected first with
 `409 ACTION_WAIT` and no execution; `character.action_wait_ms` reports the
 remaining time. Scheduled/timer read errors stop execution with
 `500 ACTION_PREFLIGHT_FAILED`, without execution or context. An earlier
