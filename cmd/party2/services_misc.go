@@ -335,6 +335,7 @@ func newMiscServices(
 		god.WithHomeMemberRepository(homeMemberRepo),
 		god.WithProfileRepository(homeMemberRepo),
 		god.WithHomeRepository(homeMemberRepo),
+		god.WithJobChanger(jobService),
 	)
 	if err != nil {
 		return nil, err

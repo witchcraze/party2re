@@ -117,6 +117,12 @@ type InventoryRepository interface {
 	Save(ctx context.Context, inv coreinventory.Inventory) error
 }
 
+// JobChanger applies an awarded job change and its job-state records inside
+// the caller's transaction.
+type JobChanger interface {
+	ApplyGrantedJobChange(ctx context.Context, char *corecharacter.Character, targetJobID string) error
+}
+
 // TransactionProvider executes operations within a database transaction.
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error

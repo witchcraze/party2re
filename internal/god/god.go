@@ -63,6 +63,12 @@ func WithHomeRepository(repo HomeRepository) Option {
 	}
 }
 
+func WithJobChanger(jobs JobChanger) Option {
+	return func(s *Service) {
+		s.jobs = jobs
+	}
+}
+
 func WithRandFloat(fn func() float64) Option {
 	return func(s *Service) {
 		s.randFloatFn = fn
@@ -80,6 +86,7 @@ type Service struct {
 	homeMembers HomeMemberRepository
 	profiles    ProfileRepository
 	homes       HomeRepository
+	jobs        JobChanger
 	randFloatFn func() float64
 }
 

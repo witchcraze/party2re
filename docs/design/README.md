@@ -80,7 +80,7 @@ graph TD
 - [`items-and-equipment.md`](items-and-equipment.md) — 5-category item catalog, equipment invariants, and consumption helpers.
 - [`custom_skill.md`](custom_skill.md) — Custom skill synthesis using 3-gem formulas and trigger phrase matching.
 - [`wishing-well.md`](wishing-well.md) — Wishing Well (願いの泉, @女神) SP sacrifice exchange for permanent stat boosts.
-- [`god.md`](god.md) — 19 celestial god wishes, limit breaks, and OverLevel blessings.
+- [`god.md`](god.md) — Heaven and Underworld wish decisions and legacy pitfalls.
 
 ### 3. Combat, Adventure & Dungeon Exploration
 - [`battle.md`](battle.md) — Deterministic turn resolver, multi-participant factions, status effects, formulas, and Battle Adapter.

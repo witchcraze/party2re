@@ -11,6 +11,15 @@ import (
 	"github.com/witchcraze/party2re/internal/guild"
 )
 
+type fakeJobChanger struct{ err error }
+
+func (f fakeJobChanger) ApplyGrantedJobChange(_ context.Context, char *corecharacter.Character, target string) error {
+	if f.err != nil {
+		return f.err
+	}
+	return char.ApplyJobChange(target, 0)
+}
+
 type mockCasinoRepo struct {
 	coins map[string]int64
 }
@@ -134,6 +143,7 @@ func setupHeavenService() (*god.Service, *mockCharacterRepo, *mockDepotRepo, *mo
 		god.WithHomeMemberRepository(homeMemberRepo),
 		god.WithProfileRepository(profileRepo),
 		god.WithHomeRepository(homeRepo),
+		god.WithJobChanger(fakeJobChanger{}),
 	)
 
 	return svc, charRepo, depotRepo, casinoRepo, lotteryRepo, guildRepo, homeMemberRepo, profileRepo, homeRepo
@@ -427,6 +437,21 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		if res.Character.Stats.MaxHP != 250 {
 			t.Errorf("expected MaxHP 250, got %d", res.Character.Stats.MaxHP)
+		}
+	})
+
+	t.Run("wish_celestial_dragon leaves character unsaved when job records fail", func(t *testing.T) {
+		charRepo := newMockCharacterRepo()
+		sentinel := errors.New("job records failed")
+		svc, _ := god.NewService(charRepo, god.WithJobChanger(fakeJobChanger{err: sentinel}))
+		char := corecharacter.Character{ID: "char-celestial-fail", JobID: "job-01", Level: 50}
+		charRepo.characters[char.ID] = char
+
+		if _, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon, god.RealmHeaven); !errors.Is(err, sentinel) {
+			t.Fatalf("expected job record error, got %v", err)
+		}
+		if got := charRepo.characters[char.ID]; got.JobID != "job-01" || got.Level != 50 {
+			t.Errorf("character saved despite failure: %+v", got)
 		}
 	})
 
