@@ -14,6 +14,7 @@ import (
 type AlchemyService interface {
 	GetStatus(ctx context.Context, characterID string) (alchemy.Synthesis, error)
 	GetCompendium(ctx context.Context, characterID string) (alchemy.Compendium, error)
+	ViewRecipes(ctx context.Context, characterID string) (alchemy.RecipeListResult, error)
 	Synthesize(ctx context.Context, characterID string, recipeID string) (alchemy.SynthesisResult, error)
 	Claim(ctx context.Context, characterID string) (alchemy.ClaimResult, error)
 }
@@ -22,16 +23,22 @@ type alchemySynthesizeRequest struct {
 	RecipeID string `json:"recipe_id"`
 }
 
-// WithAlchemy configures the scene observation, synthesis command and entry delivery.
+type alchemyRecipesRequest struct{}
+
+// WithAlchemy configures the scene observation, synthesis and recipe-list commands and entry delivery.
 func WithAlchemy(service AlchemyService) Option {
 	return func(h *Handler) {
 		h.alchemy = service
 		if service == nil {
 			withActionCommand[alchemySynthesizeRequest]("alchemy_synthesize", nil, nil)(h)
+			withActionCommand[alchemyRecipesRequest]("alchemy_recipes", nil, nil)(h)
 			return
 		}
 		withActionCommand("alchemy_synthesize", func(ctx context.Context, actor string, p alchemySynthesizeRequest) (any, error) {
 			return service.Synthesize(ctx, actor, p.RecipeID)
+		}, alchemyActionRejection)(h)
+		withActionCommand("alchemy_recipes", func(ctx context.Context, actor string, _ alchemyRecipesRequest) (any, error) {
+			return service.ViewRecipes(ctx, actor)
 		}, alchemyActionRejection)(h)
 	}
 }

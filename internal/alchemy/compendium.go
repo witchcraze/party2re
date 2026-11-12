@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -211,4 +213,65 @@ func (s *Service) GetCompendium(ctx context.Context, characterID string) (Compen
 		CompAlc:              state.CompAlc,
 		Entries:              entries,
 	}, nil
+}
+
+// RecipeListResult is the outcome of legacy れしぴ: the compendium and whether
+// this view awarded comp_alc.
+type RecipeListResult struct {
+	Compendium     Compendium `json:"compendium"`
+	CompAlcAwarded bool       `json:"comp_alc_awarded"`
+}
+
+// ViewRecipes awards comp_alc and its induction on the first view of a fully
+// crafted compendium, as legacy れしぴ does; delivery and observation never award.
+// Transaction: RunInTx
+// Lock Order: characters(2) -> character_alchemy(8); the legend insert's
+// foreign key also locks characters, so it must already be held.
+func (s *Service) ViewRecipes(ctx context.Context, characterID string) (RecipeListResult, error) {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return RecipeListResult{}, ErrInvalidCharacterID
+	}
+	var res RecipeListResult
+	var name string
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+		name = char.Name
+		// The lock serializes concurrent views so the award happens once.
+		state, err := s.repo.GetSynthesisStateForUpdate(txCtx, characterID)
+		if err != nil {
+			return fmt.Errorf("lock synthesis state: %w", err)
+		}
+		crafted, err := s.repo.CountCraftedRecipes(txCtx, characterID)
+		if err != nil {
+			return fmt.Errorf("count crafted recipes: %w", err)
+		}
+		if crafted >= len(s.recipes.All()) && !state.CompAlc {
+			if err := s.repo.SetCompAlcTitle(txCtx, characterID); err != nil {
+				return fmt.Errorf("set comp alc title: %w", err)
+			}
+			if s.legend != nil {
+				if err := s.legend.RecordLegend(txCtx, "comp_alc", characterID); err != nil {
+					return fmt.Errorf("record legend: %w", err)
+				}
+			}
+			res.CompAlcAwarded = true
+		}
+		res.Compendium, err = s.GetCompendium(txCtx, characterID)
+		return err
+	})
+	if err != nil {
+		return RecipeListResult{}, err
+	}
+	if res.CompAlcAwarded && s.news != nil {
+		msg := name + "が錬金レシピをコンプリートする！"
+		//lint:ignore error-swallow best-effort informational news does not invalidate the committed award
+		if err := s.news.PublishNews(ctx, "alchemy", msg, msg, "System", s.now()); err != nil {
+			slog.WarnContext(ctx, "alchemy completion news failed", "error_type", reflect.TypeOf(err).String())
+		}
+	}
+	return res, nil
 }

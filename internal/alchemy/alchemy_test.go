@@ -3,6 +3,7 @@ package alchemy
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -204,6 +205,13 @@ type legendCall struct {
 func (m *mockLegendInductor) RecordLegend(_ context.Context, category, characterID string) error {
 	m.calls = append(m.calls, legendCall{Category: category, CharacterID: characterID})
 	return m.err
+}
+
+type mockNews struct{ titles []string }
+
+func (m *mockNews) PublishNews(_ context.Context, category, title, _, _ string, _ time.Time) error {
+	m.titles = append(m.titles, category+":"+title)
+	return nil
 }
 
 func setupTestService(t *testing.T, simTime *time.Time) (*Service, *memoryCharRepo, *memoryDepotRepo, *memoryAlchemyRepo, *corecharacter.Character) {
@@ -658,117 +666,97 @@ func TestSynthesize_HomeSleepHookCompletion(t *testing.T) {
 	}
 }
 
-func TestCompendium_100PercentCompletionAndTitle(t *testing.T) {
+// craftAll crafts both test recipes through delivery.
+func craftAll(t *testing.T, svc *Service, depotRepo *memoryDepotRepo, charID string) {
+	t.Helper()
 	ctx := context.Background()
-	now := time.Now().UTC()
-	svc, _, depotRepo, _, char := setupTestService(t, &now)
-	legend := &mockLegendInductor{}
-	svc.SetLegendInductor(legend)
-
-	// Catalog has 2 recipes: rec-super-herb and rec-dragon-grass
-	_ = svc.UnlockRecipe(ctx, char.ID, "rec-super-herb")
-	_ = svc.UnlockRecipe(ctx, char.ID, "rec-dragon-grass")
-
-	comp, err := svc.GetCompendium(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("GetCompendium failed: %v", err)
-	}
-	if comp.TotalRecipes != 2 || comp.LearnedCount != 2 || comp.CraftedCount != 0 {
-		t.Errorf("compendium initial: total=%d, learned=%d, crafted=%d", comp.TotalRecipes, comp.LearnedCount, comp.CraftedCount)
-	}
-	if len(comp.Entries) != 2 || comp.Entries[0].ResultItemName != "" || comp.Entries[0].Name != "" {
-		t.Errorf("uncrafted entries must hide product facts, got %+v", comp.Entries)
-	}
-
-	// Craft first recipe
-	dep, _ := depot.NewDepot(char.ID)
+	_ = svc.UnlockRecipe(ctx, charID, "rec-super-herb")
+	_ = svc.UnlockRecipe(ctx, charID, "rec-dragon-grass")
+	dep, _ := depot.NewDepot(charID)
 	dep.Capacity = 10
 	h1, _ := coreitem.NewInstance("item-001", 10)
 	b1, _ := coreitem.NewInstance("item-042", 5)
 	_ = dep.AddItem(h1)
 	_ = dep.AddItem(b1)
 	_ = depotRepo.Save(ctx, dep)
-
-	_, _ = svc.Synthesize(ctx, char.ID, "rec-super-herb")
-	_ = svc.CompleteOngoingSynthesis(ctx, char.ID)
-	claim1, err := svc.Claim(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("Claim 1 failed: %v", err)
-	}
-	if claim1.CompAlcAwarded {
-		t.Errorf("comp_alc should not be awarded at 50%% completion")
-	}
-	if len(legend.calls) != 0 {
-		t.Errorf("expected no legend calls at 50%% completion, got %d", len(legend.calls))
-	}
-
-	// Craft second recipe (100% completion)
-	_, _ = svc.Synthesize(ctx, char.ID, "rec-dragon-grass")
-	_ = svc.CompleteOngoingSynthesis(ctx, char.ID)
-	claim2, err := svc.Claim(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("Claim 2 failed: %v", err)
-	}
-	if !claim2.CompAlcAwarded {
-		t.Errorf("comp_alc MUST be awarded at 100%% completion")
-	}
-	if len(legend.calls) != 1 {
-		t.Fatalf("expected 1 legend call at 100%% completion, got %d", len(legend.calls))
-	}
-	if legend.calls[0].Category != "comp_alc" || legend.calls[0].CharacterID != char.ID {
-		t.Errorf("unexpected legend call: %+v", legend.calls[0])
-	}
-
-	finalComp, _ := svc.GetCompendium(ctx, char.ID)
-	if finalComp.CompletionPercentage != 100 || !finalComp.CompAlc {
-		t.Errorf("expected 100%% completion and CompAlc true, got %+v", finalComp)
-	}
-	for _, entry := range finalComp.Entries {
-		if entry.RecipeID == "rec-super-herb" && entry.ResultItemName != "Super Herb" {
-			t.Errorf("expected Super Herb for rec-super-herb, got %s", entry.ResultItemName)
+	for _, id := range []string{"rec-super-herb", "rec-dragon-grass"} {
+		if _, err := svc.Synthesize(ctx, charID, id); err != nil {
+			t.Fatalf("Synthesize %s: %v", id, err)
 		}
-		if entry.RecipeID == "rec-dragon-grass" && entry.ResultItemName != "Dragon Grass" {
-			t.Errorf("expected Dragon Grass for rec-dragon-grass, got %s", entry.ResultItemName)
+		if err := svc.CompleteOngoingSynthesis(ctx, charID); err != nil {
+			t.Fatalf("CompleteOngoingSynthesis %s: %v", id, err)
+		}
+		if _, err := svc.Claim(ctx, charID); err != nil {
+			t.Fatalf("Claim %s: %v", id, err)
 		}
 	}
 }
 
-func TestClaim_LegendHookFailure_PropagatesError(t *testing.T) {
+// Legacy alchemy.cgi awards comp_alc only when れしぴ is viewed, never at delivery.
+func TestViewRecipes_AwardsCompAlcOnceOnFirstCompleteView(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	svc, _, depotRepo, _, char := setupTestService(t, &now)
+	legend := &mockLegendInductor{}
+	news := &mockNews{}
+	svc.SetLegendInductor(legend)
+	svc.SetNewsPublisher(news)
+
+	_ = svc.UnlockRecipe(ctx, char.ID, "rec-super-herb")
+	partial, err := svc.ViewRecipes(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("ViewRecipes before completion: %v", err)
+	}
+	if partial.CompAlcAwarded || partial.Compendium.LearnedCount != 1 {
+		t.Fatalf("incomplete view must not award: %+v", partial)
+	}
+
+	craftAll(t, svc, depotRepo, char.ID)
+	if len(legend.calls) != 0 || len(news.titles) != 0 {
+		t.Fatalf("delivery must not award comp_alc: legend=%v news=%v", legend.calls, news.titles)
+	}
+	if comp, _ := svc.GetCompendium(ctx, char.ID); comp.CompAlc || comp.CompletionPercentage != 100 {
+		t.Fatalf("observation must not award: %+v", comp)
+	}
+
+	first, err := svc.ViewRecipes(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("ViewRecipes: %v", err)
+	}
+	if !first.CompAlcAwarded || !first.Compendium.CompAlc || first.Compendium.CompletionPercentage != 100 {
+		t.Fatalf("first complete view must award: %+v", first)
+	}
+	if len(legend.calls) != 1 || legend.calls[0] != (legendCall{Category: "comp_alc", CharacterID: char.ID}) {
+		t.Fatalf("unexpected legend calls: %+v", legend.calls)
+	}
+	if want := []string{"alchemy:" + char.Name + "が錬金レシピをコンプリートする！"}; !slices.Equal(news.titles, want) {
+		t.Fatalf("news = %v, want %v", news.titles, want)
+	}
+
+	again, err := svc.ViewRecipes(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("ViewRecipes again: %v", err)
+	}
+	if again.CompAlcAwarded || !again.Compendium.CompAlc || len(legend.calls) != 1 || len(news.titles) != 1 {
+		t.Fatalf("repeat view must not award again: %+v legend=%d news=%d", again, len(legend.calls), len(news.titles))
+	}
+}
+
+func TestViewRecipes_LegendFailure_PropagatesWithoutAward(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 	svc, _, depotRepo, _, char := setupTestService(t, &now)
 	errLegendInjected := errors.New("legend injection error")
-	legend := &mockLegendInductor{err: errLegendInjected}
-	svc.SetLegendInductor(legend)
+	news := &mockNews{}
+	svc.SetLegendInductor(&mockLegendInductor{err: errLegendInjected})
+	svc.SetNewsPublisher(news)
+	craftAll(t, svc, depotRepo, char.ID)
 
-	_ = svc.UnlockRecipe(ctx, char.ID, "rec-super-herb")
-	_ = svc.UnlockRecipe(ctx, char.ID, "rec-dragon-grass")
-
-	// Craft first recipe
-	dep, _ := depot.NewDepot(char.ID)
-	dep.Capacity = 10
-	h1, _ := coreitem.NewInstance("item-001", 10)
-	b1, _ := coreitem.NewInstance("item-042", 5)
-	_ = dep.AddItem(h1)
-	_ = dep.AddItem(b1)
-	_ = depotRepo.Save(ctx, dep)
-
-	_, _ = svc.Synthesize(ctx, char.ID, "rec-super-herb")
-	_ = svc.CompleteOngoingSynthesis(ctx, char.ID)
-	_, err := svc.Claim(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("Claim 1 failed: %v", err)
+	if _, err := svc.ViewRecipes(ctx, char.ID); !errors.Is(err, errLegendInjected) {
+		t.Fatalf("expected errLegendInjected, got %v", err)
 	}
-
-	// Craft second recipe (100% completion triggers legend hook)
-	_, _ = svc.Synthesize(ctx, char.ID, "rec-dragon-grass")
-	_ = svc.CompleteOngoingSynthesis(ctx, char.ID)
-	_, err = svc.Claim(ctx, char.ID)
-	if err == nil {
-		t.Fatal("expected error from Claim when LegendInductor fails, got nil")
-	}
-	if !errors.Is(err, errLegendInjected) {
-		t.Errorf("expected errLegendInjected, got: %v", err)
+	if len(news.titles) != 0 {
+		t.Fatalf("failed award must not publish news: %v", news.titles)
 	}
 }
 
@@ -918,5 +906,47 @@ func TestClaim_RefreshesStaleDepotCapacity(t *testing.T) {
 	}
 	if len(updatedDepot.Items) != 2 {
 		t.Errorf("expected 2 items in depot, got %d", len(updatedDepot.Items))
+	}
+}
+
+type lockLog []string
+
+type lockOrderCharRepo struct {
+	*memoryCharRepo
+	log *lockLog
+}
+
+func (r lockOrderCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	*r.log = append(*r.log, "characters")
+	return r.memoryCharRepo.FindByIDForUpdate(ctx, id)
+}
+
+type lockOrderAlchemyRepo struct {
+	*memoryAlchemyRepo
+	log *lockLog
+}
+
+func (r lockOrderAlchemyRepo) GetSynthesisStateForUpdate(ctx context.Context, id string) (Synthesis, error) {
+	*r.log = append(*r.log, "character_alchemy")
+	return r.memoryAlchemyRepo.GetSynthesisStateForUpdate(ctx, id)
+}
+
+// The legend insert's foreign key locks characters, so ViewRecipes must take
+// characters before character_alchemy like Claim and Synthesize.
+func TestViewRecipes_LocksCharacterBeforeSynthesisState(t *testing.T) {
+	now := time.Now().UTC()
+	svc, charRepo, depotRepo, alcRepo, char := setupTestService(t, &now)
+	svc.SetLegendInductor(&mockLegendInductor{})
+	craftAll(t, svc, depotRepo, char.ID)
+	var log lockLog
+	svc.characters = lockOrderCharRepo{charRepo, &log}
+	svc.repo = lockOrderAlchemyRepo{alcRepo, &log}
+
+	res, err := svc.ViewRecipes(context.Background(), char.ID)
+	if err != nil || !res.CompAlcAwarded {
+		t.Fatalf("ViewRecipes: %+v, %v", res, err)
+	}
+	if want := (lockLog{"characters", "character_alchemy"}); !slices.Equal(log, want) {
+		t.Fatalf("lock order = %v, want %v", log, want)
 	}
 }

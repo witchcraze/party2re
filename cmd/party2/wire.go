@@ -225,6 +225,12 @@ func wireHooks(
 			econ.alchemy.SetLegendInductor(legendInductor)
 		}
 	}
+	if econ.alchemy != nil && soc.notification != nil {
+		econ.alchemy.SetNewsPublisher(alchemy.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		}))
+	}
 
 	soc.registerWorkerHandlers(misc.activity, misc.chapel, misc.lottery, misc.contest)
 

@@ -34,6 +34,13 @@ func (f *alchemyGatewayFixture) Synthesize(ctx context.Context, actor, recipeID 
 	return alchemy.SynthesisResult{Recipe: alchemy.RecipeView{ID: recipeID, Ingredients: []alchemy.Ingredient{}}, State: alchemy.StateOngoing, Message: "started"}, nil
 }
 
+func (f *alchemyGatewayFixture) ViewRecipes(ctx context.Context, actor string) (alchemy.RecipeListResult, error) {
+	if _, err := f.execute(ctx, actor, 0); err != nil {
+		return alchemy.RecipeListResult{}, err
+	}
+	return alchemy.RecipeListResult{Compendium: alchemy.Compendium{CompletionPercentage: 100, CompAlc: true, Entries: []alchemy.CompendiumEntry{}}, CompAlcAwarded: true}, nil
+}
+
 func (f *alchemyGatewayFixture) router(t *testing.T, timers timer.Service, options ...Option) nethttp.Handler {
 	t.Helper()
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers)
@@ -190,6 +197,24 @@ func TestAlchemyGatewayGuardsAndDiscovery(t *testing.T) {
 	}
 	if _, known := actionDefinition("alchemy_claim"); known {
 		t.Fatal("delivery happens on entry; no separate claim command exists")
+	}
+}
+
+// alchemy_recipes is legacy れしぴ: a list view that may award comp_alc and
+// never starts the action wait.
+func TestAlchemyRecipesCommand(t *testing.T) {
+	f := &alchemyGatewayFixture{gatewayFixture: newGatewayFixture(t)}
+	status, got := gatewayRequest(t, f.router(t, timer.NewService(nil)), "hero", "session", "application/json", saleGatewayBody("alchemy_recipes", `{}`), nil)
+	if status != 200 || f.executions != 1 || !strings.Contains(string(got["result"]), `"comp_alc_awarded":true`) {
+		t.Fatalf("recipes command: %d %s", status, got)
+	}
+	def, ok := actionDefinition("alchemy_recipes")
+	if !ok || def.WaitExempt != playercontext.WaitNavigation || len(def.RequiredParams) != 0 {
+		t.Fatalf("recipes definition: %+v", def)
+	}
+	f.executionErr = fmt.Errorf("private wrapped: %w", corecharacter.ErrNotFound)
+	if status, got := gatewayRequest(t, f.router(t, timer.NewService(nil)), "hero", "session", "application/json", saleGatewayBody("alchemy_recipes", `{}`), nil); status != 404 {
+		t.Fatalf("recipes error mapping: %d %s", status, got)
 	}
 }
 

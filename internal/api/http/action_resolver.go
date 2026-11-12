@@ -66,6 +66,7 @@ func (r *ActionURLResolver) Resolve(characterID, actionID, label, category strin
 func defaultActionEndpoints() map[string]ActionEndpoint {
 	return map[string]ActionEndpoint{
 		"alchemy_synthesize":    {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"alchemy_recipes":       {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"fleamarket_list":       {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"store_build":           {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"store_list_gold":       {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},

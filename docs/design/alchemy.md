@@ -6,11 +6,11 @@ Alchemy (`lib/alchemy.cgi`) synthesizes items overnight from 114 recipes (`_alch
 
 - Synthesis is free and consumes its ingredients from the **Depot**, not the inventory.
 - A synthesis completes only through sleeping at home (`lib/home.cgi:191`); elapsed time alone never completes it. **Difference:** legacy sets the flag when the character goes to bed; Go sets it at Wake, because a sleeping character cannot reach the facility.
-- Crafting every recipe awards `comp_alc` and a hall-of-fame induction.
+- **Decision:** `comp_alc`, its hall-of-fame induction and completion news are awarded once, on the first recipe-list view (`alchemy_recipes`, legacy `れしぴ`) after every recipe is crafted, not when the last one is delivered.
 
 ### 4. Delivery on Entry (`scene_enter` with `destination:alchemy`)
 
-Entering the facility delivers a completed synthesis to the Depot (`lib/alchemy.cgi:17,183–202`); there is no claim action. The product is delivered past capacity, like legacy `send_item` ([delivery capacity](depot.md#delivery-capacity-by-caller)). Delivery, the crafted mark, the title and progress hooks commit together; on failure the synthesis stays completed, so re-entry retries without duplicates.
+Entering the facility delivers a completed synthesis to the Depot (`lib/alchemy.cgi:17,183–202`); there is no claim action. The product is delivered past capacity, like legacy `send_item` ([delivery capacity](depot.md#delivery-capacity-by-caller)). Delivery, the crafted mark and progress hooks commit together; on failure the synthesis stays completed, so re-entry retries without duplicates.
 
 ## Recipe compendium
 
@@ -23,6 +23,5 @@ Recipe books (`home.cgi:524–554`) choose in two stages: first a base item unif
 Observation never claims or writes. Known differences from `lib/alchemy.cgi`:
 
 - Automatic `finish` on load (17, 183–202) happens at `scene_enter`; GET never claims, so a saved selection delivers on the next entry.
-- Legacy awards `comp_alc` when `れしぴ` (46–94) is viewed; Go awards it at delivery because observation does not write (#2062).
 - `れんきん` (99–144) takes an explicit recipe ID instead of base and material names.
-- Writing the commands' facility log rows is open (#1941), and presence is not reproduced (#1943); the action wait applies ([action wait](../architecture/place-log.md#action-wait)).
+- Writing the commands' facility log rows is open (#1941), and presence is not reproduced (#1943).

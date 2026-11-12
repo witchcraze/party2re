@@ -5261,6 +5261,32 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "alchemy_recipes"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": [],
+                  "description": "Legacy れしぴ: returns the compendium and, on the first view of a fully crafted compendium, awards comp_alc with its hall-of-fame induction (comp_alc_awarded)."
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "blackmarket_sacrifice"
                 }
               },
@@ -11169,9 +11195,6 @@
       },
       "AlchemyClaimResult": {
         "properties": {
-          "comp_alc_awarded": {
-            "type": "boolean"
-          },
           "created_item": {
             "$ref": "#/components/schemas/ItemInstance"
           },
@@ -11189,7 +11212,6 @@
           "recipe",
           "created_item",
           "total_crafts",
-          "comp_alc_awarded",
           "message"
         ],
         "type": "object",

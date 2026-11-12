@@ -545,9 +545,6 @@
       "AlchemyClaimResult": {
         "additionalProperties": false,
         "properties": {
-          "comp_alc_awarded": {
-            "type": "boolean"
-          },
           "created_item": {
             "$ref": "#/components/schemas/ItemInstance"
           },
@@ -565,7 +562,6 @@
           "recipe",
           "created_item",
           "total_crafts",
-          "comp_alc_awarded",
           "message"
         ],
         "type": "object"
@@ -5941,6 +5937,32 @@
               "required": [
                 "params"
               ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "alchemy_recipes",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "description": "Legacy れしぴ: returns the compendium and, on the first view of a fully crafted compendium, awards comp_alc with its hall-of-fame induction (comp_alc_awarded).",
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
               "type": "object"
             }
           },
