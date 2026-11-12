@@ -3,6 +3,7 @@ package tavern_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -38,13 +39,15 @@ func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character)
 }
 
 type mockTavernRepo struct {
-	statuses          map[string]tavern.TavernCharacterStatus
-	deliveries        map[string]tavern.DeliveryReservation
-	getStatusErr      error
-	resetFullnessErr  error
-	saveDeliveryErr   error
-	upsertStatusCalls int
-	resetStatusCalls  int
+	statuses            map[string]tavern.TavernCharacterStatus
+	deliveries          map[string]tavern.DeliveryReservation
+	getStatusErr        error
+	getDeliveryErr      error
+	resetFullnessErr    error
+	saveDeliveryErr     error
+	upsertStatusCalls   int
+	resetStatusCalls    int
+	deleteDeliveryCalls int
 }
 
 func newMockTavernRepo() *mockTavernRepo {
@@ -100,6 +103,12 @@ func (m *mockTavernRepo) ResetFullness(ctx context.Context, characterID string) 
 }
 
 func (m *mockTavernRepo) GetDelivery(ctx context.Context, characterID string) (tavern.DeliveryReservation, error) {
+	if m.getDeliveryErr != nil {
+		return tavern.DeliveryReservation{}, m.getDeliveryErr
+	}
+	if err := ctx.Err(); err != nil {
+		return tavern.DeliveryReservation{}, err
+	}
 	d, ok := m.deliveries[characterID]
 	if !ok {
 		return tavern.DeliveryReservation{}, tavern.ErrNoActiveDelivery
@@ -116,6 +125,7 @@ func (m *mockTavernRepo) SaveDelivery(ctx context.Context, delivery tavern.Deliv
 }
 
 func (m *mockTavernRepo) DeleteDelivery(ctx context.Context, characterID string) error {
+	m.deleteDeliveryCalls++
 	delete(m.deliveries, characterID)
 	return nil
 }
@@ -428,6 +438,103 @@ func TestTavern_CancelDelivery(t *testing.T) {
 	_, err = svc.GetDelivery(ctx, charID)
 	if !errors.Is(err, tavern.ErrNoActiveDelivery) {
 		t.Errorf("expected ErrNoActiveDelivery after cancel, got %v", err)
+	}
+}
+
+func TestTavern_DeliveryReadErrors(t *testing.T) {
+	storageErr := errors.New("delivery storage failure")
+	tests := []struct {
+		name    string
+		cancel  bool
+		wantErr error
+	}{
+		{name: "wrapped repository error", wantErr: storageErr},
+		{name: "cancelled context", cancel: true, wantErr: context.Canceled},
+	}
+	operations := []struct {
+		name string
+		call func(*tavern.Service, context.Context, string) error
+	}{
+		{
+			name: "get",
+			call: func(svc *tavern.Service, ctx context.Context, characterID string) error {
+				_, err := svc.GetDelivery(ctx, characterID)
+				return err
+			},
+		},
+		{
+			name: "cancel",
+			call: func(svc *tavern.Service, ctx context.Context, characterID string) error {
+				return svc.CancelDelivery(ctx, characterID)
+			},
+		},
+		{
+			name: "claim",
+			call: func(svc *tavern.Service, ctx context.Context, characterID string) error {
+				_, err := svc.ClaimDelivery(ctx, characterID)
+				return err
+			},
+		},
+	}
+
+	for _, operation := range operations {
+		t.Run(operation.name, func(t *testing.T) {
+			for _, test := range tests {
+				t.Run(test.name, func(t *testing.T) {
+					svc, charRepo, repo, _ := setupTestService(t)
+					const characterID = "char-delivery-read-error"
+					charRepo.chars[characterID] = corecharacter.Character{
+						ID:    characterID,
+						Name:  "DeliveryHero",
+						Money: 2000,
+						Stats: corecharacter.Stats{HP: 20, MaxHP: 100, MP: 5, MaxMP: 50},
+					}
+					if _, err := svc.ReserveDelivery(context.Background(), characterID, "tavern_omelet_rice"); err != nil {
+						t.Fatalf("ReserveDelivery: %v", err)
+					}
+					repo.statuses[characterID] = tavern.TavernCharacterStatus{
+						CharacterID:     characterID,
+						TotalMealsEaten: 3,
+						TotalGoldSpent:  800,
+					}
+					initialCharacter := charRepo.chars[characterID]
+					initialDelivery := repo.deliveries[characterID]
+					initialStatus := repo.statuses[characterID]
+
+					ctx := context.Background()
+					if test.cancel {
+						var cancel context.CancelFunc
+						ctx, cancel = context.WithCancel(ctx)
+						cancel()
+					} else {
+						repo.getDeliveryErr = fmt.Errorf("read reservation: %w", test.wantErr)
+					}
+
+					err := operation.call(svc, ctx, characterID)
+					if !errors.Is(err, test.wantErr) {
+						t.Fatalf("expected error %v, got %v", test.wantErr, err)
+					}
+					if errors.Is(err, tavern.ErrNoActiveDelivery) {
+						t.Fatalf("expected operational read error, got %v", err)
+					}
+					if got := charRepo.chars[characterID]; got != initialCharacter {
+						t.Errorf("character changed after failed %s: got %+v, want %+v", operation.name, got, initialCharacter)
+					}
+					if got := repo.deliveries[characterID]; got != initialDelivery {
+						t.Errorf("delivery changed after failed %s: got %+v, want %+v", operation.name, got, initialDelivery)
+					}
+					if got := repo.statuses[characterID]; got != initialStatus {
+						t.Errorf("tavern status changed after failed %s: got %+v, want %+v", operation.name, got, initialStatus)
+					}
+					if operation.name == "cancel" && repo.deleteDeliveryCalls != 0 {
+						t.Errorf("expected no reservation deletion after failed read, got %d calls", repo.deleteDeliveryCalls)
+					}
+					if operation.name == "claim" && repo.upsertStatusCalls != 0 {
+						t.Errorf("expected no status update after failed read, got %d calls", repo.upsertStatusCalls)
+					}
+				})
+			}
+		})
 	}
 }
 
