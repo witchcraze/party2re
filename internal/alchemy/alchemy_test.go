@@ -908,3 +908,45 @@ func TestClaim_RefreshesStaleDepotCapacity(t *testing.T) {
 		t.Errorf("expected 2 items in depot, got %d", len(updatedDepot.Items))
 	}
 }
+
+type lockLog []string
+
+type lockOrderCharRepo struct {
+	*memoryCharRepo
+	log *lockLog
+}
+
+func (r lockOrderCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	*r.log = append(*r.log, "characters")
+	return r.memoryCharRepo.FindByIDForUpdate(ctx, id)
+}
+
+type lockOrderAlchemyRepo struct {
+	*memoryAlchemyRepo
+	log *lockLog
+}
+
+func (r lockOrderAlchemyRepo) GetSynthesisStateForUpdate(ctx context.Context, id string) (Synthesis, error) {
+	*r.log = append(*r.log, "character_alchemy")
+	return r.memoryAlchemyRepo.GetSynthesisStateForUpdate(ctx, id)
+}
+
+// The legend insert's foreign key locks characters, so ViewRecipes must take
+// characters before character_alchemy like Claim and Synthesize.
+func TestViewRecipes_LocksCharacterBeforeSynthesisState(t *testing.T) {
+	now := time.Now().UTC()
+	svc, charRepo, depotRepo, alcRepo, char := setupTestService(t, &now)
+	svc.SetLegendInductor(&mockLegendInductor{})
+	craftAll(t, svc, depotRepo, char.ID)
+	var log lockLog
+	svc.characters = lockOrderCharRepo{charRepo, &log}
+	svc.repo = lockOrderAlchemyRepo{alcRepo, &log}
+
+	res, err := svc.ViewRecipes(context.Background(), char.ID)
+	if err != nil || !res.CompAlcAwarded {
+		t.Fatalf("ViewRecipes: %+v, %v", res, err)
+	}
+	if want := (lockLog{"characters", "character_alchemy"}); !slices.Equal(log, want) {
+		t.Fatalf("lock order = %v, want %v", log, want)
+	}
+}

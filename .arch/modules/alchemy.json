@@ -1,7 +1,7 @@
 {
   "module": "alchemy",
   "domain": "錬金場 (@トロデ)",
-  "description": "Overnight recipe synthesis and compendium facility. Consumes materials directly from Depot with zero gold fees, matures overnight or upon home rest, delivers items into Depot, and awards comp_alc 100% compendium title.",
+  "description": "Overnight recipe synthesis and compendium facility. Consumes materials directly from Depot with zero gold fees, matures overnight or upon home rest, delivers items into Depot, and awards comp_alc on the first recipe-list view of a fully crafted compendium.",
   "entrypoint": "internal/alchemy/alchemy.go",
   "dependencies": [
     {
@@ -56,6 +56,17 @@
         {"step": 4, "target": "depot_items", "method": "DepotRepository.Save"},
         {"step": 5, "target": "character_alchemy_recipes", "method": "Repository.MarkRecipeCrafted"},
         {"step": 6, "target": "character_alchemy", "method": "Repository.SaveSynthesisState"}
+      ]
+    },
+    {
+      "flow": "ViewRecipes (れしぴ・comp_alc 授与)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/alchemy/compendium.go#Service.ViewRecipes",
+      "lock_sequence": [
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate"},
+        {"step": 2, "target": "character_alchemy", "lock_order": 8, "method": "Repository.GetSynthesisStateForUpdate"},
+        {"step": 3, "target": "character_alchemy", "method": "Repository.SetCompAlcTitle"},
+        {"step": 4, "target": "legend_records", "method": "LegendInductor.RecordLegend"}
       ]
     }
   ]
