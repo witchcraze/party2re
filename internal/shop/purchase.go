@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -33,16 +34,23 @@ type BatchPurchaseResult struct {
 	TotalPrice int                     `json:"total_price"`
 }
 
-// isItemInActiveHelper aborts on a failed helper read, as legacy get_helper_item does.
-func (s *Service) isItemInActiveHelper(ctx context.Context, itemID string) (bool, error) {
+// activeHelperItems aborts on a failed helper read, as legacy get_helper_item does.
+func (s *Service) activeHelperItems(ctx context.Context) ([]string, error) {
 	if s.helper == nil {
-		return false, nil
+		return nil, nil
 	}
-	active, err := s.helper.GetActiveHelperItemIDs(ctx, s.now())
-	if err != nil {
-		return false, err
+	return s.helper.GetActiveHelperItemIDs(ctx, s.now())
+}
+
+// helperExcludes reports whether a helper request hides itemID from a listing.
+// Legacy armor batch purchase reads weapon requests by number
+// (armor.cgi matomete_kau: get_helper_item(1)), so a requested armor stays
+// batch-purchasable and armor-NN is hidden while weapon-NN is requested.
+func helperExcludes(active []string, shopType ShopType, itemID string, batch bool) bool {
+	if no, ok := strings.CutPrefix(itemID, "armor-"); ok && batch && shopType == ShopTypeArmor {
+		itemID = "weapon-" + no
 	}
-	return slices.Contains(active, itemID), nil
+	return slices.Contains(active, itemID)
 }
 
 // PurchaseInShop buys an item from a specific shop type, applying shop-specific pricing and messages.
@@ -62,9 +70,9 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 		return PurchaseResult{}, ErrItemNotFound
 	}
 
-	if excluded, err := s.isItemInActiveHelper(ctx, itemDefinitionID); err != nil {
+	if active, err := s.activeHelperItems(ctx); err != nil {
 		return PurchaseResult{}, err
-	} else if excluded {
+	} else if helperExcludes(active, shopType, itemDefinitionID, false) {
 		return PurchaseResult{}, ErrItemUnavailable
 	}
 
@@ -240,15 +248,19 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 		if it.Quantity <= 0 || it.Quantity > MaxTransactionQuantity {
 			return BatchPurchaseResult{}, ErrInvalidQuantity
 		}
-		if excluded, err := s.isItemInActiveHelper(ctx, it.ItemDefinitionID); err != nil {
-			return BatchPurchaseResult{}, err
-		} else if excluded {
+	}
+	active, err := s.activeHelperItems(ctx)
+	if err != nil {
+		return BatchPurchaseResult{}, err
+	}
+	for _, it := range items {
+		if helperExcludes(active, shopType, it.ItemDefinitionID, true) {
 			return BatchPurchaseResult{}, ErrItemUnavailable
 		}
 	}
 
 	var result BatchPurchaseResult
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
 		// 1. Lock Character (Rank 2)
 		char, err := s.findCharacter(txCtx, characterID)
 		if err != nil {

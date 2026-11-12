@@ -233,24 +233,16 @@ func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID
 		return ShopCatalog{}, err
 	}
 
-	// Filter out items in active helper quests
-	var excludedIDs map[string]bool
-	if s.helper != nil {
-		active, err := s.helper.GetActiveHelperItemIDs(ctx, s.now())
-		if err != nil {
-			return ShopCatalog{}, err
-		}
-		if len(active) > 0 {
-			excludedIDs = make(map[string]bool, len(active))
-			for _, id := range active {
-				excludedIDs[id] = true
-			}
-		}
+	active, err := s.activeHelperItems(ctx)
+	if err != nil {
+		return ShopCatalog{}, err
 	}
 
 	items := make([]CatalogItem, 0, len(salesIDs))
 	for _, id := range salesIDs {
-		if excludedIDs != nil && excludedIDs[id] {
+		single := !helperExcludes(active, shopType, id, false)
+		batch := SupportsBatchPurchase(shopType) && !helperExcludes(active, shopType, id, true)
+		if !single && !batch {
 			continue
 		}
 		def, err := s.catalog.FindByID(id)
@@ -267,6 +259,7 @@ func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID
 			BasePrice:   def.Price,
 			RetailPrice: retailPrice,
 			Slot:        def.Slot,
+			Purchasable: single, BatchPurchasable: batch,
 		})
 		switch shopType {
 		case ShopTypeWeapon:

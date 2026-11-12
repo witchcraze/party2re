@@ -6,7 +6,7 @@ This document records legacy rules, decisions and open gaps for the town shops (
 
 ## Helper quest exclusion
 
-Items requested by helper quests are not sold (`system.cgi:1424–1438`, filtered by item kind). A helper read failure aborts the listing or purchase before any change (`&error`, `system.cgi:1428–1429`); this applies to every shop, including the secret shop. **Pitfall:** legacy armor batch purchase filters helper kind 1 (`armor.cgi:120`) while single armor purchase uses kind 2 (`armor.cgi:52`); Go filters armor definition IDs consistently, and the difference is unreconciled (#2061).
+Items requested by helper quests are not sold (`get_helper_item`, filtered by legacy item kind and number). In every shop, including the secret shop, a helper read failure aborts the listing or purchase before any change. **Pitfall (reproduced):** armor batch purchase passes the weapon kind (`armor.cgi:119`) while single armor purchase passes the armor kind (`armor.cgi:52`). A requested armor can still be bought in a batch, and armor-NN leaves the batch listing while weapon-NN is requested. Catalog products therefore report single and batch listing membership separately.
 
 ## 5. Purchase Routing and Depot Auto-Transfer
 

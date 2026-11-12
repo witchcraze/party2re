@@ -7422,6 +7422,14 @@
             "type": "integer",
             "minimum": 0,
             "description": "Nominal weight; weapon and armor shops only."
+          },
+          "purchasable": {
+            "type": "boolean",
+            "description": "Listed for shop_purchase (not requested by a helper quest)."
+          },
+          "batch_purchasable": {
+            "type": "boolean",
+            "description": "Listed for shop_batch_purchase. The armor shop's batch listing hides armor whose number matches a requested weapon and keeps requested armor, like legacy."
           }
         },
         "required": [
@@ -7430,9 +7438,11 @@
           "base_price",
           "retail_price",
           "select_params",
-          "purchase_params"
+          "purchase_params",
+          "purchasable",
+          "batch_purchasable"
         ],
-        "description": "Exact GetCatalog facts. Purchase ID is explicit, independent of mutable navigation; quantity must be supplied separately. Presence means current catalog membership, not a funds/capacity guarantee."
+        "description": "Exact GetCatalog facts. Purchase ID is explicit, independent of mutable navigation; quantity must be supplied separately. Presence means membership in the single or batch listing, not a funds/capacity guarantee."
       },
       "ShopNPCObservation": {
         "type": "object",

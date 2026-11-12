@@ -16541,11 +16541,15 @@
       },
       "ShopProduct": {
         "additionalProperties": false,
-        "description": "Exact GetCatalog facts. Purchase ID is explicit, independent of mutable navigation; quantity must be supplied separately. Presence means current catalog membership, not a funds/capacity guarantee.",
+        "description": "Exact GetCatalog facts. Purchase ID is explicit, independent of mutable navigation; quantity must be supplied separately. Presence means membership in the single or batch listing, not a funds/capacity guarantee.",
         "properties": {
           "base_price": {
             "minimum": 0,
             "type": "integer"
+          },
+          "batch_purchasable": {
+            "description": "Listed for shop_batch_purchase. The armor shop's batch listing hides armor whose number matches a requested weapon and keeps requested armor, like legacy.",
+            "type": "boolean"
           },
           "id": {
             "maxLength": 128,
@@ -16560,6 +16564,10 @@
             "description": "Nominal strength; weapon and armor shops only.",
             "minimum": 0,
             "type": "integer"
+          },
+          "purchasable": {
+            "description": "Listed for shop_purchase (not requested by a helper quest).",
+            "type": "boolean"
           },
           "purchase_params": {
             "$ref": "#/components/schemas/ShopPurchaseParams"
@@ -16607,7 +16615,9 @@
           "base_price",
           "retail_price",
           "select_params",
-          "purchase_params"
+          "purchase_params",
+          "purchasable",
+          "batch_purchasable"
         ],
         "type": "object"
       },
