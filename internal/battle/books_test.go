@@ -38,7 +38,7 @@ func TestBookAdapterEquippedItemAndBaseStats(t *testing.T) {
 		}
 		a.TeamID = "party"
 		s := corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{a, {Participant: corebattle.Participant{ID: "enemy", TeamID: "enemy", HP: 100, Gear: &corebattle.BattleGearStats{}}}}}
-		c := &corebattle.BookContext{EffectContext: corebattle.EffectContext{TargetContext: corebattle.TargetContext{ActorID: a.ID, PartyIDs: []string{a.ID}, EnemyIDs: []string{"enemy"}}}}
+		c := &corebattle.BookContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: corebattle.TargetContext{ActorID: a.ID, PartyIDs: []string{a.ID}, EnemyIDs: []string{"enemy"}}}}}
 		var d coreskill.BattleDefinitions
 		d.RegisterBooks(c)
 		entry, err := d.BookAction(&s, c, "book-179", &resetTableRNG{t: t})

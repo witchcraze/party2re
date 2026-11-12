@@ -12,7 +12,7 @@ import (
 func bookFixture() (corebattle.LifetimeState, *corebattle.BookContext, BattleDefinitions) {
 	s, base, _ := timeMagicFixture()
 	s.Actors[0].ItemDefinitionIDs = nil
-	c := &corebattle.BookContext{EffectContext: base.EffectContext}
+	c := &corebattle.BookContext{DamageContext: base.DamageContext}
 	var d BattleDefinitions
 	d.RegisterBooks(c)
 	return s, c, d
@@ -117,8 +117,8 @@ func TestBookDiscoveryGates(t *testing.T) {
 	if len(d.Invocations.JobTables) != 0 || len(d.Invocations.Entries) != len(corebattle.BookEntries()) {
 		t.Fatal(d.Invocations)
 	}
-	// Revival, reflection/cure/damage, copy and the double-use wrapper keep their owners.
-	for _, id := range []string{"book-173", "book-174", "book-196", "book-211", "book-222", "job-86-entry-5"} {
+	// Revival, copy and the double-use wrapper keep their owners.
+	for _, id := range []string{"book-173", "book-196", "book-211", "job-86-entry-5"} {
 		if _, err := d.BookAction(&s, c, id, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(id, err)
 		}
@@ -176,8 +176,9 @@ func TestBookIndirectBodyHasNoOrdinaryCost(t *testing.T) {
 	s.Actors[0].ItemDefinitionIDs = []string{"item-249"}
 	executeBook(t, &s, c, d, "book-172", []string{"self", "self"}, 0)
 	executeBook(t, &s, c, d, "book-172", c.Arguments, 0)
-	if a := s.Actors[0]; a.HP != 824 || a.MP != 0 || len(c.Arguments) != 0 {
-		t.Fatal(a, c.Arguments)
+	executeBook(t, &s, c, d, "book-222", []string{"enemy"}, 0)
+	if a := s.Actors[0]; a.HP != 824 || a.MP != 0 || s.Actors[1].HP != 882 || len(c.Arguments) != 0 {
+		t.Fatal(a, s.Actors[1], c.Arguments)
 	}
 }
 
@@ -274,7 +275,7 @@ func TestBookReloadFrozenInputWithoutReplay(t *testing.T) {
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatal(err)
 	}
-	resumed := &corebattle.BookContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, StatUpCalls: loaded.StatUpCalls, HealCalls: loaded.HealCalls}}
+	resumed := &corebattle.BookContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, StatUpCalls: loaded.StatUpCalls, HealCalls: loaded.HealCalls}}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterBooks(resumed)
 	executeBook(t, &s, c, d, loaded.Entry, loaded.Arguments, 0)
