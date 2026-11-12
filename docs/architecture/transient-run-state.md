@@ -356,10 +356,11 @@ unsettled rewards. SQL commit and Valkey cleanup remain separate boundaries.
 Chest delivery is immediate ([gameplay](../design/dungeon.md#treasure-inspection-and-delivery)),
 so it cannot wait for Two-Phase Settlement. One SQL transaction locks the actor
 (Rank 2) and inserts a claim receipt that is unique per run and chest and records
-the actor, event and result. The same transaction debits item 215 and delivers
-to the hand or Depot (Rank 3/5) and the Collection (Rank 8). The allowance is
-counted from that actor's receipts for the event, never from the possibly stale
-live run. Hand eligibility uses in-run state: the transaction debits the actor's
+the actor, event, the event's allowance key and the result. The same transaction
+debits item 215 and delivers to the hand or Depot (Rank 3/5) and the Collection
+(Rank 8). The allowance compares the event's key with the key of the actor's
+latest receipt in the run, read under the actor lock and never from the possibly
+stale live run. Hand eligibility uses in-run state: the transaction debits the actor's
 pending consumed items, and publication removes them from the run so settlement
 does not debit them twice.
 

@@ -136,15 +136,16 @@ Not yet implemented ([#2119](https://github.com/witchcraze/party2re/issues/2119)
 - **Inspection.** Any living participant, not only the leader, opens one chosen
   unopened chest of the current treasure. A dead actor, a missing or opened chest,
   or no treasure rejects without change. Chests never respond.
-- **Allowance.** One chest per actor per treasure event. Another chest at the same
-  event needs item 215 in the tool hand, consumed before delivery. **Finding:**
-  legacy keeps only the map symbol of the actor's last opening event, reset on
-  joining (`_npc_action.cgi#shiraberu`, `quest.cgi#get_battle_line`). A later
-  floor's event with the same symbol therefore needs item 215, unless the actor
-  opened at another symbol in between. Maps that reuse symbols across floors keep
-  this. **Finding:** the Dungeon check precedes the fixed-chest check, so fixed
-  chests (map13 EX, map16) share this allowance; Dungeon has no separate fixed
-  allowance, unlike normal adventure.
+- **Allowance.** **Finding:** legacy keeps only the map symbol of the actor's last
+  opening, reset on joining (`_npc_action.cgi#shiraberu`, `quest.cgi#get_battle_line`).
+  Opening at an event with that same symbol needs item 215 in the tool hand,
+  consumed before delivery. This covers a second chest at the same event, and also
+  a later floor's event with the same symbol unless the actor opened at another
+  symbol in between. Native treasure events therefore carry an allowance key that
+  is equal exactly where the legacy symbols are equal; map0's single event gives
+  one chest per actor per run. **Finding:** the Dungeon check precedes the
+  fixed-chest check, so fixed chests (map13 EX, map16) share this allowance; Dungeon
+  has no separate fixed allowance, unlike normal adventure.
 - **Delivery.** Immediate, under the [Depot treasure rule](depot.md#delivery-capacity-by-caller).
   A tool entering the empty hand also registers the actor's equipped items in the
   Collection (`add_collection`). An empty chest (pool entry `0`) still spends the
