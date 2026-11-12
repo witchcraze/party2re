@@ -440,3 +440,59 @@ func TestNPC_Inspect_And_Talk(t *testing.T) {
 		t.Errorf("item inspect secret shop hint mismatch: %s", resI.SecretShopHint)
 	}
 }
+
+// Legacy armor.cgi kau filters armor requests (get_helper_item(2)), but
+// matomete_kau filters weapon requests by number (get_helper_item(1)).
+func TestArmorBatchPurchaseFiltersWeaponHelperRequests(t *testing.T) {
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	chars, helper := newCharacterRepoStub(), &mockHelperProvider{}
+	svc, err := shop.NewService(chars, newInventoryRepoStub(), catalog,
+		shop.WithDepotRepository(newDepotRepoStub()), shop.WithHelperProvider(helper),
+		shop.WithTransactionProvider(&mockTxProvider{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	char := createTestCharacter(t, chars, "Hero", 100000)
+	ctx := context.Background()
+	flags := func(id string) (bool, bool, bool) {
+		got, err := svc.GetCatalog(ctx, shop.ShopTypeArmor, char.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, it := range got.Items {
+			if it.ID == id {
+				return true, it.Purchasable, it.BatchPurchasable
+			}
+		}
+		return false, false, false
+	}
+	batch := func(id string) error {
+		_, err := svc.BatchPurchase(ctx, char.ID, shop.ShopTypeArmor, []shop.BatchPurchaseItemRequest{{ItemDefinitionID: id, Quantity: 1}})
+		return err
+	}
+
+	helper.activeIDs = []string{"armor-01"}
+	if listed, single, many := flags("armor-01"); !listed || single || !many {
+		t.Fatalf("armor request: listed=%v single=%v batch=%v, want batch only", listed, single, many)
+	}
+	if _, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeArmor, "armor-01", 1); !errors.Is(err, shop.ErrItemUnavailable) {
+		t.Fatalf("single purchase of requested armor: %v", err)
+	}
+	if err := batch("armor-01"); err != nil {
+		t.Fatalf("batch purchase of requested armor: %v", err)
+	}
+
+	helper.activeIDs = []string{"weapon-02"}
+	if listed, single, many := flags("armor-02"); !listed || !single || many {
+		t.Fatalf("weapon request: listed=%v single=%v batch=%v, want single only", listed, single, many)
+	}
+	if err := batch("armor-02"); !errors.Is(err, shop.ErrItemUnavailable) {
+		t.Fatalf("batch purchase of armor matching a requested weapon: %v", err)
+	}
+	if _, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeArmor, "armor-02", 1); err != nil {
+		t.Fatalf("single purchase of armor matching a requested weapon: %v", err)
+	}
+}

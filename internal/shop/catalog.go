@@ -34,6 +34,10 @@ type CatalogItem struct {
 	// Power and Weight are the nominal strength and weight the weapon and armor listings show.
 	Power  int `json:"power,omitempty"`
 	Weight int `json:"weight,omitempty"`
+	// Purchasable and BatchPurchasable report the single and batch listings that
+	// contain the item; legacy filters them by different helper requests.
+	Purchasable      bool `json:"purchasable"`
+	BatchPurchasable bool `json:"batch_purchasable"`
 }
 
 type ShopCatalog struct {
