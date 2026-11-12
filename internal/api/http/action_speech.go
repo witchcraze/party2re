@@ -100,12 +100,17 @@ func (h *Handler) registerSpeech() {
 			return nil, err
 		}
 		row := "＠ささやき>" + name
-		// Legacy logs a whisper without a body as the bare command.
-		if strings.TrimSpace(strings.NewReplacer("\r", "", "\n", "").Replace(p.Text)) != "" {
-			text, err := validation.ValidateLegacyComment(p.Text, maxSpeechLength)
-			if err != nil {
+		// Legacy logs a whisper without a body as the bare command; a
+		// whitespace-only body still gets the character and length checks.
+		text, err := validation.ValidateLegacyComment(p.Text, maxSpeechLength)
+		switch {
+		case errors.Is(err, validation.ErrEmpty):
+			if err := validation.ValidateVerbatimLine(strings.NewReplacer("\r", "", "\n", "").Replace(p.Text), maxSpeechLength); err != nil {
 				return nil, err
 			}
+		case err != nil:
+			return nil, err
+		default:
 			row += " " + text
 		}
 		return func(ctx context.Context, owner, actor string) (any, error) {

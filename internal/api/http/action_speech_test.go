@@ -124,6 +124,8 @@ func TestSpeechRejectsInvalidInputWithoutWriting(t *testing.T) {
 		`{"action":"place_whisper","params":{"text":"hi"}}`,
 		`{"action":"place_whisper","params":{"recipient_name":"Bob"}}`,
 		`{"action":"place_whisper","params":{"recipient_name":"Bob","text":"\u200b"}}`,
+		`{"action":"place_whisper","params":{"recipient_name":"Bob","text":"\t"}}`,
+		`{"action":"place_whisper","params":{"recipient_name":"Bob","text":"` + strings.Repeat(" ", maxSpeechLength+1) + `"}}`,
 		`{"action":"place_whisper","params":{"recipient_name":"B o b","text":"hi"}}`,
 	} {
 		if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", body, nil); status != http.StatusBadRequest {
