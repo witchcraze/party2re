@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -122,5 +124,28 @@ func TestMovingLeavesThePlace(t *testing.T) {
 	}
 	if len(members.left) != 1 || members.left[0] != "hero" {
 		t.Fatalf("left = %v", members.left)
+	}
+}
+
+func TestActivitySceneOffersPresenceRefreshAndEmptyMembers(t *testing.T) {
+	f := newGatewayFixture(t)
+	facts := []playercontext.Activity{{Kind: "dungeon", ID: "run", Role: "member", Phase: "in_progress", Actions: []string{}}}
+	pc := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithActivities(func(context.Context, string, string) ([]playercontext.Activity, error) { return facts, nil }))
+	router := f.router("rescue_request", timer.NewService(nil), WithPlayerContext(pc), WithPlaceMembers(&fakePlaceMembers{}),
+		WithDungeon(&dungeonSceneFixture{observeExpeditionFn: func(context.Context, string) (*dungeon.ExpeditionObservation, error) {
+			return &dungeon.ExpeditionObservation{ID: "run", Status: "in_progress", Directions: []dungeon.Direction{}}, nil
+		}}))
+	status, obs := navigationGET(t, router)
+	if status != 200 || obs.Scene.Kind != "activity" || obs.Scene.Members == nil || len(obs.Scene.Members) != 0 {
+		t.Fatalf("activity scene: %d kind=%q members=%v", status, obs.Scene.Kind, obs.Scene.Members)
+	}
+	if !slices.ContainsFunc(obs.AvailableActions, func(a ContextAction) bool { return a.Action == "presence_refresh" }) {
+		t.Fatalf("presence_refresh not offered during an activity: %+v", obs.AvailableActions)
+	}
+	if !slices.Contains(obs.Scene.Support.Actions, SceneActionSupport{Action: "presence_refresh", Connected: true, EntryEligible: true}) {
+		t.Fatalf("support: %+v", obs.Scene.Support.Actions)
+	}
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"presence_refresh"}`, nil); status != 200 {
+		t.Fatalf("presence_refresh during an activity: %d %s", status, raw["error"])
 	}
 }

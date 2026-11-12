@@ -168,3 +168,63 @@ func TestValkeyMembersConcurrentRefreshNoDuplicates(t *testing.T) {
 		t.Fatalf("members = %v; want each character once", ids)
 	}
 }
+
+func TestValkeyMembersSameSecondArrivalOrder(t *testing.T) {
+	s, client, p := realMembers(t)
+	ctx := context.Background()
+	now := time.Unix(1_800_000_000, 0)
+	// IDs sort opposite to arrival, so a tie broken by member ID would reverse them.
+	late, early := newMember(t, client, "Z"), newMember(t, client, "A")
+	late.CharacterID, early.CharacterID = "z"+late.CharacterID, "a"+early.CharacterID
+	t.Cleanup(func() {
+		client.Do(context.Background(), client.B().Del().Key("party2:placemember:character:"+late.CharacterID, "party2:placemember:character:"+early.CharacterID).Build())
+	})
+	for _, m := range []placelog.Member{late, early, late} {
+		if err := s.Refresh(ctx, p, m, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ids := memberIDs(t, s, p, now); len(ids) != 2 || ids[0] != late.CharacterID || ids[1] != early.CharacterID {
+		t.Fatalf("same-second order = %v; want arrival order %s, %s", ids, late.CharacterID, early.CharacterID)
+	}
+}
+
+// Concurrent refreshes and leaves for one character never leave an entry that
+// its place pointer does not name, so a later move or logout can always remove it.
+func TestValkeyMembersConcurrentRefreshAndLeave(t *testing.T) {
+	s, client, p := realMembers(t)
+	_, _, q := realMembers(t)
+	ctx := context.Background()
+	now := time.Unix(1_800_000_000, 0)
+	a := newMember(t, client, "A")
+	res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(w, op int) error {
+		switch (w + op) % 3 {
+		case 0:
+			return s.Refresh(ctx, p, a, now)
+		case 1:
+			return s.Refresh(ctx, q, a, now)
+		default:
+			return s.Leave(ctx, a.CharacterID)
+		}
+	})
+	if res.Failures != 0 {
+		t.Fatalf("failures: %d", res.Failures)
+	}
+	pointer, err := client.Do(ctx, client.B().Get().Key("party2:placemember:character:"+a.CharacterID).Build()).ToString()
+	if err != nil && !errors.Is(err, valkey.Nil) {
+		t.Fatal(err)
+	}
+	for _, place := range []placelog.Place{p, q} {
+		if ids := memberIDs(t, s, place, now); len(ids) != 0 && pointer != place.Kind+":"+place.ID {
+			t.Fatalf("%s lists %v but the pointer is %q", place.ID, ids, pointer)
+		}
+	}
+	if err := s.Leave(ctx, a.CharacterID); err != nil {
+		t.Fatal(err)
+	}
+	for _, place := range []placelog.Place{p, q} {
+		if ids := memberIDs(t, s, place, now); len(ids) != 0 {
+			t.Fatalf("%s still lists %v after the final leave", place.ID, ids)
+		}
+	}
+}

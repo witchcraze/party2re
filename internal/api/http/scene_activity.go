@@ -41,24 +41,27 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 	}
 	titles := map[string]string{"sleep": "休息中", "scheduled": "実行待ち", "party": "パーティー", "adventure": "冒険", "pvp": "対戦部屋", "gvg": "ギルド戦", "dungeon": "ダンジョン探索", "challenge": "試練", "casino": "カジノ", "activity_conflict": "活動の状態を確認してください"}
 	kind := result.Snapshot.LocationID
-	scene := SceneSnapshot{Kind: "activity", LocationID: kind, Title: titles[kind], Dialogue: "現在の活動を確認してください。", Data: data, Support: SceneSupport{Observation: "details", Actions: []SceneActionSupport{}}, PlaceLog: []PlaceLogEntry{}}
+	scene := SceneSnapshot{Kind: "activity", LocationID: kind, Title: titles[kind], Dialogue: "現在の活動を確認してください。", Data: data, Support: SceneSupport{Observation: "details", Actions: []SceneActionSupport{}}, PlaceLog: []PlaceLogEntry{}, Members: []PlaceMember{}}
 	if kind == "activity_conflict" {
 		scene.Kind = "activity_conflict"
 	}
 	for _, def := range playercontext.DefaultCatalog {
 		eligible := slices.Contains(result.AvailableActions, def.ID)
-		if def.ActivityKind == "" && def.ID != "home_wake" && def.ID != "rescue_request" {
+		if def.ActivityKind == "" && def.ID != "home_wake" && def.ID != "rescue_request" && def.ID != "presence_refresh" {
 			continue
 		}
 		if !eligible {
 			continue
 		}
 		connected := h.actionCommands[def.ID].prepare != nil
-		mode := "continuation"
-		if def.Recovery || def.ID == "home_wake" || def.ID == "rescue_request" {
-			mode = "recovery"
+		support := SceneActionSupport{Action: def.ID, Connected: connected, Mode: "continuation"}
+		switch {
+		case def.ID == "presence_refresh": // the page reload is neither a continuation nor recovery
+			support.Mode, support.EntryEligible = "", true
+		case def.Recovery || def.ID == "home_wake" || def.ID == "rescue_request":
+			support.Mode = "recovery"
 		}
-		scene.Support.Actions = append(scene.Support.Actions, SceneActionSupport{Action: def.ID, Connected: connected, Mode: mode, EntryEligible: false})
+		scene.Support.Actions = append(scene.Support.Actions, support)
 		if !connected {
 			continue
 		}

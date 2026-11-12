@@ -60,7 +60,9 @@ func memberKeys(p Place) ([3]string, error) {
 func characterKey(characterID string) string { return memberPrefix + "character:" + characterID }
 
 // Refresh lists m in place p until now+TTL. A character is listed in one place
-// at a time, so an entry left in another place is removed.
+// at a time, so an entry left in another place is removed. The place pointer is
+// swapped after the entry is written: a concurrent Leave or Refresh elsewhere
+// then never leaves an entry that no pointer can reach.
 func (s *Members) Refresh(ctx context.Context, p Place, m Member, now time.Time) error {
 	keys, err := memberKeys(p)
 	if err != nil {
@@ -74,19 +76,20 @@ func (s *Members) Refresh(ctx context.Context, p Place, m Member, now time.Time)
 		return err
 	}
 	ttl := int64(s.ttl / time.Second)
+	if err := refreshMemberScript.Exec(ctx, s.client, keys[:], []string{
+		strconv.FormatInt(now.Unix(), 10), strconv.FormatInt(now.Unix()+ttl, 10), strconv.FormatInt(ttl, 10), m.CharacterID, string(raw),
+	}).Error(); err != nil {
+		return err
+	}
 	place := p.Kind + ":" + p.ID
 	previous, err := s.client.Do(ctx, s.client.B().Set().Key(characterKey(m.CharacterID)).Value(place).Get().ExSeconds(ttl).Build()).ToString()
 	if err != nil && !errors.Is(err, valkey.Nil) {
 		return err
 	}
 	if previous != "" && previous != place {
-		if err := s.remove(ctx, previous, m.CharacterID); err != nil {
-			return err
-		}
+		return s.remove(ctx, previous, m.CharacterID)
 	}
-	return refreshMemberScript.Exec(ctx, s.client, keys[:], []string{
-		strconv.FormatInt(now.Unix(), 10), strconv.FormatInt(now.Unix()+ttl, 10), strconv.FormatInt(ttl, 10), m.CharacterID, string(raw),
-	}).Error()
+	return nil
 }
 
 // Leave removes the character from the place it is listed in, if any.
