@@ -19,12 +19,13 @@ type ActionWaitWriter interface {
 }
 
 // ActionWaitGate rejects every action while the legacy wait runs, except the
-// recovery actions legacy serves outside party.cgi (lib/system.cgi:637-645).
+// recovery actions legacy serves outside party.cgi and plain speech, which is
+// not a ＠ action (lib/system.cgi:637-645).
 // It applies to continuations too: legacy rejects every registered action.
 type ActionWaitGate struct{}
 
 func (ActionWaitGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
-	return snapshot.ActionWait <= 0 || action.WaitExempt == WaitRecovery
+	return snapshot.ActionWait <= 0 || action.WaitExempt == WaitRecovery || action.WaitExempt == WaitSpeech
 }
 
 // WithActionWait enables the legacy action wait. A non-positive duration or a

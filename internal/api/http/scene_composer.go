@@ -130,7 +130,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			h.sceneAdapters[definition.ID] = adapter
 			continue
 		}
-		adapter.placeLog = placeLogFacilities[definition.ID]
+		if adapter.placeLog = placeLogFacilities[definition.ID]; adapter.placeLog {
+			adapter.commands = append(adapter.commands, "place_say", "place_whisper")
+		}
 		if _, ok := npcProfiles[definition.ID]; ok {
 			adapter.commands = append(adapter.commands, "npc_talk", "npc_inspect")
 		}

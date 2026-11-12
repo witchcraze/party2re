@@ -60,6 +60,14 @@ func TestCatalogWaitDispositions(t *testing.T) {
 			if def.WaitExempt != WaitPrivate {
 				t.Errorf("%s: legacy shiraberu answers with a private $mes", def.ID)
 			}
+		case def.ID == "place_say":
+			if def.WaitExempt != WaitSpeech {
+				t.Errorf("%s: plain speech is not a ＠ action", def.ID)
+			}
+		case def.ID == "place_whisper":
+			if def.WaitExempt != WaitWhisper {
+				t.Errorf("%s: sasayaki sets act_time = 0", def.ID)
+			}
 		case def.ID == "home_wake" || def.ID == "rescue_request":
 			if def.WaitExempt != WaitRecovery {
 				t.Errorf("%s: recovery runs outside party.cgi", def.ID)
@@ -130,7 +138,7 @@ func TestQueryReadsAndClaimsActionWait(t *testing.T) {
 
 	enabled := NewService(waitChars{}, waitActions{}, timers, WithActionWait(timers, DefaultActionWait))
 	r, err := enabled.Query(ctx, "c", "p")
-	if err != nil || r.Snapshot.ActionWait != 3*time.Second || !slices.Equal(r.AvailableActions, []string{"rescue_request"}) {
+	if err != nil || r.Snapshot.ActionWait != 3*time.Second || !slices.Equal(r.AvailableActions, []string{"place_say", "rescue_request"}) {
 		t.Fatalf("enabled read: %v %v %v", r.Snapshot.ActionWait, r.AvailableActions, err)
 	}
 	claim, ok, err := enabled.ClaimActionWait(ctx, "c")

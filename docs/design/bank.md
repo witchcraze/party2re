@@ -66,7 +66,7 @@ withdraws, chooses a random dialogue or updates navigation. Required read failur
 prevents partial observation. See the [context and recovery contract](../architecture/client-agent-api.md).
 
 Every Bank REST operation is retired. NPC talk and inspect use the shared
-[NPC commands](../architecture/place-log.md#npc-interaction-1940).
+[NPC commands](../architecture/place-log.md#npc-interaction).
 
 | Former or retained REST operation | Supported replacement / disposition |
 | --- | --- |

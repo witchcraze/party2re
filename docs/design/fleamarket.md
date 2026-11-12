@@ -24,7 +24,7 @@ Legacy source: `party2/lib/free.cgi`. Commands use the [Action Gateway](../archi
 These are recorded, not approved departures:
 
 - **Seller payment**: legacy `send_money` (`free.cgi:174`) holds the money as a pending remittance. Go credits the wallet at purchase, and `AddMoney` clamps at the cap, so excess gold is lost. Owner: #1902.
-- **Action wait and facility log**: legacy successful commands keep the default action wait and write the facility log. The Gateway applies the [action wait](../architecture/place-log.md#action-wait-1939); the commands' log rows remain [#1941](https://github.com/witchcraze/party2re/issues/1941).
+- **Action wait and facility log**: legacy successful commands keep the default action wait and write the facility log. The Gateway applies the [action wait](../architecture/place-log.md#action-wait); the commands' log rows remain [#1941](https://github.com/witchcraze/party2re/issues/1941).
 - **Listing number**: legacy shows the lowest free number. Go uses an opaque listing ID, and order ties use age then ID.
 
 ---

@@ -85,11 +85,11 @@ func TestFacilitySceneEmptyAndFailedPlaceLog(t *testing.T) {
 	}
 }
 
-func TestTownSceneHasNoPlaceLogRead(t *testing.T) {
-	log := &fakePlaceLog{err: errors.New("must not be read")}
+func TestTownSceneObservesItsOwnPlaceLog(t *testing.T) {
+	log := &fakePlaceLog{}
 	_, store, _, router := bankSceneRouter(t, WithPlaceLog(log))
 	store.selection = playercontext.Selection{Destination: "town"}
-	if status, observation := navigationGET(t, router); status != 200 || observation.Scene.PlaceLog == nil || len(log.places) != 0 {
-		t.Fatalf("town: %d %+v reads %d", status, observation.Scene.PlaceLog, len(log.places))
+	if status, observation := navigationGET(t, router); status != 200 || observation.Scene.PlaceLog == nil || len(log.places) != 1 || log.places[0].ID != "town" {
+		t.Fatalf("town: %d %+v reads %+v", status, observation.Scene.PlaceLog, log.places)
 	}
 }

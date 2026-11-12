@@ -25,4 +25,4 @@ Observation never claims or writes. Known differences from `lib/alchemy.cgi`:
 - Automatic `finish` on load (17, 183–202) happens at `scene_enter`; GET never claims, so a saved selection delivers on the next entry.
 - Legacy awards `comp_alc` when `れしぴ` (46–94) is viewed; Go awards it at delivery because observation does not write (#2062).
 - `れんきん` (99–144) takes an explicit recipe ID instead of base and material names.
-- Writing the commands' facility log rows is open (#1941), and presence is not reproduced (#1943); the action wait applies ([action wait](../architecture/place-log.md#action-wait-1939)).
+- Writing the commands' facility log rows is open (#1941), and presence is not reproduced (#1943); the action wait applies ([action wait](../architecture/place-log.md#action-wait)).

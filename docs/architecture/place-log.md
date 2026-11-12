@@ -1,9 +1,8 @@
 # Place log, action wait and NPC interaction
 
 > **Status:** approved on 2026-11-08 under
-> [#1937](https://github.com/witchcraze/party2re/issues/1937). Storage, facility
-> observation, the action wait and NPC interaction run; command echoes, speech and
-> members are planned, and each section names the issue that implements it.
+> [#1937](https://github.com/witchcraze/party2re/issues/1937). Sections that are
+> not implemented yet name their open issue.
 
 Legacy Party2 is a conversation screen. Every place has a short shared log. A player's
 command and the NPC's reply are both written to it, and a short wait follows each
@@ -33,7 +32,7 @@ logs stay with their own features.
 
 ## Contract
 
-### Place log ([#1938](https://github.com/witchcraze/party2re/issues/1938))
+### Place log
 
 - **Storage**
   - A place is identified by kind and ID. A fixed facility uses its scene destination. Owner-scoped places use the owner ID.
@@ -47,12 +46,15 @@ logs stay with their own features.
   - Each row holds the time, the speaker kind (character or NPC), the speaker's name and colour as they were when the row was written, the text, and an optional private recipient.
   - Private rows count toward the shared cap, as in legacy.
 - **Observation**
-  - Facility scenes with a legacy log expose `scene.place_log`, viewer-filtered and newest first. It is `[]` for other scenes. Rows carry no character IDs; `private` marks a whisper the viewer sent or received.
+  - Facility scenes with a legacy log, the town hub and the four towns expose `scene.place_log`, viewer-filtered and newest first. It is `[]` for other scenes. Rows carry no character IDs; `private` marks a whisper the viewer sent or received.
   - A store failure fails the observation.
   - A GET never writes.
   - Owner-scoped places (home, store, guild) are observed once those scenes connect.
 
-### Writers ([#1940](https://github.com/witchcraze/party2re/issues/1940), [#1941](https://github.com/witchcraze/party2re/issues/1941), [#1942](https://github.com/witchcraze/party2re/issues/1942))
+### Writers
+
+Command echoes (the actor and NPC rows of facility commands) are open in [#1941](https://github.com/witchcraze/party2re/issues/1941).
+
 
 - **When rows are written**
   - Only a successful, effectful command writes.
@@ -66,11 +68,12 @@ logs stay with their own features.
   - The command's NPC reply is appended together with the actor row, in one append after the command commits.
   - If the append fails, the server records the failure and the command outcome does not change. This is an accepted departure: legacy wrote the log in the same request.
 - **Speech and whisper**
-  - Speech appends a public character row.
-  - Whisper appends a private row to a named, existing recipient.
-  - Both use the shared text checks.
+  - `place_say` appends the text as a public character row in any place with a log. It never checks or starts the wait.
+  - `place_whisper` takes a recipient name and appends `＠ささやき>name text` as a private row. An unknown name is rejected with the legacy `nameというプレイヤーが存在しません`. Like other `＠` actions it is rejected during the wait, but it does not start one (`act_time = 0`).
+  - Text uses the legacy comment checks: line breaks removed, 500 characters after HTML escaping (`$max_comment`). The recipient name is not counted, as for letters. Empty speech is rejected, as legacy wrote nothing for empty input; a whisper without text logs the bare `＠ささやき>name`, as in legacy.
+  - The row is the command's only effect, so an append failure is an unknown outcome (`500 EXECUTION_FAILED`), unlike the best-effort NPC row.
 
-### Action wait ([#1939](https://github.com/witchcraze/party2re/issues/1939))
+### Action wait
 
 - **When the wait starts**
   - A successful command whose legacy counterpart keeps a non-zero `act_time` sets a per-character wait in the existing timer family.
@@ -82,11 +85,11 @@ logs stay with their own features.
   - The remaining time is read in whole seconds, so `action_wait_ms` and the gate for non-starting actions may open up to about a second early. Legacy counted whole seconds too (`int($m{wt} - $time)`). Wait-starting commands are decided by the claim key itself, so they are not affected.
   - Legacy reads and writes the user file without a lock (`read_user`/`write_user`), so concurrent legacy requests could both pass. That is a legacy defect, not a rule, and the claim intentionally closes it.
   - Rescue and wake are exempt, because legacy serves them outside the `party.cgi` action path.
-  - Speech is not an action and is never blocked.
+  - Speech is not a `＠` action and is never blocked.
 - **Relation to the cooldown gate**
   - This gate is separate from the ScheduledAction cooldown gate described in [action preconditions](../design/action-preconditions.md).
 
-### NPC interaction ([#1940](https://github.com/witchcraze/party2re/issues/1940))
+### NPC interaction
 
 - The HTTP layer keeps one NPC registry keyed by scene destination: name, words (with `{name}` for the actor) and an optional inspect text. The NPC colour is the legacy `$npc_color` `#FF69B4`. Facilities in the registry offer both commands; the facility comes from the current scene, and the scene's qualification is rechecked.
 - **Talk**: `npc_talk` logs the actor row `＠はなす` and a random word as the NPC row, and starts the wait. A facility without words would answer privately with `返事がない、ただのしかばねのようだ…`.

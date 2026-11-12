@@ -136,24 +136,33 @@ func (h *Handler) registerNPC(service *playercontext.Service) {
 	}
 }
 
-// currentNPC resolves the NPC of the owner's current, still qualified facility.
-func (h *Handler) currentNPC(ctx context.Context, service *playercontext.Service, owner, actor string) (string, npcProfile, corecharacter.Character, error) {
+// currentScene resolves the owner's current, still qualified scene; ok is
+// false outside a registered scene.
+func (h *Handler) currentScene(ctx context.Context, service *playercontext.Service, owner, actor string) (string, corecharacter.Character, bool, error) {
 	current, err := service.Query(ctx, actor, owner)
 	if err != nil {
-		return "", npcProfile{}, corecharacter.Character{}, err
+		return "", corecharacter.Character{}, false, err
 	}
 	n := current.Navigation
 	if n == nil || n.Unavailable {
-		return "", npcProfile{}, corecharacter.Character{}, errNPCUnavailable
+		return "", corecharacter.Character{}, false, nil
 	}
-	destination := n.Selection.Destination
-	npc, ok := npcProfiles[destination]
-	if !ok {
-		return "", npcProfile{}, corecharacter.Character{}, errNPCUnavailable
-	}
-	char := current.Snapshot.Character
-	// A qualification lost after entry (e.g. job level) also hides the NPC.
+	destination, char := n.Selection.Destination, current.Snapshot.Character
+	// A qualification lost after entry (e.g. job level) also leaves the scene.
 	if def, ok := h.sceneAdapters[destination]; !ok || (def.definition.CanEnter != nil && !def.definition.CanEnter(char)) {
+		return "", corecharacter.Character{}, false, nil
+	}
+	return destination, char, true, nil
+}
+
+// currentNPC resolves the NPC of the owner's current, still qualified facility.
+func (h *Handler) currentNPC(ctx context.Context, service *playercontext.Service, owner, actor string) (string, npcProfile, corecharacter.Character, error) {
+	destination, char, ok, err := h.currentScene(ctx, service, owner, actor)
+	if err != nil {
+		return "", npcProfile{}, corecharacter.Character{}, err
+	}
+	npc, found := npcProfiles[destination]
+	if !ok || !found {
 		return "", npcProfile{}, corecharacter.Character{}, errNPCUnavailable
 	}
 	return destination, npc, char, nil

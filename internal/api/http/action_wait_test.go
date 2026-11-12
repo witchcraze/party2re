@@ -18,7 +18,7 @@ func actionWaitRouter(t *testing.T, destination string) (*bankGatewayFixture, ti
 	return actionWaitRouterWith(t, destination, timer.NewService(nil), playercontext.DefaultActionWait)
 }
 
-func actionWaitRouterWith(t *testing.T, destination string, timers timer.Service, wait time.Duration) (*bankGatewayFixture, timer.Service, http.Handler) {
+func actionWaitRouterWith(t *testing.T, destination string, timers timer.Service, wait time.Duration, opts ...Option) (*bankGatewayFixture, timer.Service, http.Handler) {
 	t.Helper()
 	f := newBankGatewayFixture(t)
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: destination}}
@@ -26,7 +26,7 @@ func actionWaitRouterWith(t *testing.T, destination string, timers timer.Service
 		playercontext.WithNavigation(store, playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "bank", Parent: "town"}),
 		playercontext.WithActionWait(timers, wait))
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{},
-		WithBank(&bankSceneService{BankService: f, service: f.service}), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture })
+		append([]Option{WithBank(&bankSceneService{BankService: f, service: f.service}), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,13 +21,15 @@ Gateway entry eligibility uses six gates evaluated in order: dead → fatigue �
    - **Emergency exception**: `rescue.cgi:53-65` accepts rescue during existing sleep and adds a penalty. `rescue_request` therefore has no awake requirement.
 4. **Cooldown Gate (`party2:scheduled:actor:<id>`)**:
    - Characters with Pending or Processing ScheduledActions cannot execute cooldown-gated town or expedition actions. This gate is not the legacy 4-second action wait (`$act_time`); see the action wait gate below. Passing ExecuteAt does not imply settlement; Completed/Failed records do not block. The actor Set is an index, not an exclusive lock ([Scheduled work lifecycle](../architecture/valkey-keyspace.md#scheduled-work-lifecycle)).
-   - **Action wait gate** (`party2:timer:action_wait:<id>`): a successful command starts the legacy wait (`$act_time`, default 4 s). While it runs, every action is rejected, including navigation and continuations, as legacy rejects every registered `＠` action (`lib/system.cgi:637-655`). Rescue and wake are exempt because legacy serves them outside `party.cgi`. The catalog's `WaitExempt` records why an action does not start the wait:
+   - **Action wait gate** (`party2:timer:action_wait:<id>`): a successful command starts the legacy wait (`$act_time`, default 4 s). While it runs, every action is rejected, including navigation and continuations, as legacy rejects every registered `＠` action (`lib/system.cgi:637-655`). Rescue and wake are exempt because legacy serves them outside `party.cgi`, and plain speech because it is not a `＠` action. The catalog's `WaitExempt` records why an action does not start the wait:
 
      | Disposition | Actions | Legacy evidence |
      | --- | --- | --- |
      | Starts the wait (default) | Every facility, town and entry command | Success paths set `$npc_com` or log the input; the `act_time = 0` sites in `lib/*.cgi` are the no-target list views, which Go replaces with scene observation. |
      | `navigation` | `scene_enter`, `scene_select`, `scene_page`, `scene_back` | `いどう`/`まち` set `$mes` or `act_time = 0` (`lib/system.cgi:289,316`); list views set `act_time = 0`. |
      | `recovery` (never blocked) | `home_wake`, `rescue_request` | `sleep.cgi` and `rescue.cgi` run outside the `party.cgi` action path. |
+     | `speech` (never blocked) | `place_say` | Plain input skips `action` and is written by `write_comment` (`party.cgi:20-26`). |
+     | `whisper` | `place_whisper` | `sasayaki` sets `act_time = 0` (`lib/system.cgi:261`); it is still blocked while a wait runs. |
      | `activity_pacing` | Party, PvP, GvG, dungeon, challenge and casino-room continuations | Battle and room turns keep their own pacing (`lib/_battle.cgi:1175`, `lib/casino.cgi:555`), owned by the combat and room migrations (#948, #949). They are still blocked while a wait runs. |
 
 5. **Currency gate.** Entry requires positive wallet gold; exact prices and alternate currencies stay service checks.

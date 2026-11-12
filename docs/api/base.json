@@ -2124,7 +2124,7 @@
           "action_wait_ms": {
             "type": "integer",
             "minimum": 0,
-            "description": "Remaining legacy action wait in milliseconds (default 4 s after a successful command). While positive, every Gateway command except rescue and wake is rejected with 409 ACTION_WAIT."
+            "description": "Remaining legacy action wait in milliseconds (default 4 s after a successful command). While positive, every Gateway command except rescue, wake and place_say is rejected with 409 ACTION_WAIT."
           }
         },
         "required": [
@@ -2237,7 +2237,7 @@
             "items": {
               "$ref": "#/components/schemas/PlaceLogEntry"
             },
-            "description": "Viewer-filtered shared log of the current facility, newest first (docs/architecture/place-log.md). Empty outside facilities with a log; a required read failure fails the observation."
+            "description": "Viewer-filtered shared log of the current place, newest first (docs/architecture/place-log.md). Empty outside places with a log; a required read failure fails the observation."
           }
         },
         "required": [
@@ -3410,6 +3410,84 @@
                   "required": []
                 }
               }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "place_say"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Required non-null text. Line breaks are removed; at most 500 characters counted after legacy HTML escaping (legacy $max_comment). Control, zero-width, bidi-override and excessive combining characters are rejected. Stored verbatim as data."
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "place_whisper"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "recipient_name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8,
+                      "description": "Exact name of an existing character; an unknown name is rejected with 404 RECIPIENT_NOT_FOUND."
+                    },
+                    "text": {
+                      "type": "string",
+                      "description": "Required non-null string. Whitespace-only text logs the bare ＠ささやき>name, as in legacy; other text follows place_say text rules."
+                    }
+                  },
+                  "required": [
+                    "recipient_name",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
             }
           },
           {
