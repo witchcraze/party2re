@@ -112,7 +112,7 @@ graph TD
 - [`tavern.md`](tavern.md) — Adventurer's Tavern clean-room naming and post-adventure standing delivery orders.
 - [`alchemy.md`](alchemy.md) — 114 crafting recipes consuming depot materials, recipe compendium, and overnight home sleep synthesis.
 - [`blacksmith.md`](blacksmith.md) — 12 authentic crystal weapon seals, equipment naming, and 3-slot dedicated weapon storage.
-- [`monster.md`](monster.md) — Monster Grandpa ranch stabling (50–350 cap), Home pet companions (up to 8), renaming, P2P gifting, and wild release.
+- [`monster.md`](monster.md) — Monster Grandpa ranch stabling (50–350 cap), Home pet companions, renaming, P2P gifting, and wild release.
 - [`plantation.md`](plantation.md) — Seed cultivation with 6 seeds, 14 fertilizer reagents, midnight JST maturation, and depot harvest delivery.
 - [`oracle-shop.md`](oracle-shop.md) — Oracle Shop (@ラクル) job-gated costume rentals, gender icons, private estate wallpaper boutique, and Black Market hint.
 - [`chapel.md`](chapel.md) — 5 town church blessings with single-active prayer constraint and daily reset.

@@ -32,7 +32,6 @@ const (
 	LocationHome           = "home"
 	BaseBoxCapacity        = 50
 	OverBoxCapacityPerTier = 50
-	MaxHomePets            = 8
 	MaxMonsterNameLength   = 8
 )
 
@@ -204,7 +203,7 @@ func (s *Service) GetSummary(ctx context.Context, characterID, locationFilter st
 		BoxCount:     boxCount,
 		BoxCapacity:  BoxCapacityForCharacter(char),
 		HomeCount:    homeCount,
-		HomeCapacity: MaxHomePets,
+		HomeCapacity: BoxCapacityForCharacter(char),
 		Monsters:     instances,
 	}, nil
 }
@@ -355,11 +354,9 @@ func (s *Service) SendMonster(ctx context.Context, senderCharID, recipientCharID
 			return err
 		}
 
-		var recipientChar corecharacter.Character
+		senderChar := firstChar
 		if firstChar.ID == recipientCharID {
-			recipientChar = firstChar
-		} else {
-			recipientChar = secondChar
+			senderChar = secondChar
 		}
 
 		inst, err := s.monsters.FindByIDForUpdate(txCtx, instanceID)
@@ -377,7 +374,8 @@ func (s *Service) SendMonster(ctx context.Context, senderCharID, recipientCharID
 		if err != nil {
 			return err
 		}
-		if recipientBoxCount >= BoxCapacityForCharacter(recipientChar) {
+		// The recipient's box is measured against the sender's limit, as in the original game.
+		if recipientBoxCount >= BoxCapacityForCharacter(senderChar) {
 			return ErrRecipientBoxFull
 		}
 
