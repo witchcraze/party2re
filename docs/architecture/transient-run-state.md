@@ -350,6 +350,27 @@ owner and run ID; replacing a fallback row also saves the new run's identity.
 Thus delayed finalization or cleanup retries cannot remove a later run or its
 unsettled rewards. SQL commit and Valkey cleanup remain separate boundaries.
 
+### Dungeon treasure claims
+
+**Decision (#1762), target; implementation [#2119](https://github.com/witchcraze/party2re/issues/2119).**
+Chest delivery is immediate ([gameplay](../design/dungeon.md#treasure-inspection-and-delivery)),
+so it cannot wait for Two-Phase Settlement. One SQL transaction locks the actor
+(Rank 2) and inserts a claim receipt that is unique per run and chest and records
+the actor, event and result. The same transaction debits item 215 and delivers
+to the hand or Depot (Rank 3/5) and the Collection (Rank 8). The allowance is
+counted from that actor's receipts for the event, never from the possibly stale
+live run. Hand eligibility uses in-run state: the transaction debits the actor's
+pending consumed items, and publication removes them from the run so settlement
+does not debit them twice.
+
+After commit, a revision-checked step marks the chest opened in the Valkey run.
+Every later Dungeon mutation, settlement included, first publishes committed
+receipts the run does not show yet. An identical retry returns its receipt. A
+failure before commit changes nothing. A lost commit acknowledgement is resolved
+from the receipt with a bounded context; unreadable evidence reports an unknown
+outcome and keeps state. Valkey loss never regrants a receipt, and the receipts
+do not reconstruct the run.
+
 ### Challenge finalization
 
 `ChallengeRepository.FinalizeSession` shares one settlement implementation for

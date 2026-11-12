@@ -1,6 +1,9 @@
 package adventure_test
 
 import (
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -306,6 +309,79 @@ func TestGenerateTreasureBoxesWithPools(t *testing.T) {
 	}
 	if boxes[1].ItemID != "armor-01" {
 		t.Errorf("box[1] ItemID = %s, want armor-01", boxes[1].ItemID)
+	}
+}
+
+// Legacy add_treasure pushes the weekday orb inside the chest loop, so chest i
+// draws its tool from the stage pool plus i+1 orbs (#2118).
+func TestGenerateTreasureBoxesWithPools_OrbsAccumulatePerChest(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		now       time.Time
+		wantSunny int // rng(6) draws for Sunday's random orb
+	}{
+		{name: "weekday", now: time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)},
+		{name: "sunday", now: time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC), wantSunny: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var toolPoolSizes []int
+			sunny := 0
+			rng := func(n int) int {
+				switch n {
+				case 4:
+					return 2 // tool
+				case 6:
+					sunny++
+				case 7: // box name
+				default:
+					toolPoolSizes = append(toolPoolSizes, n)
+				}
+				return n - 1
+			}
+			pools := adventure.StageTreasurePools{Weapons: []string{"weapon-01"}, Items: []string{"item-001", "item-002", "item-003", "item-004", "item-005", "item-006", "item-007"}}
+			boxes := adventure.GenerateTreasureBoxesWithPools(3, pools, tc.now, rng)
+			if want := []int{8, 9, 10}; !slices.Equal(toolPoolSizes, want) {
+				t.Fatalf("tool pool sizes = %v, want %v", toolPoolSizes, want)
+			}
+			if sunny != tc.wantSunny {
+				t.Errorf("sunday orb draws = %d, want %d", sunny, tc.wantSunny)
+			}
+			for i, b := range boxes {
+				if !strings.HasPrefix(b.ItemID, "item-06") {
+					t.Errorf("box %d = %q, want an orb", i, b.ItemID)
+				}
+			}
+		})
+	}
+}
+
+// A legacy empty pool entry yields an empty chest, never an invented item (#2118).
+func TestGenerateTreasureBoxesWithPools_EmptyEntryStaysEmpty(t *testing.T) {
+	pools := adventure.StageTreasurePools{Items: []string{"", "item-001"}}
+	boxes := adventure.GenerateTreasureBoxesWithPools(1, pools, time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC), func(int) int { return 0 })
+	if len(boxes) != 1 || boxes[0].ItemID != "" {
+		t.Fatalf("boxes = %+v, want one empty chest", boxes)
+	}
+}
+
+// Stage 0–5 tool pools keep the single legacy empty entry (stage/0.cgi–5.cgi @treasures).
+func TestInitialStageCatalog_EmptyTreasureEntries(t *testing.T) {
+	catalog, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range catalog.Stages() {
+		want := 0
+		if n, err := strconv.Atoi(strings.TrimPrefix(s.ID, "stage-")); err == nil && n <= 5 {
+			want = 1
+		}
+		got := 0
+		for _, pool := range [][]string{s.TreasureWeapons, s.TreasureArmors, s.TreasureItems} {
+			got += slices.Index(pool, "") + 1
+		}
+		if got != want {
+			t.Errorf("%s empty entries = %d, want %d", s.ID, got, want)
+		}
 	}
 }
 

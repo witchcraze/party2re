@@ -47,29 +47,14 @@ display definitions and out-of-bounds walls.
 
 `_trap_d` damages each party member by `int(base × (0.9 + rand(0.3)))`; each
 map supplies the base damage. It does not establish a universal 15%-MaxHP trap.
-`_add_treasure` starts from `$#partys`, and acting Job 78 adds `1 + int(rand(2))`.
-Inspect map event flags and the shared treasure/exit routines for actual reward
-delivery and replay prevention; do not invent a floor-scaled 100G chest rule.
 
-Ordinary Dungeon treasure blocks movement. `add_treasure` creates positive-HP,
-NPC-colored chest members (`lib/_npc_action.cgi:498–552`); `read_member` restores
-the saved event flags and places living opposing members in `@enemys`
-(`lib/_battle.cgi:453–493`). The initial flags are `S` (`lib/quest.cgi:639`);
-map0 `event_2` appends `2` before generating treasure (`map/0/1.cgi:16`),
-without setting `$event` to `宝`.
-Thus the `$event ne '宝'` guard's exception does not apply to this normal path.
-Nor does that exception register a movement action: with chests present,
-`add_battle_action` registers inspection instead of directions/map observation
-(`vs_dungeon.cgi:37–48`). Each request rebuilds actions before execution
-(`party.cgi:19–24`, `lib/_skill.cgi:22–23,286`), and the dispatcher rejects an
-unregistered action (`lib/_battle.cgi:640`). A direct movement call also rejects
-the normal chest state (`vs_dungeon.cgi:77–80`). This is not merely a hidden UI
-choice. Opening a chest sets its HP to zero; dead NPC members are omitted from
-the next saved/reloaded roster (`_npc_action.cgi:58`, `_battle.cgi:518–535`).
-Movement can resume only after no living enemy-side members remain and the
-round limit permits it. Escape is a separate action, not permission to move
-past unopened chests. This contract preserves the legacy behavior; allowing
-ordinary chest abandonment by movement would require an approved departure.
+Chests are living enemy-side members, so they block movement until every one is
+opened ([treasure contract](#treasure-inspection-and-delivery)). **Pitfall:** the
+`$event ne '宝'` exception in `_susumu` never frees them. Map0 `event_2` appends
+`2` to the flags and never sets `$event` to `宝` (`map/0/1.cgi:16`). With chests
+present, `add_battle_action` registers only `しらべる`, so the dispatcher also
+rejects movement (`vs_dungeon.cgi:37–48,77–80`; `_battle.cgi:640`). Escape stays
+a separate action; letting movement abandon chests would be a departure.
 
 ## Retired synthetic catalog
 
@@ -93,7 +78,7 @@ in their own units.
 | Map definition (`internal/dungeon`) | Stable native catalog/map identity, dimensions, start, round limit, cells and their map-owned event identities. Keep movement eligibility, visible appearance and event behavior separate: a displayed wall may be traversable, and `D` does not globally mean stairs. |
 | Live expedition (existing Valkey buffer) | Selected map identity, position, current round, existing run/revision/member/encounter facts, and typed event state. Distinguish one-time triggers, keys/doors, reversible switches, selected routes and counters; do not encode them as a legacy flag string. Shared cross-map events explicitly reuse a state identity rather than resetting on every map change. |
 | Accepted event transition | Save position, round, event state and resulting encounter/reward facts together through the existing revision-checked step contract. A rejected limit move changes none of them and consumes no encounter RNG. Reload and stale competing requests must not regenerate an accepted one-time event. |
-| Pending encounter | Distinguish hostile combat from unopened treasure for resolution, while both block ordinary Dungeon movement whenever living enemy-side members remain. Treasure generation is distinct from actor-authorized inspection and delivery; it does not activate the isolated `$event == '宝'` exception. Discovery must withhold movement choices and direct movement calls must reject the same state. Persist any accepted random choice needed to resume without redrawing it. |
+| Pending encounter | Distinguish hostile combat from unopened treasure for resolution; both block movement while living enemy-side members remain. Persist any accepted random choice needed to resume without redrawing it. |
 | Movement availability | Derive exhausted movement from current round and the selected map's limit, independently of terminal status. An exhausted expedition remains active, retaining vitality and stock; Escape and required combat/inspection continuations remain available. A genuine defeat remains a distinct outcome. |
 | Terminal settlement | Reuse frozen outcomes and the SQL run-ID settlement claim. Exit parity beyond the movement-limit guard remains separately scoped below. |
 
@@ -131,9 +116,44 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 | `すすむ` → `susumu` (`vs_dungeon.cgi:33–36,57–67`) | Superseded by atomic start, which initializes round 1 and keeps leader admission |
 | `にし`/`きた`/`みなみ`/`ひがし` (`39–43,70–73`) | Move in that direction; map-owned dispatch follows admission |
 | `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
-| Treasure `しらべる` → `shiraberu(target)` (`45–48`; `_npc_action.cgi:6–84`) | Open: native inspection with per-actor eligibility and delivery (#1762) |
+| Treasure `しらべる` → `shiraberu(target)` (`45–48`) | Participant inspection under the [treasure contract](#treasure-inspection-and-delivery); open: #2119 |
 | `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Open: map16 mining (#1777) |
 | Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Existing Escape, available after exhaustion with stock kept. Open: per-character departure, fatigue and exit equipment effects (#1956); whole-party Escape is not equivalent |
+
+### Treasure inspection and delivery
+
+**Decision (#1762, 2026-11-13).** Players get what the original gave them: each
+member opens a chest themselves and receives its item at once. The project owner
+delegated the mechanism; it is the [claim boundary](../architecture/transient-run-state.md#dungeon-treasure-claims).
+Not yet implemented ([#2119](https://github.com/witchcraze/party2re/issues/2119)).
+
+- **Creation.** The treasure step creates one chest per living roster member. An
+  acting job 78 adds `1 + rand(2)`; an acting Chapel blessing 4 adds one with
+  probability 1/5. Contents are drawn at creation by the shared Adventure chest
+  generator from the map's stage pool and stay hidden. Reload and retries never
+  redraw them. **Pitfall:** map0 picks stage 0 or 1 with equal odds on every
+  request (`map/0/1.cgi:19–20`), so the treasure step's own request picks the pool.
+- **Inspection.** Any living participant, not only the leader, opens one chosen
+  unopened chest of the current treasure. A dead actor, a missing or opened chest,
+  or no treasure rejects without change. Chests never respond.
+- **Allowance.** One chest per actor per treasure event. Another chest at the same
+  event needs item 215 in the tool hand, consumed before delivery. **Finding:**
+  legacy keeps only the map symbol of the actor's last opening event, reset on
+  joining (`_npc_action.cgi#shiraberu`, `quest.cgi#get_battle_line`). A later
+  floor's event with the same symbol therefore needs item 215, unless the actor
+  opened at another symbol in between. Maps that reuse symbols across floors keep
+  this. **Finding:** the Dungeon check precedes the fixed-chest check, so fixed
+  chests (map13 EX, map16) share this allowance; Dungeon has no separate fixed
+  allowance, unlike normal adventure.
+- **Delivery.** Immediate, under the [Depot treasure rule](depot.md#delivery-capacity-by-caller).
+  A tool entering the empty hand also registers the actor's equipped items in the
+  Collection (`add_collection`). An empty chest (pool entry `0`) still spends the
+  allowance and any item 215. Delivered items survive a later wipeout or Escape;
+  exit never awards unopened chests.
+- **Gap.** Chests are also attackable enemies, and some skills reveal contents.
+  A destroyed chest is empty. Native has neither path until [#1865](https://github.com/witchcraze/party2re/issues/1865)
+  (defeat rewards: [#1957](https://github.com/witchcraze/party2re/issues/1957)),
+  so chests nobody may open, such as a solo job 78's extras, leave only Escape.
 
 ## Map events and restoration units
 
@@ -149,12 +169,12 @@ Legacy grids, dialogue and monster/asset names are not implementation inputs.
 Native map0 has six independently authored 5×5 layouts (legacy has six initial variants, two without a hidden passage: `map/0/1.cgi`–`6.cgi`). Non-obvious rules:
 
 - Passage spawn draws `r = 2 × U[0,1)` and spawns iff `r <= 1`; start, hidden passage and consumed one-time cells draw nothing.
-- Treasure chests (one per living member, plus `1 + rand(2)` for an acting job78 leader) block all movement until opened; they grant nothing by themselves and are never auto-opened.
+- Treasure chests block all movement until opened and are never auto-opened.
 - Boss victory grants the monster's rewards only and does not complete the expedition.
 - The hidden passage is always shown as a wall; observation lists all four directions while movement is allowed, so it reveals nothing.
 - Legacy dungeon 0 has no job-level gate, so native map0 has none.
 
-Open: chest contents and inspection (#1762), encounter group size and scaling (#1954), the wish-4 extra chest, and the per-character exit gaps under [Remaining limits](#remaining-limits).
+Open: chest contents, inspection and the blessing-4 chest (#2119), encounter group size and scaling (#1954), and the per-character exit gaps under [Remaining limits](#remaining-limits).
 
 ### Map1 key and door unit
 
@@ -259,7 +279,7 @@ Define L, the legacy `$len`, as the count of non-digit flags at request start (`
 | Boss | Three-member group with party scaling, then the special boss field: allied max-stat caps and status reset, lasting for the run (`_1.cgi:39–45`, `_battle.cgi:1476–1532`). | First the phantom default field (`_battle.cgi:1786–1791`), then the EX group and the special field (`_EX.cgi:39–46`). |
 | Treasure | Gated by the frozen channels (`_1.cgi:47–87`): center W, west R, east B, north Y, west corner k > 1, east corner k > 2, top k > 3 (unreachable). Unavailable cells are plain passages with no flag or display. | Six ungated ordinary cells. The top cell is a fixed treasure: chests per allied player, fallen included, with no job-78/wish bonus (`_EX.cgi:47–53`, `_npc_action.cgi:555–598`). |
 
-Contents and inspection: [#1762](https://github.com/witchcraze/party2re/issues/1762).
+Contents and inspection: [treasure contract](#treasure-inspection-and-delivery).
 Groups/scaling: [#1954](https://github.com/witchcraze/party2re/issues/1954).
 Rewards: [#1957](https://github.com/witchcraze/party2re/issues/1957).
 Per-character combat: [#1865](https://github.com/witchcraze/party2re/issues/1865).
@@ -301,11 +321,7 @@ content; this table does not authorize their automatic rollout.
 
 ## Remaining limits
 
-This decision does not certify the whole Dungeon cluster. Native treasure
-inspection/delivery is scoped in [#1762](https://github.com/witchcraze/party2re/issues/1762), covering actor claims,
-extra-open item 215, treasure counts/pools and failure recovery. Legacy treasure
-creation is not reward delivery (`vs_dungeon.cgi:131–135`,
-`_npc_action.cgi:6–84,498–552`).
+This decision does not certify the whole Dungeon cluster.
 Per-character combat action dispatch is scoped in
 [#1865](https://github.com/witchcraze/party2re/issues/1865). Independent participant
 departure and fatigue/equipment exit effects remain unscheduled gaps; whole-party
