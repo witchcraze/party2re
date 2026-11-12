@@ -49,11 +49,10 @@ type SynthesisResult struct {
 }
 
 type ClaimResult struct {
-	Recipe         Recipe            `json:"recipe"`
-	CreatedItem    coreitem.Instance `json:"created_item"`
-	TotalCrafts    int               `json:"total_crafts"`
-	CompAlcAwarded bool              `json:"comp_alc_awarded"`
-	Message        string            `json:"message"`
+	Recipe      Recipe            `json:"recipe"`
+	CreatedItem coreitem.Instance `json:"created_item"`
+	TotalCrafts int               `json:"total_crafts"`
+	Message     string            `json:"message"`
 }
 
 type CharacterRepository interface {
@@ -88,6 +87,17 @@ type SynthesisHook func(ctx context.Context, characterID string, recipeID string
 // LegendInductor defines permanent Hall of Fame induction contract (legend.cgi).
 type LegendInductor interface {
 	RecordLegend(ctx context.Context, category, characterID string) error
+}
+
+// NewsPublisher broadcasts the first completion; failures never undo the award.
+type NewsPublisher interface {
+	PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
+}
+
+type NewsPublisherFunc func(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
+
+func (f NewsPublisherFunc) PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error {
+	return f(ctx, category, title, content, author, publishedAt)
 }
 
 type LegendInductorFunc func(ctx context.Context, category, characterID string) error
@@ -131,6 +141,7 @@ type Service struct {
 	items         coreitem.DefinitionProvider
 	synthesisHook SynthesisHook
 	legend        LegendInductor
+	news          NewsPublisher
 	nowFunc       func() time.Time
 	rngMu         sync.Mutex
 	rng           random.Generator
@@ -169,6 +180,10 @@ func NewService(
 
 func (s *Service) SetSynthesisHook(hook SynthesisHook) {
 	s.synthesisHook = hook
+}
+
+func (s *Service) SetNewsPublisher(news NewsPublisher) {
+	s.news = news
 }
 
 func (s *Service) SetLegendInductor(inductor LegendInductor) {
@@ -388,25 +403,6 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 
 		state.TotalCrafts++
 
-		// Check 100% compendium title
-		compAlcAwarded := false
-		craftedCount, err := s.repo.CountCraftedRecipes(txCtx, characterID)
-		if err != nil {
-			return fmt.Errorf("count crafted recipes: %w", err)
-		}
-		if craftedCount >= len(s.recipes.All()) && !state.CompAlc {
-			state.CompAlc = true
-			if err := s.repo.SetCompAlcTitle(txCtx, characterID); err != nil {
-				return fmt.Errorf("set comp alc title: %w", err)
-			}
-			compAlcAwarded = true
-			if s.legend != nil {
-				if err := s.legend.RecordLegend(txCtx, "comp_alc", characterID); err != nil {
-					return fmt.Errorf("record legend: %w", err)
-				}
-			}
-		}
-
 		clearedRecipeID := state.RecipeID
 		state.State = StateNone
 		state.RecipeID = ""
@@ -418,16 +414,12 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 
 		resultItem, _ := s.items.FindByID(recipe.ResultItemDefinitionID)
 		msg := fmt.Sprintf("まっておったぞ！%s が完成したぞい！出来上がったアイテムは預かり所の方に送っておいたぞい！", resultItem.Name)
-		if compAlcAwarded {
-			msg += fmt.Sprintf(" %sは 錬金レシピ をコンプリートしました！のじゃ", char.Name)
-		}
 
 		res = ClaimResult{
-			Recipe:         recipe,
-			CreatedItem:    createdInstance,
-			TotalCrafts:    state.TotalCrafts,
-			CompAlcAwarded: compAlcAwarded,
-			Message:        msg,
+			Recipe:      recipe,
+			CreatedItem: createdInstance,
+			TotalCrafts: state.TotalCrafts,
+			Message:     msg,
 		}
 
 		if s.synthesisHook != nil {

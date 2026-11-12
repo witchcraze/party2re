@@ -78,7 +78,7 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.title = t.Name
 			adapter.read = h.townDistrictSceneData
 		case "alchemy":
-			adapter.title, adapter.commands = "錬金場", []string{"alchemy_synthesize"}
+			adapter.title, adapter.commands = "錬金場", []string{"alchemy_synthesize", "alchemy_recipes"}
 			adapter.read = h.alchemySceneData
 		case "bank":
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}

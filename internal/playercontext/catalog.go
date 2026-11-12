@@ -331,6 +331,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{ID: "alchemy_synthesize", Label: "錬金調合", Category: "crafting", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "alchemy_recipes", Label: "錬金レシピを見る", Category: "crafting", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
 	{
 		ID:             "custom_skill_set",
 		Label:          "カスタムスキル作成",

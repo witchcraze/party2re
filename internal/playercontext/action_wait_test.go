@@ -68,6 +68,10 @@ func TestCatalogWaitDispositions(t *testing.T) {
 			if def.WaitExempt != WaitWhisper {
 				t.Errorf("%s: sasayaki sets act_time = 0", def.ID)
 			}
+		case def.ID == "alchemy_recipes":
+			if def.WaitExempt != WaitNavigation {
+				t.Errorf("%s: the reshipi list view sets act_time = 0", def.ID)
+			}
 		case def.ID == "home_wake" || def.ID == "rescue_request":
 			if def.WaitExempt != WaitRecovery {
 				t.Errorf("%s: recovery runs outside party.cgi", def.ID)

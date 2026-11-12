@@ -295,8 +295,11 @@ func TestAlchemyProductionWiring_LegendRollbackAndRetry(t *testing.T) {
 	realLegendAdapter := legendInductorAdapter{ranking: soc.ranking}
 	econ.alchemy.SetLegendInductor(writeThenFailAlchemyLegend{real: realLegendAdapter})
 
-	// 5. Claim must fail with injected error
-	_, err = econ.alchemy.Claim(ctx, char.ID)
+	// 5. Delivery never awards; the first complete recipe view fails with the injected error
+	if _, err := econ.alchemy.Claim(ctx, char.ID); err != nil {
+		t.Fatalf("Claim failed: %v", err)
+	}
+	_, err = econ.alchemy.ViewRecipes(ctx, char.ID)
 	if !errors.Is(err, errAlchemyLegendInjected) {
 		t.Fatalf("expected errAlchemyLegendInjected, got: %v", err)
 	}
@@ -322,14 +325,14 @@ func TestAlchemyProductionWiring_LegendRollbackAndRetry(t *testing.T) {
 		t.Fatal("character_alchemy.comp_alc committed as TRUE despite rollback")
 	}
 
-	// 7. Restore production legend inductor and retry Claim
+	// 7. Restore production legend inductor and retry the view
 	econ.alchemy.SetLegendInductor(realLegendAdapter)
-	claimRes, err := econ.alchemy.Claim(ctx, char.ID)
+	viewRes, err := econ.alchemy.ViewRecipes(ctx, char.ID)
 	if err != nil {
-		t.Fatalf("retry Claim failed: %v", err)
+		t.Fatalf("retry ViewRecipes failed: %v", err)
 	}
-	if !claimRes.CompAlcAwarded {
-		t.Fatal("expected CompAlcAwarded = true on 100% claim retry")
+	if !viewRes.CompAlcAwarded {
+		t.Fatal("expected CompAlcAwarded = true on the retried complete view")
 	}
 
 	// 8. Verify committed state after retry:

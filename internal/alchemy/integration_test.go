@@ -584,7 +584,7 @@ func TestAlchemyIntegrationClaim_SynthesisHookRollbackAndRetry(t *testing.T) {
 	}
 }
 
-func TestAlchemyIntegrationClaim_LegendHookRollbackAndRetry(t *testing.T) {
+func TestAlchemyIntegrationViewRecipes_LegendRollbackAndRetry(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -698,6 +698,11 @@ func TestAlchemyIntegrationClaim_LegendHookRollbackAndRetry(t *testing.T) {
 		t.Fatalf("CompleteOngoingSynthesis failed: %v", err)
 	}
 
+	// The completing delivery never awards; legacy awards when れしぴ is viewed.
+	if _, err := alcService.Claim(ctx, char.ID); err != nil {
+		t.Fatalf("Claim failed: %v", err)
+	}
+
 	// 4. Configure legend inductor that writes a legend record to SQL using ambient tx, then fails
 	errLegendInjected := errors.New("legend write failure injected")
 	failingLegend := alchemy.LegendInductorFunc(func(txCtx context.Context, category, characterID string) error {
@@ -710,12 +715,8 @@ func TestAlchemyIntegrationClaim_LegendHookRollbackAndRetry(t *testing.T) {
 	})
 	alcService.SetLegendInductor(failingLegend)
 
-	// 5. Attempt claim - must fail and propagate error
-	_, err = alcService.Claim(ctx, char.ID)
-	if err == nil {
-		t.Fatal("expected Claim to fail on LegendInductor error, got nil")
-	}
-	if !errors.Is(err, errLegendInjected) {
+	// 5. The first complete view must fail and propagate the error
+	if _, err = alcService.ViewRecipes(ctx, char.ID); !errors.Is(err, errLegendInjected) {
 		t.Fatalf("expected errLegendInjected, got: %v", err)
 	}
 
@@ -740,25 +741,7 @@ func TestAlchemyIntegrationClaim_LegendHookRollbackAndRetry(t *testing.T) {
 		t.Fatalf("legend_records committed despite rollback: count = %d", legendCount)
 	}
 
-	// - Final recipe is NOT marked crafted (still 113)
-	countAfterRollback, err := alcRepo.CountCraftedRecipes(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if countAfterRollback != totalRecipes-1 {
-		t.Fatalf("crafted count = %d after rollback, want %d", countAfterRollback, totalRecipes-1)
-	}
-
-	// - Synthesis state is still StateCompleted
-	stAfterRollback, err := alcRepo.GetSynthesisState(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stAfterRollback.State != alchemy.StateCompleted || stAfterRollback.RecipeID != finalRecipe.ID {
-		t.Fatalf("synthesis state was modified despite rollback: %+v", stAfterRollback)
-	}
-
-	// 7. Restore working legend inductor and retry claim
+	// 7. Restore working legend inductor and retry the view
 	legendInducted := false
 	workingLegend := alchemy.LegendInductorFunc(func(txCtx context.Context, category, characterID string) error {
 		exec := database.ExecutorFromContext(txCtx, db)
@@ -774,15 +757,18 @@ func TestAlchemyIntegrationClaim_LegendHookRollbackAndRetry(t *testing.T) {
 	})
 	alcService.SetLegendInductor(workingLegend)
 
-	claimRes, err := alcService.Claim(ctx, char.ID)
+	viewRes, err := alcService.ViewRecipes(ctx, char.ID)
 	if err != nil {
-		t.Fatalf("retry Claim failed: %v", err)
+		t.Fatalf("retry ViewRecipes failed: %v", err)
 	}
-	if !claimRes.CompAlcAwarded {
-		t.Fatal("expected CompAlcAwarded = true on 100% completion claim retry")
+	if !viewRes.CompAlcAwarded {
+		t.Fatal("expected CompAlcAwarded = true on the retried complete view")
 	}
 	if !legendInducted {
 		t.Fatal("working legend inductor was not called on retry")
+	}
+	if again, err := alcService.ViewRecipes(ctx, char.ID); err != nil || again.CompAlcAwarded {
+		t.Fatalf("repeat view must not award again: %+v, %v", again, err)
 	}
 
 	// 8. Assert successful state in DB:
@@ -792,7 +778,7 @@ func TestAlchemyIntegrationClaim_LegendHookRollbackAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !compAlcInDB {
-		t.Fatal("character_alchemy.comp_alc should be TRUE after successful 100% claim")
+		t.Fatal("character_alchemy.comp_alc should be TRUE after the successful view")
 	}
 
 	// - legend_records has 1 record for character
@@ -819,6 +805,6 @@ func TestAlchemyIntegrationClaim_LegendHookRollbackAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if stFinal.State != alchemy.StateNone || stFinal.RecipeID != "" || !stFinal.CompAlc {
-		t.Fatalf("synthesis state after final claim: %+v", stFinal)
+		t.Fatalf("synthesis state after award: %+v", stFinal)
 	}
 }
