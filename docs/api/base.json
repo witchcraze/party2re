@@ -2238,6 +2238,13 @@
               "$ref": "#/components/schemas/PlaceLogEntry"
             },
             "description": "Viewer-filtered shared log of the current place, newest first (docs/architecture/place-log.md). Empty outside places with a log; a required read failure fails the observation."
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaceMember"
+            },
+            "description": "Who is in the current place: the facility NPC first, then characters in arrival order whose last command was within the member window (docs/architecture/place-log.md#members). Empty outside places with a log; a required read failure fails the observation."
           }
         },
         "required": [
@@ -2249,7 +2256,8 @@
           "kind",
           "data",
           "support",
-          "place_log"
+          "place_log",
+          "members"
         ],
         "additionalProperties": false,
         "description": "Registered selected or feature-owned activity scene. Actual sleep, unfinished work, membership and runs override ordinary selection; conflicting exclusive facts are preserved. GET never joins, advances, settles or recovers gameplay.",
@@ -3091,6 +3099,40 @@
           "private"
         ],
         "description": "One rendered place-log row. Name and colour are snapshots at write time; character IDs are never exposed."
+      },
+      "PlaceMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "character",
+              "npc"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "icon_url": {
+            "type": "string",
+            "description": "Avatar URL; empty when unset and for the NPC."
+          },
+          "aura_effect": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "color",
+          "icon_url",
+          "aura_effect"
+        ],
+        "description": "One member of the current place. Appearance is a snapshot from the character's latest refresh; character IDs are never exposed."
       },
       "OngoingActionSnapshot": {
         "type": "object",
@@ -6104,6 +6146,31 @@
                 "action": {
                   "type": "string",
                   "const": "npc_inspect"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "presence_refresh"
                 }
               },
               "required": [

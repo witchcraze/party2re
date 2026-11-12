@@ -82,7 +82,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "lottery_takarakuji_buy", "tavern_order", "contest_enter",
 			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
-			"helper_complete", "park_post", "player_inspect", "rescue_request",
+			"helper_complete", "park_post", "player_inspect", "rescue_request", "presence_refresh",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 			"exile_petition", "exile_approve", "exile_oppose",
 		}},
@@ -95,27 +95,27 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "contest_enter",
 			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
-			"helper_complete", "park_post", "player_inspect", "rescue_request",
+			"helper_complete", "park_post", "player_inspect", "rescue_request", "presence_refresh",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 			"exile_petition", "exile_approve", "exile_oppose",
 		}},
-		{"sleeping", func(s *Snapshot) { s.Sleeping = true; s.SleepRemaining = time.Minute }, []string{"rescue_request"}},
-		{"wakeable", func(s *Snapshot) { s.Sleeping = true; s.CanWake = true }, []string{"home_wake", "rescue_request"}},
-		{"sleep timer only", func(s *Snapshot) { s.SleepRemaining = time.Minute }, []string{"rescue_request"}},
+		{"sleeping", func(s *Snapshot) { s.Sleeping = true; s.SleepRemaining = time.Minute }, []string{"rescue_request", "presence_refresh"}},
+		{"wakeable", func(s *Snapshot) { s.Sleeping = true; s.CanWake = true }, []string{"home_wake", "rescue_request", "presence_refresh"}},
+		{"sleep timer only", func(s *Snapshot) { s.SleepRemaining = time.Minute }, []string{"rescue_request", "presence_refresh"}},
 		{"overdue pending", func(s *Snapshot) {
 			s.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StatePending, ExecuteAt: time.Now().Add(-time.Hour)}}
-		}, []string{"rescue_request"}},
+		}, []string{"rescue_request", "presence_refresh"}},
 		{"processing", func(s *Snapshot) {
 			s.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StateProcessing}}
-		}, []string{"rescue_request"}},
-		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "place_say", "place_whisper", "secretshop_puffpuff", "player_inspect", "rescue_request"}},
+		}, []string{"rescue_request", "presence_refresh"}},
+		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "place_say", "place_whisper", "secretshop_puffpuff", "player_inspect", "rescue_request", "presence_refresh"}},
 		{"all constraints", func(s *Snapshot) {
 			s.Character.Stats.HP = 0
 			s.Character.Tired = 100
 			s.Character.Money = 0
 			s.Sleeping = true
 			s.LocationID = ""
-		}, []string{"rescue_request"}},
+		}, []string{"rescue_request", "presence_refresh"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			snapshot := healthySnapshot()
@@ -126,7 +126,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 82 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 83 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -146,10 +146,10 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 75 {
-		t.Fatalf("exhausted action count = %d, want 75", len(got))
+	if len(got) != 76 {
+		t.Fatalf("exhausted action count = %d, want 76", len(got))
 	}
-	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request"} {
+	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request", "presence_refresh"} {
 		if !slices.Contains(got, action) {
 			t.Errorf("exhausted character lost %s", action)
 		}
@@ -255,14 +255,14 @@ func TestEvaluate_LivingVsDeadCombatContrast(t *testing.T) {
 	deadAsleep.Sleeping = true
 	deadAsleep.SleepRemaining = time.Minute
 	gotDeadAsleep := Evaluate(deadAsleep)
-	if !reflect.DeepEqual(gotDeadAsleep, []string{"rescue_request"}) {
+	if !reflect.DeepEqual(gotDeadAsleep, []string{"rescue_request", "presence_refresh"}) {
 		t.Errorf("dead and sleeping character should only have rescue_request, got %v", gotDeadAsleep)
 	}
 
 	deadPending := dead
 	deadPending.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StatePending}}
 	gotDeadPending := Evaluate(deadPending)
-	if !reflect.DeepEqual(gotDeadPending, []string{"rescue_request"}) {
+	if !reflect.DeepEqual(gotDeadPending, []string{"rescue_request", "presence_refresh"}) {
 		t.Errorf("dead character with pending action should only have rescue_request, got %v", gotDeadPending)
 	}
 }

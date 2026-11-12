@@ -123,6 +123,7 @@ type Handler struct {
 	playerContext  *playercontext.Service
 	sceneAdapters  map[string]sceneAdapter
 	placeLog       PlaceLog
+	placeMembers   PlaceMembers
 	characterNames CharacterNameLookup
 	actionCommands map[string]actionCommand
 	players        PlayerService
@@ -309,6 +310,7 @@ func NewHandler(
 		}
 	}
 	h.registerSpeech()
+	h.registerPresenceRefresh()
 	return h, nil
 }
 

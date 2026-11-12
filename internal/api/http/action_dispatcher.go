@@ -123,6 +123,10 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
 			return
 		}
+		if err := h.refreshPlaceMember(r.Context(), char.ID, current.Snapshot.LocationID); err != nil {
+			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to refresh the place member list.")
+			return
+		}
 		def, _ := actionDefinition(req.Action)
 		// Legacy rejects every registered action while $m{wt} runs (lib/system.cgi:641-644).
 		if current.Snapshot.ActionWait > 0 && !(playercontext.ActionWaitGate{}).Allows(def, &current.Snapshot) {
@@ -147,7 +151,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		if req.Action != "home_wake" && req.Action != "rescue_request" && !def.Recovery {
+		if req.Action != "home_wake" && req.Action != "rescue_request" && req.Action != "presence_refresh" && !def.Recovery {
 			message, err := h.sleepingCharacterMessage(r.Context(), char.ID)
 			if err != nil {
 				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current sleep state.")

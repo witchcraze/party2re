@@ -99,8 +99,10 @@ Online activity takes precedence over saved scene selection and reveals only
 Offline targets have no location. This read never admits, renews or recovers an
 activity, and never exposes activity IDs, phases, members or selected products.
 
-Planned owned Gateway commands are `presence_enter` (game entry, optional string
-`login_message`) and `presence_refresh` (saved screen refresh, empty params).
+The owned Gateway commands are `presence_enter` (game entry, optional string
+`login_message`, planned) and `presence_refresh` (saved screen refresh, empty
+params). `presence_refresh` is registered and currently only refreshes the
+[place member list](place-log.md#members); its sample effect is planned.
 Omitted message preserves it; `""` clears it; null/non-string/invalid text returns
 400 without changing message or clocks. Standard authentication/ownership wrappers
 and service ownership checks apply equally to session and PAT calls: 401 for
@@ -113,7 +115,7 @@ Preserve known command results on context refresh failure and use GET-only
 recovery; do not automatically replay POST. Public clients use escaped text
 bindings and safe image URLs, never message HTML or executable avatar markup.
 
-These are approved implementation targets, not registered routes/actions.
+The rest are approved implementation targets, not registered routes/actions.
 Their modular OpenAPI schemas are added with runtime implementation. Browser UI
 and external widget delivery remain separately scoped consumers.
 
@@ -333,9 +335,9 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh derives owned activity/recovery before ordinary selection. Expired sleep requires explicit Wake; conflicting activities remain explicit. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
 | `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Shared `npc_talk`/`npc_inspect` in facility scenes ([place log](place-log.md#npc-interaction)); plain speech and `ささやき` are `place_say`/`place_whisper` in places with a log ([speech and whisper](place-log.md#writers)). `しらべる` on a player is the scene-independent `player_inspect` ([Auction design](../design/auction.md#2-player-inspection-しらべる)). Facilities outside Economy keep their REST dialogue until migrated. |
-| `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. |
+| `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. It removes the account's characters from the [place member lists](place-log.md#members). |
 | `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Stored photo acquisition/Contest reconciliation remains #949; client rendering belongs to #140. Separator superseded by structured actions. |
-| Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes. Place logs, the action wait and per-place members follow the planned [place-log contract](place-log.md). No room join/leave, recovery or settlement is introduced here. |
+| Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes. Place logs, the action wait and per-place members follow the [place-log contract](place-log.md). No room join/leave, recovery or settlement is introduced here. |
 
 The full scoped Home action/call-path reconciliation and retained REST ownership
 are maintained in [Home design](../design/home.md#observation-visibility-and-navigation).

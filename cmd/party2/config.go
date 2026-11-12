@@ -44,6 +44,8 @@ type Config struct {
 		PostMaxLength int
 	}
 	PlaceLog placelog.Config
+	// PlaceMemberTTL is the legacy $limit_member_time.
+	PlaceMemberTTL time.Duration
 	// ActionWait is the legacy $act_time applied after successful commands.
 	ActionWait time.Duration
 }
@@ -117,6 +119,7 @@ func ConfigFromEnv() (Config, error) {
 			Limit: resolvePositiveInt("PARTY2_PLACE_LOG_LIMIT", os.Getenv("PARTY2_PLACE_LOG_LIMIT"), placelog.DefaultLimit),
 			TTL:   time.Duration(resolvePositiveInt("PARTY2_PLACE_LOG_TTL_HOURS", os.Getenv("PARTY2_PLACE_LOG_TTL_HOURS"), int(placelog.DefaultTTL/time.Hour))) * time.Hour,
 		},
+		PlaceMemberTTL: time.Duration(resolvePositiveInt("PARTY2_PLACE_MEMBER_SECONDS", os.Getenv("PARTY2_PLACE_MEMBER_SECONDS"), int(placelog.DefaultMemberTTL/time.Second))) * time.Second,
 	}, nil
 }
 
