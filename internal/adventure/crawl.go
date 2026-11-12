@@ -426,7 +426,9 @@ func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error)
 
 	s.InspectedBoxes[characterID]++
 	targetBox.OpenedBy = characterID
-	targetBox.DeliveredTo = "inventory"
+	if targetBox.ItemID != "" { // an empty chest delivers nothing (#2118)
+		targetBox.DeliveredTo = "inventory"
+	}
 	return targetBox, nil
 }
 

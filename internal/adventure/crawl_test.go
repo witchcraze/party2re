@@ -139,13 +139,18 @@ func TestCrawlSession_Full10FloorsAndTreasureRoom(t *testing.T) {
 		t.Fatalf("expected 3 treasure boxes, got %d", len(session.TreasureBoxes))
 	}
 
-	// Examine treasure on Floor 11 (@しらべる)
+	// Examine treasure on Floor 11 (@しらべる). The first chest is a legacy empty
+	// draw: it still spends the allowance but delivers nothing (#2118).
+	session.TreasureBoxes[0].ItemID = ""
 	box1, err := session.ExamineTreasure(characters[0].ID)
 	if err != nil {
 		t.Fatalf("ExamineTreasure char-leader error: %v", err)
 	}
-	if box1.OpenedBy != characters[0].ID {
-		t.Errorf("box1 opened by %s, want %s", box1.OpenedBy, characters[0].ID)
+	if box1.OpenedBy != characters[0].ID || box1.DeliveredTo != "" {
+		t.Errorf("empty box1 = %+v, want opened by %s with no delivery", box1, characters[0].ID)
+	}
+	if _, err := session.ExamineTreasure(characters[0].ID); !errors.Is(err, adventure.ErrTreasureLimitReached) {
+		t.Errorf("second examine after empty chest = %v, want ErrTreasureLimitReached", err)
 	}
 
 	box2, err := session.ExamineTreasure(characters[1].ID)
@@ -401,10 +406,10 @@ func TestCrawlSession_NowFuncInjectedJSTOrb(t *testing.T) {
 				// Return 2 -> v = 3 (item pool)
 				return 2
 			}
-			if n == 27 {
-				// stage-01 has 26 treasure items + 1 orb = 27 items total.
-				// Return index 26 (last index) for the injected JST Monday orb (item-060).
-				return 26
+			if n == 28 {
+				// stage-01 has 27 treasure items + 1 orb = 28 items for the first chest.
+				// Return index 27 (last index) for the injected JST Monday orb (item-060).
+				return 27
 			}
 			return 0
 		},

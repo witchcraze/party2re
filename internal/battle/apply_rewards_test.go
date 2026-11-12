@@ -372,6 +372,11 @@ func TestApplyPostBattleResult_TreasureRoutingByDropKind(t *testing.T) {
 			wantDepot:  1,
 			wantLost:   0,
 		},
+		{
+			// A legacy empty pool entry opens as an empty chest (_npc_action.cgi#shiraberu; #2118).
+			name:       "empty chest -> nothing delivered",
+			treasureID: "",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
