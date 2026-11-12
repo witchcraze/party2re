@@ -100,6 +100,9 @@ func TestGod_GetWishes_Heaven(t *testing.T) {
 		if w.ID == "wish_restore_level_limit" {
 			hasRestore = true
 		}
+		if w.ID == "wish_secret_maid" {
+			t.Error("the secret maid wish is unreachable in legacy and must not be listed")
+		}
 	}
 	if hasLimitBreak {
 		t.Error("Lv10 character should not see wish_limit_break_level")
@@ -285,9 +288,11 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 		t.Errorf("expected small medals 25, got %d", resMedals.Character.SmallMedals)
 	}
 
-	// 4. The non-legacy refresh alias is rejected
-	if _, err := svc.GrantWish(ctx, "char_hero", "wish_full_recovery", god.RealmHeaven); !errors.Is(err, god.ErrWishNotFound) {
-		t.Errorf("expected ErrWishNotFound for wish_full_recovery, got %v", err)
+	// 4. The non-legacy refresh alias and the unreachable secret maid wish are rejected
+	for _, id := range []string{"wish_full_recovery", "wish_secret_maid"} {
+		if _, err := svc.GrantWish(ctx, "char_hero", id, god.RealmHeaven); !errors.Is(err, god.ErrWishNotFound) {
+			t.Errorf("expected ErrWishNotFound for %s, got %v", id, err)
+		}
 	}
 
 	// 5. Limit break level (fail if < 99)
@@ -346,14 +351,6 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 		t.Error("expected joke response message")
 	}
 
-	// 9. Secret maid wish
-	resMaid, err := svc.GrantWish(ctx, "char_hero", "wish_secret_maid", god.RealmHeaven)
-	if err != nil {
-		t.Fatalf("GrantWish maid failed: %v", err)
-	}
-	if resMaid.Message == "" {
-		t.Error("expected maid granted message")
-	}
 }
 
 func TestGod_GrantWish_Underworld(t *testing.T) {

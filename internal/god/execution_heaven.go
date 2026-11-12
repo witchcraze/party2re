@@ -189,30 +189,6 @@ func (s *Service) executeHeavenWish(
 		}
 		msg = fmt.Sprintf("自宅に可愛い%sがやってきました！", catName)
 
-	case WishSecretMaid:
-		wishName = "メイドを雇いたい"
-		desc = "お世話係"
-		if s.homeMembers != nil {
-			members, err := s.homeMembers.FindByCharacterID(ctx, char.ID)
-			if err == nil {
-				for _, m := range members {
-					if m.Name == "メイド" {
-						return fmt.Errorf("%w: メイドはすでに雇用されています", ErrWishRequirement)
-					}
-				}
-			}
-			err = s.homeMembers.AddMember(ctx, HomeMember{
-				CharacterID: char.ID,
-				IsNPC:       true,
-				Name:        "メイド",
-				Icon:        "chr/026.gif",
-			})
-			if err != nil {
-				return err
-			}
-		}
-		msg = "お世話係のメイドが自宅に加わりました！"
-
 	case WishEroticBook:
 		wishName = "エッチな本がほしい"
 		desc = "アイテム (預かり所へ送致)"

@@ -85,10 +85,6 @@ type mockHomeMemberRepo struct {
 	members map[string][]god.HomeMember
 }
 
-func (m *mockHomeMemberRepo) FindByCharacterID(_ context.Context, charID string) ([]god.HomeMember, error) {
-	return m.members[charID], nil
-}
-
 func (m *mockHomeMemberRepo) AddMember(_ context.Context, member god.HomeMember) error {
 	if m.members == nil {
 		m.members = make(map[string][]god.HomeMember)
@@ -475,7 +471,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 	})
 
-	t.Run("wish_ortega, wish_cat, wish_secret_maid add home members", func(t *testing.T) {
+	t.Run("wish_ortega and wish_cat add home members", func(t *testing.T) {
 		svc, charRepo, _, _, _, _, homeMemberRepo, _, _ := setupHeavenService()
 		char := corecharacter.Character{ID: "char-family", Name: "Hero"}
 		charRepo.characters[char.ID] = char
@@ -501,19 +497,13 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 			t.Fatalf("expected 2 home members, got %d", len(homeMemberRepo.members[char.ID]))
 		}
 
-		// Secret Maid
-		_, err = svc.GrantWish(ctx, char.ID, god.WishSecretMaid, god.RealmHeaven)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		// The secret maid wish is unreachable in legacy (god.cgi negau stops before the last entry)
+		_, err = svc.GrantWish(ctx, char.ID, "wish_secret_maid", god.RealmHeaven)
+		if !errors.Is(err, god.ErrWishNotFound) {
+			t.Errorf("expected ErrWishNotFound for wish_secret_maid, got %v", err)
 		}
-		if len(homeMemberRepo.members[char.ID]) != 3 || homeMemberRepo.members[char.ID][2].Name != "メイド" {
-			t.Errorf("expected メイド home member, got %+v", homeMemberRepo.members[char.ID])
-		}
-
-		// Repeat maid wish should fail
-		_, err = svc.GrantWish(ctx, char.ID, god.WishSecretMaid, god.RealmHeaven)
-		if !errors.Is(err, god.ErrWishRequirement) {
-			t.Errorf("expected ErrWishRequirement for duplicate maid, got %v", err)
+		if len(homeMemberRepo.members[char.ID]) != 2 {
+			t.Errorf("rejected maid wish must not add a home member, got %+v", homeMemberRepo.members[char.ID])
 		}
 	})
 
