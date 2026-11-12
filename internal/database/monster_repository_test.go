@@ -419,20 +419,22 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), monsterStressBudget)
 		defer cancel()
 
-		recipient, err := CreateTestCharacter(ctx, db, "CapRec")
-		if err != nil {
-			t.Fatalf("CreateTestCharacter recipient: %v", err)
-		}
+		// The gift limit is the sender's: a high-cap recipient is still full at the senders' base capacity.
+		recipient := createHighCapChar(ctx, t, "CapRec")
 		senders := make([]corecharacter.Character, cfg.Workers)
 		cleanupIDs := []string{recipient.ID}
 		for w := 0; w < cfg.Workers; w++ {
-			senders[w] = createHighCapChar(ctx, t, fmt.Sprintf("CapS%d", w))
-			cleanupIDs = append(cleanupIDs, senders[w].ID)
+			sender, err := CreateTestCharacter(ctx, db, fmt.Sprintf("CapS%d", w))
+			if err != nil {
+				t.Fatalf("CreateTestCharacter sender %d: %v", w, err)
+			}
+			senders[w] = sender
+			cleanupIDs = append(cleanupIDs, sender.ID)
 		}
 		registerCharacterCleanup(t, db, cleanupIDs...)
 
 		now := time.Now().UTC()
-		// Pre-fill recipient box to 49/50 (leaving 1 slot) plus 1 home pet
+		// Pre-fill recipient box to one below the senders' limit plus 1 home pet
 		for i := 0; i < monster.BaseBoxCapacity-1; i++ {
 			if err := monRepo.Save(ctx, monster.MonsterInstance{
 				ID:          id.New(),
@@ -630,8 +632,8 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 		t.Fatalf("BringToHome colliding with Ortega: got %v, want %v", err, monster.ErrDuplicatePetNameAtHome)
 	}
 
-	// 3. Mixed capacity: 1 God companion + 7 character_monsters = 8 -> 9th rejected with ErrHomeFull
-	for i := 1; i <= 7; i++ {
+	// 3. Mixed capacity: 1 God companion + 49 character_monsters = box capacity 50 -> 51st rejected with ErrHomeFull
+	for i := 1; i < monster.BaseBoxCapacity; i++ {
 		m, err := svc.TameMonster(ctx, c1.ID, "slime", fmt.Sprintf("家ペット%d", i))
 		if err != nil {
 			t.Fatalf("TameMonster %d: %v", i, err)
@@ -640,16 +642,16 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 			t.Fatalf("BringToHome %d: %v", i, err)
 		}
 	}
-	ninthPet, err := svc.TameMonster(ctx, c1.ID, "slime", "家ペット8")
+	overflowPet, err := svc.TameMonster(ctx, c1.ID, "slime", "家ペット50")
 	if err != nil {
-		t.Fatalf("TameMonster ninthPet: %v", err)
+		t.Fatalf("TameMonster overflowPet: %v", err)
 	}
-	if _, err := svc.BringToHome(ctx, c1.ID, ninthPet.ID); !errors.Is(err, monster.ErrHomeFull) {
-		t.Fatalf("BringToHome 9th pet: got %v, want %v", err, monster.ErrHomeFull)
+	if _, err := svc.BringToHome(ctx, c1.ID, overflowPet.ID); !errors.Is(err, monster.ErrHomeFull) {
+		t.Fatalf("BringToHome overflow pet: got %v, want %v", err, monster.ErrHomeFull)
 	}
 
 	// 4. Full box (50 monsters in box) rejects DepositToBox on Ortega without mutating home_members or character_monsters
-	// c1 currently has 2 boxed monsters (dupBox, ninthPet); add 48 more to reach BaseBoxCapacity (50)
+	// c1 currently has 2 boxed monsters (dupBox, overflowPet); add 48 more to reach BaseBoxCapacity (50)
 	var extraBoxIDs []string
 	for i := 1; i <= monster.BaseBoxCapacity-2; i++ {
 		bid := id.New()

@@ -28,7 +28,7 @@ type HomeCompanionStore interface {
 func (s *Service) BringToHome(ctx context.Context, characterID, instanceID string) (MonsterInstance, error) {
 	var updated MonsterInstance
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		_, err := s.characters.FindByIDForUpdate(txCtx, characterID)
+		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
 			if errors.Is(err, corecharacter.ErrNotFound) {
 				return ErrCharacterNotFound
@@ -75,7 +75,7 @@ func (s *Service) BringToHome(ctx context.Context, characterID, instanceID strin
 			}
 		}
 
-		if len(homeMonsters)+len(companions) >= MaxHomePets {
+		if len(homeMonsters)+len(companions) >= BoxCapacityForCharacter(char) {
 			return ErrHomeFull
 		}
 

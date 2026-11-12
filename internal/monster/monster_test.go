@@ -331,7 +331,7 @@ func TestMonsterService_TameAndSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSummary failed: %v", err)
 	}
-	if summary.BoxCount != 0 || summary.BoxCapacity != 50 || summary.HomeCount != 0 || summary.HomeCapacity != 8 {
+	if summary.BoxCount != 0 || summary.BoxCapacity != 50 || summary.HomeCount != 0 || summary.HomeCapacity != 50 {
 		t.Errorf("unexpected initial summary: %+v", summary)
 	}
 
@@ -429,8 +429,8 @@ func TestMonsterService_MaxCapacityLimits(t *testing.T) {
 
 	svc := monster.NewService(charRepo, monRepo, monster.WithTransactionProvider(&mockTxProvider{}))
 
-	// Fill home with 8 pets
-	for i := 1; i <= 8; i++ {
+	// Home capacity equals the box capacity (50 at tier 0)
+	for i := 1; i <= 50; i++ {
 		name := fmt.Sprintf("pet%d", i)
 		inst, err := svc.TameMonster(ctx, "c1", "slime", name)
 		if err != nil {
@@ -442,8 +442,8 @@ func TestMonsterService_MaxCapacityLimits(t *testing.T) {
 		}
 	}
 
-	// 9th pet cannot be brought home
-	inst9, _ := svc.TameMonster(ctx, "c1", "slime", "pet9")
+	// 51st pet cannot be brought home
+	inst9, _ := svc.TameMonster(ctx, "c1", "slime", "pet51")
 	_, err := svc.BringToHome(ctx, "c1", inst9.ID)
 	if err != monster.ErrHomeFull {
 		t.Errorf("expected ErrHomeFull, got %v", err)
@@ -521,6 +521,59 @@ func TestMonsterService_SendAndRelease(t *testing.T) {
 	bobSummary, _ = svc.GetSummary(ctx, "c2", "")
 	if bobSummary.BoxCount != 0 {
 		t.Errorf("expected Bob box 0 after release, got %d", bobSummary.BoxCount)
+	}
+}
+
+// Gift capacity counts the recipient's box against the sender's limit (legacy get_monster_c).
+func TestMonsterService_SendCapacityUsesSenderLimit(t *testing.T) {
+	recipientSetups := map[string]corecharacter.Character{
+		"novice":  {JobLevel: 99, OverMonster: 0},
+		"veteran": {JobLevel: 100, OverMonster: 5},
+	}
+	senders := []struct {
+		name               string
+		jobLevel, overTier int
+		limit              int
+	}{
+		{"JL99/OM0", 99, 0, 50},
+		{"JL99/OM5", 99, 5, 300},
+		{"JL100/OM0", 100, 0, 100},
+		{"JL100/OM5", 100, 5, 350},
+	}
+	for recipientName, recipient := range recipientSetups {
+		for _, sender := range senders {
+			for _, tc := range []struct {
+				boxCount int
+				wantErr  error
+			}{{sender.limit - 1, nil}, {sender.limit, monster.ErrRecipientBoxFull}} {
+				t.Run(fmt.Sprintf("%s to %s with %d", sender.name, recipientName, tc.boxCount), func(t *testing.T) {
+					ctx := context.Background()
+					charRepo := newMockCharacterRepo()
+					monRepo := newMockMonsterRepo()
+					charRepo.characters["s"] = corecharacter.Character{ID: "s", JobLevel: sender.jobLevel, OverMonster: sender.overTier}
+					r := recipient
+					r.ID = "r"
+					charRepo.characters["r"] = r
+					for i := 0; i < tc.boxCount; i++ {
+						id := fmt.Sprintf("r%d", i)
+						monRepo.monsters[id] = monster.MonsterInstance{ID: id, CharacterID: "r", MonsterID: "slime", CustomName: id, Location: monster.LocationBox}
+					}
+					monRepo.monsters["gift"] = monster.MonsterInstance{ID: "gift", CharacterID: "s", MonsterID: "slime", CustomName: "gift", Location: monster.LocationBox}
+					svc := monster.NewService(charRepo, monRepo, monster.WithTransactionProvider(&mockTxProvider{}))
+
+					if err := svc.SendMonster(ctx, "s", "r", "gift"); !errors.Is(err, tc.wantErr) {
+						t.Fatalf("SendMonster: got %v, want %v", err, tc.wantErr)
+					}
+					wantOwner := "r"
+					if tc.wantErr != nil {
+						wantOwner = "s"
+					}
+					if got := monRepo.monsters["gift"].CharacterID; got != wantOwner {
+						t.Fatalf("gift owner = %s, want %s", got, wantOwner)
+					}
+				})
+			}
+		}
 	}
 }
 
@@ -683,8 +736,8 @@ func TestMonsterService_GodHomeCompanions(t *testing.T) {
 		t.Fatalf("BringToHome colliding with God companion name: got %v, want %v", err, monster.ErrDuplicatePetNameAtHome)
 	}
 
-	// 3. Mixed capacity enforcement: 2 God companions + 6 character_monsters = 8 total -> 9th rejected with ErrHomeFull
-	for i := 1; i <= 6; i++ {
+	// 3. Mixed capacity enforcement: 2 God companions + 48 character_monsters = 50 total -> 51st rejected with ErrHomeFull
+	for i := 1; i <= 48; i++ {
 		m, err := svc.TameMonster(ctx, "c1", "slime", fmt.Sprintf("ペット%d", i))
 		if err != nil {
 			t.Fatalf("TameMonster %d failed: %v", i, err)
@@ -693,12 +746,12 @@ func TestMonsterService_GodHomeCompanions(t *testing.T) {
 			t.Fatalf("BringToHome %d failed: %v", i, err)
 		}
 	}
-	extraMon, err := svc.TameMonster(ctx, "c1", "slime", "ペット7")
+	extraMon, err := svc.TameMonster(ctx, "c1", "slime", "ペット49")
 	if err != nil {
 		t.Fatalf("TameMonster extraMon failed: %v", err)
 	}
 	if _, err := svc.BringToHome(ctx, "c1", extraMon.ID); !errors.Is(err, monster.ErrHomeFull) {
-		t.Fatalf("BringToHome 9th combined pet: got %v, want %v", err, monster.ErrHomeFull)
+		t.Fatalf("BringToHome 51st combined pet: got %v, want %v", err, monster.ErrHomeFull)
 	}
 
 	// 4. Unowned God companion deposit is rejected with ErrForbidden

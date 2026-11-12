@@ -16,29 +16,11 @@ The Monster system (`internal/monster`, legacy `farm.cgi` / `monster.cgi`) provi
 
 ## 3. Storage & Capacity Rules
 
-### 3.1 Box Capacity (モンスター預かり所)
-- **Base Capacity**: 50 monsters (100 monsters for veteran characters with completed job changes $\text{JobLevel} \ge 100$).
-- **Limit Break Expansion (`OverMonster`)**:
-  $$\text{BoxCapacity} = \text{BaseCapacity} + (50 \times \text{OverMonster}) \quad (0 \le \text{OverMonster} \le 5)$$
-  - Standard base ($50$):
-    - Tier 0: 50 monsters
-    - Tier 1: 100 monsters
-    - Tier 2: 150 monsters
-    - Tier 3: 200 monsters
-    - Tier 4: 250 monsters
-    - Tier 5: 300 monsters
-  - Veteran base ($100$, $\text{JobLevel} \ge 100$):
-    - Tier 0: 100 monsters
-    - Tier 1: 150 monsters
-    - Tier 2: 200 monsters
-    - Tier 3: 250 monsters
-    - Tier 4: 300 monsters
-    - Tier 5: 350 monsters
+`BoxCapacityForCharacter` owns the box capacity (50–350 from `JobLevel` and `OverMonster`). Both capacity rules below reproduce what original players experienced rather than the values the legacy source appears to intend.
 
-### 3.2 Home Pet Capacity (家のペット)
-- **Resident Pool**: Home pets comprise both tamed monsters at home (`character_monsters` with `location = "home"`) and Heaven Wish NPC companions (`home_members` with `is_npc = true`, such as Ortega, Cat, and Maid).
-- **Maximum Pets per Home**: Up to 8 resident pets/companions combined (`MaxHomePets = 8`).
-- **Uniqueness Constraint**: Within a single player home, no two resident pets/companions across `character_monsters` (`location = "home"`) and `home_members` (`is_npc = true`) may share the exact same `custom_name`. If a duplicate name is brought home, the system rejects the operation (`ErrDuplicatePetNameAtHome`) and prompts the player to rename the monster (`なづける`).
+- **Home capacity equals the owner's box capacity.** `lib/farm.cgi:17` sets a global limit of 8, but the file-scoped `my ($my_monster, $max_monster) = &get_monster_c($id)` at `:22` shadows it. The bring-home check (`:207`), the `@モンジィ` home-limit line (`:28`) and the header (`:58`) all read the shadowing value, so the 8 never applied. `GET /monster/dialogue` has no character, so its home-limit line refers to the box capacity instead of a number. The count and the duplicate-name check cover monsters at home and Heaven Wish NPC companions alike. The Heaven Wish grants themselves add companions without either check (`lib/god.cgi:79-117`).
+- **A gift is limited by the sender's capacity.** `おくる` checks the recipient (`farm.cgi:85`) with `get_monster_c` (`lib/system.cgi:1308-1321`). That routine counts the recipient's box but derives the limit from the acting player's `job_lv`/`over_monster`. A gift can therefore exceed the recipient's own capacity. The recipient then cannot tame or deposit until the box is back under their limit.
+- `get_monster_c` applies `over_monster` before clamping it to 5 (`system.cgi:1313-1314`). The God wish stops at 5 (`lib/u_god.cgi:20`), so the order has no effect.
 
 ---
 
@@ -50,7 +32,7 @@ In alignment with legacy `farm.cgi:38-47`, the Monster Grandpa facility provides
 | :--- | :--- | :--- | :--- |
 | **Dialogue** | `はなす` | `GET /monster/dialogue` | Retrieves `@モンジィ` dialogue and tips. |
 | **List & Summary** | `みる` | `GET /characters/{id}/monsters?location=box\|home` | Lists stored monsters/pets with capacity counts. |
-| **Bring to Home** | `つれてく` | `POST /characters/{id}/monsters/{instance_id}/bring-home` | Moves a monster from box to home pets (max 8, unique name check). |
+| **Bring to Home** | `つれてく` | `POST /characters/{id}/monsters/{instance_id}/bring-home` | Moves a monster from box to home pets (box-capacity limit, unique name check). |
 | **Deposit to Box** | `あずける` | `POST /characters/{id}/monsters/{instance_id}/deposit` | Moves a pet from home back to Grandpa box (requires available box capacity). |
 | **Rename** | `なづける` | `POST /characters/{id}/monsters/{instance_id}/rename` | Renames a boxed monster instance (`location=box`, max 8 characters, sanitization rules). |
 | **Send Monster** | `おくる` | `POST /characters/{id}/monsters/{instance_id}/send` | Gifts a boxed monster (`location=box`) to another player character's box. |

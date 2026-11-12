@@ -43,7 +43,7 @@ Each box's copy belongs to its owner, not to the counterpart's identity (legacy 
 
 ### 3. Companion Greeting Phrases & Resident Companions (`character_companion_phrases`, `home_members`)
 
-Resident companions combine ranch monsters at home and Heaven Wish NPC companions; both share the ranch operations and the 8-pet home capacity ([Monster](monster.md)). Talking or teaching with no resident companion is rejected, as in legacy (“教える相手がいません”). External Home cards use a [separate member/phrase contract](player-and-character.md#213-external-character-and-home-cards-adopted-not-implemented).
+Resident companions combine ranch monsters at home and Heaven Wish NPC companions; both share the ranch operations and home capacity ([Monster](monster.md)). Talking or teaching with no resident companion is rejected, as in legacy (“教える相手がいません”). External Home cards use a [separate member/phrase contract](player-and-character.md#213-external-character-and-home-cards-adopted-not-implemented).
 
 - **Legacy rule** (`lib/home.cgi:443–477`): the phrase list belongs to the character, not a pet. A new phrase goes to the head, duplicates are separate entries, and the list keeps at most `$max_log`, so teaching is never rejected for capacity. Removal by text removes only the first match (the newest duplicate).
 - **Capacity provenance:** the `config.cgi` tracked until commit `0713fcc` (2023-03-09) sets `$max_log = 30`. That commit added the template `config.cgi_origin`, which changes only `max_entry`, `max_login` and `max_log` to 999, so 999 is treated as a distribution default. The live value is unverified.
