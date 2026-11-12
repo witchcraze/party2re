@@ -12,7 +12,7 @@ import (
 
 // DungeonService defines dungeon explorations operations exposed over HTTP.
 type DungeonService interface {
-	ListDungeons(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
+	ListDungeons() []dungeon.Dungeon
 	StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
 	StartPartyExpedition(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
 	Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
@@ -47,7 +47,7 @@ type moveDungeonRequest struct {
 }
 
 type dungeonListResponse struct {
-	Dungeons []dungeon.DungeonOverview `json:"dungeons"`
+	Dungeons []dungeon.Dungeon `json:"dungeons"`
 }
 
 type startDungeonResponse struct {
@@ -65,16 +65,8 @@ func (h *Handler) handleListDungeons(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		dungeonsList, err := h.dungeons.ListDungeons(r.Context(), char.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, dungeonListResponse{
-			Dungeons: dungeonsList,
-		})
+	h.withAuthenticatedCharacter(w, r, charID, func(coreplayer.Player, corecharacter.Character) {
+		writeJSON(w, http.StatusOK, dungeonListResponse{Dungeons: h.dungeons.ListDungeons()})
 	})
 }
 
@@ -105,7 +97,7 @@ func (h *Handler) handleStartDungeon(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
-			if errors.Is(err, dungeon.ErrLevelRequirementNotMet) || errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+			if errors.Is(err, dungeon.ErrActiveExpeditionExists) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -146,7 +138,7 @@ func (h *Handler) handleStartPartyDungeon(w http.ResponseWriter, r *http.Request
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
-			if errors.Is(err, dungeon.ErrLevelRequirementNotMet) || errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, dungeon.ErrTooManyPartyMembers) {
+			if errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, dungeon.ErrTooManyPartyMembers) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

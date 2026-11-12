@@ -22,7 +22,7 @@ type pausedFinalizeRepository struct {
 	resume  chan struct{}
 }
 
-func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, rec dungeon.CharacterDungeonRecord, c *corecharacter.Character, items []coreitem.Instance, members ...dungeon.ExpeditionMember) error {
+func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, c *corecharacter.Character, items []coreitem.Instance, members ...dungeon.ExpeditionMember) error {
 	if ctx.Value(staleEscapeKey{}) != nil {
 		close(r.entered)
 		select {
@@ -31,7 +31,7 @@ func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dun
 			return ctx.Err()
 		}
 	}
-	return r.Repository.FinalizeExpedition(ctx, h, rec, c, items, members...)
+	return r.Repository.FinalizeExpedition(ctx, h, c, items, members...)
 }
 
 func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
@@ -108,7 +108,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			old, err := svc.StartExpedition(ctx, char.ID, "dungeon-01")
+			old, err := svc.StartExpedition(ctx, char.ID, dungeon.NativeMap0ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -139,7 +139,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 						return err
 					}
 				}
-				next, err := svc.StartExpedition(ctx, char.ID, "dungeon-01")
+				next, err := svc.StartExpedition(ctx, char.ID, dungeon.NativeMap0ID)
 				if err != nil {
 					return err
 				}

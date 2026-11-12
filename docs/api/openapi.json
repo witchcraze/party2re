@@ -8859,7 +8859,7 @@
         "type": "object"
       },
       "DungeonActiveEncounter": {
-        "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter. A native treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
+        "description": "Pending enemy state and destination, retained across unresolved battles. Each hostile encounter currently has one enemy. A treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
         "properties": {
           "chests": {
             "description": "Native pending treasure chests; contents and inspection are not modeled yet.",
@@ -9100,120 +9100,25 @@
       "DungeonDungeon": {
         "additionalProperties": false,
         "properties": {
-          "clear_exp_bonus": {
-            "type": "integer"
-          },
-          "clear_gold_bonus": {
-            "type": "integer"
-          },
           "description": {
             "type": "string"
           },
-          "floors": {
-            "items": {
-              "$ref": "#/components/schemas/DungeonFloor"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "id": {
             "type": "string"
-          },
-          "max_turns_per_floor": {
-            "type": "integer"
-          },
-          "min_level": {
-            "type": "integer"
           },
           "name": {
             "type": "string"
           },
           "round_limit": {
-            "description": "Native map round limit; absent for catalog floors. Native layouts are not listed, so floors is null.",
+            "description": "Map round limit. Layouts are not listed because they would disclose hidden passages.",
             "type": "integer"
-          },
-          "tier": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "tier",
-          "name",
-          "description",
-          "min_level",
-          "max_turns_per_floor",
-          "floors",
-          "clear_exp_bonus",
-          "clear_gold_bonus"
-        ],
-        "type": "object"
-      },
-      "DungeonDungeonMonster": {
-        "additionalProperties": false,
-        "properties": {
-          "agility": {
-            "type": "integer"
-          },
-          "attack": {
-            "type": "integer"
-          },
-          "defense": {
-            "type": "integer"
-          },
-          "drop_item_id": {
-            "type": "string"
-          },
-          "exp_reward": {
-            "type": "integer"
-          },
-          "gold_reward": {
-            "type": "integer"
-          },
-          "hp": {
-            "type": "integer"
-          },
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
           }
         },
         "required": [
           "id",
           "name",
-          "hp",
-          "attack",
-          "defense",
-          "agility",
-          "exp_reward",
-          "gold_reward"
-        ],
-        "type": "object"
-      },
-      "DungeonDungeonOverview": {
-        "additionalProperties": false,
-        "properties": {
-          "dungeon": {
-            "$ref": "#/components/schemas/DungeonDungeon"
-          },
-          "is_cleared": {
-            "type": "boolean"
-          },
-          "is_unlocked": {
-            "type": "boolean"
-          },
-          "lock_reason": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dungeon",
-          "is_unlocked",
-          "is_cleared"
+          "description",
+          "round_limit"
         ],
         "type": "object"
       },
@@ -9274,7 +9179,7 @@
       },
       "DungeonExpeditionObservation": {
         "additionalProperties": false,
-        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Catalog directions use the selected floor geometry, not catalog categories. Native maps list all four directions while movement is allowed (walls reject on use), so hidden passages stay undisclosed. No private roster inventory, layout identity, event flags or provisional rewards.",
+        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. All four directions are listed while movement is allowed (walls reject on use), so hidden passages stay undisclosed. No private roster inventory, layout identity, event flags or provisional rewards.",
         "properties": {
           "controls": {
             "$ref": "#/components/schemas/DungeonContinuationControls"
@@ -9320,17 +9225,16 @@
             "type": "integer"
           },
           "round": {
-            "description": "Native maps only: current shared round (1 after start).",
+            "description": "Current shared round (1 after start).",
             "type": "integer"
           },
           "round_limit": {
-            "description": "Native maps only: movement rejects once round reaches this limit.",
+            "description": "Movement rejects once round reaches this limit.",
             "type": "integer"
           },
           "status": {
             "enum": [
               "exploring",
-              "cleared",
               "escaped",
               "wiped_out"
             ],
@@ -9415,70 +9319,12 @@
         ],
         "type": "object"
       },
-      "DungeonFloor": {
-        "additionalProperties": false,
-        "properties": {
-          "boss": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DungeonDungeonMonster"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "floor_number": {
-            "type": "integer"
-          },
-          "grid": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "height": {
-            "type": "integer"
-          },
-          "monsters": {
-            "items": {
-              "$ref": "#/components/schemas/DungeonDungeonMonster"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "start_x": {
-            "type": "integer"
-          },
-          "start_y": {
-            "type": "integer"
-          },
-          "width": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "floor_number",
-          "width",
-          "height",
-          "start_x",
-          "start_y",
-          "grid",
-          "monsters"
-        ],
-        "type": "object"
-      },
       "DungeonListResponse": {
         "additionalProperties": false,
         "properties": {
           "dungeons": {
             "items": {
-              "$ref": "#/components/schemas/DungeonDungeonOverview"
+              "$ref": "#/components/schemas/DungeonDungeon"
             },
             "type": [
               "array",

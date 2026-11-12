@@ -229,7 +229,7 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 			FieldValue("party_name", exp.PartyName).
 			FieldValue("members", membersJSON).
 			FieldValue("dungeon_id", exp.DungeonID).
-			FieldValue("map_variant", encodeVariant(exp.MapVariant)).
+			FieldValue("map_variant", strconv.Itoa(exp.MapVariant)).
 			FieldValue("current_floor", strconv.Itoa(exp.CurrentFloor)).
 			FieldValue("pos_x", strconv.Itoa(exp.PosX)).
 			FieldValue("pos_y", strconv.Itoa(exp.PosY)).
@@ -394,13 +394,4 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		Status:        status,
 		EventConsumed: eventConsumed,
 	}, nil
-}
-
-// encodeVariant stores catalog runs as empty, which the step script reads as
-// "not native".
-func encodeVariant(v int) string {
-	if v <= 0 {
-		return ""
-	}
-	return strconv.Itoa(v)
 }

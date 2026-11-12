@@ -64,7 +64,7 @@ func TestStartPartyExpedition(t *testing.T) {
 
 	// 1. Success with up to 4 members
 	memberIDs := []string{"char-1", "char-2", "char-3", "char-4"}
-	exp, err := svc.StartPartyExpedition(ctx, "char-1", memberIDs, "dungeon-01", "party-01")
+	exp, err := svc.StartPartyExpedition(ctx, "char-1", memberIDs, dungeon.NativeMap0ID, "party-01")
 	if err != nil {
 		t.Fatalf("unexpected error starting party expedition: %v", err)
 	}
@@ -92,13 +92,13 @@ func TestStartPartyExpedition(t *testing.T) {
 	c5 := createTestChar("char-5", 10, 100, 30, 20)
 	svc5, _, charRepo := setupPartyTestService()
 	charRepo.chars[c5.ID] = c5
-	_, err = svc5.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2", "char-3", "char-4", "char-5"}, "dungeon-01", "")
+	_, err = svc5.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2", "char-3", "char-4", "char-5"}, dungeon.NativeMap0ID, "")
 	if err == nil {
 		t.Fatal("expected error for party exceeding 4 members")
 	}
 
 	// 3. Reject if non-existent member
-	_, err = svc5.StartPartyExpedition(ctx, "char-1", []string{"char-1", "non-existent"}, "dungeon-01", "")
+	_, err = svc5.StartPartyExpedition(ctx, "char-1", []string{"char-1", "non-existent"}, dungeon.NativeMap0ID, "")
 	if err == nil {
 		t.Fatal("expected error for non-existent member")
 	}
@@ -109,7 +109,7 @@ func TestPartyMapScouting(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Solo warrior: base view radius = 1 (3x3 grid)
-	_, err := svc.StartPartyExpedition(ctx, "char-1", []string{"char-1"}, "dungeon-01", "")
+	_, err := svc.StartPartyExpedition(ctx, "char-1", []string{"char-1"}, dungeon.NativeMap0ID, "")
 	if err != nil {
 		t.Fatalf("failed to start solo expedition: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestPartyMapScouting(t *testing.T) {
 
 	// 2. Party with Thief (job 9): leader retains radius 1
 	_, _ = svc.Escape(ctx, "char-1") // end solo expedition
-	_, err = svc.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2"}, "dungeon-01", "")
+	_, err = svc.StartPartyExpedition(ctx, "char-1", []string{"char-1", "char-2"}, dungeon.NativeMap0ID, "")
 	if err != nil {
 		t.Fatalf("failed to start party expedition: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestPartyMapScouting(t *testing.T) {
 			cTest.ID: cTest,
 		}}
 		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{}, dungeon.WithAdmission(approvedRoster{}), dungeon.WithInventoryProvider(&mockInventoryRepo{}))
-		_, err := tSvc.StartPartyExpedition(ctx, "lead", []string{"lead", cTest.ID}, "dungeon-01", "")
+		_, err := tSvc.StartPartyExpedition(ctx, "lead", []string{"lead", cTest.ID}, dungeon.NativeMap0ID, "")
 		if err != nil {
 			t.Fatalf("failed to start for job %s: %v", jobID, err)
 		}
@@ -196,7 +196,7 @@ func TestPartyMapScouting(t *testing.T) {
 	_ = inv.Add(coreitem.Instance{ID: "scope-inst", DefinitionID: "item-197", Quantity: 1})
 	invRepo.invs[cItem.ID] = inv
 
-	_, err = itemSvc.StartPartyExpedition(ctx, cItem.ID, []string{cItem.ID}, "dungeon-01", "")
+	_, err = itemSvc.StartPartyExpedition(ctx, cItem.ID, []string{cItem.ID}, dungeon.NativeMap0ID, "")
 	if err != nil {
 		t.Fatalf("failed to start item expedition: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestPartyMapScouting(t *testing.T) {
 		dungeon.WithInventoryProvider(stackInvRepo),
 		dungeon.WithAdmission(approvedRoster{}),
 	)
-	_, err = stackSvc.StartPartyExpedition(ctx, cBoth.ID, []string{cBoth.ID}, "dungeon-01", "")
+	_, err = stackSvc.StartPartyExpedition(ctx, cBoth.ID, []string{cBoth.ID}, dungeon.NativeMap0ID, "")
 	if err != nil {
 		t.Fatalf("failed to start stack expedition: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestPartyMapScouting(t *testing.T) {
 		dungeon.WithInventoryProvider(multiInvRepo),
 		dungeon.WithAdmission(approvedRoster{}),
 	)
-	_, err = multiSvc.StartPartyExpedition(ctx, cScout.ID, []string{cScout.ID, cGoggleUser.ID}, "dungeon-01", "")
+	_, err = multiSvc.StartPartyExpedition(ctx, cScout.ID, []string{cScout.ID, cGoggleUser.ID}, dungeon.NativeMap0ID, "")
 	if err != nil {
 		t.Fatalf("failed to start multi-party expedition: %v", err)
 	}
@@ -285,163 +285,6 @@ func TestPartyMapScouting(t *testing.T) {
 	}
 	if !strings.Contains(mvMulti.Map.BonusReason, "Scouting Job") || strings.Contains(mvMulti.Map.BonusReason, "Scope Goggles") {
 		t.Errorf("expected BonusReason to mention only actor scouting, got: %s", mvMulti.Map.BonusReason)
-	}
-}
-
-func TestPartyTrapDamageDistribution(t *testing.T) {
-	ctx := context.Background()
-
-	// Create custom dungeon where trap 'X' is immediately to the south
-	customCatalog := []dungeon.Dungeon{
-		{
-			ID:               "trap-dungeon",
-			Tier:             1,
-			Name:             "罠の洞窟",
-			MinLevel:         5,
-			MaxTurnsPerFloor: 20,
-			Floors: []dungeon.Floor{
-				{
-					FloorNumber: 1,
-					Width:       3,
-					Height:      3,
-					StartX:      0,
-					StartY:      0,
-					Grid: []string{
-						"S00",
-						"X00",
-						"00D",
-					},
-				},
-			},
-		},
-	}
-	tSvc, _ := dungeon.NewService(
-		newMockDungeonRepo(),
-		&mockCharRepo{chars: map[string]corecharacter.Character{
-			"p1": createTestChar("p1", 10, 150, 40, 30),
-			"p2": createTestChar("p2", 10, 100, 30, 20),
-			"p3": createTestChar("p3", 10, 80, 25, 15),
-		}},
-		&corebattle.Engine{},
-		dungeon.WithCustomDungeons(customCatalog),
-		dungeon.WithAdmission(approvedRoster{}),
-	)
-
-	_, err := tSvc.StartPartyExpedition(ctx, "p1", []string{"p1", "p2", "p3"}, "trap-dungeon", "")
-	if err != nil {
-		t.Fatalf("failed to start expedition: %v", err)
-	}
-
-	// Move south onto 'X' trap
-	res, err := tSvc.Move(ctx, "p1", dungeon.DirectionSouth)
-	if err != nil {
-		t.Fatalf("move failed: %v", err)
-	}
-
-	if res.EventType != dungeon.EventTrap {
-		t.Fatalf("expected EventTrap, got %s", res.EventType)
-	}
-
-	// Check that all 3 members received damage
-	if len(res.MemberDamages) != 3 {
-		t.Fatalf("expected 3 member damages, got %d (%v)", len(res.MemberDamages), res.MemberDamages)
-	}
-	for _, mID := range []string{"p1", "p2", "p3"} {
-		dmg := res.MemberDamages[mID]
-		if dmg <= 0 {
-			t.Errorf("expected positive damage for member %s, got %d", mID, dmg)
-		}
-	}
-
-	// Check member current HPs in active expedition
-	active, err := tSvc.GetActiveExpedition(ctx, "p1")
-	if err != nil {
-		t.Fatalf("GetActiveExpedition failed: %v", err)
-	}
-	for _, m := range active.Members {
-		if m.CurrentHP >= m.MaxHP {
-			t.Errorf("expected reduced HP for %s, got %d/%d", m.CharacterID, m.CurrentHP, m.MaxHP)
-		}
-	}
-}
-
-func TestTreasureHunterBonusChests(t *testing.T) {
-	ctx := context.Background()
-
-	// Catalog with chest 'T' to the east
-	customCatalog := []dungeon.Dungeon{
-		{
-			ID:               "chest-dungeon",
-			Tier:             1,
-			Name:             "宝の洞窟",
-			MinLevel:         5,
-			MaxTurnsPerFloor: 20,
-			Floors: []dungeon.Floor{
-				{
-					FloorNumber: 1,
-					Width:       3,
-					Height:      3,
-					StartX:      0,
-					StartY:      0,
-					Grid: []string{
-						"ST0",
-						"000",
-						"00D",
-					},
-				},
-			},
-		},
-	}
-
-	// 1. Normal party without treasure hunter
-	normalSvc, _ := dungeon.NewService(
-		newMockDungeonRepo(),
-		&mockCharRepo{chars: map[string]corecharacter.Character{
-			"p1": createTestChar("p1", 10, 150, 40, 30),
-		}},
-		&corebattle.Engine{},
-		dungeon.WithCustomDungeons(customCatalog),
-		dungeon.WithAdmission(approvedRoster{}),
-	)
-	_, _ = normalSvc.StartPartyExpedition(ctx, "p1", []string{"p1"}, "chest-dungeon", "")
-	resNormal, err := normalSvc.Move(ctx, "p1", dungeon.DirectionEast)
-	if err != nil {
-		t.Fatalf("move failed: %v", err)
-	}
-	if resNormal.EventType != dungeon.EventTreasure {
-		t.Fatalf("expected EventTreasure, got %s", resNormal.EventType)
-	}
-	if resNormal.ChestsOpened != 1 {
-		t.Errorf("expected 1 chest opened without treasure hunter, got %d", resNormal.ChestsOpened)
-	}
-
-	// 2. Party with Treasure Hunter (job 78)
-	thChar := createTestChar("th", 10, 120, 30, 20)
-	thChar.JobID = "78" // Treasure Hunter
-	thSvc, _ := dungeon.NewService(
-		newMockDungeonRepo(),
-		&mockCharRepo{chars: map[string]corecharacter.Character{
-			"p1": createTestChar("p1", 10, 150, 40, 30),
-			"th": thChar,
-		}},
-		&corebattle.Engine{},
-		dungeon.WithCustomDungeons(customCatalog),
-		dungeon.WithAdmission(approvedRoster{}),
-	)
-	_, _ = thSvc.StartPartyExpedition(ctx, "p1", []string{"p1", "th"}, "chest-dungeon", "")
-	resTH, err := thSvc.Move(ctx, "p1", dungeon.DirectionEast)
-	if err != nil {
-		t.Fatalf("move failed: %v", err)
-	}
-	if resTH.EventType != dungeon.EventTreasure {
-		t.Fatalf("expected EventTreasure, got %s", resTH.EventType)
-	}
-	// With Job 78, chestsOpened should be 1 + (1 or 2) = 2 or 3!
-	if resTH.ChestsOpened < 2 || resTH.ChestsOpened > 3 {
-		t.Errorf("expected 2 or 3 chests opened with treasure hunter, got %d", resTH.ChestsOpened)
-	}
-	if resTH.GoldFound < 200 {
-		t.Errorf("expected at least 200 gold for bonus chests, got %d", resTH.GoldFound)
 	}
 }
 
@@ -470,7 +313,7 @@ func TestPartyRequiresAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.StartPartyExpedition(context.Background(), "leader", []string{"leader", "member"}, "dungeon-01", "p"); !errors.Is(err, dungeon.ErrPartyUnavailable) {
+	if _, err := svc.StartPartyExpedition(context.Background(), "leader", []string{"leader", "member"}, dungeon.NativeMap0ID, "p"); !errors.Is(err, dungeon.ErrPartyUnavailable) {
 		t.Fatalf("party start without consent port: %v", err)
 	}
 }

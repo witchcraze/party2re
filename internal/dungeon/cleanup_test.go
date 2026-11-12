@@ -47,7 +47,7 @@ func TestExpeditionCleanup_RunIdentity(t *testing.T) {
 				store = r
 			}
 			owner, follower := id.New(), id.New()
-			old := sampleExpedition(id.New(), owner, "dungeon-01")
+			old := sampleExpedition(id.New(), owner, dungeon.NativeMap0ID)
 			old.Members = []dungeon.ExpeditionMember{{CharacterID: owner}, {CharacterID: follower}}
 			next := old
 			next.ID = id.New()
@@ -117,14 +117,14 @@ type replacingFinalizeRepository struct {
 	replace func()
 }
 
-func (r *replacingFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, rec dungeon.CharacterDungeonRecord, c *corecharacter.Character, items []coreitem.Instance, members ...dungeon.ExpeditionMember) error {
-	err := r.mockDungeonRepo.FinalizeExpedition(ctx, h, rec, c, items, members...)
+func (r *replacingFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, c *corecharacter.Character, items []coreitem.Instance, members ...dungeon.ExpeditionMember) error {
+	err := r.mockDungeonRepo.FinalizeExpedition(ctx, h, c, items, members...)
 	r.replace()
 	return err
 }
 
 func TestSettlementCleanup_PreservesReplacement(t *testing.T) {
-	for _, outcome := range []string{"clear", "escape", "wipeout"} {
+	for _, outcome := range []string{"escape", "wipeout"} {
 		for _, duplicate := range []bool{false, true} {
 			name := outcome
 			if duplicate {
@@ -134,25 +134,18 @@ func TestSettlementCleanup_PreservesReplacement(t *testing.T) {
 				ctx := context.Background()
 				store := dungeon.NewMemoryExpeditionRepository()
 				repo := &replacingFinalizeRepository{mockDungeonRepo: newMockDungeonRepo()}
-				chars := &mockCharRepo{chars: map[string]corecharacter.Character{"hero": createTestChar("hero", 30, 100, 50, 30)}}
+				hero := createTestChar("hero", 30, 100, 50, 30)
+				if outcome == "wipeout" {
+					hero = createTestChar("hero", 1, 10, 5, 5) // loses to the boss east of the start
+				}
+				chars := &mockCharRepo{chars: map[string]corecharacter.Character{"hero": hero}}
 				svc, err := dungeon.NewService(repo, chars, corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(customSettlementDungeons()))
 				if err != nil {
 					t.Fatal(err)
 				}
-				dungeonID := "test-dg-01"
-				if outcome == "clear" {
-					dungeonID = "test-dg-bossless"
-					repo.records["hero"] = dungeon.CharacterDungeonRecord{CharacterID: "hero", HighestDungeonCleared: 1}
-				}
-				old, err := svc.StartExpedition(ctx, "hero", dungeonID)
+				old, err := svc.StartExpedition(ctx, "hero", "test-dg-01")
 				if err != nil {
 					t.Fatal(err)
-				}
-				if outcome == "wipeout" {
-					old.TurnsRemaining = 1
-					if err := store.SaveActiveExpedition(ctx, *old); err != nil {
-						t.Fatal(err)
-					}
 				}
 				if duplicate {
 					repo.histories["hero"] = []dungeon.DungeonExpeditionHistory{{ID: old.ID}}
