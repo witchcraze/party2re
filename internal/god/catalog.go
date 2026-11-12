@@ -4,8 +4,8 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-// buildHeavenWishes constructs the list of heaven wishes based on character state, guild membership, and home members.
-func buildHeavenWishes(char corecharacter.Character, inGuild bool, hasMaid bool) []Wish {
+// buildHeavenWishes constructs the list of heaven wishes based on character state and guild membership.
+func buildHeavenWishes(char corecharacter.Character, inGuild bool) []Wish {
 	wishes := []Wish{
 		{
 			ID:          WishStats,
@@ -125,13 +125,6 @@ func buildHeavenWishes(char corecharacter.Character, inGuild bool, hasMaid bool)
 			Realm:       RealmHeaven,
 			Description: "恋人が…？",
 			Available:   true,
-		},
-		{
-			ID:          WishSecretMaid,
-			Name:        "メイドを雇いたい",
-			Realm:       RealmHeaven,
-			Description: "お世話係",
-			Available:   !hasMaid,
 		},
 	}
 

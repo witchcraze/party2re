@@ -133,26 +133,13 @@ func (s *Service) GetWishes(ctx context.Context, characterID string, realm Realm
 
 	switch realm {
 	case RealmHeaven:
-		hasMaid := false
-		if s.homeMembers != nil {
-			members, err := s.homeMembers.FindByCharacterID(ctx, characterID)
-			if err == nil {
-				for _, m := range members {
-					if m.Name == "メイド" {
-						hasMaid = true
-						break
-					}
-				}
-			}
-		}
-
 		inGuild := false
 		if s.guilds != nil {
 			_, _, err := s.guilds.GetGuildByCharacter(ctx, characterID)
 			inGuild = (err == nil)
 		}
 
-		return buildHeavenWishes(char, inGuild, hasMaid), nil
+		return buildHeavenWishes(char, inGuild), nil
 
 	case RealmUnderworld:
 		return buildUnderworldWishes(char), nil

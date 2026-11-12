@@ -53,7 +53,6 @@ const (
 	WishEroticBook        = "wish_erotic_book"
 	WishAlchemyRecipe     = "wish_alchemy_recipe"
 	WishLover             = "wish_lover"
-	WishSecretMaid        = "wish_secret_maid"
 	WishLimitBreakLevel   = "wish_limit_break_level"
 	WishRestoreLevelLimit = "wish_restore_level_limit"
 )
@@ -147,7 +146,6 @@ type GuildRepository interface {
 
 // HomeMemberRepository manages home members.
 type HomeMemberRepository interface {
-	FindByCharacterID(ctx context.Context, characterID string) ([]HomeMember, error)
 	AddMember(ctx context.Context, member HomeMember) error
 }
 
