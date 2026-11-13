@@ -94,7 +94,7 @@ func classifyLockCall(recvName, methodName, relPath string) (LockRank, string, b
 	normPath := filepath.ToSlash(relPath)
 
 	// Rank 0: Shared peer-to-peer, contest rounds, or contention entities
-	if methodName == "WithRunForUpdate" {
+	if methodName == "WithRunForUpdate" || methodName == "LockStoreNamesForUpdate" {
 		return RankSharedPeerEntity, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
 	if strings.Contains(m, "listing") || strings.Contains(m, "parcel") ||

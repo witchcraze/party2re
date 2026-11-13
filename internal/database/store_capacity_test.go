@@ -54,7 +54,7 @@ func (g *guildPointLog) AddGuildPoints(_ context.Context, characterID string, po
 
 // Requires a dedicated DB: the limit counts every active store in the town.
 func TestStoreTownCapacitySerializesBuilders(t *testing.T) {
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "character_stores", "store_town_capacity_lock")
+	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "character_stores", "store_town_capacity_lock", "store_name_lock")
 	ctx := context.Background()
 	if _, err := db.ExecContext(ctx, "DELETE FROM store_town_capacity_lock"); err != nil {
 		t.Fatal(err)
