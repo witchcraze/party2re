@@ -10,6 +10,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/god"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -26,7 +27,6 @@ func TestGod_GrantWish_Admission(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		visit   string
-		realm   god.Realm
 		wish    string
 		casino  god.CasinoRepository
 		wantErr error
@@ -34,12 +34,13 @@ func TestGod_GrantWish_Admission(t *testing.T) {
 		wantVisit string
 		wantMoney int
 	}{
-		{"no visit", "", god.RealmHeaven, god.WishMoney, nil, god.ErrNotAdmitted, "", 0},
-		{"realm mismatch", corecharacter.GodVisitHeaven, god.RealmUnderworld, god.WishExpandDepot, nil, god.ErrNotAdmitted, corecharacter.GodVisitHeaven, 0},
-		{"granted ends visit", corecharacter.GodVisitHeaven, god.RealmHeaven, god.WishMoney, nil, nil, "", 100000},
-		{"unmet requirement keeps visit", corecharacter.GodVisitHeaven, god.RealmHeaven, god.WishGuildRank, nil, god.ErrWishRequirement, corecharacter.GodVisitHeaven, 0},
-		{"lover keeps visit", corecharacter.GodVisitHeaven, god.RealmHeaven, god.WishLover, nil, nil, corecharacter.GodVisitHeaven, 0},
-		{"dependency failure keeps visit", corecharacter.GodVisitHeaven, god.RealmHeaven, god.WishCasinoCoins, failingCasino{}, errCasinoSave, corecharacter.GodVisitHeaven, 0},
+		{"no visit", "", god.WishMoney, nil, god.ErrNotAdmitted, "", 0},
+		// The visit decides the realm, so an Underworld wish is unknown in Heaven.
+		{"other realm wish", corecharacter.GodVisitHeaven, god.WishExpandDepot, nil, god.ErrWishNotFound, corecharacter.GodVisitHeaven, 0},
+		{"granted ends visit", corecharacter.GodVisitHeaven, god.WishMoney, nil, nil, "", 100000},
+		{"unmet requirement keeps visit", corecharacter.GodVisitHeaven, god.WishGuildRank, nil, god.ErrWishRequirement, corecharacter.GodVisitHeaven, 0},
+		{"lover keeps visit", corecharacter.GodVisitHeaven, god.WishLover, nil, nil, corecharacter.GodVisitHeaven, 0},
+		{"dependency failure keeps visit", corecharacter.GodVisitHeaven, god.WishCasinoCoins, failingCasino{}, errCasinoSave, corecharacter.GodVisitHeaven, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := newMockCharacterRepo()
@@ -52,7 +53,7 @@ func TestGod_GrantWish_Admission(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = svc.GrantWish(ctx, "c", tc.wish, tc.realm)
+			_, err = svc.GrantWish(ctx, "c", tc.wish)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
 			}
@@ -60,7 +61,7 @@ func TestGod_GrantWish_Admission(t *testing.T) {
 				t.Fatalf("stored visit=%q money=%d, want %q/%d", c.GodVisit, c.Money, tc.wantVisit, tc.wantMoney)
 			}
 			if tc.wantErr == nil && tc.wantVisit == "" {
-				if _, err := svc.GrantWish(ctx, "c", tc.wish, tc.realm); !errors.Is(err, god.ErrNotAdmitted) {
+				if _, err := svc.GrantWish(ctx, "c", tc.wish); !errors.Is(err, god.ErrNotAdmitted) {
 					t.Fatalf("second wish err = %v, want ErrNotAdmitted", err)
 				}
 			}
@@ -100,7 +101,7 @@ func TestGod_GrantWish_Integration_ConcurrentDoubleSubmit(t *testing.T) {
 	}
 
 	wish := func() error {
-		_, err := svc.GrantWish(ctx, c.ID, god.WishMoney, god.RealmHeaven)
+		_, err := svc.GrantWish(ctx, c.ID, god.WishMoney)
 		return err
 	}
 	errs := testutil.RunRace(wish, wish)
@@ -119,5 +120,55 @@ func TestGod_GrantWish_Integration_ConcurrentDoubleSubmit(t *testing.T) {
 	}
 	if granted != 1 || after.Money != c.Money+100000 || after.GodVisit != "" {
 		t.Fatalf("granted=%d money=%d visit=%q, want 1, %d, empty", granted, after.Money, after.GodVisit, c.Money+100000)
+	}
+}
+
+func TestGod_ForfeitVisit(t *testing.T) {
+	repo := newMockCharacterRepo()
+	repo.characters["c"] = corecharacter.Character{ID: "c", GodVisit: corecharacter.GodVisitUnderworld, Money: 7}
+	svc, err := god.NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 { // a second forfeit is a no-op
+		if err := svc.ForfeitVisit(context.Background(), "c"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if c := repo.characters["c"]; c.GodVisit != "" || c.Money != 7 {
+		t.Fatalf("stored %+v, want only the visit cleared", c)
+	}
+	if _, err := svc.GrantWish(context.Background(), "c", god.WishExpandDepot); !errors.Is(err, god.ErrNotAdmitted) {
+		t.Fatalf("wish after forfeit: %v", err)
+	}
+}
+
+// failingGuilds fails every membership read, unlike "not in a guild".
+type failingGuilds struct{ mockGuildRepo }
+
+var errGuildRead = errors.New("guild read failed")
+
+func (failingGuilds) GetGuildByCharacter(context.Context, string) (guild.Guild, guild.Member, error) {
+	return guild.Guild{}, guild.Member{}, errGuildRead
+}
+
+func TestGod_GuildReadFailureIsNotNoGuild(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockCharacterRepo()
+	repo.characters["c"] = corecharacter.Character{ID: "c", Level: 99, GodVisit: corecharacter.GodVisitHeaven}
+	svc, err := god.NewService(repo, god.WithGuildRepository(&failingGuilds{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.GetWishes(ctx, "c", god.RealmHeaven); !errors.Is(err, errGuildRead) {
+		t.Fatalf("GetWishes err = %v", err)
+	}
+	for _, wish := range []string{god.WishGuildRank, god.WishGuildGorgeous} {
+		if _, err := svc.GrantWish(ctx, "c", wish); !errors.Is(err, errGuildRead) || errors.Is(err, god.ErrWishRequirement) {
+			t.Fatalf("%s err = %v", wish, err)
+		}
+		if repo.characters["c"].GodVisit != corecharacter.GodVisitHeaven {
+			t.Fatal("failed grant ended the visit")
+		}
 	}
 }

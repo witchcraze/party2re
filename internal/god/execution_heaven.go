@@ -8,6 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/guild"
 )
 
 func (s *Service) executeHeavenWish(
@@ -85,8 +86,11 @@ func (s *Service) executeHeavenWish(
 			return ErrWishRequirement
 		}
 		g, _, err := s.guilds.GetGuildByCharacter(ctx, char.ID)
-		if err != nil {
+		if errors.Is(err, guild.ErrCharacterNotInGuild) {
 			return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
+		}
+		if err != nil {
+			return err
 		}
 		if err := s.guilds.AddPoints(ctx, g.ID, 1000); err != nil {
 			return err
@@ -100,8 +104,11 @@ func (s *Service) executeHeavenWish(
 			return ErrWishRequirement
 		}
 		g, _, err := s.guilds.GetGuildByCharacter(ctx, char.ID)
-		if err != nil {
+		if errors.Is(err, guild.ErrCharacterNotInGuild) {
 			return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
+		}
+		if err != nil {
+			return err
 		}
 		if err := s.guilds.UpdateBgimg(ctx, g.ID, "god.gif"); err != nil {
 			return err

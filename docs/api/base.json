@@ -2353,6 +2353,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/WishingWellSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GodSceneData"
                     }
                   ]
                 }
@@ -3120,6 +3123,66 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "god"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GodSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "u_god"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GodSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3744,6 +3807,8 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "god",
+                        "u_god",
                         "altar",
                         "wishingwell",
                         "home",
@@ -3850,6 +3915,8 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "god",
+                        "u_god",
                         "altar",
                         "wishingwell",
                         "home",
@@ -6286,6 +6353,41 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "god_wish"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "wish_id": {
+                      "type": "string",
+                      "description": "One of the god scene's wishes. The realm comes from the recorded visit."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "wish_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "npc_talk"
                 }
               },
@@ -7033,6 +7135,8 @@
               "exile",
               "fleamarket",
               "gemstore",
+              "god",
+              "u_god",
               "altar",
               "wishingwell",
               "home",
@@ -7166,6 +7270,8 @@
                   "exile",
                   "fleamarket",
                   "gemstore",
+                  "god",
+                  "u_god",
                   "altar",
                   "wishingwell",
                   "home",
@@ -14036,30 +14142,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "GrantWishResponse": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "message": {
-            "type": "string"
-          },
-          "npc_speech": {
-            "type": "string"
-          },
-          "wish": {
-            "$ref": "#/components/schemas/GodWish"
-          }
-        },
-        "required": [
-          "character",
-          "wish",
-          "message",
-          "npc_speech"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "GodWish": {
         "properties": {
           "available": {
@@ -14093,50 +14175,6 @@
           "realm",
           "description",
           "available"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ListWishesResponse": {
-        "properties": {
-          "realm": {
-            "type": "string"
-          },
-          "wishes": {
-            "items": {
-              "$ref": "#/components/schemas/GodWish"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "realm",
-          "wishes"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "DialogueResponse": {
-        "properties": {
-          "dialogue": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "realm": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "realm",
-          "dialogue"
         ],
         "type": "object",
         "additionalProperties": false
@@ -17879,6 +17917,36 @@
           "job_memory_active",
           "over_level",
           "can_exchange"
+        ]
+      },
+      "GodSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Observed while the actor's god visit (from Home reins) is recorded, whatever the saved selection; leaving the scene through navigation forfeits the visit, and a granted wish ends it. NPC dialogue comes from npc_talk/npc_inspect. Observation never grants.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "realm": {
+            "type": "string",
+            "enum": [
+              "heaven",
+              "underworld"
+            ]
+          },
+          "wishes": {
+            "type": "array",
+            "description": "god_wish choices for this realm; available is false when a requirement is not met.",
+            "items": {
+              "$ref": "#/components/schemas/GodWish"
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "realm",
+          "wishes"
         ]
       }
     },

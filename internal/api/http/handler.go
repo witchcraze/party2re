@@ -557,11 +557,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/oracle/wallpaper", h.handleOracleBuyWallpaper)
 	mux.HandleFunc("POST /characters/{id}/oracle/blackmarket", h.handleOracleBlackMarket)
 
-	// God (Endgame Wishes & Limit Breaks)
-	mux.HandleFunc("GET /god/dialogue", h.handleGetGodDialogue)
-	mux.HandleFunc("GET /characters/{id}/god/wishes", h.handleGetGodWishes)
-	mux.HandleFunc("POST /characters/{id}/god/wish", h.handleGrantGodWish)
-
 	// Monster Grandpa & Pet Companions
 	mux.HandleFunc("GET /monster/dialogue", h.handleGetMonsterDialogue)
 	mux.HandleFunc("GET /characters/{id}/monsters", h.handleGetCharacterMonsters)

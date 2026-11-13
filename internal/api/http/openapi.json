@@ -4358,6 +4358,8 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "god",
+                        "u_god",
                         "altar",
                         "wishingwell",
                         "home",
@@ -4492,6 +4494,8 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "god",
+                        "u_god",
                         "altar",
                         "wishingwell",
                         "home",
@@ -6900,6 +6904,41 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "god_wish",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "wish_id": {
+                      "description": "One of the god scene's wishes. The realm comes from the recorded visit.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "wish_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "npc_talk",
                   "type": "string"
                 }
@@ -9000,28 +9039,6 @@
         ],
         "type": "object"
       },
-      "DialogueResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "dialogue": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "realm": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "realm",
-          "dialogue"
-        ],
-        "type": "object"
-      },
       "DungeonActiveEncounter": {
         "description": "Pending enemy state and destination, retained across unresolved battles. Each hostile encounter currently has one enemy. A treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
         "properties": {
@@ -10181,6 +10198,36 @@
         ],
         "type": "object"
       },
+      "GodSceneData": {
+        "additionalProperties": false,
+        "description": "Observed while the actor's god visit (from Home reins) is recorded, whatever the saved selection; leaving the scene through navigation forfeits the visit, and a granted wish ends it. NPC dialogue comes from npc_talk/npc_inspect. Observation never grants.",
+        "properties": {
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "realm": {
+            "enum": [
+              "heaven",
+              "underworld"
+            ],
+            "type": "string"
+          },
+          "wishes": {
+            "description": "god_wish choices for this realm; available is false when a requirement is not met.",
+            "items": {
+              "$ref": "#/components/schemas/GodWish"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent",
+          "realm",
+          "wishes"
+        ],
+        "type": "object"
+      },
       "GodWish": {
         "additionalProperties": false,
         "properties": {
@@ -10215,30 +10262,6 @@
           "realm",
           "description",
           "available"
-        ],
-        "type": "object"
-      },
-      "GrantWishResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "message": {
-            "type": "string"
-          },
-          "npc_speech": {
-            "type": "string"
-          },
-          "wish": {
-            "$ref": "#/components/schemas/GodWish"
-          }
-        },
-        "required": [
-          "character",
-          "wish",
-          "message",
-          "npc_speech"
         ],
         "type": "object"
       },
@@ -11648,28 +11671,6 @@
           "is_deleted_by_sender",
           "is_deleted_by_recipient",
           "created_at"
-        ],
-        "type": "object"
-      },
-      "ListWishesResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "realm": {
-            "type": "string"
-          },
-          "wishes": {
-            "items": {
-              "$ref": "#/components/schemas/GodWish"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "realm",
-          "wishes"
         ],
         "type": "object"
       },
@@ -14932,6 +14933,8 @@
                   "exile",
                   "fleamarket",
                   "gemstore",
+                  "god",
+                  "u_god",
                   "altar",
                   "wishingwell",
                   "home",
@@ -15122,6 +15125,8 @@
               "exile",
               "fleamarket",
               "gemstore",
+              "god",
+              "u_god",
               "altar",
               "wishingwell",
               "home",
@@ -15260,6 +15265,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/WishingWellSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GodSceneData"
                     }
                   ]
                 }
@@ -16012,6 +16020,66 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/WishingWellSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "god"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GodSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "u_god"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GodSceneData"
                 },
                 "support": {
                   "properties": {
@@ -18448,7 +18516,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit."
           },
           "400": {
             "content": {
@@ -23546,235 +23614,6 @@
         "summary": "Change character gender / appearance",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/god/wish": {
-      "post": {
-        "operationId": "grantGodWish",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "realm": {
-                    "enum": [
-                      "heaven",
-                      "underworld"
-                    ],
-                    "type": "string"
-                  },
-                  "wish_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "wish_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GrantWishResponse"
-                }
-              }
-            },
-            "description": "Wish granted result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid wish request or unmet requirement"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - character not owned by player"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The character has not entered this realm with its reins (or already left it with a granted wish), or is sleeping or awaiting wake recovery"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Grant an endgame wish or limit break",
-        "tags": [
-          "God"
-        ]
-      }
-    },
-    "/characters/{id}/god/wishes": {
-      "get": {
-        "operationId": "getGodWishes",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Realm (heaven or underworld)",
-            "in": "query",
-            "name": "realm",
-            "required": false,
-            "schema": {
-              "default": "heaven",
-              "enum": [
-                "heaven",
-                "underworld"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListWishesResponse"
-                }
-              }
-            },
-            "description": "Available wishes in realm"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - character not owned by player"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get available endgame wishes",
-        "tags": [
-          "God"
         ]
       }
     },
@@ -29188,58 +29027,6 @@
         "summary": "Register character presence in Event Plaza",
         "tags": [
           "EventPlaza"
-        ]
-      }
-    },
-    "/god/dialogue": {
-      "get": {
-        "operationId": "getGodDialogue",
-        "parameters": [
-          {
-            "description": "Realm (heaven or underworld)",
-            "in": "query",
-            "name": "realm",
-            "required": false,
-            "schema": {
-              "default": "heaven",
-              "enum": [
-                "heaven",
-                "underworld"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DialogueResponse"
-                }
-              }
-            },
-            "description": "God NPC dialogue"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get celestial NPC dialogue",
-        "tags": [
-          "God"
         ]
       }
     },

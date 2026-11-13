@@ -45,6 +45,7 @@ type Service struct {
 	publicActivities PublicActivityReader
 	waitWriter       ActionWaitWriter
 	waitDuration     time.Duration
+	forfeitGodVisit  func(ctx context.Context, characterID string) error
 }
 
 // NewService requires character, scheduled-action and sleep-timer readers.

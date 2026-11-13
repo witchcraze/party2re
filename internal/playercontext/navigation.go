@@ -68,6 +68,16 @@ type PageParams struct {
 
 func (s *Service) NavigationConfigured() bool { return s.navigation != nil }
 
+// godVisitScenes are the places a recorded god visit stands in (legacy
+// $m{lib} god/u_god). The visit, not the saved selection, decides the scene.
+var godVisitScenes = map[string]string{character.GodVisitHeaven: "god", character.GodVisitUnderworld: "u_god"}
+
+// WithGodVisitForfeit clears a recorded god visit when navigation leaves its
+// scene, as legacy ＠いどう/＠まち/＠ほーむ replace $m{lib}.
+func WithGodVisitForfeit(forfeit func(ctx context.Context, characterID string) error) func(*Service) {
+	return func(s *Service) { s.forfeitGodVisit = forfeit }
+}
+
 // SceneDefinitions returns the closed registry in stable ID order for adapters.
 func (s *Service) SceneDefinitions() []SceneDefinition {
 	definitions := make([]SceneDefinition, 0, len(s.scenes))
@@ -133,6 +143,11 @@ func (s *Service) observeNavigation(ctx context.Context, actor character.Charact
 	if s.navigation == nil {
 		return nil, nil
 	}
+	if scene, ok := godVisitScenes[actor.GodVisit]; ok {
+		if _, registered := s.scenes[scene]; registered {
+			return &NavigationObservation{Selection: Selection{Destination: scene}}, nil
+		}
+	}
 	n, err := s.selection(ctx, actor.ID)
 	if err != nil {
 		return nil, err
@@ -188,6 +203,16 @@ func (s *Service) navigate(ctx context.Context, playerID, actorID string, transi
 	}
 	if err := s.navigation.Save(ctx, actorID, n); err != nil {
 		return Selection{}, fmt.Errorf("save navigation: %w", err)
+	}
+	// Clear after the save: a failed clear leaves the visit, so the actor
+	// still observes the god scene and may retry.
+	if scene := r.Navigation.Selection.Destination; scene != n.Destination && scene == godVisitScenes[r.Snapshot.Character.GodVisit] {
+		if s.forfeitGodVisit == nil {
+			return Selection{}, ErrNavigationNotConfigured
+		}
+		if err := s.forfeitGodVisit(ctx, actorID); err != nil {
+			return Selection{}, fmt.Errorf("forfeit god visit: %w", err)
+		}
 	}
 	return n, nil
 }

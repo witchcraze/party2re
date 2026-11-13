@@ -842,7 +842,7 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("god.NewService failed: %v", err)
 	}
-	if _, err := godSvc.GrantWish(ctx, c.ID, god.WishOrtega, god.RealmHeaven); err != nil {
+	if _, err := godSvc.GrantWish(ctx, c.ID, god.WishOrtega); err != nil {
 		t.Fatalf("GrantWish WishOrtega failed: %v", err)
 	}
 

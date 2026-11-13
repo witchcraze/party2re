@@ -110,7 +110,7 @@ func TestCelestialWishSynchronizesJobStateAcrossDatabaseReload(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, wishErr := godSvc.GrantWish(ctx, char.ID, god.WishCelestialDragon, god.RealmHeaven)
+			_, wishErr := godSvc.GrantWish(ctx, char.ID, god.WishCelestialDragon)
 			stored, err := chars.FindByID(ctx, char.ID)
 			if err != nil {
 				t.Fatal(err)
