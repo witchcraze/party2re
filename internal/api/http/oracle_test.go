@@ -1,404 +1,174 @@
-package http_test
+package http
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 
-	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/store"
 )
 
-type stubOracleShopService struct {
-	getStatusFn           func(ctx context.Context, characterID string) (*store.OracleStatus, error)
-	talkFn                func() string
-	inspectFn             func(jobLevel int) store.OracleInspectResult
-	buyCostumeItemFn      func(ctx context.Context, characterID string, itemNo int) (*store.CostumeBuyResult, error)
-	buyHomeWallpaperFn    func(ctx context.Context, characterID string, wallpaper string) (*store.HomeWallpaperResult, error)
-	discoverBlackMarketFn func(jobLevel int) error
+type oracleFixture struct {
+	*gatewayFixture
+	status      store.OracleStatus
+	statusErr   error
+	deliveredTo string
 }
 
-func (s *stubOracleShopService) GetOracleStatus(ctx context.Context, characterID string) (*store.OracleStatus, error) {
-	if s.getStatusFn != nil {
-		return s.getStatusFn(ctx, characterID)
+func (f *oracleFixture) GetOracleStatus(context.Context, string) (*store.OracleStatus, error) {
+	if f.statusErr != nil {
+		return nil, f.statusErr
 	}
-	return &store.OracleStatus{
-		CharacterID:          characterID,
-		LocationName:         store.OracleLocationName,
-		NPCName:              store.OracleNPCName,
-		BgImg:                store.OracleBgImg,
-		AvailableCostumes:    store.AvailableCostumes(16),
-		CanUnlockBlackMarket: true,
-	}, nil
+	return &f.status, nil
 }
 
-func (s *stubOracleShopService) OracleTalk() string {
-	if s.talkFn != nil {
-		return s.talkFn()
-	}
-	return store.OracleWords[0]
+func (f *oracleFixture) BuyCostumeItem(ctx context.Context, actor string, itemNo int) (*store.CostumeBuyResult, error) {
+	_, err := f.execute(ctx, actor, 0)
+	return &store.CostumeBuyResult{ItemNo: itemNo, ItemName: "ネコミミメイド", Price: 300, DeliveredTo: f.deliveredTo}, err
 }
 
-func (s *stubOracleShopService) OracleInspect(jobLevel int) store.OracleInspectResult {
-	if s.inspectFn != nil {
-		return s.inspectFn(jobLevel)
-	}
-	return store.OracleInspect(jobLevel)
+func (f *oracleFixture) BuyHomeWallpaper(ctx context.Context, actor, wallpaper string) (*store.HomeWallpaperResult, error) {
+	_, err := f.execute(ctx, actor, 0)
+	return &store.HomeWallpaperResult{Wallpaper: wallpaper + ".gif"}, err
 }
 
-func (s *stubOracleShopService) BuyCostumeItem(ctx context.Context, characterID string, itemNo int) (*store.CostumeBuyResult, error) {
-	if s.buyCostumeItemFn != nil {
-		return s.buyCostumeItemFn(ctx, characterID, itemNo)
-	}
-	return &store.CostumeBuyResult{
-		ItemNo:      itemNo,
-		ItemName:    "ピンクスカート",
-		Price:       300,
-		DeliveredTo: "inventory",
-	}, nil
-}
-
-func (s *stubOracleShopService) BuyHomeWallpaper(ctx context.Context, characterID string, wallpaper string) (*store.HomeWallpaperResult, error) {
-	if s.buyHomeWallpaperFn != nil {
-		return s.buyHomeWallpaperFn(ctx, characterID, wallpaper)
-	}
-	return &store.HomeWallpaperResult{
-		Wallpaper: wallpaper + ".gif",
-	}, nil
-}
-
-func (s *stubOracleShopService) DiscoverBlackMarket(jobLevel int) error {
-	if s.discoverBlackMarketFn != nil {
-		return s.discoverBlackMarketFn(jobLevel)
-	}
-	return store.DiscoverBlackMarket(jobLevel)
-}
-
-func TestOracleShopEndpoints(t *testing.T) {
-	player := coreplayer.Player{ID: "p1", Username: "hero"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Level: 20, JobLevel: 16, Money: 50000}
-	otherChar := corecharacter.Character{ID: "c2", PlayerID: "p2", Name: "Other", Level: 20, JobLevel: 16, Money: 50000}
-
-	pService := &stubPlayerService{
-		authenticateFn: alwaysAuthPlayer(player),
-	}
-	cService := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
-			if id == char.ID {
-				return char, nil
-			}
-			if id == otherChar.ID {
-				return otherChar, nil
-			}
-			return corecharacter.Character{}, corecharacter.ErrNotFound
-		},
-	}
-	oracleSvc := &stubOracleShopService{}
-
-	handler, err := apihttp.NewHandler(
-		pService,
-		cService,
-		&stubAdventureService{},
-		&stubShopService{},
-		apihttp.WithOracleShop(oracleSvc),
-	)
+func (f *oracleFixture) router(t *testing.T, destination string, options ...Option) (*gatewayNavigationStore, http.Handler) {
+	t.Helper()
+	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: destination}}
+	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
+		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"},
+		playercontext.SceneDefinition{ID: "oracle", Parent: "town"},
+		playercontext.SceneDefinition{ID: "blackmarket", Parent: "oracle", CanEnter: func(c corecharacter.Character) bool { return c.JobLevel >= 15 }}))
+	opts := append([]Option{WithOracleShop(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, options...)
+	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, opts...)
 	if err != nil {
-		t.Fatalf("failed to create handler: %v", err)
+		t.Fatal(err)
+	}
+	return store, h.Router()
+}
+
+func newOracleFixture(t *testing.T) *oracleFixture {
+	f := &oracleFixture{gatewayFixture: newGatewayFixture(t), deliveredTo: string(depot.DeliveredToInventory),
+		status: store.OracleStatus{CharacterID: "hero", AvailableCostumes: store.AvailableCostumes(3), AvailableWallpapers: []store.WallpaperInfo{{Name: "goods", Price: 1000}}}}
+	f.char.Name = "勇者"
+	return f
+}
+
+func TestOracleSceneObservesCatalogAndGatesTheBlackMarket(t *testing.T) {
+	f := newOracleFixture(t)
+	store, router := f.router(t, "oracle", WithPlaceLog(&fakePlaceLog{}))
+	status, observation := navigationGET(t, router)
+	data := decodeShopScene[OracleSceneData](t, observation)
+	if status != 200 || observation.Scene.Title != "オラクル屋" || observation.Scene.Support.Observation != "details" ||
+		data.Parent != "town" || len(data.AvailableCostumes) != 5 || data.ActiveCostume != nil {
+		t.Fatalf("oracle: %d %+v", status, data)
+	}
+	for _, action := range []string{"oracle_buy", "oracle_wallpaper", "npc_talk", "npc_inspect", "place_say", "scene_back"} {
+		if !offered(observation, action) {
+			t.Fatalf("missing choice %s", action)
+		}
+	}
+	if offered(observation, "oracle_blackmarket") {
+		t.Fatal("black market offered below job level 15")
+	}
+	f.char.JobLevel = 15
+	if _, observation = navigationGET(t, router); !offered(observation, "oracle_blackmarket") {
+		t.Fatal("black market hidden from a qualified character")
+	}
+	f.statusErr = errors.New("private costume read")
+	if status, observation := navigationGET(t, router); status != 500 || observation.Scene.Data != nil {
+		t.Fatalf("partial observation: %d", status)
+	}
+	if store.writes != 0 || f.executions != 0 {
+		t.Fatalf("GET wrote: %d %d", store.writes, f.executions)
+	}
+}
+
+func TestOracleTownListOmitsTheBlackMarket(t *testing.T) {
+	f := newOracleFixture(t)
+	f.char.JobLevel = 30
+	_, router := f.router(t, "town")
+	_, observation := navigationGET(t, router)
+	data := decodeShopScene[TownSceneData](t, observation)
+	for _, d := range data.Destinations {
+		if d.ID == "blackmarket" {
+			t.Fatal("the black market is listed in town; legacy reaches it only through ＠やみいちば")
+		}
+	}
+}
+
+func TestOraclePurchaseReplies(t *testing.T) {
+	for _, tc := range []struct{ action, params, deliveredTo, want string }{
+		{"oracle_buy", `{"item_no":47}`, string(depot.DeliveredToInventory), "ネコミミメイドだな。ほい、どうぞ"},
+		{"oracle_buy", `{"item_no":47}`, string(depot.DeliveredToDepot), "ネコミミメイドは勇者の預かり所に送っておいたよん"},
+		{"oracle_wallpaper", `{"wallpaper":"goods"}`, "", "勇者の家の壁紙を goods に、張り替えておいたよん"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			f := newOracleFixture(t)
+			f.deliveredTo = tc.deliveredTo
+			_, router := f.router(t, "oracle")
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody(tc.action, tc.params), nil)
+			got := tavernResult[struct{ Message string }](t, raw)
+			if status != 200 || got.Message != tc.want {
+				t.Fatalf("%s: %d %q", tc.action, status, got.Message)
+			}
+		})
+	}
+}
+
+func TestOracleCommandErrors(t *testing.T) {
+	for _, tc := range []struct {
+		action, params string
+		err            error
+		code, text     string
+		status         int
+	}{
+		{"oracle_buy", `{"item_no":47}`, store.ErrInsufficientFunds, "ORACLE_INSUFFICIENT_GOLD", "勇者よ…ゴールドが足らん", 409},
+		{"oracle_wallpaper", `{"wallpaper":"goods"}`, store.ErrInsufficientFunds, "ORACLE_INSUFFICIENT_GOLD", "勇者よ…ゴールドが足らん", 409},
+		{"oracle_buy", `{"item_no":141}`, store.ErrCostumeNotAvailable, "ORACLE_COSTUME_UNAVAILABLE", "", 400},
+		{"oracle_buy", `{"item_no":47}`, store.ErrItemUnavailableInHelperQuest, "ORACLE_COSTUME_UNAVAILABLE", "", 400},
+		{"oracle_wallpaper", `{"wallpaper":"x"}`, store.ErrInvalidWallpaper, "ORACLE_INVALID_WALLPAPER", "", 400},
+		{"oracle_buy", `{"item_no":47}`, errors.New("private storage failure"), "EXECUTION_FAILED", "", 500},
+	} {
+		t.Run(tc.action+tc.code, func(t *testing.T) {
+			f := newOracleFixture(t)
+			f.executionErr = fmt.Errorf("private wrapped: %w", tc.err)
+			_, router := f.router(t, "oracle")
+			status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody(tc.action, tc.params), nil)
+			assertGatewayError(t, got, tc.code)
+			if status != tc.status || strings.Contains(fmt.Sprint(got), "private") || !strings.Contains(string(got["error"]), tc.text) {
+				t.Fatalf("error mapping: %d %s", status, got)
+			}
+		})
+	}
+}
+
+func TestOracleBlackMarketMovesQualifiedCharacters(t *testing.T) {
+	f := newOracleFixture(t)
+	f.char.JobLevel = 15
+	store, router := f.router(t, "oracle")
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("oracle_blackmarket", `{}`), nil)
+	if got := tavernResult[OracleBlackMarketResult](t, raw); status != 200 || got.Message != "闇市場を見つけました！" ||
+		got.Selection.Destination != "blackmarket" || store.selection.Destination != "blackmarket" {
+		t.Fatalf("black market move: %d %+v", status, got)
 	}
 
-	server := httptest.NewServer(handler.Router())
-	defer server.Close()
+	f.char.JobLevel = 14
+	store.selection = playercontext.Selection{Destination: "oracle"}
+	if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("oracle_blackmarket", `{}`), nil); status != 403 || store.selection.Destination != "oracle" {
+		t.Fatalf("unqualified move: %d %+v", status, store.selection)
+	}
 
-	// 1. GET /characters/{id}/oracle -> 200 OK
-	t.Run("GetOracleStatus_Success", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, server.URL+"/characters/c1/oracle", nil)
-		req.Header.Set("Authorization", "Bearer session-token")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
-		}
-
-		var status store.OracleStatus
-		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if status.LocationName != store.OracleLocationName || status.NPCName != store.OracleNPCName {
-			t.Errorf("unexpected status: %+v", status)
-		}
-	})
-
-	// 2. POST /characters/{id}/oracle/talk -> 200 OK
-	t.Run("OracleTalk_Success", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/talk", nil)
-		req.Header.Set("Authorization", "Bearer session-token")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
-		}
-
-		var talkResp map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&talkResp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if talkResp["location_name"] != store.OracleLocationName {
-			t.Errorf("unexpected location_name: %v", talkResp["location_name"])
-		}
-	})
-
-	// 3. POST /characters/{id}/oracle/inspect -> 200 OK
-	t.Run("OracleInspect_Success", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/inspect", nil)
-		req.Header.Set("Authorization", "Bearer session-token")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
-		}
-
-		var inspectResp map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&inspectResp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if inspectResp["hint"] != store.OracleBlackMarketHint {
-			t.Errorf("expected hint for job_lv 16, got: %v", inspectResp["hint"])
-		}
-	})
-
-	// 4. POST /characters/{id}/oracle/buy -> 200 OK
-	t.Run("OracleBuyCostume_Success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]interface{}{"item_no": 44})
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/buy", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer session-token")
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
-		}
-
-		var buyResp struct {
-			store.CostumeBuyResult
-			Message string `json:"message"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&buyResp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if buyResp.ItemNo != 44 || buyResp.DeliveredTo != "inventory" {
-			t.Errorf("unexpected buy response: %+v", buyResp)
-		}
-		if buyResp.Message != "ピンクスカートだな。ほい、どうぞ" {
-			t.Errorf("expected costume buy message, got %q", buyResp.Message)
-		}
-	})
-
-	// 5. POST /characters/{id}/oracle/buy -> 400 Bad Request on invalid item
-	t.Run("OracleBuyCostume_NotAvailable", func(t *testing.T) {
-		oracleSvc.buyCostumeItemFn = func(_ context.Context, _ string, _ int) (*store.CostumeBuyResult, error) {
-			return nil, store.ErrCostumeNotAvailable
-		}
-		defer func() { oracleSvc.buyCostumeItemFn = nil }()
-
-		body, _ := json.Marshal(map[string]interface{}{"item_no": 999})
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/buy", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer session-token")
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("expected 400 Bad Request, got %d", resp.StatusCode)
-		}
-	})
-
-	// 6. POST /characters/{id}/oracle/buy -> 400 Bad Request on helper item
-	t.Run("OracleBuyCostume_HelperUnavailable", func(t *testing.T) {
-		oracleSvc.buyCostumeItemFn = func(_ context.Context, _ string, _ int) (*store.CostumeBuyResult, error) {
-			return nil, store.ErrItemUnavailableInHelperQuest
-		}
-		defer func() { oracleSvc.buyCostumeItemFn = nil }()
-
-		body, _ := json.Marshal(map[string]interface{}{"item_no": 45})
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/buy", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer session-token")
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("expected 400 Bad Request, got %d", resp.StatusCode)
-		}
-	})
-
-	// 6b. POST /characters/{id}/oracle/buy -> 500 Internal Server Error on helper read failure
-	t.Run("OracleBuyCostume_HelperError", func(t *testing.T) {
-		oracleSvc.buyCostumeItemFn = func(_ context.Context, _ string, _ int) (*store.CostumeBuyResult, error) {
-			return nil, errors.New("helper database failure")
-		}
-		defer func() { oracleSvc.buyCostumeItemFn = nil }()
-
-		body, _ := json.Marshal(map[string]interface{}{"item_no": 44})
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/buy", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer session-token")
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusInternalServerError {
-			t.Errorf("expected 500 Internal Server Error, got %d", resp.StatusCode)
-		}
-	})
-
-	// 6c. GET /characters/{id}/oracle -> 500 Internal Server Error on helper read failure
-	t.Run("GetOracleStatus_HelperError", func(t *testing.T) {
-		oracleSvc.getStatusFn = func(_ context.Context, _ string) (*store.OracleStatus, error) {
-			return nil, errors.New("helper database failure")
-		}
-		defer func() { oracleSvc.getStatusFn = nil }()
-
-		req, _ := http.NewRequest(http.MethodGet, server.URL+"/characters/c1/oracle", nil)
-		req.Header.Set("Authorization", "Bearer session-token")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusInternalServerError {
-			t.Errorf("expected 500 Internal Server Error, got %d", resp.StatusCode)
-		}
-	})
-
-	// 7. POST /characters/{id}/oracle/wallpaper -> 200 OK
-	t.Run("OracleBuyWallpaper_Success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]interface{}{"wallpaper": "goods"})
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/wallpaper", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer session-token")
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
-		}
-
-		var wallResp struct {
-			Wallpaper string `json:"wallpaper"`
-			Message   string `json:"message"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&wallResp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if wallResp.Wallpaper != "goods.gif" {
-			t.Errorf("expected goods.gif, got %s", wallResp.Wallpaper)
-		}
-		if wallResp.Message != "Heroの家の壁紙を goods に、張り替えておいたよん" {
-			t.Errorf("expected wallpaper message, got %q", wallResp.Message)
-		}
-	})
-
-	// 8. POST /characters/{id}/oracle/blackmarket -> 200 OK when eligible
-	t.Run("OracleBlackMarket_Success", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/blackmarket", nil)
-		req.Header.Set("Authorization", "Bearer session-token")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
-		}
-	})
-
-	// 9. POST /characters/{id}/oracle/blackmarket -> 403 Forbidden when ineligible
-	t.Run("OracleBlackMarket_Forbidden", func(t *testing.T) {
-		oracleSvc.discoverBlackMarketFn = func(jobLevel int) error {
-			return store.ErrBlackMarketNotDiscovered
-		}
-		defer func() { oracleSvc.discoverBlackMarketFn = nil }()
-
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/c1/oracle/blackmarket", nil)
-		req.Header.Set("Authorization", "Bearer session-token")
-		resp, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatalf("request failed: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusForbidden {
-			t.Errorf("expected 403 Forbidden, got %d", resp.StatusCode)
-		}
-	})
-
-	// 10. Non-owner returns 403 Forbidden across all mutating endpoints
-	t.Run("OracleMutations_ForbiddenForNonOwner", func(t *testing.T) {
-		routes := []struct {
-			name string
-			path string
-			body string
-		}{
-			{"buy_costume", "/characters/c2/oracle/buy", `{"item_no":44}`},
-			{"buy_wallpaper", "/characters/c2/oracle/wallpaper", `{"wallpaper":"goods"}`},
-			{"blackmarket", "/characters/c2/oracle/blackmarket", ""},
-		}
-
-		for _, tc := range routes {
-			t.Run(tc.name, func(t *testing.T) {
-				var req *http.Request
-				if tc.body != "" {
-					req, _ = http.NewRequest(http.MethodPost, server.URL+tc.path, bytes.NewReader([]byte(tc.body)))
-					req.Header.Set("Content-Type", "application/json")
-				} else {
-					req, _ = http.NewRequest(http.MethodPost, server.URL+tc.path, nil)
-				}
-				req.Header.Set("Authorization", "Bearer session-token")
-				resp, err := server.Client().Do(req)
-				if err != nil {
-					t.Fatalf("request failed: %v", err)
-				}
-				defer resp.Body.Close()
-
-				if resp.StatusCode != http.StatusForbidden {
-					t.Errorf("expected 403 Forbidden for %s, got %d", tc.name, resp.StatusCode)
-				}
-			})
-		}
-	})
+	f.char.JobLevel = 30
+	store.selection = playercontext.Selection{Destination: "bank"}
+	if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("oracle_blackmarket", `{}`), nil); status != 409 || store.selection.Destination != "bank" {
+		t.Fatalf("move outside the oracle shop: %d %+v", status, store.selection)
+	}
 }

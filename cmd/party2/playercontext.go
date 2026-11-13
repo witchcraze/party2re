@@ -19,13 +19,14 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 	scenes := []playercontext.SceneDefinition{
 		{ID: "town", Pageable: true}, {ID: "alchemy", Parent: "town", Pageable: true},
 		{ID: "altar", Parent: "town"}, {ID: "auction", Parent: "town"}, {ID: "bank", Parent: "town"},
-		{ID: "blackmarket", Parent: "town", Pageable: true, CanEnter: blackmarket.CheckEligibility},
+		// Reached only through the Oracle shop's ＠やみいちば (goods.cgi).
+		{ID: "blackmarket", Parent: "oracle", Pageable: true, CanEnter: blackmarket.CheckEligibility},
 		{ID: "blacksmith", Parent: "town"},
 		{ID: "chapel", Parent: "town"},
 		{ID: "depot", Parent: "town", Pageable: true},
 		{ID: "exile", Parent: "town"},
 		{ID: "fleamarket", Parent: "town", Pageable: true},
-		{ID: "gemstore", Parent: "town"}, {ID: "wishingwell", Parent: "town"}, {ID: "tavern", Parent: "town"}, {ID: "lottery", Parent: "town"}, {ID: "takarakuji", Parent: "town"}, {ID: "plantation", Parent: "town"},
+		{ID: "gemstore", Parent: "town"}, {ID: "wishingwell", Parent: "town"}, {ID: "tavern", Parent: "town"}, {ID: "lottery", Parent: "town"}, {ID: "takarakuji", Parent: "town"}, {ID: "plantation", Parent: "town"}, {ID: "oracle", Parent: "town"},
 		// Reached only by Home reins; the recorded visit, not navigation, admits.
 		{ID: "god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitHeaven }},
 		{ID: "u_god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitUnderworld }},

@@ -10,34 +10,15 @@ import (
 	"time"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
-const (
-	OracleLocationName    = "オラクル屋"
-	OracleNPCName         = "@ラクル"
-	OracleBgImg           = "bgimg/goods.gif"
-	OracleInspectMessage  = "@ラクル「おっ？なんじゃなんじゃ？わしゃ何も知らんよ」"
-	OracleBlackMarketHint = "＠やみいちば に行きたい"
-	MinBlackMarketJobLv   = 15
-)
-
 var (
 	ErrCostumeNotAvailable          = errors.New("costume is not available for your job level")
-	ErrBlackMarketNotDiscovered     = errors.New("you have not discovered the black market")
 	ErrItemUnavailableInHelperQuest = errors.New("item is temporarily unavailable due to active helper request")
 )
-
-var OracleWords = []string{
-	"おっ！久しぶりのお客だ！よく来たよく来た！ここはオラクル屋だよ",
-	"＠かべがみでそなたの家をオシャレにすることができるよん",
-	"壁紙は買ってしばらくしたら、こちらで勝手に張り替えておくよん。すぐ確認したい人は自分の家で更新ボタンを押すといいよ",
-	"衣装は着た時からその日限りのレンタルだよ、次の日には返してもらうよ",
-	"衣装は転職するときにも返してもらうよ",
-}
 
 type OracleItem struct {
 	ItemNo   int    `json:"item_no"`
@@ -50,23 +31,15 @@ type OracleItem struct {
 type ActiveCostume = costume.ActiveCostume
 
 type OracleStatus struct {
-	CharacterID          string          `json:"character_id"`
-	LocationName         string          `json:"location_name"`
-	NPCName              string          `json:"npc_name"`
-	BgImg                string          `json:"bgimg"`
-	AvailableCostumes    []OracleItem    `json:"available_costumes"`
-	AvailableWallpapers  []WallpaperInfo `json:"available_wallpapers"`
-	ActiveCostume        *ActiveCostume  `json:"active_costume,omitempty"`
-	CanUnlockBlackMarket bool            `json:"can_unlock_black_market"`
+	CharacterID         string          `json:"character_id"`
+	AvailableCostumes   []OracleItem    `json:"available_costumes"`
+	AvailableWallpapers []WallpaperInfo `json:"available_wallpapers"`
+	ActiveCostume       *ActiveCostume  `json:"active_costume"`
 }
 
 type WallpaperInfo struct {
 	Name  string `json:"name"`
 	Price int    `json:"price"`
-}
-
-type OracleInspectResult struct {
-	Hint string `json:"hint,omitempty"`
 }
 
 type CostumeBuyResult struct {
@@ -111,7 +84,7 @@ var rawOracleItems = map[int]struct {
 	138: {name: "タクシード", price: 500, maleIcon: "chr/027.gif", femaleIcon: "chr/027.gif"},
 	139: {name: "闇人の衣装", price: 600, maleIcon: "chr/025.gif", femaleIcon: "chr/025.gif"},
 	140: {name: "英雄の衣装", price: 700, maleIcon: "chr/034.gif", femaleIcon: "chr/028.gif"},
-	141: {name: "モシャスの巻物", price: 1500, maleIcon: "chr/001.gif", femaleIcon: "chr/001.gif"},
+	141: {name: "変身の巻物", price: 1500, maleIcon: "chr/001.gif", femaleIcon: "chr/001.gif"},
 }
 
 // AvailableCostumes returns the list of available costume items according to legacy goods.cgi gating rules:
@@ -167,44 +140,6 @@ func CostumeIcon(itemNo int, gender string) string {
 	return raw.maleIcon
 }
 
-// OracleTalk returns a random dialogue from legacy @words.
-func OracleTalk() string {
-	idx := random.IntN(len(OracleWords))
-	return OracleWords[idx]
-}
-
-// OracleInspect returns Black Market hint if eligible (job_lv >= 15).
-func OracleInspect(jobLevel int) OracleInspectResult {
-	res := OracleInspectResult{}
-	if jobLevel >= MinBlackMarketJobLv {
-		res.Hint = OracleBlackMarketHint
-	}
-	return res
-}
-
-// DiscoverBlackMarket checks if character jobLevel is eligible to discover Black Market.
-func DiscoverBlackMarket(jobLevel int) error {
-	if jobLevel < MinBlackMarketJobLv {
-		return ErrBlackMarketNotDiscovered
-	}
-	return nil
-}
-
-// OracleTalk forwards to OracleTalk.
-func (s *Service) OracleTalk() string {
-	return OracleTalk()
-}
-
-// OracleInspect forwards to OracleInspect.
-func (s *Service) OracleInspect(jobLevel int) OracleInspectResult {
-	return OracleInspect(jobLevel)
-}
-
-// DiscoverBlackMarket forwards to DiscoverBlackMarket.
-func (s *Service) DiscoverBlackMarket(jobLevel int) error {
-	return DiscoverBlackMarket(jobLevel)
-}
-
 // GetOracleStatus retrieves the current status, catalog, wallpapers, and active costume.
 func (s *Service) GetOracleStatus(ctx context.Context, characterID string) (*OracleStatus, error) {
 	char, err := s.charRepo.FindByID(ctx, characterID)
@@ -252,20 +187,19 @@ func (s *Service) GetOracleStatus(ctx context.Context, characterID string) (*Ora
 	var activeCostume *ActiveCostume
 	if s.costumeRepo != nil {
 		active, err := s.costumeRepo.GetActiveCostume(ctx, characterID)
-		if err == nil && active != nil && active.IsActive(s.nowFunc().UTC()) {
+		if err != nil {
+			return nil, err
+		}
+		if active != nil && active.IsActive(s.nowFunc().UTC()) {
 			activeCostume = active
 		}
 	}
 
 	return &OracleStatus{
-		CharacterID:          char.ID,
-		LocationName:         OracleLocationName,
-		NPCName:              OracleNPCName,
-		BgImg:                OracleBgImg,
-		AvailableCostumes:    costumes,
-		AvailableWallpapers:  wallpapers,
-		ActiveCostume:        activeCostume,
-		CanUnlockBlackMarket: char.JobLevel >= MinBlackMarketJobLv,
+		CharacterID:         char.ID,
+		AvailableCostumes:   costumes,
+		AvailableWallpapers: wallpapers,
+		ActiveCostume:       activeCostume,
 	}, nil
 }
 

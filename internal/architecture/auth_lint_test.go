@@ -418,10 +418,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleRenameMonster":       "monster.go",
 		"handleSendMonster":         "monster.go",
 		"handleReleaseMonster":      "monster.go",
-		// Oracle
-		"handleOracleBuyCostume":   "oracle.go",
-		"handleOracleBuyWallpaper": "oracle.go",
-		"handleOracleBlackMarket":  "oracle.go",
 		// Helper
 		"handleCompleteHelperQuest": "helper_rescue.go",
 	}

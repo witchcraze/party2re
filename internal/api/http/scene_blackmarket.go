@@ -39,7 +39,7 @@ func (h *Handler) blackMarketSceneData(ctx context.Context, r playercontext.Resu
 	if end < len(candidates) {
 		page.Next = &playercontext.PageParams{Destination: n.Destination, Offset: end, Limit: limit}
 	}
-	data := BlackMarketSceneData{Parent: "town", Status: *status, CandidateCount: len(candidates), Page: page}
+	data := BlackMarketSceneData{Parent: "oracle", Status: *status, CandidateCount: len(candidates), Page: page}
 	data.SacrificeCandidates = append([]blackmarket.SacrificeCandidate{}, candidates[start:end]...)
 	return data, nil
 }

@@ -1698,7 +1698,7 @@
             "$ref": "#/components/schemas/ScenePage"
           },
           "parent": {
-            "const": "town",
+            "const": "oracle",
             "type": "string"
           },
           "prizes": {
@@ -4383,7 +4383,8 @@
                         "tavern",
                         "lottery",
                         "takarakuji",
-                        "plantation"
+                        "plantation",
+                        "oracle"
                       ],
                       "type": "string"
                     }
@@ -4523,7 +4524,8 @@
                         "tavern",
                         "lottery",
                         "takarakuji",
-                        "plantation"
+                        "plantation",
+                        "oracle"
                       ],
                       "type": "string"
                     },
@@ -7554,6 +7556,103 @@
               "properties": {
                 "action": {
                   "const": "plantation_harvest",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "oracle_buy",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_no": {
+                      "description": "One of the oracle scene's available_costumes item_no values.",
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "item_no"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "oracle_wallpaper",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "wallpaper": {
+                      "description": "One of the oracle scene's available_wallpapers names.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "wallpaper"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "oracle_blackmarket",
                   "type": "string"
                 }
               },
@@ -12506,19 +12605,52 @@
         ],
         "type": "object"
       },
-      "OracleBuyWallpaperResponse": {
+      "OracleSceneData": {
         "additionalProperties": false,
+        "description": "The actor's costume catalog (gated by job level, minus helper-requested items), the wallpapers and the worn costume. oracle_blackmarket is offered only to characters who qualify for the black market. NPC dialogue comes from npc_talk/npc_inspect. Observation never buys.",
         "properties": {
-          "message": {
+          "active_costume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostumeActiveCostume"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_costumes": {
+            "items": {
+              "$ref": "#/components/schemas/StoreOracleItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "available_wallpapers": {
+            "items": {
+              "$ref": "#/components/schemas/StoreWallpaperInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "character_id": {
             "type": "string"
           },
-          "wallpaper": {
+          "parent": {
+            "const": "town",
             "type": "string"
           }
         },
         "required": [
-          "wallpaper",
-          "message"
+          "parent",
+          "character_id",
+          "available_costumes",
+          "available_wallpapers",
+          "active_costume"
         ],
         "type": "object"
       },
@@ -14874,7 +15006,8 @@
                   "tavern",
                   "lottery",
                   "takarakuji",
-                  "plantation"
+                  "plantation",
+                  "oracle"
                 ],
                 "type": "string"
               }
@@ -15070,7 +15203,8 @@
               "tavern",
               "lottery",
               "takarakuji",
-              "plantation"
+              "plantation",
+              "oracle"
             ],
             "type": "string"
           },
@@ -15209,6 +15343,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/PlantationSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OracleSceneData"
                     }
                   ]
                 }
@@ -16141,6 +16278,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/PlantationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "oracle"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/OracleSceneData"
                 },
                 "support": {
                   "properties": {
@@ -17349,64 +17516,6 @@
         ],
         "type": "object"
       },
-      "StoreOracleStatus": {
-        "additionalProperties": false,
-        "properties": {
-          "active_costume": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CostumeActiveCostume"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "available_costumes": {
-            "items": {
-              "$ref": "#/components/schemas/StoreOracleItem"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "available_wallpapers": {
-            "items": {
-              "$ref": "#/components/schemas/StoreWallpaperInfo"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "bgimg": {
-            "type": "string"
-          },
-          "can_unlock_black_market": {
-            "type": "boolean"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "bgimg",
-          "available_costumes",
-          "available_wallpapers",
-          "can_unlock_black_market"
-        ],
-        "type": "object"
-      },
       "StoreSale": {
         "additionalProperties": false,
         "properties": {
@@ -18558,7 +18667,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message."
           },
           "400": {
             "content": {
@@ -25527,613 +25636,6 @@
         "summary": "Change character name",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/oracle": {
-      "get": {
-        "description": "Returns Oracle Shop status, costume catalog gated by job level, home wallpapers, and current active costume rental.",
-        "operationId": "getOracleStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/StoreOracleStatus"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Oracle Shop status retrieved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Oracle Shop status, costume catalog, wallpapers, and active rental",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/blackmarket": {
-      "post": {
-        "description": "Checks if character meets level requirements to discover Black Market from Oracle Shop hint.",
-        "operationId": "discoverOracleBlackMarket",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    },
-                    "unlocked": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "unlocked",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Black Market discovery eligibility verified"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character job level insufficient (requires job_lv \u003e= 15)"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Check Black Market discovery from Oracle Shop",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/buy": {
-      "post": {
-        "description": "Purchases a costume consumable item from Oracle Shop with gold. Delivers to inventory (or routes overflow to depot) and records in item collection.",
-        "operationId": "buyOracleCostume",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_no": {
-                    "description": "Costume item number (e.g. 44..56, 138..141)",
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "item_no"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "delivered_to": {
-                      "description": "Destination where item was delivered (inventory or depot)",
-                      "type": "string"
-                    },
-                    "item_name": {
-                      "type": "string"
-                    },
-                    "item_no": {
-                      "type": "integer"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "price": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "item_no",
-                    "item_name",
-                    "price",
-                    "delivered_to",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Costume purchased successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Insufficient gold, unavailable costume item, or active helper quest conflict"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Buy a costume consumable item",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/inspect": {
-      "post": {
-        "description": "Inspects Oracle Shop NPC @ラクル, showing description and conditional Black Market hint for job level \u003e= 15.",
-        "operationId": "inspectOracleNPC",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "hint": {
-                      "type": "string"
-                    },
-                    "location_name": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "npc_name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "character_id",
-                    "location_name",
-                    "npc_name",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "NPC description and optional hint retrieved"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Inspect Oracle NPC @ラクル",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/talk": {
-      "post": {
-        "description": "Talks to Oracle Shop NPC @ラクル, receiving a randomized fortune-telling dialogue.",
-        "operationId": "talkOracleNPC",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "location_name": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "npc_name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "character_id",
-                    "location_name",
-                    "npc_name",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "NPC dialogue returned successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Talk to Oracle NPC @ラクル",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/wallpaper": {
-      "post": {
-        "description": "Purchases and applies a seasonal or scenic wallpaper for the character's private home estate.",
-        "operationId": "buyOracleHomeWallpaper",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "wallpaper": {
-                    "description": "Wallpaper identifier (e.g. stage10, stage11...)",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "wallpaper"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OracleBuyWallpaperResponse"
-                }
-              }
-            },
-            "description": "Home wallpaper purchased and applied successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Insufficient gold or invalid wallpaper identifier"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Purchase home wallpaper",
-        "tags": [
-          "Oracle Shop"
         ]
       }
     },
