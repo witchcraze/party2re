@@ -105,7 +105,8 @@ if command -v go >/dev/null 2>&1; then
         echo "$SCHEMA_HASH" > "$SCHEMA_STAMP_FILE"
     fi
     # Step 4 already verified ./internal/architecture on this unchanged tree, and .git/.cache walks prevent reliable Go testcache hits there.
-    SUITE_PKGS=$(go list ./... | awk '!/[/]internal[/]architecture$/ { printf "%s%s", (sep ? " " : ""), $0; sep=1 }')
+    RAW_PKGS=$(go list ./...)
+    SUITE_PKGS=$(printf '%s\n' "$RAW_PKGS" | awk '!/[/]internal[/]architecture$/ { printf "%s%s", (sep ? " " : ""), $0; sep=1 }')
     if [ -z "$SUITE_PKGS" ]; then
         echo "==> [verify.sh] ERROR: No test packages resolved for Step 6." >&2
         exit 1
@@ -115,7 +116,7 @@ if command -v go >/dev/null 2>&1; then
     PARTY2_VALKEY_ADDR="127.0.0.1:${TEST_VALKEY_PORT}" \
     go test ${TIMEOUT_ARG} ${SUITE_PKGS}
 else
-    docker compose run --rm app sh -c 'suite_pkgs=$(go list ./... | awk '\''!/[/]internal[/]architecture$/ { printf "%s%s", (sep ? " " : ""), $0; sep=1 }'\'') && [ -n "$suite_pkgs" ] && go test '"${TIMEOUT_ARG}"' -count=1 $suite_pkgs'
+    docker compose run --rm app sh -c 'set -eu; raw_pkgs=$(go list ./...); suite_pkgs=$(printf "%s\n" "$raw_pkgs" | awk '\''!/[/]internal[/]architecture$/ { printf "%s%s", (sep ? " " : ""), $0; sep=1 }'\''); [ -n "$suite_pkgs" ]; exec go test '"${TIMEOUT_ARG}"' -count=1 $suite_pkgs'
 fi
 
 echo "==> [7/7] Running smoke image build..."
