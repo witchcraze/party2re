@@ -29,6 +29,18 @@ func WithJob(jobs JobService) Option {
 	}
 }
 
+// jobName is the display name of jobID, or "" without a job service.
+func (h *Handler) jobName(jobID string) string {
+	if h.jobs != nil {
+		for _, job := range h.jobs.ListDefinitions() {
+			if job.ID == jobID {
+				return job.Name
+			}
+		}
+	}
+	return ""
+}
+
 type changeJobRequest struct {
 	JobID string `json:"job_id"`
 }

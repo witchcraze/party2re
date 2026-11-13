@@ -75,27 +75,27 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	}{
 		{"dead", func(s *Snapshot) { s.Character.Stats.HP = 0 }, []string{
 			"scene_enter", "scene_select", "scene_page", "scene_back",
-			"home_sleep", "place_say", "place_whisper", "chapel_pray",
+			"home_sleep", "npc_talk", "npc_inspect", "place_say", "place_whisper", "chapel_pray",
 			"bank_deposit", "bank_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_purchase", "fleamarket_cancel",
 			"store_build", "store_list_gold", "store_list_barter", "store_withdraw", "store_buy", "store_trade", "store_rename", "store_wallpaper", "store_interior_add", "store_interior_rename", "store_interior_clean",
-			"shop_purchase", "shop_sell", "shop_batch_purchase", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_buy", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "secretshop_purchase", "blackmarket_sacrifice", "blackmarket_trade",
+			"shop_purchase", "shop_sell", "shop_batch_purchase", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_buy", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "secretshop_purchase", "park_divinate", "secretshop_puffpuff", "blackmarket_sacrifice", "blackmarket_trade",
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "lottery_takarakuji_buy", "tavern_order", "contest_enter",
 			"wishingwell_exchange", "altar_pray", "altar_wish", "god_wish", "job_change", "medal_claim",
-			"helper_complete", "park_post", "player_inspect", "rescue_request", "presence_refresh",
+			"helper_complete", "player_inspect", "rescue_request", "presence_refresh",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 			"exile_petition", "exile_approve", "exile_oppose",
 		}},
 		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{
 			"scene_enter", "scene_select", "scene_page", "scene_back",
-			"home_sleep", "place_say", "place_whisper", "chapel_pray",
+			"home_sleep", "npc_talk", "npc_inspect", "place_say", "place_whisper", "chapel_pray",
 			"bank_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_cancel",
 			"store_list_gold", "store_list_barter", "store_withdraw", "store_trade", "store_rename", "store_wallpaper", "store_interior_add", "store_interior_rename", "store_interior_clean",
-			"shop_sell", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "blackmarket_sacrifice", "blackmarket_trade",
+			"shop_sell", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "park_divinate", "secretshop_puffpuff", "blackmarket_sacrifice", "blackmarket_trade",
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "contest_enter",
 			"wishingwell_exchange", "altar_pray", "altar_wish", "god_wish", "job_change", "medal_claim",
-			"helper_complete", "park_post", "player_inspect", "rescue_request", "presence_refresh",
+			"helper_complete", "player_inspect", "rescue_request", "presence_refresh",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 			"exile_petition", "exile_approve", "exile_oppose",
 		}},
@@ -108,7 +108,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		{"processing", func(s *Snapshot) {
 			s.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StateProcessing}}
 		}, []string{"rescue_request", "presence_refresh"}},
-		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "place_say", "place_whisper", "secretshop_puffpuff", "player_inspect", "rescue_request", "presence_refresh"}},
+		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "place_say", "place_whisper", "park_divinate", "secretshop_puffpuff", "player_inspect", "rescue_request", "presence_refresh"}},
 		{"all constraints", func(s *Snapshot) {
 			s.Character.Stats.HP = 0
 			s.Character.Tired = 100
@@ -126,7 +126,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 84 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 87 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -146,8 +146,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 77 {
-		t.Fatalf("exhausted action count = %d, want 77", len(got))
+	if len(got) != 80 {
+		t.Fatalf("exhausted action count = %d, want 80", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request", "presence_refresh"} {
 		if !slices.Contains(got, action) {
@@ -198,7 +198,7 @@ func TestEvaluation_OrderAndShortCircuit(t *testing.T) {
 
 func TestEvaluate_DeadNonCombatActions(t *testing.T) {
 	s := Snapshot{Character: character.Character{Money: 100}, LocationID: LocationTown}
-	for _, id := range []string{"bank_withdraw", "park_post", "shop_purchase"} {
+	for _, id := range []string{"bank_withdraw", "npc_talk", "park_divinate", "shop_purchase"} {
 		t.Run(id, func(t *testing.T) {
 			if !slices.Contains(Evaluate(s), id) {
 				t.Errorf("noncombat legacy action hidden solely by HP=0: %s", id)
@@ -213,7 +213,7 @@ func TestEvaluate_LivingVsDeadCombatContrast(t *testing.T) {
 	}
 	sampleNonCombatActions := []string{
 		"bank_withdraw", "bank_deposit", "shop_purchase", "shop_sell",
-		"blacksmith_seal", "casino_slot", "job_change", "park_post",
+		"blacksmith_seal", "casino_slot", "job_change", "park_divinate",
 	}
 
 	living := healthySnapshot()

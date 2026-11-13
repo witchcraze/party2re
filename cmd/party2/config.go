@@ -11,7 +11,6 @@ import (
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/home"
-	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/valkey"
@@ -38,10 +37,6 @@ type Config struct {
 		CompanionPhraseLimit int
 		LetterLogLimit       int
 		LetterMaxLength      int
-	}
-	Park struct {
-		PostLogLimit  int
-		PostMaxLength int
 	}
 	PlaceLog placelog.Config
 	// PlaceMemberTTL is the legacy $limit_member_time.
@@ -106,13 +101,6 @@ func ConfigFromEnv() (Config, error) {
 			CompanionPhraseLimit: resolvePositiveInt("PARTY2_HOME_COMPANION_PHRASE_LIMIT", os.Getenv("PARTY2_HOME_COMPANION_PHRASE_LIMIT"), home.DefaultCompanionPhraseLimit),
 			LetterLogLimit:       resolvePositiveInt("PARTY2_HOME_LETTER_LOG_LIMIT", os.Getenv("PARTY2_HOME_LETTER_LOG_LIMIT"), home.DefaultLetterLogLimit),
 			LetterMaxLength:      resolvePositiveInt("PARTY2_HOME_LETTER_MAX_LENGTH", os.Getenv("PARTY2_HOME_LETTER_MAX_LENGTH"), home.DefaultLetterMaxLength),
-		},
-		Park: struct {
-			PostLogLimit  int
-			PostMaxLength int
-		}{
-			PostLogLimit:  resolvePositiveInt("PARTY2_PARK_POST_LOG_LIMIT", os.Getenv("PARTY2_PARK_POST_LOG_LIMIT"), park.DefaultLogLimit),
-			PostMaxLength: resolvePositiveInt("PARTY2_PARK_POST_MAX_LENGTH", os.Getenv("PARTY2_PARK_POST_MAX_LENGTH"), park.DefaultMaxContentLength),
 		},
 		ActionWait: time.Duration(resolvePositiveInt("PARTY2_ACTION_WAIT_SECONDS", os.Getenv("PARTY2_ACTION_WAIT_SECONDS"), int(playercontext.DefaultActionWait/time.Second))) * time.Second,
 		PlaceLog: placelog.Config{

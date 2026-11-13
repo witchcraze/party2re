@@ -32,7 +32,7 @@ func TestPlayerInspectGatewayLocation(t *testing.T) {
 	}{
 		{nil, ""},
 		{&PlayerInspectionLocation{PublicLocation: playercontext.PublicLocation{Kind: "quest"}}, "クエスト中"},
-		{&PlayerInspectionLocation{PublicLocation: playercontext.PublicLocation{Kind: "scene", SceneID: "town"}}, "始まりの街"},
+		{&PlayerInspectionLocation{PublicLocation: playercontext.PublicLocation{Kind: "scene", SceneID: "town"}}, "交流広場"},
 		{&PlayerInspectionLocation{PublicLocation: playercontext.PublicLocation{Kind: "home", HomeOwnerCharacterID: "host", HomeOwnerName: "家主"}}, "家主の家"},
 	} {
 		f, router := playerInspectRouter(t)

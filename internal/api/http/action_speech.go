@@ -15,7 +15,7 @@ import (
 )
 
 // maxSpeechLength is the legacy $max_comment, counted after HTML escaping like
-// letters and park posts; the whisper recipient is taken separately.
+// letters; the whisper recipient is taken separately.
 const maxSpeechLength = 500
 
 // CharacterNameLookup resolves a whisper recipient by exact name.

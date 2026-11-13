@@ -72,7 +72,7 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		adapter := sceneAdapter{definition: definition}
 		switch definition.ID {
 		case "town":
-			adapter.title, adapter.commands = "始まりの街", []string{"adventure_start"}
+			adapter.title, adapter.commands = "交流広場", []string{"adventure_start", "park_divinate"}
 			adapter.read = func(_ context.Context, r playercontext.Result) (any, error) { return h.townSceneData(r), nil }
 		case "town1", "town2", "town3", "town4":
 			t, _ := town.GetTown(definition.ID)

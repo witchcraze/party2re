@@ -148,7 +148,7 @@ func TestPlayerContextHTTP_States(t *testing.T) {
 			}
 			want := playercontext.Evaluate(playercontext.Snapshot{Character: readers.char, LocationID: "town"})
 			want = slices.DeleteFunc(want, func(id string) bool {
-				return !slices.Contains([]string{"adventure_start", "home_sleep", "home_wake", "rescue_request", "shop_purchase", "shop_sell", "shop_batch_purchase", "shop_synthesize"}, id)
+				return !slices.Contains([]string{"adventure_start", "home_sleep", "home_wake", "rescue_request", "shop_purchase", "shop_sell", "shop_batch_purchase", "shop_synthesize", "npc_talk", "npc_inspect", "park_divinate", "secretshop_puffpuff"}, id)
 			})
 			if !reflect.DeepEqual(ids, want) {
 				t.Fatalf("actions=%v want=%v", ids, want)

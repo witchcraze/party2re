@@ -179,7 +179,7 @@ To preserve parallel testability and eliminate global state mutations:
    - `services_core.go`: Player, Character, Inventory, Item/Job catalogs, and transaction orchestration.
    - `services_econ.go`: Shop, Bank, Depot, Blacksmith, Alchemy, Plantation, Auction, Flea Market, and Gem Store.
    - `services_cmbt.go`: Battle engine, Boss, PvP, GvG, Dungeon, Challenge, Party, Replay, and Custom Skill.
-   - `services_soc.go`: Guild, Ranking, Park, Home, Notification, Scheduling, and Worker.
+   - `services_soc.go`: Guild, Ranking, Home, Notification, Scheduling, and Worker.
    - `services_misc.go`: Town facilities and side systems (Casino, Contest, Medal, Collection, Chapel, Altar, Wishing Well, Activity, etc.).
    - `wire.go`: Cross-domain event hooks (`VictoryHook`, `SynthesisHook`, `GamePlayedHook`, `PostAdventureHook`) and HTTP handler composition.
 5. **Fail-Fast Startup Connectivity & Clean Teardown**:

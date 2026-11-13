@@ -292,6 +292,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"item_id", "quantity"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
+	{ID: "park_divinate", Label: "うらない", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "secretshop_puffpuff", Label: "ぱふぱふ", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "blackmarket_sacrifice", Label: "闇市でレアアイテムをささげる", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "blackmarket_trade", Label: "闇市景品交換", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"prize_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
@@ -435,14 +436,6 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		Category:       "social",
 		OperationID:    "completeHelperQuest",
 		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "park_post",
-		Label:          "交流広場に伝言投稿",
-		Category:       "social",
-		OperationID:    "postParkMessage",
-		RequiredParams: []string{"content"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	// Common しらべる on a player (lib/system.cgi shiraberu): usable in every

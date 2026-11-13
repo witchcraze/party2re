@@ -165,7 +165,9 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 		// Claim the wait atomically before running, so concurrent commands cannot
 		// all pass the read-only check above.
 		var claim playercontext.ActionWaitClaim
-		if playercontext.StartsActionWait(def) {
+		// The park answers ＠しらべる>@町娘 through ＠はなす, a logged reply that waits.
+		loggedInspect := req.Action == "npc_inspect" && len(npcProfiles[current.Snapshot.LocationID].inspectWords) > 0
+		if playercontext.StartsActionWait(def) || loggedInspect {
 			var claimed bool
 			claim, claimed, err = h.playerContext.ClaimActionWait(r.Context(), char.ID)
 			if err != nil {

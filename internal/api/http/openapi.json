@@ -4136,6 +4136,31 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "park_divinate",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "place_say",
                   "type": "string"
                 }
@@ -8747,38 +8772,6 @@
         ],
         "type": "object"
       },
-      "CursorPageParkPost": {
-        "properties": {
-          "has_more": {
-            "description": "Whether additional records exist beyond the current page",
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "next_cursor": {
-            "description": "Opaque cursor token for retrieving the next page of results",
-            "type": "string"
-          },
-          "prev_cursor": {
-            "description": "Opaque cursor token for retrieving the previous page of results",
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "limit",
-          "has_more"
-        ],
-        "type": "object"
-      },
       "CursorPageReplayHeader": {
         "properties": {
           "has_more": {
@@ -12567,35 +12560,6 @@
         ],
         "type": "object"
       },
-      "PageParkPost": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "Offset from beginning of result set",
-            "type": "integer"
-          },
-          "total": {
-            "description": "Total number of records matching the query",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
       "PagePartySummary": {
         "properties": {
           "items": {
@@ -12689,38 +12653,6 @@
         ],
         "type": "object"
       },
-      "PaginationCursorPageParkPost": {
-        "additionalProperties": false,
-        "properties": {
-          "has_more": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "limit": {
-            "type": "integer"
-          },
-          "next_cursor": {
-            "type": "string"
-          },
-          "prev_cursor": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "limit",
-          "has_more"
-        ],
-        "type": "object"
-      },
       "PaginationCursorPageReplayReplayHeader": {
         "additionalProperties": false,
         "properties": {
@@ -12750,74 +12682,6 @@
           "items",
           "limit",
           "has_more"
-        ],
-        "type": "object"
-      },
-      "ParkDialogueResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dialogue"
-        ],
-        "type": "object"
-      },
-      "ParkDivinationResult": {
-        "additionalProperties": false,
-        "properties": {
-          "fortune": {
-            "type": "string"
-          },
-          "lucky_color": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "fortune",
-          "lucky_color",
-          "message"
-        ],
-        "type": "object"
-      },
-      "ParkPost": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "color": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "recipient_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "character_id",
-          "character_name",
-          "content",
-          "color",
-          "recipient_name",
-          "created_at"
         ],
         "type": "object"
       },
@@ -18504,7 +18368,7 @@
               }
             }
           },
-          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_sell require non-null string item_id; depot_withdraw accepts an optional non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. place_say requires non-null string text and place_whisper also requires non-null string recipient_name; the place comes from the owner's current scene. Invalid text or name is rejected before execution with no log row; an unknown recipient is 404 RECIPIENT_NOT_FOUND, and a scene without a place log is 409 PLACE_UNAVAILABLE. place_say is never blocked by ACTION_WAIT. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor. presence_refresh accepts omitted params or an empty object and has no effect beyond the member refresh that precedes every command; it is never blocked by ACTION_WAIT, sleep or death.",
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_sell require non-null string item_id; depot_withdraw accepts an optional non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect, park_divinate and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. place_say requires non-null string text and place_whisper also requires non-null string recipient_name; the place comes from the owner's current scene. Invalid text or name is rejected before execution with no log row; an unknown recipient is 404 RECIPIENT_NOT_FOUND, and a scene without a place log is 409 PLACE_UNAVAILABLE. place_say is never blocked by ACTION_WAIT. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor. presence_refresh accepts omitted params or an empty object and has no effect beyond the member refresh that precedes every command; it is never blocked by ACTION_WAIT, sleep or death.",
           "required": true
         },
         "responses": {
@@ -32856,465 +32720,6 @@
         ]
       }
     },
-    "/park/npc/divinate": {
-      "post": {
-        "operationId": "divinateParkNPC",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParkDivinationResult"
-                }
-              }
-            },
-            "description": "Fortune divination result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping or awaiting wake-up"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get daily fortune divination from park NPC",
-        "tags": [
-          "Park"
-        ]
-      }
-    },
-    "/park/npc/inspect": {
-      "get": {
-        "operationId": "inspectParkNPC",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParkDialogueResponse"
-                }
-              }
-            },
-            "description": "Park NPC inspection info"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Inspect town park NPC status",
-        "tags": [
-          "Park"
-        ]
-      }
-    },
-    "/park/npc/talk": {
-      "post": {
-        "operationId": "talkParkNPC",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParkDialogueResponse"
-                }
-              }
-            },
-            "description": "Park NPC dialogue response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping or awaiting wake-up"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Talk to town park NPC",
-        "tags": [
-          "Park"
-        ]
-      }
-    },
-    "/park/posts": {
-      "get": {
-        "operationId": "getParkPosts",
-        "parameters": [
-          {
-            "description": "Number of posts to fetch",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Offset from beginning of result set (default 0)",
-            "in": "query",
-            "name": "offset",
-            "schema": {
-              "default": 0,
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Opaque cursor for keyset pagination (e.g. returned in next_cursor)",
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/PaginationCursorPageParkPost"
-                    },
-                    {
-                      "$ref": "#/components/schemas/PageParkPost"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Park board posts"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get town park bulletin board posts",
-        "tags": [
-          "Park"
-        ]
-      },
-      "post": {
-        "operationId": "postParkMessage",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  },
-                  "color": {
-                    "type": "string"
-                  },
-                  "content": {
-                    "type": "string"
-                  },
-                  "recipient_name": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id",
-                  "content"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParkPost"
-                }
-              }
-            },
-            "description": "Message posted successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping or awaiting wake-up"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Post message to town park board",
-        "tags": [
-          "Park"
-        ]
-      }
-    },
     "/parties": {
       "get": {
         "description": "Lists recruiting or active multiplayer parties.",
@@ -36315,10 +35720,6 @@
     {
       "description": "Item purchasing and inventory resale transactions",
       "name": "Shop"
-    },
-    {
-      "description": "Town park bulletin board and NPC interactions",
-      "name": "Park"
     },
     {
       "description": "Small medal collection and rare reward exchange",

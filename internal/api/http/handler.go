@@ -131,7 +131,6 @@ type Handler struct {
 	adventures     AdventureService
 	shops          ShopService
 	medals         MedalService
-	park           ParkService
 	helpers        HelperService
 	rescues        RescueService
 	notifications  NotificationService
@@ -351,12 +350,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /adventures", h.handleStartAdventure)
 	mux.HandleFunc("GET /characters/{id}/adventures", h.handleListCharacterAdventures)
 	mux.HandleFunc("GET /characters/{id}/adventure-chronicle", h.handleGetAdventureChronicle)
-
-	mux.HandleFunc("GET /park/posts", h.handleGetParkPosts)
-	mux.HandleFunc("POST /park/posts", h.handlePostParkMessage)
-	mux.HandleFunc("POST /park/npc/talk", h.handleParkNPCTalk)
-	mux.HandleFunc("POST /park/npc/divinate", h.handleParkNPCDivinate)
-	mux.HandleFunc("GET /park/npc/inspect", h.handleParkNPCInspect)
 
 	mux.HandleFunc("GET /eventplaza", h.handleGetEventPlaza)
 	mux.HandleFunc("POST /eventplaza/presence", h.handlePostEventPlazaPresence)

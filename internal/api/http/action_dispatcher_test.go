@@ -368,7 +368,6 @@ func TestActionGatewayUnsupported(t *testing.T) {
 		{"documented seal inputs", "blacksmith_seal", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"documented alchemy inputs", "alchemy_synthesize", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"documented medal inputs", "medal_claim", "ACTION_NOT_IMPLEMENTED", 501, nil},
-		{"documented park inputs", "park_post", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"unconfigured query", "bank_deposit", "ACTION_NOT_IMPLEMENTED", 501, WithPlayerContext(nil)},
 		{"unconfigured adapter", "bank_withdraw", "ACTION_NOT_IMPLEMENTED", 501, withActionCommand[gatewayParams]("bank_withdraw", nil, nil)},
 	} {
