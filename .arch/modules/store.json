@@ -48,13 +48,27 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/store/service.go#Service.BuildStore",
       "lock_sequence": [
-        {"step": 1, "target": "store_town_capacity_lock", "lock_order": 0, "method": "StoreRepository.LockTownCapacityForUpdate", "mode": "INSERT ... ON DUPLICATE KEY UPDATE (row lock)"},
+        {"step": 1, "target": "store_name_lock", "lock_order": 0, "method": "StoreRepository.LockStoreNamesForUpdate", "mode": "INSERT ... ON DUPLICATE KEY UPDATE (row lock)"},
+        {"step": 2, "target": "store_town_capacity_lock", "lock_order": 0, "method": "StoreRepository.LockTownCapacityForUpdate", "mode": "INSERT ... ON DUPLICATE KEY UPDATE (row lock)"},
+        {"step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 4, "target": "character_stores", "method": "StoreRepository.CountActiveTownStores", "mode": "SELECT"},
+        {"step": 5, "target": "character_stores", "method": "StoreRepository.GetStoreByCharacterID", "mode": "SELECT"},
+        {"step": 6, "target": "character_stores", "method": "StoreRepository.ActiveStoreNameExists", "mode": "SELECT"},
+        {"step": 7, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE"},
+        {"step": 8, "target": "guilds", "method": "GuildPointsRegistrar.AddGuildPoints", "mode": "UPDATE"},
+        {"step": 9, "target": "character_stores", "method": "StoreRepository.SaveStore", "mode": "UPSERT"}
+      ]
+    },
+    {
+      "flow": "ChangeStoreName (看板変更)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/store/customization.go#Service.ChangeStoreName",
+      "lock_sequence": [
+        {"step": 1, "target": "store_name_lock", "lock_order": 0, "method": "StoreRepository.LockStoreNamesForUpdate", "mode": "INSERT ... ON DUPLICATE KEY UPDATE (row lock)"},
         {"step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
-        {"step": 3, "target": "character_stores", "method": "StoreRepository.CountActiveTownStores", "mode": "SELECT"},
-        {"step": 4, "target": "character_stores", "method": "StoreRepository.GetStoreByCharacterID", "mode": "SELECT"},
-        {"step": 5, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE"},
-        {"step": 6, "target": "guilds", "method": "GuildPointsRegistrar.AddGuildPoints", "mode": "UPDATE"},
-        {"step": 7, "target": "character_stores", "method": "StoreRepository.SaveStore", "mode": "UPSERT"}
+        {"step": 3, "target": "character_stores", "method": "StoreRepository.GetStoreByCharacterID", "mode": "SELECT"},
+        {"step": 4, "target": "character_stores", "method": "StoreRepository.ActiveStoreNameExists", "mode": "SELECT"},
+        {"step": 5, "target": "character_stores", "method": "StoreRepository.SaveStore", "mode": "UPSERT"}
       ]
     },
     {

@@ -36,12 +36,21 @@ func (r *StoreRepository) GetStoreByID(ctx context.Context, storeID string) (sto
 	`, storeID)
 }
 
-func (r *StoreRepository) GetStoreByName(ctx context.Context, storeName string) (store.Store, error) {
-	return r.queryStore(ctx, `
-		SELECT id, character_id, town_id, store_name, house_style, wallpaper, expires_at, created_at, updated_at
-		FROM character_stores
-		WHERE store_name = ?
-	`, storeName)
+func (r *StoreRepository) ActiveStoreNameExists(ctx context.Context, storeName string, now time.Time) (bool, error) {
+	var exists bool
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM character_stores WHERE store_name = ? AND expires_at > ?)
+	`, storeName, now).Scan(&exists)
+	return exists, err
+}
+
+// LockStoreNamesForUpdate holds the shared name-claim row until the ambient transaction ends.
+func (r *StoreRepository) LockStoreNamesForUpdate(ctx context.Context) error {
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT INTO store_name_lock (id) VALUES (1)
+		ON DUPLICATE KEY UPDATE id = id
+	`)
+	return err
 }
 
 func (r *StoreRepository) queryStore(ctx context.Context, query string, arg interface{}) (store.Store, error) {

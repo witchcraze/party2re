@@ -2,11 +2,12 @@ package store
 
 import (
 	"context"
-	"errors"
 	"strings"
 )
 
 // ChangeStoreName updates the store's signboard name (requires 5,000 G balance, 0 G deducted).
+// Transaction: RunInTx
+// Lock Order: store_name_lock(0) -> characters(2)
 func (s *Service) ChangeStoreName(ctx context.Context, characterID, cleanName string) error {
 	if err := ValidateStoreName(cleanName); err != nil {
 		return err
@@ -15,6 +16,9 @@ func (s *Service) ChangeStoreName(ctx context.Context, characterID, cleanName st
 	now := s.nowFunc().UTC()
 
 	return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockStoreNamesForUpdate(txCtx); err != nil {
+			return err
+		}
 		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
 			return err
@@ -36,11 +40,11 @@ func (s *Service) ChangeStoreName(ctx context.Context, characterID, cleanName st
 		}
 
 		// Legacy rejects any active store with the name, including the actor's own.
-		namedStore, err := s.repo.GetStoreByName(txCtx, cleanName)
-		if err != nil && !errors.Is(err, ErrStoreNotFound) {
+		taken, err := s.repo.ActiveStoreNameExists(txCtx, cleanName, now)
+		if err != nil {
 			return err
 		}
-		if err == nil && namedStore.IsActive(now) {
+		if taken {
 			return ErrStoreNameTaken
 		}
 

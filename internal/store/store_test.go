@@ -45,14 +45,16 @@ func (m *mockStoreRepo) GetStoreByID(ctx context.Context, storeID string) (store
 	return s, nil
 }
 
-func (m *mockStoreRepo) GetStoreByName(ctx context.Context, storeName string) (store.Store, error) {
+func (m *mockStoreRepo) ActiveStoreNameExists(ctx context.Context, storeName string, now time.Time) (bool, error) {
 	for _, s := range m.stores {
-		if s.StoreName == storeName {
-			return s, nil
+		if s.StoreName == storeName && s.IsActive(now) {
+			return true, nil
 		}
 	}
-	return store.Store{}, store.ErrStoreNotFound
+	return false, nil
 }
+
+func (m *mockStoreRepo) LockStoreNamesForUpdate(context.Context) error { return nil }
 
 func (m *mockStoreRepo) LockTownCapacityForUpdate(context.Context, string) error { return nil }
 

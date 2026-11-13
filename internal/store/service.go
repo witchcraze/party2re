@@ -163,6 +163,8 @@ func (s *Service) wireCostumeClaimChecker() {
 
 // BuildStore builds the actor's store in townID (legacy ＠みせ: only a house
 // style is chosen). A rebuilt store keeps its registered name.
+// Transaction: RunInTx
+// Lock Order: store_name_lock(0) -> store_town_capacity_lock(0) -> characters(2) -> guilds(7)
 func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyle string) (*StoreCheckResult, error) {
 	t, ok := town.GetTown(townID)
 	if !ok {
@@ -176,6 +178,9 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 	var res *StoreCheckResult
 
 	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockStoreNamesForUpdate(txCtx); err != nil {
+			return err
+		}
 		// Rank 0: concurrent builders in one town must not both see a free slot.
 		if err := s.repo.LockTownCapacityForUpdate(txCtx, townID); err != nil {
 			return err
@@ -214,6 +219,13 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 		storeID, storeName, wallpaper := existing.ID, existing.StoreName, existing.Wallpaper
 		if storeID == "" {
 			storeID, storeName, wallpaper = s.idGen(), "@"+char.Name+"の店@", "none"
+		}
+		taken, err := s.repo.ActiveStoreNameExists(txCtx, storeName, now)
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrStoreNameTaken
 		}
 
 		if err := char.DeductMoney(StorePrice); err != nil {
