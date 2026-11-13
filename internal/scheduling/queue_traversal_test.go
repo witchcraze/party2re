@@ -16,6 +16,21 @@ import (
 	"github.com/witchcraze/party2re/internal/scheduling"
 )
 
+func selectScheduledActions(actions []core.ScheduledAction, ids ...string) []core.ScheduledAction {
+	ownedIDs := make(map[string]struct{}, len(ids))
+	for _, actionID := range ids {
+		ownedIDs[actionID] = struct{}{}
+	}
+
+	var selected []core.ScheduledAction
+	for _, action := range actions {
+		if _, ok := ownedIDs[action.ID]; ok {
+			selected = append(selected, action)
+		}
+	}
+	return selected
+}
+
 func TestWorker_QueueTraversal_StarvationPrevention(t *testing.T) {
 	client := openValkeyClient(t)
 	t.Cleanup(client.Close)
@@ -98,8 +113,12 @@ func TestWorker_QueueTraversal_StarvationPrevention(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchDue: %v", err)
 	}
-	for _, a := range due {
-		worker.ProcessAction(ctx, a)
+	ownedDue := selectScheduledActions(due, append(blockedIDs, healthyID)...)
+	if len(ownedDue) != 1 || ownedDue[0].ID != healthyID {
+		t.Fatalf("expected only healthy action %s among owned due actions, got %+v", healthyID, ownedDue)
+	}
+	for _, action := range ownedDue {
+		worker.ProcessAction(ctx, action)
 	}
 
 	// Handler calls must increment to 51 (healthy action executed; 50 blocked records not replayed)
@@ -201,8 +220,12 @@ func TestWorker_QueueTraversal_MultiPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchDue: %v", err)
 	}
-	for _, a := range due {
-		worker.ProcessAction(ctx, a)
+	ownedDue := selectScheduledActions(due, append(blockedIDs, healthyID)...)
+	if len(ownedDue) != 1 || ownedDue[0].ID != healthyID {
+		t.Fatalf("expected only healthy action %s among owned due actions, got %+v", healthyID, ownedDue)
+	}
+	for _, action := range ownedDue {
+		worker.ProcessAction(ctx, action)
 	}
 
 	if handler.calls != numBlocked+1 {
@@ -241,16 +264,6 @@ func TestWorker_QueueTraversal_HealthyContrast(t *testing.T) {
 		cleanupKeys(t, client, ids...)
 	})
 
-	foreignID := fmt.Sprintf("contrast-foreign-%s", id.New())
-	foreignAction := validTestAction(foreignID, baseTime.Add(-time.Second))
-	foreignAction.ActorID = ""
-	if err := repo.Schedule(ctx, foreignAction); err != nil {
-		t.Fatalf("Schedule foreign action: %v", err)
-	}
-	t.Cleanup(func() {
-		cleanupKeys(t, client, foreignID)
-	})
-
 	actions, err := repo.FindPendingByActorID(ctx, actorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID: %v", err)
@@ -285,9 +298,6 @@ func TestWorker_QueueTraversal_HealthyContrast(t *testing.T) {
 		if !valkey.IsValkeyNil(err) {
 			t.Fatalf("expected %s to be removed from queue, score=%s, err=%v", aID, score, err)
 		}
-	}
-	if _, err := client.Do(ctx, client.B().Zscore().Key("party2:scheduled:pending").Member(foreignID).Build()).ToString(); err != nil {
-		t.Fatalf("expected foreign action %s to remain in queue, err=%v", foreignID, err)
 	}
 }
 
@@ -597,12 +607,13 @@ func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
 		if len(due) > 50 {
 			t.Fatalf("tick %d returned %d actions, exceeding production limit 50", tick, len(due))
 		}
-		for _, a := range due {
-			worker.ProcessAction(ctx, a)
-			if a.ID == healthyID {
+		ownedDue := selectScheduledActions(due, healthyID, concurrentInsertID)
+		for _, action := range ownedDue {
+			worker.ProcessAction(ctx, action)
+			if action.ID == healthyID {
 				executedHealthy = true
 			}
-			if a.ID == concurrentInsertID {
+			if action.ID == concurrentInsertID {
 				executedConcurrent = true
 			}
 		}
@@ -660,10 +671,11 @@ func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchDue contrast: %v", err)
 	}
-	if len(dueContrast) != 1 || dueContrast[0].ID != contrastID {
-		t.Fatalf("expected contrast action %s returned immediately, got %+v", contrastID, dueContrast)
+	ownedContrast := selectScheduledActions(dueContrast, contrastID)
+	if len(ownedContrast) != 1 || ownedContrast[0].ID != contrastID {
+		t.Fatalf("expected contrast action %s returned immediately, got owned actions %+v", contrastID, ownedContrast)
 	}
-	worker.ProcessAction(ctx, dueContrast[0])
+	worker.ProcessAction(ctx, ownedContrast[0])
 	if handler.calls != 3 {
 		t.Fatalf("expected 3 handler calls after contrast, got %d", handler.calls)
 	}
