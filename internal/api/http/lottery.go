@@ -18,7 +18,7 @@ type LotteryService interface {
 	PlayRaffle(ctx context.Context, characterID string) (lottery.RaffleResult, int, corecharacter.Character, error)
 	GetTakarakujiStatus(ctx context.Context) (lottery.TakarakujiStatus, error)
 	BuyTakarakujiTicket(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error)
-	GetCharacterTakarakujiTicket(ctx context.Context, characterID string) (*lottery.TakarakujiTicket, []lottery.TakarakujiTicket, error)
+	HasPurchasedTakarakuji(ctx context.Context, characterID string) (bool, error)
 }
 
 var jst = time.FixedZone("JST", 9*60*60)
@@ -61,7 +61,7 @@ type LotteryRaffleResult struct {
 type TakarakujiBuyResult struct {
 	Purchased     bool                      `json:"purchased"`
 	Ticket        *lottery.TakarakujiTicket `json:"ticket"`
-	RemainingGold int                       `json:"remaining_gold,omitempty"`
+	RemainingGold *int                      `json:"remaining_gold,omitempty"` // set on purchase, even at 0G
 	Message       string                    `json:"message"`
 }
 
@@ -91,7 +91,7 @@ func WithLottery(service LotteryService) Option {
 			case err != nil:
 				return nil, err
 			}
-			return TakarakujiBuyResult{Purchased: true, Ticket: &res.Ticket, RemainingGold: res.RemainingGold,
+			return TakarakujiBuyResult{Purchased: true, Ticket: &res.Ticket, RemainingGold: &res.RemainingGold,
 				Message: "ありがとー。当たってたら " + drawDateLabel(res.DrawDate) + " に賞品が届くからね"}, nil
 		}, lotteryRejection)(h)
 	}
@@ -150,11 +150,11 @@ func (h *Handler) takarakujiSceneData(ctx context.Context, r playercontext.Resul
 	if err != nil {
 		return nil, err
 	}
-	current, _, err := h.lottery.GetCharacterTakarakujiTicket(ctx, r.Snapshot.Character.ID)
+	purchased, err := h.lottery.HasPurchasedTakarakuji(ctx, r.Snapshot.Character.ID)
 	if err != nil {
 		return nil, err
 	}
-	return TakarakujiSceneData{Parent: "town", TakarakujiStatus: status, DrawDateLabel: drawDateLabel(status.DrawDate), Purchased: current != nil}, nil
+	return TakarakujiSceneData{Parent: "town", TakarakujiStatus: status, DrawDateLabel: drawDateLabel(status.DrawDate), Purchased: purchased}, nil
 }
 
 // raffleMessage follows lot.cgi fukubiki.

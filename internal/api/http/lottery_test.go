@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,7 +22,9 @@ type lotteryFixture struct {
 	ticketErr error
 	status    lottery.TakarakujiStatus
 	statusErr error
-	current   *lottery.TakarakujiTicket
+	purchased bool
+	boughtErr error
+	goldLeft  int
 	raffle    lottery.RaffleResult
 	remaining int
 }
@@ -42,12 +45,12 @@ func (f *lotteryFixture) GetTakarakujiStatus(context.Context) (lottery.Takarakuj
 func (f *lotteryFixture) BuyTakarakujiTicket(ctx context.Context, actor string) (lottery.TakarakujiPurchaseResult, error) {
 	_, err := f.execute(ctx, actor, 0)
 	// 2026-11-20T15:00Z is 2026/11/21 00:00 JST.
-	return lottery.TakarakujiPurchaseResult{Ticket: lottery.TakarakujiTicket{ID: "t1", CharacterID: actor}, RemainingGold: 70000,
+	return lottery.TakarakujiPurchaseResult{Ticket: lottery.TakarakujiTicket{ID: "t1", CharacterID: actor}, RemainingGold: f.goldLeft,
 		DrawDate: time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC)}, err
 }
 
-func (f *lotteryFixture) GetCharacterTakarakujiTicket(context.Context, string) (*lottery.TakarakujiTicket, []lottery.TakarakujiTicket, error) {
-	return f.current, nil, nil
+func (f *lotteryFixture) HasPurchasedTakarakuji(context.Context, string) (bool, error) {
+	return f.purchased, f.boughtErr
 }
 
 func (f *lotteryFixture) router(t *testing.T, destination string, options ...Option) (*gatewayNavigationStore, http.Handler) {
@@ -102,7 +105,7 @@ func TestRaffleHallObservesCouponsAndPrizeTable(t *testing.T) {
 
 func TestTakarakujiShopObservesTheRound(t *testing.T) {
 	f := newLotteryFixture(t)
-	f.current = &lottery.TakarakujiTicket{ID: "t1"}
+	f.purchased = true
 	_, router := f.router(t, "takarakuji")
 	status, observation := navigationGET(t, router)
 	data := decodeShopScene[TakarakujiSceneData](t, observation)
@@ -110,7 +113,11 @@ func TestTakarakujiShopObservesTheRound(t *testing.T) {
 		data.DrawDateLabel != "2026/11/21" || !data.Purchased || !offered(observation, "takarakuji_buy") {
 		t.Fatalf("takarakuji shop: %d %+v", status, data)
 	}
-	f.statusErr = errors.New("private round read")
+	f.boughtErr = errors.New("private ticket read")
+	if status, observation := navigationGET(t, router); status != 500 || observation.Scene.Data != nil {
+		t.Fatalf("purchase read failure became a partial observation: %d", status)
+	}
+	f.boughtErr, f.statusErr = nil, errors.New("private round read")
 	if status, observation := navigationGET(t, router); status != 500 || observation.Scene.Data != nil {
 		t.Fatalf("partial observation: %d", status)
 	}
@@ -167,6 +174,14 @@ func TestTakarakujiPurchaseReplies(t *testing.T) {
 			got := tavernResult[TakarakujiBuyResult](t, raw)
 			if status != 200 || f.executions != 1 || got.Purchased != tc.purchased || got.Message != tc.want || (got.Ticket != nil) != tc.purchased {
 				t.Fatalf("buy: %d %+v", status, got)
+			}
+			// A purchase reports the remaining gold even when it is 0G; refusals omit it.
+			var rawResult map[string]json.RawMessage
+			if err := json.Unmarshal(raw["result"], &rawResult); err != nil {
+				t.Fatal(err)
+			}
+			if gold, ok := rawResult["remaining_gold"]; ok != tc.purchased || (ok && string(gold) != "0") {
+				t.Fatalf("remaining_gold %s present=%v", gold, ok)
 			}
 		})
 	}

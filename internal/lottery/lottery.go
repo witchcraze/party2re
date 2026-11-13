@@ -36,8 +36,6 @@ type TakarakujiRepository interface {
 	CountTakarakujiTickets(ctx context.Context, roundID int) (int, error)
 	HasCharacterPurchasedTakarakuji(ctx context.Context, roundID int, characterID string) (bool, error)
 	PurchaseTakarakujiTicket(ctx context.Context, roundID int, characterID string, goldCost int) (TakarakujiTicket, corecharacter.Character, error)
-	GetCharacterTakarakujiTicket(ctx context.Context, roundID int, characterID string) (TakarakujiTicket, error)
-	ListCharacterTakarakujiTickets(ctx context.Context, characterID string) ([]TakarakujiTicket, error)
 	ListRoundTakarakujiTickets(ctx context.Context, roundID int) ([]TakarakujiTicket, error)
 	SettleTakarakujiRound(ctx context.Context, roundID int, drawnAt time.Time, winningTickets []TakarakujiTicket) error
 }

@@ -25,8 +25,6 @@ type mockLotteryRepo struct {
 	countTakarakujiTicketsFn            func(ctx context.Context, roundID int) (int, error)
 	hasCharacterPurchasedTakarakujiFn   func(ctx context.Context, roundID int, characterID string) (bool, error)
 	purchaseTakarakujiTicketFn          func(ctx context.Context, roundID int, characterID string, goldCost int) (lottery.TakarakujiTicket, corecharacter.Character, error)
-	getCharacterTakarakujiTicketFn      func(ctx context.Context, roundID int, characterID string) (lottery.TakarakujiTicket, error)
-	listCharacterTakarakujiTicketsFn    func(ctx context.Context, characterID string) ([]lottery.TakarakujiTicket, error)
 	listRoundTakarakujiTicketsFn        func(ctx context.Context, roundID int) ([]lottery.TakarakujiTicket, error)
 	settleTakarakujiRoundFn             func(ctx context.Context, roundID int, drawnAt time.Time, winningTickets []lottery.TakarakujiTicket) error
 }
@@ -82,18 +80,6 @@ func (m *mockLotteryRepo) PurchaseTakarakujiTicket(ctx context.Context, roundID 
 		return m.purchaseTakarakujiTicketFn(ctx, roundID, characterID, goldCost)
 	}
 	return lottery.TakarakujiTicket{ID: "ticket-1", RoundID: roundID, CharacterID: characterID}, corecharacter.Character{Money: 100000 - goldCost}, nil
-}
-func (m *mockLotteryRepo) GetCharacterTakarakujiTicket(ctx context.Context, roundID int, characterID string) (lottery.TakarakujiTicket, error) {
-	if m.getCharacterTakarakujiTicketFn != nil {
-		return m.getCharacterTakarakujiTicketFn(ctx, roundID, characterID)
-	}
-	return lottery.TakarakujiTicket{}, errors.New("not found")
-}
-func (m *mockLotteryRepo) ListCharacterTakarakujiTickets(ctx context.Context, characterID string) ([]lottery.TakarakujiTicket, error) {
-	if m.listCharacterTakarakujiTicketsFn != nil {
-		return m.listCharacterTakarakujiTicketsFn(ctx, characterID)
-	}
-	return nil, nil
 }
 func (m *mockLotteryRepo) ListRoundTakarakujiTickets(ctx context.Context, roundID int) ([]lottery.TakarakujiTicket, error) {
 	if m.listRoundTakarakujiTicketsFn != nil {
@@ -1339,5 +1325,33 @@ func TestDrawTakarakuji_PropagatesCollectionError(t *testing.T) {
 	_, err = svc.DrawTakarakuji(context.Background(), drawTime)
 	if !errors.Is(err, colErr) {
 		t.Fatalf("expected collection error %v, got: %v", colErr, err)
+	}
+}
+
+func TestHasPurchasedTakarakujiUsesTheCurrentRound(t *testing.T) {
+	readErr := errors.New("read ticket")
+	for _, tc := range []struct {
+		name   string
+		bought bool
+		err    error
+	}{{"bought", true, nil}, {"not bought", false, nil}, {"read failure", false, readErr}} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &mockLotteryRepo{
+				getActiveTakarakujiRoundFn: func(context.Context) (lottery.TakarakujiRound, error) {
+					return lottery.TakarakujiRound{RoundID: 4}, nil
+				},
+				hasCharacterPurchasedTakarakujiFn: func(_ context.Context, roundID int, characterID string) (bool, error) {
+					if roundID != 4 || characterID != "hero" {
+						t.Fatalf("checked round %d for %q", roundID, characterID)
+					}
+					return tc.bought, tc.err
+				},
+			}
+			svc, _ := lottery.NewService(repo)
+			got, err := svc.HasPurchasedTakarakuji(context.Background(), " hero ")
+			if got != tc.bought || !errors.Is(err, tc.err) {
+				t.Fatalf("got %v, %v", got, err)
+			}
+		})
 	}
 }

@@ -311,28 +311,16 @@ func (s *Service) BuyTakarakujiTicket(ctx context.Context, characterID string) (
 	}, nil
 }
 
-func (s *Service) GetCharacterTakarakujiTicket(ctx context.Context, characterID string) (*TakarakujiTicket, []TakarakujiTicket, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, nil, corecharacter.ErrNotFound
-	}
+// HasPurchasedTakarakuji reports whether the character holds the current
+// round's ticket; reading the round provisions it when none is open.
+func (s *Service) HasPurchasedTakarakuji(ctx context.Context, characterID string) (bool, error) {
 	characterID = strings.TrimSpace(characterID)
-
-	now := s.now()
-	round, err := s.getOrCreateActiveRound(ctx, now)
+	if characterID == "" {
+		return false, corecharacter.ErrNotFound
+	}
+	round, err := s.getOrCreateActiveRound(ctx, s.now())
 	if err != nil {
-		return nil, nil, err
+		return false, err
 	}
-
-	var currentTicket *TakarakujiTicket
-	t, err := s.repo.GetCharacterTakarakujiTicket(ctx, round.RoundID, characterID)
-	if err == nil {
-		currentTicket = &t
-	}
-
-	history, err := s.repo.ListCharacterTakarakujiTickets(ctx, characterID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return currentTicket, history, nil
+	return s.repo.HasCharacterPurchasedTakarakuji(ctx, round.RoundID, characterID)
 }
