@@ -3,6 +3,7 @@ package scripts_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -540,13 +541,123 @@ func extractDockerfileCMD(t *testing.T, dockerfilePath string) []string {
 }
 
 func TestCIWorkflow_RunsWholeSuiteWithoutResultCache(t *testing.T) {
-	ci, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "ci.yml"))
+	ciBytes, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "ci.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(ci), "go test -timeout=30m -count=1 ./... -coverprofile=") {
-		t.Fatal("CI must run ./... with -count=1 and coverage")
+	ci := string(ciBytes)
+
+	// Ensure CI partitions all packages dynamically across shards without result-cache replay.
+	for _, want := range []string{
+		"verify-shard:",
+		"shard: [0, 1, 2]",
+		`./scripts/ci_shard.sh "${{ matrix.shard }}" 3`,
+		"go test -timeout=30m -count=1 -coverprofile=coverage.out -covermode=atomic",
+		"verify:",
+		"needs: [verify-shard]",
+		"needs.verify-shard.result != 'success'",
+		"go tool cover -func=coverage.out",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Fatalf("ci.yml missing required sharded verification directive %q", want)
+		}
 	}
+}
+
+func TestCIShard_PartitionsAllPackagesWithoutDuplicatesOrOmissions(t *testing.T) {
+	allOut, code := runCmd(t, "..", os.Environ(), "go", "list", "./...")
+	if code != 0 {
+		t.Fatalf("go list ./... failed (code %d):\n%s", code, allOut)
+	}
+	var expected []string
+	for _, line := range strings.Split(strings.TrimSpace(allOut), "\n") {
+		if pkg := strings.TrimSpace(line); pkg != "" {
+			expected = append(expected, pkg)
+		}
+	}
+	if len(expected) == 0 {
+		t.Fatal("expected non-empty repository package list")
+	}
+
+	for _, count := range []int{2, 3} {
+		t.Run(fmt.Sprintf("%d-shards", count), func(t *testing.T) {
+			seen := make(map[string]int, len(expected))
+			for shard := 0; shard < count; shard++ {
+				out, code := runCmd(t, "..", os.Environ(), "./scripts/ci_shard.sh", fmt.Sprintf("%d", shard), fmt.Sprintf("%d", count))
+				if code != 0 {
+					t.Fatalf("ci_shard.sh %d %d failed (code %d):\n%s", shard, count, code, out)
+				}
+				var shardCount int
+				for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+					pkg := strings.TrimSpace(line)
+					if pkg == "" {
+						continue
+					}
+					shardCount++
+					if prev, dup := seen[pkg]; dup {
+						t.Fatalf("package %s assigned to both shard %d and shard %d", pkg, prev, shard)
+					}
+					seen[pkg] = shard
+				}
+				if shardCount == 0 {
+					t.Fatalf("shard %d of %d received zero packages", shard, count)
+				}
+			}
+			for _, pkg := range expected {
+				if _, ok := seen[pkg]; !ok {
+					t.Fatalf("package %s omitted from %d-shard partition", pkg, count)
+				}
+			}
+			if len(seen) != len(expected) {
+				t.Fatalf("partitioned package count = %d, want %d", len(seen), len(expected))
+			}
+		})
+	}
+
+	t.Run("synthetic new and missing packages via stdin", func(t *testing.T) {
+		synthetic := strings.Join([]string{
+			"github.com/witchcraze/party2re/internal/newpkg",
+			"github.com/witchcraze/party2re/internal/casino",
+			"github.com/witchcraze/party2re/internal/alpha",
+			"github.com/witchcraze/party2re/internal/myscripts",
+		}, "\n") + "\n"
+		seen := make(map[string]int)
+		for shard := 0; shard < 3; shard++ {
+			cmd := exec.Command("./scripts/ci_shard.sh", fmt.Sprintf("%d", shard), "3", "--stdin")
+			cmd.Dir = ".."
+			cmd.Stdin = strings.NewReader(synthetic)
+			outBytes, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("ci_shard.sh stdin failed (shard %d): %v\n%s", shard, err, string(outBytes))
+			}
+			for _, line := range strings.Split(strings.TrimSpace(string(outBytes)), "\n") {
+				if pkg := strings.TrimSpace(line); pkg != "" {
+					if prev, dup := seen[pkg]; dup {
+						t.Fatalf("synthetic package %s duplicated across shards %d and %d", pkg, prev, shard)
+					}
+					seen[pkg] = shard
+				}
+			}
+		}
+		if len(seen) != 4 {
+			t.Fatalf("expected all 4 synthetic packages partitioned, got %v", seen)
+		}
+	})
+
+	t.Run("rejects invalid arguments and partial go list failure", func(t *testing.T) {
+		if out, code := runCmd(t, "..", os.Environ(), "./scripts/ci_shard.sh", "3", "3"); code == 0 {
+			t.Fatalf("expected out-of-range shard index to fail, got:\n%s", out)
+		}
+		binDir := t.TempDir()
+		fakeGo := filepath.Join(binDir, "go")
+		if err := os.WriteFile(fakeGo, []byte("#!/usr/bin/env bash\necho github.com/witchcraze/party2re/internal/sample\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		env := append(os.Environ(), "PATH="+binDir+":"+os.Getenv("PATH"))
+		if out, code := runCmd(t, "..", env, "./scripts/ci_shard.sh", "0", "3"); code == 0 {
+			t.Fatalf("expected partial go list failure to abort ci_shard.sh, got:\n%s", out)
+		}
+	})
 }
 
 func TestCompose_AppCommandTimeoutConfiguration(t *testing.T) {

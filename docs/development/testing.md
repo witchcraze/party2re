@@ -406,11 +406,14 @@ compares latency/allocations; the default +30% regression threshold exits with c
 ## 8. Continuous Integration and Delivery
 
 The [CI workflow](../../.github/workflows/ci.yml) runs formatting, OpenAPI sync
-validation and vet, tests with atomic coverage on the host Go toolchain against the
-[test stack](#4-container-roles) with a 30-minute package timeout, and the
-production image build in parallel jobs. It does not currently run the race detector or exercise the built
-production image. The GitHub-hosted runner is disposable per job; tests inside a job
-still follow the database ownership/isolation rules above.
+validation and vet, sharded Go test execution (`verify-shard`, partitioned by
+[scripts/ci_shard.sh](../../scripts/ci_shard.sh) with isolated MariaDB/Valkey
+containers and `-covermode=atomic`), the `verify` gate (which enforces shard
+outcomes and merges shard profiles into unified `coverage.out` / `coverage.txt`),
+and the production image build in parallel branches. It does not currently run
+the race detector or exercise the built production image. The GitHub-hosted
+runner is disposable per job; tests inside a job still follow the database
+ownership/isolation rules above.
 
 `actions/setup-go` restores Go build and module data; a miss only costs time. Tests run with `-count=1` because a restored build
 cache would otherwise replay earlier test results, so CI always runs the whole suite.

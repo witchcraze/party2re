@@ -40,8 +40,13 @@ jobs:
       - name: Build production image (smoke test)
         run: docker build -f Dockerfile -t party2re:ci-smoke .
 
-  verify:
+  verify-shard:
+    name: verify-shard-${{ matrix.shard }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
     env:
       COMPOSE_FILE: ${{ github.workspace }}/compose.test.yaml
     steps:
@@ -58,13 +63,72 @@ jobs:
         run: docker compose up -d --wait mariadb valkey
 
       # -count=1 is required: the restored build cache would otherwise replay test results.
-      - name: Run tests with coverage
+      - name: Run shard tests with atomic coverage
         env:
           PARTY2_DB_DSN: party2:party2@tcp(127.0.0.1:3307)/party2?parseTime=true
           PARTY2_TEST_DB_ADMIN_DSN: root:root@tcp(127.0.0.1:3307)/?parseTime=true
           PARTY2_VALKEY_ADDR: 127.0.0.1:6380
         run: |
-          go test -timeout=30m -count=1 ./... -coverprofile=coverage.out -covermode=atomic
+          mapfile -t shard_pkgs < <(./scripts/ci_shard.sh "${{ matrix.shard }}" 3)
+          if [ "${#shard_pkgs[@]}" -eq 0 ]; then
+            echo "No packages assigned to shard ${{ matrix.shard }}" >&2
+            exit 1
+          fi
+          go test -timeout=30m -count=1 -coverprofile=coverage.out -covermode=atomic "${shard_pkgs[@]}"
+
+      - name: Upload shard coverage
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: coverage.out
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    name: verify
+    needs: [verify-shard]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce shard outcomes
+        if: ${{ needs.verify-shard.result != 'success' }}
+        run: |
+          echo "Shard execution did not succeed (result=${{ needs.verify-shard.result }})." >&2
+          exit 1
+
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Download shard coverage profiles
+        uses: actions/download-artifact@v6
+        with:
+          pattern: coverage-shard-*
+          path: .coverage-shards
+          merge-multiple: false
+
+      - name: Merge coverage profiles and generate summary
+        run: |
+          shopt -s nullglob
+          files=(.coverage-shards/coverage-shard-*/coverage.out)
+          if [ "${#files[@]}" -ne 3 ]; then
+            echo "Expected 3 shard coverage profiles, found ${#files[@]}" >&2
+            exit 1
+          fi
+          {
+            echo "mode: atomic"
+            for f in "${files[@]}"; do
+              mode_line=$(head -n 1 "$f")
+              if [ "$mode_line" != "mode: atomic" ]; then
+                echo "Unexpected coverage mode in $f: $mode_line" >&2
+                exit 1
+              fi
+              tail -n +2 "$f"
+            done
+          } > coverage.out
+          rm -rf .coverage-shards
           go tool cover -func=coverage.out | tee coverage.txt
 
       - name: Upload coverage reports
@@ -74,4 +138,4 @@ jobs:
           path: |
             coverage.out
             coverage.txt
-          if-no-files-found: warn
+          if-no-files-found: error
