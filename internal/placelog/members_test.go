@@ -115,9 +115,111 @@ func TestValkeyMembersExpiryOrderAndLeave(t *testing.T) {
 		t.Fatalf("after A left = %v; want only B", ids)
 	}
 	ttl, err := client.Do(ctx, client.B().Ttl().Key("party2:placemember:{test:"+p.ID+"}:profile").Build()).AsInt64()
-	if err != nil || ttl <= 0 || ttl > 300 {
-		t.Fatalf("ttl = %d, %v; want refreshed within 300 s", ttl, err)
+	if err != nil || ttl <= 0 || ttl > 301 {
+		t.Fatalf("ttl = %d, %v; want refreshed within 301 s", ttl, err)
 	}
+}
+
+func TestValkeyMembersPhysicalTTLBoundary(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+	client, err := vk.NewClient()
+	if err != nil {
+		t.Fatalf("connect valkey: %v", err)
+	}
+	t.Cleanup(client.Close)
+
+	newPlace := func() placelog.Place {
+		p := placelog.Place{Kind: "test", ID: id.New()}
+		t.Cleanup(func() {
+			base := "party2:placemember:{test:" + p.ID + "}:"
+			client.Do(context.Background(), client.B().Del().Key(base+"joined", base+"expiry", base+"profile", base+"token").Build())
+		})
+		return p
+	}
+
+	ctx := context.Background()
+	s := placelog.NewMembers(client, time.Second)
+
+	// 1. Single member in an idle place stays visible at the inclusive boundary
+	// under real Valkey expiry, hides beyond it, and expires physically afterwards.
+	p1 := newPlace()
+	a := newMember(t, client, "A")
+	t0 := time.Now()
+	if err := s.Refresh(ctx, p1, a, t0); err != nil {
+		t.Fatal(err)
+	}
+	if ids := memberIDs(t, s, p1, t0); !slices.Equal(ids, []string{a.CharacterID}) {
+		t.Fatalf("immediate read = %v; want [%s]", ids, a.CharacterID)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+
+	if ids := memberIDs(t, s, p1, t0.Add(time.Second)); !slices.Equal(ids, []string{a.CharacterID}) {
+		t.Fatalf("inclusive TTL boundary lost member: %v", ids)
+	}
+	if ids := memberIDs(t, s, p1, t0.Add(2*time.Second)); len(ids) != 0 {
+		t.Fatalf("beyond boundary = %v; want empty", ids)
+	}
+	base1 := "party2:placemember:{test:" + p1.ID + "}:"
+	existsBeforeCleanup, err := client.Do(ctx, client.B().Exists().Key(base1+"expiry").Build()).AsInt64()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if existsBeforeCleanup != 1 {
+		t.Fatalf("expiry key missing before physical retention elapsed: exists=%d", existsBeforeCleanup)
+	}
+	// Verify keys expire after physical retention without GET writes extending them.
+	time.Sleep(1100 * time.Millisecond)
+	for _, k := range []string{
+		base1 + "joined",
+		base1 + "expiry",
+		base1 + "profile",
+		base1 + "token",
+		"party2:placemember:character:" + a.CharacterID,
+	} {
+		exists, err := client.Do(ctx, client.B().Exists().Key(k).Build()).AsInt64()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exists != 0 {
+			t.Fatalf("key %s still exists after physical expiry", k)
+		}
+	}
+
+	// 2. Character pointer remains valid at the boundary for Leave and movement.
+	p2 := newPlace()
+	p3 := newPlace()
+	p4 := newPlace()
+	b := newMember(t, client, "B")
+	c := newMember(t, client, "C")
+	t1 := time.Now()
+	if err := s.Refresh(ctx, p2, b, t1); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Refresh(ctx, p3, c, t1); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+
+	if err := s.Leave(ctx, b.CharacterID); err != nil {
+		t.Fatal(err)
+	}
+	if pointer := readPointerPlace(t, ctx, client, b.CharacterID); pointer != "" {
+		t.Fatalf("pointer after boundary Leave = %q; want empty", pointer)
+	}
+	assertPlaceMembershipState(t, ctx, client, s, p2, t1.Add(time.Second), b.CharacterID, false)
+
+	if err := s.Refresh(ctx, p4, c, t1.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if pointer := readPointerPlace(t, ctx, client, c.CharacterID); pointer != p4.Kind+":"+p4.ID {
+		t.Fatalf("pointer after boundary move = %q; want %s:%s", pointer, p4.Kind, p4.ID)
+	}
+	assertPlaceMembershipState(t, ctx, client, s, p3, t1.Add(time.Second), c.CharacterID, false)
+	assertPlaceMembershipState(t, ctx, client, s, p4, t1.Add(time.Second), c.CharacterID, true)
 }
 
 func TestValkeyMembersOnePlaceAtATime(t *testing.T) {
@@ -583,8 +685,8 @@ func TestValkeyMembersBoundedExpiryCleanupAndReturningOrder(t *testing.T) {
 	}
 	for _, suffix := range []string{"joined", "expiry", "profile", "token"} {
 		ttl, err := client.Do(ctx, client.B().Ttl().Key(base+suffix).Build()).AsInt64()
-		if err != nil || ttl <= 0 || ttl > 300 {
-			t.Fatalf("%s ttl = %d, %v; want positive within 300s", suffix, ttl, err)
+		if err != nil || ttl <= 0 || ttl > 301 {
+			t.Fatalf("%s ttl = %d, %v; want positive within 301s", suffix, ttl, err)
 		}
 	}
 }

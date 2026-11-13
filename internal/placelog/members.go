@@ -128,16 +128,18 @@ func (s *Members) Refresh(ctx context.Context, p Place, m Member, now time.Time)
 		return err
 	}
 	ttl := int64(s.ttl / time.Second)
+	// Physical retention adds 1s so keys outlive the inclusive [T, T+ttl] second.
+	physicalTTL := ttl + 1
 	tok := id.New()
 	place := p.Kind + ":" + p.ID
 
 	unlock := s.lockCharacter(m.CharacterID)
 	err = refreshMemberScript.Exec(ctx, s.client, keys[:], []string{
-		strconv.FormatInt(now.Unix(), 10), strconv.FormatInt(now.Unix()+ttl, 10), strconv.FormatInt(ttl, 10), m.CharacterID, string(raw), tok,
+		strconv.FormatInt(now.Unix(), 10), strconv.FormatInt(now.Unix()+ttl, 10), strconv.FormatInt(physicalTTL, 10), m.CharacterID, string(raw), tok,
 	}).Error()
 	var previous string
 	if err == nil {
-		previous, err = s.client.Do(ctx, s.client.B().Set().Key(characterKey(m.CharacterID)).Value(place+"|"+tok).Get().ExSeconds(ttl).Build()).ToString()
+		previous, err = s.client.Do(ctx, s.client.B().Set().Key(characterKey(m.CharacterID)).Value(place+"|"+tok).Get().ExSeconds(physicalTTL).Build()).ToString()
 		if errors.Is(err, valkey.Nil) {
 			err = nil
 		}

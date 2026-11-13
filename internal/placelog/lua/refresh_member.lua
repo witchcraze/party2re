@@ -1,5 +1,5 @@
 -- KEYS[1] joined, KEYS[2] expiry, KEYS[3] profile, KEYS[4] token
--- ARGV[1] now, ARGV[2] expires_at, ARGV[3] ttl seconds, ARGV[4] character ID, ARGV[5] profile JSON, ARGV[6] membership token
+-- ARGV[1] now, ARGV[2] expires_at, ARGV[3] physical ttl seconds, ARGV[4] character ID, ARGV[5] profile JSON, ARGV[6] membership token
 -- Purge a bounded batch of entries that expired before now (one at exactly now+ttl is still listed),
 -- then keep the arrival position of a still-live listed member and refresh its expiry, profile and token.
 -- A newcomer or returning expired member is placed after the last entry so same-second arrivals keep their order.
