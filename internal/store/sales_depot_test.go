@@ -69,6 +69,7 @@ func setupSalesDepotFixture(t *testing.T) *salesDepotTestFixture {
 		depotRepo,
 		catalog,
 		&mockTxProvider{},
+		store.WithDeliveryService(stubStoreDelivery{}),
 		store.WithNowFunc(func() time.Time { return time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC) }),
 	)
 

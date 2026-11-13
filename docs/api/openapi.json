@@ -9361,10 +9361,11 @@
             "type": "string"
           },
           "source": {
-            "description": "Why the gold is held; clients render the receipt message.",
+            "description": "Why the gold is held; clients render the receipt message. For store_payment, render \u003csender_name\u003eから店の支払い.",
             "enum": [
               "depot_transfer",
-              "pvp_prize"
+              "pvp_prize",
+              "store_payment"
             ],
             "type": "string"
           }

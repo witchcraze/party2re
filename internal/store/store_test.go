@@ -224,6 +224,11 @@ func (m *mockCatalog) FindByName(name string) (coreitem.Definition, error) {
 
 type mockTxProvider struct{}
 
+type stubStoreDelivery struct{}
+
+func (stubStoreDelivery) HoldPayment(context.Context, string, string, int) error   { return nil }
+func (stubStoreDelivery) NotifyItem(context.Context, string, string, string) error { return nil }
+
 func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	return fn(ctx)
 }
@@ -256,6 +261,7 @@ func setupTestService(t *testing.T) (*store.Service, *mockStoreRepo, *mockCharRe
 		depotRepo,
 		catalog,
 		&mockTxProvider{},
+		store.WithDeliveryService(stubStoreDelivery{}),
 		store.WithNowFunc(func() time.Time { return time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC) }),
 	)
 
@@ -545,8 +551,8 @@ func TestStoreSalesAndTrading(t *testing.T) {
 
 	c1, _ := charRepo.FindByID(ctx, "c1")
 	c2, _ := charRepo.FindByID(ctx, "c2")
-	if c1.Money != 53000 { // 50,000 + 3,000
-		t.Errorf("expected c1 money 53000, got %d", c1.Money)
+	if c1.Money != 50000 { // Payment is held until collected at the Depot.
+		t.Errorf("expected c1 money 50000, got %d", c1.Money)
 	}
 	if c2.Money != 97000 { // 100,000 - 3,000
 		t.Errorf("expected c2 money 97000, got %d", c2.Money)

@@ -19,6 +19,7 @@ type Service struct {
 	repo              StoreRepository
 	charRepo          CharacterRepository
 	depotRepo         DepotRepository
+	delivery          DeliveryService
 	itemCatalog       ItemCatalog
 	guildPoints       GuildPointsRegistrar
 	timer             TimerService

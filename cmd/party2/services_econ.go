@@ -224,8 +224,9 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	}, nil
 }
 
-func (e *econServices) initStore(core *coreServices, gp store.GuildPointsRegistrar, t store.TimerService, valkeyClient valkeygo.Client) {
+func (e *econServices) initStore(core *coreServices, gp store.GuildPointsRegistrar, t store.TimerService, valkeyClient valkeygo.Client, delivery store.DeliveryService) {
 	opts := []store.Option{
+		store.WithDeliveryService(delivery),
 		store.WithGuildPoints(gp),
 		store.WithTimer(t),
 		store.WithHomeWallpaperRepository(e.storeRepo),
