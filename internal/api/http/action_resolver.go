@@ -88,6 +88,8 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 		"altar_wish":              {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"wishingwell_exchange":    {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"tavern_order":            {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"lottery_raffle":          {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"takarakuji_buy":          {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"tavern_delivery_reserve": {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"tavern_delivery_cancel":  {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"god_wish":                {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},

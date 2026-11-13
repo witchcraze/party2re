@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -430,11 +429,6 @@ func TestGetTakarakujiStatus(t *testing.T) {
 	}
 	if status.Prizes[2].ItemName != "超魔力水" || status.Prizes[2].WinnersCount != 3 {
 		t.Errorf("Prize 3 = %+v", status.Prizes[2])
-	}
-	// Check talk phrases
-	lastPhrase := status.TalkPhrases[len(status.TalkPhrases)-1]
-	if !strings.Contains(lastPhrase, "12") {
-		t.Errorf("expected last talk phrase to mention 12 remaining, got: %s", lastPhrase)
 	}
 }
 

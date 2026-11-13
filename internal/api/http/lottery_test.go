@@ -1,257 +1,226 @@
-package http_test
+package http
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
-	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/lottery"
+	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
-type stubLotteryService struct {
-	getRaffleTicketsFn             func(ctx context.Context, characterID string) (int, error)
-	playRaffleFn                   func(ctx context.Context, characterID string) (lottery.RaffleResult, int, corecharacter.Character, error)
-	getTakarakujiStatusFn          func(ctx context.Context) (lottery.TakarakujiStatus, error)
-	buyTakarakujiTicketFn          func(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error)
-	getCharacterTakarakujiTicketFn func(ctx context.Context, characterID string) (*lottery.TakarakujiTicket, []lottery.TakarakujiTicket, error)
+type lotteryFixture struct {
+	*gatewayFixture
+	tickets   int
+	ticketErr error
+	status    lottery.TakarakujiStatus
+	statusErr error
+	current   *lottery.TakarakujiTicket
+	raffle    lottery.RaffleResult
+	remaining int
 }
 
-func (s *stubLotteryService) GetRaffleTickets(ctx context.Context, characterID string) (int, error) {
-	if s.getRaffleTicketsFn != nil {
-		return s.getRaffleTicketsFn(ctx, characterID)
-	}
-	return 0, nil
+func (f *lotteryFixture) GetRaffleTickets(context.Context, string) (int, error) {
+	return f.tickets, f.ticketErr
 }
 
-func (s *stubLotteryService) PlayRaffle(ctx context.Context, characterID string) (lottery.RaffleResult, int, corecharacter.Character, error) {
-	if s.playRaffleFn != nil {
-		return s.playRaffleFn(ctx, characterID)
-	}
-	return lottery.RaffleResult{Prize: lottery.RafflePrize{Tier: lottery.PrizeTierMiss, Name: "Pocket Tissue"}}, 0, corecharacter.Character{ID: characterID}, nil
+func (f *lotteryFixture) PlayRaffle(ctx context.Context, actor string) (lottery.RaffleResult, int, corecharacter.Character, error) {
+	_, err := f.execute(ctx, actor, 0)
+	return f.raffle, f.remaining, f.char, err
 }
 
-func (s *stubLotteryService) GetTakarakujiStatus(ctx context.Context) (lottery.TakarakujiStatus, error) {
-	if s.getTakarakujiStatusFn != nil {
-		return s.getTakarakujiStatusFn(ctx)
-	}
-	return lottery.TakarakujiStatus{
-		RoundID:          1,
-		Title:            "宝くじ屋",
-		NPCName:          "@クラゲ",
-		TicketPrice:      30000,
-		MaxTickets:       20,
-		SoldCount:        5,
-		RemainingTickets: 15,
-		DrawDate:         time.Now().Add(5 * 24 * time.Hour),
-	}, nil
+func (f *lotteryFixture) GetTakarakujiStatus(context.Context) (lottery.TakarakujiStatus, error) {
+	return f.status, f.statusErr
 }
 
-func (s *stubLotteryService) BuyTakarakujiTicket(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error) {
-	if s.buyTakarakujiTicketFn != nil {
-		return s.buyTakarakujiTicketFn(ctx, characterID)
-	}
-	return lottery.TakarakujiPurchaseResult{
-		Ticket:        lottery.TakarakujiTicket{ID: "t-1", RoundID: 1, CharacterID: characterID},
-		RemainingGold: 70000,
-		DrawDate:      time.Date(2026, 9, 10, 15, 0, 0, 0, time.UTC), // 2026/09/11 00:00 JST
-	}, nil
+func (f *lotteryFixture) BuyTakarakujiTicket(ctx context.Context, actor string) (lottery.TakarakujiPurchaseResult, error) {
+	_, err := f.execute(ctx, actor, 0)
+	// 2026-11-20T15:00Z is 2026/11/21 00:00 JST.
+	return lottery.TakarakujiPurchaseResult{Ticket: lottery.TakarakujiTicket{ID: "t1", CharacterID: actor}, RemainingGold: 70000,
+		DrawDate: time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC)}, err
 }
 
-func (s *stubLotteryService) GetCharacterTakarakujiTicket(ctx context.Context, characterID string) (*lottery.TakarakujiTicket, []lottery.TakarakujiTicket, error) {
-	if s.getCharacterTakarakujiTicketFn != nil {
-		return s.getCharacterTakarakujiTicketFn(ctx, characterID)
-	}
-	tkt := lottery.TakarakujiTicket{ID: "t-1", RoundID: 1, CharacterID: characterID}
-	return &tkt, []lottery.TakarakujiTicket{tkt}, nil
+func (f *lotteryFixture) GetCharacterTakarakujiTicket(context.Context, string) (*lottery.TakarakujiTicket, []lottery.TakarakujiTicket, error) {
+	return f.current, nil, nil
 }
 
-func TestLotteryEndpoints(t *testing.T) {
-	player := coreplayer.Player{ID: "p1", Username: "hero"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Money: 100000}
-
-	pService := &stubPlayerService{
-		authenticateFn: alwaysAuthPlayer(player),
+func (f *lotteryFixture) router(t *testing.T, destination string, options ...Option) (*gatewayNavigationStore, http.Handler) {
+	t.Helper()
+	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: destination}}
+	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
+		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"},
+		playercontext.SceneDefinition{ID: "lottery", Parent: "town"}, playercontext.SceneDefinition{ID: "takarakuji", Parent: "town"}))
+	opts := append([]Option{WithLottery(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, options...)
+	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, opts...)
+	if err != nil {
+		t.Fatal(err)
 	}
-	cService := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
-			if id == "c1" {
-				return char, nil
+	return store, h.Router()
+}
+
+func newLotteryFixture(t *testing.T) *lotteryFixture {
+	f := &lotteryFixture{gatewayFixture: newGatewayFixture(t), tickets: 7,
+		status: lottery.TakarakujiStatus{RoundID: 3, TicketPrice: 30000, MaxTickets: 20, SoldCount: 8, RemainingTickets: 12,
+			DrawDate: time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC), Prizes: []lottery.TakarakujiPrizeItem{}}}
+	f.char.Name = "勇者"
+	return f
+}
+
+func TestRaffleHallObservesCouponsAndPrizeTable(t *testing.T) {
+	f := newLotteryFixture(t)
+	store, router := f.router(t, "lottery", WithPlaceLog(&fakePlaceLog{}))
+	status, observation := navigationGET(t, router)
+	data := decodeShopScene[LotterySceneData](t, observation)
+	if status != 200 || observation.Scene.Title != "福引所" || observation.Scene.Support.Observation != "details" ||
+		data.Tickets != 7 || data.Special || data.Cost != 3 || len(data.Prizes) != 7 || data.Prizes[4].Name != "種系" || data.Prizes[6].Name != "福袋" {
+		t.Fatalf("raffle hall: %d %+v", status, data)
+	}
+	for _, action := range []string{"lottery_raffle", "npc_talk", "npc_inspect", "place_say", "scene_back"} {
+		if !offered(observation, action) {
+			t.Fatalf("missing choice %s", action)
+		}
+	}
+	f.tickets = 300
+	_, observation = navigationGET(t, router)
+	if data := decodeShopScene[LotterySceneData](t, observation); !data.Special || data.Cost != 300 || len(data.Prizes) != 1 {
+		t.Fatalf("special raffle: %+v", data)
+	}
+	f.ticketErr = errors.New("private coupon read")
+	if status, observation := navigationGET(t, router); status != 500 || observation.Scene.Data != nil {
+		t.Fatalf("partial observation: %d", status)
+	}
+	if store.writes != 0 || f.executions != 0 {
+		t.Fatalf("GET wrote: %d %d", store.writes, f.executions)
+	}
+}
+
+func TestTakarakujiShopObservesTheRound(t *testing.T) {
+	f := newLotteryFixture(t)
+	f.current = &lottery.TakarakujiTicket{ID: "t1"}
+	_, router := f.router(t, "takarakuji")
+	status, observation := navigationGET(t, router)
+	data := decodeShopScene[TakarakujiSceneData](t, observation)
+	if status != 200 || observation.Scene.Title != "宝くじ屋" || data.RoundID != 3 || data.RemainingTickets != 12 ||
+		data.DrawDateLabel != "2026/11/21" || !data.Purchased || !offered(observation, "takarakuji_buy") {
+		t.Fatalf("takarakuji shop: %d %+v", status, data)
+	}
+	f.statusErr = errors.New("private round read")
+	if status, observation := navigationGET(t, router); status != 500 || observation.Scene.Data != nil {
+		t.Fatalf("partial observation: %d", status)
+	}
+}
+
+func TestRaffleMessagesFollowLegacy(t *testing.T) {
+	seed := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, 20, 0)
+	miss := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, 999, 0)
+	orb := lottery.EvaluateRaffleRoll(lottery.RaffleSpecial, 20, 0)
+	for _, tc := range []struct {
+		name      string
+		res       lottery.RaffleResult
+		remaining int
+		want      string
+	}{
+		{"hand", lottery.RaffleResult{RaffleType: lottery.RaffleStandard, TicketsUsed: 3, Prize: seed}, 4,
+			"プニョプニョプニョ…コロコロコロ…...,,,● 【桃スライム】おおっ、当たりで〜す！おめでとうございま〜す！４等が出ました〜！こちらが４等の不思議な木の実です！はい。どうぞ！"},
+		{"depot", lottery.RaffleResult{RaffleType: lottery.RaffleSpecial, TicketsUsed: 300, Prize: orb, TransferredToDepot: true}, 0,
+			"ガラガラガラ…コロコロコロ…...,,,● 【レッドオーブ】おおっ！レッドオーブが出ました〜！おめでとうございま〜す！こちらがレッドオーブになります！レッドオーブは、勇者さんの預かり所に送っておきますね"},
+		{"miss again", lottery.RaffleResult{RaffleType: lottery.RaffleStandard, TicketsUsed: 3, Prize: miss}, 7,
+			"プニョプニョプニョ…コロコロコロ…...,,,● 【白スライム】 ハズレです…あと2回まわせるよ"},
+		{"miss last", lottery.RaffleResult{RaffleType: lottery.RaffleStandard, TicketsUsed: 3, Prize: miss}, 2,
+			"プニョプニョプニョ…コロコロコロ…...,,,● 【白スライム】 ハズレです…また挑戦してね"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newLotteryFixture(t)
+			f.raffle, f.remaining = tc.res, tc.remaining
+			_, router := f.router(t, "lottery")
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("lottery_raffle", `{}`), nil)
+			if got := tavernResult[LotteryRaffleResult](t, raw); status != 200 || got.Message != tc.want || got.RemainingTickets != tc.remaining {
+				t.Fatalf("raffle: %d %q", status, got.Message)
 			}
-			return corecharacter.Character{}, corecharacter.ErrNotFound
-		},
+		})
 	}
-	lService := &stubLotteryService{
-		getRaffleTicketsFn: func(_ context.Context, characterID string) (int, error) {
-			return 10, nil
-		},
+}
+
+func TestTakarakujiPurchaseReplies(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		err       error
+		purchased bool
+		want      string
+	}{
+		{"bought", nil, true, "ありがとー。当たってたら 2026/11/21 に賞品が届くからね"},
+		{"sold out", lottery.ErrSoldOut, false, "今回の宝くじは完売したよー"},
+		{"one each", lottery.ErrAlreadyPurchased, false, "おひとりさまおひとつ！"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newLotteryFixture(t)
+			f.char.Money = 0 // sold-out and one-per-person come before funds
+			f.executionErr = tc.err
+			_, router := f.router(t, "takarakuji")
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("takarakuji_buy", `{}`), nil)
+			got := tavernResult[TakarakujiBuyResult](t, raw)
+			if status != 200 || f.executions != 1 || got.Purchased != tc.purchased || got.Message != tc.want || (got.Ticket != nil) != tc.purchased {
+				t.Fatalf("buy: %d %+v", status, got)
+			}
+		})
 	}
+}
 
-	h := newTestHandler(
-		t,
-		pService,
-		cService,
-		&stubAdventureService{},
-		&stubShopService{},
-		apihttp.WithLottery(lService),
-	)
-	router := h.Router()
+func TestLotteryCommandErrors(t *testing.T) {
+	for _, tc := range []struct {
+		scene, action string
+		err           error
+		code, text    string
+		status        int
+	}{
+		{"lottery", "lottery_raffle", lottery.ErrInsufficientTickets, "LOTTERY_INSUFFICIENT_TICKETS", "福引券を 3 枚以上、持っていないようですねぇ…", 409},
+		{"takarakuji", "takarakuji_buy", lottery.ErrInsufficientGold, "TAKARAKUJI_INSUFFICIENT_GOLD", "お金が足りないよ", 409},
+		{"lottery", "lottery_raffle", errors.New("private storage failure"), "EXECUTION_FAILED", "", 500},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			f := newLotteryFixture(t)
+			f.executionErr = fmt.Errorf("private wrapped: %w", tc.err)
+			_, router := f.router(t, tc.scene)
+			status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody(tc.action, `{}`), nil)
+			assertGatewayError(t, got, tc.code)
+			if status != tc.status || strings.Contains(fmt.Sprint(got), "private") || !strings.Contains(string(got["error"]), tc.text) {
+				t.Fatalf("error mapping: %d %s", status, got)
+			}
+		})
+	}
+}
 
-	t.Run("GET /lottery/takarakuji - public success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/lottery/takarakuji", nil)
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+func TestLotteryCommandsStayInTheirPlace(t *testing.T) {
+	for _, tc := range []struct{ scene, action string }{{"takarakuji", "lottery_raffle"}, {"lottery", "takarakuji_buy"}, {"bank", "lottery_raffle"}} {
+		f := newLotteryFixture(t)
+		_, router := f.router(t, tc.scene)
+		if status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody(tc.action, `{}`), nil); status != 409 || f.executions != 0 {
+			t.Fatalf("%s in %s: %d %s", tc.action, tc.scene, status, got)
 		}
-	})
+	}
+}
 
-	t.Run("POST /characters/{id}/lottery/takarakuji/buy - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/lottery/takarakuji/buy", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var res struct {
-			RemainingGold int    `json:"remaining_gold"`
-			NPCMessage    string `json:"npc_message"`
-		}
-		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if want := "ありがとー。当たってたら 2026/09/11 に賞品が届くからね"; res.NPCMessage != want {
-			t.Fatalf("npc_message = %q; want %q", res.NPCMessage, want)
-		}
-		if res.RemainingGold != 70000 {
-			t.Fatalf("remaining_gold = %d; want 70000", res.RemainingGold)
-		}
-	})
-
-	t.Run("POST /characters/{id}/lottery/takarakuji/buy - already purchased conflict", func(t *testing.T) {
-		hConflict := newTestHandler(
-			t,
-			pService,
-			cService,
-			&stubAdventureService{},
-			&stubShopService{},
-			apihttp.WithLottery(&stubLotteryService{
-				buyTakarakujiTicketFn: func(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error) {
-					return lottery.TakarakujiPurchaseResult{}, lottery.ErrAlreadyPurchased
-				},
-			}),
-		)
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/lottery/takarakuji/buy", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		hConflict.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusConflict {
-			t.Fatalf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/lottery/takarakuji/buy - sold out conflict", func(t *testing.T) {
-		hSoldOut := newTestHandler(
-			t,
-			pService,
-			cService,
-			&stubAdventureService{},
-			&stubShopService{},
-			apihttp.WithLottery(&stubLotteryService{
-				buyTakarakujiTicketFn: func(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error) {
-					return lottery.TakarakujiPurchaseResult{}, lottery.ErrSoldOut
-				},
-			}),
-		)
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/lottery/takarakuji/buy", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		hSoldOut.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusConflict {
-			t.Fatalf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("GET /characters/{id}/lottery/takarakuji/ticket - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/lottery/takarakuji/ticket", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("Fictional routes removed - 404", func(t *testing.T) {
-		req1 := jsonRequest(t, http.MethodPost, "/characters/c1/lottery/buy-ticket", `{"round_id":1,"number":"1234"}`)
-		req1.Header.Set("Authorization", "Bearer valid-token")
-		rec1 := httptest.NewRecorder()
-		router.ServeHTTP(rec1, req1)
-		if rec1.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 for buy-ticket, got %d", rec1.Code)
-		}
-
-		req2 := jsonRequest(t, http.MethodPost, "/characters/c1/lottery/claim", `{"ticket_id":"t1"}`)
-		req2.Header.Set("Authorization", "Bearer valid-token")
-		rec2 := httptest.NewRecorder()
-		router.ServeHTTP(rec2, req2)
-		if rec2.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 for claim, got %d", rec2.Code)
-		}
-	})
-
-	t.Run("GET /characters/{id}/lottery/tickets - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/lottery/tickets", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/lottery/buy-raffle - not found (purged)", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/lottery/buy-raffle", `{"count":5}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 Not Found for purged buy-raffle, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/lottery/raffle - success with body", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/lottery/raffle", `{"raffle_type":"STANDARD"}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/lottery/raffle - success without body", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/lottery/raffle", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
+func TestLotteryNPCWordsUseLiveFacts(t *testing.T) {
+	f := newLotteryFixture(t)
+	f.tickets = 300
+	_, router := f.router(t, "lottery")
+	h := &Handler{lottery: f}
+	words, err := lotteryWords(h, context.Background(), corecharacter.Character{ID: "hero"})
+	if err != nil || words[0] != "福引券300枚で１回まわすことができるよ" {
+		t.Fatalf("raffle words: %v %v", words, err)
+	}
+	words, err = takarakujiWords(h, context.Background(), corecharacter.Character{})
+	if err != nil || words[4] != "あと 12 人分の宝くじがあるよ" {
+		t.Fatalf("takarakuji words: %v %v", words, err)
+	}
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("npc_inspect", `{}`), nil)
+	if r := npcResult(t, raw); status != 200 || !r.Private || r.Dialogue != "なんと、勇者は福引券を見つけた！\n@フクスケ「ダメだよ！あげないよ！」" {
+		t.Fatalf("inspect: %d %+v", status, r)
+	}
 }

@@ -309,16 +309,12 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string) (RaffleRes
 		return RaffleResult{}, 0, corecharacter.Character{}, err
 	}
 
-	remainingAttempts := remainingTickets / cost
-	message := FormatLegacyRaffleMessage(raffleType, prize, transferredToDepot, remainingAttempts)
-
 	res := RaffleResult{
 		RaffleType:         raffleType,
 		TicketsUsed:        cost,
 		Roll:               roll,
 		Prize:              prize,
 		TransferredToDepot: transferredToDepot,
-		Message:            message,
 	}
 	return res, remainingTickets, updatedChar, nil
 }

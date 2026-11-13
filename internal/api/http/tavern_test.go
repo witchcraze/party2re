@@ -258,7 +258,8 @@ func TestTavernCommandsRequireTheTavern(t *testing.T) {
 }
 
 func TestTavernWordsNameACatalogDish(t *testing.T) {
-	line := tavernWords(corecharacter.Character{})[1]
+	words, _ := tavernWords(nil, context.Background(), corecharacter.Character{})
+	line := words[1]
 	if !slices.ContainsFunc(tavernDishes, func(d string) bool { return line == "{name}さんは"+d+"は好きかしら？" }) {
 		t.Fatalf("dish line %q names no catalog dish", line)
 	}

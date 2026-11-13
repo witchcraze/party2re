@@ -132,7 +132,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /houses/check$`),
 		regexp.MustCompile(`^GET /towns/\{town_id\}/stores$`),
 		regexp.MustCompile(`^GET /stores/\{store_id\}$`),
-		regexp.MustCompile(`^GET /lottery/takarakuji$`),
 		regexp.MustCompile(`^GET /casino/prizes$`),
 		regexp.MustCompile(`^GET /casino/rooms$`),
 		regexp.MustCompile(`^GET /casino/rooms/\{roomId\}$`),
@@ -384,9 +383,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleVoteContest":          "contest.go",
 		"handleSaveCharacterPhoto":   "contest.go",
 		"handleDeleteCharacterPhoto": "contest.go",
-		// Lottery
-		"handlePlayRaffle":          "lottery.go",
-		"handleBuyTakarakujiTicket": "lottery.go",
 		// Event Plaza
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",

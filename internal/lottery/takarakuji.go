@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -16,7 +15,6 @@ const (
 	TakarakujiCostGold   = 30000
 	TakarakujiMaxTickets = 20
 
-	TakarakujiTitle   = "宝くじ屋"
 	TakarakujiNPCName = "@クラゲ"
 )
 
@@ -62,13 +60,6 @@ var (
 		"item-263", // 2/9 weight
 		"item-264",
 	}
-
-	TalkPhrases = []string{
-		"宝くじの三要素！　夢！運！げんじつ！",
-		"宝くじを当てたいなら、当たるまで買うといいよ！",
-		"スライムは眼中にありません！",
-		"大体10日くらいで賞品は変わるよ",
-	}
 )
 
 type TakarakujiPrizeItem struct {
@@ -103,8 +94,6 @@ type TakarakujiTicket struct {
 
 type TakarakujiStatus struct {
 	RoundID          int                   `json:"round_id"`
-	Title            string                `json:"title"`
-	NPCName          string                `json:"npc_name"`
 	TicketPrice      int                   `json:"ticket_price"`
 	MaxTickets       int                   `json:"max_tickets"`
 	SoldCount        int                   `json:"sold_count"`
@@ -112,7 +101,6 @@ type TakarakujiStatus struct {
 	IsSoldOut        bool                  `json:"is_sold_out"`
 	DrawDate         time.Time             `json:"draw_date"`
 	Prizes           []TakarakujiPrizeItem `json:"prizes"`
-	TalkPhrases      []string              `json:"talk_phrases"`
 }
 
 type TakarakujiPurchaseResult struct {
@@ -287,14 +275,8 @@ func (s *Service) GetTakarakujiStatus(ctx context.Context) (TakarakujiStatus, er
 		},
 	}
 
-	phrases := make([]string, len(TalkPhrases)+1)
-	copy(phrases, TalkPhrases)
-	phrases[len(phrases)-1] = fmt.Sprintf("あと %d 人分の宝くじがあるよ", remaining)
-
 	return TakarakujiStatus{
 		RoundID:          round.RoundID,
-		Title:            TakarakujiTitle,
-		NPCName:          TakarakujiNPCName,
 		TicketPrice:      TakarakujiCostGold,
 		MaxTickets:       TakarakujiMaxTickets,
 		SoldCount:        soldCount,
@@ -302,7 +284,6 @@ func (s *Service) GetTakarakujiStatus(ctx context.Context) (TakarakujiStatus, er
 		IsSoldOut:        soldCount >= TakarakujiMaxTickets,
 		DrawDate:         round.DrawDate,
 		Prizes:           prizes,
-		TalkPhrases:      phrases,
 	}, nil
 }
 

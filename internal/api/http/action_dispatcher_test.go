@@ -364,7 +364,7 @@ func TestActionGatewayUnsupported(t *testing.T) {
 		option             Option
 	}{
 		{"unknown", "nonexistent", "ACTION_NOT_FOUND", 404, nil},
-		{"unconnected", "lottery_raffle", "ACTION_NOT_IMPLEMENTED", 501, nil},
+		{"unconnected", "plantation_sow", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"documented PvP inputs", "pvp_room_create", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"documented seal inputs", "blacksmith_seal", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"documented alchemy inputs", "alchemy_synthesize", "ACTION_NOT_IMPLEMENTED", 501, nil},

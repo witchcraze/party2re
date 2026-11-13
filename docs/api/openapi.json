@@ -2273,26 +2273,6 @@
         ],
         "type": "object"
       },
-      "BuyTakarakujiTicketResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "npc_message": {
-            "type": "string"
-          },
-          "remaining_gold": {
-            "type": "integer"
-          },
-          "ticket": {
-            "$ref": "#/components/schemas/LotteryTakarakujiTicket"
-          }
-        },
-        "required": [
-          "ticket",
-          "remaining_gold",
-          "npc_message"
-        ],
-        "type": "object"
-      },
       "CasinoAccount": {
         "additionalProperties": false,
         "properties": {
@@ -4400,7 +4380,9 @@
                         "town2",
                         "town3",
                         "town4",
-                        "tavern"
+                        "tavern",
+                        "lottery",
+                        "takarakuji"
                       ],
                       "type": "string"
                     }
@@ -4537,7 +4519,9 @@
                         "town2",
                         "town3",
                         "town4",
-                        "tavern"
+                        "tavern",
+                        "lottery",
+                        "takarakuji"
                       ],
                       "type": "string"
                     },
@@ -7438,6 +7422,56 @@
               },
               "type": "object"
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "lottery_raffle",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "takarakuji_buy",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
           }
         ],
         "properties": {
@@ -10233,46 +10267,6 @@
         ],
         "type": "object"
       },
-      "GetCharacterTakarakujiTicketResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "current_ticket": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LotteryTakarakujiTicket"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "history": {
-            "items": {
-              "$ref": "#/components/schemas/LotteryTakarakujiTicket"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "history"
-        ],
-        "type": "object"
-      },
-      "GetLotteryTicketsResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "tickets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "tickets"
-        ],
-        "type": "object"
-      },
       "GodSceneData": {
         "additionalProperties": false,
         "description": "Observed while the actor's god visit (from Home reins) is recorded, whatever the saved selection; leaving the scene through navigation forfeits the visit, and a granted wish ends it. NPC dialogue comes from npc_talk/npc_inspect. Observation never grants.",
@@ -11758,9 +11752,6 @@
           "color_name": {
             "type": "string"
           },
-          "description": {
-            "type": "string"
-          },
           "item_definition_id": {
             "type": "string"
           },
@@ -11775,17 +11766,13 @@
           "tier",
           "name",
           "color",
-          "color_name",
-          "description"
+          "color_name"
         ],
         "type": "object"
       },
       "LotteryRaffleResult": {
         "additionalProperties": false,
         "properties": {
-          "message": {
-            "type": "string"
-          },
           "prize": {
             "$ref": "#/components/schemas/LotteryRafflePrize"
           },
@@ -11811,6 +11798,60 @@
         ],
         "type": "object"
       },
+      "LotterySceneData": {
+        "additionalProperties": false,
+        "description": "The actor's raffle coupons and the prize table of the raffle they would play; 300 or more coupons always play the special raffle. NPC dialogue comes from npc_talk/npc_inspect. Observation never draws.",
+        "properties": {
+          "cost": {
+            "type": "integer"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "prizes": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "color": {
+                  "type": "string"
+                },
+                "color_name": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "rank": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "rank",
+                "color",
+                "color_name",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "special": {
+            "type": "boolean"
+          },
+          "tickets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parent",
+          "tickets",
+          "special",
+          "cost",
+          "prizes"
+        ],
+        "type": "object"
+      },
       "LotteryTakarakujiPrizeItem": {
         "additionalProperties": false,
         "properties": {
@@ -11832,71 +11873,6 @@
           "item_id",
           "item_name",
           "winners_count"
-        ],
-        "type": "object"
-      },
-      "LotteryTakarakujiStatus": {
-        "additionalProperties": false,
-        "properties": {
-          "draw_date": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "is_sold_out": {
-            "type": "boolean"
-          },
-          "max_tickets": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "type": "string"
-          },
-          "prizes": {
-            "items": {
-              "$ref": "#/components/schemas/LotteryTakarakujiPrizeItem"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "remaining_tickets": {
-            "type": "integer"
-          },
-          "round_id": {
-            "type": "integer"
-          },
-          "sold_count": {
-            "type": "integer"
-          },
-          "talk_phrases": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "ticket_price": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "round_id",
-          "title",
-          "npc_name",
-          "ticket_price",
-          "max_tickets",
-          "sold_count",
-          "remaining_tickets",
-          "is_sold_out",
-          "draw_date",
-          "prizes",
-          "talk_phrases"
         ],
         "type": "object"
       },
@@ -13490,26 +13466,6 @@
         ],
         "type": "object"
       },
-      "PlayRaffleResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "remaining_tickets": {
-            "type": "integer"
-          },
-          "result": {
-            "$ref": "#/components/schemas/LotteryRaffleResult"
-          }
-        },
-        "required": [
-          "result",
-          "remaining_tickets",
-          "character"
-        ],
-        "type": "object"
-      },
       "PlayerContextResponse": {
         "description": "Shared GET/post-command selected-scene composition with four slots and non-null arrays. Only connected, scene-appropriate eligible commands are offered; required reads fail the whole observation.",
         "properties": {
@@ -14896,7 +14852,9 @@
                   "town2",
                   "town3",
                   "town4",
-                  "tavern"
+                  "tavern",
+                  "lottery",
+                  "takarakuji"
                 ],
                 "type": "string"
               }
@@ -15089,7 +15047,9 @@
               "town2",
               "town3",
               "town4",
-              "tavern"
+              "tavern",
+              "lottery",
+              "takarakuji"
             ],
             "type": "string"
           },
@@ -15219,6 +15179,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/TavernSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LotterySceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TakarakujiSceneData"
                     }
                   ]
                 }
@@ -16061,6 +16027,66 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/TavernSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "lottery"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/LotterySceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "takarakuji"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TakarakujiSceneData"
                 },
                 "support": {
                   "properties": {
@@ -17427,6 +17453,69 @@
         ],
         "type": "object"
       },
+      "TakarakujiSceneData": {
+        "additionalProperties": false,
+        "description": "The current takarakuji round. Reading it provisions the round when none is open; observation never draws or delivers.",
+        "properties": {
+          "draw_date": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "draw_date_label": {
+            "description": "Draw date as the legacy unpadded JST year/month/day.",
+            "type": "string"
+          },
+          "is_sold_out": {
+            "type": "boolean"
+          },
+          "max_tickets": {
+            "type": "integer"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "prizes": {
+            "items": {
+              "$ref": "#/components/schemas/LotteryTakarakujiPrizeItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "purchased": {
+            "description": "The actor holds this round's ticket.",
+            "type": "boolean"
+          },
+          "remaining_tickets": {
+            "type": "integer"
+          },
+          "round_id": {
+            "type": "integer"
+          },
+          "sold_count": {
+            "type": "integer"
+          },
+          "ticket_price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parent",
+          "round_id",
+          "ticket_price",
+          "max_tickets",
+          "sold_count",
+          "remaining_tickets",
+          "is_sold_out",
+          "draw_date",
+          "prizes",
+          "draw_date_label",
+          "purchased"
+        ],
+        "type": "object"
+      },
       "TavernDeliveryReservation": {
         "properties": {
           "character_id": {
@@ -18415,7 +18504,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message."
           },
           "400": {
             "content": {
@@ -24500,388 +24589,6 @@
         "summary": "Get character job mastery catalog and completion percentage",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/lottery/raffle": {
-      "post": {
-        "operationId": "playRaffle",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "raffle_type": {
-                    "description": "Deprecated: raffle mode is automatically selected based on locked coupon balance (\u003e= 300: SPECIAL, \u003c 300: STANDARD). Maintained for backward compatibility.",
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": false
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlayRaffleResponse"
-                }
-              }
-            },
-            "description": "Raffle draw result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Draw raffle ticket for item prizes",
-        "tags": [
-          "Lottery"
-        ]
-      }
-    },
-    "/characters/{id}/lottery/takarakuji/buy": {
-      "post": {
-        "operationId": "buyTakarakujiTicket",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BuyTakarakujiTicketResponse"
-                }
-              }
-            },
-            "description": "Purchased Takarakuji ticket and character state"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - already purchased in this round or round sold out"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - insufficient gold"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Buy Takarakuji lottery ticket",
-        "tags": [
-          "Lottery"
-        ]
-      }
-    },
-    "/characters/{id}/lottery/takarakuji/ticket": {
-      "get": {
-        "operationId": "getCharacterTakarakujiTicket",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetCharacterTakarakujiTicketResponse"
-                }
-              }
-            },
-            "description": "Character current Takarakuji ticket and past participation history"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character Takarakuji ticket status",
-        "tags": [
-          "Lottery"
-        ]
-      }
-    },
-    "/characters/{id}/lottery/tickets": {
-      "get": {
-        "operationId": "getLotteryTickets",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetLotteryTicketsResponse"
-                }
-              }
-            },
-            "description": "Raffle ticket info"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character raffle tickets",
-        "tags": [
-          "Lottery"
         ]
       }
     },
@@ -31411,42 +31118,6 @@
         "summary": "Read letter and mark as read",
         "tags": [
           "Letters"
-        ]
-      }
-    },
-    "/lottery/takarakuji": {
-      "get": {
-        "operationId": "getTakarakujiStatus",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LotteryTakarakujiStatus"
-                }
-              }
-            },
-            "description": "Takarakuji round status, prize lineup, and talk phrases"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get current Takarakuji lottery status",
-        "tags": [
-          "Lottery"
         ]
       }
     },
