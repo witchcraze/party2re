@@ -159,7 +159,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishStats, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishStats)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -179,7 +179,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		// Reject if OverLevel
 		char.OverLevel = true
 		charRepo.characters[char.ID] = char
-		_, err = svc.GrantWish(ctx, char.ID, god.WishStats, god.RealmHeaven)
+		_, err = svc.GrantWish(ctx, char.ID, god.WishStats)
 		if !errors.Is(err, god.ErrWishRequirement) {
 			t.Errorf("expected ErrWishRequirement for OverLevel, got %v", err)
 		}
@@ -190,7 +190,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		char := corecharacter.Character{ID: "char-sp", Name: "Mage", SP: 10}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishSP, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishSP)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -207,7 +207,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		char := corecharacter.Character{ID: "char-money", Name: "Merchant", Money: 500}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishMoney, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishMoney)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -224,7 +224,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		char := corecharacter.Character{ID: "char-casino", Name: "Gambler"}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishCasinoCoins, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishCasinoCoins)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -241,7 +241,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		char := corecharacter.Character{ID: "char-medals", Name: "Collector", SmallMedals: 5}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishSmallMedals, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishSmallMedals)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -258,7 +258,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		char := corecharacter.Character{ID: "char-lottery", Name: "Lucky"}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishLotteryTickets, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishLotteryTickets)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -276,7 +276,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		charRepo.characters[char.ID] = char
 
 		// Without guild: fails
-		_, err := svc.GrantWish(ctx, char.ID, god.WishGuildRank, god.RealmHeaven)
+		_, err := svc.GrantWish(ctx, char.ID, god.WishGuildRank)
 		if !errors.Is(err, god.ErrWishRequirement) {
 			t.Errorf("expected ErrWishRequirement without guild, got %v", err)
 		}
@@ -286,7 +286,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		guildRepo.members[char.ID] = guild.Member{GuildID: "guild-1", CharacterID: char.ID}
 
 		// Rank up wish
-		res, err := svc.GrantWish(ctx, char.ID, god.WishGuildRank, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishGuildRank)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -298,7 +298,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 
 		// Gorgeous wish
-		res, err = svc.GrantWish(ctx, char.ID, god.WishGuildGorgeous, god.RealmHeaven)
+		res, err = svc.GrantWish(ctx, char.ID, god.WishGuildGorgeous)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -316,7 +316,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishRefresh, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishRefresh)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -355,7 +355,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 				char := corecharacter.Character{ID: "char-orbs", Name: "OrbHunter", Orb: tc.initialOrb}
 				charRepo.characters[char.ID] = char
 
-				res, err := svc.GrantWish(ctx, char.ID, god.WishAllOrbs, god.RealmHeaven)
+				res, err := svc.GrantWish(ctx, char.ID, god.WishAllOrbs)
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
@@ -383,7 +383,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -398,7 +398,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 
 		// Reject if already job-70
-		_, err = svc.GrantWish(ctx, char.ID, god.WishCelestialDragon, god.RealmHeaven)
+		_, err = svc.GrantWish(ctx, char.ID, god.WishCelestialDragon)
 		if !errors.Is(err, god.ErrWishRequirement) {
 			t.Errorf("expected ErrWishRequirement for existing job-70, got %v", err)
 		}
@@ -416,7 +416,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -445,7 +445,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		char := corecharacter.Character{ID: "char-celestial-fail", JobID: "job-01", Level: 50}
 		charRepo.characters[char.ID] = char
 
-		if _, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon, god.RealmHeaven); !errors.Is(err, sentinel) {
+		if _, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon); !errors.Is(err, sentinel) {
 			t.Fatalf("expected job record error, got %v", err)
 		}
 		if got := charRepo.characters[char.ID]; got.JobID != "job-01" || got.Level != 50 {
@@ -458,7 +458,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		char := corecharacter.Character{ID: "char-god-new-world", Name: "Light"}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishGodOfNewWorld, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishGodOfNewWorld)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -479,7 +479,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		charRepo.characters[char.ID] = char
 
 		// Ortega
-		res, err := svc.GrantWish(ctx, char.ID, god.WishOrtega, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishOrtega)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -491,7 +491,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 
 		// Cat
-		_, err = svc.GrantWish(ctx, char.ID, god.WishCat, god.RealmHeaven)
+		_, err = svc.GrantWish(ctx, char.ID, god.WishCat)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -500,7 +500,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 
 		// The secret maid wish is unreachable in legacy (god.cgi negau stops before the last entry)
-		_, err = svc.GrantWish(ctx, char.ID, "wish_secret_maid", god.RealmHeaven)
+		_, err = svc.GrantWish(ctx, char.ID, "wish_secret_maid")
 		if !errors.Is(err, god.ErrWishNotFound) {
 			t.Errorf("expected ErrWishNotFound for wish_secret_maid, got %v", err)
 		}
@@ -515,7 +515,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		charRepo.characters[char.ID] = char
 
 		// Erotic book -> depot
-		res, err := svc.GrantWish(ctx, char.ID, god.WishEroticBook, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishEroticBook)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -528,7 +528,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 
 		// Alchemy recipe -> depot
-		_, err = svc.GrantWish(ctx, char.ID, god.WishAlchemyRecipe, god.RealmHeaven)
+		_, err = svc.GrantWish(ctx, char.ID, god.WishAlchemyRecipe)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -546,7 +546,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		char := corecharacter.Character{ID: "char-lover", Name: "Lonely"}
 		charRepo.characters[char.ID] = char
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishLover, god.RealmHeaven)
+		res, err := svc.GrantWish(ctx, char.ID, god.WishLover)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

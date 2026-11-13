@@ -87,6 +87,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "wishingwell":
 			adapter.title, adapter.commands = "願いの泉", []string{"wishingwell_exchange"}
 			adapter.read = h.wishingWellSceneData
+		case "god", "u_god":
+			adapter.title = map[string]string{"god": "天界", "u_god": "天界?"}[definition.ID]
+			adapter.commands, adapter.read = []string{"god_wish"}, h.godSceneData
 		case "bank":
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
 			adapter.read = h.bankSceneData
@@ -245,7 +248,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			}
 		}
 		switch data := data.(type) {
-		case BankSceneData, BlacksmithSceneData, ChapelSceneData, ExileSceneData, GemStoreSceneData, WishingWellSceneData:
+		case BankSceneData, BlacksmithSceneData, ChapelSceneData, ExileSceneData, GemStoreSceneData, GodSceneData, WishingWellSceneData:
 			scene.Support.Observation = "details"
 		case AltarSceneData:
 			scene.Support.Observation = "details"

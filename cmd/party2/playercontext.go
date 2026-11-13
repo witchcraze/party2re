@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/witchcraze/party2re/internal/blackmarket"
+	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
@@ -25,6 +26,9 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		{ID: "exile", Parent: "town"},
 		{ID: "fleamarket", Parent: "town", Pageable: true},
 		{ID: "gemstore", Parent: "town"}, {ID: "wishingwell", Parent: "town"},
+		// Reached only by Home reins; the recorded visit, not navigation, admits.
+		{ID: "god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitHeaven }},
+		{ID: "u_god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitUnderworld }},
 		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: secretshop.CheckEligibility,
 			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
 				status, err := misc.secretshop.GetShopStatus(ctx, actorID)
@@ -91,5 +95,5 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		})
 	}
 	readers := newContextActivityReaders(cmbt, misc)
-	return playercontext.NewService(core.charRepo, soc.schedRepo, contextSleepReader{TimerReader: soc.timer, home: soc.home}, append([]func(*playercontext.Service){playercontext.WithNavigation(core.navigation, scenes...), playercontext.WithActivities(readers.read), playercontext.WithPublicActivities(readers.publicActivity)}, options...)...)
+	return playercontext.NewService(core.charRepo, soc.schedRepo, contextSleepReader{TimerReader: soc.timer, home: soc.home}, append([]func(*playercontext.Service){playercontext.WithNavigation(core.navigation, scenes...), playercontext.WithGodVisitForfeit(misc.god.ForfeitVisit), playercontext.WithActivities(readers.read), playercontext.WithPublicActivities(readers.publicActivity)}, options...)...)
 }

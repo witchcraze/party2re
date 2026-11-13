@@ -36,6 +36,7 @@ type npcProfile struct {
 	words   []string
 	wordsOf func(corecharacter.Character) []string // replaces words when they depend on the speaker
 	inspect string                                 // empty: npcInspectDefault
+	silent  bool                                   // inspection prints nothing (an empty shiraberu_npc)
 }
 
 func shopNPC(kind shop.ShopType, inspect string) npcProfile {
@@ -83,12 +84,17 @@ var npcProfiles = map[string]npcProfile{
 		"ここはフリーマーケットだ。物の売り買いができるぜ", "物の価値は人それぞれだ。思いのほか良い物があるかもな",
 		"１人で出せる品は限りがあるから気をつけな", "俺の名前を知らないようじゃピヨッコだ",
 	}},
-	"altar":       {name: altar.NPCName, wordsOf: altar.MikoWords},
+	"altar": {name: altar.NPCName, wordsOf: altar.MikoWords},
+	// god.cgi/u_god.cgi @words and shiraberu_npc.
+	"god":         {name: "@神", words: godWords, inspect: "@神「本当の願いは自分の力で叶えるのだ…」"},
+	"u_god":       {name: "@神?", words: godWords, silent: true},
 	"wishingwell": {name: wishingwell.NPCName, words: wishingwell.NPCWords},
 	"chapel": {name: "@シスター", words: []string{
 		"{name}に神のご加護があらんことを", "待つだけでは祈りは叶いません…", "{name}が力を尽くすとき、祈りは叶うことでしょう",
 	}},
 }
+
+var godWords = []string{"{name}よ。よくぞここまできた。{name}の願いを一つだけ叶えてやろう"}
 
 // NPCResult is the NPC's reply. Private replies are shown only to the actor and
 // are not logged (legacy $mes).
@@ -193,6 +199,9 @@ func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, ow
 	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
 	if err != nil {
 		return NPCResult{}, err
+	}
+	if !talk && npc.silent {
+		return NPCResult{NPCName: npc.name, Private: true}, nil
 	}
 	if !talk {
 		text := npc.inspect

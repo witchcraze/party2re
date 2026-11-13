@@ -223,8 +223,9 @@ and `scene_back`. Destinations, subject kinds and paging inputs are closed,
 typed contracts registered by the relevant adapter. Back means the registered
 parent scene, not browser history. A facility/subject change clears subordinate
 selection and paging. Navigation commands have no price, fatigue, scheduled
-cooldown or implicit feature mutation. Recovery and active-session restrictions
-still apply: browsing cannot bypass sleep or abandon a run.
+cooldown or implicit feature mutation. The one exception is a recorded god visit:
+it decides the observed scene, and leaving that scene clears it ([God](../design/god.md#visit)).
+Recovery and active-session restrictions still apply: browsing cannot bypass sleep or abandon a run.
 
 Registered destinations, their parents, subject kinds and paging are defined by
 the production registry (`newPlayerContext` in `cmd/party2/playercontext.go`).

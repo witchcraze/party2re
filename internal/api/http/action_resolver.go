@@ -87,6 +87,7 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 		"altar_pray":            {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"altar_wish":            {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"wishingwell_exchange":  {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"god_wish":              {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"gemstore_sell":         {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"gemstore_send":         {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"gemstore_synthesize":   {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},

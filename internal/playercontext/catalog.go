@@ -408,14 +408,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "wishingwell_exchange", Label: "願いの泉でSP交換", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"stat", "sp"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "altar_pray", Label: "復活の祭壇（祈り）", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "altar_wish", Label: "復活の祭壇（願い）", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{
-		ID:             "god_wish",
-		Label:          "神の願い・限界突破",
-		Category:       "growth",
-		OperationID:    "grantGodWish",
-		RequiredParams: []string{"wish_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "god_wish", Label: "神の願い・限界突破", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"wish_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{
 		ID:             "job_change",
 		Label:          "ダーマ神殿で転職",

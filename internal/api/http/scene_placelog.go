@@ -30,7 +30,7 @@ type PlaceLogEntry struct {
 var placeLogFacilities = map[string]bool{
 	"town": true, "town1": true, "town2": true, "town3": true, "town4": true,
 	"alchemy": true, "altar": true, "auction": true, "bank": true, "blackmarket": true, "blacksmith": true, "casino": true,
-	"chapel": true, "depot": true, "fleamarket": true, "gemstore": true, "secretshop": true,
+	"chapel": true, "depot": true, "fleamarket": true, "gemstore": true, "god": true, "u_god": true, "secretshop": true,
 	"shop_weapon": true, "shop_armor": true, "shop_item": true, "shop_accessory": true, "wishingwell": true,
 }
 

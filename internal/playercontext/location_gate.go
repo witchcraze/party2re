@@ -22,5 +22,7 @@ func (LocationGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
 	}
 	return strings.HasPrefix(action.ID, snapshot.LocationID+"_") || (strings.HasPrefix(snapshot.LocationID, "shop_") && strings.HasPrefix(action.ID, "shop_")) ||
 		// Legacy player stores stand in the four towns (town1..town4).
-		(strings.HasPrefix(snapshot.LocationID, LocationTown) && strings.HasPrefix(action.ID, "store_"))
+		(strings.HasPrefix(snapshot.LocationID, LocationTown) && strings.HasPrefix(action.ID, "store_")) ||
+		// The Underworld god (u_god.cgi) grants the same god_ commands.
+		(snapshot.LocationID == "u_god" && strings.HasPrefix(action.ID, "god_"))
 }
