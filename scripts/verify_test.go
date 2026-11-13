@@ -551,10 +551,11 @@ func TestCIWorkflow_RunsWholeSuiteWithoutResultCache(t *testing.T) {
 	for _, want := range []string{
 		"verify-shard:",
 		"shard: [0, 1, 2]",
-		`./scripts/ci_shard.sh "${{ matrix.shard }}" 3`,
+		`shard_output=$(./scripts/ci_shard.sh "${{ matrix.shard }}" 3)`,
 		"go test -timeout=30m -count=1 -coverprofile=coverage.out -covermode=atomic",
 		"verify:",
 		"needs: [verify-shard]",
+		"if: ${{ always() }}",
 		"needs.verify-shard.result != 'success'",
 		"go tool cover -func=coverage.out",
 	} {
@@ -562,6 +563,71 @@ func TestCIWorkflow_RunsWholeSuiteWithoutResultCache(t *testing.T) {
 			t.Fatalf("ci.yml missing required sharded verification directive %q", want)
 		}
 	}
+	if strings.Contains(ci, "< <(./scripts/ci_shard.sh") {
+		t.Fatal("ci.yml must not use bash process substitution for ci_shard.sh (loses exit code)")
+	}
+	if strings.Contains(ci, "if: ${{ !cancelled() }}") {
+		t.Fatal("ci.yml verify gate must use always() so cancelled shards never report skipped and pass branch protection")
+	}
+
+	// Regression test: verify the actual CI shard shell block aborts before `go test` when ci_shard.sh fails after partial stdout.
+	t.Run("shard step aborts on partial ci_shard failure", func(t *testing.T) {
+		marker := "        run: |\n"
+		stepMarker := "- name: Run shard tests with atomic coverage"
+		idx := strings.Index(ci, stepMarker)
+		if idx < 0 {
+			t.Fatalf("could not locate %q in ci.yml", stepMarker)
+		}
+		rest := ci[idx:]
+		runIdx := strings.Index(rest, marker)
+		if runIdx < 0 {
+			t.Fatalf("could not locate run block in %q", stepMarker)
+		}
+		var blockLines []string
+		for _, line := range strings.Split(rest[runIdx+len(marker):], "\n") {
+			if line != "" && !strings.HasPrefix(line, "          ") {
+				break
+			}
+			blockLines = append(blockLines, strings.TrimPrefix(line, "          "))
+		}
+		script := strings.ReplaceAll(strings.Join(blockLines, "\n"), "${{ matrix.shard }}", "0")
+
+		fix := setupVerifyFixture(t, false)
+		shardScript, err := os.ReadFile("ci_shard.sh")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(fix.root, "scripts", "ci_shard.sh"), shardScript, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		if out, code := runCmd(t, fix.root, fix.env, "bash", "-eo", "pipefail", "-c", script); code != 0 {
+			t.Fatalf("happy-path CI shard script failed (code %d):\n%s", code, out)
+		}
+		goLogOK, err := os.ReadFile(fix.goRecord)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(goLogOK), "go test -timeout=30m -count=1") {
+			t.Fatalf("expected happy-path CI shard script to run go test:\n%s", goLogOK)
+		}
+
+		if err := os.WriteFile(fix.goRecord, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		failEnv := append([]string{}, fix.env...)
+		failEnv = append(failEnv, "GO_LIST_PARTIAL_FAIL=1")
+		if out, code := runCmd(t, fix.root, failEnv, "bash", "-eo", "pipefail", "-c", script); code == 0 {
+			t.Fatalf("expected CI shard script to abort when ci_shard.sh fails after partial stdout, got:\n%s", out)
+		}
+		goLogFail, err := os.ReadFile(fix.goRecord)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(goLogFail), "go test ") {
+			t.Fatalf("CI shard script must not execute go test after ci_shard.sh fails:\n%s", goLogFail)
+		}
+	})
 }
 
 func TestCIShard_PartitionsAllPackagesWithoutDuplicatesOrOmissions(t *testing.T) {
