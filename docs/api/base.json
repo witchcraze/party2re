@@ -2169,6 +2169,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/PlantationSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OracleSceneData"
                     }
                   ]
                 }
@@ -3116,6 +3119,36 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "oracle"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/OracleSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3785,7 +3818,8 @@
                         "tavern",
                         "lottery",
                         "takarakuji",
-                        "plantation"
+                        "plantation",
+                        "oracle"
                       ]
                     }
                   },
@@ -3897,7 +3931,8 @@
                         "tavern",
                         "lottery",
                         "takarakuji",
-                        "plantation"
+                        "plantation",
+                        "oracle"
                       ]
                     },
                     "offset": {
@@ -6973,6 +7008,103 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "oracle_buy"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_no": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "One of the oracle scene's available_costumes item_no values."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_no"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "oracle_wallpaper"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "wallpaper": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "One of the oracle scene's available_wallpapers names."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "wallpaper"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "oracle_blackmarket"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
           }
         ]
       },
@@ -7365,7 +7497,8 @@
               "tavern",
               "lottery",
               "takarakuji",
-              "plantation"
+              "plantation",
+              "oracle"
             ]
           },
           "offset": {
@@ -7504,7 +7637,8 @@
                   "tavern",
                   "lottery",
                   "takarakuji",
-                  "plantation"
+                  "plantation",
+                  "oracle"
                 ]
               }
             },
@@ -15390,64 +15524,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "StoreOracleStatus": {
-        "properties": {
-          "active_costume": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CostumeActiveCostume"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "available_costumes": {
-            "items": {
-              "$ref": "#/components/schemas/StoreOracleItem"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "available_wallpapers": {
-            "items": {
-              "$ref": "#/components/schemas/StoreWallpaperInfo"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "bgimg": {
-            "type": "string"
-          },
-          "can_unlock_black_market": {
-            "type": "boolean"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "bgimg",
-          "available_costumes",
-          "available_wallpapers",
-          "can_unlock_black_market"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "CostumeActiveCostume": {
         "properties": {
           "character_id": {
@@ -15522,22 +15598,6 @@
         "required": [
           "name",
           "price"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "OracleBuyWallpaperResponse": {
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "wallpaper": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "wallpaper",
-          "message"
         ],
         "type": "object",
         "additionalProperties": false
@@ -16892,7 +16952,7 @@
         "properties": {
           "parent": {
             "type": "string",
-            "const": "town"
+            "const": "oracle"
           },
           "character_id": {
             "type": "string",
@@ -17985,6 +18045,55 @@
           "status",
           "seeds",
           "fertilizers"
+        ]
+      },
+      "OracleSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's costume catalog (gated by job level, minus helper-requested items), the wallpapers and the worn costume. oracle_blackmarket is offered only to characters who qualify for the black market. NPC dialogue comes from npc_talk/npc_inspect. Observation never buys.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "active_costume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostumeActiveCostume"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_costumes": {
+            "items": {
+              "$ref": "#/components/schemas/StoreOracleItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "available_wallpapers": {
+            "items": {
+              "$ref": "#/components/schemas/StoreWallpaperInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "character_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "character_id",
+          "available_costumes",
+          "available_wallpapers",
+          "active_costume"
         ]
       }
     },

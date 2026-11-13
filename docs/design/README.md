@@ -112,7 +112,7 @@ graph TD
 - [`blacksmith.md`](blacksmith.md) — 12 authentic crystal weapon seals, equipment naming, and 3-slot dedicated weapon storage.
 - [`monster.md`](monster.md) — Monster Grandpa ranch capacity: Home limit equal to the box, gifts limited by the sender's capacity.
 - [`plantation.md`](plantation.md) — Seed garden plot, fertilizer and harvest rules.
-- [`oracle-shop.md`](oracle-shop.md) — Oracle Shop (@ラクル) job-gated costume rentals, gender icons, private estate wallpaper boutique, and Black Market hint.
+- [`oracle-shop.md`](oracle-shop.md) — Oracle shop costume and wallpaper rules and the hidden way into the black market.
 - [`chapel.md`](chapel.md) — 5 town church blessings with single-active prayer constraint and daily reset.
 - [`altar-of-rebirth.md`](altar-of-rebirth.md) — Orb offering source, Ramia awakening and otherworld travel item wishes.
 

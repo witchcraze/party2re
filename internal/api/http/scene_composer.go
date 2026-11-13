@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/witchcraze/party2re/internal/altar"
+	"github.com/witchcraze/party2re/internal/blackmarket"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/town"
@@ -40,7 +41,7 @@ var facilities = func() map[string]facility {
 		"god": godFacility, "u_god": underworldGodFacility, "auction": auctionFacility, "bank": bankFacility,
 		"blackmarket": blackMarketFacility, "blacksmith": blacksmithFacility, "chapel": chapelFacility, "exile": exileFacility,
 		"depot": depotFacility, "fleamarket": fleaMarketFacility, "gemstore": gemStoreFacility, "secretshop": secretShopFacility,
-		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "casino": casinoFacility, "tavern": tavernFacility, "lottery": lotteryFacility, "takarakuji": takarakujiFacility, "plantation": plantationFacility,
+		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "casino": casinoFacility, "tavern": tavernFacility, "lottery": lotteryFacility, "takarakuji": takarakujiFacility, "plantation": plantationFacility, "oracle": oracleFacility,
 	}
 	for _, t := range town.AllTowns() {
 		m[t.ID] = townDistrictFacility(t.Name)
@@ -311,6 +312,12 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			templates["home_sleep"] = map[string]any{"target_home_id": data.View.Owner.ID}
 		case LotterySceneData, TakarakujiSceneData, PlantationSceneData:
 			scene.Support.Observation = "details"
+		case OracleSceneData:
+			scene.Support.Observation = "details"
+			// ＠やみいちば answers only qualified characters (goods.cgi yamiichiba).
+			if !blackmarket.CheckEligibility(result.Snapshot.Character) {
+				choices = slices.DeleteFunc(choices, func(id string) bool { return id == "oracle_blackmarket" })
+			}
 		case TavernSceneData:
 			scene.Support.Observation = "details"
 			if data.Delivery == nil {
