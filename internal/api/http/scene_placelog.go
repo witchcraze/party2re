@@ -29,9 +29,9 @@ type PlaceLogEntry struct {
 // store, guild) connect with their own scenes.
 var placeLogFacilities = map[string]bool{
 	"town": true, "town1": true, "town2": true, "town3": true, "town4": true,
-	"alchemy": true, "auction": true, "bank": true, "blackmarket": true, "blacksmith": true, "casino": true,
+	"alchemy": true, "altar": true, "auction": true, "bank": true, "blackmarket": true, "blacksmith": true, "casino": true,
 	"chapel": true, "depot": true, "fleamarket": true, "gemstore": true, "secretshop": true,
-	"shop_weapon": true, "shop_armor": true, "shop_item": true, "shop_accessory": true,
+	"shop_weapon": true, "shop_armor": true, "shop_item": true, "shop_accessory": true, "wishingwell": true,
 }
 
 // WithPlaceLog configures the shared place log observed by facility scenes.

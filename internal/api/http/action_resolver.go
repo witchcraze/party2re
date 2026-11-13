@@ -84,6 +84,9 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 		"blackmarket_sacrifice": {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"blackmarket_trade":     {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"gemstore_buy":          {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"altar_pray":            {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"altar_wish":            {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
+		"wishingwell_exchange":  {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"gemstore_sell":         {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"gemstore_send":         {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
 		"gemstore_synthesize":   {Method: http.MethodPost, PathPattern: "/api/v1/characters/%s/actions"},
@@ -151,10 +154,6 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 		"chapel_pray": {
 			Method:      http.MethodPost,
 			PathPattern: "/api/v1/characters/%s/actions",
-		},
-		"wishingwell_exchange": {
-			Method:      http.MethodPost,
-			PathPattern: "/characters/%s/wishing-well/exchange",
 		},
 		"adventure_start": {
 			Method:      http.MethodPost,

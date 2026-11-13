@@ -80,7 +80,7 @@ func TestActionURLResolver(t *testing.T) {
 			label:      "願いを捧げる",
 			category:   "wishingwell",
 			wantMethod: http.MethodPost,
-			wantURL:    "/characters/char-999/wishing-well/exchange",
+			wantURL:    "/api/v1/characters/char-999/actions",
 		},
 		{
 			name:       "adventure start action",

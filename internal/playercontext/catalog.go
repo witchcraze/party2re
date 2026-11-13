@@ -405,22 +405,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	// =========================================================================
 	// Category: growth (Sanctuary, Progression & Limit Break)
 	// =========================================================================
-	{
-		ID:             "wishingwell_exchange",
-		Label:          "願いの泉でSP交換",
-		Category:       "growth",
-		OperationID:    "exchangeWishingWellSP",
-		RequiredParams: []string{"stat", "sp"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "altar_pray",
-		Label:          "復活の祭壇（祈り）",
-		Category:       "growth",
-		OperationID:    "prayAltarRamia",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "wishingwell_exchange", Label: "願いの泉でSP交換", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"stat", "sp"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "altar_pray", Label: "復活の祭壇（祈り）", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "altar_wish", Label: "復活の祭壇（願い）", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{
 		ID:             "god_wish",
 		Label:          "神の願い・限界突破",

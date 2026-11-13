@@ -166,7 +166,6 @@ type Handler struct {
 	contest        ContestService
 	parties        PartyService
 	altar          AltarService
-	wishingWell    WishingWellService
 	bank           BankService
 	blacksmith     BlacksmithService
 	replay         ReplayService
@@ -439,18 +438,6 @@ func (h *Handler) Router() http.Handler {
 	// Custom Skills
 	mux.HandleFunc("GET /characters/{id}/custom-skills", h.handleGetCustomSkills)
 	mux.HandleFunc("POST /characters/{id}/custom-skills", h.handleSetCustomSkill)
-
-	// Chapel
-
-	// Altar of Rebirth
-	mux.HandleFunc("GET /characters/{id}/altar", h.handleGetAltar)
-	mux.HandleFunc("POST /characters/{id}/altar/pray", h.handleAltarPray)
-	mux.HandleFunc("POST /characters/{id}/altar/wish", h.handleAltarWish)
-	mux.HandleFunc("POST /characters/{id}/altar/offer", h.handleAltarOffer)
-
-	// Wishing Well
-	mux.HandleFunc("GET /characters/{id}/wishing-well", h.handleGetWishingWell)
-	mux.HandleFunc("POST /characters/{id}/wishing-well/exchange", h.handleWishingWellExchange)
 
 	// Tavern
 	mux.HandleFunc("GET /tavern/menu", h.handleGetTavernMenu)

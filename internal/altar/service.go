@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
@@ -34,10 +33,8 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (AltarStatu
 		awakenedBy = latestAwakening.CharacterName
 	}
 
-	dialogue := MsgMikoGuardingEggs
-	var availableItems []WishItemInfo
+	availableItems := []WishItemInfo{}
 	if char.IsRamiaAwakened() {
-		dialogue = MsgMikoAfterAwakening
 		for _, itemID := range AllowedWishItems {
 			def, defErr := s.itemDefs.FindByID(itemID)
 			name := itemID
@@ -49,8 +46,6 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (AltarStatu
 				Name: name,
 			})
 		}
-	} else if char.HasAllOrbs() {
-		dialogue = MsgMikoReadyToPray
 	}
 
 	return AltarStatus{
@@ -62,7 +57,6 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (AltarStatu
 		RamiaPresent:   ramiaPresent,
 		RamiaExpiresAt: expiresAt,
 		AwakenedBy:     awakenedBy,
-		MikoDialogue:   dialogue,
 		AvailableItems: availableItems,
 	}, nil
 }
@@ -77,6 +71,10 @@ func (s *Service) Pray(ctx context.Context, characterID string) (PrayResult, err
 			return err
 		}
 
+		// Legacy offers ＠いのる only before Ramia awakens.
+		if char.IsRamiaAwakened() {
+			return ErrRamiaAwakened
+		}
 		if !char.HasAllOrbs() {
 			return ErrInsufficientOrbs
 		}
@@ -211,83 +209,6 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 		return WishResult{}, err
 	}
 	return result, nil
-}
-
-// OfferOrb offers an orb to the altar, adding it to character collection.
-func (s *Service) OfferOrb(ctx context.Context, characterID string, orb rune) (OfferResult, error) {
-	if !corecharacter.IsValidOrbRune(orb) {
-		return OfferResult{}, ErrInvalidOrbRune
-	}
-
-	var result OfferResult
-	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
-		char, err := s.chars.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		if char.HasOrb(orb) {
-			result = OfferResult{
-				CharacterID: char.ID,
-				Orb:         orb,
-				OrbName:     OrbName(orb),
-				Message:     MsgAlreadyOffered,
-				TotalOrbs:   char.OrbCount(),
-				HasAllOrbs:  char.HasAllOrbs(),
-			}
-			return ErrOrbAlreadyOffered
-		}
-
-		inv, err := s.invs.FindByCharacterIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		orbItemID := OrbItemID(orb)
-		var orbInstanceID string
-		for _, item := range inv.Items {
-			if item.DefinitionID == orbItemID {
-				orbInstanceID = item.ID
-				break
-			}
-		}
-		if orbInstanceID == "" {
-			return ErrOrbItemNotFound
-		}
-		if err := inv.Consume(orbInstanceID, 1); err != nil {
-			return fmt.Errorf("%w: %v", ErrOrbItemNotFound, err)
-		}
-
-		added, err := char.AddOrb(orb)
-		if err != nil {
-			return err
-		}
-		if !added {
-			return ErrOrbAlreadyOffered
-		}
-
-		if err := s.invs.Save(txCtx, inv); err != nil {
-			return err
-		}
-
-		if err := s.chars.Update(txCtx, char); err != nil {
-			return err
-		}
-
-		result = OfferResult{
-			CharacterID: char.ID,
-			Orb:         orb,
-			OrbName:     OrbName(orb),
-			Message:     fmt.Sprintf(MsgOrbOfferedFmt, OrbName(orb)),
-			TotalOrbs:   char.OrbCount(),
-			HasAllOrbs:  char.HasAllOrbs(),
-		}
-		return nil
-	})
-	if err != nil && !errors.Is(err, ErrOrbAlreadyOffered) {
-		return OfferResult{}, err
-	}
-	return result, err
 }
 
 type timeTimePtr = time.Time

@@ -69,8 +69,6 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithJob(&stubJobService{}),
 		apihttp.WithDepot(&stubDepotService{}),
 		apihttp.WithPlantation(&stubPlantationService{}),
-		apihttp.WithAltar(&stubAltarService{}),
-		apihttp.WithWishingWell(&stubWishingWellService{}),
 		apihttp.WithContest(&stubContestService{}),
 		apihttp.WithLottery(&stubLotteryService{}),
 		apihttp.WithEventPlaza(&mockEventPlazaService{}),
@@ -124,12 +122,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"plantation_sow", http.MethodPost, "/characters/char-1/plantation/sow", `{"seed_id":"seed-1"}`},
 		{"plantation_fertilize", http.MethodPost, "/characters/char-1/plantation/fertilize", `{"fertilizer_id":"fert-1"}`},
 		{"plantation_harvest", http.MethodPost, "/characters/char-1/plantation/harvest", `{}`},
-		// Altar
-		{"altar_pray", http.MethodPost, "/characters/char-1/altar/pray", `{}`},
-		{"altar_wish", http.MethodPost, "/characters/char-1/altar/wish", `{"item_id":"sword-1"}`},
-		{"altar_offer", http.MethodPost, "/characters/char-1/altar/offer", `{"orb":"silver"}`},
-		// Wishing Well
-		{"wishingwell_exchange", http.MethodPost, "/characters/char-1/wishing-well/exchange", `{"stat":"STR","sp":10}`},
 		// Contest
 		{"contest_enter", http.MethodPost, "/characters/char-1/contest/enter", `{"photo_id":"p-1","title":"Entry"}`},
 		{"contest_vote", http.MethodPost, "/characters/char-1/contest/vote", `{"entry_id":"e-1","comment":"Nice"}`},

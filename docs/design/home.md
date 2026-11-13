@@ -72,7 +72,6 @@ Open items (`lib/_data.cgi` lines):
 | Items | Legacy behavior | Owner |
 | --- | --- | --- |
 | 043 transformation staff (`789–799`) | Uniform monster appearance 001–108, fallback if the image is absent; consumes | #1837 |
-| 060–065 orbs (`965–1054`) | Append rune `s/r/b/g/y/p`; an existing rune sets `mes` and keeps the item | #1839 |
 | 113/114 bracelets/rings (`1408–1429`) | Returned stats are discarded: **no permanent HP/MP change; consumes one** | #1840 |
 | 203 sacred mana (`1824`) | SP +200, including over-level; consumes | #1835 |
 | 231–236, 245 wallpapers (`1940–1993;2002–2010`) | Replace own background with field 0/1/2/4/5/6/8; consumes, no gold or lease prerequisite (unlike the Store's paid wallpaper) | #1836 |

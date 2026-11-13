@@ -124,12 +124,6 @@ func setupTestService(t *testing.T) (*Service, *mockCharRepo, *mockInvRepo, *moc
 	collector := &mockCollector{}
 	itemDefs := &mockItemDefProvider{
 		defs: map[string]coreitem.Definition{
-			ItemSilverOrb:      {ID: ItemSilverOrb, Name: "シルバーオーブ"},
-			ItemRedOrb:         {ID: ItemRedOrb, Name: "レッドオーブ"},
-			ItemBlueOrb:        {ID: ItemBlueOrb, Name: "ブルーオーブ"},
-			ItemGreenOrb:       {ID: ItemGreenOrb, Name: "グリーンオーブ"},
-			ItemYellowOrb:      {ID: ItemYellowOrb, Name: "イエローオーブ"},
-			ItemPurpleOrb:      {ID: ItemPurpleOrb, Name: "パープルオーブ"},
 			ItemMirrorOfTruth:  {ID: ItemMirrorOfTruth, Name: "真実の鏡"},
 			ItemMadamsInvite:   {ID: ItemMadamsInvite, Name: "マダムの招待状"},
 			ItemTreasureMap:    {ID: ItemTreasureMap, Name: "宝の地図"},
@@ -176,11 +170,11 @@ func TestGetStatusProgression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if status.OrbCount != 0 || status.HasAllOrbs || status.RamiaAwakened || status.RamiaPresent {
+	if status.OrbCount != 0 || status.HasAllOrbs || status.RamiaAwakened || status.RamiaPresent || status.AvailableItems == nil {
 		t.Fatalf("unexpected initial status: %+v", status)
 	}
-	if status.MikoDialogue != MsgMikoGuardingEggs {
-		t.Fatalf("expected guarding eggs dialogue, got %q", status.MikoDialogue)
+	if got := MikoWords(c); got[0] != mikoGuardingWords[0] {
+		t.Fatalf("expected guarding eggs words, got %q", got)
 	}
 
 	// 2. All 6 orbs offered
@@ -193,8 +187,8 @@ func TestGetStatusProgression(t *testing.T) {
 	if status.OrbCount != 6 || !status.HasAllOrbs || status.RamiaAwakened {
 		t.Fatalf("unexpected all orbs status: %+v", status)
 	}
-	if status.MikoDialogue != MsgMikoReadyToPray {
-		t.Fatalf("expected ready to pray dialogue, got %q", status.MikoDialogue)
+	if got := MikoWords(c); got[0] != mikoReadyWords[0] {
+		t.Fatalf("expected ready to pray words, got %q", got)
 	}
 
 	// 3. Ramia awakened
@@ -207,8 +201,8 @@ func TestGetStatusProgression(t *testing.T) {
 	if !status.RamiaAwakened {
 		t.Fatalf("expected RamiaAwakened to be true")
 	}
-	if status.MikoDialogue != MsgMikoAfterAwakening {
-		t.Fatalf("expected after awakening dialogue, got %q", status.MikoDialogue)
+	if got := MikoWords(c); got[0] != mikoAwakenedWords[0] {
+		t.Fatalf("expected after awakening words, got %q", got)
 	}
 	if len(status.AvailableItems) != 4 {
 		t.Fatalf("expected 4 available items, got %d", len(status.AvailableItems))
@@ -444,65 +438,6 @@ func TestWishDeliveredToDepot_RefreshesCapacityWithJobLevelAndOverDepot(t *testi
 	}
 }
 
-func TestOfferOrb(t *testing.T) {
-	svc, charRepo, invRepo, _, _, _ := setupTestService(t)
-	ctx := context.Background()
-
-	c, _ := corecharacter.New("Hero")
-	c.ID = "char-1"
-	charRepo.chars[c.ID] = c
-
-	// Invalid rune
-	_, err := svc.OfferOrb(ctx, "char-1", 'z')
-	if !errors.Is(err, ErrInvalidOrbRune) {
-		t.Fatalf("expected ErrInvalidOrbRune, got %v", err)
-	}
-
-	// An orb can only be offered when its tangible inventory item is present.
-	inv, _ := coreinventory.New(c.ID)
-	silver, _ := coreitem.NewInstance(ItemSilverOrb, 2)
-	_ = inv.Add(silver)
-	invRepo.invs[c.ID] = inv
-
-	// Offer silver orb
-	res, err := svc.OfferOrb(ctx, "char-1", corecharacter.OrbSilver)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if res.TotalOrbs != 1 || res.OrbName != "シルバーオーブ" {
-		t.Fatalf("unexpected offer result: %+v", res)
-	}
-	remaining := invRepo.invs[c.ID]
-	if got := remaining.Quantity(ItemSilverOrb); got != 1 {
-		t.Fatalf("expected one silver orb remaining, got %d", got)
-	}
-
-	// Duplicate offer
-	_, err = svc.OfferOrb(ctx, "char-1", corecharacter.OrbSilver)
-	if !errors.Is(err, ErrOrbAlreadyOffered) {
-		t.Fatalf("expected ErrOrbAlreadyOffered, got %v", err)
-	}
-	remaining = invRepo.invs[c.ID]
-	if got := remaining.Quantity(ItemSilverOrb); got != 1 {
-		t.Fatalf("duplicate offer must not consume an item, got %d remaining", got)
-	}
-}
-
-func TestOfferOrbRequiresMatchingInventoryItem(t *testing.T) {
-	svc, charRepo, _, _, _, _ := setupTestService(t)
-	c, _ := corecharacter.New("Hero")
-	c.ID = "char-1"
-	charRepo.chars[c.ID] = c
-
-	_, err := svc.OfferOrb(context.Background(), c.ID, corecharacter.OrbPurple)
-	if !errors.Is(err, ErrOrbItemNotFound) {
-		t.Fatalf("expected ErrOrbItemNotFound, got %v", err)
-	}
-	if charRepo.chars[c.ID].Orb != "" {
-		t.Fatalf("missing orb item must not mutate character state")
-	}
-}
-
 func TestAltarEligibilityAfterOrbReplacement(t *testing.T) {
 	svc, charRepo, _, _, _, _ := setupTestService(t)
 	ctx := context.Background()
@@ -513,11 +448,18 @@ func TestAltarEligibilityAfterOrbReplacement(t *testing.T) {
 	c.Orb = "G"
 	charRepo.chars[c.ID] = c
 
-	// With "G", character cannot pray (not standard 6 orbs)
+	// With "G", character cannot pray: legacy offers only ＠ねがう.
 	_, err := svc.Pray(ctx, "char-1")
-	if !errors.Is(err, ErrInsufficientOrbs) {
-		t.Fatalf("expected ErrInsufficientOrbs before wish, got %v", err)
+	if !errors.Is(err, ErrRamiaAwakened) {
+		t.Fatalf("expected ErrRamiaAwakened before wish, got %v", err)
 	}
+	// Home offerings may add all six runes after G; prayer stays rejected.
+	c.Orb = "Gsrbgyp"
+	charRepo.chars[c.ID] = c
+	if _, err := svc.Pray(ctx, "char-1"); !errors.Is(err, ErrRamiaAwakened) || charRepo.chars[c.ID].Orb != "Gsrbgyp" {
+		t.Fatalf("expected ErrRamiaAwakened and unchanged orbs, got %v / %q", err, charRepo.chars[c.ID].Orb)
+	}
+	c.Orb = "G"
 
 	// Receive 6 orbs via SetAllOrbs (replaces existing state, clearing G)
 	c.SetAllOrbs()
@@ -531,8 +473,8 @@ func TestAltarEligibilityAfterOrbReplacement(t *testing.T) {
 	if !status.HasAllOrbs || status.OrbCount != 6 || status.RamiaAwakened {
 		t.Fatalf("expected 6 orbs, not awakened, got %+v", status)
 	}
-	if status.MikoDialogue != MsgMikoReadyToPray {
-		t.Fatalf("expected ready to pray dialogue, got %q", status.MikoDialogue)
+	if got := MikoWords(c); got[0] != mikoReadyWords[0] {
+		t.Fatalf("expected ready to pray words, got %q", got)
 	}
 
 	// 2. Travel item wish is NOT eligible yet (Ramia not awakened)
@@ -556,10 +498,10 @@ func TestAltarEligibilityAfterOrbReplacement(t *testing.T) {
 		t.Fatalf("expected Orb to be 'G', got %q", updatedChar.Orb)
 	}
 
-	// 5. Pray again should now fail (orb is "G", not 6 standard orbs)
+	// 5. Pray again should now fail (Ramia is awakened)
 	_, err = svc.Pray(ctx, "char-1")
-	if !errors.Is(err, ErrInsufficientOrbs) {
-		t.Fatalf("expected ErrInsufficientOrbs after pray, got %v", err)
+	if !errors.Is(err, ErrRamiaAwakened) {
+		t.Fatalf("expected ErrRamiaAwakened after pray, got %v", err)
 	}
 
 	// 6. Travel item wish is now eligible and succeeds

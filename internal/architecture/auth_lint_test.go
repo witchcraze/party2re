@@ -383,12 +383,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handlePlantationSow":       "plantation.go",
 		"handlePlantationFertilize": "plantation.go",
 		"handlePlantationHarvest":   "plantation.go",
-		// Altar
-		"handleAltarPray":  "altar.go",
-		"handleAltarWish":  "altar.go",
-		"handleAltarOffer": "altar.go",
-		// Wishing Well
-		"handleWishingWellExchange": "wishingwell.go",
 		// Contest
 		"handleEnterContest":         "contest.go",
 		"handleVoteContest":          "contest.go",

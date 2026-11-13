@@ -101,10 +101,6 @@
       "name": "EventPlaza"
     },
     {
-      "description": "Goddess wishing well and skill point stat sacrifice exchange",
-      "name": "WishingWell"
-    },
-    {
       "description": "Step-by-step combat battle replay playback and match history",
       "name": "Replay"
     }
@@ -2351,6 +2347,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/TownDistrictSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AltarSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WishingWellSceneData"
                     }
                   ]
                 }
@@ -3058,6 +3060,66 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "altar"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/AltarSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "wishingwell"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/WishingWellSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3682,6 +3744,8 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "altar",
+                        "wishingwell",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -3786,6 +3850,8 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "altar",
+                        "wishingwell",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -6120,6 +6186,106 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "altar_pray"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "altar_wish"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "description": "One of the altar scene's available_items IDs. Delivery to inventory or Depot stays service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "wishingwell_exchange"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "stat": {
+                      "type": "string",
+                      "description": "mhp, mmp, at, df or ag (legacy names accepted). 1 SP raises max HP/MP by 2 or another stat by 1."
+                    },
+                    "sp": {
+                      "type": "integer",
+                      "description": "SP to offer, at least 1 and at most the actor's SP."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "stat",
+                    "sp"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "npc_talk"
                 }
               },
@@ -6867,6 +7033,8 @@
               "exile",
               "fleamarket",
               "gemstore",
+              "altar",
+              "wishingwell",
               "home",
               "shop_weapon",
               "shop_armor",
@@ -6998,6 +7166,8 @@
                   "exile",
                   "fleamarket",
                   "gemstore",
+                  "altar",
+                  "wishingwell",
                   "home",
                   "shop_weapon",
                   "shop_armor",
@@ -9480,38 +9650,6 @@
           "items",
           "limit",
           "has_more"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AltarOfferResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "has_all_orbs": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string"
-          },
-          "orb": {
-            "type": "integer"
-          },
-          "orb_name": {
-            "type": "string"
-          },
-          "total_orbs": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "orb",
-          "orb_name",
-          "message",
-          "total_orbs",
-          "has_all_orbs"
         ],
         "type": "object",
         "additionalProperties": false
@@ -16553,120 +16691,6 @@
         ],
         "additionalProperties": false
       },
-      "WishingWellStatus": {
-        "properties": {
-          "agility": {
-            "type": "integer"
-          },
-          "attack": {
-            "type": "integer"
-          },
-          "background_image": {
-            "type": "string"
-          },
-          "can_exchange": {
-            "type": "boolean"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "defense": {
-            "type": "integer"
-          },
-          "dialogues": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "job_memory_active": {
-            "type": "boolean"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "max_hp": {
-            "type": "integer"
-          },
-          "max_mp": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "type": "string"
-          },
-          "over_level": {
-            "type": "boolean"
-          },
-          "sp": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "location_name",
-          "npc_name",
-          "background_image",
-          "character_id",
-          "character_name",
-          "sp",
-          "job_memory_active",
-          "over_level",
-          "can_exchange",
-          "max_hp",
-          "max_mp",
-          "attack",
-          "defense",
-          "agility",
-          "dialogues"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "WishingwellExchangeResult": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "remaining_sp": {
-            "type": "integer"
-          },
-          "sp_consumed": {
-            "type": "integer"
-          },
-          "stat": {
-            "type": "string"
-          },
-          "stat_increase": {
-            "type": "integer"
-          },
-          "stat_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "stat",
-          "stat_name",
-          "sp_consumed",
-          "stat_increase",
-          "remaining_sp",
-          "message",
-          "character"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "ChallengeCommandResult": {
         "type": "object",
         "properties": {
@@ -17761,6 +17785,101 @@
           "sender_name"
         ],
         "description": "Gold held for the character until collected by depot_withdraw."
+      },
+      "AltarSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's offered orbs and Ramia's awakening, plus whether a Ramia awakened by anyone is still present (30 minutes). Orbs are offered by Home item use; NPC dialogue comes from npc_talk/npc_inspect. Observation never prays or wishes.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "orbs": {
+            "type": "string",
+            "description": "Offered orb runes s/r/b/g/y/p; G after Ramia awakens."
+          },
+          "orb_count": {
+            "type": "integer"
+          },
+          "has_all_orbs": {
+            "type": "boolean"
+          },
+          "ramia_awakened": {
+            "type": "boolean"
+          },
+          "ramia_present": {
+            "type": "boolean"
+          },
+          "ramia_expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "awakened_by": {
+            "type": "string"
+          },
+          "available_items": {
+            "type": "array",
+            "description": "altar_wish choices; empty until the actor's Ramia awakens.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "character_id",
+          "orbs",
+          "orb_count",
+          "has_all_orbs",
+          "ramia_awakened",
+          "ramia_present",
+          "available_items"
+        ]
+      },
+      "WishingWellSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Whether the actor may offer SP; SP and stats are in the character context. NPC dialogue comes from npc_talk/npc_inspect. Observation never exchanges.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "job_memory_active": {
+            "type": "boolean",
+            "description": "A remembered (persistent) job memory blocks the exchange; a temporary one does not."
+          },
+          "over_level": {
+            "type": "boolean",
+            "description": "Limit-broken characters cannot exchange."
+          },
+          "can_exchange": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "parent",
+          "job_memory_active",
+          "over_level",
+          "can_exchange"
+        ]
       }
     },
     "securitySchemes": {
