@@ -375,10 +375,7 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleSaveFutureMemory":   "job.go",
 		"handleRecallFutureMemory": "job.go",
 		// Contest
-		"handleEnterContest":         "contest.go",
-		"handleVoteContest":          "contest.go",
-		"handleSaveCharacterPhoto":   "contest.go",
-		"handleDeleteCharacterPhoto": "contest.go",
+		"handleSaveCharacterPhoto": "contest.go",
 		// Event Plaza
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",

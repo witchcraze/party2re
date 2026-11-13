@@ -2172,6 +2172,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/OracleSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ContestSceneData"
                     }
                   ]
                 }
@@ -3149,6 +3152,36 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "contest"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ContestSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3819,7 +3852,8 @@
                         "lottery",
                         "takarakuji",
                         "plantation",
-                        "oracle"
+                        "oracle",
+                        "contest"
                       ]
                     }
                   },
@@ -3932,7 +3966,8 @@
                         "lottery",
                         "takarakuji",
                         "plantation",
-                        "oracle"
+                        "oracle",
+                        "contest"
                       ]
                     },
                     "offset": {
@@ -7105,6 +7140,123 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "contest_enter"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "photo_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "One of the contest scene's photos."
+                    },
+                    "title": {
+                      "type": "string",
+                      "description": "Entry title, at most 40 characters, without whitespace or , ; \" ' & < > @ ＠ (legacy photo.cgi)."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "photo_id",
+                    "title"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "contest_vote"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "entry_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "One of the contest scene's active_entries."
+                    },
+                    "comment": {
+                      "type": "string",
+                      "description": "Optional vote comment."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "entry_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "contest_photo_delete"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "photo_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "One of the contest scene's photos."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "photo_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
           }
         ]
       },
@@ -7498,7 +7650,8 @@
               "lottery",
               "takarakuji",
               "plantation",
-              "oracle"
+              "oracle",
+              "contest"
             ]
           },
           "offset": {
@@ -7638,7 +7791,8 @@
                   "lottery",
                   "takarakuji",
                   "plantation",
-                  "oracle"
+                  "oracle",
+                  "contest"
                 ]
               }
             },
@@ -13317,115 +13471,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "EnterContestResponse": {
-        "properties": {
-          "caption": {
-            "type": "string"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "comments": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "guild_name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "image_url": {
-            "type": "string"
-          },
-          "photo_id": {
-            "type": "string"
-          },
-          "ranking": {
-            "type": "integer"
-          },
-          "round": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "votes": {
-            "type": "integer"
-          },
-          "warning": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "round",
-          "character_id",
-          "character_name",
-          "title",
-          "photo_id",
-          "image_url",
-          "caption",
-          "votes",
-          "ranking",
-          "created_at",
-          "updated_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ContestContestVote": {
-        "properties": {
-          "comment": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "entry_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "round": {
-            "type": "integer"
-          },
-          "voter_character_id": {
-            "type": "string"
-          },
-          "voter_character_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "round",
-          "entry_id",
-          "voter_character_id",
-          "voter_character_name",
-          "created_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "ContestPhoto": {
         "properties": {
           "caption": {
@@ -13659,9 +13704,6 @@
               }
             ]
           },
-          "dialogue": {
-            "$ref": "#/components/schemas/ContestDialogue"
-          },
           "entry_count": {
             "type": "integer"
           },
@@ -13685,38 +13727,7 @@
         "required": [
           "entry_count",
           "min_entries",
-          "is_postponed",
-          "dialogue"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ContestDialogue": {
-        "properties": {
-          "greeting": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          },
-          "phrases": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "npc_name",
-          "title",
-          "greeting",
-          "phrases"
+          "is_postponed"
         ],
         "type": "object",
         "additionalProperties": false
@@ -18094,6 +18105,69 @@
           "available_costumes",
           "available_wallpapers",
           "active_costume"
+        ]
+      },
+      "ContestSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The contest round state, the active entries open for voting and the actor's own photos. NPC dialogue comes from npc_talk/npc_inspect. Observation never enters, votes or settles.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "active_entries": {
+            "items": {
+              "$ref": "#/components/schemas/ContestContestEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "active_round": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContestContestRound"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entry_count": {
+            "type": "integer"
+          },
+          "is_postponed": {
+            "type": "boolean"
+          },
+          "min_entries": {
+            "type": "integer"
+          },
+          "preparing_round": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContestContestRound"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "photos": {
+            "type": "array",
+            "description": "The actor's photos, newest first; contest_photo_delete reports the photo's position in this list.",
+            "items": {
+              "$ref": "#/components/schemas/ContestPhoto"
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "entry_count",
+          "min_entries",
+          "is_postponed",
+          "photos"
         ]
       }
     },

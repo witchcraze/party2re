@@ -1806,49 +1806,36 @@ func TestReconcileSettlementSchedule_DifferentRoundMatchingEndTimeNotConfused(t 
 	}
 }
 
-func TestGetOverview_ReconcileFailurePropagated(t *testing.T) {
+func TestGetOverviewReadsWithoutWritingAndPropagatesReadErrors(t *testing.T) {
 	ctx := context.Background()
-	charRepo := newMockCharRepo()
-	contestRepo := newMockContestRepo()
 	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
-	contestRepo.rounds[1] = contest.ContestRound{
-		Round:     1,
-		Status:    contest.StatusActive,
-		StartTime: now.Add(-time.Hour),
-		EndTime:   now.Add(time.Hour),
-	}
-	sched := &mockScheduler{
-		scheduleErr: errors.New("queue unavailable"),
-	}
-
-	svc, err := contest.NewService(
-		charRepo,
-		contestRepo,
-		contest.WithServiceScheduler(sched),
-		contest.WithNowFunc(func() time.Time { return now }),
-	)
-	if err != nil {
-		t.Fatalf("NewService failed: %v", err)
+	newSvc := func(t *testing.T, repo *mockContestRepo, sched *mockScheduler) *contest.Service {
+		svc, err := contest.NewService(newMockCharRepo(), repo, contest.WithServiceScheduler(sched),
+			contest.WithNowFunc(func() time.Time { return now }))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc
 	}
 
-	_, err = svc.GetOverview(ctx)
-	if err == nil {
-		t.Fatal("expected error from GetOverview when reconciliation fails, got nil")
-	}
-	if !errors.Is(err, contest.ErrScheduleFailed) {
-		t.Fatalf("expected ErrScheduleFailed, got: %v", err)
+	// No rounds at all: the overview is empty and nothing is created or scheduled.
+	repo, sched := newMockContestRepo(), &mockScheduler{}
+	overview, err := newSvc(t, repo, sched).GetOverview(ctx)
+	if err != nil || overview.ActiveRound != nil || overview.PreparingRound != nil || len(repo.rounds) != 0 || len(sched.scheduledActions) != 0 {
+		t.Fatalf("read wrote or failed: %+v %v rounds=%d scheduled=%d", overview, err, len(repo.rounds), len(sched.scheduledActions))
 	}
 
-	// When scheduler succeeds, GetOverview returns overview and schedules action
-	sched.scheduleErr = nil
-	overview, err := svc.GetOverview(ctx)
-	if err != nil {
-		t.Fatalf("expected success after scheduler recovery, got: %v", err)
-	}
-	if overview.ActiveRound == nil || overview.ActiveRound.Round != 1 {
-		t.Fatalf("expected active round 1, got %+v", overview.ActiveRound)
-	}
-	if len(sched.scheduledActions) != 1 {
-		t.Fatalf("expected 1 scheduled action after recovery, got %d", len(sched.scheduledActions))
+	storage := errors.New("storage down")
+	for name, inject := range map[string]func(*mockContestRepo){
+		"active round":    func(r *mockContestRepo) { r.getActiveErr = storage },
+		"active entries":  func(r *mockContestRepo) { r.listEntriesByRoundErrByRound = map[int]error{1: storage} },
+		"preparing round": func(r *mockContestRepo) { r.getPreparingErr = storage },
+	} {
+		repo := newMockContestRepo()
+		repo.rounds[1] = contest.ContestRound{Round: 1, Status: contest.StatusActive, EndTime: now.Add(time.Hour)}
+		inject(repo)
+		if _, err := newSvc(t, repo, &mockScheduler{}).GetOverview(ctx); !errors.Is(err, storage) {
+			t.Errorf("%s: got %v", name, err)
+		}
 	}
 }

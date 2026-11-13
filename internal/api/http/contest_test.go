@@ -144,20 +144,9 @@ func TestContestPublicEndpoints(t *testing.T) {
 	}
 	var venue struct {
 		MinEntries int `json:"min_entries"`
-		Dialogue   struct {
-			NPCName string   `json:"npc_name"`
-			Title   string   `json:"title"`
-			Phrases []string `json:"phrases"`
-		} `json:"dialogue"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&venue); err != nil {
 		t.Fatalf("failed to decode GET /contest/venue response: %v", err)
-	}
-	if venue.Dialogue.NPCName != "@ワコール" {
-		t.Errorf("expected NPCName @ワコール, got %s", venue.Dialogue.NPCName)
-	}
-	if len(venue.Dialogue.Phrases) == 0 {
-		t.Errorf("expected non-empty dialogue phrases")
 	}
 
 	// 2. GET /contest/current
@@ -248,19 +237,12 @@ func TestContestCharacterEndpoints(t *testing.T) {
 
 	client := &http.Client{}
 
-	// 1. GET /characters/{id}/photos - Unauthenticated
-	req, _ := http.NewRequest(http.MethodGet, server.URL+"/characters/char-1/photos", nil)
+	// Photo save stays on REST until the screenshot client (#140); it requires a session.
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/photos", bytes.NewReader([]byte(`{"title":"x"}`)))
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401 Unauthorized without session, got %d", resp.StatusCode)
-	}
-
-	// 2. GET /characters/{id}/photos - Authenticated
-	req, _ = http.NewRequest(http.MethodGet, server.URL+"/characters/char-1/photos", nil)
-	req.Header.Set("Authorization", "Bearer valid-session")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
 	}
 
 	// 3. POST /characters/{id}/photos - Save Photo
@@ -276,81 +258,6 @@ func TestContestCharacterEndpoints(t *testing.T) {
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201 Created, got %d", resp.StatusCode)
-	}
-
-	// 4. DELETE /characters/{id}/photos/{photoId} - Delete Photo
-	req, _ = http.NewRequest(http.MethodDelete, server.URL+"/characters/char-1/photos/p1", nil)
-	req.Header.Set("Authorization", "Bearer valid-session")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
-	}
-
-	// 5. POST /characters/{id}/contest/enter - Enter Contest
-	entryBody, _ := json.Marshal(map[string]string{
-		"photo_id": "p1",
-		"title":    "Sunset Entry",
-	})
-	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/enter", bytes.NewReader(entryBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected 201 Created, got %d", resp.StatusCode)
-	}
-
-	// 5b. POST /characters/{id}/contest/enter - Enter Contest with scheduling failure returns 202 Accepted with saved entry and warning
-	entryPartialBody, _ := json.Marshal(map[string]string{
-		"photo_id": "p1",
-		"title":    "QueueFailure",
-	})
-	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/enter", bytes.NewReader(entryPartialBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("expected 202 Accepted for entry with scheduling failure, got %d", resp.StatusCode)
-	}
-	var partialRes struct {
-		ID      string `json:"id"`
-		Title   string `json:"title"`
-		Warning string `json:"warning"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&partialRes); err != nil {
-		t.Fatalf("failed to decode 202 Accepted response body: %v", err)
-	}
-	if partialRes.ID != "e-partial" {
-		t.Errorf("expected entry ID e-partial, got %s", partialRes.ID)
-	}
-	if partialRes.Warning == "" {
-		t.Errorf("expected non-empty warning in 202 Accepted response")
-	}
-
-	// 6. POST /characters/{id}/contest/vote - Vote
-
-	voteBody, _ := json.Marshal(map[string]string{
-		"entry_id": "e1",
-		"comment":  "Wonderful!",
-	})
-	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/vote", bytes.NewReader(voteBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
-	}
-
-	// 6b. POST /characters/{id}/contest/vote - Duplicate vote rejected with 400
-	dupVoteBody, _ := json.Marshal(map[string]string{
-		"entry_id": "already-voted",
-		"comment":  "Vote again",
-	})
-	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/vote", bytes.NewReader(dupVoteBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request for duplicate vote, got %d", resp.StatusCode)
 	}
 
 	// 7. POST /contest/settle - Admin Auth Required
@@ -454,14 +361,14 @@ func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
 }
 
 func TestGetContestVenue_ReconcileFailure_Returns500(t *testing.T) {
-	reconcileCalls := 0
+	overviewCalls := 0
 	stub := &stubContestService{
 		reconcileFn: func(ctx context.Context) error {
-			reconcileCalls++
-			return nil
+			return fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
 		},
 		getOverviewFn: func(ctx context.Context) (contest.ContestOverview, error) {
-			return contest.ContestOverview{}, fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
+			overviewCalls++
+			return contest.ContestOverview{}, nil
 		},
 	}
 
@@ -480,11 +387,9 @@ func TestGetContestVenue_ReconcileFailure_Returns500(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Fatalf("expected 500 Internal Server Error, got %d", resp.StatusCode)
-	}
-	if reconcileCalls != 0 {
-		t.Errorf("expected venue handler NOT to directly call ReconcileSettlementSchedule (calls=%d), GetOverview owns reconciliation", reconcileCalls)
+	// The public venue page self-heals the schedule before reading; a failure is not hidden.
+	if resp.StatusCode != http.StatusInternalServerError || overviewCalls != 0 {
+		t.Fatalf("expected 500 before reading the overview, got %d (overview calls=%d)", resp.StatusCode, overviewCalls)
 	}
 }
 

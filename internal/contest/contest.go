@@ -71,6 +71,12 @@ type Photo struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// AlreadyEnteredError reports the character's existing entry in the preparing round.
+type AlreadyEnteredError struct{ Title string }
+
+func (e AlreadyEnteredError) Error() string { return ErrAlreadyEntered.Error() + ": " + e.Title }
+func (e AlreadyEnteredError) Unwrap() error { return ErrAlreadyEntered }
+
 // ContestRound represents a single photo contest season / round.
 type ContestRound struct {
 	Round     int       `json:"round"`

@@ -29,29 +29,8 @@ type ContestService interface {
 func WithContest(c ContestService) Option {
 	return func(h *Handler) {
 		h.contest = c
+		h.registerContestCommands()
 	}
-}
-
-type contestDialogue struct {
-	NPCName  string   `json:"npc_name"`
-	Title    string   `json:"title"`
-	Greeting string   `json:"greeting"`
-	Phrases  []string `json:"phrases"`
-}
-
-var defaultContestDialogue = contestDialogue{
-	NPCName:  "@ワコール",
-	Title:    "フォトコン会場",
-	Greeting: "フォトコンテストの会場、略してフォトコン会場へようこそ。私が主催者のワコールざます",
-	Phrases: []string{
-		"ここでは、あなたが撮ったスクリーンショットを消したり、コンテストに応募したりできるざます",
-		"コンテスト上位入賞者には、ゴールドと賞品が授与されるざます",
-		"コンテスト１位の作品に投票した参加者にも小さなメダルが配られるざます",
-		"フォトコンで重要なのは、何が写っているかはもちろん。タイトルやコメントなども重要なポイントざます",
-		"自分で撮ったスクリーンショットを見たり消すことができるざます",
-		"ただ撮るだけではなく、コスプレしたり色々と工夫することが大事ざます",
-		"スクリーンショットは最大20枚まで所持することができるざます。それ以上は、＠けす必要があるざます",
-	},
 }
 
 type contestVenueResponse struct {
@@ -61,7 +40,6 @@ type contestVenueResponse struct {
 	EntryCount     int                    `json:"entry_count"`
 	MinEntries     int                    `json:"min_entries"`
 	IsPostponed    bool                   `json:"is_postponed"`
-	Dialogue       contestDialogue        `json:"dialogue"`
 }
 
 type savePhotoRequest struct {
@@ -70,21 +48,6 @@ type savePhotoRequest struct {
 	ImageURL string `json:"image_url"`
 	Caption  string `json:"caption"`
 	Metadata string `json:"metadata"`
-}
-
-type enterContestRequest struct {
-	PhotoID string `json:"photo_id"`
-	Title   string `json:"title"`
-}
-
-type enterContestResponse struct {
-	contest.ContestEntry
-	Warning string `json:"warning,omitempty"`
-}
-
-type voteContestRequest struct {
-	EntryID string `json:"entry_id"`
-	Comment string `json:"comment"`
 }
 
 type settleContestRequest struct {
@@ -102,6 +65,12 @@ func (h *Handler) handleGetContestVenue(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// The public venue page self-heals the settlement schedule, as legacy
+	// contest.cgi settled on page load; the owned scene observation does not.
+	if err := h.contest.ReconcileSettlementSchedule(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	overview, err := h.contest.GetOverview(r.Context())
 
 	if err != nil {
@@ -116,7 +85,6 @@ func (h *Handler) handleGetContestVenue(w http.ResponseWriter, r *http.Request) 
 		EntryCount:     overview.EntryCount,
 		MinEntries:     overview.MinEntries,
 		IsPostponed:    overview.IsPostponed,
-		Dialogue:       defaultContestDialogue,
 	})
 }
 
@@ -214,28 +182,6 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, settleContestResponse{SettlementResult: result})
 }
 
-func (h *Handler) handleGetCharacterPhotos(w http.ResponseWriter, r *http.Request) {
-	if h.contest == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("contest service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		photos, err := h.contest.ListPhotos(r.Context(), char.ID)
-		if err != nil {
-			if errors.Is(err, contest.ErrCharacterNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, photos)
-	})
-}
-
 func (h *Handler) handleSaveCharacterPhoto(w http.ResponseWriter, r *http.Request) {
 	if h.contest == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("contest service not configured"))
@@ -265,114 +211,5 @@ func (h *Handler) handleSaveCharacterPhoto(w http.ResponseWriter, r *http.Reques
 		}
 
 		writeJSON(w, http.StatusCreated, photo)
-	})
-}
-
-func (h *Handler) handleDeleteCharacterPhoto(w http.ResponseWriter, r *http.Request) {
-	if h.contest == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("contest service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		photoID := r.PathValue("photoId")
-		if photoID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("photoId is required"))
-			return
-		}
-
-		err := h.contest.DeletePhoto(r.Context(), char.ID, photoID)
-		if err != nil {
-			switch {
-			case errors.Is(err, contest.ErrForbidden):
-				writeError(w, http.StatusForbidden, err)
-			case errors.Is(err, contest.ErrPhotoNotFound),
-				errors.Is(err, contest.ErrCharacterNotFound):
-				writeError(w, http.StatusNotFound, err)
-			default:
-				writeError(w, http.StatusInternalServerError, err)
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]string{"message": "photo deleted successfully"})
-	})
-}
-
-func (h *Handler) handleEnterContest(w http.ResponseWriter, r *http.Request) {
-	if h.contest == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("contest service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req enterContestRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		entry, err := h.contest.EnterContest(r.Context(), char.ID, req.PhotoID, req.Title)
-		if err != nil {
-			if errors.Is(err, contest.ErrScheduleFailed) {
-				writeJSON(w, http.StatusAccepted, enterContestResponse{
-					ContestEntry: entry,
-					Warning:      "entry saved, but settlement scheduling failed: " + err.Error(),
-				})
-				return
-			}
-			switch {
-			case errors.Is(err, contest.ErrInvalidTitle),
-				errors.Is(err, contest.ErrTitleTooLong),
-				errors.Is(err, contest.ErrConsecutiveEntryDisallowed),
-				errors.Is(err, contest.ErrAlreadyEntered),
-				errors.Is(err, contest.ErrDuplicateTitle):
-				writeError(w, http.StatusBadRequest, err)
-			case errors.Is(err, contest.ErrForbidden):
-				writeError(w, http.StatusForbidden, err)
-			case errors.Is(err, contest.ErrPhotoNotFound),
-				errors.Is(err, contest.ErrCharacterNotFound):
-				writeError(w, http.StatusNotFound, err)
-			default:
-				writeError(w, http.StatusInternalServerError, err)
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusCreated, enterContestResponse{ContestEntry: entry})
-	})
-}
-
-func (h *Handler) handleVoteContest(w http.ResponseWriter, r *http.Request) {
-	if h.contest == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("contest service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req voteContestRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		vote, err := h.contest.Vote(r.Context(), char.ID, req.EntryID, req.Comment)
-		if err != nil {
-			switch {
-			case errors.Is(err, contest.ErrContestNotActive),
-				errors.Is(err, contest.ErrAlreadyVoted),
-				errors.Is(err, contest.ErrCommentTooLong):
-				writeError(w, http.StatusBadRequest, err)
-			case errors.Is(err, contest.ErrEntryNotFound),
-				errors.Is(err, contest.ErrCharacterNotFound):
-				writeError(w, http.StatusNotFound, err)
-			default:
-				writeError(w, http.StatusInternalServerError, err)
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, vote)
 	})
 }

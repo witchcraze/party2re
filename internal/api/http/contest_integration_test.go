@@ -276,9 +276,6 @@ func TestContestVenueAndUnreadySettlement_RealService_HTTP_Integration(t *testin
 	}
 	var venue struct {
 		ActiveRound *contest.ContestRound `json:"active_round"`
-		Dialogue    struct {
-			NPCName string `json:"npc_name"`
-		} `json:"dialogue"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&venue); err != nil {
 		t.Fatalf("decode venue response failed: %v", err)
@@ -287,9 +284,6 @@ func TestContestVenueAndUnreadySettlement_RealService_HTTP_Integration(t *testin
 
 	if venue.ActiveRound == nil || venue.ActiveRound.Round != 1 {
 		t.Fatalf("expected active round 1 in venue response, got %+v", venue.ActiveRound)
-	}
-	if venue.Dialogue.NPCName != "@ワコール" {
-		t.Errorf("expected NPCName @ワコール, got %q", venue.Dialogue.NPCName)
 	}
 
 	// Verify exactly 1 action was registered in the queue

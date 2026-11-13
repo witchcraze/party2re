@@ -485,7 +485,8 @@ System/bootstrap, account/session/API-token and character lifecycle, admin
 maintenance/batch operations, and player-scoped notifications remain outside the
 owned-character gameplay Gateway. Admin-only news publication, contest settlement
 and ranking refresh remain admin operations even where their existing paths lack
-an `/admin` prefix. Public news, rankings/legends, explicitly public replays under
+an `/admin` prefix. Public news, rankings/legends, the public contest pages of legacy
+`contest.cgi` (current, previous round and hall of fame), explicitly public replays under
 the [replay ownership contract](../design/replay.md#original-content-and-access-boundary), and approved
 sanitized public home/store/guild and presence projections may retain anonymous
 routes; normal interactive clients still obtain gameplay information through context. Other

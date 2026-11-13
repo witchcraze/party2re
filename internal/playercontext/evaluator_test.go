@@ -80,7 +80,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"store_build", "store_list_gold", "store_list_barter", "store_withdraw", "store_buy", "store_trade", "store_rename", "store_wallpaper", "store_interior_add", "store_interior_rename", "store_interior_clean",
 			"shop_purchase", "shop_sell", "shop_batch_purchase", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_buy", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "secretshop_purchase", "park_divinate", "secretshop_puffpuff", "blackmarket_sacrifice", "blackmarket_trade",
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "oracle_buy", "oracle_wallpaper", "oracle_blackmarket", "plantation_sow", "plantation_fertilize", "plantation_harvest",
-			"casino_slot", "lottery_raffle", "takarakuji_buy", "tavern_order", "tavern_delivery_reserve", "tavern_delivery_cancel", "contest_enter",
+			"casino_slot", "lottery_raffle", "takarakuji_buy", "tavern_order", "tavern_delivery_reserve", "tavern_delivery_cancel", "contest_enter", "contest_vote", "contest_photo_delete",
 			"wishingwell_exchange", "altar_pray", "altar_wish", "god_wish", "job_change", "medal_claim",
 			"helper_complete", "player_inspect", "rescue_request", "presence_refresh",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
@@ -93,7 +93,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"store_list_gold", "store_list_barter", "store_withdraw", "store_trade", "store_rename", "store_wallpaper", "store_interior_add", "store_interior_rename", "store_interior_clean",
 			"shop_sell", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "park_divinate", "secretshop_puffpuff", "blackmarket_sacrifice", "blackmarket_trade",
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "oracle_buy", "oracle_wallpaper", "oracle_blackmarket", "plantation_sow", "plantation_fertilize", "plantation_harvest",
-			"casino_slot", "lottery_raffle", "takarakuji_buy", "tavern_order", "tavern_delivery_reserve", "tavern_delivery_cancel", "contest_enter",
+			"casino_slot", "lottery_raffle", "takarakuji_buy", "tavern_order", "tavern_delivery_reserve", "tavern_delivery_cancel", "contest_enter", "contest_vote", "contest_photo_delete",
 			"wishingwell_exchange", "altar_pray", "altar_wish", "god_wish", "job_change", "medal_claim",
 			"helper_complete", "player_inspect", "rescue_request", "presence_refresh",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
@@ -126,7 +126,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 93 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 95 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -146,8 +146,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 86 {
-		t.Fatalf("exhausted action count = %d, want 86", len(got))
+	if len(got) != 88 {
+		t.Fatalf("exhausted action count = %d, want 88", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request", "presence_refresh"} {
 		if !slices.Contains(got, action) {

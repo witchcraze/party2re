@@ -114,10 +114,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"depot_send_money", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_send_money","params":{"recipient_character_id":"char-2","amount":100}}`},
 		{"depot_send_item", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_send_item","params":{"recipient_character_id":"char-2","item_id":"item-1"}}`},
 		// Contest
-		{"contest_enter", http.MethodPost, "/characters/char-1/contest/enter", `{"photo_id":"p-1","title":"Entry"}`},
-		{"contest_vote", http.MethodPost, "/characters/char-1/contest/vote", `{"entry_id":"e-1","comment":"Nice"}`},
 		{"contest_save_photo", http.MethodPost, "/characters/char-1/photos", `{"title":"Photo","location":"Field","image_url":"https://example.com/p.jpg"}`},
-		{"contest_delete_photo", http.MethodDelete, "/characters/char-1/photos/photo-1", ``},
 		// Event Plaza
 		{"eventplaza_presence", http.MethodPost, "/eventplaza/presence", `{"character_id":"char-1"}`},
 		{"eventplaza_merchant_purchase", http.MethodPost, "/eventplaza/merchant/purchase", `{"character_id":"char-1","item_id":"item-1","quantity":1}`},
