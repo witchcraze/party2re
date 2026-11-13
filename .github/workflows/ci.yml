@@ -8,11 +8,13 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  verify:
+  lint:
     runs-on: ubuntu-latest
-    env:
-      COMPOSE_FILE: ${{ github.workspace }}/compose.test.yaml
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v7
@@ -30,7 +32,29 @@ jobs:
       - name: Run static analysis
         run: go vet ./...
 
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build production image (smoke test)
+        run: docker build -f Dockerfile -t party2re:ci-smoke .
+
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_FILE: ${{ github.workspace }}/compose.test.yaml
+    steps:
+      - uses: actions/checkout@v6
+
       - name: Start test services
+        run: docker compose up -d mariadb valkey
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Wait for test services
         run: docker compose up -d --wait mariadb valkey
 
       # -count=1 is required: the restored build cache would otherwise replay test results.
@@ -51,6 +75,3 @@ jobs:
             coverage.out
             coverage.txt
           if-no-files-found: warn
-
-      - name: Build production image (smoke test)
-        run: docker build -f Dockerfile -t party2re:ci-smoke .
