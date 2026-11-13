@@ -17,14 +17,14 @@ import (
 func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, cmbt *cmbtServices, misc *miscServices, options ...func(*playercontext.Service)) *playercontext.Service {
 	scenes := []playercontext.SceneDefinition{
 		{ID: "town", Pageable: true}, {ID: "alchemy", Parent: "town", Pageable: true},
-		{ID: "auction", Parent: "town"}, {ID: "bank", Parent: "town"},
+		{ID: "altar", Parent: "town"}, {ID: "auction", Parent: "town"}, {ID: "bank", Parent: "town"},
 		{ID: "blackmarket", Parent: "town", Pageable: true, CanEnter: blackmarket.CheckEligibility},
 		{ID: "blacksmith", Parent: "town"},
 		{ID: "chapel", Parent: "town"},
 		{ID: "depot", Parent: "town", Pageable: true},
 		{ID: "exile", Parent: "town"},
 		{ID: "fleamarket", Parent: "town", Pageable: true},
-		{ID: "gemstore", Parent: "town"},
+		{ID: "gemstore", Parent: "town"}, {ID: "wishingwell", Parent: "town"},
 		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: secretshop.CheckEligibility,
 			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
 				status, err := misc.secretshop.GetShopStatus(ctx, actorID)

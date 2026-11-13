@@ -25,25 +25,14 @@ const (
 	ItemTreasureMap    = "item-068" // 宝の地図
 	ItemLampOfDarkness = "item-069" // 闇のランプ
 
-	ItemSilverOrb = "item-060"
-	ItemRedOrb    = "item-061"
-	ItemBlueOrb   = "item-062"
-	ItemGreenOrb  = "item-063"
-	ItemYellowOrb = "item-064"
-	ItemPurpleOrb = "item-065"
 )
 
 // Legacy dialogue & messages from reborn.cgi
 const (
-	MsgOrbsInsufficient   = "オーブが足りません。オーブが足りません。オーブを６つ集めてください"
-	MsgRamiaAwakening     = "時は来たれり。今こそ目覚める時。大空はお前のもの。舞い上がれ空高く！"
-	MsgMikoGuardingEggs   = "私達は。私達は。卵を守っています。卵を守っています。世界中にちらばる６つのオーブをささげたとき....伝説の不死鳥ラーミァはよみがえりましょう。手に入れられるオーブは曜日によって変わるようです"
-	MsgMikoReadyToPray    = "私達。私達。この日をどんなに。この日をどんなに。待ちわびたことでしょう。さぁ、祈りましょう。さぁ、祈りましょう"
-	MsgMikoAfterAwakening = "このアイテムを冒険中に使えば、今まで見たことのない世界へと行くことができます。未知の世界に連れて行くことができるのは、アイテムを使った一回だけです。未知の世界にへは、その場にいた仲間と一緒に行くことができます"
-	MsgAlreadyOffered     = "すでにささげられています"
-	MsgOrbOfferedFmt      = "%sを復活の祭壇にささげた！"
-	MsgWishInventoryFmt   = "%s ですね。冒険中に使うことで未知の世界へと行くことができるでしょう"
-	MsgWishDepotFmt       = "%s を%sの預かり所に送っておきました。冒険中に使うことで未知の世界へと行くことができるでしょう"
+	MsgOrbsInsufficient = "オーブが足りません。オーブが足りません。オーブを６つ集めてください"
+	MsgRamiaAwakening   = "時は来たれり。今こそ目覚める時。大空はお前のもの。舞い上がれ空高く！"
+	MsgWishInventoryFmt = "%s ですね。冒険中に使うことで未知の世界へと行くことができるでしょう"
+	MsgWishDepotFmt     = "%s を%sの預かり所に送っておきました。冒険中に使うことで未知の世界へと行くことができるでしょう"
 )
 
 var (
@@ -51,9 +40,7 @@ var (
 	ErrInsufficientOrbs  = errors.New(MsgOrbsInsufficient)
 	ErrRamiaNotAwakened  = errors.New("Ramia is not awakened; cannot make a wish")
 	ErrInvalidWishItem   = errors.New("invalid travel item chosen for wish")
-	ErrOrbAlreadyOffered = errors.New("orb has already been offered")
-	ErrOrbItemNotFound   = errors.New("required orb item not found in inventory")
-	ErrInvalidOrbRune    = errors.New("invalid orb symbol")
+	ErrRamiaAwakened     = errors.New("Ramia is already awakened; make a wish instead")
 	ErrNilDependency     = errors.New("required dependency is nil")
 )
 
@@ -68,42 +55,35 @@ func IsValidWishItem(itemID string) bool {
 	return slices.Contains(AllowedWishItems, itemID)
 }
 
-// OrbName returns the Japanese display name of the orb symbol.
-func OrbName(r rune) string {
-	switch r {
-	case corecharacter.OrbSilver:
-		return "シルバーオーブ"
-	case corecharacter.OrbRed:
-		return "レッドオーブ"
-	case corecharacter.OrbBlue:
-		return "ブルーオーブ"
-	case corecharacter.OrbGreen:
-		return "グリーンオーブ"
-	case corecharacter.OrbYellow:
-		return "イエローオーブ"
-	case corecharacter.OrbPurple:
-		return "パープルオーブ"
-	default:
-		return "オーブ"
-	}
-}
+// NPCName is the altar's shrine maiden (reborn.cgi $npc_name).
+const NPCName = "@巫女"
 
-func OrbItemID(r rune) string {
-	switch r {
-	case corecharacter.OrbSilver:
-		return ItemSilverOrb
-	case corecharacter.OrbRed:
-		return ItemRedOrb
-	case corecharacter.OrbBlue:
-		return ItemBlueOrb
-	case corecharacter.OrbGreen:
-		return ItemGreenOrb
-	case corecharacter.OrbYellow:
-		return ItemYellowOrb
-	case corecharacter.OrbPurple:
-		return ItemPurpleOrb
+// RamiaMemberName is Ramia's place-member name while she is present.
+const RamiaMemberName = "ラーミァ@"
+
+// reborn.cgi @words, chosen by the character's orb state.
+var (
+	mikoGuardingWords = []string{
+		"私達は。私達は。卵を守っています。卵を守っています", "世界中にちらばる６つのオーブをささげたとき....",
+		"伝説の不死鳥ラーミァはよみがえりましょう", "手に入れられるオーブは曜日によって変わるようです",
+	}
+	mikoReadyWords    = []string{"私達。私達。この日をどんなに。この日をどんなに。待ちわびたことでしょう", "さぁ、祈りましょう。さぁ、祈りましょう"}
+	mikoAwakenedWords = []string{
+		"このアイテムを冒険中に使えば、今まで見たことのない世界へと行くことができます",
+		"未知の世界に連れて行くことができるのは、アイテムを使った一回だけです",
+		"未知の世界にへは、その場にいた仲間と一緒に行くことができます",
+	}
+)
+
+// MikoWords returns the lines the shrine maiden may say to char.
+func MikoWords(char corecharacter.Character) []string {
+	switch {
+	case char.IsRamiaAwakened():
+		return mikoAwakenedWords
+	case char.HasAllOrbs():
+		return mikoReadyWords
 	default:
-		return ""
+		return mikoGuardingWords
 	}
 }
 
@@ -133,8 +113,7 @@ type AltarStatus struct {
 	RamiaPresent   bool           `json:"ramia_present"`
 	RamiaExpiresAt *time.Time     `json:"ramia_expires_at,omitempty"`
 	AwakenedBy     string         `json:"awakened_by,omitempty"`
-	MikoDialogue   string         `json:"miko_dialogue"`
-	AvailableItems []WishItemInfo `json:"available_items,omitempty"`
+	AvailableItems []WishItemInfo `json:"available_items"`
 }
 
 type WishItemInfo struct {
@@ -155,15 +134,6 @@ type WishResult struct {
 	ItemName    string `json:"item_name"`
 	DeliveredTo string `json:"delivered_to"` // "inventory" or "depot"
 	Message     string `json:"message"`
-}
-
-type OfferResult struct {
-	CharacterID string `json:"character_id"`
-	Orb         rune   `json:"orb"`
-	OrbName     string `json:"orb_name"`
-	Message     string `json:"message"`
-	TotalOrbs   int    `json:"total_orbs"`
-	HasAllOrbs  bool   `json:"has_all_orbs"`
 }
 
 type CharacterRepository interface {

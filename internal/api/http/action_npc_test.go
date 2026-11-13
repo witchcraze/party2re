@@ -103,7 +103,7 @@ func TestNPCTalkStartsTheActionWaitButInspectDoesNot(t *testing.T) {
 
 func TestEveryNPCProfileHasLegacyFacts(t *testing.T) {
 	for id, p := range npcProfiles {
-		if p.name == "" || len(p.words) == 0 {
+		if p.name == "" || (len(p.words) == 0) == (p.wordsOf == nil) {
 			t.Errorf("%s: incomplete NPC profile %+v", id, p)
 		}
 	}

@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/altar"
 	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -18,6 +20,7 @@ import (
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
 	"github.com/witchcraze/party2re/internal/shop"
+	"github.com/witchcraze/party2re/internal/wishingwell"
 )
 
 // Legacy NPC presentation (lib/system.cgi:240-246,322-328,413; facility $npc_name,
@@ -31,7 +34,8 @@ const (
 type npcProfile struct {
 	name    string
 	words   []string
-	inspect string // empty: npcInspectDefault
+	wordsOf func(corecharacter.Character) []string // replaces words when they depend on the speaker
+	inspect string                                 // empty: npcInspectDefault
 }
 
 func shopNPC(kind shop.ShopType, inspect string) npcProfile {
@@ -79,6 +83,8 @@ var npcProfiles = map[string]npcProfile{
 		"ここはフリーマーケットだ。物の売り買いができるぜ", "物の価値は人それぞれだ。思いのほか良い物があるかもな",
 		"１人で出せる品は限りがあるから気をつけな", "俺の名前を知らないようじゃピヨッコだ",
 	}},
+	"altar":       {name: altar.NPCName, wordsOf: altar.MikoWords},
+	"wishingwell": {name: wishingwell.NPCName, words: wishingwell.NPCWords},
 	"chapel": {name: "@シスター", words: []string{
 		"{name}に神のご加護があらんことを", "待つだけでは祈りは叶いません…", "{name}が力を尽くすとき、祈りは叶うことでしょう",
 	}},
@@ -195,10 +201,14 @@ func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, ow
 		}
 		return NPCResult{NPCName: npc.name, Dialogue: text, Private: true}, nil
 	}
-	if len(npc.words) == 0 {
+	words := npc.words
+	if npc.wordsOf != nil {
+		words = npc.wordsOf(char)
+	}
+	if len(words) == 0 {
 		return NPCResult{NPCName: npc.name, Dialogue: npcNoWords, Private: true}, nil
 	}
-	word := strings.ReplaceAll(npc.words[random.Intn(len(npc.words))], "{name}", char.Name)
+	word := strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP)).Replace(words[random.Intn(len(words))])
 	h.appendNPCLog(ctx, destination, char, "＠はなす", npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }

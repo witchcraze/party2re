@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/witchcraze/party2re/internal/altar"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/town"
 )
@@ -80,6 +81,12 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "alchemy":
 			adapter.title, adapter.commands = "錬金場", []string{"alchemy_synthesize", "alchemy_recipes"}
 			adapter.read = h.alchemySceneData
+		case "altar":
+			adapter.title, adapter.commands = "復活の祭壇", []string{"altar_pray", "altar_wish"}
+			adapter.read = h.altarSceneData
+		case "wishingwell":
+			adapter.title, adapter.commands = "願いの泉", []string{"wishingwell_exchange"}
+			adapter.read = h.wishingWellSceneData
 		case "bank":
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
 			adapter.read = h.bankSceneData
@@ -238,8 +245,14 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			}
 		}
 		switch data := data.(type) {
-		case BankSceneData, BlacksmithSceneData, ChapelSceneData, ExileSceneData, GemStoreSceneData:
+		case BankSceneData, BlacksmithSceneData, ChapelSceneData, ExileSceneData, GemStoreSceneData, WishingWellSceneData:
 			scene.Support.Observation = "details"
+		case AltarSceneData:
+			scene.Support.Observation = "details"
+			// Legacy ＠いのる lists Ramia as a member until she leaves (reborn.cgi:81-84).
+			if data.RamiaPresent && adapter.placeLog {
+				scene.Members = append(scene.Members, PlaceMember{Kind: "npc", Name: altar.RamiaMemberName, Color: npcColor})
+			}
 		case AlchemySceneData:
 			scene.Support.Observation = "details"
 			if p := data.Page.Next; p != nil {

@@ -81,7 +81,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"shop_purchase", "shop_sell", "shop_batch_purchase", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_buy", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "secretshop_purchase", "blackmarket_sacrifice", "blackmarket_trade",
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "lottery_takarakuji_buy", "tavern_order", "contest_enter",
-			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
+			"wishingwell_exchange", "altar_pray", "altar_wish", "god_wish", "job_change", "medal_claim",
 			"helper_complete", "park_post", "player_inspect", "rescue_request", "presence_refresh",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 			"exile_petition", "exile_approve", "exile_oppose",
@@ -94,7 +94,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"shop_sell", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "blackmarket_sacrifice", "blackmarket_trade",
 			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "contest_enter",
-			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
+			"wishingwell_exchange", "altar_pray", "altar_wish", "god_wish", "job_change", "medal_claim",
 			"helper_complete", "park_post", "player_inspect", "rescue_request", "presence_refresh",
 			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 			"exile_petition", "exile_approve", "exile_oppose",
@@ -126,7 +126,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 83 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 84 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -146,8 +146,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 76 {
-		t.Fatalf("exhausted action count = %d, want 76", len(got))
+	if len(got) != 77 {
+		t.Fatalf("exhausted action count = %d, want 77", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request", "presence_refresh"} {
 		if !slices.Contains(got, action) {

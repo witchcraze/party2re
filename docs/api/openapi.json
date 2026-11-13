@@ -813,35 +813,70 @@
         ],
         "type": "object"
       },
-      "AltarOfferResult": {
+      "AltarSceneData": {
         "additionalProperties": false,
+        "description": "The actor's offered orbs and Ramia's awakening, plus whether a Ramia awakened by anyone is still present (30 minutes). Orbs are offered by Home item use; NPC dialogue comes from npc_talk/npc_inspect. Observation never prays or wishes.",
         "properties": {
+          "available_items": {
+            "description": "altar_wish choices; empty until the actor's Ramia awakens.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "awakened_by": {
+            "type": "string"
+          },
           "character_id": {
             "type": "string"
           },
           "has_all_orbs": {
             "type": "boolean"
           },
-          "message": {
-            "type": "string"
-          },
-          "orb": {
+          "orb_count": {
             "type": "integer"
           },
-          "orb_name": {
+          "orbs": {
+            "description": "Offered orb runes s/r/b/g/y/p; G after Ramia awakens.",
             "type": "string"
           },
-          "total_orbs": {
-            "type": "integer"
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "ramia_awakened": {
+            "type": "boolean"
+          },
+          "ramia_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ramia_present": {
+            "type": "boolean"
           }
         },
         "required": [
+          "parent",
           "character_id",
-          "orb",
-          "orb_name",
-          "message",
-          "total_orbs",
-          "has_all_orbs"
+          "orbs",
+          "orb_count",
+          "has_all_orbs",
+          "ramia_awakened",
+          "ramia_present",
+          "available_items"
         ],
         "type": "object"
       },
@@ -4323,6 +4358,8 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "altar",
+                        "wishingwell",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -4455,6 +4492,8 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "altar",
+                        "wishingwell",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -6754,6 +6793,106 @@
                   "type": "object"
                 }
               },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "altar_pray",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "altar_wish",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "One of the altar scene's available_items IDs. Delivery to inventory or Depot stays service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "wishingwell_exchange",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sp": {
+                      "description": "SP to offer, at least 1 and at most the actor's SP.",
+                      "type": "integer"
+                    },
+                    "stat": {
+                      "description": "mhp, mmp, at, df or ag (legacy names accepted). 1 SP raises max HP/MP by 2 or another stat by 1.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "stat",
+                    "sp"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
               "type": "object"
             }
           },
@@ -14793,6 +14932,8 @@
                   "exile",
                   "fleamarket",
                   "gemstore",
+                  "altar",
+                  "wishingwell",
                   "home",
                   "shop_weapon",
                   "shop_armor",
@@ -14981,6 +15122,8 @@
               "exile",
               "fleamarket",
               "gemstore",
+              "altar",
+              "wishingwell",
               "home",
               "shop_weapon",
               "shop_armor",
@@ -15111,6 +15254,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/TownDistrictSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AltarSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WishingWellSceneData"
                     }
                   ]
                 }
@@ -15803,6 +15952,66 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/StoreSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "altar"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/AltarSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "wishingwell"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/WishingWellSceneData"
                 },
                 "support": {
                   "properties": {
@@ -17550,117 +17759,31 @@
         ],
         "type": "object"
       },
-      "WishingWellStatus": {
+      "WishingWellSceneData": {
         "additionalProperties": false,
+        "description": "Whether the actor may offer SP; SP and stats are in the character context. NPC dialogue comes from npc_talk/npc_inspect. Observation never exchanges.",
         "properties": {
-          "agility": {
-            "type": "integer"
-          },
-          "attack": {
-            "type": "integer"
-          },
-          "background_image": {
-            "type": "string"
-          },
           "can_exchange": {
             "type": "boolean"
           },
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "defense": {
-            "type": "integer"
-          },
-          "dialogues": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "job_memory_active": {
+            "description": "A remembered (persistent) job memory blocks the exchange; a temporary one does not.",
             "type": "boolean"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "max_hp": {
-            "type": "integer"
-          },
-          "max_mp": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "type": "string"
           },
           "over_level": {
+            "description": "Limit-broken characters cannot exchange.",
             "type": "boolean"
           },
-          "sp": {
-            "type": "integer"
+          "parent": {
+            "const": "town",
+            "type": "string"
           }
         },
         "required": [
-          "location_name",
-          "npc_name",
-          "background_image",
-          "character_id",
-          "character_name",
-          "sp",
+          "parent",
           "job_memory_active",
           "over_level",
-          "can_exchange",
-          "max_hp",
-          "max_mp",
-          "attack",
-          "defense",
-          "agility",
-          "dialogues"
-        ],
-        "type": "object"
-      },
-      "WishingwellExchangeResult": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "remaining_sp": {
-            "type": "integer"
-          },
-          "sp_consumed": {
-            "type": "integer"
-          },
-          "stat": {
-            "type": "string"
-          },
-          "stat_increase": {
-            "type": "integer"
-          },
-          "stat_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "stat",
-          "stat_name",
-          "sp_consumed",
-          "stat_increase",
-          "remaining_sp",
-          "message",
-          "character"
+          "can_exchange"
         ],
         "type": "object"
       }
@@ -18325,7 +18448,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character."
           },
           "400": {
             "content": {
@@ -19557,496 +19680,6 @@
         "summary": "List character adventure history",
         "tags": [
           "Adventure"
-        ]
-      }
-    },
-    "/characters/{id}/altar": {
-      "get": {
-        "operationId": "getAltarStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "available_items": {
-                      "items": {
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "awakened_by": {
-                      "type": "string"
-                    },
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "has_all_orbs": {
-                      "type": "boolean"
-                    },
-                    "miko_dialogue": {
-                      "type": "string"
-                    },
-                    "orb_count": {
-                      "type": "integer"
-                    },
-                    "orbs": {
-                      "type": "string"
-                    },
-                    "ramia_awakened": {
-                      "type": "boolean"
-                    },
-                    "ramia_expires_at": {
-                      "format": "date-time",
-                      "type": "string"
-                    },
-                    "ramia_present": {
-                      "type": "boolean"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Altar status and orb offering progression"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Altar of Rebirth status, orb collection, and Ramia presence",
-        "tags": [
-          "Altar"
-        ]
-      }
-    },
-    "/characters/{id}/altar/offer": {
-      "post": {
-        "operationId": "offerAltarOrb",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "orb": {
-                    "description": "Orb symbol (s, r, b, g, y, p) or Japanese name",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "orb"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AltarOfferResult"
-                }
-              }
-            },
-            "description": "Orb offered successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid orb symbol"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - orb has already been offered"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Offer an orb to the Altar of Rebirth",
-        "tags": [
-          "Altar"
-        ]
-      }
-    },
-    "/characters/{id}/altar/pray": {
-      "post": {
-        "operationId": "prayAltarRamia",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "expires_at": {
-                      "format": "date-time",
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "ramia_awakened": {
-                      "type": "boolean"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Ramia awakened successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - insufficient orbs to awaken Ramia"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Pray to awaken legendary phoenix Ramia (@いのる)",
-        "tags": [
-          "Altar"
-        ]
-      }
-    },
-    "/characters/{id}/altar/wish": {
-      "post": {
-        "operationId": "wishAltarTravelItem",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_id": {
-                    "description": "Secret otherworld travel item ID",
-                    "enum": [
-                      "item-066",
-                      "item-067",
-                      "item-068",
-                      "item-069"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "item_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "delivered_to": {
-                      "enum": [
-                        "inventory",
-                        "depot"
-                      ],
-                      "type": "string"
-                    },
-                    "item_id": {
-                      "type": "string"
-                    },
-                    "item_name": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Wish granted and item delivered"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - Ramia not awakened or invalid travel item"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Make a wish for an otherworld travel item (@ねがう)",
-        "tags": [
-          "Altar"
         ]
       }
     },
@@ -29012,209 +28645,6 @@
         ]
       }
     },
-    "/characters/{id}/wishing-well": {
-      "get": {
-        "operationId": "getWishingWellStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WishingWellStatus"
-                }
-              }
-            },
-            "description": "Wishing Well status and dialogues"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Wishing Well status, current SP, and goddess dialogues",
-        "tags": [
-          "WishingWell"
-        ]
-      }
-    },
-    "/characters/{id}/wishing-well/exchange": {
-      "post": {
-        "operationId": "exchangeWishingWellSP",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "sp": {
-                    "description": "Number of skill points to sacrifice (at least 1)",
-                    "type": "integer"
-                  },
-                  "stat": {
-                    "description": "Target stat to permanently increase (mhp, mmp, at, df, ag)",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "stat",
-                  "sp"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "description": "SP sacrifice request",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WishingwellExchangeResult"
-                }
-              }
-            },
-            "description": "Successful SP sacrifice and permanent stat increase"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid amount, insufficient SP, active JobMemory, or OverLevel restriction"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Sacrifice skill points to permanently increase a base stat",
-        "tags": [
-          "WishingWell"
-        ]
-      }
-    },
     "/contest/current": {
       "get": {
         "description": "Returns all photo submissions and current vote totals in the active contest round.",
@@ -37166,10 +36596,6 @@
     {
       "description": "Town event plaza and traveling merchant bazaar",
       "name": "EventPlaza"
-    },
-    {
-      "description": "Goddess wishing well and skill point stat sacrifice exchange",
-      "name": "WishingWell"
     },
     {
       "description": "Step-by-step combat battle replay playback and match history",
