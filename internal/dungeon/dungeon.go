@@ -89,39 +89,35 @@ type Dungeon struct {
 }
 
 type ActiveExpedition struct {
-	Revision          int                `json:"revision"`
-	Encounter         *ActiveEncounter   `json:"encounter,omitempty"`
-	ID                string             `json:"id"`
-	CharacterID       string             `json:"character_id"`
-	PartyID           string             `json:"party_id,omitempty"`
-	PartyName         string             `json:"party_name,omitempty"`
-	Members           []ExpeditionMember `json:"members,omitempty"`
-	DungeonID         string             `json:"dungeon_id"`
-	MapVariant        int                `json:"-"` // 1-based native layout; 0 for catalog floors
-	CurrentFloor      int                `json:"current_floor"`
-	PosX              int                `json:"pos_x"`
-	PosY              int                `json:"pos_y"`
-	CurrentHP         int                `json:"current_hp"`
-	TurnsRemaining    int                `json:"turns_remaining"`
-	AccumulatedExp    int                `json:"accumulated_exp"`
-	AccumulatedGold   int                `json:"accumulated_gold"`
-	AccumulatedItems  []string           `json:"accumulated_items"`
-	AccumulatedMedals int                `json:"accumulated_medals"`
-	ConsumedEvents    []string           `json:"consumed_events,omitempty"`
-	Status            ExpeditionStatus   `json:"status"`
-	StartedAt         time.Time          `json:"started_at"`
-	UpdatedAt         time.Time          `json:"updated_at"`
+	Revision         int                `json:"revision"`
+	Encounter        *ActiveEncounter   `json:"encounter,omitempty"`
+	ID               string             `json:"id"`
+	CharacterID      string             `json:"character_id"`
+	PartyID          string             `json:"party_id,omitempty"`
+	PartyName        string             `json:"party_name,omitempty"`
+	Members          []ExpeditionMember `json:"members,omitempty"`
+	DungeonID        string             `json:"dungeon_id"`
+	MapVariant       int                `json:"-"` // 1-based native layout; 0 for catalog floors
+	PosX             int                `json:"pos_x"`
+	PosY             int                `json:"pos_y"`
+	CurrentHP        int                `json:"current_hp"`
+	TurnsRemaining   int                `json:"turns_remaining"`
+	AccumulatedExp   int                `json:"accumulated_exp"`
+	AccumulatedGold  int                `json:"accumulated_gold"`
+	AccumulatedItems []string           `json:"accumulated_items"`
+	ConsumedEvents   []string           `json:"consumed_events,omitempty"`
+	Status           ExpeditionStatus   `json:"status"`
+	StartedAt        time.Time          `json:"started_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 type DungeonExpeditionHistory struct {
 	ID               string           `json:"id"`
 	CharacterID      string           `json:"character_id"`
 	DungeonID        string           `json:"dungeon_id"`
-	FloorsReached    int              `json:"floors_reached"`
 	Outcome          ExpeditionStatus `json:"outcome"`
 	ExpReward        int              `json:"exp_reward"`
 	GoldReward       int              `json:"gold_reward"`
-	MedalsReward     int              `json:"medals_reward"`
 	ItemsRewardCount int              `json:"items_reward_count"`
 	CreatedAt        time.Time        `json:"created_at"`
 }
@@ -134,7 +130,6 @@ type ExpeditionStepResult struct {
 	DamageTaken   int                `json:"damage_taken,omitempty"`
 	MemberDamages map[string]int     `json:"member_damages,omitempty"`
 	GoldFound     int                `json:"gold_found,omitempty"`
-	MedalsFound   int                `json:"medals_found,omitempty"`
 	ItemFound     string             `json:"item_found,omitempty"`
 	ChestsOpened  int                `json:"chests_opened,omitempty"`
 	ExpEarned     int                `json:"exp_earned,omitempty"`
@@ -148,7 +143,6 @@ type StepParams struct {
 	FinishStatus         ExpeditionStatus
 	Combat               bool
 	Encounter            *ActiveEncounter
-	NewFloor             int
 	NewX                 int
 	NewY                 int
 	HPDelta              int
@@ -160,7 +154,6 @@ type StepParams struct {
 	TurnsDelta           int
 	ExpDelta             int
 	GoldDelta            int
-	MedalsDelta          int
 	RewardItemID         string
 	EventKey             string
 	Now                  time.Time

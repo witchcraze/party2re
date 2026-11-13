@@ -90,7 +90,6 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
 		Combat:               clearing,
-		NewFloor:             exp.CurrentFloor,
 		NewX:                 x,
 		NewY:                 y,
 		TurnsDelta:           -1,

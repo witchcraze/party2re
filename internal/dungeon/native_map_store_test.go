@@ -29,7 +29,7 @@ func nativeStoreContract(t *testing.T, store dungeon.ActiveExpeditionStore, char
 	stale := got.Revision
 	step := func(rev int, key string, enc *dungeon.ActiveEncounter, turns int) (dungeon.StepOutcome, error) {
 		return store.Step(ctx, charID, dungeon.StepParams{
-			ExpectedExpeditionID: exp.ID, ExpectedRevision: &rev, NewFloor: 1, NewX: 1, NewY: 0,
+			ExpectedExpeditionID: exp.ID, ExpectedRevision: &rev, NewX: 1, NewY: 0,
 			TurnsDelta: turns, EventKey: key, Encounter: enc, Now: time.Now().UTC(),
 		})
 	}

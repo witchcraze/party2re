@@ -49,7 +49,7 @@ func (r *mapRunReader) GetActiveExpedition(context.Context, string) (*dungeon.Ac
 
 func TestMapObservationSourcesAndContinuations(t *testing.T) {
 	ctx := context.Background()
-	run := &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: dungeon.NativeMap0ID, MapVariant: 1, CurrentFloor: 1, Revision: 4, Status: dungeon.StatusExploring, TurnsRemaining: 20}
+	run := &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: dungeon.NativeMap0ID, MapVariant: 1, Revision: 4, Status: dungeon.StatusExploring, TurnsRemaining: 20}
 	store := &mapRunReader{run: run}
 	chars := &mapCharacterReader{char: corecharacter.Character{ID: "hero", JobID: "job-09"}}
 	inventory := &mapInventoryReader{inv: coreinventory.Inventory{Items: []coreitem.Instance{{DefinitionID: "item-197", Quantity: 1}}}}
@@ -128,7 +128,7 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 
 func TestMapObservationRejectsInvalidGeometry(t *testing.T) {
 	for _, grid := range [][]string{{}, {"S"}, {"S0", "0"}} {
-		store := &mapRunReader{run: &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: "broken", CurrentFloor: 1, Status: dungeon.StatusExploring}}
+		store := &mapRunReader{run: &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: "broken", Status: dungeon.StatusExploring}}
 		svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{}, &corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons([]dungeon.Dungeon{{ID: "broken", Variants: []dungeon.Floor{{Width: 2, Height: 2, Grid: grid}}}}))
 		if err != nil {
 			t.Fatal(err)
@@ -170,7 +170,7 @@ func TestMapObservationRecoversMissingSavedInventory(t *testing.T) {
 				if ownsGoggles {
 					inv.inv.Items = []coreitem.Instance{{ID: "scope", DefinitionID: "item-197", Quantity: 1}}
 				}
-				run := dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: dungeon.NativeMap0ID, MapVariant: 1, CurrentFloor: 1, Status: dungeon.StatusExploring, TurnsRemaining: 20}
+				run := dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: dungeon.NativeMap0ID, MapVariant: 1, Status: dungeon.StatusExploring, TurnsRemaining: 20}
 				switch origin {
 				case "old-json":
 					run.Members = dungeon.DecodeMembers(`[{"character_id":"hero","job_id":"job-01"},{"character_id":"ally","job_id":"job-79","item_ids":["item-197"]}]`)

@@ -46,7 +46,6 @@ func TestDungeonRepository(t *testing.T) {
 		ID:               expID,
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
-		CurrentFloor:     1,
 		PosX:             2,
 		PosY:             0,
 		CurrentHP:        char.Stats.HP,
@@ -78,7 +77,6 @@ func TestDungeonRepository(t *testing.T) {
 		ID:               histID,
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
-		FloorsReached:    2,
 		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        450,
 		GoldReward:       800,
@@ -153,7 +151,6 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		ID:               fmt.Sprintf("hist_%016x", now.UnixNano()),
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
-		FloorsReached:    1,
 		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        100,
 		GoldReward:       200,
@@ -184,7 +181,6 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		ID:               fmt.Sprintf("hist_%016x", now.UnixNano()+1),
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
-		FloorsReached:    2,
 		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        100,
 		GoldReward:       200,
@@ -232,7 +228,6 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 		ID:               fmt.Sprintf("hist_%016x", now.UnixNano()+2),
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
-		FloorsReached:    3,
 		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        100,
 		GoldReward:       200,
@@ -307,11 +302,9 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 		ID:               runID,
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-02",
-		FloorsReached:    3,
 		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        200,
 		GoldReward:       400,
-		MedalsReward:     2,
 		ItemsRewardCount: 1,
 		CreatedAt:        now,
 	}
@@ -353,8 +346,8 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 	if updatedChar.Money != 1900 {
 		t.Errorf("expected money 1900 (preserving concurrent +500 and single +400 reward), got %d", updatedChar.Money)
 	}
-	if updatedChar.SmallMedals != 5 {
-		t.Errorf("expected small medals 5 (3 + 2), got %d", updatedChar.SmallMedals)
+	if updatedChar.SmallMedals != 3 {
+		t.Errorf("expected small medals 3 (preserving concurrent +3), got %d", updatedChar.SmallMedals)
 	}
 
 	// Verify only 1 item delivered across inventory and depot
@@ -410,11 +403,9 @@ func TestDungeonRepository_RollbackOnRewardFailure(t *testing.T) {
 		ID:               runID,
 		CharacterID:      char.ID,
 		DungeonID:        "dungeon-01",
-		FloorsReached:    1,
 		Outcome:          dungeon.StatusEscaped,
 		ExpReward:        50,
 		GoldReward:       250,
-		MedalsReward:     2,
 		ItemsRewardCount: 1,
 		CreatedAt:        now,
 	}
@@ -514,16 +505,13 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 			<-start
 			staleSnapshot := char
 			staleSnapshot.Money += 300
-			staleSnapshot.SmallMedals += 1
 			h := dungeon.DungeonExpeditionHistory{
 				ID:               runID,
 				CharacterID:      char.ID,
 				DungeonID:        "dungeon-01",
-				FloorsReached:    2,
 				Outcome:          dungeon.StatusEscaped,
 				ExpReward:        50,
 				GoldReward:       300,
-				MedalsReward:     1,
 				ItemsRewardCount: 1,
 				CreatedAt:        now,
 			}
@@ -583,7 +571,7 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 	}
 
 	// Net bank movement: 2 deposits of 100 (-200 wallet, +200 deposit) and 2 withdrawals of 50 (+100 wallet, -100 deposit)
-	// Plus 1 expedition reward of +300 wallet, +1 small medal.
+	// Plus 1 expedition reward of +300 wallet.
 	// Expected wallet: 5000 - 200 + 100 + 300 = 5200
 	// Expected deposit: 5000 + 200 - 100 = 5100
 	finalChar, err := charRepo.FindByID(ctx, char.ID)
@@ -595,9 +583,6 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 	}
 	if finalChar.Deposit != 5100 {
 		t.Errorf("expected deposit 5100, got %d", finalChar.Deposit)
-	}
-	if finalChar.SmallMedals != 1 {
-		t.Errorf("expected small medals 1, got %d", finalChar.SmallMedals)
 	}
 
 	// Verify 1 history entry, 1 item delivered, 1 expedition recorded

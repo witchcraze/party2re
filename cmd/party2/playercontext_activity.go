@@ -183,7 +183,7 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if !exp.ContainsCharacter(actor) {
 			return nil, errors.New("dungeon activity ownership mismatch")
 		}
-		a := playercontext.Activity{Kind: "dungeon", ID: exp.ID, Revision: exp.Revision, PartyID: exp.PartyID, Phase: string(exp.Status), Role: "actor", Round: exp.CurrentFloor, Actions: []string{}}
+		a := playercontext.Activity{Kind: "dungeon", ID: exp.ID, Revision: exp.Revision, PartyID: exp.PartyID, Phase: string(exp.Status), Role: "actor", Actions: []string{}}
 		if exp.CharacterID != actor {
 			a.Role = "member"
 		}

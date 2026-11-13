@@ -22,23 +22,21 @@ func TestValkeyExpeditionRepository_NewAndFallback(t *testing.T) {
 	}
 
 	exp := dungeon.ActiveExpedition{
-		ID:                "exp-fallback-1",
-		CharacterID:       "char-fallback-1",
-		PartyID:           "party-fallback-1",
-		PartyName:         "Fallback Party",
-		DungeonID:         "cave_01",
-		CurrentFloor:      1,
-		PosX:              0,
-		PosY:              0,
-		CurrentHP:         100,
-		TurnsRemaining:    50,
-		AccumulatedExp:    10,
-		AccumulatedGold:   20,
-		AccumulatedMedals: 1,
-		AccumulatedItems:  []string{"item-1"},
-		Status:            dungeon.StatusExploring,
-		StartedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+		ID:               "exp-fallback-1",
+		CharacterID:      "char-fallback-1",
+		PartyID:          "party-fallback-1",
+		PartyName:        "Fallback Party",
+		DungeonID:        "cave_01",
+		PosX:             0,
+		PosY:             0,
+		CurrentHP:        100,
+		TurnsRemaining:   50,
+		AccumulatedExp:   10,
+		AccumulatedGold:  20,
+		AccumulatedItems: []string{"item-1"},
+		Status:           dungeon.StatusExploring,
+		StartedAt:        time.Now().UTC(),
+		UpdatedAt:        time.Now().UTC(),
 	}
 
 	// 1. SaveActiveExpedition fallback
@@ -58,14 +56,12 @@ func TestValkeyExpeditionRepository_NewAndFallback(t *testing.T) {
 	// 3. Step fallback
 	stepOutcome, err := repo.Step(ctx, "char-fallback-1", dungeon.StepParams{
 		ExpectedExpeditionID: "exp-fallback-1",
-		NewFloor:             1,
 		NewX:                 1,
 		NewY:                 0,
 		HPDelta:              -5,
 		TurnsDelta:           -1,
 		ExpDelta:             20,
 		GoldDelta:            50,
-		MedalsDelta:          1,
 		RewardItemID:         "item-2",
 		Now:                  time.Now().UTC(),
 	})
@@ -113,19 +109,17 @@ func TestValkeyExpeditionRepository_SaveActiveExpedition(t *testing.T) {
 				MaxHP:       80,
 			},
 		},
-		DungeonID:         dungeon.NativeMap0ID,
-		CurrentFloor:      2,
-		PosX:              3,
-		PosY:              4,
-		CurrentHP:         110,
-		TurnsRemaining:    45,
-		AccumulatedExp:    150,
-		AccumulatedGold:   300,
-		AccumulatedMedals: 2,
-		AccumulatedItems:  []string{"item-1", "item-2"},
-		Status:            dungeon.StatusExploring,
-		StartedAt:         now,
-		UpdatedAt:         now,
+		DungeonID:        dungeon.NativeMap0ID,
+		PosX:             3,
+		PosY:             4,
+		CurrentHP:        110,
+		TurnsRemaining:   45,
+		AccumulatedExp:   150,
+		AccumulatedGold:  300,
+		AccumulatedItems: []string{"item-1", "item-2"},
+		Status:           dungeon.StatusExploring,
+		StartedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	// 1. Success case: DoMulti executes HSET (state), HSET (rewards), EXPIRE (state), EXPIRE (rewards)
@@ -219,7 +213,6 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 		"party_name":      "Solo Run",
 		"members":         membersJSON,
 		"dungeon_id":      "dungeon-lost-ruins",
-		"current_floor":   "3",
 		"pos_x":           "5",
 		"pos_y":           "7",
 		"current_hp":      "140",
@@ -229,10 +222,9 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 		"updated_at":      now.Format(time.RFC3339Nano),
 	}
 	rewardsMap := map[string]string{
-		"exp":    "500",
-		"gold":   "1200",
-		"medals": "3",
-		"items":  itemsJSON,
+		"exp":   "500",
+		"gold":  "1200",
+		"items": itemsJSON,
 	}
 
 	// 1. Success case
@@ -255,10 +247,10 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 	if active.ID != "exp-get-1" || active.PartyID != "party-solo" || active.DungeonID != "dungeon-lost-ruins" {
 		t.Errorf("unexpected identity fields: %+v", active)
 	}
-	if active.CurrentFloor != 3 || active.PosX != 5 || active.PosY != 7 || active.CurrentHP != 140 {
+	if active.PosX != 5 || active.PosY != 7 || active.CurrentHP != 140 {
 		t.Errorf("unexpected coordinates or stats: %+v", active)
 	}
-	if active.AccumulatedExp != 500 || active.AccumulatedGold != 1200 || active.AccumulatedMedals != 3 {
+	if active.AccumulatedExp != 500 || active.AccumulatedGold != 1200 {
 		t.Errorf("unexpected rewards: %+v", active)
 	}
 	if len(active.AccumulatedItems) != 2 || active.AccumulatedItems[0] != "item-alpha" {
@@ -345,18 +337,16 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 
 	validStepVals := []string{
 		string(dungeon.StatusExploring), // [0] status
-		"2",                             // [1] current_floor
-		"4",                             // [2] pos_x
-		"5",                             // [3] pos_y
-		"85",                            // [4] current_hp
-		"40",                            // [5] turns_remaining
-		"120",                           // [6] exp
-		"250",                           // [7] gold
-		"2",                             // [8] medals
-		itemsJSON,                       // [9] items
-		now.Format(time.RFC3339Nano),    // [10] updated_at
-		"dungeon-cave",                  // [11] dungeon_id
-		now.Format(time.RFC3339Nano),    // [12] started_at
+		"4",                             // [1] pos_x
+		"5",                             // [2] pos_y
+		"85",                            // [3] current_hp
+		"40",                            // [4] turns_remaining
+		"120",                           // [5] exp
+		"250",                           // [6] gold
+		itemsJSON,                       // [7] items
+		now.Format(time.RFC3339Nano),    // [8] updated_at
+		"dungeon-cave",                  // [9] dungeon_id
+		now.Format(time.RFC3339Nano),    // [10] started_at
 		"party-live", "Live Party", "[]",
 		"[]", "1", "", "1", // consumed events, event consumed, encounter, revision
 		"", // map variant (catalog run)
@@ -364,14 +354,12 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 
 	params := dungeon.StepParams{
 		ExpectedExpeditionID: "exp-step-1",
-		NewFloor:             2,
 		NewX:                 4,
 		NewY:                 5,
 		HPDelta:              -15,
 		TurnsDelta:           -1,
 		ExpDelta:             50,
 		GoldDelta:            100,
-		MedalsDelta:          1,
 		RewardItemID:         "reward-potion",
 		Now:                  now,
 	}
@@ -390,13 +378,13 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 	if outcome.Status != dungeon.StatusExploring {
 		t.Errorf("expected StatusExploring, got %v", outcome.Status)
 	}
-	if outcome.Expedition.CurrentFloor != 2 || outcome.Expedition.PosX != 4 || outcome.Expedition.PosY != 5 {
+	if outcome.Expedition.PosX != 4 || outcome.Expedition.PosY != 5 {
 		t.Errorf("unexpected position: %+v", outcome.Expedition)
 	}
 	if outcome.Expedition.CurrentHP != 85 || outcome.Expedition.TurnsRemaining != 40 {
 		t.Errorf("unexpected hp/turns: %+v", outcome.Expedition)
 	}
-	if outcome.Expedition.AccumulatedExp != 120 || outcome.Expedition.AccumulatedGold != 250 || outcome.Expedition.AccumulatedMedals != 2 {
+	if outcome.Expedition.AccumulatedExp != 120 || outcome.Expedition.AccumulatedGold != 250 {
 		t.Errorf("unexpected rewards: %+v", outcome.Expedition)
 	}
 	if len(outcome.Expedition.AccumulatedItems) != 1 || outcome.Expedition.AccumulatedItems[0] != "reward-potion" {

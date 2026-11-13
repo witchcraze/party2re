@@ -185,7 +185,7 @@ func TestEncounterStepCAS(t *testing.T) {
 				}
 			})
 			enc := &dungeon.ActiveEncounter{Monster: dungeon.DungeonMonster{ID: "enemy", HP: 100}, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 70, 10, 10)}, EventType: dungeon.EventBattle, X: 1}
-			params := dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &exp.Revision, Combat: true, Encounter: enc, NewFloor: 1, TurnsDelta: -1, Now: time.Now().UTC()}
+			params := dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &exp.Revision, Combat: true, Encounter: enc, TurnsDelta: -1, Now: time.Now().UTC()}
 			if _, err := store.Step(ctx, exp.CharacterID, params); err != nil {
 				t.Fatal(err)
 			}

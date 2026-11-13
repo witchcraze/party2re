@@ -21,7 +21,6 @@ func (s *Service) freezeExpedition(ctx context.Context, exp *ActiveExpedition, s
 		ExpectedRevision:     &exp.Revision,
 		FinishStatus:         status,
 		Combat:               true,
-		NewFloor:             exp.CurrentFloor,
 		NewX:                 exp.PosX,
 		NewY:                 exp.PosY,
 		Now:                  time.Now().UTC(),

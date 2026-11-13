@@ -142,7 +142,6 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 		return nil, err
 	}
 
-	floor, _ := strconv.Atoi(sMap["current_floor"])
 	posX, _ := strconv.Atoi(sMap["pos_x"])
 	posY, _ := strconv.Atoi(sMap["pos_y"])
 	hp, _ := strconv.Atoi(sMap["current_hp"])
@@ -151,7 +150,6 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 
 	exp, _ := strconv.Atoi(rMap["exp"])
 	gold, _ := strconv.Atoi(rMap["gold"])
-	medals, _ := strconv.Atoi(rMap["medals"])
 	items := DecodeItems(rMap["items"])
 
 	startedAt, _ := time.Parse(time.RFC3339Nano, sMap["started_at"])
@@ -172,28 +170,26 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 	}
 	revision, _ := strconv.Atoi(sMap["revision"])
 	active := &ActiveExpedition{
-		Encounter:         encounter,
-		Revision:          revision,
-		ID:                sMap["expedition_id"],
-		CharacterID:       sMap["character_id"],
-		PartyID:           sMap["party_id"],
-		PartyName:         sMap["party_name"],
-		Members:           members,
-		DungeonID:         sMap["dungeon_id"],
-		MapVariant:        variant,
-		CurrentFloor:      floor,
-		PosX:              posX,
-		PosY:              posY,
-		CurrentHP:         hp,
-		TurnsRemaining:    turns,
-		AccumulatedExp:    exp,
-		AccumulatedGold:   gold,
-		AccumulatedMedals: medals,
-		AccumulatedItems:  items,
-		ConsumedEvents:    consumedEvents,
-		Status:            ExpeditionStatus(sMap["status"]),
-		StartedAt:         startedAt,
-		UpdatedAt:         updatedAt,
+		Encounter:        encounter,
+		Revision:         revision,
+		ID:               sMap["expedition_id"],
+		CharacterID:      sMap["character_id"],
+		PartyID:          sMap["party_id"],
+		PartyName:        sMap["party_name"],
+		Members:          members,
+		DungeonID:        sMap["dungeon_id"],
+		MapVariant:       variant,
+		PosX:             posX,
+		PosY:             posY,
+		CurrentHP:        hp,
+		TurnsRemaining:   turns,
+		AccumulatedExp:   exp,
+		AccumulatedGold:  gold,
+		AccumulatedItems: items,
+		ConsumedEvents:   consumedEvents,
+		Status:           ExpeditionStatus(sMap["status"]),
+		StartedAt:        startedAt,
+		UpdatedAt:        updatedAt,
 	}
 
 	return active, nil
@@ -230,7 +226,6 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 			FieldValue("members", membersJSON).
 			FieldValue("dungeon_id", exp.DungeonID).
 			FieldValue("map_variant", strconv.Itoa(exp.MapVariant)).
-			FieldValue("current_floor", strconv.Itoa(exp.CurrentFloor)).
 			FieldValue("pos_x", strconv.Itoa(exp.PosX)).
 			FieldValue("pos_y", strconv.Itoa(exp.PosY)).
 			FieldValue("current_hp", strconv.Itoa(exp.CurrentHP)).
@@ -243,7 +238,6 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 		r.client.B().Hset().Key(rKey).FieldValue().
 			FieldValue("exp", strconv.Itoa(exp.AccumulatedExp)).
 			FieldValue("gold", strconv.Itoa(exp.AccumulatedGold)).
-			FieldValue("medals", strconv.Itoa(exp.AccumulatedMedals)).
 			FieldValue("items", itemsJSON).
 			Build(),
 		r.client.B().Expire().Key(sKey).Seconds(ttlSec).Build(),
@@ -307,14 +301,12 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 	res := r.stepScript.Exec(ctx, r.client, []string{sKey, rKey}, []string{
 		params.ExpectedExpeditionID,
-		strconv.Itoa(params.NewFloor),
 		strconv.Itoa(params.NewX),
 		strconv.Itoa(params.NewY),
 		strconv.Itoa(params.HPDelta),
 		strconv.Itoa(params.TurnsDelta),
 		strconv.Itoa(params.ExpDelta),
 		strconv.Itoa(params.GoldDelta),
-		strconv.Itoa(params.MedalsDelta),
 		params.RewardItemID,
 		params.Now.Format(time.RFC3339Nano),
 		strconv.FormatInt(int64(r.ttl.Seconds()), 10),
@@ -335,58 +327,54 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 21 {
+	if err != nil || len(vals) < 19 {
 		return StepOutcome{}, fmt.Errorf("unexpected lua step response format: %v", err)
 	}
 
 	status := ExpeditionStatus(vals[0])
-	floor, _ := strconv.Atoi(vals[1])
-	posX, _ := strconv.Atoi(vals[2])
-	posY, _ := strconv.Atoi(vals[3])
-	hp, _ := strconv.Atoi(vals[4])
-	turns, _ := strconv.Atoi(vals[5])
-	totExp, _ := strconv.Atoi(vals[6])
-	totGold, _ := strconv.Atoi(vals[7])
-	totMedals, _ := strconv.Atoi(vals[8])
-	items := DecodeItems(vals[9])
-	updatedAt, _ := time.Parse(time.RFC3339Nano, vals[10])
-	dungeonID := vals[11]
-	startedAt, _ := time.Parse(time.RFC3339Nano, vals[12])
+	posX, _ := strconv.Atoi(vals[1])
+	posY, _ := strconv.Atoi(vals[2])
+	hp, _ := strconv.Atoi(vals[3])
+	turns, _ := strconv.Atoi(vals[4])
+	totExp, _ := strconv.Atoi(vals[5])
+	totGold, _ := strconv.Atoi(vals[6])
+	items := DecodeItems(vals[7])
+	updatedAt, _ := time.Parse(time.RFC3339Nano, vals[8])
+	dungeonID := vals[9]
+	startedAt, _ := time.Parse(time.RFC3339Nano, vals[10])
 
-	consumedEvents := DecodeItems(vals[16])
-	eventConsumed := vals[17] != "0"
+	consumedEvents := DecodeItems(vals[14])
+	eventConsumed := vals[15] != "0"
 
-	encounter, err := decodeEncounter(vals[18])
+	encounter, err := decodeEncounter(vals[16])
 	if err != nil {
 		return StepOutcome{}, err
 	}
-	members, err := decodeMembers(vals[15])
+	members, err := decodeMembers(vals[13])
 	if err != nil {
 		return StepOutcome{}, err
 	}
-	revision, _ := strconv.Atoi(vals[19])
-	variant, _ := strconv.Atoi(vals[20])
+	revision, _ := strconv.Atoi(vals[17])
+	variant, _ := strconv.Atoi(vals[18])
 	exp := ActiveExpedition{
 		Encounter: encounter,
 		Revision:  revision,
-		PartyID:   vals[13], PartyName: vals[14], Members: members,
-		ID:                params.ExpectedExpeditionID,
-		CharacterID:       characterID,
-		DungeonID:         dungeonID,
-		MapVariant:        variant,
-		CurrentFloor:      floor,
-		PosX:              posX,
-		PosY:              posY,
-		CurrentHP:         hp,
-		TurnsRemaining:    turns,
-		AccumulatedExp:    totExp,
-		AccumulatedGold:   totGold,
-		AccumulatedMedals: totMedals,
-		AccumulatedItems:  items,
-		ConsumedEvents:    consumedEvents,
-		Status:            status,
-		StartedAt:         startedAt,
-		UpdatedAt:         updatedAt,
+		PartyID:   vals[11], PartyName: vals[12], Members: members,
+		ID:               params.ExpectedExpeditionID,
+		CharacterID:      characterID,
+		DungeonID:        dungeonID,
+		MapVariant:       variant,
+		PosX:             posX,
+		PosY:             posY,
+		CurrentHP:        hp,
+		TurnsRemaining:   turns,
+		AccumulatedExp:   totExp,
+		AccumulatedGold:  totGold,
+		AccumulatedItems: items,
+		ConsumedEvents:   consumedEvents,
+		Status:           status,
+		StartedAt:        startedAt,
+		UpdatedAt:        updatedAt,
 	}
 
 	return StepOutcome{

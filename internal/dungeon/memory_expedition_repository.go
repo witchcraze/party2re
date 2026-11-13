@@ -219,7 +219,6 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	if params.FinishStatus != "" {
 		finalStatus = params.FinishStatus
 	}
-	exp.CurrentFloor = params.NewFloor
 	exp.PosX = params.NewX
 	exp.PosY = params.NewY
 	exp.CurrentHP = currentHP
@@ -245,7 +244,6 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	if eventConsumed {
 		exp.AccumulatedExp += params.ExpDelta
 		exp.AccumulatedGold += params.GoldDelta
-		exp.AccumulatedMedals += params.MedalsDelta
 		if params.RewardItemID != "" {
 			exp.AccumulatedItems = append(exp.AccumulatedItems, params.RewardItemID)
 		}
