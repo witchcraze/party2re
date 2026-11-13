@@ -13,7 +13,6 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -152,7 +151,7 @@ func (h *Handler) playerContextResponse(ctx context.Context, result playercontex
 			Gold: c.Money, Tired: c.Tired, IsDead: c.Stats.HP <= 0, IsSleeping: s.Sleeping, IconURL: profile.Profile.AvatarURL, ActionWaitMS: s.ActionWait.Milliseconds()},
 		Scene: SceneSnapshot{LocationID: s.LocationID, Title: "交流広場", Bgimg: "bg_town",
 			BgimgURL: "data:image/svg+xml," + url.PathEscape(townBackgroundPlaceholder),
-			Dialogue: "広場へようこそ。次の行動を選んでください。", Speaker: &SceneSpeaker{Name: park.NPCName}, PlaceLog: []PlaceLogEntry{}, Members: []PlaceMember{}},
+			Dialogue: "広場へようこそ。次の行動を選んでください。", Speaker: &SceneSpeaker{Name: parkNPCName}, PlaceLog: []PlaceLogEntry{}, Members: []PlaceMember{}},
 		OngoingActions:   make([]OngoingActionSnapshot, 0, len(s.OngoingActions)+1),
 		AvailableActions: make([]ContextAction, 0, len(result.AvailableActions)),
 	}

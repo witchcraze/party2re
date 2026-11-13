@@ -86,3 +86,9 @@ func (h *Handler) homeMailboxSceneData(ctx context.Context, r playercontext.Resu
 	}
 	return data, nil
 }
+
+var (
+	homeFacility       = facility{title: "自宅", commands: []string{"home_sleep"}, read: (*Handler).homeSceneData}
+	homeInboxFacility  = facility{title: "受信箱", read: (*Handler).homeMailboxSceneData}
+	homeOutboxFacility = facility{title: "送信箱", read: (*Handler).homeMailboxSceneData}
+)

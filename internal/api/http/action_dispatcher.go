@@ -166,7 +166,8 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 		// all pass the read-only check above.
 		var claim playercontext.ActionWaitClaim
 		// The park answers ＠しらべる>@町娘 through ＠はなす, a logged reply that waits.
-		loggedInspect := req.Action == "npc_inspect" && len(npcProfiles[current.Snapshot.LocationID].inspectWords) > 0
+		npc := h.sceneAdapters[current.Snapshot.LocationID].npc
+		loggedInspect := req.Action == "npc_inspect" && npc != nil && len(npc.inspectWords) > 0
 		if playercontext.StartsActionWait(def) || loggedInspect {
 			var claimed bool
 			claim, claimed, err = h.playerContext.ClaimActionWait(r.Context(), char.ID)

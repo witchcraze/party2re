@@ -64,3 +64,15 @@ func (h *Handler) depotSceneData(ctx context.Context, r playercontext.Result) (a
 	return DepotSceneData{Parent: "town", CharacterID: dep.CharacterID, Capacity: dep.Capacity, ExDepot: dep.ExDepot,
 		NextExpansionCost: nextCost, ItemCount: len(dep.Items), Items: items, Page: page, PendingRemittances: toRemittanceResponses(pending)}, nil
 }
+
+var depotFacility = facility{
+	title: "預かり所", commands: []string{"depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"},
+	read: (*Handler).depotSceneData, placeLog: true,
+	// Lines with capacities ($max_depot) are omitted until those facts are wired.
+	npc: &npcProfile{name: "@ニキータ", words: []string{
+		"ここは預かり所だけど、何か用かい？", "転職回数が増えるごとに預けられる個数も増えていくぜ",
+		"＠おくる時は、送るアイテムと相手の名前を教えてくれな", "＠せいとんすると、武器、防具、道具の順に整頓できるぜ",
+		"預かり所がまんぱんだと、相手からのアイテムが受け取れないぜ", "預かり所がまんぱんだと、クエストでの宝物を手に入れることができないぜ",
+		"ここで売るのも専門店で売るのも売値は変わらないぜ",
+	}},
+}

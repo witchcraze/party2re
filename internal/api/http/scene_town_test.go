@@ -1,14 +1,12 @@
-package park_test
+package http
 
 import (
 	"testing"
-
-	"github.com/witchcraze/party2re/internal/park"
 )
 
-type seq []int
+type divinationDraws []int
 
-func (s *seq) Intn(int) int { v := (*s)[0]; *s = (*s)[1:]; return v }
+func (s *divinationDraws) Intn(int) int { v := (*s)[0]; *s = (*s)[1:]; return v }
 
 func TestDivinateUsesLegacyListsAndLine(t *testing.T) {
 	for _, tc := range []struct {
@@ -20,8 +18,8 @@ func TestDivinateUsesLegacyListsAndLine(t *testing.T) {
 		{[]int{7, 26}, "今日の勇者さんの運勢はずばり…大吉です♪ラッキーカラーはパール色ですよ〜。"},
 		{[]int{21, 15}, "今日の勇者さんの運勢はずばり…何か起きますです♪ラッキーカラーはワインレッド色ですよ〜。"},
 	} {
-		draws := seq(tc.draws)
-		if got := park.Divinate(draws.Intn, "勇者"); got != tc.want {
+		draws := divinationDraws(tc.draws)
+		if got := divination(draws.Intn, "勇者"); got != tc.want {
 			t.Errorf("draws %v: got %q, want %q", tc.draws, got, tc.want)
 		}
 	}

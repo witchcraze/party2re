@@ -127,7 +127,7 @@ func (h *Handler) speak(ctx context.Context, service *playercontext.Service, own
 	if err != nil {
 		return SpeechResult{}, err
 	}
-	if !ok || !placeLogFacilities[destination] {
+	if !ok || !h.sceneAdapters[destination].placeLog {
 		return SpeechResult{}, errPlaceUnavailable
 	}
 	recipientID := ""

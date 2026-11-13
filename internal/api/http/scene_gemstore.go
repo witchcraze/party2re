@@ -30,3 +30,13 @@ func (h *Handler) gemStoreSceneData(ctx context.Context, r playercontext.Result)
 		Catalog: append([]gemstore.Gem{}, h.gemstore.GetCatalog(char.JobLevel)...),
 		Recipes: append([]gemstore.Recipe{}, h.gemstore.GetRecipes()...)}, nil
 }
+
+var gemStoreFacility = facility{
+	title: "宝石店", commands: []string{"gemstore_buy", "gemstore_sell", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "gemstore_sort"},
+	read: (*Handler).gemStoreSceneData, placeLog: true,
+	// Lines with item recommendations ($gems) are omitted until those facts are wired.
+	npc: &npcProfile{name: "@ジェマ", words: []string{
+		"ここは宝石店です。色んな宝石を売っています", "どんな宝石がお好きですか？",
+		"アイテムや宝石を使って、新しい宝石に加工することもできますよ", "宝石ごとに不思議な力があるんです",
+	}},
+}

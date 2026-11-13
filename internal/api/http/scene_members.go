@@ -34,7 +34,7 @@ func WithPlaceMembers(members PlaceMembers) Option {
 
 func (h *Handler) readPlaceMembers(ctx context.Context, destination string) ([]PlaceMember, error) {
 	out := []PlaceMember{}
-	if npc, ok := npcProfiles[destination]; ok {
+	if npc := h.sceneAdapters[destination].npc; npc != nil {
 		out = append(out, PlaceMember{Kind: "npc", Name: npc.name, Color: npcColor})
 	}
 	if h.placeMembers == nil {
@@ -53,7 +53,7 @@ func (h *Handler) readPlaceMembers(ctx context.Context, destination string) ([]P
 // refreshPlaceMember lists the actor in its current place before a command
 // runs, as legacy read_member precedes the action (party.cgi:19-20).
 func (h *Handler) refreshPlaceMember(ctx context.Context, characterID, location string) error {
-	if h.placeMembers == nil || !placeLogFacilities[location] {
+	if h.placeMembers == nil || !h.sceneAdapters[location].placeLog {
 		return nil
 	}
 	profile, err := h.characters.GetProfile(ctx, characterID)

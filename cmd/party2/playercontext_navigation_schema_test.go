@@ -27,6 +27,9 @@ func TestProductionSceneRegistryMatchesNavigationSchemas(t *testing.T) {
 		t.Fatal("production Chapel scene is missing")
 	}
 	slices.Sort(destinations)
+	if facilities := apihttp.FacilityIDs(); !slices.Equal(facilities, destinations) {
+		t.Errorf("HTTP facility registrations and scene definitions disagree: facilities=%v scenes=%v", facilities, destinations)
+	}
 	var spec map[string]any
 	if err := json.Unmarshal(apihttp.OpenAPISpec(), &spec); err != nil {
 		t.Fatal(err)

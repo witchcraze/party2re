@@ -22,3 +22,7 @@ func (h *Handler) exileSceneData(ctx context.Context, r playercontext.Result) (a
 	}
 	return ExileSceneData{Parent: "town", Board: board}, nil
 }
+
+var exileFacility = facility{
+	title: "荒らし追放騎士団", commands: []string{"exile_petition", "exile_approve", "exile_oppose"}, read: (*Handler).exileSceneData,
+}

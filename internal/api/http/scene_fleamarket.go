@@ -41,3 +41,11 @@ func (h *Handler) fleaMarketSceneData(ctx context.Context, r playercontext.Resul
 	return FleaMarketSceneData{Parent: "town", Listings: append([]fleamarket.Listing{}, listings...), ListingCount: total,
 		OwnedListings: append([]fleamarket.Listing{}, owned...), Page: page}, nil
 }
+
+var fleaMarketFacility = facility{
+	title: "フリーマーケット", commands: []string{"fleamarket_list", "fleamarket_purchase", "fleamarket_cancel"}, read: (*Handler).fleaMarketSceneData, placeLog: true,
+	npc: &npcProfile{name: "@FMGKDP", words: []string{
+		"ここはフリーマーケットだ。物の売り買いができるぜ", "物の価値は人それぞれだ。思いのほか良い物があるかもな",
+		"１人で出せる品は限りがあるから気をつけな", "俺の名前を知らないようじゃピヨッコだ",
+	}},
+}

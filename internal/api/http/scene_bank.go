@@ -22,3 +22,12 @@ func (h *Handler) bankSceneData(ctx context.Context, r playercontext.Result) (an
 	}
 	return BankSceneData{Parent: "town", State: state}, nil
 }
+
+var bankFacility = facility{
+	title: "銀行", commands: []string{"bank_deposit", "bank_withdraw"}, read: (*Handler).bankSceneData, placeLog: true,
+	npc: &npcProfile{name: bank.NPCName, words: []string{
+		"ゴールドをお預かりいたします",
+		"24時間いつでも、手数料もございません",
+		"99999999999999 Gまでお預かりいたします",
+	}},
+}

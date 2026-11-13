@@ -64,3 +64,7 @@ func (h *Handler) townDistrictSceneData(ctx context.Context, r playercontext.Res
 	return TownDistrictSceneData{Parent: "town", Town: t, Stores: append([]store.Store{}, stores...),
 		StoreTerms: StoreBuildTerms{Price: store.StorePrice, CycleDays: store.StoreCycleDays, MaxStores: store.MaxTownStores, HouseStyles: t.HouseStyles}}, nil
 }
+
+func townDistrictFacility(name string) facility {
+	return facility{title: name, read: (*Handler).townDistrictSceneData, placeLog: true}
+}

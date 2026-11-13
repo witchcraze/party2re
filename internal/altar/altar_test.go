@@ -173,9 +173,6 @@ func TestGetStatusProgression(t *testing.T) {
 	if status.OrbCount != 0 || status.HasAllOrbs || status.RamiaAwakened || status.RamiaPresent || status.AvailableItems == nil {
 		t.Fatalf("unexpected initial status: %+v", status)
 	}
-	if got := MikoWords(c); got[0] != mikoGuardingWords[0] {
-		t.Fatalf("expected guarding eggs words, got %q", got)
-	}
 
 	// 2. All 6 orbs offered
 	c.Orb = "srbgyp"
@@ -187,9 +184,6 @@ func TestGetStatusProgression(t *testing.T) {
 	if status.OrbCount != 6 || !status.HasAllOrbs || status.RamiaAwakened {
 		t.Fatalf("unexpected all orbs status: %+v", status)
 	}
-	if got := MikoWords(c); got[0] != mikoReadyWords[0] {
-		t.Fatalf("expected ready to pray words, got %q", got)
-	}
 
 	// 3. Ramia awakened
 	c.Orb = "G"
@@ -200,9 +194,6 @@ func TestGetStatusProgression(t *testing.T) {
 	}
 	if !status.RamiaAwakened {
 		t.Fatalf("expected RamiaAwakened to be true")
-	}
-	if got := MikoWords(c); got[0] != mikoAwakenedWords[0] {
-		t.Fatalf("expected after awakening words, got %q", got)
 	}
 	if len(status.AvailableItems) != 4 {
 		t.Fatalf("expected 4 available items, got %d", len(status.AvailableItems))
@@ -472,9 +463,6 @@ func TestAltarEligibilityAfterOrbReplacement(t *testing.T) {
 	}
 	if !status.HasAllOrbs || status.OrbCount != 6 || status.RamiaAwakened {
 		t.Fatalf("expected 6 orbs, not awakened, got %+v", status)
-	}
-	if got := MikoWords(c); got[0] != mikoReadyWords[0] {
-		t.Fatalf("expected ready to pray words, got %q", got)
 	}
 
 	// 2. Travel item wish is NOT eligible yet (Ramia not awakened)

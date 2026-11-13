@@ -8,21 +8,58 @@ import (
 
 	"github.com/witchcraze/party2re/internal/altar"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/town"
 )
 
 var errSceneNotConfigured = errors.New("selected scene adapter not configured")
 
-// sceneAdapter is HTTP-owned. Facility migrations replace the controls-only
-// read with their typed public-service projection; it must never perform a
-// gameplay mutation or return a partial observation after a required read fails.
-type sceneAdapter struct {
-	definition playercontext.SceneDefinition
-	title      string
-	commands   []string
-	read       func(context.Context, playercontext.Result) (any, error)
+// facility is one Gateway facility's HTTP registration, keyed by scene
+// destination. read observes a typed public-service projection; it must never
+// perform a gameplay mutation or return a partial observation after a required
+// read fails. A nil read offers the controls-only selection view.
+type facility struct {
+	title    string
+	commands []string
+	read     func(*Handler, context.Context, playercontext.Result) (any, error)
 	// placeLog marks facilities with a shared legacy log (docs/architecture/place-log.md).
 	placeLog bool
+	npc      *npcProfile
+}
+
+type sceneAdapter struct {
+	definition playercontext.SceneDefinition
+	facility
+	read func(context.Context, playercontext.Result) (any, error)
+}
+
+// facilities holds every HTTP facility registration.
+var facilities = func() map[string]facility {
+	m := map[string]facility{
+		"town": townFacility, "alchemy": alchemyFacility, "altar": altarFacility, "wishingwell": wishingWellFacility,
+		"god": godFacility, "u_god": underworldGodFacility, "auction": auctionFacility, "bank": bankFacility,
+		"blackmarket": blackMarketFacility, "blacksmith": blacksmithFacility, "chapel": chapelFacility, "exile": exileFacility,
+		"depot": depotFacility, "fleamarket": fleaMarketFacility, "gemstore": gemStoreFacility, "secretshop": secretShopFacility,
+		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "casino": casinoFacility,
+	}
+	for _, t := range town.AllTowns() {
+		m[t.ID] = townDistrictFacility(t.Name)
+	}
+	for _, kind := range []shop.ShopType{shop.ShopTypeWeapon, shop.ShopTypeArmor, shop.ShopTypeItem, shop.ShopTypeAccessory} {
+		m["shop_"+string(kind)] = shopFacility(kind)
+	}
+	return m
+}()
+
+// FacilityIDs lists the registered facility destinations; the composition
+// root checks them against its scene definitions.
+func FacilityIDs() []string {
+	ids := make([]string, 0, len(facilities))
+	for id := range facilities {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 type SceneSupport struct {
@@ -69,93 +106,31 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		definitions = service.SceneDefinitions()
 	}
 	for _, definition := range definitions {
-		adapter := sceneAdapter{definition: definition}
-		switch definition.ID {
-		case "town":
-			adapter.title, adapter.commands = "交流広場", []string{"adventure_start", "park_divinate"}
-			adapter.read = func(_ context.Context, r playercontext.Result) (any, error) { return h.townSceneData(r), nil }
-		case "town1", "town2", "town3", "town4":
-			t, _ := town.GetTown(definition.ID)
-			adapter.title = t.Name
-			adapter.read = h.townDistrictSceneData
-		case "alchemy":
-			adapter.title, adapter.commands = "錬金場", []string{"alchemy_synthesize", "alchemy_recipes"}
-			adapter.read = h.alchemySceneData
-		case "altar":
-			adapter.title, adapter.commands = "復活の祭壇", []string{"altar_pray", "altar_wish"}
-			adapter.read = h.altarSceneData
-		case "wishingwell":
-			adapter.title, adapter.commands = "願いの泉", []string{"wishingwell_exchange"}
-			adapter.read = h.wishingWellSceneData
-		case "god", "u_god":
-			adapter.title = map[string]string{"god": "天界", "u_god": "天界?"}[definition.ID]
-			adapter.commands, adapter.read = []string{"god_wish"}, h.godSceneData
-		case "bank":
-			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
-			adapter.read = h.bankSceneData
-		case "blackmarket":
-			adapter.title, adapter.commands = "闇市場", []string{"blackmarket_sacrifice", "blackmarket_trade"}
-			adapter.read = h.blackMarketSceneData
-		case "blacksmith":
-			adapter.title, adapter.commands = "鍛冶屋", []string{"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw"}
-			adapter.read = h.blacksmithSceneData
-		case "chapel":
-			adapter.title, adapter.commands = "礼拝堂", []string{"chapel_pray"}
-			adapter.read = h.chapelSceneData
-		case "exile":
-			adapter.title, adapter.commands = "荒らし追放騎士団", []string{"exile_petition", "exile_approve", "exile_oppose"}
-			adapter.read = h.exileSceneData
-		case "depot":
-			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"}
-			adapter.read = h.depotSceneData
-		case "auction":
-			adapter.title, adapter.commands = "オークション会場", []string{"auction_send"}
-		case "fleamarket":
-			adapter.title, adapter.commands = "フリーマーケット", []string{"fleamarket_list", "fleamarket_purchase", "fleamarket_cancel"}
-			adapter.read = h.fleaMarketSceneData
-		case "gemstore":
-			adapter.title, adapter.commands = "宝石店", []string{"gemstore_buy", "gemstore_sell", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "gemstore_sort"}
-			adapter.read = h.gemStoreSceneData
-		case "secretshop":
-			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase", "secretshop_puffpuff"}
-			adapter.read = h.secretShopSceneData
-		case "home":
-			adapter.title, adapter.commands = "自宅", []string{"home_sleep"}
-			adapter.read = h.homeSceneData
-		case "home_inbox", "home_outbox":
-			adapter.title = map[string]string{"home_inbox": "受信箱", "home_outbox": "送信箱"}[definition.ID]
-			adapter.read = h.homeMailboxSceneData
-		case "casino":
-			adapter.title, adapter.commands = "カジノ", []string{"casino_slot", "casino_exchange", "casino_prize_exchange", "casino_room_create"}
-			adapter.read = h.casinoSceneData
-		case "shop_weapon", "shop_armor", "shop_item", "shop_accessory":
-			adapter.title = map[string]string{"shop_weapon": "武器店", "shop_armor": "防具店", "shop_item": "道具店", "shop_accessory": "装飾品店"}[definition.ID]
-			adapter.commands = []string{"shop_purchase", "shop_batch_purchase", "shop_sell"}
-			if definition.ID == "shop_accessory" {
-				adapter.commands = []string{"shop_purchase", "shop_sell", "shop_synthesize"}
-			}
-			adapter.read = h.shopSceneData
-		default:
+		f, ok := facilities[definition.ID]
+		if !ok {
 			// Navigation registration does not manufacture observation support.
-			h.sceneAdapters[definition.ID] = adapter
+			h.sceneAdapters[definition.ID] = sceneAdapter{definition: definition}
 			continue
 		}
-		if adapter.placeLog = placeLogFacilities[definition.ID]; adapter.placeLog {
+		adapter := sceneAdapter{definition: definition, facility: f}
+		adapter.commands = slices.Clone(f.commands)
+		if f.placeLog {
 			adapter.commands = append(adapter.commands, "place_say", "place_whisper")
 		}
-		if _, ok := npcProfiles[definition.ID]; ok {
+		if f.npc != nil {
 			adapter.commands = append(adapter.commands, "npc_talk", "npc_inspect")
 		}
-		if adapter.read == nil {
-			adapter.read = func(_ context.Context, _ playercontext.Result) (any, error) {
-				return SelectionSceneData{Parent: definition.Parent}, nil
-			}
+		adapter.read = func(_ context.Context, _ playercontext.Result) (any, error) {
+			return SelectionSceneData{Parent: definition.Parent}, nil
+		}
+		if f.read != nil {
+			adapter.read = func(ctx context.Context, r playercontext.Result) (any, error) { return f.read(h, ctx, r) }
 		}
 		h.sceneAdapters[definition.ID] = adapter
 	}
 }
 
-func (h *Handler) townSceneData(result playercontext.Result) TownSceneData {
+func (h *Handler) townSceneData(_ context.Context, result playercontext.Result) (any, error) {
 	rows := make([]SceneDestination, 0, len(h.sceneAdapters))
 	for id, adapter := range h.sceneAdapters {
 		if adapter.definition.Parent != "town" {
@@ -172,7 +147,7 @@ func (h *Handler) townSceneData(result playercontext.Result) TownSceneData {
 	if result.Navigation != nil {
 		n = result.Navigation.Selection
 	}
-	return pageDestinations(rows, n)
+	return pageDestinations(rows, n), nil
 }
 
 func pageDestinations(rows []SceneDestination, n playercontext.Selection) TownSceneData {

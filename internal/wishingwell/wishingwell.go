@@ -11,18 +11,6 @@ import (
 // NPCName is the well's goddess (sp_change.cgi $npc_name).
 const NPCName = "@女神"
 
-// NPCWords are sp_change.cgi @words; {name} and {sp} are the speaker's.
-var NPCWords = []string{
-	"スキルポイントはレベルが上がるごとに１ポイント増えていくのです",
-	"スキルポイントを早く上げるコツは、何度も同じ職業に転職することです",
-	"{name}のスキルポイントは現在 {sp} ポイントです",
-	"スキル習得を目指している場合は、ささげずにとっておくのですよ",
-	"スキルポイントをささげるのです",
-	"スキルポイントのお礼に、{name}のステータスを上げてあげましょう",
-	"一度ささげたスキルポイントを戻すことはできません",
-	"スキルポイントは、その職業のスキルを習得するのに必要です",
-}
-
 // Errors propagated from domain rules.
 var (
 	ErrNilRepository       = errors.New("character repository is nil")

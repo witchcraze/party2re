@@ -77,3 +77,17 @@ func (h *Handler) secretShopSceneData(ctx context.Context, r playercontext.Resul
 	}
 	return SecretShopCatalogSceneData{SecretShopSceneInfo: info, Items: append([]SecretShopProduct{}, products[start:end]...), Page: page}, nil
 }
+
+var secretShopFacility = facility{
+	title: "秘密の店", commands: []string{"secretshop_purchase", "secretshop_puffpuff"}, read: (*Handler).secretShopSceneData, placeLog: true,
+	npc: &npcProfile{name: secretshop.NPCName, words: []string{
+		"バレちゃったメェ〜。他の人には秘密だメェ〜。",
+		"値段は高いメェ〜けれど、他では手に入らないレアものだメェ〜。",
+		"メェ〜メェ〜メェ〜メェ〜メェ〜メェ〜メェ〜メェ〜メェ〜。",
+		"ベェ〜ベェ〜ベェ〜ベェ〜ベェ〜ベェ〜ベェ〜ベェ〜ベェ〜。",
+		"＠ぱふぱふはサービスだメェ〜。",
+	}, inspect: "@ヒミツジ「オイラは羊の@ヒミツジだメェ〜。羊の国から来たよ…ゴホッゴホッ…羊の国から来たメェ〜」"},
+}
+
+// puffPuffDialogueFormat is the ＠ぱふぱふ reply; %s is the actor's name (secret.cgi:79-84).
+const puffPuffDialogueFormat = "パフパフ♥ パフパフ♥ パフパフ♥ ……… どうだ %s わしのパフパフは気持ちいいだろう"
