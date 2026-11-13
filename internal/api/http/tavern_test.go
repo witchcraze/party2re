@@ -162,6 +162,35 @@ func TestTavernOrderRepliesLikeLegacy(t *testing.T) {
 	}
 }
 
+// Legacy chuumon answers fullness before funds, and an empty wallet still reaches the barkeep.
+func TestTavernOrderWithEmptyWallet(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{{"hungry", tavern.ErrInsufficientFunds}, {"full", tavern.ErrAlreadyFull}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newTavernFixture(t)
+			f.char.Money = 0
+			f.executionErr = tc.err
+			_, router := f.router(t, "tavern")
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("tavern_order", `{"item_id":"tavern_water"}`), nil)
+			if f.executions != 1 {
+				t.Fatalf("order did not reach the service at 0G: %d %s", status, raw)
+			}
+			if tc.name == "full" {
+				if got := tavernResult[TavernOrderResult](t, raw); status != 200 || !got.Full || got.Message != "そんなに飲み食いするとお腹がこわれちゃうわよ？" {
+					t.Fatalf("full at 0G: %d %+v", status, got)
+				}
+				return
+			}
+			assertGatewayError(t, raw, "TAVERN_INSUFFICIENT_FUNDS")
+			if status != 409 || !strings.Contains(string(raw["error"]), "お金が足りないみたいね") {
+				t.Fatalf("hungry at 0G: %d %s", status, raw)
+			}
+		})
+	}
+}
+
 func TestTavernOrderRejectsBeforeCommitWhenProfileFails(t *testing.T) {
 	f := newTavernFixture(t)
 	f.profileErr = errors.New("private profile failure")
