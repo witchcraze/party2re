@@ -369,7 +369,12 @@ own context. This budget is a cancellation safety net, not a latency assertion.
 
 Keep separate bounds for intentional lock waits and isolated stuck-worker checks;
 the workflow rule's 2–5 second dead-man guidance applies to those checks, not the
-whole DB scenario. Do not relax SQL lock-wait settings or suppress deadline,
+whole DB scenario. When verifying an intentional timeout-failure path (such as a
+stuck-worker diagnostic in an isolated test fixture), inject an explicit fixture timeout
+while still joining the worker before cleanup rather than relaxing normal deadlock bounds
+or adding wall-clock performance assertions; overlap legitimate multi-second lock/TTL
+boundary waits with unique-ID `t.Parallel()` isolation instead of weakening
+real Valkey `EX` expiry or caller-deadline checks. Do not relax SQL lock-wait settings or suppress deadline,
 deadlock or cancellation errors. Wait for barriers/state observations rather than
 fixed sleeps, make channel waits cancellation-aware, and join all workers before
 assertions and fixture cleanup. Existing concurrency helpers join workers; their

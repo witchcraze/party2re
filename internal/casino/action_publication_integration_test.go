@@ -16,6 +16,7 @@ import (
 // Fail every required store operation, including result reads after the final payload SET.
 // Compare all persisted facts, then let the healthy opponent act without replaying the rejected command.
 func TestActionPublication_FailureBoundaries(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -23,18 +24,22 @@ func TestActionPublication_FailureBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	raw := openIsolatedTestValkey(t, 0)
-	defer raw.Close()
+	t.Cleanup(raw.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
+	t.Cleanup(cancel)
 	for _, game := range []casino.GameType{casino.GameTypeIndian, casino.GameTypeHighLow, casino.GameTypeDoppel} {
+		game := game
 		t.Run(string(game), func(t *testing.T) {
+			t.Parallel()
 			for _, scenario := range []string{"first-action", "settlement", "elimination", "next-round", "reselection"} {
 				if (scenario == "next-round" && game == casino.GameTypeDoppel) || (scenario == "reselection" && game != casino.GameTypeDoppel) {
 					continue
 				}
+				scenario := scenario
 				t.Run(scenario, func(t *testing.T) {
+					t.Parallel()
 					coinsB := int64(500)
 					if scenario == "elimination" {
 						coinsB = 10

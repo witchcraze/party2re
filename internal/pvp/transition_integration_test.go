@@ -12,6 +12,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
@@ -120,11 +121,11 @@ func newTransitionFixture(t *testing.T) *transitionFixture {
 		t.Fatal(err)
 	}
 	f := &transitionFixture{db: db, client: client, rooms: &transitionRooms{RoomRepository: rooms}, chars: &transitionCharacters{CharacterRepository: chars}, store: store, battle: &transitionBattle{outcome: corebattle.OutcomeWin}, roomIDs: map[string]bool{}}
-	f.leader, err = database.CreateTestCharacterWithFunds(ctx, db, "PvpLeader", 1000)
+	f.leader, err = database.CreateTestCharacterWithFunds(ctx, db, "P"+id.New()[:7], 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.member, err = database.CreateTestCharacterWithFunds(ctx, db, "PvpMember", 1000)
+	f.member, err = database.CreateTestCharacterWithFunds(ctx, db, "M"+id.New()[:7], 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,6 +359,7 @@ func (f *transitionFixture) assertFunds(t *testing.T, leaderMoney, memberMoney, 
 }
 
 func TestPvPFinancialPublicationIntegration(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"create", "join", "leave", "disband", "settle", "draw"} {
 		faults := []string{"save", "set"}
 		if kind == "leave" {
@@ -368,8 +370,10 @@ func TestPvPFinancialPublicationIntegration(t *testing.T) {
 		}
 		for _, fault := range faults {
 			for _, after := range []bool{false, true} {
+				kind, fault, after := kind, fault, after
 				name := kind + "/" + fault + map[bool]string{false: "/before", true: "/lost-reply"}[after]
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
 					f := newTransitionFixture(t)
 					f.prepare(t, kind)
 					f.rooms.fail = fault
@@ -449,8 +453,11 @@ func TestPvPFinancialRollbackIntegration(t *testing.T) {
 }
 
 func TestPvPFinancialConcurrentIntegration(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"create", "join", "leave", "disband", "settle", "draw"} {
+		kind := kind
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			f := newTransitionFixture(t)
 			f.prepare(t, kind)
 			// Concurrent create reads may race; only the SQL claim may admit a debit.

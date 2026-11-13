@@ -36,6 +36,7 @@ func (s retryHTTPServices) Get(ctx context.Context, id string) (corecharacter.Ch
 }
 
 func TestGvGExpectedRoundHTTPReplayIntegration(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name          string
 		target, round int
@@ -47,7 +48,9 @@ func TestGvGExpectedRoundHTTPReplayIntegration(t *testing.T) {
 		{"final_win", 1, 1, corebattle.OutcomeWin, 7, 4, 1, 0},
 		{"final_draw", 3, gvg.MaxRounds, corebattle.OutcomeDraw, 0, 0, 0, 1},
 	} {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f := newRewardFixture(t, tc.target, tc.round, tc.outcome)
 			ctx := context.Background()
 			chars, err := database.NewCharacterRepository(f.db)
@@ -141,6 +144,7 @@ func TestGvGExpectedRoundHTTPReplayIntegration(t *testing.T) {
 }
 
 func TestGvGExpectedRoundConcurrentIntegration(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name          string
 		target, round int
@@ -152,7 +156,9 @@ func TestGvGExpectedRoundConcurrentIntegration(t *testing.T) {
 		{"final_win", 1, 1, corebattle.OutcomeWin, 7, 4, 1, 0},
 		{"final_draw", 3, gvg.MaxRounds, corebattle.OutcomeDraw, 0, 0, 0, 1},
 	} {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f := newRewardFixture(t, tc.target, tc.round, tc.outcome)
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
