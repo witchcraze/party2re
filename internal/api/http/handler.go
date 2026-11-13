@@ -435,10 +435,6 @@ func (h *Handler) Router() http.Handler {
 	// Tavern
 
 	// Plantation
-	mux.HandleFunc("GET /characters/{id}/plantation", h.handleGetCharacterPlantation)
-	mux.HandleFunc("POST /characters/{id}/plantation/sow", h.handlePlantationSow)
-	mux.HandleFunc("POST /characters/{id}/plantation/fertilize", h.handlePlantationFertilize)
-	mux.HandleFunc("POST /characters/{id}/plantation/harvest", h.handlePlantationHarvest)
 
 	// Black Market
 

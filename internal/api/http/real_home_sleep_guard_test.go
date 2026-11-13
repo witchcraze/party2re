@@ -16,7 +16,6 @@ import (
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/home"
-	"github.com/witchcraze/party2re/internal/plantation"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -208,7 +207,6 @@ func setupRealHomeGuardTest(
 	timerSvc *inMemoryRealTimer,
 	bankRepo *inMemoryRealBankRepo,
 	charRepo *inMemoryRealCharRepo,
-	plantationSvc *stubPlantationService,
 ) (http.Handler, *home.Service) {
 	t.Helper()
 
@@ -256,7 +254,6 @@ func setupRealHomeGuardTest(
 		apihttp.WithHome(homeSvc),
 		apihttp.WithBank(bankSvc),
 		apihttp.WithPlayerContext(playercontext.NewService(readers, readers, timer.NewService(nil))),
-		apihttp.WithPlantation(plantationSvc),
 	)
 	if err != nil {
 		t.Fatalf("apihttp.NewHandler failed: %v", err)
@@ -266,7 +263,7 @@ func setupRealHomeGuardTest(
 }
 
 func TestAuditRealHomeSleepGuard(t *testing.T) {
-	t.Run("Asleep lookup failure halts execution with 5xx without mutating Bank or Plantation", func(t *testing.T) {
+	t.Run("Asleep lookup failure halts execution with 5xx without mutating Bank", func(t *testing.T) {
 		charRepo := &inMemoryRealCharRepo{
 			char: corecharacter.Character{
 				ID:       "hero",
@@ -290,15 +287,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		timerSvc.remainingDurations[timer.CategorySleep+":hero"] = 0
 		timerSvc.isLockedErrs[timer.CategoryAsleep+":hero"] = errors.New("storage error in valkey asleep lookup")
 
-		harvested := false
-		plantationSvc := &stubPlantationService{
-			harvestFn: func(ctx context.Context, charID string) (plantation.HarvestResult, error) {
-				harvested = true
-				return plantation.HarvestResult{}, nil
-			},
-		}
-
-		router, homeSvc := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, plantationSvc)
+		router, homeSvc := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo)
 
 		// 1. Bank deposit fails with 500 and does NOT mutate wallet or deposit
 		{
@@ -313,22 +302,6 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			}
 			if bankRepo.char.Money != 100 || bankRepo.char.Deposit != 1000 {
 				t.Errorf("expected bank state unmutated on error, got money=%d, deposit=%d", bankRepo.char.Money, bankRepo.char.Deposit)
-			}
-		}
-
-		// 2. Representative REST action fails with 500 and does NOT invoke callback
-		{
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/characters/hero/plantation/harvest", nil)
-			req.Header.Set("Authorization", "Bearer valid-session")
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusInternalServerError {
-				t.Fatalf("expected 500 Internal Server Error for plantation harvest on asleep error, got %d: %s", rec.Code, rec.Body.String())
-			}
-			if harvested {
-				t.Errorf("expected plantation harvest not to be created on asleep lookup error")
 			}
 		}
 
@@ -376,15 +349,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		timerSvc.remainingDurations[timer.CategorySleep+":hero"] = 0
 		timerSvc.locks[timer.CategoryAsleep+":hero"] = true
 
-		harvested := false
-		plantationSvc := &stubPlantationService{
-			harvestFn: func(ctx context.Context, charID string) (plantation.HarvestResult, error) {
-				harvested = true
-				return plantation.HarvestResult{}, nil
-			},
-		}
-
-		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, plantationSvc)
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo)
 
 		// Bank deposit returns 409 Conflict
 		{
@@ -405,21 +370,6 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			}
 		}
 
-		// Plantation harvest returns 409 Conflict
-		{
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/characters/hero/plantation/harvest", nil)
-			req.Header.Set("Authorization", "Bearer valid-session")
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusConflict {
-				t.Fatalf("expected 409 Conflict for plantation harvest when pending recovery, got %d: %s", rec.Code, rec.Body.String())
-			}
-			if harvested {
-				t.Errorf("expected plantation harvest not to be created when pending recovery")
-			}
-		}
 	})
 
 	t.Run("Active sleep contrast returns 409 Conflict without mutating state", func(t *testing.T) {
@@ -444,15 +394,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		timerSvc.remainingDurations[timer.CategorySleep+":hero"] = 5 * time.Minute
 		timerSvc.locks[timer.CategoryAsleep+":hero"] = true
 
-		harvested := false
-		plantationSvc := &stubPlantationService{
-			harvestFn: func(ctx context.Context, charID string) (plantation.HarvestResult, error) {
-				harvested = true
-				return plantation.HarvestResult{}, nil
-			},
-		}
-
-		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, plantationSvc)
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo)
 
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/hero/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":10}}`))
@@ -466,12 +408,9 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		if bankRepo.char.Money != 100 || bankRepo.char.Deposit != 1000 {
 			t.Errorf("expected bank state unmutated on 409, got money=%d, deposit=%d", bankRepo.char.Money, bankRepo.char.Deposit)
 		}
-		if harvested {
-			t.Errorf("expected plantation harvest not to be created")
-		}
 	})
 
-	t.Run("Awake contrast succeeds and mutates Bank and Plantation", func(t *testing.T) {
+	t.Run("Awake contrast succeeds and mutates Bank", func(t *testing.T) {
 		charRepo := &inMemoryRealCharRepo{
 			char: corecharacter.Character{
 				ID:       "hero",
@@ -493,15 +432,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		timerSvc.remainingDurations[timer.CategorySleep+":hero"] = 0
 		timerSvc.locks[timer.CategoryAsleep+":hero"] = false
 
-		harvested := false
-		plantationSvc := &stubPlantationService{
-			harvestFn: func(ctx context.Context, charID string) (plantation.HarvestResult, error) {
-				harvested = true
-				return plantation.HarvestResult{}, nil
-			},
-		}
-
-		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, plantationSvc)
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo)
 
 		// Bank deposit succeeds with 200 and mutates wallet=90, deposit=1010
 		{
@@ -520,24 +451,9 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			}
 		}
 
-		// Plantation harvest succeeds with 200 OK and harvests
-		{
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/characters/hero/plantation/harvest", nil)
-			req.Header.Set("Authorization", "Bearer valid-session")
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusOK {
-				t.Fatalf("expected 200 OK for plantation harvest when awake, got %d: %s", rec.Code, rec.Body.String())
-			}
-			if !harvested {
-				t.Errorf("expected plantation harvest to be created when awake")
-			}
-		}
 	})
 
-	t.Run("SQL pending_wake read failure in Home.GetSleepStatus halts REST and Gateway guards with 500 without mutating Bank or Plantation", func(t *testing.T) {
+	t.Run("SQL pending_wake read failure in Home.GetSleepStatus halts the Gateway guard with 500 without mutating Bank", func(t *testing.T) {
 		charRepo := &inMemoryRealCharRepo{
 			char: corecharacter.Character{
 				ID:          "hero",
@@ -560,15 +476,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		timerSvc.remainingDurations[timer.CategorySleep+":hero"] = 0
 		timerSvc.locks[timer.CategoryAsleep+":hero"] = false
 
-		harvested := false
-		plantationSvc := &stubPlantationService{
-			harvestFn: func(ctx context.Context, charID string) (plantation.HarvestResult, error) {
-				harvested = true
-				return plantation.HarvestResult{}, nil
-			},
-		}
-
-		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, plantationSvc)
+		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo)
 
 		// Contrast 1: With readable SQL pending_wake=true and no Valkey locks, Gateway bank_deposit and REST mutations return 409 Conflict
 		{
@@ -605,20 +513,5 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			}
 		}
 
-		// 2. REST Plantation harvest fails closed with 500 and 0 mutations
-		{
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/characters/hero/plantation/harvest", nil)
-			req.Header.Set("Authorization", "Bearer valid-session")
-			req.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusInternalServerError {
-				t.Fatalf("expected 500 Internal Server Error for plantation harvest on SQL pending_wake read failure, got %d: %s", rec.Code, rec.Body.String())
-			}
-			if harvested {
-				t.Errorf("expected harvest callback not invoked on SQL pending_wake read failure")
-			}
-		}
 	})
 }

@@ -193,7 +193,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | `lib/alchemy.cgi`, `lib/_alchemy_recipe.cgi` | 錬金堂 (@トロデ) | `internal/alchemy/` | [design/alchemy.md](../design/alchemy.md)<br/>[api/openapi.json](../api/openapi.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `lib/farm.cgi` | モンスター牧場 (@モンジィ) | `internal/monster/` | [design/monster.md](../design/monster.md)<br/>[api/openapi.json](../api/openapi.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
-| `lib/plantation.cgi` | 種菜園 (@ロータス) | `internal/plantation/` | [design/plantation.md](../design/plantation.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | 6種の種、14種の肥料、枯れ率、翌朝収穫・Depot配送の仕様はDesign Docと原典を照合。 |
+| `lib/plantation.cgi` | 種菜園 (@ロータス) | `internal/plantation/`<br/>`internal/api/http/plantation.go` | [design/plantation.md](../design/plantation.md) | Review against source | `plantation` シーン。`たねをまく`/`ひりょう`/`しゅうかく` → `plantation_sow`/`plantation_fertilize`/`plantation_harvest`。 |
 
 ---
 

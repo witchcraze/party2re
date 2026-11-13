@@ -2166,6 +2166,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/TakarakujiSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PlantationSceneData"
                     }
                   ]
                 }
@@ -3083,6 +3086,36 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "plantation"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/PlantationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3751,7 +3784,8 @@
                         "town4",
                         "tavern",
                         "lottery",
-                        "takarakuji"
+                        "takarakuji",
+                        "plantation"
                       ]
                     }
                   },
@@ -3862,7 +3896,8 @@
                         "town4",
                         "tavern",
                         "lottery",
-                        "takarakuji"
+                        "takarakuji",
+                        "plantation"
                       ]
                     },
                     "offset": {
@@ -6839,6 +6874,105 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "plantation_sow"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "seed_id": {
+                      "minLength": 1,
+                      "pattern": "[^\t-\r    -     　]",
+                      "type": "string",
+                      "description": "One of the plantation scene's seed IDs."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "seed_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "plantation_fertilize"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "fertilizer_id": {
+                      "minLength": 1,
+                      "pattern": "[^\t-\r    -     　]",
+                      "type": "string",
+                      "description": "One of the plantation scene's fertilizer IDs."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "fertilizer_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "plantation_harvest"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
           }
         ]
       },
@@ -7230,7 +7364,8 @@
               "town4",
               "tavern",
               "lottery",
-              "takarakuji"
+              "takarakuji",
+              "plantation"
             ]
           },
           "offset": {
@@ -7368,7 +7503,8 @@
                   "town4",
                   "tavern",
                   "lottery",
-                  "takarakuji"
+                  "takarakuji",
+                  "plantation"
                 ]
               }
             },
@@ -12385,52 +12521,6 @@
         ],
         "additionalProperties": false
       },
-      "PlantationStatusResponse": {
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          },
-          "fertilizers": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationFertilizer"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "plot": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlantationPlot"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seeds": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationSeed"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "seeds",
-          "fertilizers",
-          "dialogue"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "PlantationFertilizer": {
         "properties": {
           "id": {
@@ -12552,61 +12642,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "PlantationFertilizeResponse": {
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "plot": {
-            "$ref": "#/components/schemas/PlantationPlot"
-          }
-        },
-        "required": [
-          "plot",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PlantationFertilizeRequest": {
-        "properties": {
-          "fertilizer_id": {
-            "minLength": 1,
-            "pattern": "[^\t-\r    -     　]",
-            "type": "string"
-          }
-        },
-        "required": [
-          "fertilizer_id"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PlantationHarvestResponse": {
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "withered": {
-            "type": "boolean"
-          },
-          "yields": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationHarvestYield"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "withered",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "PlantationHarvestYield": {
         "properties": {
           "item_id": {
@@ -12623,36 +12658,6 @@
           "item_id",
           "item_name",
           "quantity"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PlantationSowResponse": {
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "plot": {
-            "$ref": "#/components/schemas/PlantationPlot"
-          }
-        },
-        "required": [
-          "plot",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PlantationSowRequest": {
-        "properties": {
-          "seed_id": {
-            "minLength": 1,
-            "pattern": "[^\t-\r    -     　]",
-            "type": "string"
-          }
-        },
-        "required": [
-          "seed_id"
         ],
         "type": "object",
         "additionalProperties": false
@@ -17931,6 +17936,55 @@
           "prizes",
           "draw_date_label",
           "purchased"
+        ]
+      },
+      "PlantationSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's plot and its maturity, the seeds on sale and the usable fertilizers. NPC dialogue comes from npc_talk/npc_inspect. Observation never harvests; maturity alone claims nothing.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "fertilizers": {
+            "items": {
+              "$ref": "#/components/schemas/PlantationFertilizer"
+            },
+            "type": [
+              "array",
+              "null"
+            ],
+            "description": "Gold fertilizers and the item fertilizers the actor holds in the Depot or Inventory."
+          },
+          "plot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlantationPlot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seeds": {
+            "items": {
+              "$ref": "#/components/schemas/PlantationSeed"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "status",
+          "seeds",
+          "fertilizers"
         ]
       }
     },

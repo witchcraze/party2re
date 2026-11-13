@@ -287,6 +287,51 @@ func TestGetStatus(t *testing.T) {
 	}
 }
 
+func TestGetStatusListsOnlyHeldItemFertilizers(t *testing.T) {
+	svc, charRepo, invRepo, depotRepo, _ := setupTestHarness(t)
+	ctx := context.Background()
+	charRepo.chars["c1"] = corecharacter.Character{ID: "c1", Name: "Hero"}
+	names := func() []string {
+		st, err := svc.GetStatus(ctx, "c1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, f := range st.Fertilizers {
+			out = append(out, f.ID)
+		}
+		return out
+	}
+	if got := names(); fmt.Sprint(got) != "[rice_bran oil_cake bone_meal lime chemical]" {
+		t.Fatalf("without items: %v", got)
+	}
+	inv, _ := coreinventory.New("c1")
+	dung, _ := coreitem.NewInstance("item-130", 1)
+	_ = inv.Add(dung)
+	_ = invRepo.Save(ctx, inv)
+	dep, _ := depot.NewDepot("c1")
+	dep.Capacity = 50
+	nut, _ := coreitem.NewInstance("item-038", 1)
+	_ = dep.AddItem(nut)
+	_ = depotRepo.Save(ctx, dep)
+	if got := names(); fmt.Sprint(got) != "[rice_bran oil_cake bone_meal lime chemical kupo_nut horse_dung]" {
+		t.Fatalf("with held items: %v", got)
+	}
+}
+
+func TestFertilizeReportsTheAppliedFertilizer(t *testing.T) {
+	svc, charRepo, _, _, plotRepo := setupTestHarness(t)
+	ctx := context.Background()
+	charRepo.chars["c1"] = corecharacter.Character{ID: "c1", Name: "Hero", Money: 1000}
+	applied := "bone_meal"
+	plotRepo.plots["c1"] = plantation.Plot{CharacterID: "c1", SeedID: "red", FertilizerID: &applied}
+	_, err := svc.Fertilize(ctx, "c1", "lime")
+	var appliedErr plantation.FertilizerAppliedError
+	if !errors.Is(err, plantation.ErrFertilizerAlreadyApplied) || !errors.As(err, &appliedErr) || appliedErr.Name != "骨粉" {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestSow(t *testing.T) {
 	svc, charRepo, _, _, plotRepo := setupTestHarness(t)
 	ctx := context.Background()

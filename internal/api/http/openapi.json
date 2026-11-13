@@ -4382,7 +4382,8 @@
                         "town4",
                         "tavern",
                         "lottery",
-                        "takarakuji"
+                        "takarakuji",
+                        "plantation"
                       ],
                       "type": "string"
                     }
@@ -4521,7 +4522,8 @@
                         "town4",
                         "tavern",
                         "lottery",
-                        "takarakuji"
+                        "takarakuji",
+                        "plantation"
                       ],
                       "type": "string"
                     },
@@ -7453,6 +7455,105 @@
               "properties": {
                 "action": {
                   "const": "takarakuji_buy",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "plantation_sow",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "seed_id": {
+                      "description": "One of the plantation scene's seed IDs.",
+                      "minLength": 1,
+                      "pattern": "[^\t-\r    - \u2028\u2029  　]",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "seed_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "plantation_fertilize",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fertilizer_id": {
+                      "description": "One of the plantation scene's fertilizer IDs.",
+                      "minLength": 1,
+                      "pattern": "[^\t-\r    - \u2028\u2029  　]",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "fertilizer_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "plantation_harvest",
                   "type": "string"
                 }
               },
@@ -13194,36 +13295,6 @@
         ],
         "type": "object"
       },
-      "PlantationFertilizeRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "fertilizer_id": {
-            "minLength": 1,
-            "pattern": "[^\t-\r    - \u2028\u2029  　]",
-            "type": "string"
-          }
-        },
-        "required": [
-          "fertilizer_id"
-        ],
-        "type": "object"
-      },
-      "PlantationFertilizeResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "plot": {
-            "$ref": "#/components/schemas/PlantationPlot"
-          }
-        },
-        "required": [
-          "plot",
-          "message"
-        ],
-        "type": "object"
-      },
       "PlantationFertilizer": {
         "additionalProperties": false,
         "properties": {
@@ -13260,31 +13331,6 @@
           "wither_rate",
           "yield_bonus",
           "is_item"
-        ],
-        "type": "object"
-      },
-      "PlantationHarvestResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "withered": {
-            "type": "boolean"
-          },
-          "yields": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationHarvestYield"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "withered",
-          "message"
         ],
         "type": "object"
       },
@@ -13350,6 +13396,55 @@
         ],
         "type": "object"
       },
+      "PlantationSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's plot and its maturity, the seeds on sale and the usable fertilizers. NPC dialogue comes from npc_talk/npc_inspect. Observation never harvests; maturity alone claims nothing.",
+        "properties": {
+          "fertilizers": {
+            "description": "Gold fertilizers and the item fertilizers the actor holds in the Depot or Inventory.",
+            "items": {
+              "$ref": "#/components/schemas/PlantationFertilizer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "plot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlantationPlot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seeds": {
+            "items": {
+              "$ref": "#/components/schemas/PlantationSeed"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "status",
+          "seeds",
+          "fertilizers"
+        ],
+        "type": "object"
+      },
       "PlantationSeed": {
         "additionalProperties": false,
         "properties": {
@@ -13387,82 +13482,6 @@
           "low_base",
           "low_rand",
           "high_rate"
-        ],
-        "type": "object"
-      },
-      "PlantationSowRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "seed_id": {
-            "minLength": 1,
-            "pattern": "[^\t-\r    - \u2028\u2029  　]",
-            "type": "string"
-          }
-        },
-        "required": [
-          "seed_id"
-        ],
-        "type": "object"
-      },
-      "PlantationSowResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "plot": {
-            "$ref": "#/components/schemas/PlantationPlot"
-          }
-        },
-        "required": [
-          "plot",
-          "message"
-        ],
-        "type": "object"
-      },
-      "PlantationStatusResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          },
-          "fertilizers": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationFertilizer"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "plot": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlantationPlot"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seeds": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationSeed"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "seeds",
-          "fertilizers",
-          "dialogue"
         ],
         "type": "object"
       },
@@ -14854,7 +14873,8 @@
                   "town4",
                   "tavern",
                   "lottery",
-                  "takarakuji"
+                  "takarakuji",
+                  "plantation"
                 ],
                 "type": "string"
               }
@@ -15049,7 +15069,8 @@
               "town4",
               "tavern",
               "lottery",
-              "takarakuji"
+              "takarakuji",
+              "plantation"
             ],
             "type": "string"
           },
@@ -15185,6 +15206,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/TakarakujiSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PlantationSceneData"
                     }
                   ]
                 }
@@ -16087,6 +16111,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/TakarakujiSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "plantation"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/PlantationSceneData"
                 },
                 "support": {
                   "properties": {
@@ -18504,7 +18558,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message."
           },
           "400": {
             "content": {
@@ -26329,310 +26383,6 @@
         "summary": "Delete a character photo",
         "tags": [
           "Contest"
-        ]
-      }
-    },
-    "/characters/{id}/plantation": {
-      "get": {
-        "operationId": "getCharactersIdPlantation",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlantationStatusResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Character Plantation",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/plantation/fertilize": {
-      "post": {
-        "operationId": "postCharactersIdPlantationFertilize",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlantationFertilizeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlantationFertilizeResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Plantation Fertilize",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/plantation/harvest": {
-      "post": {
-        "operationId": "postCharactersIdPlantationHarvest",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlantationHarvestResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Plantation Harvest",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/plantation/sow": {
-      "post": {
-        "operationId": "postCharactersIdPlantationSow",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlantationSowRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlantationSowResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Plantation Sow",
-        "tags": [
-          "Character"
         ]
       }
     },
