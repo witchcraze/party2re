@@ -1,301 +1,165 @@
-package http_test
+package http
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
-	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/plantation"
+	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
-type stubPlantationService struct {
-	getStatusFn func(ctx context.Context, characterID string) (plantation.StatusResponse, error)
-	sowFn       func(ctx context.Context, characterID string, seedID string) (plantation.SowResult, error)
-	fertilizeFn func(ctx context.Context, characterID string, fertilizerID string) (plantation.FertilizeResult, error)
-	harvestFn   func(ctx context.Context, characterID string) (plantation.HarvestResult, error)
+type plantationFixture struct {
+	*gatewayFixture
+	status    plantation.StatusResponse
+	statusErr error
+	harvest   plantation.HarvestResult
+	inputs    []string
 }
 
-func (s *stubPlantationService) GetStatus(ctx context.Context, characterID string) (plantation.StatusResponse, error) {
-	if s.getStatusFn != nil {
-		return s.getStatusFn(ctx, characterID)
-	}
-	return plantation.StatusResponse{
-		Status:      plantation.StatusNone,
-		Seeds:       plantation.AllSeeds(),
-		Fertilizers: plantation.AllFertilizers(),
-	}, nil
+func (f *plantationFixture) GetStatus(context.Context, string) (plantation.StatusResponse, error) {
+	return f.status, f.statusErr
 }
 
-func (s *stubPlantationService) Sow(ctx context.Context, characterID string, seedID string) (plantation.SowResult, error) {
-	if s.sowFn != nil {
-		return s.sowFn(ctx, characterID, seedID)
-	}
-	return plantation.SowResult{
-		Plot: plantation.Plot{
-			CharacterID: characterID,
-			SeedID:      seedID,
-			SownAt:      time.Now(),
-			MaturesAt:   time.Now().Add(12 * time.Hour),
-		},
-		SeedName: "赤の種",
-	}, nil
+func (f *plantationFixture) Sow(ctx context.Context, actor, seedID string) (plantation.SowResult, error) {
+	f.inputs = append(f.inputs, seedID)
+	_, err := f.execute(ctx, actor, 0)
+	return plantation.SowResult{Plot: plantation.Plot{SeedID: seedID}, SeedName: "赤の種"}, err
 }
 
-func (s *stubPlantationService) Fertilize(ctx context.Context, characterID string, fertilizerID string) (plantation.FertilizeResult, error) {
-	if s.fertilizeFn != nil {
-		return s.fertilizeFn(ctx, characterID, fertilizerID)
-	}
-	return plantation.FertilizeResult{
-		Plot: plantation.Plot{
-			CharacterID:  characterID,
-			SeedID:       "red",
-			FertilizerID: &fertilizerID,
-		},
-		FertilizerName: "化学肥料",
-	}, nil
+func (f *plantationFixture) Fertilize(ctx context.Context, actor, fertilizerID string) (plantation.FertilizeResult, error) {
+	f.inputs = append(f.inputs, fertilizerID)
+	_, err := f.execute(ctx, actor, 0)
+	return plantation.FertilizeResult{FertilizerName: "化学肥料"}, err
 }
 
-func (s *stubPlantationService) Harvest(ctx context.Context, characterID string) (plantation.HarvestResult, error) {
-	if s.harvestFn != nil {
-		return s.harvestFn(ctx, characterID)
-	}
-	return plantation.HarvestResult{
-		Withered: false,
-		Yields: []plantation.HarvestYield{
-			{ItemID: "item-001", ItemName: "薬草", Quantity: 1},
-		},
-	}, nil
+func (f *plantationFixture) Harvest(ctx context.Context, actor string) (plantation.HarvestResult, error) {
+	_, err := f.execute(ctx, actor, 0)
+	return f.harvest, err
 }
 
-func setupPlantationTestHandler(t *testing.T, plantationSvc *stubPlantationService) (*apihttp.Handler, string) {
-	player := coreplayer.Player{ID: "p1", Username: "planter"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "PlanterChar", Level: 10, Money: 1000}
-
-	pService := &stubPlayerService{
-		authenticateFn: alwaysAuthPlayer(player),
+func (f *plantationFixture) router(t *testing.T, destination string, options ...Option) (*gatewayNavigationStore, http.Handler) {
+	t.Helper()
+	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: destination}}
+	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
+		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"},
+		playercontext.SceneDefinition{ID: "plantation", Parent: "town"}))
+	opts := append([]Option{WithPlantation(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, options...)
+	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, opts...)
+	if err != nil {
+		t.Fatal(err)
 	}
-	cService := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
-			if id == "c1" {
-				return char, nil
-			}
-			return corecharacter.Character{}, corecharacter.ErrNotFound
-		},
-	}
-
-	h := newTestHandler(
-		t,
-		pService,
-		cService,
-		&stubAdventureService{},
-		&stubShopService{},
-		apihttp.WithPlantation(plantationSvc),
-	)
-	return h, "c1"
+	return store, h.Router()
 }
 
-func TestHTTP_GetCharacterPlantation(t *testing.T) {
-	h, charID := setupPlantationTestHandler(t, &stubPlantationService{})
-	router := h.Router()
+func newPlantationFixture(t *testing.T) *plantationFixture {
+	return &plantationFixture{gatewayFixture: newGatewayFixture(t), status: plantation.StatusResponse{Status: plantation.StatusNone,
+		Seeds: plantation.AllSeeds(), Fertilizers: []plantation.Fertilizer{}}}
+}
 
-	req := httptest.NewRequest(http.MethodGet, "/characters/"+charID+"/plantation", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+func TestPlantationSceneObservesThePlot(t *testing.T) {
+	f := newPlantationFixture(t)
+	store, router := f.router(t, "plantation", WithPlaceLog(&fakePlaceLog{}))
+	status, observation := navigationGET(t, router)
+	data := decodeShopScene[PlantationSceneData](t, observation)
+	if status != 200 || observation.Scene.Title != "種菜園" || observation.Scene.Support.Observation != "details" ||
+		data.Parent != "town" || data.Status != plantation.StatusNone || len(data.Seeds) != 6 {
+		t.Fatalf("plantation: %d %+v", status, data)
 	}
-
-	var res struct {
-		plantation.StatusResponse
-		Dialogue string `json:"dialogue"`
+	if len(observation.Scene.Members) == 0 || observation.Scene.Members[0].Name != "@ロータス" {
+		t.Fatalf("members %+v", observation.Scene.Members)
 	}
-	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-		t.Fatalf("decode response error: %v", err)
+	for _, action := range []string{"plantation_sow", "plantation_fertilize", "plantation_harvest", "npc_talk", "npc_inspect", "place_say", "scene_back"} {
+		if !offered(observation, action) {
+			t.Fatalf("missing choice %s", action)
+		}
 	}
-	if res.Status != plantation.StatusNone {
-		t.Errorf("expected StatusNone, got %v", res.Status)
+	f.statusErr = errors.New("private plot read")
+	if status, observation := navigationGET(t, router); status != 500 || observation.Scene.Data != nil {
+		t.Fatalf("partial observation: %d", status)
 	}
-	if len(res.Seeds) != 6 {
-		t.Errorf("expected 6 seeds, got %d", len(res.Seeds))
-	}
-	if res.Dialogue == "" {
-		t.Errorf("expected non-empty dialogue")
+	if store.writes != 0 || f.executions != 0 {
+		t.Fatalf("GET wrote: %d %d", store.writes, f.executions)
 	}
 }
 
-func TestHTTP_PlantationSow(t *testing.T) {
-	h, charID := setupPlantationTestHandler(t, &stubPlantationService{})
-	router := h.Router()
-
-	body, _ := json.Marshal(map[string]string{"seed_id": "red"})
-	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/sow", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer valid-token")
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var res struct {
-		plantation.SowResult
-		Message string `json:"message"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-		t.Fatalf("decode response error: %v", err)
-	}
-	if res.Plot.SeedID != "red" {
-		t.Errorf("expected seed red, got %s", res.Plot.SeedID)
-	}
-	if res.Message != "赤の種をまいたよ！" {
-		t.Errorf("expected message, got %q", res.Message)
-	}
-}
-
-func TestHTTP_PlantationFertilize(t *testing.T) {
-	h, charID := setupPlantationTestHandler(t, &stubPlantationService{})
-	router := h.Router()
-
-	body, _ := json.Marshal(map[string]string{"fertilizer_id": "chemical"})
-	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/fertilize", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer valid-token")
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var res struct {
-		plantation.FertilizeResult
-		Message string `json:"message"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-		t.Fatalf("decode response error: %v", err)
-	}
-	if *res.Plot.FertilizerID != "chemical" {
-		t.Errorf("expected chemical fertilizer, got %v", res.Plot.FertilizerID)
-	}
-	if res.Message != "化学肥料をまくよ！" {
-		t.Errorf("expected message, got %q", res.Message)
-	}
-}
-
-func TestHTTP_PlantationHarvest(t *testing.T) {
-	h, charID := setupPlantationTestHandler(t, &stubPlantationService{})
-	router := h.Router()
-
-	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/harvest", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var res struct {
-		plantation.HarvestResult
-		Message string `json:"message"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-		t.Fatalf("decode response error: %v", err)
-	}
-	if res.Withered {
-		t.Errorf("expected not withered")
-	}
-	if len(res.Yields) != 1 {
-		t.Errorf("expected 1 yield, got %d", len(res.Yields))
-	}
-	if res.Message != "収穫したよ！\n薬草を1個\n倉庫に送っておいたよ" {
-		t.Errorf("expected harvest message, got %q", res.Message)
-	}
-}
-
-func TestHTTP_PlantationErrors(t *testing.T) {
-	stub := &stubPlantationService{
-		sowFn: func(_ context.Context, _ string, _ string) (plantation.SowResult, error) {
-			return plantation.SowResult{}, plantation.ErrInsufficientGold
-		},
-		fertilizeFn: func(_ context.Context, _ string, _ string) (plantation.FertilizeResult, error) {
-			return plantation.FertilizeResult{}, plantation.ErrMissingFertilizerItem
-		},
-		harvestFn: func(_ context.Context, _ string) (plantation.HarvestResult, error) {
-			return plantation.HarvestResult{}, plantation.ErrCropNotMatured
-		},
-	}
-	h, charID := setupPlantationTestHandler(t, stub)
-	router := h.Router()
-
-	// Sow with insufficient gold -> 422
-	body, _ := json.Marshal(map[string]string{"seed_id": "gold"})
-	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/sow", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer valid-token")
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Errorf("expected 422 Unprocessable Entity, got %d", rec.Code)
-	}
-
-	// Fertilize with missing item -> 422
-	body2, _ := json.Marshal(map[string]string{"fertilizer_id": "kupo_nut"})
-	req2 := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/fertilize", bytes.NewReader(body2))
-	req2.Header.Set("Authorization", "Bearer valid-token")
-	req2.Header.Set("Content-Type", "application/json")
-	rec2 := httptest.NewRecorder()
-	router.ServeHTTP(rec2, req2)
-	if rec2.Code != http.StatusUnprocessableEntity {
-		t.Errorf("expected 422 Unprocessable Entity, got %d", rec2.Code)
-	}
-
-	// Harvest when not matured -> 422
-	req3 := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/harvest", nil)
-	req3.Header.Set("Authorization", "Bearer valid-token")
-	rec3 := httptest.NewRecorder()
-	router.ServeHTTP(rec3, req3)
-	if rec3.Code != http.StatusUnprocessableEntity {
-		t.Errorf("expected 422 Unprocessable Entity, got %d", rec3.Code)
-	}
-}
-
-func TestHTTP_PlantationFertilize_RejectDefaultAliases(t *testing.T) {
-	for _, alias := range []string{"none", "なし"} {
-		t.Run("reject_"+alias, func(t *testing.T) {
-			stub := &stubPlantationService{
-				fertilizeFn: func(_ context.Context, _ string, fertID string) (plantation.FertilizeResult, error) {
-					if fertID == "none" || fertID == "なし" {
-						return plantation.FertilizeResult{}, plantation.ErrInvalidFertilizerID
-					}
-					return plantation.FertilizeResult{
-						Plot: plantation.Plot{FertilizerID: &fertID},
-					}, nil
-				},
-			}
-			h, charID := setupPlantationTestHandler(t, stub)
-			router := h.Router()
-
-			body, _ := json.Marshal(map[string]string{"fertilizer_id": alias})
-			req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/fertilize", bytes.NewReader(body))
-			req.Header.Set("Authorization", "Bearer valid-token")
-			req.Header.Set("Content-Type", "application/json")
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("expected 400 Bad Request for %q, got %d: %s", alias, rec.Code, rec.Body.String())
+func TestPlantationCommandReplies(t *testing.T) {
+	for _, tc := range []struct {
+		action, params string
+		harvest        plantation.HarvestResult
+		want           string
+	}{
+		{"plantation_sow", `{"seed_id":"red"}`, plantation.HarvestResult{}, "赤の種をまいたよ！"},
+		{"plantation_fertilize", `{"fertilizer_id":"chemical"}`, plantation.HarvestResult{}, "化学肥料をまくよ！"},
+		{"plantation_harvest", `{}`, plantation.HarvestResult{Withered: true, SeedName: "金の種"}, "金の種は芽が出なかったよ…"},
+		{"plantation_harvest", `{}`, plantation.HarvestResult{Yields: []plantation.HarvestYield{{ItemName: "力の種", Quantity: 2}, {ItemName: "薬草", Quantity: 1}}},
+			"収穫したよ！\n力の種を2個\n薬草を1個\n倉庫に送っておいたよ"},
+	} {
+		t.Run(tc.action+tc.want, func(t *testing.T) {
+			f := newPlantationFixture(t)
+			f.harvest = tc.harvest
+			_, router := f.router(t, "plantation")
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody(tc.action, tc.params), nil)
+			if got := tavernResult[PlantationResult](t, raw); status != 200 || got.Message != tc.want {
+				t.Fatalf("%s: %d %q", tc.action, status, got.Message)
 			}
 		})
+	}
+}
+
+func TestPlantationCommandErrors(t *testing.T) {
+	for _, tc := range []struct {
+		action, params string
+		err            error
+		code, text     string
+		status         int
+	}{
+		{"plantation_sow", `{"seed_id":"red"}`, plantation.ErrPlotAlreadySown, "PLANTATION_ALREADY_SOWN", "収穫するまでちょっと待ってね", 409},
+		{"plantation_sow", `{"seed_id":"red"}`, plantation.ErrInsufficientGold, "PLANTATION_INSUFFICIENT_GOLD", "お金が足りないよ！", 409},
+		{"plantation_sow", `{"seed_id":"x"}`, plantation.ErrInvalidSeedID, "PLANTATION_INVALID_SEED", "", 400},
+		{"plantation_fertilize", `{"fertilizer_id":"lime"}`, plantation.FertilizerAppliedError{Name: "骨粉"}, "PLANTATION_ALREADY_FERTILIZED", "もう骨粉をまいてあるよ", 409},
+		{"plantation_fertilize", `{"fertilizer_id":"lime"}`, plantation.ErrNoActivePlot, "PLANTATION_NO_PLOT", "まず種をまいてね", 409},
+		{"plantation_fertilize", `{"fertilizer_id":"kupo_nut"}`, plantation.ErrMissingFertilizerItem, "PLANTATION_INVALID_FERTILIZER", "", 400},
+		{"plantation_harvest", `{}`, plantation.ErrNoActivePlot, "PLANTATION_NO_PLOT", "まず種をまいてね", 409},
+		{"plantation_harvest", `{}`, plantation.ErrCropNotMatured, "PLANTATION_NOT_MATURED", "芽が出るまで一日待ってね", 409},
+		{"plantation_harvest", `{}`, errors.New("private storage failure"), "EXECUTION_FAILED", "", 500},
+	} {
+		t.Run(tc.action+tc.code, func(t *testing.T) {
+			f := newPlantationFixture(t)
+			f.executionErr = fmt.Errorf("private wrapped: %w", tc.err)
+			_, router := f.router(t, "plantation")
+			status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody(tc.action, tc.params), nil)
+			assertGatewayError(t, got, tc.code)
+			if status != tc.status || strings.Contains(fmt.Sprint(got), "private") || !strings.Contains(string(got["error"]), tc.text) {
+				t.Fatalf("error mapping: %d %s", status, got)
+			}
+		})
+	}
+}
+
+func TestPlantationCommandsRequireTheGarden(t *testing.T) {
+	f := newPlantationFixture(t)
+	_, router := f.router(t, "bank")
+	if status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("plantation_harvest", `{}`), nil); status != 409 || f.executions != 0 {
+		t.Fatalf("harvest outside the garden: %d %s", status, got)
+	}
+}
+
+func TestPlantationWordsNameCatalogEntries(t *testing.T) {
+	words, err := plantationWords(nil, context.Background(), corecharacter.Character{})
+	if err != nil || !strings.HasPrefix(words[7], "今日は") || !strings.HasPrefix(words[8], "肥料は") {
+		t.Fatalf("words %v %v", words, err)
+	}
+	firstSeven := []string{}
+	for _, f := range plantation.AllFertilizers()[:7] {
+		firstSeven = append(firstSeven, "肥料は"+f.Name+"をまくのはどうかな？")
+	}
+	if !strings.Contains(strings.Join(firstSeven, "|"), words[8]) {
+		t.Fatalf("fertilizer tip %q is outside the first seven", words[8])
 	}
 }

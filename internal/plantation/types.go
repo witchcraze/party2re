@@ -18,6 +18,14 @@ var (
 	ErrPlotNotFound             = errors.New("plantation plot not found")
 )
 
+// FertilizerAppliedError reports the fertilizer already on the plot.
+type FertilizerAppliedError struct{ Name string }
+
+func (e FertilizerAppliedError) Error() string {
+	return ErrFertilizerAlreadyApplied.Error() + ": " + e.Name
+}
+func (e FertilizerAppliedError) Unwrap() error { return ErrFertilizerAlreadyApplied }
+
 // PlotStatus represents the current lifecycle status of a plantation plot.
 type PlotStatus string
 

@@ -342,22 +342,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"name"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "plantation_sow",
-		Label:          "種菜園に種まき",
-		Category:       "crafting",
-		OperationID:    "postCharactersIdPlantationSow",
-		RequiredParams: []string{"seed_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "plantation_harvest",
-		Label:          "種菜園から収穫",
-		Category:       "crafting",
-		OperationID:    "postCharactersIdPlantationHarvest",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "plantation_sow", Label: "種をまく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"seed_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "plantation_fertilize", Label: "肥料をまく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"fertilizer_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "plantation_harvest", Label: "収穫する", Category: "growth", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
 	// Category: entertainment (Casino, Lottery & Tavern)

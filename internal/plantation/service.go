@@ -172,12 +172,39 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (StatusResp
 		}
 	}
 
+	ferts, err := s.usableFertilizers(ctx, characterID)
+	if err != nil {
+		return StatusResponse{}, err
+	}
 	return StatusResponse{
 		Plot:        plotPtr,
 		Status:      status,
 		Seeds:       AllSeeds(),
-		Fertilizers: AllFertilizers(),
+		Fertilizers: ferts,
 	}, nil
+}
+
+// usableFertilizers lists gold fertilizers and the item fertilizers the
+// character holds in the Depot or Inventory; legacy hides the others.
+func (s *Service) usableFertilizers(ctx context.Context, characterID string) ([]Fertilizer, error) {
+	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+	dep, err := s.depots.FindByCharacterID(ctx, characterID)
+	if err != nil && !errors.Is(err, depot.ErrNotFound) {
+		return nil, err
+	}
+	out := []Fertilizer{}
+	for _, f := range AllFertilizers() {
+		if f.IsItem {
+			if _, err := depot.ResolveItem(&inv, &dep, depot.QueryByDefinitionID(f.ItemID), depot.PriorityDepotFirst); err != nil {
+				continue
+			}
+		}
+		out = append(out, f)
+	}
+	return out, nil
 }
 
 // Sow seeds a plot for the character after deducting seed purchase cost.
@@ -294,7 +321,7 @@ func (s *Service) Fertilize(ctx context.Context, characterID string, fertilizerI
 			if applied, ok := FindFertilizer(*plot.FertilizerID); ok {
 				appliedName = applied.Name
 			}
-			return fmt.Errorf("%w: もう%sをまいてあるよ", ErrFertilizerAlreadyApplied, appliedName)
+			return FertilizerAppliedError{Name: appliedName}
 		}
 
 		if !fert.IsItem {
