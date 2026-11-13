@@ -607,7 +607,7 @@ func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
 		if len(due) > 50 {
 			t.Fatalf("tick %d returned %d actions, exceeding production limit 50", tick, len(due))
 		}
-		ownedDue := selectScheduledActions(due, healthyID, concurrentInsertID)
+		ownedDue := selectScheduledActions(due, healthyID, concurrentInsertID, terminalID)
 		for _, action := range ownedDue {
 			worker.ProcessAction(ctx, action)
 			if action.ID == healthyID {
