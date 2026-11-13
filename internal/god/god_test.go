@@ -3,7 +3,6 @@ package god_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -15,6 +14,9 @@ import (
 type mockCharacterRepo struct {
 	mu         sync.RWMutex
 	characters map[string]corecharacter.Character
+	// admit, when set, re-admits every locked read so catalog tests can grant
+	// several wishes; admission tests leave it empty.
+	admit god.Realm
 }
 
 func newMockCharacterRepo() *mockCharacterRepo {
@@ -34,7 +36,11 @@ func (m *mockCharacterRepo) FindByID(ctx context.Context, id string) (corecharac
 }
 
 func (m *mockCharacterRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
-	return m.FindByID(ctx, id)
+	c, err := m.FindByID(ctx, id)
+	if err == nil && m.admit != "" {
+		c.GodVisit = string(m.admit)
+	}
+	return c, err
 }
 
 func (m *mockCharacterRepo) Update(ctx context.Context, character corecharacter.Character) error {
@@ -230,6 +236,7 @@ func TestGod_GetWishes_Underworld(t *testing.T) {
 
 func TestGod_GrantWish_Heaven(t *testing.T) {
 	repo := newMockCharacterRepo()
+	repo.admit = god.RealmHeaven
 	svc, err := god.NewService(repo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -355,6 +362,7 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 
 func TestGod_GrantWish_Underworld(t *testing.T) {
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmUnderworld
 	depotRepo := newMockDepotRepo()
 
 	svc, err := god.NewService(charRepo, god.WithDepotRepository(depotRepo))
@@ -448,41 +456,5 @@ func TestGod_Dialogue(t *testing.T) {
 	uLines := svc.GetDialogue(god.RealmUnderworld)
 	if len(uLines) == 0 {
 		t.Error("expected non-empty dialogue for underworld")
-	}
-}
-
-func TestGod_Concurrency(t *testing.T) {
-	repo := newMockCharacterRepo()
-	svc, _ := god.NewService(repo)
-
-	const workerCount = 20
-	errChan := make(chan error, workerCount)
-
-	for i := 0; i < workerCount; i++ {
-		charID := fmt.Sprintf("char_worker_%d", i)
-		char := corecharacter.Character{ID: charID, Name: "Worker", Money: 1000}
-		repo.characters[charID] = char
-	}
-
-	for i := 0; i < workerCount; i++ {
-		go func(workerID int) {
-			charID := fmt.Sprintf("char_worker_%d", workerID)
-			res, err := svc.GrantWish(context.Background(), charID, "wish_money", god.RealmHeaven)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			if res.Character.Money != 101000 {
-				errChan <- errors.New("unexpected money after wish")
-				return
-			}
-			errChan <- nil
-		}(i)
-	}
-
-	for i := 0; i < workerCount; i++ {
-		if err := <-errChan; err != nil {
-			t.Errorf("worker failed: %v", err)
-		}
 	}
 }

@@ -172,6 +172,12 @@ func (s *Service) GrantWish(
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrCharacterNotFound, err)
 		}
+		if char.GodVisit != string(realm) {
+			return ErrNotAdmitted
+		}
+		// A granted wish ends the visit; executors persist the character with it.
+		// Rejections roll back, and wish_lover persists nothing.
+		char.GodVisit = ""
 
 		switch realm {
 		case RealmHeaven:

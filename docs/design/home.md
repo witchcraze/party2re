@@ -72,7 +72,6 @@ Open items (`lib/_data.cgi` lines):
 | Items | Legacy behavior | Owner |
 | --- | --- | --- |
 | 043 transformation staff (`789–799`) | Uniform monster appearance 001–108, fallback if the image is absent; consumes | #1837 |
-| 059/262 reins (`956–964;2071–2077`) | Enter `god`/`u_god`; consumes, no capacity gate | #1153 |
 | 060–065 orbs (`965–1054`) | Append rune `s/r/b/g/y/p`; an existing rune sets `mes` and keeps the item | #1839 |
 | 113/114 bracelets/rings (`1408–1429`) | Returned stats are discarded: **no permanent HP/MP change; consumes one** | #1840 |
 | 203 sacred mana (`1824`) | SP +200, including over-level; consumes | #1835 |

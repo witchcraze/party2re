@@ -89,6 +89,16 @@
           },
           "description": "Character not found"
         },
+        "409": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "The character has not entered this realm with its reins (or already left it with a granted wish), or is sleeping or awaiting wake recovery"
+        },
         "415": {
           "$ref": "#/components/responses/Error",
           "description": "Unsupported Media Type"

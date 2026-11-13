@@ -36,6 +36,7 @@ func (m *errDepotRepo) Save(_ context.Context, dep depot.Depot) error {
 func TestGod_UnderworldDepot_PreservesJobLevelCapacity(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmUnderworld
 	depotRepo := newMockDepotRepo()
 
 	char := corecharacter.Character{
@@ -86,6 +87,7 @@ func TestGod_UnderworldDepot_PreservesJobLevelCapacity(t *testing.T) {
 func TestGod_UnderworldDepot_PropagatesSaveError(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmUnderworld
 
 	char := corecharacter.Character{
 		ID:        "char_err",
@@ -116,6 +118,7 @@ func TestGod_UnderworldDepot_PropagatesSaveError(t *testing.T) {
 func TestGod_UnderworldDepot_CreatesNewDepotIfNotFound(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmUnderworld
 
 	char := corecharacter.Character{
 		ID:        "char_new",
@@ -151,6 +154,7 @@ func TestGod_UnderworldDepot_CreatesNewDepotIfNotFound(t *testing.T) {
 func TestGod_HeavenDepot_RefreshesCapacityWithJobLevel(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmHeaven
 	depotRepo := newMockDepotRepo()
 
 	char := corecharacter.Character{

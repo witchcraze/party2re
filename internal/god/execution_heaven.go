@@ -246,6 +246,7 @@ func (s *Service) executeHeavenWish(
 		msg = "錬金レシピを預かり所に送致しました！"
 
 	case WishLover:
+		char.GodVisit = string(RealmHeaven) // refused: the visit continues
 		*res = WishResult{
 			Character: *char,
 			Wish: Wish{
@@ -255,8 +256,7 @@ func (s *Service) executeHeavenWish(
 				Description: "恋人が…？",
 				Available:   true,
 			},
-			Message:      "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…",
-			NextLocation: "",
+			Message: "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…",
 		}
 		return nil
 
@@ -295,8 +295,7 @@ func (s *Service) executeHeavenWish(
 			Description: desc,
 			Available:   true,
 		},
-		Message:      msg,
-		NextLocation: "home",
+		Message: msg,
 	}
 	return nil
 }

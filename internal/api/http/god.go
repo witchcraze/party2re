@@ -105,7 +105,7 @@ func (h *Handler) handleGrantGodWish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req grantWishRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -123,6 +123,10 @@ func (h *Handler) handleGrantGodWish(w http.ResponseWriter, r *http.Request) {
 
 		res, err := h.god.GrantWish(r.Context(), char.ID, req.WishID, realm)
 		if err != nil {
+			if errors.Is(err, god.ErrNotAdmitted) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
 			if errors.Is(err, god.ErrWishNotFound) ||
 				errors.Is(err, god.ErrWishRequirement) ||
 				errors.Is(err, god.ErrLimitBreakMaxed) ||
