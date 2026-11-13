@@ -543,11 +543,7 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /contest/past", h.handleGetContestPast)
 	mux.HandleFunc("GET /contest/legends", h.handleGetContestLegends)
 	mux.HandleFunc("POST /contest/settle", h.handleSettleContest)
-	mux.HandleFunc("GET /characters/{id}/photos", h.handleGetCharacterPhotos)
 	mux.HandleFunc("POST /characters/{id}/photos", h.handleSaveCharacterPhoto)
-	mux.HandleFunc("DELETE /characters/{id}/photos/{photoId}", h.handleDeleteCharacterPhoto)
-	mux.HandleFunc("POST /characters/{id}/contest/enter", h.handleEnterContest)
-	mux.HandleFunc("POST /characters/{id}/contest/vote", h.handleVoteContest)
 
 	// Multiplayer Party System (quest.cgi, party.cgi)
 	mux.HandleFunc("GET /parties", h.handleListParties)

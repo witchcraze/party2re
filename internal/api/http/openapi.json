@@ -4384,7 +4384,8 @@
                         "lottery",
                         "takarakuji",
                         "plantation",
-                        "oracle"
+                        "oracle",
+                        "contest"
                       ],
                       "type": "string"
                     }
@@ -4525,7 +4526,8 @@
                         "lottery",
                         "takarakuji",
                         "plantation",
-                        "oracle"
+                        "oracle",
+                        "contest"
                       ],
                       "type": "string"
                     },
@@ -7672,6 +7674,123 @@
               },
               "type": "object"
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "contest_enter",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "photo_id": {
+                      "description": "One of the contest scene's photos.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "title": {
+                      "description": "Entry title, at most 40 characters, without whitespace or , ; \" ' \u0026 \u003c \u003e @ ＠ (legacy photo.cgi).",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "photo_id",
+                    "title"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "contest_vote",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "comment": {
+                      "description": "Optional vote comment.",
+                      "type": "string"
+                    },
+                    "entry_id": {
+                      "description": "One of the contest scene's active_entries.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "entry_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "contest_photo_delete",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "photo_id": {
+                      "description": "One of the contest scene's photos.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "photo_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
           }
         ],
         "properties": {
@@ -8478,72 +8597,6 @@
         ],
         "type": "object"
       },
-      "ContestContestVote": {
-        "additionalProperties": false,
-        "properties": {
-          "comment": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "entry_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "round": {
-            "type": "integer"
-          },
-          "voter_character_id": {
-            "type": "string"
-          },
-          "voter_character_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "round",
-          "entry_id",
-          "voter_character_id",
-          "voter_character_name",
-          "created_at"
-        ],
-        "type": "object"
-      },
-      "ContestDialogue": {
-        "additionalProperties": false,
-        "properties": {
-          "greeting": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          },
-          "phrases": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "npc_name",
-          "title",
-          "greeting",
-          "phrases"
-        ],
-        "type": "object"
-      },
       "ContestLegend": {
         "properties": {
           "caption": {
@@ -8636,6 +8689,69 @@
         ],
         "type": "object"
       },
+      "ContestSceneData": {
+        "additionalProperties": false,
+        "description": "The contest round state, the active entries open for voting and the actor's own photos. NPC dialogue comes from npc_talk/npc_inspect. Observation never enters, votes or settles.",
+        "properties": {
+          "active_entries": {
+            "items": {
+              "$ref": "#/components/schemas/ContestContestEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "active_round": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContestContestRound"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entry_count": {
+            "type": "integer"
+          },
+          "is_postponed": {
+            "type": "boolean"
+          },
+          "min_entries": {
+            "type": "integer"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "photos": {
+            "description": "The actor's photos, newest first; contest_photo_delete reports the photo's position in this list.",
+            "items": {
+              "$ref": "#/components/schemas/ContestPhoto"
+            },
+            "type": "array"
+          },
+          "preparing_round": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContestContestRound"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "parent",
+          "entry_count",
+          "min_entries",
+          "is_postponed",
+          "photos"
+        ],
+        "type": "object"
+      },
       "ContestVenueResponse": {
         "additionalProperties": false,
         "properties": {
@@ -8657,9 +8773,6 @@
                 "type": "null"
               }
             ]
-          },
-          "dialogue": {
-            "$ref": "#/components/schemas/ContestDialogue"
           },
           "entry_count": {
             "type": "integer"
@@ -8684,8 +8797,7 @@
         "required": [
           "entry_count",
           "min_entries",
-          "is_postponed",
-          "dialogue"
+          "is_postponed"
         ],
         "type": "object"
       },
@@ -9877,79 +9989,6 @@
         },
         "required": [
           "result"
-        ],
-        "type": "object"
-      },
-      "EnterContestResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "caption": {
-            "type": "string"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "comments": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "guild_name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "image_url": {
-            "type": "string"
-          },
-          "photo_id": {
-            "type": "string"
-          },
-          "ranking": {
-            "type": "integer"
-          },
-          "round": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "votes": {
-            "type": "integer"
-          },
-          "warning": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "round",
-          "character_id",
-          "character_name",
-          "title",
-          "photo_id",
-          "image_url",
-          "caption",
-          "votes",
-          "ranking",
-          "created_at",
-          "updated_at"
         ],
         "type": "object"
       },
@@ -15007,7 +15046,8 @@
                   "lottery",
                   "takarakuji",
                   "plantation",
-                  "oracle"
+                  "oracle",
+                  "contest"
                 ],
                 "type": "string"
               }
@@ -15204,7 +15244,8 @@
               "lottery",
               "takarakuji",
               "plantation",
-              "oracle"
+              "oracle",
+              "contest"
             ],
             "type": "string"
           },
@@ -15346,6 +15387,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/OracleSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ContestSceneData"
                     }
                   ]
                 }
@@ -16308,6 +16352,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/OracleSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "contest"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ContestSceneData"
                 },
                 "support": {
                   "properties": {
@@ -18667,7 +18741,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message. contest_enter returns the entry and the host's message (warning set when the entry committed but settlement scheduling failed); contest_vote returns the vote and message; contest_photo_delete returns the message."
           },
           "400": {
             "content": {
@@ -22363,199 +22437,6 @@
         ]
       }
     },
-    "/characters/{id}/contest/enter": {
-      "post": {
-        "description": "Submits a character's saved photo into the next preparing contest round.",
-        "operationId": "enterContest",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "photo_id": {
-                    "type": "string"
-                  },
-                  "title": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "photo_id",
-                  "title"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnterContestResponse"
-                }
-              }
-            },
-            "description": "Photo submitted to contest successfully"
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnterContestResponse"
-                }
-              }
-            },
-            "description": "Photo submitted to contest successfully, but settlement scheduling deferred or failed"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Invalid submission (duplicate title, already entered, or consecutive entry disallowed)"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Photo or Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Enter photo into upcoming contest",
-        "tags": [
-          "Contest"
-        ]
-      }
-    },
-    "/characters/{id}/contest/vote": {
-      "post": {
-        "description": "Casts a vote for a photo entry in the active contest round with an optional cheering comment.",
-        "operationId": "voteContest",
-        "parameters": [
-          {
-            "description": "Voter Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "comment": {
-                    "type": "string"
-                  },
-                  "entry_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "entry_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContestContestVote"
-                }
-              }
-            },
-            "description": "Vote cast successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Invalid vote (contest not active, already voted, or comment too long)"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Entry or Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Vote for a contest entry",
-        "tags": [
-          "Contest"
-        ]
-      }
-    },
     "/characters/{id}/custom-skills": {
       "get": {
         "operationId": "getCustomSkill",
@@ -25640,72 +25521,6 @@
       }
     },
     "/characters/{id}/photos": {
-      "get": {
-        "description": "Retrieves all captured screenshots owned by the character (max 20).",
-        "operationId": "getCharacterPhotos",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ContestPhoto"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "Photos retrieved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List character photos / screenshots",
-        "tags": [
-          "Contest"
-        ]
-      },
       "post": {
         "description": "Saves a new photo snapshot into the character's gallery (enforces max 20 capacity).",
         "operationId": "saveCharacterPhoto",
@@ -25800,89 +25615,6 @@
           }
         ],
         "summary": "Capture and save a new photo / screenshot",
-        "tags": [
-          "Contest"
-        ]
-      }
-    },
-    "/characters/{id}/photos/{photoId}": {
-      "delete": {
-        "description": "Removes a specific screenshot from the character's gallery.",
-        "operationId": "deleteCharacterPhoto",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Photo ID",
-            "in": "path",
-            "name": "photoId",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Photo deleted successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Photo or Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Delete a character photo",
         "tags": [
           "Contest"
         ]

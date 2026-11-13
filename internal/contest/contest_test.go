@@ -57,6 +57,8 @@ type mockContestRepo struct {
 	getPreparingRoundForUpdateErr error
 	getRoundByNumberErr           error
 	listEntriesByRoundErrByRound  map[int]error
+	findEntryByCharacterErr       error
+	findEntryByTitleErr           error
 }
 
 func newMockContestRepo() *mockContestRepo {
@@ -237,6 +239,9 @@ func (m *mockContestRepo) FindEntryByIDForUpdate(ctx context.Context, id string)
 func (m *mockContestRepo) FindEntryByRoundAndCharacter(ctx context.Context, round int, charID string) (contest.ContestEntry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.findEntryByCharacterErr != nil {
+		return contest.ContestEntry{}, m.findEntryByCharacterErr
+	}
 	for _, e := range m.entries {
 		if e.Round == round && e.CharacterID == charID {
 			return e, nil
@@ -248,6 +253,9 @@ func (m *mockContestRepo) FindEntryByRoundAndCharacter(ctx context.Context, roun
 func (m *mockContestRepo) FindEntryByRoundAndTitle(ctx context.Context, round int, title string) (contest.ContestEntry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.findEntryByTitleErr != nil {
+		return contest.ContestEntry{}, m.findEntryByTitleErr
+	}
 	for _, e := range m.entries {
 		if e.Round == round && e.Title == title {
 			return e, nil
@@ -510,28 +518,28 @@ func TestContestEntryAndConsecutiveRules(t *testing.T) {
 	photo2, _ := svc.SavePhoto(ctx, char2.ID, "Photo Two", "Town", "url2", "caption2", "")
 
 	// 1. Submit entry for char1 into Round 1 (auto-created preparing round)
-	entry1, err := svc.EnterContest(ctx, char1.ID, photo1.ID, "My First Contest Entry")
+	entry1, err := svc.EnterContest(ctx, char1.ID, photo1.ID, "MyFirstContestEntry")
 	if err != nil {
 		t.Fatalf("EnterContest failed: %v", err)
 	}
-	if entry1.Round != 1 || entry1.CharacterID != char1.ID || entry1.Title != "My First Contest Entry" {
+	if entry1.Round != 1 || entry1.CharacterID != char1.ID || entry1.Title != "MyFirstContestEntry" {
 		t.Errorf("unexpected entry1: %+v", entry1)
 	}
 
 	// 2. Duplicate entry by char1 in same preparing round rejected
-	_, err = svc.EnterContest(ctx, char1.ID, photo1.ID, "Another Title")
+	_, err = svc.EnterContest(ctx, char1.ID, photo1.ID, "AnotherTitle")
 	if !errors.Is(err, contest.ErrAlreadyEntered) {
 		t.Errorf("expected ErrAlreadyEntered, got %v", err)
 	}
 
 	// 3. Duplicate title by char2 in same preparing round rejected
-	_, err = svc.EnterContest(ctx, char2.ID, photo2.ID, "My First Contest Entry")
+	_, err = svc.EnterContest(ctx, char2.ID, photo2.ID, "MyFirstContestEntry")
 	if !errors.Is(err, contest.ErrDuplicateTitle) {
 		t.Errorf("expected ErrDuplicateTitle, got %v", err)
 	}
 
 	// 4. Submit unique entry for char2
-	entry2, err := svc.EnterContest(ctx, char2.ID, photo2.ID, "My Second Contest Entry")
+	entry2, err := svc.EnterContest(ctx, char2.ID, photo2.ID, "MySecondContestEntry")
 	if err != nil {
 		t.Fatalf("EnterContest for char2 failed: %v", err)
 	}
@@ -554,7 +562,7 @@ func TestContestEntryAndConsecutiveRules(t *testing.T) {
 
 	// char1 has an entry in active Round 1 -> attempting to enter Round 2 (preparing) should fail!
 	photo1b, _ := svc.SavePhoto(ctx, char1.ID, "Photo 1B", "Town", "url1b", "", "")
-	_, err = svc.EnterContest(ctx, char1.ID, photo1b.ID, "Consecutive Attempt")
+	_, err = svc.EnterContest(ctx, char1.ID, photo1b.ID, "ConsecutiveAttempt")
 	if !errors.Is(err, contest.ErrConsecutiveEntryDisallowed) {
 		t.Errorf("expected ErrConsecutiveEntryDisallowed, got %v", err)
 	}
@@ -579,7 +587,7 @@ func TestVotingRules(t *testing.T) {
 	ctx := context.Background()
 
 	photo, _ := svc.SavePhoto(ctx, author.ID, "Cool Shot", "Cave", "url", "", "")
-	entry, _ := svc.EnterContest(ctx, author.ID, photo.ID, "Epic Battle Scene")
+	entry, _ := svc.EnterContest(ctx, author.ID, photo.ID, "EpicBattleScene")
 
 	// 1. Voting when contest is preparing (not active) should fail
 	_, err = svc.Vote(ctx, voter1.ID, entry.ID, "Great photo!")
@@ -655,10 +663,10 @@ func TestVoting_AuthorVotingPermitted(t *testing.T) {
 	ctx := context.Background()
 
 	p1, _ := svc.SavePhoto(ctx, author1.ID, "Photo 1", "Forest", "url1", "", "")
-	e1, _ := svc.EnterContest(ctx, author1.ID, p1.ID, "Forest Shot")
+	e1, _ := svc.EnterContest(ctx, author1.ID, p1.ID, "ForestShot")
 
 	p2, _ := svc.SavePhoto(ctx, author2.ID, "Photo 2", "Cave", "url2", "", "")
-	e2, _ := svc.EnterContest(ctx, author2.ID, p2.ID, "Cave Shot")
+	e2, _ := svc.EnterContest(ctx, author2.ID, p2.ID, "CaveShot")
 
 	// Activate contest
 	round, _ := contestRepo.GetRoundByNumber(ctx, 1)
@@ -1004,7 +1012,7 @@ func TestContestEntry_CapturesGuildSnapshot(t *testing.T) {
 	photo2, _ := svc.SavePhoto(ctx, charUnaffiliated.ID, "Photo 2", "Town", "url2", "cap2", "")
 
 	// 1. Entry by affiliated character captures guild ID and name
-	entryAff, err := svc.EnterContest(ctx, charAffiliated.ID, photo1.ID, "Affiliated Entry")
+	entryAff, err := svc.EnterContest(ctx, charAffiliated.ID, photo1.ID, "AffiliatedEntry")
 	if err != nil {
 		t.Fatalf("EnterContest failed: %v", err)
 	}
@@ -1016,7 +1024,7 @@ func TestContestEntry_CapturesGuildSnapshot(t *testing.T) {
 	}
 
 	// 2. Entry by unaffiliated character has empty guild ID and name
-	entryUnaff, err := svc.EnterContest(ctx, charUnaffiliated.ID, photo2.ID, "Lone Entry")
+	entryUnaff, err := svc.EnterContest(ctx, charUnaffiliated.ID, photo2.ID, "LoneEntry")
 	if err != nil {
 		t.Fatalf("EnterContest failed: %v", err)
 	}
@@ -1270,5 +1278,51 @@ func TestSettlement_GuildPointAttribution_DisbandedGuildNotMisdelivered(t *testi
 	// Result still retains entry-time GuildName
 	if res.WinnerLegend == nil || res.WinnerLegend.GuildName != "Phoenix" {
 		t.Errorf("expected legend GuildName to remain 'Phoenix', got %+v", res.WinnerLegend)
+	}
+}
+
+func TestEnterContestMatchesLegacyEntryChecks(t *testing.T) {
+	ctx := context.Background()
+	setup := func(t *testing.T) (*contest.Service, *mockContestRepo, contest.Photo) {
+		charRepo := newMockCharRepo()
+		charRepo.Update(ctx, corecharacter.Character{ID: "char-1", Name: "Hero"})
+		repo := newMockContestRepo()
+		svc, err := contest.NewService(charRepo, repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		photo, err := svc.SavePhoto(ctx, "char-1", "Photo", "Town", "url", "caption", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc, repo, photo
+	}
+	for _, title := range []string{"春 の 光", "春　光", "春\u00a0光"} {
+		svc, repo, photo := setup(t)
+		if _, err := svc.EnterContest(ctx, "char-1", photo.ID, title); !errors.Is(err, contest.ErrInvalidTitle) || len(repo.entries) != 0 {
+			t.Errorf("title %q: %v, entries %d", title, err, len(repo.entries))
+		}
+	}
+
+	svc, _, photo := setup(t)
+	if _, err := svc.EnterContest(ctx, "char-1", photo.ID, "春光"); err != nil {
+		t.Fatal(err)
+	}
+	var entered contest.AlreadyEnteredError
+	if _, err := svc.EnterContest(ctx, "char-1", photo.ID, "夏光"); !errors.As(err, &entered) || entered.Title != "春光" || !errors.Is(err, contest.ErrAlreadyEntered) {
+		t.Fatalf("already entered: %v", err)
+	}
+
+	storage := errors.New("storage down")
+	for name, inject := range map[string]func(*mockContestRepo){
+		"active round": func(r *mockContestRepo) { r.getActiveErr = storage },
+		"own entry":    func(r *mockContestRepo) { r.findEntryByCharacterErr = storage },
+		"title lookup": func(r *mockContestRepo) { r.findEntryByTitleErr = storage },
+	} {
+		svc, repo, photo := setup(t)
+		inject(repo)
+		if _, err := svc.EnterContest(ctx, "char-1", photo.ID, "春光"); !errors.Is(err, storage) || len(repo.entries) != 0 {
+			t.Errorf("%s: %v, entries %d", name, err, len(repo.entries))
+		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
@@ -157,6 +158,10 @@ func (s *Service) EnterContest(
 	if err := ValidateTitle(title); err != nil {
 		return ContestEntry{}, err
 	}
+	// photo.cgi entori rejects any whitespace in an entry title (/　|\s/).
+	if strings.ContainsFunc(title, unicode.IsSpace) {
+		return ContestEntry{}, ErrInvalidTitle
+	}
 
 	var entry ContestEntry
 	var prepRoundEndTime time.Time
@@ -179,10 +184,16 @@ func (s *Service) EnterContest(
 
 		// Consecutive entry check: if character is in active contest, cannot enter preparing contest
 		activeRound, err := s.contests.GetActiveRound(txCtx)
+		if err != nil && !errors.Is(err, ErrContestNotFound) {
+			return err
+		}
 		if err == nil && activeRound.Status == StatusActive {
 			_, err := s.contests.FindEntryByRoundAndCharacter(txCtx, activeRound.Round, characterID)
 			if err == nil {
 				return ErrConsecutiveEntryDisallowed
+			}
+			if !errors.Is(err, ErrEntryNotFound) {
+				return err
 			}
 		}
 
@@ -194,13 +205,17 @@ func (s *Service) EnterContest(
 		prepRoundEndTime = prepRound.EndTime
 
 		// Check if character already entered this preparing round
-		if _, err := s.contests.FindEntryByRoundAndCharacter(txCtx, prepRound.Round, characterID); err == nil {
-			return ErrAlreadyEntered
+		if existing, err := s.contests.FindEntryByRoundAndCharacter(txCtx, prepRound.Round, characterID); err == nil {
+			return AlreadyEnteredError{Title: existing.Title}
+		} else if !errors.Is(err, ErrEntryNotFound) {
+			return err
 		}
 
 		// Check if title already taken in this preparing round
 		if _, err := s.contests.FindEntryByRoundAndTitle(txCtx, prepRound.Round, title); err == nil {
 			return ErrDuplicateTitle
+		} else if !errors.Is(err, ErrEntryNotFound) {
+			return err
 		}
 
 		var guildRef GuildRef
