@@ -57,10 +57,10 @@ fi
 echo "==> [3/7] Validating OpenAPI 3.1 specification and route coverage..."
 if command -v go >/dev/null 2>&1; then
     go run ./scripts/sync_openapi --check
-    go test -count=1 ./internal/api/http ./internal/architecture -run "OpenAPI"
+    go test -count=1 ./internal/api/http -run "OpenAPI"
 else
     docker compose run --rm app go run ./scripts/sync_openapi --check
-    docker compose run --rm app go test -count=1 ./internal/api/http ./internal/architecture -run "OpenAPI"
+    docker compose run --rm app go test -count=1 ./internal/api/http -run "OpenAPI"
 fi
 
 echo "==> [4/7] Validating .arch Guidance Layer symbols and database row-lock hierarchy via Go AST..."
@@ -104,12 +104,18 @@ if command -v go >/dev/null 2>&1; then
         mkdir -p "${ROOT_DIR}/.cache"
         echo "$SCHEMA_HASH" > "$SCHEMA_STAMP_FILE"
     fi
+    # Step 4 already verified ./internal/architecture on this unchanged tree, and .git/.cache walks prevent reliable Go testcache hits there.
+    SUITE_PKGS=$(go list ./... | awk '!/[/]internal[/]architecture$/ { printf "%s%s", (sep ? " " : ""), $0; sep=1 }')
+    if [ -z "$SUITE_PKGS" ]; then
+        echo "==> [verify.sh] ERROR: No test packages resolved for Step 6." >&2
+        exit 1
+    fi
     PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:${TEST_DB_PORT})/party2?parseTime=true" \
     PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:${TEST_DB_PORT})/?parseTime=true" \
     PARTY2_VALKEY_ADDR="127.0.0.1:${TEST_VALKEY_PORT}" \
-    go test ${TIMEOUT_ARG} ./...
+    go test ${TIMEOUT_ARG} ${SUITE_PKGS}
 else
-    docker compose run --rm app go test ${TIMEOUT_ARG} -count=1 ./...
+    docker compose run --rm app sh -c 'suite_pkgs=$(go list ./... | awk '\''!/[/]internal[/]architecture$/ { printf "%s%s", (sep ? " " : ""), $0; sep=1 }'\'') && [ -n "$suite_pkgs" ] && go test '"${TIMEOUT_ARG}"' -count=1 $suite_pkgs'
 fi
 
 echo "==> [7/7] Running smoke image build..."
