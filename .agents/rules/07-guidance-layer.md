@@ -27,7 +27,7 @@ A module qualifies for a dedicated `.arch/modules/<module>.json` file only if it
 - **Tier 1 (Priority navigation)**:
   MUST prioritize `tavern`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`, and `store` when investigating transactions. A priority designation MUST NOT imply that a module-level JSON exists or waive C1–C4. Depot mailing belongs to `internal/depot`; MUST NOT infer an `internal/delivery` module from the feature name.
 - **Tier 2 (On-Demand - authored when modified)**:
-  `bank`, `alchemy`, `dungeon`, `casino`, `medal`, `depot`, `activity`, `monster`, `plantation`, `park`, `home`, `collection`, `chapel`, `secretshop`, `blackmarket`, `gemstore`, `fleamarket`, `eventplaza`, `pvp`, `gvg`, `boss`, `rescue`. A single-row bank savings update does not justify duplicating its repository in a module index.
+  `bank`, `alchemy`, `dungeon`, `casino`, `medal`, `depot`, `activity`, `monster`, `plantation`, `home`, `collection`, `chapel`, `secretshop`, `blackmarket`, `gemstore`, `fleamarket`, `eventplaza`, `pvp`, `gvg`, `boss`, `rescue`. A single-row bank savings update does not justify duplicating its repository in a module index.
 - **Tier 3 (Out-of-Scope - No module-level JSON)**:
   Stateless utilities (`id`, `pagination`, `validation`, `logging`, `ratelimit`, `valkey`) and core domain entities (`core/*`).
 

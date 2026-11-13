@@ -22,7 +22,7 @@ func TestSelectedScenesAndConnectedChoices(t *testing.T) {
 	if status != 200 || town.Scene.Kind != "town" || town.Scene.Subject != nil {
 		t.Fatalf("town: %d %+v", status, town.Scene)
 	}
-	if !slices.EqualFunc(town.AvailableActions, []string{"scene_enter", "adventure_start"}, func(a ContextAction, id string) bool { return a.Action == id }) {
+	if !slices.EqualFunc(town.AvailableActions, []string{"scene_enter", "adventure_start", "npc_talk", "npc_inspect", "park_divinate"}, func(a ContextAction, id string) bool { return a.Action == id }) {
 		t.Fatalf("unconnected or irrelevant commands offered: %+v", town.AvailableActions)
 	}
 	var data TownSceneData

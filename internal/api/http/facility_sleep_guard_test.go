@@ -80,7 +80,6 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithSecretShop(&stubSecretShopService{}),
 		apihttp.WithBlacksmith(&stubBlacksmithService{}),
 		apihttp.WithStore(noopStoreService{}),
-		apihttp.WithPark(&mockParkService{}),
 		apihttp.WithMonster(&stubMonsterService{}),
 		apihttp.WithOracleShop(&stubOracleShopService{}),
 		apihttp.WithHelper(&mockHelperService{}),
@@ -177,10 +176,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"store_interior_add", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_add","params":{"furniture_id":"001"}}`},
 		{"store_interior_rename", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_rename","params":{"interior_id":"int-1","name":"お気に入りの机"}}`},
 		{"store_interior_clean", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_clean"}`},
-		// Park
-		{"park_post_message", http.MethodPost, "/park/posts", `{"character_id":"char-1","content":"hello"}`},
-		{"park_npc_talk", http.MethodPost, "/park/npc/talk", `{"character_id":"char-1"}`},
-		{"park_npc_divinate", http.MethodPost, "/park/npc/divinate", `{"character_id":"char-1"}`},
 		// Monster
 		{"monster_bring_home", http.MethodPost, "/characters/char-1/monsters/m-1/bring-home", ``},
 		{"monster_deposit", http.MethodPost, "/characters/char-1/monsters/m-1/deposit", ``},

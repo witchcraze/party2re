@@ -16,6 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/bank"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
@@ -32,11 +33,12 @@ const (
 )
 
 type npcProfile struct {
-	name    string
-	words   []string
-	wordsOf func(corecharacter.Character) []string // replaces words when they depend on the speaker
-	inspect string                                 // empty: npcInspectDefault
-	silent  bool                                   // inspection prints nothing (an empty shiraberu_npc)
+	name         string
+	words        []string
+	wordsOf      func(corecharacter.Character) []string // replaces words when they depend on the speaker
+	inspect      string                                 // empty: npcInspectDefault
+	inspectWords []string                               // inspection answered by ＠はなす: logged publicly
+	silent       bool                                   // inspection prints nothing (an empty shiraberu_npc)
 }
 
 func shopNPC(kind shop.ShopType, inspect string) npcProfile {
@@ -85,6 +87,8 @@ var npcProfiles = map[string]npcProfile{
 		"１人で出せる品は限りがあるから気をつけな", "俺の名前を知らないようじゃピヨッコだ",
 	}},
 	"altar": {name: altar.NPCName, wordsOf: altar.MikoWords},
+	// The town hub is the legacy default place, lib/park.cgi.
+	"town": {name: park.NPCName, words: park.Words, inspectWords: park.InspectWords},
 	// god.cgi/u_god.cgi @words and shiraberu_npc.
 	"god":         {name: "@神", words: godWords, inspect: "@神「本当の願いは自分の力で叶えるのだ…」"},
 	"u_god":       {name: "@神?", words: godWords, silent: true},
@@ -131,6 +135,9 @@ func (h *Handler) registerNPC(service *playercontext.Service) {
 		},
 		"secretshop_puffpuff": func(ctx context.Context, owner, actor string) (NPCResult, error) {
 			return h.puffPuff(ctx, service, owner, actor)
+		},
+		"park_divinate": func(ctx context.Context, owner, actor string) (NPCResult, error) {
+			return h.divinate(ctx, service, owner, actor)
 		},
 	}
 	for id, act := range acts {
@@ -195,6 +202,20 @@ func (h *Handler) puffPuff(ctx context.Context, service *playercontext.Service, 
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
+// divinate is ＠うらない (park.cgi uranai): a public $npc_com that starts the wait.
+func (h *Handler) divinate(ctx context.Context, service *playercontext.Service, owner, actor string) (NPCResult, error) {
+	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
+	if err != nil {
+		return NPCResult{}, err
+	}
+	if destination != "town" {
+		return NPCResult{}, errNPCUnavailable
+	}
+	word := park.Divinate(random.Intn, char.Name)
+	h.appendNPCLog(ctx, destination, char, "＠うらない", npc.name, word, "")
+	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
+}
+
 func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, owner, actor string, talk bool) (NPCResult, error) {
 	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
 	if err != nil {
@@ -203,22 +224,24 @@ func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, ow
 	if !talk && npc.silent {
 		return NPCResult{NPCName: npc.name, Private: true}, nil
 	}
-	if !talk {
+	command, words := "＠はなす", npc.words
+	if !talk && len(npc.inspectWords) > 0 {
+		command, words = "＠しらべる>"+npc.name, npc.inspectWords
+	} else if !talk {
 		text := npc.inspect
 		if text == "" {
 			text = npcInspectDefault
 		}
 		return NPCResult{NPCName: npc.name, Dialogue: text, Private: true}, nil
 	}
-	words := npc.words
-	if npc.wordsOf != nil {
+	if talk && npc.wordsOf != nil {
 		words = npc.wordsOf(char)
 	}
 	if len(words) == 0 {
 		return NPCResult{NPCName: npc.name, Dialogue: npcNoWords, Private: true}, nil
 	}
-	word := strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP)).Replace(words[random.Intn(len(words))])
-	h.appendNPCLog(ctx, destination, char, "＠はなす", npc.name, word, "")
+	word := strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP), "{job}", h.jobName(char.JobID)).Replace(words[random.Intn(len(words))])
+	h.appendNPCLog(ctx, destination, char, command, npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 

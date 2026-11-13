@@ -169,7 +169,7 @@ func TestConfigFromEnv(t *testing.T) {
 		}
 	})
 
-	t.Run("mail and park limit parsing", func(t *testing.T) {
+	t.Run("mail and place limit parsing", func(t *testing.T) {
 		t.Setenv("PARTY2_DB_DSN", "test:test@tcp(127.0.0.1:3306)/test_db")
 		t.Setenv("PARTY2_MAX_PLAYERS", "")
 		t.Setenv("PARTY2_TRUSTED_PROXIES", "")
@@ -181,8 +181,6 @@ func TestConfigFromEnv(t *testing.T) {
 		}{
 			{"PARTY2_HOME_LETTER_LOG_LIMIT", 30, func(c Config) int { return c.Home.LetterLogLimit }},
 			{"PARTY2_HOME_LETTER_MAX_LENGTH", 500, func(c Config) int { return c.Home.LetterMaxLength }},
-			{"PARTY2_PARK_POST_LOG_LIMIT", 30, func(c Config) int { return c.Park.PostLogLimit }},
-			{"PARTY2_PARK_POST_MAX_LENGTH", 500, func(c Config) int { return c.Park.PostMaxLength }},
 			{"PARTY2_ACTION_WAIT_SECONDS", 4, func(c Config) int { return int(c.ActionWait / time.Second) }},
 			{"PARTY2_PLACE_LOG_LIMIT", 30, func(c Config) int { return c.PlaceLog.Limit }},
 			{"PARTY2_PLACE_LOG_TTL_HOURS", 168, func(c Config) int { return int(c.PlaceLog.TTL / time.Hour) }},

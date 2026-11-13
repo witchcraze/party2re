@@ -67,18 +67,18 @@ this delivery path under the existing [trajectory gap](../design/player-and-char
 ### CL-02: Living, Housing & Towns (生活・拠点・預かり所)
 - **Cluster Summary**: プレイヤーの生活拠点（自宅、睡眠）、手紙、町の探索、公園、預かり所（Depot）
 - **Shared Dependencies**: `party2/lib/_npc_action.cgi`, `party2/lib/system.cgi`, `party2/lib/_data.cgi` (Homeで使うアイテム効果)
-- **Primary Domain Packages**: `internal/home/`, `internal/depot/`, `internal/park/`, `internal/town/`, `internal/store/` (建設部分)
+- **Primary Domain Packages**: `internal/home/`, `internal/depot/`, `internal/town/`, `internal/store/` (建設部分)
 - **Key Testing / Linter Focus**: 有料宿屋の排除、Depotの排他制御・保管上限、日次フラグリセット
 
 `CL-02A`〜`CL-02E`を個別の監査対象として指定する。親の`CL-02`を指定した場合は全5単位を順に調べ、各単位の結果を共有した後、下記の連動確認を行う。一部の監査だけで親全体をCompliantと判定しない。
 
 同じ`lib/home.cgi`が複数単位に登場するのは、表示・睡眠・アイテム使用で操作と状態変化が異なるため。以下は監査範囲と参照先であり、ゲーム仕様の正本や実装済み証明ではない。外部スキルの`references/clusters.json`は候補キャッシュとして、このmappingに照合する。
 
-#### CL-02A: Home, Mail & Park
+#### CL-02A: Home & Mail
 
-- **Scope / Legacy**: `lib/home.cgi`の公開/本人表示、Home設定、`てがみをかく` / `てがみをよむ`、`からー`、`ことばをおしえる` / `ことばをわすれさせる`、ペット表示/会話、配送通知。`lib/park.cgi`の`うらない`、NPC会話・共通チャット。共有`lib/system.cgi`の手紙・ログ処理まで追う。
-- **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/park/`、`internal/api/http/home.go`、`internal/api/http/home_estate.go`の設定/色関連、`internal/api/http/park.go`。
-- **Contracts**: [design/home.md](../design/home.md)、[design/town_park.md](../design/town_park.md)、[api/paths/home.json](../api/paths/home.json)、[api/paths/letter.json](../api/paths/letter.json)、[api/paths/park.json](../api/paths/park.json)、[api/paths/character.json](../api/paths/character.json) (色設定)。
+- **Scope / Legacy**: `lib/home.cgi`の公開/本人表示、Home設定、`てがみをかく` / `てがみをよむ`、`からー`、`ことばをおしえる` / `ことばをわすれさせる`、ペット表示/会話、配送通知。共有`lib/system.cgi`の手紙・ログ処理まで追う。
+- **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/api/http/home.go`、`internal/api/http/home_estate.go`の設定/色関連。
+- **Contracts**: [design/home.md](../design/home.md)、[api/paths/home.json](../api/paths/home.json)、[api/paths/letter.json](../api/paths/letter.json)、[api/paths/character.json](../api/paths/character.json) (色設定)。
 - **Open follow-ups**: [#1094](https://github.com/witchcraze/party2re/issues/1094) (mailbox所有)、[#1115](https://github.com/witchcraze/party2re/issues/1115) (設定更新)、[#1116](https://github.com/witchcraze/party2re/issues/1116) (色更新)。
 - **Boundary**: Homeからの図鑑・ジョブマスター・プロフィール・冒険記録・特技設定・画像設定は遷移先と対象identityを確認する。遷移先の全仕様はCL-01/04/06/07の担当範囲。壁紙等の表示はここ、使用による変更はCL-02E。
 
@@ -129,7 +129,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | `lib/home.cgi` | 自宅拠点 (@自宅ペット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json)<br/>[api/paths/letter.json](../api/paths/letter.json) | Reconciling | CL-02A/B/E。未解決の所有・更新・睡眠・使用差分は各監査単位および所有文書を参照。 |
 | `lib/sleep.cgi` | 睡眠 (無料全快・日次リセット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json) | Reconciling | CL-02B (#1117〜#1119, #1822)。有料宿屋は非存在。時間/人数・起床義務・訪問条件の契約は CL-02B および [design/home.md](../design/home.md) 参照。 |
-| `lib/park.cgi` | 交流広場 (@町娘) | `internal/park/` | [design/town_park.md](../design/town_park.md)<br/>[api/paths/park.json](../api/paths/park.json) | Reconciling | CL-02A (#1126)。占い（22entry・27色）、NPC会話、チャット。文字数/log契約は未確定。10G回復は非存在。 |
+| `lib/park.cgi` | 交流広場 (@町娘) = town hub | `internal/park/` (NPC文言)<br/>`internal/api/http/action_npc.go` | [architecture/place-log.md](../architecture/place-log.md) | Review against source | 発言/ささやきは共有place log、`はなす`/`しらべる`/`うらない`はNPC Gateway。10G回復は非存在。 |
 | `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | [design/depot.md](../design/depot.md) | Reconciling | CL-02C。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |
 | `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (住宅建設)<br/>`internal/town/`<br/>`internal/store/` (商店建設)<br/>Client Presentation | [design/home.md](../design/home.md)<br/>[design/store.md](../design/store.md)<br/>[api/paths/towns.json](../api/paths/towns.json)<br/>[api/paths/houses.json](../api/paths/houses.json) | Reconciling | CL-02D (#1113, #1114, #1122)。町別上限・GP配線に未解決差分があり、設定/guardはCL-02A/Bと連動確認する。 |
 

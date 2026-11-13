@@ -95,8 +95,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /helpers/quests$`),
 		regexp.MustCompile(`^GET /news$`),
 		regexp.MustCompile(`^GET /news/\{id\}$`),
-		regexp.MustCompile(`^GET /park/posts$`),
-		regexp.MustCompile(`^GET /park/npc/inspect$`),
 		regexp.MustCompile(`^GET /eventplaza$`),
 		regexp.MustCompile(`^GET /eventplaza/merchant/items$`),
 		regexp.MustCompile(`^GET /eventplaza/banquets$`),
@@ -427,10 +425,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleTeachCompanionPhrase":  "home.go",
 		"handleForgetCompanionPhrase": "home.go",
 		"handleClearDeliveryNotices":  "home.go",
-		// Park
-		"handlePostParkMessage": "park.go",
-		"handleParkNPCTalk":     "park.go",
-		"handleParkNPCDivinate": "park.go",
 		// Monster
 		"handleBringMonsterToHome":  "monster.go",
 		"handleDepositMonsterToBox": "monster.go",

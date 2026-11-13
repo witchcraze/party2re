@@ -33,10 +33,6 @@
       "name": "Shop"
     },
     {
-      "description": "Town park bulletin board and NPC interactions",
-      "name": "Park"
-    },
-    {
       "description": "Small medal collection and rare reward exchange",
       "name": "Medals"
     },
@@ -937,38 +933,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "CursorPageParkPost": {
-        "properties": {
-          "has_more": {
-            "description": "Whether additional records exist beyond the current page",
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "next_cursor": {
-            "description": "Opaque cursor token for retrieving the next page of results",
-            "type": "string"
-          },
-          "prev_cursor": {
-            "description": "Opaque cursor token for retrieving the previous page of results",
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "limit",
-          "has_more"
-        ],
-        "type": "object"
-      },
       "CursorPageReplayHeader": {
         "properties": {
           "has_more": {
@@ -1397,35 +1361,6 @@
           "items": {
             "items": {
               "$ref": "#/components/schemas/Notification"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "Offset from beginning of result set",
-            "type": "integer"
-          },
-          "total": {
-            "description": "Total number of records matching the query",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
-      "PageParkPost": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
             },
             "type": "array"
           },
@@ -3561,6 +3496,31 @@
                 "action": {
                   "type": "string",
                   "const": "secretshop_puffpuff"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "park_divinate"
                 }
               },
               "required": [
@@ -9034,42 +8994,6 @@
           "title",
           "body",
           "is_read",
-          "created_at"
-        ],
-        "type": "object"
-      },
-      "ParkPost": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "color": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "recipient_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "character_id",
-          "character_name",
-          "content",
-          "color",
-          "recipient_name",
           "created_at"
         ],
         "type": "object"
@@ -15650,70 +15574,6 @@
         "required": [
           "wallpaper",
           "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ParkDivinationResult": {
-        "properties": {
-          "fortune": {
-            "type": "string"
-          },
-          "lucky_color": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "fortune",
-          "lucky_color",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ParkDialogueResponse": {
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dialogue"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PaginationCursorPageParkPost": {
-        "properties": {
-          "has_more": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "limit": {
-            "type": "integer"
-          },
-          "next_cursor": {
-            "type": "string"
-          },
-          "prev_cursor": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "limit",
-          "has_more"
         ],
         "type": "object",
         "additionalProperties": false

@@ -9,13 +9,10 @@ func (LocationGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
 	if !action.RequiredGates.Has(GateLocationCheck) || action.ID == "home_wake" || action.Category == "navigation" {
 		return true
 	}
-	if strings.HasPrefix(action.ID, "place_") {
-		// Speech goes to any place with a log; the HTTP registry decides which.
+	if strings.HasPrefix(action.ID, "place_") || action.Category == "npc" {
+		// Speech and NPCs belong to places with a log or an NPC (the town hub
+		// included); the HTTP registry decides which.
 		return true
-	}
-	if action.Category == "npc" {
-		// NPCs stand in facilities; the HTTP registry decides which have one.
-		return snapshot.LocationID != LocationTown
 	}
 	if snapshot.LocationID == LocationTown {
 		return true

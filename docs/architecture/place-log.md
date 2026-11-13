@@ -94,6 +94,7 @@ Command echoes (the actor and NPC rows of facility commands) are open in [#1941]
 - The HTTP layer keeps one NPC registry keyed by scene destination: name, words (with `{name}` for the actor) and an optional inspect text. The NPC colour is the legacy `$npc_color` `#FF69B4`. Facilities in the registry offer both commands; the facility comes from the current scene, and the scene's qualification is rechecked.
 - **Talk**: `npc_talk` logs the actor row `＠はなす` and a random word as the NPC row, and starts the wait. A facility without words would answer privately with `返事がない、ただのしかばねのようだ…`.
 - **Inspect**: `npc_inspect` returns the facility's `shiraberu_npc` text, or the default `しかし何も見つからなかった…`, to the actor only (`private: true`). It writes no row and starts no wait (`WaitPrivate`).
+  The park (town hub) is the exception: its `shiraberu_npc` swaps `@words` and calls `&hanasu` (`lib/park.cgi`), so the line is a logged `$npc_com` with the actor row `＠しらべる>@町娘`, and it starts the wait.
 - Legacy word lines that embed live facts (Gem Store and Accessory item recommendations, Depot capacity) are omitted until those facts are wired.
 - Facility-specific NPC acts stay facility commands in the `npc` category, such as SecretShop `secretshop_puffpuff`. It logs `＠ぱふぱふ` and its reply as rows private to the actor and starts the wait.
 

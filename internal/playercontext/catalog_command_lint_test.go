@@ -109,6 +109,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"depot_expand", "", "", false},
 		{"depot_sort", "", "", false},
 		{"secretshop_puffpuff", "", "", false},
+		{"park_divinate", "", "", false},
 		{"gemstore_sort", "", "", false},
 		{"gemstore_sell", "item_id", "string", true},
 		{"gemstore_buy", "gem_id", "string", true},

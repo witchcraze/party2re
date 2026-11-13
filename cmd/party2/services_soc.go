@@ -21,7 +21,6 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/notification"
-	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/ratelimit"
@@ -78,7 +77,6 @@ type socServices struct {
 	guildRepo    *database.GuildRepository
 	guild        *guild.Service
 	ranking      *ranking.Service
-	park         *park.Service
 	home         *home.Service
 	notification *notification.Service
 	sched        *scheduling.Service
@@ -106,11 +104,6 @@ func newSocServices(
 	}
 
 	rankingRepo, err := database.NewRankingRepository(db)
-	if err != nil {
-		return nil, err
-	}
-
-	parkRepo, err := database.NewParkRepository(db)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +149,6 @@ func newSocServices(
 	}
 
 	timerService := timer.NewService(valkeyClient)
-	parkService, _ := park.NewService(parkRepo, core.charRepo)
 
 	invService, _ := inventory.NewService(core.invRepo)
 	var depotMgr home.DepotManager
@@ -218,7 +210,6 @@ func newSocServices(
 		guildRepo:    guildRepo,
 		guild:        guildService,
 		ranking:      rankingService,
-		park:         parkService,
 		home:         homeService,
 		notification: notificationService,
 		sched:        schedService,

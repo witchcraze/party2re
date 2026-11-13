@@ -53,7 +53,6 @@ func wireApp(
 	}
 	soc.home.SetCompanionPhraseLimit(cfg.Home.CompanionPhraseLimit)
 	soc.home.SetLetterLimits(cfg.Home.LetterLogLimit, cfg.Home.LetterMaxLength)
-	soc.park.SetLimits(cfg.Park.PostLogLimit, cfg.Park.PostMaxLength)
 	soc.placeLog = placelog.New(valkeyClient, cfg.PlaceLog)
 	soc.placeMembers = placelog.NewMembers(valkeyClient, cfg.PlaceMemberTTL)
 	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
@@ -319,7 +318,6 @@ func newHTTPHandler(
 		http.WithRescue(misc.rescue),
 		http.WithExile(soc.exile),
 		http.WithMedal(misc.medal),
-		http.WithPark(soc.park),
 		http.WithRanking(soc.ranking),
 		http.WithJob(misc.job),
 		http.WithChapel(misc.chapel),
