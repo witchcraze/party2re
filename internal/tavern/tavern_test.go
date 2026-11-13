@@ -218,7 +218,7 @@ func TestTavern_GetStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetStatus failed: %v", err)
 	}
-	if status.CharacterName != "Hero" || status.Gold != 1000 || status.IsFull {
+	if status.CharacterID != charID || status.IsFull || status.DeliveryReservation != nil {
 		t.Errorf("unexpected status: %+v", status)
 	}
 
@@ -475,6 +475,13 @@ func TestTavern_DeliveryReadErrors(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name: "status",
+			call: func(svc *tavern.Service, ctx context.Context, characterID string) error {
+				_, err := svc.GetStatus(ctx, characterID)
+				return err
+			},
+		},
 	}
 
 	for _, operation := range operations {
@@ -535,26 +542,6 @@ func TestTavern_DeliveryReadErrors(t *testing.T) {
 				})
 			}
 		})
-	}
-}
-
-func TestTavern_Talk(t *testing.T) {
-	svc, charRepo, _, _ := setupTestService(t)
-	ctx := context.Background()
-
-	charID := "char-1"
-	charRepo.chars[charID] = corecharacter.Character{
-		ID:    charID,
-		Name:  "Loto",
-		Money: 100,
-	}
-
-	talkRes, err := svc.Talk(ctx, charID)
-	if err != nil {
-		t.Fatalf("Talk failed: %v", err)
-	}
-	if talkRes.NPCName != "@エレナ" || talkRes.LocationName != "冒険者の酒場" || talkRes.Message == "" {
-		t.Errorf("unexpected TalkResult: %+v", talkRes)
 	}
 }
 

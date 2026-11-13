@@ -29,6 +29,7 @@ type gatewayFixture struct {
 	queryErr, profileErr, executionErr, sleepErr     error
 	queryOwner                                       string
 	profileOwner                                     string
+	bio                                              map[string]string
 	characterErr                                     error
 	actions                                          []scheduling.ScheduledAction
 	sleep                                            home.SleepStatus
@@ -75,7 +76,7 @@ func (f *gatewayFixture) GetProfile(ctx context.Context, id string) (character.P
 	if f.profileOwner != "" {
 		c.PlayerID = f.profileOwner
 	}
-	return character.ProfileView{Character: c, Profile: character.Profile{AvatarURL: "avatar"}}, f.profileErr
+	return character.ProfileView{Character: c, Profile: character.Profile{AvatarURL: "avatar", BioData: f.bio}}, f.profileErr
 }
 
 func (f *gatewayFixture) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
@@ -363,7 +364,7 @@ func TestActionGatewayUnsupported(t *testing.T) {
 		option             Option
 	}{
 		{"unknown", "nonexistent", "ACTION_NOT_FOUND", 404, nil},
-		{"unconnected", "tavern_order", "ACTION_NOT_IMPLEMENTED", 501, nil},
+		{"unconnected", "lottery_raffle", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"documented PvP inputs", "pvp_room_create", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"documented seal inputs", "blacksmith_seal", "ACTION_NOT_IMPLEMENTED", 501, nil},
 		{"documented alchemy inputs", "alchemy_synthesize", "ACTION_NOT_IMPLEMENTED", 501, nil},

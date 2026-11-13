@@ -40,7 +40,7 @@ var facilities = func() map[string]facility {
 		"god": godFacility, "u_god": underworldGodFacility, "auction": auctionFacility, "bank": bankFacility,
 		"blackmarket": blackMarketFacility, "blacksmith": blacksmithFacility, "chapel": chapelFacility, "exile": exileFacility,
 		"depot": depotFacility, "fleamarket": fleaMarketFacility, "gemstore": gemStoreFacility, "secretshop": secretShopFacility,
-		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "casino": casinoFacility,
+		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "casino": casinoFacility, "tavern": tavernFacility,
 	}
 	for _, t := range town.AllTowns() {
 		m[t.ID] = townDistrictFacility(t.Name)
@@ -309,6 +309,11 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 				choices = append(choices, "scene_enter")
 			}
 			templates["home_sleep"] = map[string]any{"target_home_id": data.View.Owner.ID}
+		case TavernSceneData:
+			scene.Support.Observation = "details"
+			if data.Delivery == nil {
+				choices = slices.DeleteFunc(choices, func(id string) bool { return id == "tavern_delivery_cancel" })
+			}
 		case HomeMailboxSceneData:
 			scene.Support.Observation = "details"
 			if data.Page.Next != nil {

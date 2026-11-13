@@ -56,17 +56,9 @@ type TavernCharacterStatus struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
-// TavernStatus represents the full tavern status presented to the character.
+// TavernStatus is the character's tavern state.
 type TavernStatus struct {
 	CharacterID         string               `json:"character_id"`
-	CharacterName       string               `json:"character_name"`
-	LocationName        string               `json:"location_name"`
-	NPCName             string               `json:"npc_name"`
-	Gold                int                  `json:"gold"`
-	HP                  int                  `json:"hp"`
-	MaxHP               int                  `json:"max_hp"`
-	MP                  int                  `json:"mp"`
-	MaxMP               int                  `json:"max_mp"`
 	IsFull              bool                 `json:"is_full"`
 	DeliveryReservation *DeliveryReservation `json:"delivery_reservation,omitempty"`
 }
@@ -84,6 +76,9 @@ type OrderResult struct {
 	TotalTickets   int      `json:"total_tickets"`
 	Message        string   `json:"message"`
 }
+
+// NPCName is the tavern's barkeep, a clean-room replacement for the legacy name.
+const NPCName = "@エレナ"
 
 // Repository defines storage operations for tavern deliveries and character statuses.
 type Repository interface {
@@ -182,23 +177,14 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (TavernStat
 
 	var deliveryPtr *DeliveryReservation
 	delivery, err := s.repo.GetDelivery(ctx, charID)
+	if err != nil && !errors.Is(err, ErrNoActiveDelivery) {
+		return TavernStatus{}, err
+	}
 	if err == nil && delivery.ItemID != "" {
 		deliveryPtr = &delivery
 	}
 
-	return TavernStatus{
-		CharacterID:         char.ID,
-		CharacterName:       char.Name,
-		LocationName:        LocationName,
-		NPCName:             NPCName,
-		Gold:                char.Money,
-		HP:                  char.Stats.HP,
-		MaxHP:               char.Stats.MaxHP,
-		MP:                  char.Stats.MP,
-		MaxMP:               char.Stats.MaxMP,
-		IsFull:              status.IsFull,
-		DeliveryReservation: deliveryPtr,
-	}, nil
+	return TavernStatus{CharacterID: char.ID, IsFull: status.IsFull, DeliveryReservation: deliveryPtr}, nil
 }
 
 // ResetFullness clears the fullness state for a character (e.g. after adventure or sleep).
