@@ -16,6 +16,21 @@ import (
 	"github.com/witchcraze/party2re/internal/scheduling"
 )
 
+func selectScheduledActions(actions []core.ScheduledAction, ids ...string) []core.ScheduledAction {
+	ownedIDs := make(map[string]struct{}, len(ids))
+	for _, actionID := range ids {
+		ownedIDs[actionID] = struct{}{}
+	}
+
+	var selected []core.ScheduledAction
+	for _, action := range actions {
+		if _, ok := ownedIDs[action.ID]; ok {
+			selected = append(selected, action)
+		}
+	}
+	return selected
+}
+
 func TestWorker_QueueTraversal_StarvationPrevention(t *testing.T) {
 	client := openValkeyClient(t)
 	t.Cleanup(client.Close)
@@ -98,8 +113,12 @@ func TestWorker_QueueTraversal_StarvationPrevention(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchDue: %v", err)
 	}
-	for _, a := range due {
-		worker.ProcessAction(ctx, a)
+	ownedDue := selectScheduledActions(due, append(blockedIDs, healthyID)...)
+	if len(ownedDue) != 1 || ownedDue[0].ID != healthyID {
+		t.Fatalf("expected only healthy action %s among owned due actions, got %+v", healthyID, ownedDue)
+	}
+	for _, action := range ownedDue {
+		worker.ProcessAction(ctx, action)
 	}
 
 	// Handler calls must increment to 51 (healthy action executed; 50 blocked records not replayed)
@@ -201,8 +220,12 @@ func TestWorker_QueueTraversal_MultiPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchDue: %v", err)
 	}
-	for _, a := range due {
-		worker.ProcessAction(ctx, a)
+	ownedDue := selectScheduledActions(due, append(blockedIDs, healthyID)...)
+	if len(ownedDue) != 1 || ownedDue[0].ID != healthyID {
+		t.Fatalf("expected only healthy action %s among owned due actions, got %+v", healthyID, ownedDue)
+	}
+	for _, action := range ownedDue {
+		worker.ProcessAction(ctx, action)
 	}
 
 	if handler.calls != numBlocked+1 {
@@ -215,6 +238,11 @@ func TestWorker_QueueTraversal_HealthyContrast(t *testing.T) {
 	t.Cleanup(client.Close)
 
 	ctx := context.Background()
+	actorID := id.New()
+	t.Cleanup(func() {
+		client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+	})
+
 	repo := scheduling.NewValkeyRepository(client)
 	handler := &terminalCountingHandler{}
 	worker := scheduling.NewWorker(repo, time.Minute, logging.NewJSON(io.Discard))
@@ -227,6 +255,7 @@ func TestWorker_QueueTraversal_HealthyContrast(t *testing.T) {
 		actionID := fmt.Sprintf("contrast-%02d-%s", i, id.New())
 		ids[i] = actionID
 		action := validTestAction(actionID, baseTime.Add(time.Duration(i)*time.Second))
+		action.ActorID = actorID
 		if err := repo.Schedule(ctx, action); err != nil {
 			t.Fatalf("Schedule %d: %v", i, err)
 		}
@@ -235,15 +264,28 @@ func TestWorker_QueueTraversal_HealthyContrast(t *testing.T) {
 		cleanupKeys(t, client, ids...)
 	})
 
-	due, err := repo.FetchDue(ctx, time.Now(), 50)
+	actions, err := repo.FindPendingByActorID(ctx, actorID)
 	if err != nil {
-		t.Fatalf("FetchDue: %v", err)
+		t.Fatalf("FindPendingByActorID: %v", err)
 	}
-	if len(due) != count {
-		t.Fatalf("expected %d due actions, got %d", count, len(due))
+	if len(actions) != count {
+		t.Fatalf("expected %d owned due actions, got %d", count, len(actions))
 	}
-	for _, a := range due {
-		worker.ProcessAction(ctx, a)
+	remainingIDs := make(map[string]struct{}, count)
+	for _, actionID := range ids {
+		remainingIDs[actionID] = struct{}{}
+	}
+	for _, action := range actions {
+		if _, ok := remainingIDs[action.ID]; !ok {
+			t.Fatalf("unexpected action %s returned for actor %s", action.ID, actorID)
+		}
+		delete(remainingIDs, action.ID)
+	}
+	if len(remainingIDs) != 0 {
+		t.Fatalf("expected all owned actions to be returned, missing %v", remainingIDs)
+	}
+	for _, action := range actions {
+		worker.ProcessAction(ctx, action)
 	}
 
 	if handler.calls != count {
@@ -264,6 +306,11 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 	t.Cleanup(client.Close)
 
 	ctx := context.Background()
+	actorID := id.New()
+	t.Cleanup(func() {
+		client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+	})
+
 	fault := &terminalFaultClient{Client: client}
 	repo := scheduling.NewValkeyRepository(fault)
 	handler := &terminalCountingHandler{}
@@ -278,6 +325,7 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 		actionID := fmt.Sprintf("mixed-blocked-%02d-%s", i, id.New())
 		blockedIDs[i] = actionID
 		action := validTestAction(actionID, baseTime.Add(time.Duration(i)*time.Second))
+		action.ActorID = actorID
 		if err := repo.Schedule(ctx, action); err != nil {
 			t.Fatalf("Schedule: %v", err)
 		}
@@ -297,7 +345,9 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 		return false
 	}
 	for _, aID := range blockedIDs {
-		worker.ProcessAction(ctx, validTestAction(aID, baseTime))
+		action := validTestAction(aID, baseTime)
+		action.ActorID = actorID
+		worker.ProcessAction(ctx, action)
 	}
 	if handler.calls != 10 {
 		t.Fatalf("expected 10 handler calls for blocked, got %d", handler.calls)
@@ -313,6 +363,7 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 		actionID := fmt.Sprintf("mixed-completed-%02d-%s", i, id.New())
 		completedIDs[i] = actionID
 		action := validTestAction(actionID, baseTime.Add(time.Duration(10+i)*time.Second))
+		action.ActorID = actorID
 		if err := repo.Schedule(ctx, action); err != nil {
 			t.Fatalf("Schedule: %v", err)
 		}
@@ -336,6 +387,7 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 		actionID := fmt.Sprintf("mixed-healthy-%02d-%s", i, id.New())
 		healthyIDs[i] = actionID
 		action := validTestAction(actionID, baseTime.Add(time.Duration(20+i)*time.Second))
+		action.ActorID = actorID
 		if err := repo.Schedule(ctx, action); err != nil {
 			t.Fatalf("Schedule: %v", err)
 		}
@@ -344,18 +396,34 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 		cleanupKeys(t, client, healthyIDs...)
 	})
 
-	// FetchDue with limit 50:
-	// Should skip the 10 Processing actions, return the 10 Completed actions (for cleanup) and 5 Pending actions (for execution)
-	due, err := repo.FetchDue(ctx, time.Now(), 50)
+	// Fetch well beyond this test's actions and process only its own terminal and pending records.
+	due, err := repo.FetchDue(ctx, time.Now(), 1000)
 	if err != nil {
 		t.Fatalf("FetchDue: %v", err)
 	}
-	if len(due) != 15 {
-		t.Fatalf("expected 15 due actions (10 completed + 5 pending), got %d", len(due))
+	ownedIDs := make(map[string]struct{}, len(completedIDs)+len(healthyIDs))
+	for _, actionID := range completedIDs {
+		ownedIDs[actionID] = struct{}{}
+	}
+	for _, actionID := range healthyIDs {
+		ownedIDs[actionID] = struct{}{}
+	}
+	var ownedDue []core.ScheduledAction
+	for _, action := range due {
+		if _, ok := ownedIDs[action.ID]; ok {
+			ownedDue = append(ownedDue, action)
+			delete(ownedIDs, action.ID)
+		}
+	}
+	if len(ownedDue) != 15 {
+		t.Fatalf("expected 15 owned due actions (10 completed + 5 pending), got %d", len(ownedDue))
+	}
+	if len(ownedIDs) != 0 {
+		t.Fatalf("expected all owned due actions to be fetched, missing %v", ownedIDs)
 	}
 
-	for _, a := range due {
-		worker.ProcessAction(ctx, a)
+	for _, action := range ownedDue {
+		worker.ProcessAction(ctx, action)
 	}
 
 	// Handler calls must only increment by 5 (only healthy pending actions executed, completed actions not redispatched)
@@ -539,12 +607,13 @@ func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
 		if len(due) > 50 {
 			t.Fatalf("tick %d returned %d actions, exceeding production limit 50", tick, len(due))
 		}
-		for _, a := range due {
-			worker.ProcessAction(ctx, a)
-			if a.ID == healthyID {
+		ownedDue := selectScheduledActions(due, healthyID, concurrentInsertID, terminalID)
+		for _, action := range ownedDue {
+			worker.ProcessAction(ctx, action)
+			if action.ID == healthyID {
 				executedHealthy = true
 			}
-			if a.ID == concurrentInsertID {
+			if action.ID == concurrentInsertID {
 				executedConcurrent = true
 			}
 		}
@@ -602,10 +671,11 @@ func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchDue contrast: %v", err)
 	}
-	if len(dueContrast) != 1 || dueContrast[0].ID != contrastID {
-		t.Fatalf("expected contrast action %s returned immediately, got %+v", contrastID, dueContrast)
+	ownedContrast := selectScheduledActions(dueContrast, contrastID)
+	if len(ownedContrast) != 1 || ownedContrast[0].ID != contrastID {
+		t.Fatalf("expected contrast action %s returned immediately, got owned actions %+v", contrastID, ownedContrast)
 	}
-	worker.ProcessAction(ctx, dueContrast[0])
+	worker.ProcessAction(ctx, ownedContrast[0])
 	if handler.calls != 3 {
 		t.Fatalf("expected 3 handler calls after contrast, got %d", handler.calls)
 	}
