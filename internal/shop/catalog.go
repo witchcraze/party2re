@@ -185,37 +185,3 @@ func GetShopMeta(shopType ShopType) (title string, npcName string) {
 		return "", ""
 	}
 }
-
-func GetShopWords(shopType ShopType) []string {
-	switch shopType {
-	case ShopTypeWeapon:
-		return []string{
-			"いらっしゃい！ここは武器屋だぜ！",
-			"強い武器ほど重いぜ！重いと素早さが下がるから注意しな！",
-			"武器の強さ＝攻撃力だぜ！",
-			"まとめて買ってくれるなら、あんたの預かり所に送ってやるぜ！",
-		}
-	case ShopTypeArmor:
-		return []string{
-			"いらっしゃいッス！ここは防具屋ッス！",
-			"防御力が高ければ、敵から受けるダメージが減るッスよ！",
-			"防具も重いと素早さが下がるッスから注意ッス！",
-			"まとめて買ってくれるなら、預かり所に送っておくッスよ！",
-		}
-	case ShopTypeItem:
-		return []string{
-			"いらしゃいませぇ〜ここは道具屋ニャ",
-			"冒険に出る前に道具があると便利ニャ",
-			"道具は戦闘中に使うニャ！",
-			"この世界のどこかに秘密の店というあやしいお店があるらしいですよぉ",
-		}
-	case ShopTypeAccessory:
-		return []string{
-			"ここはアクセサリー屋。ここでしか手に入らないアイテムばっかりよ",
-			"おすすめのアクセサリーを買うと良いと思うわ！",
-			"独占禁止法？　ぼったくり？　細かいことはいいの！",
-		}
-	default:
-		return nil
-	}
-}

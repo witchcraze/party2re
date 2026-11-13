@@ -9,7 +9,6 @@ import (
 
 	"github.com/witchcraze/party2re/internal/bank"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
-	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
@@ -33,7 +32,7 @@ func TestNPCTalkLogsActorAndReplyInTheCurrentFacility(t *testing.T) {
 		t.Fatalf("npc_talk: %d %s", status, raw["error"])
 	}
 	r := npcResult(t, raw)
-	if r.NPCName != bank.NPCName || r.Private || !slices.Contains(bank.NPCDialogues, r.Dialogue) {
+	if r.NPCName != bank.NPCName || r.Private || !slices.Contains(bankFacility.npc.words, r.Dialogue) {
 		t.Fatalf("talk result: %+v", r)
 	}
 	want := []placelog.Entry{
@@ -106,7 +105,11 @@ func TestNPCTalkStartsTheActionWaitButInspectDoesNot(t *testing.T) {
 }
 
 func TestEveryNPCProfileHasLegacyFacts(t *testing.T) {
-	for id, p := range npcProfiles {
+	for id, f := range facilities {
+		p := f.npc
+		if p == nil {
+			continue
+		}
 		if p.name == "" || (len(p.words) == 0) == (p.wordsOf == nil) {
 			t.Errorf("%s: incomplete NPC profile %+v", id, p)
 		}
@@ -118,7 +121,7 @@ func TestNPCRequiresTheFacilityQualification(t *testing.T) {
 	store.selection = playercontext.Selection{Destination: "secretshop"}
 	f.char.JobLevel = 7
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"npc_inspect","params":{}}`, nil)
-	if r := npcResult(t, raw); status != 200 || r.NPCName != secretshop.NPCName || r.Dialogue != secretshop.InspectDialogue || !r.Private {
+	if r := npcResult(t, raw); status != 200 || r.NPCName != secretshop.NPCName || r.Dialogue != secretShopFacility.npc.inspect || !r.Private {
 		t.Fatalf("qualified inspect: %d %+v", status, r)
 	}
 	f.char.JobLevel = 6
@@ -202,8 +205,8 @@ func TestTownHubIsTheLegacyPark(t *testing.T) {
 	f.char.Name, f.char.JobID = "Hero", "warrior"
 
 	status, observation := navigationGET(t, router)
-	if status != 200 || observation.Scene.Title != "交流広場" || observation.Scene.Speaker == nil || observation.Scene.Speaker.Name != park.NPCName ||
-		len(observation.Scene.Members) == 0 || observation.Scene.Members[0] != (PlaceMember{Kind: "npc", Name: park.NPCName, Color: npcColor}) {
+	if status != 200 || observation.Scene.Title != "交流広場" || observation.Scene.Speaker == nil || observation.Scene.Speaker.Name != parkNPCName ||
+		len(observation.Scene.Members) == 0 || observation.Scene.Members[0] != (PlaceMember{Kind: "npc", Name: parkNPCName, Color: npcColor}) {
 		t.Fatalf("town scene: %d %+v", status, observation.Scene)
 	}
 	for _, action := range []string{"npc_talk", "npc_inspect", "park_divinate", "place_say"} {
@@ -213,13 +216,13 @@ func TestTownHubIsTheLegacyPark(t *testing.T) {
 	}
 
 	words := map[string]bool{}
-	for _, w := range park.Words {
+	for _, w := range parkWords {
 		words[strings.NewReplacer("{name}", "Hero", "{job}", "戦士").Replace(w)] = true
 	}
 	jobLine := "Heroさんの職業は戦士ですね？どうですか？当たりですか？"
 	for i := 0; i < 300 && !slices.ContainsFunc(log.rows, func(e placelog.Entry) bool { return e.Text == jobLine }); i++ {
 		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"npc_talk"}`, nil)
-		if r := npcResult(t, raw); status != 200 || r.NPCName != park.NPCName || r.Private || !words[r.Dialogue] {
+		if r := npcResult(t, raw); status != 200 || r.NPCName != parkNPCName || r.Private || !words[r.Dialogue] {
 			t.Fatalf("talk: %d %+v", status, r)
 		}
 	}
@@ -230,7 +233,7 @@ func TestTownHubIsTheLegacyPark(t *testing.T) {
 	// しらべる>@町娘 answers through ＠はなす, so it is logged publicly.
 	log.rows = nil
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"npc_inspect"}`, nil)
-	if r := npcResult(t, raw); status != 200 || r.Private || !slices.Contains(park.InspectWords, r.Dialogue) ||
+	if r := npcResult(t, raw); status != 200 || r.Private || !slices.Contains(parkInspectWords, r.Dialogue) ||
 		len(log.rows) != 2 || log.rows[1].Text != "＠しらべる>@町娘" || log.rows[1].RecipientCharacterID != "" || log.rows[0].Text != r.Dialogue {
 		t.Fatalf("inspect: %d %+v %+v", status, r, log.rows)
 	}
@@ -238,8 +241,8 @@ func TestTownHubIsTheLegacyPark(t *testing.T) {
 	log.rows = nil
 	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"park_divinate"}`, nil)
 	r := npcResult(t, raw)
-	if status != 200 || r.NPCName != park.NPCName || r.Private || !strings.HasPrefix(r.Dialogue, "今日のHeroさんの運勢はずばり…") ||
-		len(log.rows) != 2 || log.rows[1].Text != "＠うらない" || log.rows[0] != (placelog.Entry{OccurredAt: log.rows[0].OccurredAt, SpeakerKind: placelog.SpeakerNPC, Name: park.NPCName, Color: npcColor, Text: r.Dialogue}) {
+	if status != 200 || r.NPCName != parkNPCName || r.Private || !strings.HasPrefix(r.Dialogue, "今日のHeroさんの運勢はずばり…") ||
+		len(log.rows) != 2 || log.rows[1].Text != "＠うらない" || log.rows[0] != (placelog.Entry{OccurredAt: log.rows[0].OccurredAt, SpeakerKind: placelog.SpeakerNPC, Name: parkNPCName, Color: npcColor, Text: r.Dialogue}) {
 		t.Fatalf("divinate: %d %+v %+v", status, r, log.rows)
 	}
 }

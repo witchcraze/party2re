@@ -61,32 +61,6 @@ const NPCName = "@巫女"
 // RamiaMemberName is Ramia's place-member name while she is present.
 const RamiaMemberName = "ラーミァ@"
 
-// reborn.cgi @words, chosen by the character's orb state.
-var (
-	mikoGuardingWords = []string{
-		"私達は。私達は。卵を守っています。卵を守っています", "世界中にちらばる６つのオーブをささげたとき....",
-		"伝説の不死鳥ラーミァはよみがえりましょう", "手に入れられるオーブは曜日によって変わるようです",
-	}
-	mikoReadyWords    = []string{"私達。私達。この日をどんなに。この日をどんなに。待ちわびたことでしょう", "さぁ、祈りましょう。さぁ、祈りましょう"}
-	mikoAwakenedWords = []string{
-		"このアイテムを冒険中に使えば、今まで見たことのない世界へと行くことができます",
-		"未知の世界に連れて行くことができるのは、アイテムを使った一回だけです",
-		"未知の世界にへは、その場にいた仲間と一緒に行くことができます",
-	}
-)
-
-// MikoWords returns the lines the shrine maiden may say to char.
-func MikoWords(char corecharacter.Character) []string {
-	switch {
-	case char.IsRamiaAwakened():
-		return mikoAwakenedWords
-	case char.HasAllOrbs():
-		return mikoReadyWords
-	default:
-		return mikoGuardingWords
-	}
-}
-
 // RamiaAwakening represents a persistent record of Ramia being awakened at the altar.
 type RamiaAwakening struct {
 	ID            string    `json:"id"`

@@ -230,9 +230,9 @@ func TestFaithNPCWordsFollowTheSpeaker(t *testing.T) {
 		scene, orb string
 		words      []string
 	}{
-		{"altar", "", altar.MikoWords(corecharacter.Character{})},
-		{"altar", "srbgyp", altar.MikoWords(corecharacter.Character{Orb: "srbgyp"})},
-		{"altar", "G", altar.MikoWords(corecharacter.Character{Orb: "G"})},
+		{"altar", "", mikoWords(corecharacter.Character{})},
+		{"altar", "srbgyp", mikoWords(corecharacter.Character{Orb: "srbgyp"})},
+		{"altar", "G", mikoWords(corecharacter.Character{Orb: "G"})},
 		{"wishingwell", "", nil},
 	} {
 		t.Run(tc.scene+tc.orb, func(t *testing.T) {
@@ -264,5 +264,16 @@ func TestAltarSceneDataKeepsEmptyWishItems(t *testing.T) {
 	raw, err := json.Marshal(AltarSceneData{Parent: "town", AltarStatus: altar.AltarStatus{AvailableItems: []altar.WishItemInfo{}}})
 	if err != nil || !strings.Contains(string(raw), `"available_items":[]`) {
 		t.Fatalf("%s %v", raw, err)
+	}
+}
+
+func TestMikoWordsFollowOrbState(t *testing.T) {
+	for _, tc := range []struct {
+		orb  string
+		want []string
+	}{{"", mikoGuardingWords}, {"srbgyp", mikoReadyWords}, {"G", mikoAwakenedWords}} {
+		if got := mikoWords(corecharacter.Character{Orb: tc.orb}); !slices.Equal(got, tc.want) {
+			t.Errorf("orb %q: got %q", tc.orb, got)
+		}
 	}
 }

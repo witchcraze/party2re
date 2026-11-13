@@ -126,3 +126,51 @@ func wishingWellActionRejection(err error) (int, ErrorDetail) {
 		return 0, ErrorDetail{}
 	}
 }
+
+var altarFacility = facility{
+	title: "復活の祭壇", commands: []string{"altar_pray", "altar_wish"}, read: (*Handler).altarSceneData, placeLog: true,
+	npc: &npcProfile{name: altar.NPCName, wordsOf: mikoWords},
+}
+
+var wishingWellFacility = facility{
+	title: "願いの泉", commands: []string{"wishingwell_exchange"}, read: (*Handler).wishingWellSceneData, placeLog: true,
+	npc: &npcProfile{name: wishingwell.NPCName, words: wishingWellWords},
+}
+
+// reborn.cgi @words, chosen by the character's orb state.
+var (
+	mikoGuardingWords = []string{
+		"私達は。私達は。卵を守っています。卵を守っています", "世界中にちらばる６つのオーブをささげたとき....",
+		"伝説の不死鳥ラーミァはよみがえりましょう", "手に入れられるオーブは曜日によって変わるようです",
+	}
+	mikoReadyWords    = []string{"私達。私達。この日をどんなに。この日をどんなに。待ちわびたことでしょう", "さぁ、祈りましょう。さぁ、祈りましょう"}
+	mikoAwakenedWords = []string{
+		"このアイテムを冒険中に使えば、今まで見たことのない世界へと行くことができます",
+		"未知の世界に連れて行くことができるのは、アイテムを使った一回だけです",
+		"未知の世界にへは、その場にいた仲間と一緒に行くことができます",
+	}
+)
+
+// mikoWords returns the lines the shrine maiden may say to char.
+func mikoWords(char corecharacter.Character) []string {
+	switch {
+	case char.IsRamiaAwakened():
+		return mikoAwakenedWords
+	case char.HasAllOrbs():
+		return mikoReadyWords
+	default:
+		return mikoGuardingWords
+	}
+}
+
+// wishingWellWords are sp_change.cgi @words; {name} and {sp} are the speaker's.
+var wishingWellWords = []string{
+	"スキルポイントはレベルが上がるごとに１ポイント増えていくのです",
+	"スキルポイントを早く上げるコツは、何度も同じ職業に転職することです",
+	"{name}のスキルポイントは現在 {sp} ポイントです",
+	"スキル習得を目指している場合は、ささげずにとっておくのですよ",
+	"スキルポイントをささげるのです",
+	"スキルポイントのお礼に、{name}のステータスを上げてあげましょう",
+	"一度ささげたスキルポイントを戻すことはできません",
+	"スキルポイントは、その職業のスキルを習得するのに必要です",
+}

@@ -42,3 +42,12 @@ func (h *Handler) alchemySceneData(ctx context.Context, r playercontext.Result) 
 	compendium.Entries = append([]alchemy.CompendiumEntry{}, compendium.Entries[start:end]...)
 	return AlchemySceneData{Parent: "town", Status: status, Compendium: compendium, Page: page}, nil
 }
+
+var alchemyFacility = facility{
+	title: "錬金場", commands: []string{"alchemy_synthesize", "alchemy_recipes"}, read: (*Handler).alchemySceneData, placeLog: true,
+	npc: &npcProfile{name: "@トロデ", words: []string{
+		"２つのアイテムを錬金することで新たなアイテムを作ることができるぞい", "錬金レシピを使うことで錬金することが可能になるぞい",
+		"錬金したアイテムの完成は、お主が寝て起きた次の日には完成しているじゃろう", "錬金で作ることでしか手に入らない武器や防具があるそうじゃ・・・",
+		"錬金レシピは習得済み以外のものを習得することができるぞい",
+	}, inspect: "@トロデ「いやん。どこをさわっとるんじゃっ！」"},
+}

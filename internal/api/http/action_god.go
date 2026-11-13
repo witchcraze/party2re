@@ -88,3 +88,12 @@ func godActionRejection(err error) (int, ErrorDetail) {
 		return 0, ErrorDetail{}
 	}
 }
+
+// god.cgi/u_god.cgi @words and shiraberu_npc.
+var (
+	godWords    = []string{"{name}よ。よくぞここまできた。{name}の願いを一つだけ叶えてやろう"}
+	godFacility = facility{title: "天界", commands: []string{"god_wish"}, read: (*Handler).godSceneData, placeLog: true,
+		npc: &npcProfile{name: "@神", words: godWords, inspect: "@神「本当の願いは自分の力で叶えるのだ…」"}}
+	underworldGodFacility = facility{title: "天界?", commands: []string{"god_wish"}, read: (*Handler).godSceneData, placeLog: true,
+		npc: &npcProfile{name: "@神?", words: godWords, silent: true}}
+)

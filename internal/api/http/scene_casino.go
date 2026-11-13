@@ -122,3 +122,8 @@ func (h *Handler) casinoActivityData(ctx context.Context, result playercontext.R
 	}
 	return &CasinoRoomSceneData{Coins: account.Coins, View: *view, Controls: controls}, nil
 }
+
+var casinoFacility = facility{
+	title: "カジノ", commands: []string{"casino_slot", "casino_exchange", "casino_prize_exchange", "casino_room_create"},
+	read: (*Handler).casinoSceneData, placeLog: true,
+}
