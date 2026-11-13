@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -42,11 +43,13 @@ func newStoreDB(t *testing.T) *storeDB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	source := db
 	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
+		if err := source.Close(); err != nil {
 			t.Error(err)
 		}
 	})
+	db = isolatedStoreGatewayDB(t, source)
 	f := &storeDB{db: db, guild: &failingGuildPoints{}}
 	if f.chars, err = database.NewCharacterRepository(db); err != nil {
 		t.Fatal(err)
@@ -61,24 +64,38 @@ func newStoreDB(t *testing.T) *storeDB {
 	if f.items, err = item.InitialCatalog(); err != nil {
 		t.Fatal(err)
 	}
-	f.service = store.NewService(repo, f.chars, f.depots, f.items, database.NewTransactionProvider(db), store.WithGuildPoints(f.guild))
+	f.service = store.NewService(repo, f.chars, f.depots, f.items, database.NewTransactionProvider(db), store.WithGuildPoints(f.guild), store.WithDeliveryService(f))
 	return f
 }
 
-// character creates an owned test character (deleted with its store rows) holding the given Depot items.
+func (f *storeDB) HoldPayment(ctx context.Context, recipientID, buyerName string, amount int) error {
+	return f.depots.AddRemittance(ctx, depot.Remittance{ID: id.New(), CharacterID: recipientID,
+		Amount: amount, Source: depot.RemittanceStorePayment, SenderName: buyerName})
+}
+
+// Home notices are verified with the production adapter in cmd/party2 tests.
+func (*storeDB) NotifyItem(context.Context, string, string, string) error { return nil }
+
+func (f *storeDB) heldGold(t *testing.T, ctx context.Context, actor string) int {
+	t.Helper()
+	values, err := f.depots.ListRemittances(ctx, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var total int
+	for _, value := range values {
+		total += value.Amount
+	}
+	return total
+}
+
+// character creates a character in the fixture-owned database with the given Depot items.
 func (f *storeDB) character(t *testing.T, ctx context.Context, gold int, items ...item.Instance) corecharacter.Character {
 	t.Helper()
 	c, err := database.CreateTestCharacterWithFunds(ctx, f.db, "Store Gateway", gold)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		if err := f.chars.Delete(cleanupCtx, c.ID); err != nil {
-			t.Error(err)
-		}
-	})
 	if _, err := database.CreateTestDepot(ctx, f.db, c.ID, 2, items); err != nil {
 		t.Fatal(err)
 	}
@@ -165,8 +182,11 @@ func TestStoreGatewayBuyAndTradeThroughRealService(t *testing.T) {
 	if status, got := f.request(t, ctx, buyer, "store_buy", fmt.Sprintf(`{"sale_id":%q}`, sale.ID)); status != 200 {
 		t.Fatalf("buy: %d %s", status, got)
 	}
-	if o, b := f.money(t, ctx, owner.ID), f.money(t, ctx, buyer.ID); o != 1300 || b != 700 {
+	if o, b := f.money(t, ctx, owner.ID), f.money(t, ctx, buyer.ID); o != 1000 || b != 700 {
 		t.Fatalf("gold: owner=%d buyer=%d", o, b)
+	}
+	if held := f.heldGold(t, ctx, owner.ID); held != 300 {
+		t.Fatalf("held payment: %d", held)
 	}
 	status, got := f.request(t, ctx, buyer, "store_buy", fmt.Sprintf(`{"sale_id":%q}`, sale.ID))
 	if status != 404 {
@@ -235,7 +255,7 @@ func TestStoreGatewayConcurrentPurchasesConserveAssets(t *testing.T) {
 	if !(statuses[0] == 200 && statuses[1] == 404) && !(statuses[0] == 404 && statuses[1] == 200) {
 		t.Fatalf("expected one winner: %v", statuses)
 	}
-	if total := f.money(t, ctx, owner.ID) + f.money(t, ctx, buyer.ID) + f.money(t, ctx, rival.ID); total != 2000 {
+	if total := f.money(t, ctx, owner.ID) + f.money(t, ctx, buyer.ID) + f.money(t, ctx, rival.ID) + f.heldGold(t, ctx, owner.ID); total != 2000 {
 		t.Fatalf("gold drift: %d", total)
 	}
 	if items := len(f.depot(t, ctx, buyer.ID)) + len(f.depot(t, ctx, rival.ID)); items != 1 {

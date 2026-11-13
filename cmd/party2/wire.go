@@ -68,7 +68,7 @@ func wireApp(
 		return nil, err
 	}
 
-	econ.initStore(core, soc.guildRepo, soc.timer, valkeyClient)
+	econ.initStore(core, soc.guildRepo, soc.timer, valkeyClient, storeDelivery{econ.depotRepo, soc.home, core.itemCatalog})
 	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
 		return nil, err
 	}

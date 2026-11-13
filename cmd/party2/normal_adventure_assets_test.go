@@ -66,7 +66,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Exercise the later production Store reconfiguration too.
-	econ.initStore(core, soc.guild, soc.timer, client)
+	econ.initStore(core, soc.guild, soc.timer, client, storeDelivery{econ.depotRepo, soc.home, core.itemCatalog})
 	combat.normal.SetExitEffects(func(context.Context, string) error { return nil })
 	chars := make([]corecharacter.Character, 2)
 	for i := range chars {
