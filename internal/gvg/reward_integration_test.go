@@ -174,6 +174,7 @@ func TestGvGRewardPublicationIntegration(t *testing.T) {
 }
 
 func TestGvGRewardConcurrentRetryIntegration(t *testing.T) {
+	t.Parallel()
 	f := newRewardFixture(t, 1, 1, corebattle.OutcomeWin)
 	ctx := context.Background()
 	f.rooms.fail = true
@@ -214,6 +215,7 @@ func TestGvGRewardConcurrentRetryIntegration(t *testing.T) {
 }
 
 func TestGvGRewardConcurrentWinDrawIntegration(t *testing.T) {
+	t.Parallel()
 	f := newRewardFixture(t, 1, 1, corebattle.OutcomeWin)
 	ctx := context.Background()
 	roomIDs := []string{id.New(), id.New()}
