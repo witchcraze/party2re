@@ -4399,7 +4399,8 @@
                         "town1",
                         "town2",
                         "town3",
-                        "town4"
+                        "town4",
+                        "tavern"
                       ],
                       "type": "string"
                     }
@@ -4535,7 +4536,8 @@
                         "town1",
                         "town2",
                         "town3",
-                        "town4"
+                        "town4",
+                        "tavern"
                       ],
                       "type": "string"
                     },
@@ -7339,6 +7341,101 @@
               "required": [
                 "params"
               ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "tavern_order",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "One of the tavern scene's menu IDs.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "tavern_delivery_reserve",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "One of the tavern scene's menu IDs.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "tavern_delivery_cancel",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
               "type": "object"
             }
           }
@@ -14798,7 +14895,8 @@
                   "town1",
                   "town2",
                   "town3",
-                  "town4"
+                  "town4",
+                  "tavern"
                 ],
                 "type": "string"
               }
@@ -14990,7 +15088,8 @@
               "town1",
               "town2",
               "town3",
-              "town4"
+              "town4",
+              "tavern"
             ],
             "type": "string"
           },
@@ -15117,6 +15216,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/GodSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TavernSceneData"
                     }
                   ]
                 }
@@ -15929,6 +16031,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/GodSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "tavern"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TavernSceneData"
                 },
                 "support": {
                   "properties": {
@@ -17335,18 +17467,6 @@
         ],
         "type": "object"
       },
-      "TavernItemRequest": {
-        "properties": {
-          "item_id": {
-            "example": "tavern_curry",
-            "type": "string"
-          }
-        },
-        "required": [
-          "item_id"
-        ],
-        "type": "object"
-      },
       "TavernMenuItem": {
         "properties": {
           "category": {
@@ -17399,125 +17519,55 @@
         ],
         "type": "object"
       },
-      "TavernOrderResult": {
+      "TavernSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's menu, fullness and standing delivery order. tavern_delivery_cancel is offered only while delivery is set. NPC dialogue comes from npc_talk/npc_inspect. Observation never orders or settles.",
         "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "current_hp": {
-            "type": "integer"
-          },
-          "current_mp": {
-            "type": "integer"
-          },
-          "hp_healed": {
-            "type": "integer"
-          },
-          "item": {
-            "$ref": "#/components/schemas/TavernMenuItem"
-          },
-          "message": {
-            "type": "string"
-          },
-          "mp_healed": {
-            "type": "integer"
-          },
-          "remaining_gold": {
-            "type": "integer"
-          },
-          "tickets_awarded": {
-            "type": "integer"
-          },
-          "total_tickets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "item",
-          "hp_healed",
-          "mp_healed",
-          "current_hp",
-          "current_mp",
-          "remaining_gold",
-          "tickets_awarded",
-          "total_tickets",
-          "message"
-        ],
-        "type": "object"
-      },
-      "TavernStatus": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "delivery_reservation": {
-            "$ref": "#/components/schemas/TavernDeliveryReservation"
-          },
-          "gold": {
-            "type": "integer"
-          },
-          "hp": {
-            "type": "integer"
+          "delivery": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TavernDeliveryReservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "is_full": {
             "type": "boolean"
           },
-          "location_name": {
-            "example": "冒険者の酒場",
-            "type": "string"
+          "menu": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/TavernMenuItem"
+                },
+                {
+                  "properties": {
+                    "order_name": {
+                      "description": "Name used by tavern_order: the profile like_food for the full course when set, otherwise the catalog name. tavern_delivery_reserve keeps the catalog name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "order_name"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
           },
-          "max_hp": {
-            "type": "integer"
-          },
-          "max_mp": {
-            "type": "integer"
-          },
-          "mp": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "example": "@エレナ",
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "character_name",
-          "location_name",
-          "npc_name",
-          "gold",
-          "hp",
-          "max_hp",
-          "mp",
-          "max_mp",
-          "is_full"
-        ],
-        "type": "object"
-      },
-      "TavernTalkResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "npc_name": {
+          "parent": {
+            "const": "town",
             "type": "string"
           }
         },
         "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "message"
+          "parent",
+          "menu",
+          "is_full",
+          "delivery"
         ],
         "type": "object"
       },
@@ -18365,7 +18415,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message."
           },
           "400": {
             "content": {
@@ -27905,434 +27955,6 @@
         ]
       }
     },
-    "/characters/{id}/tavern": {
-      "get": {
-        "description": "Returns current character stats, fullness status, and active delivery reservation at the tavern.",
-        "operationId": "getCharacterTavernStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernStatus"
-                }
-              }
-            },
-            "description": "Tavern status retrieved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character tavern status",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
-    "/characters/{id}/tavern/delivery": {
-      "delete": {
-        "description": "Cancels the character's active delivery reservation.",
-        "operationId": "cancelTavernDelivery",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Delivery reservation cancelled successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "No active delivery reservation"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Cancel tavern delivery reservation",
-        "tags": [
-          "Tavern"
-        ]
-      },
-      "get": {
-        "description": "Retrieves the character's active delivery reservation.",
-        "operationId": "getTavernDelivery",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernDeliveryReservation"
-                }
-              }
-            },
-            "description": "Delivery reservation retrieved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "No active delivery reservation"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get current tavern delivery reservation",
-        "tags": [
-          "Tavern"
-        ]
-      },
-      "post": {
-        "description": "Reserves a meal to be delivered and consumed after an adventure.",
-        "operationId": "reserveTavernDelivery",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TavernItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernDeliveryReservation"
-                }
-              }
-            },
-            "description": "Delivery order reserved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character or menu item not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Reserve tavern delivery order",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
-    "/characters/{id}/tavern/order": {
-      "post": {
-        "description": "Purchases and immediately consumes a meal or drink, restoring HP/MP and awarding raffle tickets.",
-        "operationId": "orderTavernMeal",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TavernItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernOrderResult"
-                }
-              }
-            },
-            "description": "Meal ordered and consumed successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Insufficient gold or invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character or menu item not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character is already full"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Order and eat a tavern meal",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
-    "/characters/{id}/tavern/talk": {
-      "post": {
-        "description": "Converses with Elena the tavern barkeep to receive randomized dialogue and tavern advice.",
-        "operationId": "talkTavernBarkeep",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernTalkResult"
-                }
-              }
-            },
-            "description": "Barkeep conversation dialogue returned"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Talk to tavern barkeep NPC",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
     "/contest/current": {
       "get": {
         "description": "Returns all photo submissions and current vote totals in the active contest round.",
@@ -35502,44 +35124,6 @@
         "summary": "Login player and obtain session token",
         "tags": [
           "Auth"
-        ]
-      }
-    },
-    "/tavern/menu": {
-      "get": {
-        "description": "Returns the complete catalog of foods, drinks, and courses available at the tavern.",
-        "operationId": "listTavernMenu",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "items": {
-                      "items": {
-                        "$ref": "#/components/schemas/TavernMenuItem"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "required": [
-                    "items"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Menu retrieved successfully"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List tavern menu",
-        "tags": [
-          "Tavern"
         ]
       }
     },

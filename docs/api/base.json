@@ -1816,18 +1816,6 @@
         ],
         "type": "object"
       },
-      "TavernItemRequest": {
-        "properties": {
-          "item_id": {
-            "example": "tavern_curry",
-            "type": "string"
-          }
-        },
-        "required": [
-          "item_id"
-        ],
-        "type": "object"
-      },
       "TavernMenuItem": {
         "properties": {
           "category": {
@@ -1877,128 +1865,6 @@
           "mp_heal",
           "tickets",
           "description"
-        ],
-        "type": "object"
-      },
-      "TavernOrderResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "current_hp": {
-            "type": "integer"
-          },
-          "current_mp": {
-            "type": "integer"
-          },
-          "hp_healed": {
-            "type": "integer"
-          },
-          "item": {
-            "$ref": "#/components/schemas/TavernMenuItem"
-          },
-          "message": {
-            "type": "string"
-          },
-          "mp_healed": {
-            "type": "integer"
-          },
-          "remaining_gold": {
-            "type": "integer"
-          },
-          "tickets_awarded": {
-            "type": "integer"
-          },
-          "total_tickets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "item",
-          "hp_healed",
-          "mp_healed",
-          "current_hp",
-          "current_mp",
-          "remaining_gold",
-          "tickets_awarded",
-          "total_tickets",
-          "message"
-        ],
-        "type": "object"
-      },
-      "TavernStatus": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "delivery_reservation": {
-            "$ref": "#/components/schemas/TavernDeliveryReservation"
-          },
-          "gold": {
-            "type": "integer"
-          },
-          "hp": {
-            "type": "integer"
-          },
-          "is_full": {
-            "type": "boolean"
-          },
-          "location_name": {
-            "example": "冒険者の酒場",
-            "type": "string"
-          },
-          "max_hp": {
-            "type": "integer"
-          },
-          "max_mp": {
-            "type": "integer"
-          },
-          "mp": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "example": "@エレナ",
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "character_name",
-          "location_name",
-          "npc_name",
-          "gold",
-          "hp",
-          "max_hp",
-          "mp",
-          "max_mp",
-          "is_full"
-        ],
-        "type": "object"
-      },
-      "TavernTalkResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "message"
         ],
         "type": "object"
       },
@@ -2291,6 +2157,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/GodSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TavernSceneData"
                     }
                   ]
                 }
@@ -3118,6 +2987,36 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "tavern"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TavernSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3783,7 +3682,8 @@
                         "town1",
                         "town2",
                         "town3",
-                        "town4"
+                        "town4",
+                        "tavern"
                       ]
                     }
                   },
@@ -3891,7 +3791,8 @@
                         "town1",
                         "town2",
                         "town3",
-                        "town4"
+                        "town4",
+                        "tavern"
                       ]
                     },
                     "offset": {
@@ -6723,6 +6624,101 @@
                 "params"
               ]
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "tavern_order"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "description": "One of the tavern scene's menu IDs."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "tavern_delivery_reserve"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "description": "One of the tavern scene's menu IDs."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "tavern_delivery_cancel"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
           }
         ]
       },
@@ -7111,7 +7107,8 @@
               "town1",
               "town2",
               "town3",
-              "town4"
+              "town4",
+              "tavern"
             ]
           },
           "offset": {
@@ -7246,7 +7243,8 @@
                   "town1",
                   "town2",
                   "town3",
-                  "town4"
+                  "town4",
+                  "tavern"
                 ]
               }
             },
@@ -17792,6 +17790,58 @@
           "parent",
           "realm",
           "wishes"
+        ]
+      },
+      "TavernSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's menu, fullness and standing delivery order. tavern_delivery_cancel is offered only while delivery is set. NPC dialogue comes from npc_talk/npc_inspect. Observation never orders or settles.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "menu": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/TavernMenuItem"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "order_name": {
+                      "type": "string",
+                      "description": "Name used by tavern_order: the profile like_food for the full course when set, otherwise the catalog name. tavern_delivery_reserve keeps the catalog name."
+                    }
+                  },
+                  "required": [
+                    "order_name"
+                  ]
+                }
+              ]
+            }
+          },
+          "is_full": {
+            "type": "boolean"
+          },
+          "delivery": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TavernDeliveryReservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "parent",
+          "menu",
+          "is_full",
+          "delivery"
         ]
       }
     },

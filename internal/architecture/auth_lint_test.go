@@ -98,7 +98,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /eventplaza$`),
 		regexp.MustCompile(`^GET /eventplaza/merchant/items$`),
 		regexp.MustCompile(`^GET /eventplaza/banquets$`),
-		regexp.MustCompile(`^GET /tavern/menu$`),
 		regexp.MustCompile(`^GET /challenges/tiers$`),
 		regexp.MustCompile(`^GET /challenges/hall-of-fame$`),
 		regexp.MustCompile(`^GET /challenges/hall-of-fame/\{tier_id\}$`),
@@ -392,10 +391,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",
 		// Tavern
-		"handleTavernOrder":           "tavern.go",
-		"handleTavernReserveDelivery": "tavern.go",
-		"handleTavernCancelDelivery":  "tavern.go",
-		"handleTavernTalk":            "tavern.go",
 		// Custom Skill
 		"handleSetCustomSkill": "custom_skill.go",
 		// Guild

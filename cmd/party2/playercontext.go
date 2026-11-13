@@ -25,7 +25,7 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		{ID: "depot", Parent: "town", Pageable: true},
 		{ID: "exile", Parent: "town"},
 		{ID: "fleamarket", Parent: "town", Pageable: true},
-		{ID: "gemstore", Parent: "town"}, {ID: "wishingwell", Parent: "town"},
+		{ID: "gemstore", Parent: "town"}, {ID: "wishingwell", Parent: "town"}, {ID: "tavern", Parent: "town"},
 		// Reached only by Home reins; the recorded visit, not navigation, admits.
 		{ID: "god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitHeaven }},
 		{ID: "u_god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitUnderworld }},

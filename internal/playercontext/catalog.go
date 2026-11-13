@@ -386,14 +386,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
-	{
-		ID:             "tavern_order",
-		Label:          "酒場で食事注文",
-		Category:       "entertainment",
-		OperationID:    "orderTavernMeal",
-		RequiredParams: []string{"item_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
-	},
+	{ID: "tavern_order", Label: "酒場で食事注文", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
+	{ID: "tavern_delivery_reserve", Label: "でりばりーを頼む", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "tavern_delivery_cancel", Label: "でりばりーをキャンセル", Category: "entertainment", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{
 		ID:             "contest_enter",
 		Label:          "フォトコンテスト応募",
