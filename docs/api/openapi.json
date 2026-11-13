@@ -9162,9 +9162,6 @@
               "null"
             ]
           },
-          "accumulated_medals": {
-            "type": "integer"
-          },
           "character_id": {
             "type": "string"
           },
@@ -9176,9 +9173,6 @@
               "array",
               "null"
             ]
-          },
-          "current_floor": {
-            "type": "integer"
           },
           "current_hp": {
             "type": "integer"
@@ -9236,7 +9230,6 @@
           "id",
           "character_id",
           "dungeon_id",
-          "current_floor",
           "pos_x",
           "pos_y",
           "current_hp",
@@ -9244,7 +9237,6 @@
           "accumulated_exp",
           "accumulated_gold",
           "accumulated_items",
-          "accumulated_medals",
           "status",
           "started_at",
           "updated_at"
@@ -9358,9 +9350,6 @@
           "controls": {
             "$ref": "#/components/schemas/DungeonContinuationControls"
           },
-          "current_floor": {
-            "type": "integer"
-          },
           "directions": {
             "items": {
               "enum": [
@@ -9423,7 +9412,6 @@
           "leader_id",
           "dungeon_id",
           "revision",
-          "current_floor",
           "turns_remaining",
           "status",
           "map",
@@ -9468,9 +9456,6 @@
           },
           "item_found": {
             "type": "string"
-          },
-          "medals_found": {
-            "type": "integer"
           },
           "member_damages": {
             "additionalProperties": {

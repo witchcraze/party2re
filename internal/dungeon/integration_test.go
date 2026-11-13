@@ -109,7 +109,6 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		}
 		exp.AccumulatedGold = 250
 		exp.AccumulatedExp = 80
-		exp.AccumulatedMedals = 1
 		exp.AccumulatedItems = []string{"potion"}
 		if err := vStore.SaveActiveExpedition(ctx, *exp); err != nil {
 			t.Fatalf("SaveActiveExpedition failed: %v", err)
@@ -136,8 +135,8 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if afterChar.Money != 1250 || afterChar.SmallMedals != 1 {
-			t.Errorf("expected money=1250 and medals=1 (single grant), got money=%d medals=%d", afterChar.Money, afterChar.SmallMedals)
+		if afterChar.Money != 1250 {
+			t.Errorf("expected money=1250 (single grant), got money=%d", afterChar.Money)
 		}
 		histories, err := svc.GetHistory(ctx, char.ID, 10)
 		if err != nil || len(histories) != 1 {
@@ -176,7 +175,6 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		}
 		exp.AccumulatedGold = 300
 		exp.AccumulatedExp = 60
-		exp.AccumulatedMedals = 2
 		exp.AccumulatedItems = []string{"potion"}
 		if err := vStore.SaveActiveExpedition(ctx, *exp); err != nil {
 			t.Fatalf("SaveActiveExpedition failed: %v", err)
@@ -242,9 +240,9 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if afterChar.Money != 2200 || afterChar.Deposit != 2100 || afterChar.SmallMedals != 2 {
-			t.Errorf("expected money=2200 deposit=2100 medals=2, got money=%d deposit=%d medals=%d",
-				afterChar.Money, afterChar.Deposit, afterChar.SmallMedals)
+		if afterChar.Money != 2200 || afterChar.Deposit != 2100 {
+			t.Errorf("expected money=2200 deposit=2100, got money=%d deposit=%d",
+				afterChar.Money, afterChar.Deposit)
 		}
 
 		histories, err := svc.GetHistory(ctx, char.ID, 10)

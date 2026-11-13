@@ -42,7 +42,7 @@ func TestDungeonRepository_RunQualifiedCleanup(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	old := dungeon.ActiveExpedition{ID: id.New(), CharacterID: char.ID, DungeonID: "dungeon-01", Status: dungeon.StatusExploring, CurrentFloor: 1, CurrentHP: char.Stats.HP, TurnsRemaining: 20, StartedAt: time.Now().UTC().Truncate(time.Second)}
+	old := dungeon.ActiveExpedition{ID: id.New(), CharacterID: char.ID, DungeonID: "dungeon-01", Status: dungeon.StatusExploring, CurrentHP: char.Stats.HP, TurnsRemaining: 20, StartedAt: time.Now().UTC().Truncate(time.Second)}
 	if err := repo.SaveActiveExpedition(ctx, old); err != nil {
 		t.Fatal(err)
 	}

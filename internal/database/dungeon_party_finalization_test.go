@@ -68,15 +68,13 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	now := time.Now().UTC()
 	expID := id.New()
 	history := dungeon.DungeonExpeditionHistory{
-		ID:            expID,
-		CharacterID:   c1.ID,
-		DungeonID:     "dungeon-01",
-		Outcome:       dungeon.StatusEscaped,
-		FloorsReached: 2,
-		ExpReward:     250,
-		GoldReward:    400,
-		MedalsReward:  3,
-		CreatedAt:     now,
+		ID:          expID,
+		CharacterID: c1.ID,
+		DungeonID:   "dungeon-01",
+		Outcome:     dungeon.StatusEscaped,
+		ExpReward:   250,
+		GoldReward:  400,
+		CreatedAt:   now,
 	}
 
 	// Expedition members:
@@ -112,7 +110,6 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 		ID:             expID,
 		CharacterID:    c1.ID,
 		DungeonID:      "dungeon-01",
-		CurrentFloor:   2,
 		CurrentHP:      0,
 		TurnsRemaining: 10,
 		Status:         dungeon.StatusExploring,
@@ -151,9 +148,6 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	if reloadedLead.Money != 1150 {
 		t.Errorf("expected leader wallet 1150 (1000 + 150), got %d", reloadedLead.Money)
 	}
-	if reloadedLead.SmallMedals != 3 {
-		t.Errorf("expected leader small medals 3, got %d", reloadedLead.SmallMedals)
-	}
 	if reloadedLead.Experience < 100 {
 		t.Errorf("expected leader EXP to increase by at least 100, got %d", reloadedLead.Experience)
 	}
@@ -168,9 +162,6 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	}
 	if reloadedAlly.Money != 1400 {
 		t.Errorf("expected ally wallet 1400 (1000 + 400), got %d", reloadedAlly.Money)
-	}
-	if reloadedAlly.SmallMedals != 0 {
-		t.Errorf("expected ally small medals to remain 0 (leader only), got %d", reloadedAlly.SmallMedals)
 	}
 	if reloadedAlly.Experience < 250 {
 		t.Errorf("expected ally EXP to increase by at least 250, got %d", reloadedAlly.Experience)

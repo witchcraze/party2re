@@ -32,7 +32,6 @@ type ExpeditionObservation struct {
 	DungeonID      string               `json:"dungeon_id"`
 	Revision       int                  `json:"revision"`
 	Status         ExpeditionStatus     `json:"status"`
-	CurrentFloor   int                  `json:"current_floor"`
 	TurnsRemaining int                  `json:"turns_remaining"`
 	Round          int                  `json:"round,omitempty"`
 	RoundLimit     int                  `json:"round_limit,omitempty"`
@@ -48,7 +47,7 @@ func (s *Service) ObserveExpedition(ctx context.Context, actor string) (*Expedit
 	if err != nil || exp == nil {
 		return nil, err
 	}
-	view := &ExpeditionObservation{ID: exp.ID, LeaderID: exp.CharacterID, PartyID: exp.PartyID, DungeonID: exp.DungeonID, Revision: exp.Revision, Status: exp.Status, CurrentFloor: exp.CurrentFloor, TurnsRemaining: exp.TurnsRemaining, Directions: []Direction{}, Controls: exp.Controls(actor)}
+	view := &ExpeditionObservation{ID: exp.ID, LeaderID: exp.CharacterID, PartyID: exp.PartyID, DungeonID: exp.DungeonID, Revision: exp.Revision, Status: exp.Status, TurnsRemaining: exp.TurnsRemaining, Directions: []Direction{}, Controls: exp.Controls(actor)}
 	if exp.Status != StatusExploring {
 		return view, nil
 	}

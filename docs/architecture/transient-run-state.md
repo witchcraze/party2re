@@ -327,7 +327,7 @@ expedition member characters in ascending ID order (`SELECT ... FOR UPDATE`, Ran
 claims the history row, delegates surviving vitality persistence (HP/MP, 1 HP floor for
 fallen characters) and consumable inventory item deduction to shared post-battle settlement
 (`battle.ApplyPostBattleResult`), applies experience and gold rewards to each participating
-member, awards small medals to the expedition leader, and delivers reward items to inventory/depot
+member, and delivers reward items to inventory/depot
 (Rank 3/5). Pre-cutover
 expedition `members` payloads that omit `current_mp` distinguish missing MP from explicit
 `"current_mp": 0` (`ExpeditionMember.HasCurrentMP()`): combat participant construction

@@ -155,25 +155,6 @@ func TestEscape_ErrorPropagation(t *testing.T) {
 		}
 	})
 
-	t.Run("small medals addition error propagates", func(t *testing.T) {
-		_, _, activeStore, service := setupSettlementTest(t)
-		now := time.Now().UTC()
-
-		_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-			CharacterID:       "hero",
-			DungeonID:         "test-dg-01",
-			Status:            dungeon.StatusExploring,
-			AccumulatedMedals: -1,
-			StartedAt:         now,
-			UpdatedAt:         now,
-		})
-
-		_, err := service.Escape(ctx, "hero")
-		if err == nil || !strings.Contains(err.Error(), "adding small medals") {
-			t.Fatalf("expected adding small medals error, got: %v", err)
-		}
-	})
-
 	t.Run("finalize expedition repository error propagates", func(t *testing.T) {
 		repo, _, activeStore, service := setupSettlementTest(t)
 		now := time.Now().UTC()
@@ -198,16 +179,14 @@ func TestEscape_ErrorPropagation(t *testing.T) {
 		now := time.Now().UTC()
 
 		_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-			CharacterID:       "hero",
-			DungeonID:         "test-dg-01",
-			Status:            dungeon.StatusExploring,
-			CurrentFloor:      3,
-			AccumulatedExp:    120,
-			AccumulatedGold:   350,
-			AccumulatedMedals: 2,
-			AccumulatedItems:  []string{"item-pot-01"},
-			StartedAt:         now,
-			UpdatedAt:         now,
+			CharacterID:      "hero",
+			DungeonID:        "test-dg-01",
+			Status:           dungeon.StatusExploring,
+			AccumulatedExp:   120,
+			AccumulatedGold:  350,
+			AccumulatedItems: []string{"item-pot-01"},
+			StartedAt:        now,
+			UpdatedAt:        now,
 		})
 
 		res, err := service.Escape(ctx, "hero")
@@ -218,17 +197,14 @@ func TestEscape_ErrorPropagation(t *testing.T) {
 		if !res.IsFinished || res.EventType != dungeon.EventEscape {
 			t.Errorf("unexpected escape event result: %+v", res)
 		}
-		if res.ExpEarned != 120 || res.GoldFound != 350 || res.MedalsFound != 2 {
+		if res.ExpEarned != 120 || res.GoldFound != 350 {
 			t.Errorf("rewards mismatch: %+v", res)
 		}
 
-		// Verify character received gold and medals
+		// Verify character received gold
 		savedChar := repo.savedChars["hero"]
 		if savedChar.Money != charRepo.chars["hero"].Money+350 {
 			t.Errorf("expected gold %d, got %d", charRepo.chars["hero"].Money+350, savedChar.Money)
-		}
-		if savedChar.SmallMedals != charRepo.chars["hero"].SmallMedals+2 {
-			t.Errorf("expected medals %d, got %d", charRepo.chars["hero"].SmallMedals+2, savedChar.SmallMedals)
 		}
 
 		// Verify active expedition deleted from store
@@ -275,17 +251,15 @@ func TestEscape_IdempotentOnDeleteFailureRetry(t *testing.T) {
 
 	now := time.Now().UTC()
 	_ = store.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-		ID:                "exp-retry-1",
-		CharacterID:       "hero",
-		DungeonID:         "test-dg-01",
-		Status:            dungeon.StatusExploring,
-		CurrentFloor:      2,
-		AccumulatedExp:    100,
-		AccumulatedGold:   250,
-		AccumulatedMedals: 1,
-		AccumulatedItems:  []string{"potion"},
-		StartedAt:         now,
-		UpdatedAt:         now,
+		ID:               "exp-retry-1",
+		CharacterID:      "hero",
+		DungeonID:        "test-dg-01",
+		Status:           dungeon.StatusExploring,
+		AccumulatedExp:   100,
+		AccumulatedGold:  250,
+		AccumulatedItems: []string{"potion"},
+		StartedAt:        now,
+		UpdatedAt:        now,
 	})
 
 	// First Escape succeeds in SQL (mock repo), but activeStore.DeleteActiveExpedition fails

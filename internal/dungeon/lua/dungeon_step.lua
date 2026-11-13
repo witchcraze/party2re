@@ -2,23 +2,21 @@ local state_key = KEYS[1]
 local rewards_key = KEYS[2]
 
 local expected_expedition_id = ARGV[1]
-local new_floor = ARGV[2]
-local new_x = ARGV[3]
-local new_y = ARGV[4]
-local hp_delta = tonumber(ARGV[5]) or 0
-local turns_delta = tonumber(ARGV[6]) or 0
-local exp_delta = tonumber(ARGV[7]) or 0
-local gold_delta = tonumber(ARGV[8]) or 0
-local medals_delta = tonumber(ARGV[9]) or 0
-local reward_item = ARGV[10]
-local now_timestamp = ARGV[11]
-local ttl_seconds = tonumber(ARGV[12]) or 7200
-local event_key = ARGV[13] or ''
-local member_hp_deltas_str = ARGV[14] or '{}'
-local member_mp_deltas_str = ARGV[15] or '{}'
-local consumed_items_str = ARGV[16] or '{}'
-local member_exp_deltas_str = ARGV[17] or '{}'
-local member_gold_deltas_str = ARGV[18] or '{}'
+local new_x = ARGV[2]
+local new_y = ARGV[3]
+local hp_delta = tonumber(ARGV[4]) or 0
+local turns_delta = tonumber(ARGV[5]) or 0
+local exp_delta = tonumber(ARGV[6]) or 0
+local gold_delta = tonumber(ARGV[7]) or 0
+local reward_item = ARGV[8]
+local now_timestamp = ARGV[9]
+local ttl_seconds = tonumber(ARGV[10]) or 7200
+local event_key = ARGV[11] or ''
+local member_hp_deltas_str = ARGV[12] or '{}'
+local member_mp_deltas_str = ARGV[13] or '{}'
+local consumed_items_str = ARGV[14] or '{}'
+local member_exp_deltas_str = ARGV[15] or '{}'
+local member_gold_deltas_str = ARGV[16] or '{}'
 
 -- 1. Check existence of active expedition state key
 if redis.call('EXISTS', state_key) == 0 then
@@ -38,15 +36,15 @@ if status ~= 'exploring' then
 end
 
 local encounter = redis.call('HGET', state_key, 'encounter') or ''
-if encounter ~= '' and ARGV[20] ~= 'true' then
+if encounter ~= '' and ARGV[18] ~= 'true' then
     return redis.error_reply('ERR_COMBAT_ACTIVE')
 end
 local revision = tonumber(redis.call('HGET', state_key, 'revision') or '0')
-if ARGV[19] ~= '' and tonumber(ARGV[19]) ~= revision then
+if ARGV[17] ~= '' and tonumber(ARGV[17]) ~= revision then
     return redis.error_reply('ERR_EXPEDITION_STATE_CHANGED')
 end
 revision = revision + 1
-encounter = ARGV[21] or ''
+encounter = ARGV[19] or ''
 
 -- 4. Calculate new HP and turns budget
 local current_hp = tonumber(redis.call('HGET', state_key, 'current_hp') or '0')
@@ -170,8 +168,8 @@ if turns_remaining < 0 then
     turns_remaining = 0
 end
 
-if ARGV[22] and ARGV[22] ~= '' then
-    final_status = ARGV[22]
+if ARGV[20] and ARGV[20] ~= '' then
+    final_status = ARGV[20]
 end
 
 -- 5. Check and record event consumption
@@ -249,7 +247,6 @@ end
 redis.call('HMSET', state_key,
     'revision', tostring(revision),
     'encounter', encounter,
-    'current_floor', new_floor,
     'pos_x', new_x,
     'pos_y', new_y,
     'current_hp', tostring(current_hp),
@@ -264,12 +261,10 @@ redis.call('HMSET', state_key,
 if event_consumed == 0 then
     exp_delta = 0
     gold_delta = 0
-    medals_delta = 0
     reward_item = ''
 end
 local total_exp = redis.call('HINCRBY', rewards_key, 'exp', exp_delta)
 local total_gold = redis.call('HINCRBY', rewards_key, 'gold', gold_delta)
-local total_medals = redis.call('HINCRBY', rewards_key, 'medals', medals_delta)
 
 local items_str = redis.call('HGET', rewards_key, 'items')
 local items = {}
@@ -300,14 +295,12 @@ local started_at = redis.call('HGET', state_key, 'started_at') or ''
 
 return {
     final_status,
-    new_floor,
     new_x,
     new_y,
     tostring(current_hp),
     tostring(turns_remaining),
     tostring(total_exp),
     tostring(total_gold),
-    tostring(total_medals),
     new_items_str,
     now_timestamp,
     dungeon_id,

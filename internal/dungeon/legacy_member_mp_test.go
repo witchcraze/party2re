@@ -298,7 +298,6 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 					Members:          dungeon.DecodeMembers(rawMembers),
 					DungeonID:        customDungeon.ID,
 					MapVariant:       1,
-					CurrentFloor:     1,
 					PosX:             0,
 					PosY:             0,
 					CurrentHP:        40,

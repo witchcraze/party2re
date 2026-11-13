@@ -40,8 +40,8 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newGatewayFixture(t)
 			selection := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "bank"}, loadErr: errors.New("lost selector")}
-			fact := playercontext.Activity{Kind: "dungeon", ID: "run", Revision: 7, PartyID: "party", Role: tc.role, Phase: string(tc.status), Round: 2, Actions: tc.actions}
-			view := dungeon.ExpeditionObservation{ID: "run", LeaderID: "hero", PartyID: "party", DungeonID: "dungeon-01", Revision: 7, Status: tc.status, CurrentFloor: 2, TurnsRemaining: 12, Directions: []dungeon.Direction{}, Controls: tc.controls}
+			fact := playercontext.Activity{Kind: "dungeon", ID: "run", Revision: 7, PartyID: "party", Role: tc.role, Phase: string(tc.status), Actions: tc.actions}
+			view := dungeon.ExpeditionObservation{ID: "run", LeaderID: "hero", PartyID: "party", DungeonID: "dungeon-01", Revision: 7, Status: tc.status, TurnsRemaining: 12, Directions: []dungeon.Direction{}, Controls: tc.controls}
 			if tc.role == "member" {
 				view.LeaderID = "leader"
 			}
@@ -111,7 +111,7 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 			if status, _ := navigationGET(t, router); status != 200 || f.executions != 2 {
 				t.Fatalf("GET recovery replayed mutation: %d", status)
 			}
-			for _, change := range []string{"revision", "run", "phase", "role", "party", "floor", "controls", "ended"} {
+			for _, change := range []string{"revision", "run", "phase", "role", "party", "controls", "ended"} {
 				original := view
 				switch change {
 				case "revision":
@@ -128,8 +128,6 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 					}
 				case "party":
 					view.PartyID = "other"
-				case "floor":
-					view.CurrentFloor++
 				case "controls":
 					view.Controls.CanEscape = !view.Controls.CanEscape
 				case "ended":

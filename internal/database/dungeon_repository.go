@@ -33,7 +33,7 @@ func NewDungeonRepository(db *sql.DB) (*DungeonRepository, error) {
 
 func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error) {
 	query := `
-		SELECT id, character_id, party_id, dungeon_id, current_floor, pos_x, pos_y,
+		SELECT id, character_id, party_id, dungeon_id, pos_x, pos_y,
 		       current_hp, turns_remaining, accumulated_exp, accumulated_gold,
 		       accumulated_items_json, members_json, status, started_at, updated_at
 		FROM dungeon_active_expeditions
@@ -50,7 +50,6 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 		&exp.CharacterID,
 		&partyID,
 		&exp.DungeonID,
-		&exp.CurrentFloor,
 		&exp.PosX,
 		&exp.PosY,
 		&exp.CurrentHP,
@@ -97,15 +96,14 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 
 	query := `
 		INSERT INTO dungeon_active_expeditions (
-			id, character_id, party_id, dungeon_id, current_floor, pos_x, pos_y,
+			id, character_id, party_id, dungeon_id, pos_x, pos_y,
 			current_hp, turns_remaining, accumulated_exp, accumulated_gold,
 			accumulated_items_json, members_json, status, started_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			id = VALUES(id),
 			party_id = VALUES(party_id),
 			dungeon_id = VALUES(dungeon_id),
-			current_floor = VALUES(current_floor),
 			pos_x = VALUES(pos_x),
 			pos_y = VALUES(pos_y),
 			current_hp = VALUES(current_hp),
@@ -125,7 +123,6 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 		exp.CharacterID,
 		partyID,
 		exp.DungeonID,
-		exp.CurrentFloor,
 		exp.PosX,
 		exp.PosY,
 		exp.CurrentHP,
@@ -216,9 +213,9 @@ func (r *DungeonRepository) FinalizeExpedition(
 		// 2. Claim expedition finalization durably by run ID and owner
 		insertHistoryQuery := `
 			INSERT INTO dungeon_expedition_history (
-				id, character_id, dungeon_id, floors_reached, outcome,
+				id, character_id, dungeon_id, outcome,
 				exp_reward, gold_reward, items_reward_count, created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		_, err := executor.ExecContext(
 			txCtx,
@@ -226,7 +223,6 @@ func (r *DungeonRepository) FinalizeExpedition(
 			history.ID,
 			history.CharacterID,
 			history.DungeonID,
-			history.FloorsReached,
 			string(history.Outcome),
 			history.ExpReward,
 			history.GoldReward,
@@ -305,11 +301,6 @@ func (r *DungeonRepository) FinalizeExpedition(
 					}
 				}
 			}
-			if m.CharacterID == charID && history.MedalsReward > 0 {
-				if err := c.AddSmallMedals(history.MedalsReward); err != nil {
-					return fmt.Errorf("adding small medals: %w", err)
-				}
-			}
 			if err := updateCharacter(txCtx, executor, c); err != nil {
 				return err
 			}
@@ -342,7 +333,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 
 func (r *DungeonRepository) GetHistory(ctx context.Context, characterID string, limit int) ([]dungeon.DungeonExpeditionHistory, error) {
 	query := `
-		SELECT id, character_id, dungeon_id, floors_reached, outcome,
+		SELECT id, character_id, dungeon_id, outcome,
 		       exp_reward, gold_reward, items_reward_count, created_at
 		FROM dungeon_expedition_history
 		WHERE character_id = ?
@@ -364,7 +355,6 @@ func (r *DungeonRepository) GetHistory(ctx context.Context, characterID string, 
 			&h.ID,
 			&h.CharacterID,
 			&h.DungeonID,
-			&h.FloorsReached,
 			&outcomeStr,
 			&h.ExpReward,
 			&h.GoldReward,

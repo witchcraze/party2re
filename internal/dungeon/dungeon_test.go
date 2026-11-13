@@ -315,7 +315,6 @@ func TestMove_ValidationErrors(t *testing.T) {
 		CharacterID:    "advent",
 		DungeonID:      dungeon.NativeMap0ID,
 		MapVariant:     1,
-		CurrentFloor:   1,
 		PosX:           0,
 		PosY:           0,
 		CurrentHP:      100,

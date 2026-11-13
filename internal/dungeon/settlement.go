@@ -63,9 +63,6 @@ func (s *Service) handleEscape(
 	if err := char.AddMoney(exp.AccumulatedGold); err != nil {
 		return ExpeditionStepResult{}, fmt.Errorf("adding gold: %w", err)
 	}
-	if err := char.AddSmallMedals(exp.AccumulatedMedals); err != nil {
-		return ExpeditionStepResult{}, fmt.Errorf("adding small medals: %w", err)
-	}
 
 	char.Stats.HP = exp.CurrentHP
 	for _, m := range exp.Members {
@@ -98,11 +95,9 @@ func (s *Service) handleEscape(
 		ID:               histID,
 		CharacterID:      char.ID,
 		DungeonID:        exp.DungeonID,
-		FloorsReached:    exp.CurrentFloor,
 		Outcome:          StatusEscaped,
 		ExpReward:        exp.AccumulatedExp,
 		GoldReward:       exp.AccumulatedGold,
-		MedalsReward:     exp.AccumulatedMedals,
 		ItemsRewardCount: len(rewardItems),
 		CreatedAt:        now,
 	}
@@ -119,13 +114,12 @@ func (s *Service) handleEscape(
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID, exp.ID)
 
 	return ExpeditionStepResult{
-		Expedition:  *exp,
-		EventType:   EventEscape,
-		ExpEarned:   exp.AccumulatedExp,
-		GoldFound:   exp.AccumulatedGold,
-		MedalsFound: exp.AccumulatedMedals,
-		IsFinished:  true,
-		Message:     msg,
+		Expedition: *exp,
+		EventType:  EventEscape,
+		ExpEarned:  exp.AccumulatedExp,
+		GoldFound:  exp.AccumulatedGold,
+		IsFinished: true,
+		Message:    msg,
 	}, nil
 }
 
@@ -151,7 +145,6 @@ func (s *Service) handleWipeout(
 		ID:               histID,
 		CharacterID:      char.ID,
 		DungeonID:        exp.DungeonID,
-		FloorsReached:    exp.CurrentFloor,
 		Outcome:          StatusWipedOut,
 		ExpReward:        0,
 		GoldReward:       0,
