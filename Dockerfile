@@ -1,18 +1,21 @@
 # Stage 1: build
-FROM golang:1.26.7-trixie AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.7-trixie AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /build
 
 # Download dependencies before copying source to leverage Docker layer cache.
+# Keep downloaded modules in the builder layer rather than a BuildKit cache mount
+# so CI layer caches (type=gha) retain them across runners.
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+RUN go mod download
 
 # Copy source and build a statically linked binary.
 COPY . .
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/party2 ./cmd/party2
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/party2 ./cmd/party2
 
 # Stage 2: minimal runtime image.
 # distroless/static contains CA certificates and timezone data but no shell,

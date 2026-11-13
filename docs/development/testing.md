@@ -401,9 +401,9 @@ compares latency/allocations; the default +30% regression threshold exits with c
 ## 8. Continuous Integration and Delivery
 
 The [CI workflow](../../.github/workflows/ci.yml) runs formatting, OpenAPI sync
-validation, vet and tests with atomic coverage on the host Go toolchain against the
-[test stack](#4-container-roles) with a 30-minute package timeout, then builds the
-production image. It does not currently run the race detector or exercise the built
+validation and vet, tests with atomic coverage on the host Go toolchain against the
+[test stack](#4-container-roles) with a 30-minute package timeout, and the
+production image build in parallel jobs. It does not currently run the race detector or exercise the built
 production image. The GitHub-hosted runner is disposable per job; tests inside a job
 still follow the database ownership/isolation rules above.
 
