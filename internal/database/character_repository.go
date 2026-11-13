@@ -190,6 +190,37 @@ func (r *CharacterRepository) SaveProfile(ctx context.Context, profile character
 }
 
 func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
+	standalone := TxFromContext(ctx) == nil
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		if standalone {
+			if err := r.DeleteSharedRows(txCtx, id); err != nil {
+				return err
+			}
+		}
+		return r.deleteLockedCharacter(txCtx, id)
+	})
+}
+
+var errDeletionRowsChanged = errors.New("market rows changed during character deletion")
+
+func (r *CharacterRepository) deleteLockedCharacter(ctx context.Context, id string) error {
+	if _, err := r.FindByIDForUpdate(ctx, id); err != nil && !errors.Is(err, corecharacter.ErrNotFound) {
+		return err
+	}
+	// Creators hold the seller lock. A nonlocking READ COMMITTED read detects new rows
+	// without waiting on a purchase that holds Rank 0 and needs this character.
+	var changed bool
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM fleamarket_listings WHERE seller_character_id = ?)
+			OR EXISTS(SELECT 1 FROM store_sales WHERE character_id = ?)
+	`, id, id).Scan(&changed)
+	if err != nil {
+		return err
+	}
+	if changed {
+		return errDeletionRowsChanged
+	}
+
 	exec := ExecutorFromContext(ctx, r.db)
 	queries := []string{
 		`DELETE FROM casino_accounts WHERE character_id = ?`,
@@ -204,7 +235,6 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM contest_votes WHERE voter_character_id = ?`,
 		`DELETE FROM contest_entries WHERE character_id = ?`,
 		`DELETE FROM character_photos WHERE character_id = ?`,
-		`DELETE FROM fleamarket_listings WHERE seller_character_id = ?`,
 		`DELETE FROM character_companion_phrases WHERE character_id = ?`,
 		`DELETE FROM character_delivery_notices WHERE character_id = ?`,
 		`DELETE FROM character_homes WHERE character_id = ?`,
@@ -232,7 +262,6 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM depot_items WHERE character_id = ?`,
 		`DELETE FROM character_depots WHERE character_id = ?`,
 		`DELETE FROM store_interiors WHERE character_id = ?`,
-		`DELETE FROM store_sales WHERE character_id = ?`,
 		`DELETE FROM character_stores WHERE character_id = ?`,
 		`DELETE FROM character_job_masteries WHERE character_id = ?`,
 		`DELETE FROM character_job_history WHERE character_id = ?`,
@@ -285,8 +314,8 @@ func hideDeletedCharacterLetters(ctx context.Context, exec sqlContextExecutor, i
 
 // DeleteSharedRows removes the character's Rank 0 rows before character deletion locks any
 // character: flea market listings and store sales, which purchases lock before the seller,
-// and admission rows no other participant still claims. Delete repeats the listing/sale
-// cleanup for rows created afterward.
+// and admission rows no other participant still claims. Delete checks for new market rows
+// under the seller lock and requests a whole-transaction restart if discovery went stale.
 func (r *CharacterRepository) DeleteSharedRows(ctx context.Context, characterID string) error {
 	exec := ExecutorFromContext(ctx, r.db)
 	for _, q := range []string{

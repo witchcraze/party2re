@@ -52,6 +52,12 @@ Rank order applies to acquiring new locks, not merely the textual order of
 updates to rows already locked. The complete hierarchy is owned by
 [the database rules](../../.agents/rules/05-database-and-caching.md).
 
+If character deletion's shared market rows change before seller locking, the
+transaction runner rolls back and restarts the root callback, up to three total
+attempts. Nested callbacks never retry independently. Callbacks that can delete
+characters therefore keep their effects inside the SQL transaction; an exhausted
+restart returns an error with no deletion committed.
+
 Same-table multi-row acquisition uses [`economy.LockInOrder`](../../internal/economy/locking.go);
 callers retain transaction ownership and domain-specific missing-row decisions.
 
