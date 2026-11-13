@@ -1276,10 +1276,10 @@ func TestContestSettlement_GetOverview_SchedulingFailureAndReconciliation_Databa
 		t.Fatalf("expected ErrScheduleFailed from ReconcileSettlementSchedule, got: %v", err)
 	}
 
-	// GetOverview must propagate the failure, returning ErrScheduleFailed
-	_, overviewErr := svc.GetOverview(ctx)
-	if overviewErr == nil || !errors.Is(overviewErr, contest.ErrScheduleFailed) {
-		t.Fatalf("expected ErrScheduleFailed from GetOverview, got: %v", overviewErr)
+	// Read-only observations succeed even when the scheduler is unavailable.
+	overview, err := svc.GetOverview(ctx)
+	if err != nil || overview.ActiveRound == nil || overview.ActiveRound.Round != 1 {
+		t.Fatalf("expected active round 1 despite scheduler failure, got %+v, %v", overview, err)
 	}
 
 	// SQL round must be unchanged in MariaDB
@@ -1300,12 +1300,18 @@ func TestContestSettlement_GetOverview_SchedulingFailureAndReconciliation_Databa
 	schedRepo.failSched = false
 	schedRepo.scheduleErr = nil
 
-	overview, err := svc.GetOverview(ctx)
+	overview, err = svc.GetOverview(ctx)
 	if err != nil {
 		t.Fatalf("expected GetOverview to succeed after scheduler recovery, got: %v", err)
 	}
 	if overview.ActiveRound == nil || overview.ActiveRound.Round != 1 {
 		t.Fatalf("expected ActiveRound 1, got %+v", overview.ActiveRound)
+	}
+	if len(schedRepo.actions) != 0 {
+		t.Fatalf("expected read-only overview not to schedule actions, got %d", len(schedRepo.actions))
+	}
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("expected explicit reconciliation to recover, got: %v", err)
 	}
 
 	// 1 scheduled action must now exist in the queue
@@ -1330,7 +1336,10 @@ func TestContestSettlement_GetOverview_SchedulingFailureAndReconciliation_Databa
 		t.Errorf("expected action ExecuteAt %v, got %v", targetEndTime, createdAction.ExecuteAt)
 	}
 
-	// 3. Subsequent GetOverview calls must NOT duplicate the scheduled reservation
+	// 3. Repeated reconciliation and reads must not duplicate the reservation.
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("subsequent reconciliation failed: %v", err)
+	}
 	overview2, err := svc.GetOverview(ctx)
 	if err != nil {
 		t.Fatalf("subsequent GetOverview failed: %v", err)

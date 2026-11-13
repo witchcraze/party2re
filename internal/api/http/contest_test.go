@@ -361,14 +361,14 @@ func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
 }
 
 func TestGetContestVenue_ReconcileFailure_Returns500(t *testing.T) {
-	reconcileCalls := 0
+	overviewCalls := 0
 	stub := &stubContestService{
 		reconcileFn: func(ctx context.Context) error {
-			reconcileCalls++
-			return nil
+			return fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
 		},
 		getOverviewFn: func(ctx context.Context) (contest.ContestOverview, error) {
-			return contest.ContestOverview{}, fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
+			overviewCalls++
+			return contest.ContestOverview{}, nil
 		},
 	}
 
@@ -387,11 +387,9 @@ func TestGetContestVenue_ReconcileFailure_Returns500(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Fatalf("expected 500 Internal Server Error, got %d", resp.StatusCode)
-	}
-	if reconcileCalls != 0 {
-		t.Errorf("expected venue handler NOT to directly call ReconcileSettlementSchedule (calls=%d), GetOverview owns reconciliation", reconcileCalls)
+	// The public venue page self-heals the schedule before reading; a failure is not hidden.
+	if resp.StatusCode != http.StatusInternalServerError || overviewCalls != 0 {
+		t.Fatalf("expected 500 before reading the overview, got %d (overview calls=%d)", resp.StatusCode, overviewCalls)
 	}
 }
 

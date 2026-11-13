@@ -1297,7 +1297,7 @@ func TestEnterContestMatchesLegacyEntryChecks(t *testing.T) {
 		}
 		return svc, repo, photo
 	}
-	for _, title := range []string{"春 の 光", "春　光", "春\u00a0光"} {
+	for _, title := range []string{"春 の 光", "春　光", "春\u00a0光", " 春光", "春光 ", "　春光"} {
 		svc, repo, photo := setup(t)
 		if _, err := svc.EnterContest(ctx, "char-1", photo.ID, title); !errors.Is(err, contest.ErrInvalidTitle) || len(repo.entries) != 0 {
 			t.Errorf("title %q: %v, entries %d", title, err, len(repo.entries))

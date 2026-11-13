@@ -26870,7 +26870,7 @@
     },
     "/contest/venue": {
       "get": {
-        "description": "Returns NPC @ワコール dialogue, overview of current and preparing contest rounds, and status.",
+        "description": "Public page (legacy contest.cgi): current and preparing contest rounds and their status. Reconciles the settlement schedule before reading and fails with 500 if that reconciliation fails.",
         "operationId": "getContestVenue",
         "responses": {
           "200": {
@@ -26893,7 +26893,7 @@
           }
         },
         "security": [],
-        "summary": "Get Photo Contest venue overview and dialogue",
+        "summary": "Get the public Photo Contest venue overview",
         "tags": [
           "Contest"
         ]

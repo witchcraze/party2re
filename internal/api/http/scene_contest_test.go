@@ -147,6 +147,7 @@ func TestContestCommandErrors(t *testing.T) {
 	}{
 		{"contest_enter", `{"photo_id":"p","title":""}`, contest.ErrInvalidTitle, "CONTEST_REFUSED", "題名を記入してください", 409},
 		{"contest_enter", `{"photo_id":"p","title":"春 光"}`, contest.ErrInvalidTitle, "CONTEST_REFUSED", "題名に不正な空白が含まれています", 409},
+		{"contest_enter", `{"photo_id":"p","title":" 春光"}`, contest.ErrInvalidTitle, "CONTEST_REFUSED", "題名に不正な空白が含まれています", 409},
 		{"contest_enter", `{"photo_id":"p","title":"春＠光"}`, contest.ErrInvalidTitle, "CONTEST_REFUSED", "題名に不正な文字( ＠ )が含まれています", 409},
 		{"contest_enter", `{"photo_id":"p","title":"a<b"}`, contest.ErrInvalidTitle, "CONTEST_REFUSED", `題名に不正な文字( ,;"'&<>@ )が含まれています`, 409},
 		{"contest_enter", `{"photo_id":"p","title":"` + strings.Repeat("あ", 41) + `"}`, contest.ErrTitleTooLong, "CONTEST_REFUSED", "題名は40文字までです", 409},

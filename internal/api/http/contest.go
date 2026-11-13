@@ -65,6 +65,12 @@ func (h *Handler) handleGetContestVenue(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// The public venue page self-heals the settlement schedule, as legacy
+	// contest.cgi settled on page load; the owned scene observation does not.
+	if err := h.contest.ReconcileSettlementSchedule(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	overview, err := h.contest.GetOverview(r.Context())
 
 	if err != nil {

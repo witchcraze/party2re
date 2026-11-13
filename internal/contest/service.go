@@ -108,31 +108,34 @@ func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) er
 	return fn(ctx)
 }
 
-// GetOverview returns a summary of current contest rounds and active submissions.
-// Opportunistically reconciles the contest settlement schedule to self-heal missing reservations during runtime.
+// GetOverview reads the current contest rounds and active submissions without
+// writing; callers that self-heal the settlement schedule reconcile first.
 func (s *Service) GetOverview(ctx context.Context) (ContestOverview, error) {
-	if err := s.ReconcileSettlementSchedule(ctx); err != nil {
-		return ContestOverview{}, err
-	}
-
 	overview := ContestOverview{
 		MinEntries: MinEntriesForContest,
 	}
 
 	activeRound, err := s.contests.GetActiveRound(ctx)
-	if err == nil {
+	switch {
+	case err == nil:
 		overview.ActiveRound = &activeRound
 		entries, err := s.contests.ListEntriesByRound(ctx, activeRound.Round)
-		if err == nil {
-			overview.ActiveEntries = entries
-			overview.EntryCount = len(entries)
-			overview.IsPostponed = len(entries) < MinEntriesForContest
+		if err != nil {
+			return ContestOverview{}, err
 		}
+		overview.ActiveEntries = entries
+		overview.EntryCount = len(entries)
+		overview.IsPostponed = len(entries) < MinEntriesForContest
+	case !errors.Is(err, ErrContestNotFound):
+		return ContestOverview{}, err
 	}
 
 	prepRound, err := s.contests.GetPreparingRound(ctx)
-	if err == nil {
+	switch {
+	case err == nil:
 		overview.PreparingRound = &prepRound
+	case !errors.Is(err, ErrContestNotFound):
+		return ContestOverview{}, err
 	}
 
 	return overview, nil
@@ -145,6 +148,8 @@ func (s *Service) EnterContest(
 	photoID string,
 	title string,
 ) (ContestEntry, error) {
+	// photo.cgi entori rejects any whitespace in the raw title (/　|\s/), edges included.
+	rawTitle := title
 	characterID = strings.TrimSpace(characterID)
 	photoID = strings.TrimSpace(photoID)
 	title = strings.TrimSpace(title)
@@ -158,8 +163,7 @@ func (s *Service) EnterContest(
 	if err := ValidateTitle(title); err != nil {
 		return ContestEntry{}, err
 	}
-	// photo.cgi entori rejects any whitespace in an entry title (/　|\s/).
-	if strings.ContainsFunc(title, unicode.IsSpace) {
+	if strings.ContainsFunc(rawTitle, unicode.IsSpace) {
 		return ContestEntry{}, ErrInvalidTitle
 	}
 
