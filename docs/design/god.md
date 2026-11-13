@@ -1,6 +1,13 @@
 # Endgame Wishes & Limit Breaks Design (天界・裏天界)
 
-The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wish per audience in Heaven (`@神`, reached with item059) or the Underworld (`@神?`, reached with item262). The wish catalog, costs and effects are owned by `internal/god`; this document keeps decisions and non-obvious legacy findings. A granted wish returns the character home; a rejected or joke wish (`wish_lover`) mutates nothing and stays.
+The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wish per audience in Heaven (`@神`, reached with item059) or the Underworld (`@神?`, reached with item262). The wish catalog, costs and effects are owned by `internal/god`; this document keeps decisions and non-obvious legacy findings.
+
+## Visit
+
+- Using the reins from either Home source records the realm on the character (`god_visit`, the legacy `$m{lib}`) and consumes one in the same transaction. A wish is granted in the recorded realm, and granting clears the visit in the wish's transaction. A rejected or joke wish (`wish_lover`) mutates nothing and the visit continues.
+- **Decision:** reins used while a visit is recorded have no effect and are kept. Legacy cannot reach this because items are used only at Home.
+- The visit is the character's place, as legacy reins set `$m{lib}` (`_data.cgi:961,2074`): while it is recorded, context shows the realm's scene whatever the saved selection says. Legacy `＠いどう`/`＠まち`/`＠ほーむ` replace `$m{lib}` (`system.cgi:266–330,416–421`), so any navigation that leaves the scene forfeits the visit. **Decision:** a granted wish returns to the saved selection instead of forcing Home (`god.cgi:176`); the reins are used at own Home, which is normally that selection.
+- Both realms share the god's `@words` line and grant reply (`u_god.cgi:39–41,66`). The Underworld god's `＠しらべる` prints nothing.
 
 ## Heaven wishes
 

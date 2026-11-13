@@ -16,6 +16,7 @@ import (
 )
 
 func TestValkeyRoomLock_MutualExclusion(t *testing.T) {
+	t.Parallel()
 	raw := openIsolatedTestValkey(t, 11)
 	t.Cleanup(raw.Close)
 
@@ -148,9 +149,14 @@ func TestValkeyRoomLock_Cancellation(t *testing.T) {
 
 	started1 := make(chan struct{})
 	release1 := make(chan struct{})
-	defer close(release1)
+	done1 := make(chan struct{})
+	defer func() {
+		close(release1)
+		<-done1
+	}()
 
 	go func() {
+		defer close(done1)
 		_ = repo.WithRoomLock(context.Background(), roomID, func(ctx context.Context) error {
 			close(started1)
 			<-release1
@@ -200,9 +206,14 @@ func TestValkeyRoomLock_CallerDeadlineTimeout(t *testing.T) {
 
 	started1 := make(chan struct{})
 	release1 := make(chan struct{})
-	defer close(release1)
+	done1 := make(chan struct{})
+	defer func() {
+		close(release1)
+		<-done1
+	}()
 
 	go func() {
+		defer close(done1)
 		_ = repo.WithRoomLock(context.Background(), roomID, func(ctx context.Context) error {
 			close(started1)
 			<-release1
@@ -679,6 +690,7 @@ func TestValkeyRoomLock_LeaseSafetyAndContentionHoldTiming(t *testing.T) {
 }
 
 func TestValkeyRoomLock_HonorsCallerDeadlineBeyondDefault(t *testing.T) {
+	t.Parallel()
 	raw := openIsolatedTestValkey(t, 11)
 	t.Cleanup(raw.Close)
 

@@ -36,7 +36,7 @@ func TestDefaultCatalog_Integrity(t *testing.T) {
 		}
 		seenOperationIDs[act.OperationID] = true
 
-		if act.RequiredGates == 0 && act.ID != "rescue_request" && act.ActivityKind == "" {
+		if act.RequiredGates == 0 && act.ID != "rescue_request" && act.ID != "presence_refresh" && act.ActivityKind == "" {
 			t.Errorf("action %s has zero RequiredGates", act.ID)
 		}
 		if act.ID == "rescue_request" && act.RequiredGates != 0 {

@@ -48,8 +48,8 @@ func TestScanCharacterRow_CustomError(t *testing.T) {
 func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	scanner := &mockScanner{
 		scanFn: func(dest ...any) error {
-			if len(dest) != 46 {
-				t.Fatalf("expected 46 scan destinations, got %d", len(dest))
+			if len(dest) != 47 {
+				t.Fatalf("expected 47 scan destinations, got %d", len(dest))
 			}
 			*dest[0].(*string) = "char-1"
 			*dest[1].(*string) = "player-1"
@@ -97,6 +97,7 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 			*dest[43].(*string) = "Legendary Sword"
 			*dest[44].(*string) = "Dragon Armor"
 			*dest[45].(*bool) = true
+			*dest[46].(*string) = "heaven"
 			return nil
 		},
 	}
@@ -140,6 +141,9 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	}
 	if !char.PendingWake {
 		t.Errorf("expected PendingWake = true")
+	}
+	if char.GodVisit != "heaven" {
+		t.Errorf("expected GodVisit = heaven, got %q", char.GodVisit)
 	}
 	if char.JobMemory == nil || char.JobMemory.Kind != corecharacter.JobMemoryKindTemporary ||
 		char.JobMemory.JobID != "memory-job" || char.JobMemory.SP != 12 ||

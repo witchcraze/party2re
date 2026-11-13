@@ -16,6 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/job"
 	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/tavern"
@@ -467,6 +468,7 @@ func TestWake_RealTavernFullnessReset(t *testing.T) {
 }
 
 func TestSleepWake_CycleConsistency(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("SQL and Valkey integration environment is not configured")
 	}
@@ -474,12 +476,12 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	client, err := valkey.NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	t.Cleanup(client.Close)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -499,9 +501,9 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newChar := func(t *testing.T, ctx context.Context, name string) corecharacter.Character {
+	newChar := func(t *testing.T, ctx context.Context, _ string) corecharacter.Character {
 		t.Helper()
-		char, err := database.CreateTestCharacter(ctx, db, name)
+		char, err := database.CreateTestCharacter(ctx, db, "H"+id.New()[:7])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -802,6 +804,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	})
 
 	t.Run("wake_keep_alive_renews_lease_in_real_valkey", func(t *testing.T) {
+		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		char := newChar(t, ctx, "WakeRealKeepAlive")
@@ -892,6 +895,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	})
 
 	t.Run("wake_ownership_loss_aborts_and_preserves_successor_in_real_valkey", func(t *testing.T) {
+		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		char := newChar(t, ctx, "WakeRealLoss")
@@ -986,6 +990,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	})
 
 	t.Run("wake_lease_expiry_aborts_and_preserves_state_in_real_valkey", func(t *testing.T) {
+		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		char := newChar(t, ctx, "WakeRealExpiry")
@@ -1081,6 +1086,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	})
 
 	t.Run("wake_hook_paused_lease_expiry_preserves_successor_play_state_in_real_valkey", func(t *testing.T) {
+		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		char := newChar(t, ctx, "WakeRealHookPaused")
@@ -1266,6 +1272,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	})
 
 	t.Run("sleep_keep_alive_renews_lease_in_real_valkey", func(t *testing.T) {
+		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		char := newChar(t, ctx, "SleepRealKeepAlive")
@@ -1357,6 +1364,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	})
 
 	t.Run("sleep_expired_claim_preserves_successor_sleep_state_in_real_mariadb_and_valkey", func(t *testing.T) {
+		t.Parallel()
 		jobRepo, err := database.NewCharacterJobRepository(db)
 		if err != nil {
 			t.Fatal(err)
@@ -1367,7 +1375,9 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		}
 
 		for _, mode := range []string{"asleep_error", "asleep_proceed", "job_revert_error", "job_revert_proceed"} {
+			mode := mode
 			t.Run(mode, func(t *testing.T) {
+				t.Parallel()
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 				defer cancel()
 				char := newChar(t, ctx, "SleepExpiredClaim_"+mode)

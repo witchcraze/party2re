@@ -787,10 +787,14 @@ func TestAdventure_TreasureBlessing_SingleChestGenerationNoItemDuplication(t *te
 			res, err := svc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
 				CharacterIDs: []string{char.ID},
 				StageID:      "stage-01",
-				// Roll a tool (rng(4)==2) so the opened chest enters the empty tool hand.
+				// Roll a tool (rng(4)==2) so the opened chest enters the empty tool hand;
+				// index 1 skips stage-01's legacy empty entry.
 				Rng: func(n int) int {
-					if n == 4 {
+					switch {
+					case n == 4:
 						return 2
+					case n > 27:
+						return 1
 					}
 					return 0
 				},

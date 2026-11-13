@@ -114,3 +114,48 @@ func shopTemplates(info ShopSceneInfo, choices []string, templates map[string]ma
 	templates["shop_sell"]["item_instance_id"] = info.SaleOffer.ItemInstanceID
 	return choices
 }
+
+// shop.cgi files' @words and shiraberu_npc; an empty inspect uses the default.
+var shopNPCWords = map[shop.ShopType]struct {
+	words   []string
+	inspect string
+}{
+	shop.ShopTypeWeapon: {[]string{
+		"いらっしゃい！ここは武器屋だぜ！",
+		"強い武器ほど重いぜ！重いと素早さが下がるから注意しな！",
+		"武器の強さ＝攻撃力だぜ！",
+		"まとめて買ってくれるなら、あんたの預かり所に送ってやるぜ！",
+	}, "おいおい、俺は武器じゃねぇぜ"},
+	shop.ShopTypeArmor: {[]string{
+		"いらっしゃいッス！ここは防具屋ッス！",
+		"防御力が高ければ、敵から受けるダメージが減るッスよ！",
+		"防具も重いと素早さが下がるッスから注意ッス！",
+		"まとめて買ってくれるなら、預かり所に送っておくッスよ！",
+	}, "な、な、何を見ているッスか！？"},
+	shop.ShopTypeItem: {[]string{
+		"いらしゃいませぇ〜ここは道具屋ニャ",
+		"冒険に出る前に道具があると便利ニャ",
+		"道具は戦闘中に使うニャ！",
+		"この世界のどこかに秘密の店というあやしいお店があるらしいですよぉ",
+	}, "ほえ？なんでしょうかぁ？"},
+	shop.ShopTypeAccessory: {[]string{
+		"ここはアクセサリー屋。ここでしか手に入らないアイテムばっかりよ",
+		"おすすめのアクセサリーを買うと良いと思うわ！",
+		"独占禁止法？　ぼったくり？　細かいことはいいの！",
+	}, ""},
+}
+
+var shopTitles = map[shop.ShopType]string{shop.ShopTypeWeapon: "武器店", shop.ShopTypeArmor: "防具店", shop.ShopTypeItem: "道具店", shop.ShopTypeAccessory: "装飾品店"}
+
+func shopFacility(kind shop.ShopType) facility {
+	commands := []string{"shop_purchase", "shop_batch_purchase", "shop_sell"}
+	if kind == shop.ShopTypeAccessory {
+		commands = []string{"shop_purchase", "shop_sell", "shop_synthesize"}
+	}
+	_, name := shop.GetShopMeta(kind)
+	npc := &npcProfile{name: name, words: shopNPCWords[kind].words}
+	if inspect := shopNPCWords[kind].inspect; inspect != "" {
+		npc.inspect = name + "「" + inspect + "」"
+	}
+	return facility{title: shopTitles[kind], commands: commands, read: (*Handler).shopSceneData, placeLog: true, npc: npc}
+}

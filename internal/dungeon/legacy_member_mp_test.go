@@ -59,7 +59,6 @@ type preFinalizeHookRepo struct {
 func (r *preFinalizeHookRepo) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
-	record dungeon.CharacterDungeonRecord,
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
@@ -69,7 +68,7 @@ func (r *preFinalizeHookRepo) FinalizeExpedition(
 			return err
 		}
 	}
-	return r.Repository.FinalizeExpedition(ctx, history, record, character, rewardItems, members...)
+	return r.Repository.FinalizeExpedition(ctx, history, character, rewardItems, members...)
 }
 
 type failingFindCharRepo struct {
@@ -155,11 +154,10 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 	t.Cleanup(valkeyClient.Close)
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dg-mp-compat",
-		Name:             "MP Compat Dungeon",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 20,
-		Floors: []dungeon.Floor{
+		ID:         "dg-mp-compat",
+		Name:       "MP Compat Dungeon",
+		RoundLimit: 21,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -286,6 +284,7 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 					dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 					dungeon.WithActiveExpeditionStore(store),
 					dungeon.WithParticipantBuilder(battleSvc),
+					dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 				)
 				if err != nil {
 					t.Fatal(err)
@@ -298,7 +297,7 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 					PartyID:          "party-1",
 					Members:          dungeon.DecodeMembers(rawMembers),
 					DungeonID:        customDungeon.ID,
-					CurrentFloor:     1,
+					MapVariant:       1,
 					PosX:             0,
 					PosY:             0,
 					CurrentHP:        40,
@@ -393,7 +392,6 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			cleanupDungeonValkey(t, valkeyClient, lead.ID)
 			_ = valkeyClient.Do(cleanupCtx, valkeyClient.B().Del().Key("party2:dungeon:{char:"+ally.ID+"}:member").Build()).Error()
 			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM dungeon_expedition_history WHERE character_id IN (?, ?)", lead.ID, ally.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_dungeon_records WHERE character_id IN (?, ?)", lead.ID, ally.ID)
 			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM dungeon_active_expeditions WHERE character_id IN (?, ?)", lead.ID, ally.ID)
 			_ = charRepo.Delete(cleanupCtx, lead.ID)
 			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", lead.PlayerID)
@@ -432,12 +430,13 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			corebattle.Engine{},
 			dungeon.WithActiveExpeditionStore(store),
 			dungeon.WithParticipantBuilder(battleSvc),
+			dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		exp, err := svc.StartExpedition(ctx, lead.ID, "dungeon-01")
+		exp, err := svc.StartExpedition(ctx, lead.ID, dungeon.NativeMap0ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -484,12 +483,13 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			corebattle.Engine{},
 			dungeon.WithActiveExpeditionStore(store),
 			dungeon.WithParticipantBuilder(battleSvc),
+			dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if _, err := svc.StartExpedition(ctx, lead.ID, "dungeon-01"); err != nil {
+		if _, err := svc.StartExpedition(ctx, lead.ID, dungeon.NativeMap0ID); err != nil {
 			t.Fatal(err)
 		}
 		zeroMembersJSON := fmt.Sprintf(
@@ -536,11 +536,10 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			},
 		}
 		combatDungeon := dungeon.Dungeon{
-			ID:               "dg-real-combat-mp",
-			Name:             "Real Combat MP Dungeon",
-			MinLevel:         1,
-			MaxTurnsPerFloor: 20,
-			Floors: []dungeon.Floor{
+			ID:         "dg-real-combat-mp",
+			Name:       "Real Combat MP Dungeon",
+			RoundLimit: 21,
+			Variants: []dungeon.Floor{
 				{
 					FloorNumber: 1,
 					Width:       3,
@@ -561,6 +560,7 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			dungeon.WithCustomDungeons([]dungeon.Dungeon{combatDungeon}),
 			dungeon.WithActiveExpeditionStore(store),
 			dungeon.WithParticipantBuilder(battleSvc),
+			dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -640,12 +640,13 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			corebattle.Engine{},
 			dungeon.WithActiveExpeditionStore(store),
 			dungeon.WithParticipantBuilder(battleSvc),
+			dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if _, err := svc.StartExpedition(ctx, lead.ID, "dungeon-01"); err != nil {
+		if _, err := svc.StartExpedition(ctx, lead.ID, dungeon.NativeMap0ID); err != nil {
 			t.Fatal(err)
 		}
 		legacyMembersJSON := fmt.Sprintf(
@@ -696,11 +697,10 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 		}
 		battleSvc := battle.NewService(battle.WithCharacterRepository(flakyCharRepo))
 		combatDungeon := dungeon.Dungeon{
-			ID:               "dg-read-fail-mp",
-			Name:             "Read Fail MP Dungeon",
-			MinLevel:         1,
-			MaxTurnsPerFloor: 20,
-			Floors: []dungeon.Floor{
+			ID:         "dg-read-fail-mp",
+			Name:       "Read Fail MP Dungeon",
+			RoundLimit: 21,
+			Variants: []dungeon.Floor{
 				{
 					FloorNumber: 1,
 					Width:       3,
@@ -721,6 +721,7 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			dungeon.WithCustomDungeons([]dungeon.Dungeon{combatDungeon}),
 			dungeon.WithActiveExpeditionStore(store),
 			dungeon.WithParticipantBuilder(battleSvc),
+			dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		)
 		if err != nil {
 			t.Fatal(err)

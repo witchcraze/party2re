@@ -55,7 +55,6 @@ func nativeMap0() Dungeon {
 	}
 	return Dungeon{
 		ID:          NativeMap0ID,
-		Tier:        1,
 		Name:        "地下迷路",
 		Description: "小さな地下迷路。隠し通路と宝箱、奥に潜む主が待つ。",
 		RoundLimit:  20,
@@ -65,22 +64,17 @@ func nativeMap0() Dungeon {
 
 var errInvalidFloor = errors.New("invalid floor index")
 
-func (d Dungeon) native() bool { return len(d.Variants) > 0 }
-
 // activeFloor resolves the layout saved on a run.
 func (s *Service) activeFloor(exp *ActiveExpedition) (Dungeon, Floor, error) {
 	d, ok := s.dungeonMap[exp.DungeonID]
 	if !ok {
 		return Dungeon{}, Floor{}, ErrDungeonNotFound
 	}
-	floors, idx := d.Floors, exp.CurrentFloor-1
-	if d.native() {
-		floors, idx = d.Variants, exp.MapVariant-1
-	}
-	if idx < 0 || idx >= len(floors) {
+	idx := exp.MapVariant - 1
+	if idx < 0 || idx >= len(d.Variants) {
 		return d, Floor{}, errInvalidFloor
 	}
-	return d, floors[idx], nil
+	return d, d.Variants[idx], nil
 }
 
 // moveNative applies one admitted native step: the round advances and the
@@ -96,7 +90,6 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
 		Combat:               clearing,
-		NewFloor:             exp.CurrentFloor,
 		NewX:                 x,
 		NewY:                 y,
 		TurnsDelta:           -1,

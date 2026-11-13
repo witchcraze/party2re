@@ -109,18 +109,6 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 			return fmt.Errorf("failed to update tavern character status: %w", err)
 		}
 
-		msg := fmt.Sprintf("おまたせ、%sよ♪ 美味しく召し上がれ！", item.Name)
-		if hpHealed > 0 && mpHealed > 0 {
-			msg += fmt.Sprintf(" HPが%d、MPが%d回復した！", hpHealed, mpHealed)
-		} else if hpHealed > 0 {
-			msg += fmt.Sprintf(" HPが%d回復した！", hpHealed)
-		} else if mpHealed > 0 {
-			msg += fmt.Sprintf(" MPが%d回復した！", mpHealed)
-		}
-		if ticketsAwarded > 0 {
-			msg += fmt.Sprintf(" 福引券を%d枚もらった！", ticketsAwarded)
-		}
-
 		result = OrderResult{
 			CharacterID:    char.ID,
 			Item:           item,
@@ -131,7 +119,6 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 			RemainingGold:  char.Money,
 			TicketsAwarded: ticketsAwarded,
 			TotalTickets:   totalTickets,
-			Message:        msg,
 		}
 		return nil
 	})

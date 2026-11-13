@@ -50,8 +50,8 @@ func blackMarketSceneRouter(t *testing.T, service BlackMarketService, jobLevel i
 	f.char.JobLevel = jobLevel
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "blackmarket"}}
 	pc := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithNavigation(store,
-		playercontext.SceneDefinition{ID: "town", Pageable: true},
-		playercontext.SceneDefinition{ID: "blackmarket", Parent: "town", Pageable: true, CanEnter: blackmarket.CheckEligibility}))
+		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "oracle", Parent: "town"},
+		playercontext.SceneDefinition{ID: "blackmarket", Parent: "oracle", Pageable: true, CanEnter: blackmarket.CheckEligibility}))
 	options := []Option{WithPlayerContext(pc), func(h *Handler) { h.homes = f }}
 	if service != nil {
 		options = append(options, WithBlackMarket(service))
@@ -80,7 +80,7 @@ func TestBlackMarketSceneObservesOwnedFactsWithoutMutation(t *testing.T) {
 		t.Fatalf("projection: %d %+v", status, observation)
 	}
 	data := decodeShopScene[BlackMarketSceneData](t, observation)
-	if data.Parent != "town" || !reflect.DeepEqual(data.Status, service.status) || data.CandidateCount != 2 || data.Page.Next != nil {
+	if data.Parent != "oracle" || !reflect.DeepEqual(data.Status, service.status) || data.CandidateCount != 2 || data.Page.Next != nil {
 		t.Fatalf("lost facts: %+v", data)
 	}
 	for _, action := range []string{"blackmarket_sacrifice", "blackmarket_trade", "scene_back"} {
@@ -94,10 +94,9 @@ func TestBlackMarketSceneObservesOwnedFactsWithoutMutation(t *testing.T) {
 
 	store.selection.Destination = "town"
 	status, town := navigationGET(t, router)
-	if status != 200 || !slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
-		return d.ID == "blackmarket" && d.Supported && d.EnterParams.Destination == "blackmarket"
-	}) {
-		t.Fatalf("missing town entry: %d %+v", status, town)
+	// Legacy reaches the black market only through the Oracle shop (goods.cgi ＠やみいちば).
+	if status != 200 || slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool { return d.ID == "blackmarket" }) {
+		t.Fatalf("black market listed in town: %d %+v", status, town)
 	}
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"blackmarket"}}`, nil)
 	var refreshed PlayerContextResponse

@@ -49,7 +49,7 @@ func (r *mapRunReader) GetActiveExpedition(context.Context, string) (*dungeon.Ac
 
 func TestMapObservationSourcesAndContinuations(t *testing.T) {
 	ctx := context.Background()
-	run := &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: "dungeon-01", CurrentFloor: 1, Revision: 4, Status: dungeon.StatusExploring, TurnsRemaining: 20}
+	run := &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: dungeon.NativeMap0ID, MapVariant: 1, Revision: 4, Status: dungeon.StatusExploring, TurnsRemaining: 20}
 	store := &mapRunReader{run: run}
 	chars := &mapCharacterReader{char: corecharacter.Character{ID: "hero", JobID: "job-09"}}
 	inventory := &mapInventoryReader{inv: coreinventory.Inventory{Items: []coreitem.Instance{{DefinitionID: "item-197", Quantity: 1}}}}
@@ -58,7 +58,7 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 		t.Fatal(err)
 	}
 	view, err := svc.ObserveExpedition(ctx, "hero")
-	if err != nil || view.Map.Radius != 3 || !slices.Equal(view.Directions, []dungeon.Direction{dungeon.DirectionEast}) || !view.Controls.CanMove || view.Controls.CanFight || !view.Controls.CanEscape {
+	if err != nil || view.Map.Radius != 3 || !slices.Equal(view.Directions, []dungeon.Direction{dungeon.DirectionNorth, dungeon.DirectionSouth, dungeon.DirectionEast, dungeon.DirectionWest}) || !view.Controls.CanMove || view.Controls.CanFight || !view.Controls.CanEscape {
 		t.Fatalf("solo map: %+v %v", view, err)
 	}
 	for _, item := range []string{"197", "item-197", "scope_goggles", "スコープ"} {
@@ -112,7 +112,7 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 	if err != nil || got.Controls.CanMove || len(got.Directions) != 0 || !got.Controls.CanEscape {
 		t.Fatalf("exhausted: %+v %v", got, err)
 	}
-	for _, status := range []dungeon.ExpeditionStatus{dungeon.StatusCleared, dungeon.StatusEscaped, dungeon.StatusWipedOut} {
+	for _, status := range []dungeon.ExpeditionStatus{dungeon.StatusEscaped, dungeon.StatusWipedOut} {
 		run.Status = status
 		chars.err, inventory.err = errors.New("terminal map must not read character"), errors.New("terminal map must not read inventory")
 		got, err := svc.ObserveExpedition(ctx, "hero")
@@ -128,8 +128,8 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 
 func TestMapObservationRejectsInvalidGeometry(t *testing.T) {
 	for _, grid := range [][]string{{}, {"S"}, {"S0", "0"}} {
-		store := &mapRunReader{run: &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: "broken", CurrentFloor: 1, Status: dungeon.StatusExploring}}
-		svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{}, &corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons([]dungeon.Dungeon{{ID: "broken", Floors: []dungeon.Floor{{Width: 2, Height: 2, Grid: grid}}}}))
+		store := &mapRunReader{run: &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: "broken", Status: dungeon.StatusExploring}}
+		svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{}, &corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons([]dungeon.Dungeon{{ID: "broken", Variants: []dungeon.Floor{{Width: 2, Height: 2, Grid: grid}}}}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -149,7 +149,7 @@ func TestDungeonStartDoesNotSaveAnIncompleteVisibilitySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if run, err := svc.StartExpedition(ctx, "hero", "dungeon-01"); run != nil || !errors.Is(err, failure) {
+	if run, err := svc.StartExpedition(ctx, "hero", dungeon.NativeMap0ID); run != nil || !errors.Is(err, failure) {
 		t.Fatalf("partial start: %+v %v", run, err)
 	}
 	if run, err := store.GetActiveExpedition(ctx, "hero"); run != nil || err != nil {
@@ -170,7 +170,7 @@ func TestMapObservationRecoversMissingSavedInventory(t *testing.T) {
 				if ownsGoggles {
 					inv.inv.Items = []coreitem.Instance{{ID: "scope", DefinitionID: "item-197", Quantity: 1}}
 				}
-				run := dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: "dungeon-01", CurrentFloor: 1, Status: dungeon.StatusExploring, TurnsRemaining: 20}
+				run := dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: dungeon.NativeMap0ID, MapVariant: 1, Status: dungeon.StatusExploring, TurnsRemaining: 20}
 				switch origin {
 				case "old-json":
 					run.Members = dungeon.DecodeMembers(`[{"character_id":"hero","job_id":"job-01"},{"character_id":"ally","job_id":"job-79","item_ids":["item-197"]}]`)
@@ -190,7 +190,7 @@ func TestMapObservationRecoversMissingSavedInventory(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					started, err := starter.StartExpedition(ctx, "hero", "dungeon-01")
+					started, err := starter.StartExpedition(ctx, "hero", dungeon.NativeMap0ID)
 					if err != nil {
 						t.Fatal(err)
 					}

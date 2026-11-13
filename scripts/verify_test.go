@@ -3,6 +3,7 @@ package scripts_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,6 +73,12 @@ func setupVerifyFixture(t *testing.T, isGit bool) *verifyFixture {
 if [ -n "${GO_RECORD:-}" ]; then
     echo "go $@" >> "$GO_RECORD"
 fi
+if [ "$1" = "list" ] && [ "${2:-}" = "./..." ]; then
+    printf 'github.com/witchcraze/party2re/internal/architecture\ngithub.com/witchcraze/party2re/internal/sample\n'
+    if [ "${GO_LIST_PARTIAL_FAIL:-0}" != "0" ]; then
+        exit 1
+    fi
+fi
 if [ -n "${GO_MUTATE:-}" ]; then
     eval "$GO_MUTATE"
 fi
@@ -88,6 +95,10 @@ if [ -n "${DOCKER_RECORD:-}" ]; then
 fi
 if [ -n "${DOCKER_MUTATE:-}" ]; then
     eval "$DOCKER_MUTATE"
+fi
+if [ "${DOCKER_EXEC_APP_SH:-0}" != "0" ] && [ "$1" = "compose" ] && [ "$2" = "run" ] && [ "$3" = "--rm" ] && [ "$4" = "app" ] && [ "$5" = "sh" ] && [ "$6" = "-c" ]; then
+    PATH="${CONTAINER_PATH:-$PATH}" sh -c "$7"
+    exit $?
 fi
 exit "${DOCKER_EXIT:-0}"
 `
@@ -235,8 +246,8 @@ func TestVerify_ClearsTestCacheOnSchemaChangeOrForce(t *testing.T) {
 		if got := strings.Contains(string(goLog), "go clean -testcache"); got != step.wantClear {
 			t.Fatalf("%s: cleared = %v, want %v:\n%s", step.name, got, step.wantClear, goLog)
 		}
-		if !strings.Contains(string(goLog), "go test -timeout=30m ./...") {
-			t.Fatalf("%s: full suite must allow result caching:\n%s", step.name, goLog)
+		if !strings.Contains(string(goLog), "go test -timeout=30m github.com/witchcraze/party2re/internal/sample") {
+			t.Fatalf("%s: full suite must allow result caching and exclude internal/architecture:\n%s", step.name, goLog)
 		}
 	}
 }
@@ -466,7 +477,7 @@ func TestVerify_TimeoutConfiguration(t *testing.T) {
 			}
 			var fullSuiteCall string
 			for _, line := range strings.Split(string(goLog), "\n") {
-				if strings.HasPrefix(line, "go test") && strings.Contains(line, "./...") {
+				if strings.HasPrefix(line, "go test") && strings.Contains(line, "github.com/witchcraze/party2re/internal/sample") {
 					fullSuiteCall = line
 					break
 				}
@@ -530,13 +541,189 @@ func extractDockerfileCMD(t *testing.T, dockerfilePath string) []string {
 }
 
 func TestCIWorkflow_RunsWholeSuiteWithoutResultCache(t *testing.T) {
-	ci, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "ci.yml"))
+	ciBytes, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "ci.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(ci), "go test -timeout=30m -count=1 ./... -coverprofile=") {
-		t.Fatal("CI must run ./... with -count=1 and coverage")
+	ci := string(ciBytes)
+
+	// Ensure CI partitions all packages dynamically across shards without result-cache replay.
+	for _, want := range []string{
+		"verify-shard:",
+		"shard: [0, 1, 2]",
+		`shard_output=$(./scripts/ci_shard.sh "${{ matrix.shard }}" 3)`,
+		"go test -timeout=30m -count=1 -coverprofile=coverage.out -covermode=atomic",
+		"verify:",
+		"needs: [verify-shard]",
+		"if: ${{ always() }}",
+		"needs.verify-shard.result != 'success'",
+		"go tool cover -func=coverage.out",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Fatalf("ci.yml missing required sharded verification directive %q", want)
+		}
 	}
+	if strings.Contains(ci, "< <(./scripts/ci_shard.sh") {
+		t.Fatal("ci.yml must not use bash process substitution for ci_shard.sh (loses exit code)")
+	}
+	if strings.Contains(ci, "if: ${{ !cancelled() }}") {
+		t.Fatal("ci.yml verify gate must use always() so cancelled shards never report skipped and pass branch protection")
+	}
+
+	// Regression test: verify the actual CI shard shell block aborts before `go test` when ci_shard.sh fails after partial stdout.
+	t.Run("shard step aborts on partial ci_shard failure", func(t *testing.T) {
+		marker := "        run: |\n"
+		stepMarker := "- name: Run shard tests with atomic coverage"
+		idx := strings.Index(ci, stepMarker)
+		if idx < 0 {
+			t.Fatalf("could not locate %q in ci.yml", stepMarker)
+		}
+		rest := ci[idx:]
+		runIdx := strings.Index(rest, marker)
+		if runIdx < 0 {
+			t.Fatalf("could not locate run block in %q", stepMarker)
+		}
+		var blockLines []string
+		for _, line := range strings.Split(rest[runIdx+len(marker):], "\n") {
+			if line != "" && !strings.HasPrefix(line, "          ") {
+				break
+			}
+			blockLines = append(blockLines, strings.TrimPrefix(line, "          "))
+		}
+		script := strings.ReplaceAll(strings.Join(blockLines, "\n"), "${{ matrix.shard }}", "0")
+
+		fix := setupVerifyFixture(t, false)
+		shardScript, err := os.ReadFile("ci_shard.sh")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(fix.root, "scripts", "ci_shard.sh"), shardScript, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		if out, code := runCmd(t, fix.root, fix.env, "bash", "-eo", "pipefail", "-c", script); code != 0 {
+			t.Fatalf("happy-path CI shard script failed (code %d):\n%s", code, out)
+		}
+		goLogOK, err := os.ReadFile(fix.goRecord)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(goLogOK), "go test -timeout=30m -count=1") {
+			t.Fatalf("expected happy-path CI shard script to run go test:\n%s", goLogOK)
+		}
+
+		if err := os.WriteFile(fix.goRecord, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		failEnv := append([]string{}, fix.env...)
+		failEnv = append(failEnv, "GO_LIST_PARTIAL_FAIL=1")
+		if out, code := runCmd(t, fix.root, failEnv, "bash", "-eo", "pipefail", "-c", script); code == 0 {
+			t.Fatalf("expected CI shard script to abort when ci_shard.sh fails after partial stdout, got:\n%s", out)
+		}
+		goLogFail, err := os.ReadFile(fix.goRecord)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(goLogFail), "go test ") {
+			t.Fatalf("CI shard script must not execute go test after ci_shard.sh fails:\n%s", goLogFail)
+		}
+	})
+}
+
+func TestCIShard_PartitionsAllPackagesWithoutDuplicatesOrOmissions(t *testing.T) {
+	allOut, code := runCmd(t, "..", os.Environ(), "go", "list", "./...")
+	if code != 0 {
+		t.Fatalf("go list ./... failed (code %d):\n%s", code, allOut)
+	}
+	var expected []string
+	for _, line := range strings.Split(strings.TrimSpace(allOut), "\n") {
+		if pkg := strings.TrimSpace(line); pkg != "" {
+			expected = append(expected, pkg)
+		}
+	}
+	if len(expected) == 0 {
+		t.Fatal("expected non-empty repository package list")
+	}
+
+	for _, count := range []int{2, 3} {
+		t.Run(fmt.Sprintf("%d-shards", count), func(t *testing.T) {
+			seen := make(map[string]int, len(expected))
+			for shard := 0; shard < count; shard++ {
+				out, code := runCmd(t, "..", os.Environ(), "./scripts/ci_shard.sh", fmt.Sprintf("%d", shard), fmt.Sprintf("%d", count))
+				if code != 0 {
+					t.Fatalf("ci_shard.sh %d %d failed (code %d):\n%s", shard, count, code, out)
+				}
+				var shardCount int
+				for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+					pkg := strings.TrimSpace(line)
+					if pkg == "" {
+						continue
+					}
+					shardCount++
+					if prev, dup := seen[pkg]; dup {
+						t.Fatalf("package %s assigned to both shard %d and shard %d", pkg, prev, shard)
+					}
+					seen[pkg] = shard
+				}
+				if shardCount == 0 {
+					t.Fatalf("shard %d of %d received zero packages", shard, count)
+				}
+			}
+			for _, pkg := range expected {
+				if _, ok := seen[pkg]; !ok {
+					t.Fatalf("package %s omitted from %d-shard partition", pkg, count)
+				}
+			}
+			if len(seen) != len(expected) {
+				t.Fatalf("partitioned package count = %d, want %d", len(seen), len(expected))
+			}
+		})
+	}
+
+	t.Run("synthetic new and missing packages via stdin", func(t *testing.T) {
+		synthetic := strings.Join([]string{
+			"github.com/witchcraze/party2re/internal/newpkg",
+			"github.com/witchcraze/party2re/internal/casino",
+			"github.com/witchcraze/party2re/internal/alpha",
+			"github.com/witchcraze/party2re/internal/myscripts",
+		}, "\n") + "\n"
+		seen := make(map[string]int)
+		for shard := 0; shard < 3; shard++ {
+			cmd := exec.Command("./scripts/ci_shard.sh", fmt.Sprintf("%d", shard), "3", "--stdin")
+			cmd.Dir = ".."
+			cmd.Stdin = strings.NewReader(synthetic)
+			outBytes, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("ci_shard.sh stdin failed (shard %d): %v\n%s", shard, err, string(outBytes))
+			}
+			for _, line := range strings.Split(strings.TrimSpace(string(outBytes)), "\n") {
+				if pkg := strings.TrimSpace(line); pkg != "" {
+					if prev, dup := seen[pkg]; dup {
+						t.Fatalf("synthetic package %s duplicated across shards %d and %d", pkg, prev, shard)
+					}
+					seen[pkg] = shard
+				}
+			}
+		}
+		if len(seen) != 4 {
+			t.Fatalf("expected all 4 synthetic packages partitioned, got %v", seen)
+		}
+	})
+
+	t.Run("rejects invalid arguments and partial go list failure", func(t *testing.T) {
+		if out, code := runCmd(t, "..", os.Environ(), "./scripts/ci_shard.sh", "3", "3"); code == 0 {
+			t.Fatalf("expected out-of-range shard index to fail, got:\n%s", out)
+		}
+		binDir := t.TempDir()
+		fakeGo := filepath.Join(binDir, "go")
+		if err := os.WriteFile(fakeGo, []byte("#!/usr/bin/env bash\necho github.com/witchcraze/party2re/internal/sample\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		env := append(os.Environ(), "PATH="+binDir+":"+os.Getenv("PATH"))
+		if out, code := runCmd(t, "..", env, "./scripts/ci_shard.sh", "0", "3"); code == 0 {
+			t.Fatalf("expected partial go list failure to abort ci_shard.sh, got:\n%s", out)
+		}
+	})
 }
 
 func TestCompose_AppCommandTimeoutConfiguration(t *testing.T) {
@@ -695,4 +882,118 @@ func TestDockerfileDev_CMDTimeoutConfiguration(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVerify_DeduplicatesArchitectureAndOpenAPITests(t *testing.T) {
+	fix := setupVerifyFixture(t, false)
+	out, code := runCmd(t, fix.root, fix.env, "bash", "./scripts/verify.sh")
+	if code != 0 {
+		t.Fatalf("verify failed with code %d:\n%s", code, out)
+	}
+	goLog, err := os.ReadFile(fix.goRecord)
+	if err != nil {
+		t.Fatalf("could not read go record: %v", err)
+	}
+
+	var openAPICall, archCall, suiteCall string
+	archTestCount := 0
+	for _, line := range strings.Split(string(goLog), "\n") {
+		if !strings.HasPrefix(line, "go test ") {
+			continue
+		}
+		if strings.Contains(line, "-run OpenAPI") {
+			openAPICall = line
+		}
+		if strings.Contains(line, "internal/architecture") {
+			archTestCount++
+			archCall = line
+		}
+		if strings.Contains(line, "github.com/witchcraze/party2re/internal/sample") {
+			suiteCall = line
+		}
+	}
+
+	if openAPICall == "" {
+		t.Fatalf("expected OpenAPI test call in go record:\n%s", goLog)
+	}
+	if strings.Contains(openAPICall, "internal/architecture") {
+		t.Fatalf("Step 3 OpenAPI check must not redundantly execute internal/architecture: %s", openAPICall)
+	}
+	if archCall == "" || archTestCount != 1 {
+		t.Fatalf("expected internal/architecture to execute exactly once, got count=%d:\n%s", archTestCount, goLog)
+	}
+	if suiteCall == "" {
+		t.Fatalf("expected Step 6 suite call in go record:\n%s", goLog)
+	}
+	if strings.Contains(suiteCall, "internal/architecture") {
+		t.Fatalf("Step 6 suite call must not re-run internal/architecture: %s", suiteCall)
+	}
+}
+
+func TestVerify_PartialGoListFailureAbortsStep6(t *testing.T) {
+	t.Run("host path", func(t *testing.T) {
+		fix := setupVerifyFixture(t, false)
+		env := append(fix.env, "GO_LIST_PARTIAL_FAIL=1")
+		out, code := runCmd(t, fix.root, env, "bash", "./scripts/verify.sh")
+		if code == 0 {
+			t.Fatalf("expected verify.sh to fail on partial go list failure, output:\n%s", out)
+		}
+		goLog, err := os.ReadFile(fix.goRecord)
+		if err != nil {
+			t.Fatalf("could not read go record: %v", err)
+		}
+		if strings.Contains(string(goLog), "github.com/witchcraze/party2re/internal/sample") {
+			t.Fatalf("Step 6 go test must not execute after go list fails:\n%s", goLog)
+		}
+	})
+
+	t.Run("docker fallback path", func(t *testing.T) {
+		fix := setupVerifyFixture(t, false)
+		noGoDir := t.TempDir()
+		for _, tool := range []string{"awk", "bash", "cat", "dirname", "find", "git", "gofmt", "grep", "mkdir", "mktemp", "rm", "sh", "sha256sum", "tr"} {
+			if p, err := exec.LookPath(tool); err == nil {
+				if err := os.Symlink(p, filepath.Join(noGoDir, tool)); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if err := os.Symlink(filepath.Join(fix.binDir, "docker"), filepath.Join(noGoDir, "docker")); err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify docker fallback succeeds when go list exits 0.
+		okEnv := append([]string{}, fix.env...)
+		okEnv = append(okEnv,
+			"PATH="+noGoDir,
+			"CONTAINER_PATH="+fix.binDir+":"+os.Getenv("PATH"),
+			"DOCKER_EXEC_APP_SH=1",
+		)
+		if out, code := runCmd(t, fix.root, okEnv, "bash", "./scripts/verify.sh"); code != 0 {
+			t.Fatalf("expected docker fallback happy path to pass (code %d):\n%s", code, out)
+		}
+		goLogOK, err := os.ReadFile(fix.goRecord)
+		if err != nil {
+			t.Fatalf("could not read go record: %v", err)
+		}
+		if !strings.Contains(string(goLogOK), "go test -timeout=30m -count=1 github.com/witchcraze/party2re/internal/sample") {
+			t.Fatalf("expected docker fallback Step 6 to run filtered suite:\n%s", goLogOK)
+		}
+
+		// Verify partial stdout + non-zero exit from go list aborts Step 6 under sh without pipefail.
+		if err := os.WriteFile(fix.goRecord, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		failEnv := append(okEnv, "GO_LIST_PARTIAL_FAIL=1")
+		out, code := runCmd(t, fix.root, failEnv, "bash", "./scripts/verify.sh")
+		if code == 0 {
+			t.Fatalf("expected docker fallback to abort when go list exits non-zero after partial output:\n%s", out)
+		}
+		goLogFail, err := os.ReadFile(fix.goRecord)
+		if err != nil {
+			t.Fatalf("could not read go record: %v", err)
+		}
+		if strings.Contains(string(goLogFail), "github.com/witchcraze/party2re/internal/sample") {
+			t.Fatalf("docker fallback Step 6 must not run go test after go list fails:\n%s", goLogFail)
+		}
+	})
 }

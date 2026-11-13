@@ -20,6 +20,18 @@ import (
 // has no effect and must not be consumed (e.g. raw crystal with no weapon seal).
 var errNoEffect = errors.New("item had no effect")
 
+const (
+	heavenReinsName     = "天馬のたづな"
+	underworldReinsName = "黒い天馬のたづな"
+)
+
+// orbItems are the legacy items 60..65 (_data.cgi); using one offers it to
+// the Altar of Rebirth from either Home source.
+var orbItems = map[string]rune{
+	"シルバーオーブ": corecharacter.OrbSilver, "レッドオーブ": corecharacter.OrbRed, "ブルーオーブ": corecharacter.OrbBlue,
+	"グリーンオーブ": corecharacter.OrbGreen, "イエローオーブ": corecharacter.OrbYellow, "パープルオーブ": corecharacter.OrbPurple,
+}
+
 type InventoryManager interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	Consume(ctx context.Context, characterID, instanceID string, quantity int) (coreinventory.Inventory, error)
@@ -144,9 +156,10 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	}
 
 	// Validate supported consumable items before transaction
-	if _, isBag := rewardBags[def.Name]; !isBag && !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
+	_, isOrb := orbItems[def.Name]
+	if _, isBag := rewardBags[def.Name]; !isBag && !isOrb && !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
 		switch def.Name {
-		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ", veteranRewardName, personalityBookName:
+		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ", veteranRewardName, personalityBookName, heavenReinsName, underworldReinsName:
 		default:
 			return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 		}
@@ -340,6 +353,17 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 		return costumeMsg, err
 	}
 
+	if orb, ok := orbItems[def.Name]; ok {
+		added, err := char.AddOrb(orb)
+		if err != nil {
+			return "", err
+		}
+		if !added {
+			return "すでにささげられています", errNoEffect
+		}
+		return def.Name + "を復活の祭壇にささげた！", nil
+	}
+
 	var msg string
 
 	switch def.Name {
@@ -397,6 +421,16 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 	case "ファイト一発", "気合の霊薬":
 		char.ResetTired()
 		msg = fmt.Sprintf("元気全快！%sの疲労が回復した！", char.Name)
+	case heavenReinsName, underworldReinsName:
+		if char.GodVisit != "" {
+			return noEffectMessage, errNoEffect // already admitted; keep the reins
+		}
+		char.GodVisit = corecharacter.GodVisitHeaven
+		msg = fmt.Sprintf("%sは、天馬に乗り天界へと導かれた！", char.Name)
+		if def.Name == underworldReinsName {
+			char.GodVisit = corecharacter.GodVisitUnderworld
+			msg = fmt.Sprintf("%sは、黒い天馬に乗り天界?へと導かれた！", char.Name)
+		}
 	case "小さなメダル":
 		if err := char.AddSmallMedals(1); err != nil {
 			return "", err

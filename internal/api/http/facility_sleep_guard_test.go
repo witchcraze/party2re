@@ -68,13 +68,8 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithPlayerContext(playercontext.NewService(readers, readers, timer.NewService(nil))),
 		apihttp.WithJob(&stubJobService{}),
 		apihttp.WithDepot(&stubDepotService{}),
-		apihttp.WithPlantation(&stubPlantationService{}),
-		apihttp.WithAltar(&stubAltarService{}),
-		apihttp.WithWishingWell(&stubWishingWellService{}),
 		apihttp.WithContest(&stubContestService{}),
-		apihttp.WithLottery(&stubLotteryService{}),
 		apihttp.WithEventPlaza(&mockEventPlazaService{}),
-		apihttp.WithTavern(&stubTavernService{}),
 		apihttp.WithCustomSkill(&stubCustomSkillService{}),
 		apihttp.WithGuild(&stubGuildService{}),
 		apihttp.WithMedal(&mockMedalService{}),
@@ -82,9 +77,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithSecretShop(&stubSecretShopService{}),
 		apihttp.WithBlacksmith(&stubBlacksmithService{}),
 		apihttp.WithStore(noopStoreService{}),
-		apihttp.WithPark(&mockParkService{}),
 		apihttp.WithMonster(&stubMonsterService{}),
-		apihttp.WithOracleShop(&stubOracleShopService{}),
 		apihttp.WithHelper(&mockHelperService{}),
 	)
 	if err != nil {
@@ -120,32 +113,15 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"depot_expand", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_expand"}`},
 		{"depot_send_money", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_send_money","params":{"recipient_character_id":"char-2","amount":100}}`},
 		{"depot_send_item", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_send_item","params":{"recipient_character_id":"char-2","item_id":"item-1"}}`},
-		// Plantation
-		{"plantation_sow", http.MethodPost, "/characters/char-1/plantation/sow", `{"seed_id":"seed-1"}`},
-		{"plantation_fertilize", http.MethodPost, "/characters/char-1/plantation/fertilize", `{"fertilizer_id":"fert-1"}`},
-		{"plantation_harvest", http.MethodPost, "/characters/char-1/plantation/harvest", `{}`},
-		// Altar
-		{"altar_pray", http.MethodPost, "/characters/char-1/altar/pray", `{}`},
-		{"altar_wish", http.MethodPost, "/characters/char-1/altar/wish", `{"item_id":"sword-1"}`},
-		{"altar_offer", http.MethodPost, "/characters/char-1/altar/offer", `{"orb":"silver"}`},
-		// Wishing Well
-		{"wishingwell_exchange", http.MethodPost, "/characters/char-1/wishing-well/exchange", `{"stat":"STR","sp":10}`},
 		// Contest
 		{"contest_enter", http.MethodPost, "/characters/char-1/contest/enter", `{"photo_id":"p-1","title":"Entry"}`},
 		{"contest_vote", http.MethodPost, "/characters/char-1/contest/vote", `{"entry_id":"e-1","comment":"Nice"}`},
 		{"contest_save_photo", http.MethodPost, "/characters/char-1/photos", `{"title":"Photo","location":"Field","image_url":"https://example.com/p.jpg"}`},
 		{"contest_delete_photo", http.MethodDelete, "/characters/char-1/photos/photo-1", ``},
-		// Lottery
-		{"lottery_play", http.MethodPost, "/characters/char-1/lottery/raffle", `{"raffle_type":"STANDARD"}`},
-		{"lottery_takarakuji_buy", http.MethodPost, "/characters/char-1/lottery/takarakuji/buy", `{}`},
 		// Event Plaza
 		{"eventplaza_presence", http.MethodPost, "/eventplaza/presence", `{"character_id":"char-1"}`},
 		{"eventplaza_merchant_purchase", http.MethodPost, "/eventplaza/merchant/purchase", `{"character_id":"char-1","item_id":"item-1","quantity":1}`},
 		// Tavern
-		{"tavern_order", http.MethodPost, "/characters/char-1/tavern/order", `{"item_id":"ale"}`},
-		{"tavern_reserve_delivery", http.MethodPost, "/characters/char-1/tavern/delivery", `{"item_id":"ale"}`},
-		{"tavern_cancel_delivery", http.MethodDelete, "/characters/char-1/tavern/delivery", ``},
-		{"tavern_talk", http.MethodPost, "/characters/char-1/tavern/talk", `{}`},
 		// Custom Skill
 		{"custom_skill_set", http.MethodPost, "/characters/char-1/custom-skills", `{"name":"Skill","comment":"Desc","gems":["g1","g2","g3"]}`},
 		// Guild
@@ -185,20 +161,12 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"store_interior_add", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_add","params":{"furniture_id":"001"}}`},
 		{"store_interior_rename", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_rename","params":{"interior_id":"int-1","name":"お気に入りの机"}}`},
 		{"store_interior_clean", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_interior_clean"}`},
-		// Park
-		{"park_post_message", http.MethodPost, "/park/posts", `{"character_id":"char-1","content":"hello"}`},
-		{"park_npc_talk", http.MethodPost, "/park/npc/talk", `{"character_id":"char-1"}`},
-		{"park_npc_divinate", http.MethodPost, "/park/npc/divinate", `{"character_id":"char-1"}`},
 		// Monster
 		{"monster_bring_home", http.MethodPost, "/characters/char-1/monsters/m-1/bring-home", ``},
 		{"monster_deposit", http.MethodPost, "/characters/char-1/monsters/m-1/deposit", ``},
 		{"monster_rename", http.MethodPost, "/characters/char-1/monsters/m-1/rename", `{"custom_name":"newname"}`},
 		{"monster_send", http.MethodPost, "/characters/char-1/monsters/m-1/send", `{"recipient_character_id":"char-2"}`},
 		{"monster_release", http.MethodPost, "/characters/char-1/monsters/m-1/release", ``},
-		// Oracle
-		{"oracle_buy_costume", http.MethodPost, "/characters/char-1/oracle/buy", `{"item_no":44}`},
-		{"oracle_buy_wallpaper", http.MethodPost, "/characters/char-1/oracle/wallpaper", `{"wallpaper":"goods"}`},
-		{"oracle_blackmarket", http.MethodPost, "/characters/char-1/oracle/blackmarket", ``},
 		// Helper
 		{"helper_complete", http.MethodPost, "/helpers/complete", `{"character_id":"char-1","quest_id":"quest-1"}`},
 		{"helper_complete_renew_only", http.MethodPost, "/helpers/complete", `{"character_id":"char-1"}`},
@@ -534,126 +502,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 
 			if rec.Code == http.StatusConflict {
 				t.Errorf("expected GET %s not to be blocked by sleep guard, got %d: %s", path, rec.Code, rec.Body.String())
-			}
-		}
-	})
-
-	t.Run("oracle mutations never invoke service when sleeping, can_wake, or sleep lookup fails", func(t *testing.T) {
-		conditions := []struct {
-			name         string
-			sleepStatus  home.SleepStatus
-			sleepErr     error
-			expectedCode int
-		}{
-			{"sleeping", home.SleepStatus{Sleeping: true, RemainingSeconds: 300, Message: "お休み中「Zzz...」"}, nil, http.StatusConflict},
-			{"can_wake", home.SleepStatus{CanWake: true, Message: "お休み中「Zzz...」 目を覚ましてください"}, nil, http.StatusConflict},
-			{"lookup_error", home.SleepStatus{}, errors.New("sleep lookup failed"), http.StatusInternalServerError},
-		}
-
-		oracleRoutes := []struct {
-			name   string
-			method string
-			path   string
-			body   string
-		}{
-			{"buy_costume", http.MethodPost, "/characters/char-1/oracle/buy", `{"item_no":44}`},
-			{"buy_wallpaper", http.MethodPost, "/characters/char-1/oracle/wallpaper", `{"wallpaper":"goods"}`},
-			{"blackmarket", http.MethodPost, "/characters/char-1/oracle/blackmarket", ""},
-		}
-
-		for _, cond := range conditions {
-			t.Run(cond.name, func(t *testing.T) {
-				called := false
-				oracleStub := &stubOracleShopService{
-					buyCostumeItemFn: func(_ context.Context, _ string, _ int) (*store.CostumeBuyResult, error) {
-						called = true
-						return &store.CostumeBuyResult{}, nil
-					},
-					buyHomeWallpaperFn: func(_ context.Context, _ string, _ string) (*store.HomeWallpaperResult, error) {
-						called = true
-						return &store.HomeWallpaperResult{}, nil
-					},
-					discoverBlackMarketFn: func(_ int) error {
-						called = true
-						return nil
-					},
-				}
-
-				player := coreplayer.Player{ID: "player-1", Username: "hero"}
-				char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero", JobLevel: 20}
-				players := &stubPlayerService{
-					authenticateFn: func(_ context.Context, _ string) (coreplayer.Player, error) { return player, nil },
-				}
-				chars := &stubCharacterService{
-					getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
-				}
-				mockHome := &mockHomeService{
-					getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
-						return cond.sleepStatus, cond.sleepErr
-					},
-				}
-
-				h, err := apihttp.NewHandler(
-					players,
-					chars,
-					&stubAdventureService{},
-					&stubShopService{},
-					apihttp.WithHome(mockHome),
-					apihttp.WithOracleShop(oracleStub),
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-				router := h.Router()
-
-				for _, route := range oracleRoutes {
-					called = false
-					var req *http.Request
-					if route.body != "" {
-						req = httptest.NewRequest(route.method, route.path, bytes.NewReader([]byte(route.body)))
-						req.Header.Set("Content-Type", "application/json")
-					} else {
-						req = httptest.NewRequest(route.method, route.path, nil)
-					}
-					req.Header.Set("Authorization", "Bearer valid-session")
-					rec := httptest.NewRecorder()
-					router.ServeHTTP(rec, req)
-
-					if rec.Code != cond.expectedCode {
-						t.Errorf("[%s - %s] expected status %d, got %d: %s", cond.name, route.name, cond.expectedCode, rec.Code, rec.Body.String())
-					}
-					if called {
-						t.Errorf("[%s - %s] expected service method not to be called, but was called", cond.name, route.name)
-					}
-				}
-			})
-		}
-	})
-
-	t.Run("oracle read endpoints are exempt from sleep guard", func(t *testing.T) {
-		router := setupFacilitySleepGuardTest(t, home.SleepStatus{
-			Sleeping:         true,
-			RemainingSeconds: 300,
-			Message:          "お休み中「Zzz...」",
-		})
-
-		readRoutes := []struct {
-			method string
-			path   string
-		}{
-			{http.MethodGet, "/characters/char-1/oracle"},
-			{http.MethodPost, "/characters/char-1/oracle/talk"},
-			{http.MethodPost, "/characters/char-1/oracle/inspect"},
-		}
-
-		for _, route := range readRoutes {
-			req := httptest.NewRequest(route.method, route.path, nil)
-			req.Header.Set("Authorization", "Bearer valid-session")
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, req)
-
-			if rec.Code == http.StatusConflict {
-				t.Errorf("expected %s %s not to be blocked by sleep guard, got %d: %s", route.method, route.path, rec.Code, rec.Body.String())
 			}
 		}
 	})

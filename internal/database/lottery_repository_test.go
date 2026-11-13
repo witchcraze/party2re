@@ -203,10 +203,11 @@ func TestLotteryRepository_Integration(t *testing.T) {
 	}
 
 	// 12. Check settled ticket
-	charTkt, err := repo.GetCharacterTakarakujiTicket(ctx, round.RoundID, char.ID)
-	if err != nil {
-		t.Fatal(err)
+	settled, err := repo.ListRoundTakarakujiTickets(ctx, round.RoundID)
+	if err != nil || len(settled) != 1 {
+		t.Fatalf("settled tickets = %+v, %v", settled, err)
 	}
+	charTkt := settled[0]
 	if charTkt.WonRank != 1 || charTkt.WonItemID == nil || *charTkt.WonItemID != "item-129" {
 		t.Errorf("charTkt = %+v", charTkt)
 	}

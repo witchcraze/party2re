@@ -3,224 +3,163 @@ package http
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/store"
 )
 
-// OracleShopService defines Oracle Shop town facility operations exposed over HTTP.
+// OracleShopService is the Oracle shop surface used by its scene and commands.
 type OracleShopService interface {
 	GetOracleStatus(ctx context.Context, characterID string) (*store.OracleStatus, error)
-	OracleTalk() string
-	OracleInspect(jobLevel int) store.OracleInspectResult
 	BuyCostumeItem(ctx context.Context, characterID string, itemNo int) (*store.CostumeBuyResult, error)
 	BuyHomeWallpaper(ctx context.Context, characterID string, wallpaper string) (*store.HomeWallpaperResult, error)
-	DiscoverBlackMarket(jobLevel int) error
 }
 
-// WithOracleShop configures the OracleShopService for the HTTP handler.
-func WithOracleShop(oracle OracleShopService) Option {
-	return func(h *Handler) {
-		h.oracle = oracle
-	}
-}
-
-type oracleBuyCostumeRequest struct {
+type oracleBuyRequest struct {
 	ItemNo int `json:"item_no"`
 }
 
-type oracleBuyWallpaperRequest struct {
+type oracleWallpaperRequest struct {
 	Wallpaper string `json:"wallpaper"`
 }
 
-type oracleDialogueResponse struct {
-	CharacterID  string `json:"character_id"`
-	LocationName string `json:"location_name"`
-	NPCName      string `json:"npc_name"`
-	Message      string `json:"message"`
+// OracleSceneData is the actor's costume catalog, the wallpapers and the worn costume.
+type OracleSceneData struct {
+	Parent string `json:"parent"`
+	store.OracleStatus
 }
 
-type oracleInspectResponse struct {
-	CharacterID  string `json:"character_id"`
-	LocationName string `json:"location_name"`
-	NPCName      string `json:"npc_name"`
-	Message      string `json:"message"`
-	Hint         string `json:"hint,omitempty"`
+// OracleBuyResult is a ＠かう outcome.
+type OracleBuyResult struct {
+	store.CostumeBuyResult
+	Message string `json:"message"`
 }
 
-type oracleBlackMarketResponse struct {
-	Unlocked bool   `json:"unlocked"`
-	Message  string `json:"message"`
-}
-
-type oracleBuyCostumeResponse struct {
-	ItemNo      int    `json:"item_no"`
-	ItemName    string `json:"item_name"`
-	Price       int    `json:"price"`
-	DeliveredTo string `json:"delivered_to"`
-	Message     string `json:"message"`
-}
-
-type oracleBuyWallpaperResponse struct {
+// OracleWallpaperResult is a ＠かべがみ outcome.
+type OracleWallpaperResult struct {
 	Wallpaper string `json:"wallpaper"`
 	Message   string `json:"message"`
 }
 
-func (h *Handler) handleGetOracleStatus(w http.ResponseWriter, r *http.Request) {
-	if h.oracle == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
-		return
-	}
+// OracleBlackMarketResult is the ＠やみいちば move into the black market.
+type OracleBlackMarketResult struct {
+	Selection playercontext.Selection `json:"selection"`
+	Message   string                  `json:"message"`
+}
 
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		status, err := h.oracle.GetOracleStatus(r.Context(), char.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
+// oracleGoldShort carries the actor's name for goods.cgi's "$mよ…ゴールドが足らん".
+type oracleGoldShort struct{ name string }
+
+func (e oracleGoldShort) Error() string { return store.ErrInsufficientFunds.Error() }
+func (e oracleGoldShort) Unwrap() error { return store.ErrInsufficientFunds }
+
+// WithOracleShop configures the Oracle shop scene observation and its commands.
+func WithOracleShop(service OracleShopService) Option {
+	return func(h *Handler) {
+		h.oracle = service
+		if service == nil {
+			withActionCommand[oracleBuyRequest]("oracle_buy", nil, nil)(h)
+			withActionCommand[oracleWallpaperRequest]("oracle_wallpaper", nil, nil)(h)
 			return
 		}
-		writeJSON(w, http.StatusOK, status)
-	})
-}
-
-func (h *Handler) handleOracleTalk(w http.ResponseWriter, r *http.Request) {
-	if h.oracle == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		msg := h.oracle.OracleTalk()
-		writeJSON(w, http.StatusOK, oracleDialogueResponse{
-			CharacterID:  char.ID,
-			LocationName: store.OracleLocationName,
-			NPCName:      store.OracleNPCName,
-			Message:      msg,
-		})
-	})
-}
-
-func (h *Handler) handleOracleInspect(w http.ResponseWriter, r *http.Request) {
-	if h.oracle == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		res := h.oracle.OracleInspect(char.JobLevel)
-		writeJSON(w, http.StatusOK, oracleInspectResponse{
-			CharacterID:  char.ID,
-			LocationName: store.OracleLocationName,
-			NPCName:      store.OracleNPCName,
-			Message:      store.OracleInspectMessage,
-			Hint:         res.Hint,
-		})
-	})
-}
-
-func (h *Handler) handleOracleBuyCostume(w http.ResponseWriter, r *http.Request) {
-	if h.oracle == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
-		return
-	}
-
-	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *oracleBuyCostumeRequest) string {
-		return r.PathValue("id")
-	}, func(_ coreplayer.Player, char corecharacter.Character, req oracleBuyCostumeRequest) {
-		if req.ItemNo <= 0 {
-			writeError(w, http.StatusBadRequest, errors.New("item_no must be positive"))
-			return
-		}
-
-		res, err := h.oracle.BuyCostumeItem(r.Context(), char.ID, req.ItemNo)
-		if err != nil {
-			if errors.Is(err, store.ErrCostumeNotAvailable) ||
-				errors.Is(err, store.ErrInsufficientFunds) ||
-				errors.Is(err, store.ErrItemUnavailableInHelperQuest) {
-				writeError(w, http.StatusBadRequest, err)
-				return
+		withActionCommand("oracle_buy", func(ctx context.Context, actor string, p oracleBuyRequest) (any, error) {
+			name, err := h.actorName(ctx, actor)
+			if err != nil {
+				return nil, err
 			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		var msg string
-		if res.DeliveredTo == string(depot.DeliveredToInventory) {
-			msg = fmt.Sprintf("%sだな。ほい、どうぞ", res.ItemName)
-		} else {
-			msg = fmt.Sprintf("%sは%sの預かり所に送っておいたよん", res.ItemName, char.Name)
-		}
-
-		writeJSON(w, http.StatusOK, oracleBuyCostumeResponse{
-			ItemNo:      res.ItemNo,
-			ItemName:    res.ItemName,
-			Price:       res.Price,
-			DeliveredTo: res.DeliveredTo,
-			Message:     msg,
-		})
-	})
+			res, err := service.BuyCostumeItem(ctx, actor, p.ItemNo)
+			if errors.Is(err, store.ErrInsufficientFunds) {
+				return nil, oracleGoldShort{name}
+			}
+			if err != nil {
+				return nil, err
+			}
+			msg := res.ItemName + "は" + name + "の預かり所に送っておいたよん"
+			if res.DeliveredTo == string(depot.DeliveredToInventory) {
+				msg = res.ItemName + "だな。ほい、どうぞ"
+			}
+			return OracleBuyResult{CostumeBuyResult: *res, Message: msg}, nil
+		}, oracleRejection)(h)
+		withActionCommand("oracle_wallpaper", func(ctx context.Context, actor string, p oracleWallpaperRequest) (any, error) {
+			name, err := h.actorName(ctx, actor)
+			if err != nil {
+				return nil, err
+			}
+			res, err := service.BuyHomeWallpaper(ctx, actor, p.Wallpaper)
+			if errors.Is(err, store.ErrInsufficientFunds) {
+				return nil, oracleGoldShort{name}
+			}
+			if err != nil {
+				return nil, err
+			}
+			return OracleWallpaperResult{Wallpaper: res.Wallpaper,
+				Message: name + "の家の壁紙を " + strings.TrimSuffix(res.Wallpaper, ".gif") + " に、張り替えておいたよん"}, nil
+		}, oracleRejection)(h)
+	}
 }
 
-func (h *Handler) handleOracleBuyWallpaper(w http.ResponseWriter, r *http.Request) {
-	if h.oracle == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
+// actorName is read before a purchase so a failure rejects before it commits.
+func (h *Handler) actorName(ctx context.Context, actor string) (string, error) {
+	char, err := h.characters.Get(ctx, actor)
+	if err != nil {
+		return "", err
+	}
+	return char.Name, nil
+}
+
+// registerOracleBlackMarket connects ＠やみいちば: the hidden goods.cgi action
+// that moves a qualified character into the black market.
+func (h *Handler) registerOracleBlackMarket(service *playercontext.Service) {
+	if service == nil || !service.NavigationConfigured() {
 		return
 	}
-
-	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *oracleBuyWallpaperRequest) string {
-		return r.PathValue("id")
-	}, func(_ coreplayer.Player, char corecharacter.Character, req oracleBuyWallpaperRequest) {
-		if req.Wallpaper == "" {
-			writeError(w, http.StatusBadRequest, errors.New("wallpaper cannot be empty"))
-			return
-		}
-
-		res, err := h.oracle.BuyHomeWallpaper(r.Context(), char.ID, req.Wallpaper)
+	navigationCommand(h, "oracle_blackmarket", func(ctx context.Context, owner, actor string, _ struct{}) (OracleBlackMarketResult, error) {
+		selection, err := service.Enter(ctx, owner, actor, "blackmarket")
 		if err != nil {
-			if errors.Is(err, store.ErrInvalidWallpaper) || errors.Is(err, store.ErrInsufficientFunds) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return OracleBlackMarketResult{}, err
 		}
-
-		cleanWallpaper := strings.TrimSuffix(res.Wallpaper, ".gif")
-		msg := fmt.Sprintf("%sの家の壁紙を %s に、張り替えておいたよん", char.Name, cleanWallpaper)
-
-		writeJSON(w, http.StatusOK, oracleBuyWallpaperResponse{
-			Wallpaper: res.Wallpaper,
-			Message:   msg,
-		})
+		h.leavePlace(ctx, actor)
+		return OracleBlackMarketResult{Selection: selection, Message: "闇市場を見つけました！"}, nil
 	})
 }
 
-func (h *Handler) handleOracleBlackMarket(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) oracleSceneData(ctx context.Context, r playercontext.Result) (any, error) {
 	if h.oracle == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
-		return
+		return nil, errSceneNotConfigured
 	}
+	status, err := h.oracle.GetOracleStatus(ctx, r.Snapshot.Character.ID)
+	if err != nil {
+		return nil, err
+	}
+	return OracleSceneData{Parent: "town", OracleStatus: *status}, nil
+}
 
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		if err := h.oracle.DiscoverBlackMarket(char.JobLevel); err != nil {
-			if errors.Is(err, store.ErrBlackMarketNotDiscovered) {
-				writeError(w, http.StatusForbidden, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, oracleBlackMarketResponse{
-			Unlocked: true,
-			Message:  "闇市場を見つけました！",
-		})
-	})
+func oracleRejection(err error) (int, ErrorDetail) {
+	var short oracleGoldShort
+	switch {
+	case errors.As(err, &short):
+		return http.StatusConflict, ErrorDetail{Code: "ORACLE_INSUFFICIENT_GOLD", Message: short.name + "よ…ゴールドが足らん"}
+	case errors.Is(err, store.ErrCostumeNotAvailable), errors.Is(err, store.ErrItemUnavailableInHelperQuest):
+		return http.StatusBadRequest, ErrorDetail{Code: "ORACLE_COSTUME_UNAVAILABLE", Message: "Choose one of the observed costumes."}
+	case errors.Is(err, store.ErrInvalidWallpaper):
+		return http.StatusBadRequest, ErrorDetail{Code: "ORACLE_INVALID_WALLPAPER", Message: "Choose one of the observed wallpapers."}
+	default:
+		return 0, ErrorDetail{}
+	}
+}
+
+// goods.cgi @words; inspection hints at the hidden ＠やみいちば.
+var oracleFacility = facility{
+	title: "オラクル屋", commands: []string{"oracle_buy", "oracle_wallpaper", "oracle_blackmarket"},
+	read: (*Handler).oracleSceneData, placeLog: true,
+	npc: &npcProfile{name: "@ラクル", words: []string{
+		"おっ！久しぶりのお客だ！よく来たよく来た！ここはオラクル屋だよ",
+		"＠かべがみでそなたの家をオシャレにすることができるよん",
+		"壁紙は買ってしばらくしたら、こちらで勝手に張り替えておくよん。すぐ確認したい人は自分の家で更新ボタンを押すといいよ",
+		"衣装は着た時からその日限りのレンタルだよ、次の日には返してもらうよ",
+		"衣装は転職するときにも返してもらうよ",
+	}, inspect: "@ラクル「おっ？なんじゃなんじゃ？わしゃ何も知らんよ」"},
 }

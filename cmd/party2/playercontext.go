@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/witchcraze/party2re/internal/blackmarket"
+	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
@@ -17,14 +18,18 @@ import (
 func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, cmbt *cmbtServices, misc *miscServices, options ...func(*playercontext.Service)) *playercontext.Service {
 	scenes := []playercontext.SceneDefinition{
 		{ID: "town", Pageable: true}, {ID: "alchemy", Parent: "town", Pageable: true},
-		{ID: "auction", Parent: "town"}, {ID: "bank", Parent: "town"},
-		{ID: "blackmarket", Parent: "town", Pageable: true, CanEnter: blackmarket.CheckEligibility},
+		{ID: "altar", Parent: "town"}, {ID: "auction", Parent: "town"}, {ID: "bank", Parent: "town"},
+		// Reached only through the Oracle shop's ＠やみいちば (goods.cgi).
+		{ID: "blackmarket", Parent: "oracle", Pageable: true, CanEnter: blackmarket.CheckEligibility},
 		{ID: "blacksmith", Parent: "town"},
 		{ID: "chapel", Parent: "town"},
 		{ID: "depot", Parent: "town", Pageable: true},
 		{ID: "exile", Parent: "town"},
 		{ID: "fleamarket", Parent: "town", Pageable: true},
-		{ID: "gemstore", Parent: "town"},
+		{ID: "gemstore", Parent: "town"}, {ID: "wishingwell", Parent: "town"}, {ID: "tavern", Parent: "town"}, {ID: "lottery", Parent: "town"}, {ID: "takarakuji", Parent: "town"}, {ID: "plantation", Parent: "town"}, {ID: "oracle", Parent: "town"},
+		// Reached only by Home reins; the recorded visit, not navigation, admits.
+		{ID: "god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitHeaven }},
+		{ID: "u_god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitUnderworld }},
 		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: secretshop.CheckEligibility,
 			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
 				status, err := misc.secretshop.GetShopStatus(ctx, actorID)
@@ -91,5 +96,5 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		})
 	}
 	readers := newContextActivityReaders(cmbt, misc)
-	return playercontext.NewService(core.charRepo, soc.schedRepo, contextSleepReader{TimerReader: soc.timer, home: soc.home}, append([]func(*playercontext.Service){playercontext.WithNavigation(core.navigation, scenes...), playercontext.WithActivities(readers.read), playercontext.WithPublicActivities(readers.publicActivity)}, options...)...)
+	return playercontext.NewService(core.charRepo, soc.schedRepo, contextSleepReader{TimerReader: soc.timer, home: soc.home}, append([]func(*playercontext.Service){playercontext.WithNavigation(core.navigation, scenes...), playercontext.WithGodVisitForfeit(misc.god.ForfeitVisit), playercontext.WithActivities(readers.read), playercontext.WithPublicActivities(readers.publicActivity)}, options...)...)
 }

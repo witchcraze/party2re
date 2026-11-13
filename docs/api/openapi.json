@@ -813,35 +813,70 @@
         ],
         "type": "object"
       },
-      "AltarOfferResult": {
+      "AltarSceneData": {
         "additionalProperties": false,
+        "description": "The actor's offered orbs and Ramia's awakening, plus whether a Ramia awakened by anyone is still present (30 minutes). Orbs are offered by Home item use; NPC dialogue comes from npc_talk/npc_inspect. Observation never prays or wishes.",
         "properties": {
+          "available_items": {
+            "description": "altar_wish choices; empty until the actor's Ramia awakens.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "awakened_by": {
+            "type": "string"
+          },
           "character_id": {
             "type": "string"
           },
           "has_all_orbs": {
             "type": "boolean"
           },
-          "message": {
-            "type": "string"
-          },
-          "orb": {
+          "orb_count": {
             "type": "integer"
           },
-          "orb_name": {
+          "orbs": {
+            "description": "Offered orb runes s/r/b/g/y/p; G after Ramia awakens.",
             "type": "string"
           },
-          "total_orbs": {
-            "type": "integer"
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "ramia_awakened": {
+            "type": "boolean"
+          },
+          "ramia_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ramia_present": {
+            "type": "boolean"
           }
         },
         "required": [
+          "parent",
           "character_id",
-          "orb",
-          "orb_name",
-          "message",
-          "total_orbs",
-          "has_all_orbs"
+          "orbs",
+          "orb_count",
+          "has_all_orbs",
+          "ramia_awakened",
+          "ramia_present",
+          "available_items"
         ],
         "type": "object"
       },
@@ -1663,7 +1698,7 @@
             "$ref": "#/components/schemas/ScenePage"
           },
           "parent": {
-            "const": "town",
+            "const": "oracle",
             "type": "string"
           },
           "prizes": {
@@ -2235,26 +2270,6 @@
         "required": [
           "character_id",
           "house_style"
-        ],
-        "type": "object"
-      },
-      "BuyTakarakujiTicketResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "npc_message": {
-            "type": "string"
-          },
-          "remaining_gold": {
-            "type": "integer"
-          },
-          "ticket": {
-            "$ref": "#/components/schemas/LotteryTakarakujiTicket"
-          }
-        },
-        "required": [
-          "ticket",
-          "remaining_gold",
-          "npc_message"
         ],
         "type": "object"
       },
@@ -4101,6 +4116,31 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "park_divinate",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "place_say",
                   "type": "string"
                 }
@@ -4323,6 +4363,10 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "god",
+                        "u_god",
+                        "altar",
+                        "wishingwell",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -4335,7 +4379,12 @@
                         "town1",
                         "town2",
                         "town3",
-                        "town4"
+                        "town4",
+                        "tavern",
+                        "lottery",
+                        "takarakuji",
+                        "plantation",
+                        "oracle"
                       ],
                       "type": "string"
                     }
@@ -4455,6 +4504,10 @@
                         "exile",
                         "fleamarket",
                         "gemstore",
+                        "god",
+                        "u_god",
+                        "altar",
+                        "wishingwell",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -4467,7 +4520,12 @@
                         "town1",
                         "town2",
                         "town3",
-                        "town4"
+                        "town4",
+                        "tavern",
+                        "lottery",
+                        "takarakuji",
+                        "plantation",
+                        "oracle"
                       ],
                       "type": "string"
                     },
@@ -6761,6 +6819,141 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "altar_pray",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "altar_wish",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "One of the altar scene's available_items IDs. Delivery to inventory or Depot stays service-owned.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "wishingwell_exchange",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sp": {
+                      "description": "SP to offer, at least 1 and at most the actor's SP.",
+                      "type": "integer"
+                    },
+                    "stat": {
+                      "description": "mhp, mmp, at, df or ag (legacy names accepted). 1 SP raises max HP/MP by 2 or another stat by 1.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "stat",
+                    "sp"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "god_wish",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "wish_id": {
+                      "description": "One of the god scene's wishes. The realm comes from the recorded visit.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "wish_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "npc_talk",
                   "type": "string"
                 }
@@ -6787,6 +6980,31 @@
               "properties": {
                 "action": {
                   "const": "npc_inspect",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "presence_refresh",
                   "type": "string"
                 }
               },
@@ -7111,6 +7329,347 @@
               "required": [
                 "params"
               ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "tavern_order",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "One of the tavern scene's menu IDs.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "tavern_delivery_reserve",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "One of the tavern scene's menu IDs.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "tavern_delivery_cancel",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "lottery_raffle",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "takarakuji_buy",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "plantation_sow",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "seed_id": {
+                      "description": "One of the plantation scene's seed IDs.",
+                      "minLength": 1,
+                      "pattern": "[^\t-\r    - \u2028\u2029  　]",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "seed_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "plantation_fertilize",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fertilizer_id": {
+                      "description": "One of the plantation scene's fertilizer IDs.",
+                      "minLength": 1,
+                      "pattern": "[^\t-\r    - \u2028\u2029  　]",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "fertilizer_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "plantation_harvest",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "oracle_buy",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_no": {
+                      "description": "One of the oracle scene's available_costumes item_no values.",
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "item_no"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "oracle_wallpaper",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "wallpaper": {
+                      "description": "One of the oracle scene's available_wallpapers names.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "wallpaper"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "oracle_blackmarket",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
               "type": "object"
             }
           }
@@ -8544,38 +9103,6 @@
         ],
         "type": "object"
       },
-      "CursorPageParkPost": {
-        "properties": {
-          "has_more": {
-            "description": "Whether additional records exist beyond the current page",
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "next_cursor": {
-            "description": "Opaque cursor token for retrieving the next page of results",
-            "type": "string"
-          },
-          "prev_cursor": {
-            "description": "Opaque cursor token for retrieving the previous page of results",
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "limit",
-          "has_more"
-        ],
-        "type": "object"
-      },
       "CursorPageReplayHeader": {
         "properties": {
           "has_more": {
@@ -8836,30 +9363,8 @@
         ],
         "type": "object"
       },
-      "DialogueResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "dialogue": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "realm": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "realm",
-          "dialogue"
-        ],
-        "type": "object"
-      },
       "DungeonActiveEncounter": {
-        "description": "Pending enemy state and destination, retained across unresolved battles. The current catalog creates one enemy per encounter. A native treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
+        "description": "Pending enemy state and destination, retained across unresolved battles. Each hostile encounter currently has one enemy. A treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
         "properties": {
           "chests": {
             "description": "Native pending treasure chests; contents and inspection are not modeled yet.",
@@ -8988,9 +9493,6 @@
               "null"
             ]
           },
-          "accumulated_medals": {
-            "type": "integer"
-          },
           "character_id": {
             "type": "string"
           },
@@ -9002,9 +9504,6 @@
               "array",
               "null"
             ]
-          },
-          "current_floor": {
-            "type": "integer"
           },
           "current_hp": {
             "type": "integer"
@@ -9062,7 +9561,6 @@
           "id",
           "character_id",
           "dungeon_id",
-          "current_floor",
           "pos_x",
           "pos_y",
           "current_hp",
@@ -9070,7 +9568,6 @@
           "accumulated_exp",
           "accumulated_gold",
           "accumulated_items",
-          "accumulated_medals",
           "status",
           "started_at",
           "updated_at"
@@ -9100,120 +9597,25 @@
       "DungeonDungeon": {
         "additionalProperties": false,
         "properties": {
-          "clear_exp_bonus": {
-            "type": "integer"
-          },
-          "clear_gold_bonus": {
-            "type": "integer"
-          },
           "description": {
             "type": "string"
           },
-          "floors": {
-            "items": {
-              "$ref": "#/components/schemas/DungeonFloor"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "id": {
             "type": "string"
-          },
-          "max_turns_per_floor": {
-            "type": "integer"
-          },
-          "min_level": {
-            "type": "integer"
           },
           "name": {
             "type": "string"
           },
           "round_limit": {
-            "description": "Native map round limit; absent for catalog floors. Native layouts are not listed, so floors is null.",
+            "description": "Map round limit. Layouts are not listed because they would disclose hidden passages.",
             "type": "integer"
-          },
-          "tier": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "tier",
-          "name",
-          "description",
-          "min_level",
-          "max_turns_per_floor",
-          "floors",
-          "clear_exp_bonus",
-          "clear_gold_bonus"
-        ],
-        "type": "object"
-      },
-      "DungeonDungeonMonster": {
-        "additionalProperties": false,
-        "properties": {
-          "agility": {
-            "type": "integer"
-          },
-          "attack": {
-            "type": "integer"
-          },
-          "defense": {
-            "type": "integer"
-          },
-          "drop_item_id": {
-            "type": "string"
-          },
-          "exp_reward": {
-            "type": "integer"
-          },
-          "gold_reward": {
-            "type": "integer"
-          },
-          "hp": {
-            "type": "integer"
-          },
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
           }
         },
         "required": [
           "id",
           "name",
-          "hp",
-          "attack",
-          "defense",
-          "agility",
-          "exp_reward",
-          "gold_reward"
-        ],
-        "type": "object"
-      },
-      "DungeonDungeonOverview": {
-        "additionalProperties": false,
-        "properties": {
-          "dungeon": {
-            "$ref": "#/components/schemas/DungeonDungeon"
-          },
-          "is_cleared": {
-            "type": "boolean"
-          },
-          "is_unlocked": {
-            "type": "boolean"
-          },
-          "lock_reason": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dungeon",
-          "is_unlocked",
-          "is_cleared"
+          "description",
+          "round_limit"
         ],
         "type": "object"
       },
@@ -9274,13 +9676,10 @@
       },
       "DungeonExpeditionObservation": {
         "additionalProperties": false,
-        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. Catalog directions use the selected floor geometry, not catalog categories. Native maps list all four directions while movement is allowed (walls reject on use), so hidden passages stay undisclosed. No private roster inventory, layout identity, event flags or provisional rewards.",
+        "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. All four directions are listed while movement is allowed (walls reject on use), so hidden passages stay undisclosed. No private roster inventory, layout identity, event flags or provisional rewards.",
         "properties": {
           "controls": {
             "$ref": "#/components/schemas/DungeonContinuationControls"
-          },
-          "current_floor": {
-            "type": "integer"
           },
           "directions": {
             "items": {
@@ -9320,17 +9719,16 @@
             "type": "integer"
           },
           "round": {
-            "description": "Native maps only: current shared round (1 after start).",
+            "description": "Current shared round (1 after start).",
             "type": "integer"
           },
           "round_limit": {
-            "description": "Native maps only: movement rejects once round reaches this limit.",
+            "description": "Movement rejects once round reaches this limit.",
             "type": "integer"
           },
           "status": {
             "enum": [
               "exploring",
-              "cleared",
               "escaped",
               "wiped_out"
             ],
@@ -9345,7 +9743,6 @@
           "leader_id",
           "dungeon_id",
           "revision",
-          "current_floor",
           "turns_remaining",
           "status",
           "map",
@@ -9391,9 +9788,6 @@
           "item_found": {
             "type": "string"
           },
-          "medals_found": {
-            "type": "integer"
-          },
           "member_damages": {
             "additionalProperties": {
               "type": "integer"
@@ -9415,70 +9809,12 @@
         ],
         "type": "object"
       },
-      "DungeonFloor": {
-        "additionalProperties": false,
-        "properties": {
-          "boss": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DungeonDungeonMonster"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "floor_number": {
-            "type": "integer"
-          },
-          "grid": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "height": {
-            "type": "integer"
-          },
-          "monsters": {
-            "items": {
-              "$ref": "#/components/schemas/DungeonDungeonMonster"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "start_x": {
-            "type": "integer"
-          },
-          "start_y": {
-            "type": "integer"
-          },
-          "width": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "floor_number",
-          "width",
-          "height",
-          "start_x",
-          "start_y",
-          "grid",
-          "monsters"
-        ],
-        "type": "object"
-      },
       "DungeonListResponse": {
         "additionalProperties": false,
         "properties": {
           "dungeons": {
             "items": {
-              "$ref": "#/components/schemas/DungeonDungeonOverview"
+              "$ref": "#/components/schemas/DungeonDungeon"
             },
             "type": [
               "array",
@@ -10131,43 +10467,33 @@
         ],
         "type": "object"
       },
-      "GetCharacterTakarakujiTicketResponse": {
+      "GodSceneData": {
         "additionalProperties": false,
+        "description": "Observed while the actor's god visit (from Home reins) is recorded, whatever the saved selection; leaving the scene through navigation forfeits the visit, and a granted wish ends it. NPC dialogue comes from npc_talk/npc_inspect. Observation never grants.",
         "properties": {
-          "current_ticket": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LotteryTakarakujiTicket"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "parent": {
+            "const": "town",
+            "type": "string"
           },
-          "history": {
+          "realm": {
+            "enum": [
+              "heaven",
+              "underworld"
+            ],
+            "type": "string"
+          },
+          "wishes": {
+            "description": "god_wish choices for this realm; available is false when a requirement is not met.",
             "items": {
-              "$ref": "#/components/schemas/LotteryTakarakujiTicket"
+              "$ref": "#/components/schemas/GodWish"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           }
         },
         "required": [
-          "history"
-        ],
-        "type": "object"
-      },
-      "GetLotteryTicketsResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "tickets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "tickets"
+          "parent",
+          "realm",
+          "wishes"
         ],
         "type": "object"
       },
@@ -10205,30 +10531,6 @@
           "realm",
           "description",
           "available"
-        ],
-        "type": "object"
-      },
-      "GrantWishResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "message": {
-            "type": "string"
-          },
-          "npc_speech": {
-            "type": "string"
-          },
-          "wish": {
-            "$ref": "#/components/schemas/GodWish"
-          }
-        },
-        "required": [
-          "character",
-          "wish",
-          "message",
-          "npc_speech"
         ],
         "type": "object"
       },
@@ -11641,28 +11943,6 @@
         ],
         "type": "object"
       },
-      "ListWishesResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "realm": {
-            "type": "string"
-          },
-          "wishes": {
-            "items": {
-              "$ref": "#/components/schemas/GodWish"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "realm",
-          "wishes"
-        ],
-        "type": "object"
-      },
       "LotteryRafflePrize": {
         "additionalProperties": false,
         "properties": {
@@ -11670,9 +11950,6 @@
             "type": "string"
           },
           "color_name": {
-            "type": "string"
-          },
-          "description": {
             "type": "string"
           },
           "item_definition_id": {
@@ -11689,17 +11966,13 @@
           "tier",
           "name",
           "color",
-          "color_name",
-          "description"
+          "color_name"
         ],
         "type": "object"
       },
       "LotteryRaffleResult": {
         "additionalProperties": false,
         "properties": {
-          "message": {
-            "type": "string"
-          },
           "prize": {
             "$ref": "#/components/schemas/LotteryRafflePrize"
           },
@@ -11725,6 +11998,60 @@
         ],
         "type": "object"
       },
+      "LotterySceneData": {
+        "additionalProperties": false,
+        "description": "The actor's raffle coupons and the prize table of the raffle they would play; 300 or more coupons always play the special raffle. NPC dialogue comes from npc_talk/npc_inspect. Observation never draws.",
+        "properties": {
+          "cost": {
+            "type": "integer"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "prizes": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "color": {
+                  "type": "string"
+                },
+                "color_name": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "rank": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "rank",
+                "color",
+                "color_name",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "special": {
+            "type": "boolean"
+          },
+          "tickets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parent",
+          "tickets",
+          "special",
+          "cost",
+          "prizes"
+        ],
+        "type": "object"
+      },
       "LotteryTakarakujiPrizeItem": {
         "additionalProperties": false,
         "properties": {
@@ -11746,71 +12073,6 @@
           "item_id",
           "item_name",
           "winners_count"
-        ],
-        "type": "object"
-      },
-      "LotteryTakarakujiStatus": {
-        "additionalProperties": false,
-        "properties": {
-          "draw_date": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "is_sold_out": {
-            "type": "boolean"
-          },
-          "max_tickets": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "type": "string"
-          },
-          "prizes": {
-            "items": {
-              "$ref": "#/components/schemas/LotteryTakarakujiPrizeItem"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "remaining_tickets": {
-            "type": "integer"
-          },
-          "round_id": {
-            "type": "integer"
-          },
-          "sold_count": {
-            "type": "integer"
-          },
-          "talk_phrases": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "ticket_price": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "round_id",
-          "title",
-          "npc_name",
-          "ticket_price",
-          "max_tickets",
-          "sold_count",
-          "remaining_tickets",
-          "is_sold_out",
-          "draw_date",
-          "prizes",
-          "talk_phrases"
         ],
         "type": "object"
       },
@@ -12343,19 +12605,52 @@
         ],
         "type": "object"
       },
-      "OracleBuyWallpaperResponse": {
+      "OracleSceneData": {
         "additionalProperties": false,
+        "description": "The actor's costume catalog (gated by job level, minus helper-requested items), the wallpapers and the worn costume. oracle_blackmarket is offered only to characters who qualify for the black market. NPC dialogue comes from npc_talk/npc_inspect. Observation never buys.",
         "properties": {
-          "message": {
+          "active_costume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostumeActiveCostume"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_costumes": {
+            "items": {
+              "$ref": "#/components/schemas/StoreOracleItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "available_wallpapers": {
+            "items": {
+              "$ref": "#/components/schemas/StoreWallpaperInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "character_id": {
             "type": "string"
           },
-          "wallpaper": {
+          "parent": {
+            "const": "town",
             "type": "string"
           }
         },
         "required": [
-          "wallpaper",
-          "message"
+          "parent",
+          "character_id",
+          "available_costumes",
+          "available_wallpapers",
+          "active_costume"
         ],
         "type": "object"
       },
@@ -12556,35 +12851,6 @@
         ],
         "type": "object"
       },
-      "PageParkPost": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "Offset from beginning of result set",
-            "type": "integer"
-          },
-          "total": {
-            "description": "Total number of records matching the query",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
       "PagePartySummary": {
         "properties": {
           "items": {
@@ -12678,38 +12944,6 @@
         ],
         "type": "object"
       },
-      "PaginationCursorPageParkPost": {
-        "additionalProperties": false,
-        "properties": {
-          "has_more": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParkPost"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "limit": {
-            "type": "integer"
-          },
-          "next_cursor": {
-            "type": "string"
-          },
-          "prev_cursor": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "limit",
-          "has_more"
-        ],
-        "type": "object"
-      },
       "PaginationCursorPageReplayReplayHeader": {
         "additionalProperties": false,
         "properties": {
@@ -12739,74 +12973,6 @@
           "items",
           "limit",
           "has_more"
-        ],
-        "type": "object"
-      },
-      "ParkDialogueResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dialogue"
-        ],
-        "type": "object"
-      },
-      "ParkDivinationResult": {
-        "additionalProperties": false,
-        "properties": {
-          "fortune": {
-            "type": "string"
-          },
-          "lucky_color": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "fortune",
-          "lucky_color",
-          "message"
-        ],
-        "type": "object"
-      },
-      "ParkPost": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "color": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "recipient_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "character_id",
-          "character_name",
-          "content",
-          "color",
-          "recipient_name",
-          "created_at"
         ],
         "type": "object"
       },
@@ -13227,33 +13393,37 @@
         ],
         "type": "object"
       },
-      "PlantationFertilizeRequest": {
+      "PlaceMember": {
         "additionalProperties": false,
+        "description": "One member of the current place. Appearance is a snapshot from the character's latest refresh; character IDs are never exposed.",
         "properties": {
-          "fertilizer_id": {
-            "minLength": 1,
-            "pattern": "[^\t-\r    - \u2028\u2029  　]",
-            "type": "string"
-          }
-        },
-        "required": [
-          "fertilizer_id"
-        ],
-        "type": "object"
-      },
-      "PlantationFertilizeResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
+          "aura_effect": {
+            "type": "integer"
+          },
+          "color": {
             "type": "string"
           },
-          "plot": {
-            "$ref": "#/components/schemas/PlantationPlot"
+          "icon_url": {
+            "description": "Avatar URL; empty when unset and for the NPC.",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "character",
+              "npc"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
           }
         },
         "required": [
-          "plot",
-          "message"
+          "kind",
+          "name",
+          "color",
+          "icon_url",
+          "aura_effect"
         ],
         "type": "object"
       },
@@ -13293,31 +13463,6 @@
           "wither_rate",
           "yield_bonus",
           "is_item"
-        ],
-        "type": "object"
-      },
-      "PlantationHarvestResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "withered": {
-            "type": "boolean"
-          },
-          "yields": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationHarvestYield"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "withered",
-          "message"
         ],
         "type": "object"
       },
@@ -13383,6 +13528,55 @@
         ],
         "type": "object"
       },
+      "PlantationSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's plot and its maturity, the seeds on sale and the usable fertilizers. NPC dialogue comes from npc_talk/npc_inspect. Observation never harvests; maturity alone claims nothing.",
+        "properties": {
+          "fertilizers": {
+            "description": "Gold fertilizers and the item fertilizers the actor holds in the Depot or Inventory.",
+            "items": {
+              "$ref": "#/components/schemas/PlantationFertilizer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "plot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlantationPlot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seeds": {
+            "items": {
+              "$ref": "#/components/schemas/PlantationSeed"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "status",
+          "seeds",
+          "fertilizers"
+        ],
+        "type": "object"
+      },
       "PlantationSeed": {
         "additionalProperties": false,
         "properties": {
@@ -13420,102 +13614,6 @@
           "low_base",
           "low_rand",
           "high_rate"
-        ],
-        "type": "object"
-      },
-      "PlantationSowRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "seed_id": {
-            "minLength": 1,
-            "pattern": "[^\t-\r    - \u2028\u2029  　]",
-            "type": "string"
-          }
-        },
-        "required": [
-          "seed_id"
-        ],
-        "type": "object"
-      },
-      "PlantationSowResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "plot": {
-            "$ref": "#/components/schemas/PlantationPlot"
-          }
-        },
-        "required": [
-          "plot",
-          "message"
-        ],
-        "type": "object"
-      },
-      "PlantationStatusResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          },
-          "fertilizers": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationFertilizer"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "plot": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlantationPlot"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seeds": {
-            "items": {
-              "$ref": "#/components/schemas/PlantationSeed"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "seeds",
-          "fertilizers",
-          "dialogue"
-        ],
-        "type": "object"
-      },
-      "PlayRaffleResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "remaining_tickets": {
-            "type": "integer"
-          },
-          "result": {
-            "$ref": "#/components/schemas/LotteryRaffleResult"
-          }
-        },
-        "required": [
-          "result",
-          "remaining_tickets",
-          "character"
         ],
         "type": "object"
       },
@@ -14888,6 +14986,10 @@
                   "exile",
                   "fleamarket",
                   "gemstore",
+                  "god",
+                  "u_god",
+                  "altar",
+                  "wishingwell",
                   "home",
                   "shop_weapon",
                   "shop_armor",
@@ -14900,7 +15002,12 @@
                   "town1",
                   "town2",
                   "town3",
-                  "town4"
+                  "town4",
+                  "tavern",
+                  "lottery",
+                  "takarakuji",
+                  "plantation",
+                  "oracle"
                 ],
                 "type": "string"
               }
@@ -15076,6 +15183,10 @@
               "exile",
               "fleamarket",
               "gemstore",
+              "god",
+              "u_god",
+              "altar",
+              "wishingwell",
               "home",
               "shop_weapon",
               "shop_armor",
@@ -15088,7 +15199,12 @@
               "town1",
               "town2",
               "town3",
-              "town4"
+              "town4",
+              "tavern",
+              "lottery",
+              "takarakuji",
+              "plantation",
+              "oracle"
             ],
             "type": "string"
           },
@@ -15206,6 +15322,30 @@
                     },
                     {
                       "$ref": "#/components/schemas/TownDistrictSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AltarSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WishingWellSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GodSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TavernSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LotterySceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TakarakujiSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PlantationSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OracleSceneData"
                     }
                   ]
                 }
@@ -15908,6 +16048,276 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "altar"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/AltarSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "wishingwell"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/WishingWellSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "god"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GodSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "u_god"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GodSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "tavern"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TavernSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "lottery"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/LotterySceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "takarakuji"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TakarakujiSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "plantation"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/PlantationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "oracle"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/OracleSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ],
         "description": "Registered selected or feature-owned activity scene. Actual sleep, unfinished work, membership and runs override ordinary selection; conflicting exclusive facts are preserved. GET never joins, advances, settles or recovers gameplay.",
@@ -15940,6 +16350,13 @@
             "maxLength": 128,
             "pattern": "^[a-zA-Z0-9_-]{1,128}$",
             "type": "string"
+          },
+          "members": {
+            "description": "Who is in the current place: the facility NPC first, then characters in arrival order whose last command was within the member window (docs/architecture/place-log.md#members). Empty outside places with a log; a required read failure fails the observation.",
+            "items": {
+              "$ref": "#/components/schemas/PlaceMember"
+            },
+            "type": "array"
           },
           "opponent": {
             "$ref": "#/components/schemas/SceneOpponent"
@@ -15974,7 +16391,8 @@
           "kind",
           "data",
           "support",
-          "place_log"
+          "place_log",
+          "members"
         ],
         "type": "object"
       },
@@ -17098,64 +17516,6 @@
         ],
         "type": "object"
       },
-      "StoreOracleStatus": {
-        "additionalProperties": false,
-        "properties": {
-          "active_costume": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CostumeActiveCostume"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "available_costumes": {
-            "items": {
-              "$ref": "#/components/schemas/StoreOracleItem"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "available_wallpapers": {
-            "items": {
-              "$ref": "#/components/schemas/StoreWallpaperInfo"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "bgimg": {
-            "type": "string"
-          },
-          "can_unlock_black_market": {
-            "type": "boolean"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "bgimg",
-          "available_costumes",
-          "available_wallpapers",
-          "can_unlock_black_market"
-        ],
-        "type": "object"
-      },
       "StoreSale": {
         "additionalProperties": false,
         "properties": {
@@ -17256,6 +17616,69 @@
         ],
         "type": "object"
       },
+      "TakarakujiSceneData": {
+        "additionalProperties": false,
+        "description": "The current takarakuji round. Reading it provisions the round when none is open; observation never draws or delivers.",
+        "properties": {
+          "draw_date": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "draw_date_label": {
+            "description": "Draw date as the legacy unpadded JST year/month/day.",
+            "type": "string"
+          },
+          "is_sold_out": {
+            "type": "boolean"
+          },
+          "max_tickets": {
+            "type": "integer"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "prizes": {
+            "items": {
+              "$ref": "#/components/schemas/LotteryTakarakujiPrizeItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "purchased": {
+            "description": "The actor holds this round's ticket.",
+            "type": "boolean"
+          },
+          "remaining_tickets": {
+            "type": "integer"
+          },
+          "round_id": {
+            "type": "integer"
+          },
+          "sold_count": {
+            "type": "integer"
+          },
+          "ticket_price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parent",
+          "round_id",
+          "ticket_price",
+          "max_tickets",
+          "sold_count",
+          "remaining_tickets",
+          "is_sold_out",
+          "draw_date",
+          "prizes",
+          "draw_date_label",
+          "purchased"
+        ],
+        "type": "object"
+      },
       "TavernDeliveryReservation": {
         "properties": {
           "character_id": {
@@ -17293,18 +17716,6 @@
           "mp_heal",
           "tickets",
           "created_at"
-        ],
-        "type": "object"
-      },
-      "TavernItemRequest": {
-        "properties": {
-          "item_id": {
-            "example": "tavern_curry",
-            "type": "string"
-          }
-        },
-        "required": [
-          "item_id"
         ],
         "type": "object"
       },
@@ -17360,125 +17771,55 @@
         ],
         "type": "object"
       },
-      "TavernOrderResult": {
+      "TavernSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's menu, fullness and standing delivery order. tavern_delivery_cancel is offered only while delivery is set. NPC dialogue comes from npc_talk/npc_inspect. Observation never orders or settles.",
         "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "current_hp": {
-            "type": "integer"
-          },
-          "current_mp": {
-            "type": "integer"
-          },
-          "hp_healed": {
-            "type": "integer"
-          },
-          "item": {
-            "$ref": "#/components/schemas/TavernMenuItem"
-          },
-          "message": {
-            "type": "string"
-          },
-          "mp_healed": {
-            "type": "integer"
-          },
-          "remaining_gold": {
-            "type": "integer"
-          },
-          "tickets_awarded": {
-            "type": "integer"
-          },
-          "total_tickets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "item",
-          "hp_healed",
-          "mp_healed",
-          "current_hp",
-          "current_mp",
-          "remaining_gold",
-          "tickets_awarded",
-          "total_tickets",
-          "message"
-        ],
-        "type": "object"
-      },
-      "TavernStatus": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "delivery_reservation": {
-            "$ref": "#/components/schemas/TavernDeliveryReservation"
-          },
-          "gold": {
-            "type": "integer"
-          },
-          "hp": {
-            "type": "integer"
+          "delivery": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TavernDeliveryReservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "is_full": {
             "type": "boolean"
           },
-          "location_name": {
-            "example": "冒険者の酒場",
-            "type": "string"
+          "menu": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/TavernMenuItem"
+                },
+                {
+                  "properties": {
+                    "order_name": {
+                      "description": "Name used by tavern_order: the profile like_food for the full course when set, otherwise the catalog name. tavern_delivery_reserve keeps the catalog name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "order_name"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
           },
-          "max_hp": {
-            "type": "integer"
-          },
-          "max_mp": {
-            "type": "integer"
-          },
-          "mp": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "example": "@エレナ",
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "character_name",
-          "location_name",
-          "npc_name",
-          "gold",
-          "hp",
-          "max_hp",
-          "mp",
-          "max_mp",
-          "is_full"
-        ],
-        "type": "object"
-      },
-      "TavernTalkResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "npc_name": {
+          "parent": {
+            "const": "town",
             "type": "string"
           }
         },
         "required": [
-          "character_id",
-          "location_name",
-          "npc_name",
-          "message"
+          "parent",
+          "menu",
+          "is_full",
+          "delivery"
         ],
         "type": "object"
       },
@@ -17637,117 +17978,31 @@
         ],
         "type": "object"
       },
-      "WishingWellStatus": {
+      "WishingWellSceneData": {
         "additionalProperties": false,
+        "description": "Whether the actor may offer SP; SP and stats are in the character context. NPC dialogue comes from npc_talk/npc_inspect. Observation never exchanges.",
         "properties": {
-          "agility": {
-            "type": "integer"
-          },
-          "attack": {
-            "type": "integer"
-          },
-          "background_image": {
-            "type": "string"
-          },
           "can_exchange": {
             "type": "boolean"
           },
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "defense": {
-            "type": "integer"
-          },
-          "dialogues": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "job_memory_active": {
+            "description": "A remembered (persistent) job memory blocks the exchange; a temporary one does not.",
             "type": "boolean"
-          },
-          "location_name": {
-            "type": "string"
-          },
-          "max_hp": {
-            "type": "integer"
-          },
-          "max_mp": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "type": "string"
           },
           "over_level": {
+            "description": "Limit-broken characters cannot exchange.",
             "type": "boolean"
           },
-          "sp": {
-            "type": "integer"
+          "parent": {
+            "const": "town",
+            "type": "string"
           }
         },
         "required": [
-          "location_name",
-          "npc_name",
-          "background_image",
-          "character_id",
-          "character_name",
-          "sp",
+          "parent",
           "job_memory_active",
           "over_level",
-          "can_exchange",
-          "max_hp",
-          "max_mp",
-          "attack",
-          "defense",
-          "agility",
-          "dialogues"
-        ],
-        "type": "object"
-      },
-      "WishingwellExchangeResult": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "remaining_sp": {
-            "type": "integer"
-          },
-          "sp_consumed": {
-            "type": "integer"
-          },
-          "stat": {
-            "type": "string"
-          },
-          "stat_increase": {
-            "type": "integer"
-          },
-          "stat_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "stat",
-          "stat_name",
-          "sp_consumed",
-          "stat_increase",
-          "remaining_sp",
-          "message",
-          "character"
+          "can_exchange"
         ],
         "type": "object"
       }
@@ -18400,7 +18655,7 @@
               }
             }
           },
-          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_sell require non-null string item_id; depot_withdraw accepts an optional non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. place_say requires non-null string text and place_whisper also requires non-null string recipient_name; the place comes from the owner's current scene. Invalid text or name is rejected before execution with no log row; an unknown recipient is 404 RECIPIENT_NOT_FOUND, and a scene without a place log is 409 PLACE_UNAVAILABLE. place_say is never blocked by ACTION_WAIT. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor.",
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_sell require non-null string item_id; depot_withdraw accepts an optional non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. auction_send accepts only optional non-null target_character_id, target_character_name, slot, instance_id (strings) and gold (signed integer). The service requires a recipient and something to send; ID takes precedence over name, positive gold over items, and slot over instance_id. No sender override is accepted. npc_talk, npc_inspect, park_divinate and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. place_say requires non-null string text and place_whisper also requires non-null string recipient_name; the place comes from the owner's current scene. Invalid text or name is rejected before execution with no log row; an unknown recipient is 404 RECIPIENT_NOT_FOUND, and a scene without a place log is 409 PLACE_UNAVAILABLE. place_say is never blocked by ACTION_WAIT. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor. presence_refresh accepts omitted params or an empty object and has no effect beyond the member refresh that precedes every command; it is never blocked by ACTION_WAIT, sleep or death.",
           "required": true
         },
         "responses": {
@@ -18412,7 +18667,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message."
           },
           "400": {
             "content": {
@@ -19644,496 +19899,6 @@
         "summary": "List character adventure history",
         "tags": [
           "Adventure"
-        ]
-      }
-    },
-    "/characters/{id}/altar": {
-      "get": {
-        "operationId": "getAltarStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "available_items": {
-                      "items": {
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "awakened_by": {
-                      "type": "string"
-                    },
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "has_all_orbs": {
-                      "type": "boolean"
-                    },
-                    "miko_dialogue": {
-                      "type": "string"
-                    },
-                    "orb_count": {
-                      "type": "integer"
-                    },
-                    "orbs": {
-                      "type": "string"
-                    },
-                    "ramia_awakened": {
-                      "type": "boolean"
-                    },
-                    "ramia_expires_at": {
-                      "format": "date-time",
-                      "type": "string"
-                    },
-                    "ramia_present": {
-                      "type": "boolean"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Altar status and orb offering progression"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Altar of Rebirth status, orb collection, and Ramia presence",
-        "tags": [
-          "Altar"
-        ]
-      }
-    },
-    "/characters/{id}/altar/offer": {
-      "post": {
-        "operationId": "offerAltarOrb",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "orb": {
-                    "description": "Orb symbol (s, r, b, g, y, p) or Japanese name",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "orb"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AltarOfferResult"
-                }
-              }
-            },
-            "description": "Orb offered successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid orb symbol"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - orb has already been offered"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Offer an orb to the Altar of Rebirth",
-        "tags": [
-          "Altar"
-        ]
-      }
-    },
-    "/characters/{id}/altar/pray": {
-      "post": {
-        "operationId": "prayAltarRamia",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "expires_at": {
-                      "format": "date-time",
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "ramia_awakened": {
-                      "type": "boolean"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Ramia awakened successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - insufficient orbs to awaken Ramia"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Pray to awaken legendary phoenix Ramia (@いのる)",
-        "tags": [
-          "Altar"
-        ]
-      }
-    },
-    "/characters/{id}/altar/wish": {
-      "post": {
-        "operationId": "wishAltarTravelItem",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_id": {
-                    "description": "Secret otherworld travel item ID",
-                    "enum": [
-                      "item-066",
-                      "item-067",
-                      "item-068",
-                      "item-069"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "item_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "delivered_to": {
-                      "enum": [
-                        "inventory",
-                        "depot"
-                      ],
-                      "type": "string"
-                    },
-                    "item_id": {
-                      "type": "string"
-                    },
-                    "item_name": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Wish granted and item delivered"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - Ramia not awakened or invalid travel item"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Make a wish for an otherworld travel item (@ねがう)",
-        "tags": [
-          "Altar"
         ]
       }
     },
@@ -23074,7 +22839,7 @@
     },
     "/characters/{id}/dungeons/escape": {
       "post": {
-        "description": "Freeze the observed expedition revision before SQL settlement; concurrent combat changes reject with 409. A terminal buffer retries its original clear/escape/wipeout outcome, preserving run-ID idempotency and SQL-first cleanup.",
+        "description": "Freeze the observed expedition revision before SQL settlement; concurrent combat changes reject with 409. A terminal buffer retries its original escape/wipeout outcome, preserving run-ID idempotency and SQL-first cleanup.",
         "operationId": "escapeDungeonExpedition",
         "parameters": [
           {
@@ -24000,225 +23765,6 @@
         "summary": "Change character gender / appearance",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/god/wish": {
-      "post": {
-        "operationId": "grantGodWish",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "realm": {
-                    "enum": [
-                      "heaven",
-                      "underworld"
-                    ],
-                    "type": "string"
-                  },
-                  "wish_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "wish_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GrantWishResponse"
-                }
-              }
-            },
-            "description": "Wish granted result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid wish request or unmet requirement"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - character not owned by player"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Grant an endgame wish or limit break",
-        "tags": [
-          "God"
-        ]
-      }
-    },
-    "/characters/{id}/god/wishes": {
-      "get": {
-        "operationId": "getGodWishes",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Realm (heaven or underworld)",
-            "in": "query",
-            "name": "realm",
-            "required": false,
-            "schema": {
-              "default": "heaven",
-              "enum": [
-                "heaven",
-                "underworld"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListWishesResponse"
-                }
-              }
-            },
-            "description": "Available wishes in realm"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - character not owned by player"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get available endgame wishes",
-        "tags": [
-          "God"
         ]
       }
     },
@@ -25209,388 +24755,6 @@
         ]
       }
     },
-    "/characters/{id}/lottery/raffle": {
-      "post": {
-        "operationId": "playRaffle",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "raffle_type": {
-                    "description": "Deprecated: raffle mode is automatically selected based on locked coupon balance (\u003e= 300: SPECIAL, \u003c 300: STANDARD). Maintained for backward compatibility.",
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": false
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlayRaffleResponse"
-                }
-              }
-            },
-            "description": "Raffle draw result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Draw raffle ticket for item prizes",
-        "tags": [
-          "Lottery"
-        ]
-      }
-    },
-    "/characters/{id}/lottery/takarakuji/buy": {
-      "post": {
-        "operationId": "buyTakarakujiTicket",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BuyTakarakujiTicketResponse"
-                }
-              }
-            },
-            "description": "Purchased Takarakuji ticket and character state"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - already purchased in this round or round sold out"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - insufficient gold"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Buy Takarakuji lottery ticket",
-        "tags": [
-          "Lottery"
-        ]
-      }
-    },
-    "/characters/{id}/lottery/takarakuji/ticket": {
-      "get": {
-        "operationId": "getCharacterTakarakujiTicket",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetCharacterTakarakujiTicketResponse"
-                }
-              }
-            },
-            "description": "Character current Takarakuji ticket and past participation history"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character Takarakuji ticket status",
-        "tags": [
-          "Lottery"
-        ]
-      }
-    },
-    "/characters/{id}/lottery/tickets": {
-      "get": {
-        "operationId": "getLotteryTickets",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetLotteryTicketsResponse"
-                }
-              }
-            },
-            "description": "Raffle ticket info"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character raffle tickets",
-        "tags": [
-          "Lottery"
-        ]
-      }
-    },
     "/characters/{id}/medals": {
       "get": {
         "operationId": "getCharacterMedals",
@@ -26475,613 +25639,6 @@
         ]
       }
     },
-    "/characters/{id}/oracle": {
-      "get": {
-        "description": "Returns Oracle Shop status, costume catalog gated by job level, home wallpapers, and current active costume rental.",
-        "operationId": "getOracleStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/StoreOracleStatus"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Oracle Shop status retrieved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Oracle Shop status, costume catalog, wallpapers, and active rental",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/blackmarket": {
-      "post": {
-        "description": "Checks if character meets level requirements to discover Black Market from Oracle Shop hint.",
-        "operationId": "discoverOracleBlackMarket",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    },
-                    "unlocked": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "unlocked",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Black Market discovery eligibility verified"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character job level insufficient (requires job_lv \u003e= 15)"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Check Black Market discovery from Oracle Shop",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/buy": {
-      "post": {
-        "description": "Purchases a costume consumable item from Oracle Shop with gold. Delivers to inventory (or routes overflow to depot) and records in item collection.",
-        "operationId": "buyOracleCostume",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_no": {
-                    "description": "Costume item number (e.g. 44..56, 138..141)",
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "item_no"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "delivered_to": {
-                      "description": "Destination where item was delivered (inventory or depot)",
-                      "type": "string"
-                    },
-                    "item_name": {
-                      "type": "string"
-                    },
-                    "item_no": {
-                      "type": "integer"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "price": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "item_no",
-                    "item_name",
-                    "price",
-                    "delivered_to",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Costume purchased successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Insufficient gold, unavailable costume item, or active helper quest conflict"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Buy a costume consumable item",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/inspect": {
-      "post": {
-        "description": "Inspects Oracle Shop NPC @ラクル, showing description and conditional Black Market hint for job level \u003e= 15.",
-        "operationId": "inspectOracleNPC",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "hint": {
-                      "type": "string"
-                    },
-                    "location_name": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "npc_name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "character_id",
-                    "location_name",
-                    "npc_name",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "NPC description and optional hint retrieved"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Inspect Oracle NPC @ラクル",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/talk": {
-      "post": {
-        "description": "Talks to Oracle Shop NPC @ラクル, receiving a randomized fortune-telling dialogue.",
-        "operationId": "talkOracleNPC",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "location_name": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "npc_name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "character_id",
-                    "location_name",
-                    "npc_name",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "NPC dialogue returned successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Talk to Oracle NPC @ラクル",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/wallpaper": {
-      "post": {
-        "description": "Purchases and applies a seasonal or scenic wallpaper for the character's private home estate.",
-        "operationId": "buyOracleHomeWallpaper",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "wallpaper": {
-                    "description": "Wallpaper identifier (e.g. stage10, stage11...)",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "wallpaper"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OracleBuyWallpaperResponse"
-                }
-              }
-            },
-            "description": "Home wallpaper purchased and applied successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Insufficient gold or invalid wallpaper identifier"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Purchase home wallpaper",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
     "/characters/{id}/photos": {
       "get": {
         "description": "Retrieves all captured screenshots owned by the character (max 20).",
@@ -27328,310 +25885,6 @@
         "summary": "Delete a character photo",
         "tags": [
           "Contest"
-        ]
-      }
-    },
-    "/characters/{id}/plantation": {
-      "get": {
-        "operationId": "getCharactersIdPlantation",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlantationStatusResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Character Plantation",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/plantation/fertilize": {
-      "post": {
-        "operationId": "postCharactersIdPlantationFertilize",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlantationFertilizeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlantationFertilizeResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Plantation Fertilize",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/plantation/harvest": {
-      "post": {
-        "operationId": "postCharactersIdPlantationHarvest",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlantationHarvestResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Plantation Harvest",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/plantation/sow": {
-      "post": {
-        "operationId": "postCharactersIdPlantationSow",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlantationSowRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlantationSowResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Plantation Sow",
-        "tags": [
-          "Character"
         ]
       }
     },
@@ -28661,637 +26914,6 @@
         ]
       }
     },
-    "/characters/{id}/tavern": {
-      "get": {
-        "description": "Returns current character stats, fullness status, and active delivery reservation at the tavern.",
-        "operationId": "getCharacterTavernStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernStatus"
-                }
-              }
-            },
-            "description": "Tavern status retrieved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character tavern status",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
-    "/characters/{id}/tavern/delivery": {
-      "delete": {
-        "description": "Cancels the character's active delivery reservation.",
-        "operationId": "cancelTavernDelivery",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Delivery reservation cancelled successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "No active delivery reservation"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Cancel tavern delivery reservation",
-        "tags": [
-          "Tavern"
-        ]
-      },
-      "get": {
-        "description": "Retrieves the character's active delivery reservation.",
-        "operationId": "getTavernDelivery",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernDeliveryReservation"
-                }
-              }
-            },
-            "description": "Delivery reservation retrieved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "No active delivery reservation"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get current tavern delivery reservation",
-        "tags": [
-          "Tavern"
-        ]
-      },
-      "post": {
-        "description": "Reserves a meal to be delivered and consumed after an adventure.",
-        "operationId": "reserveTavernDelivery",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TavernItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernDeliveryReservation"
-                }
-              }
-            },
-            "description": "Delivery order reserved successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character or menu item not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Reserve tavern delivery order",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
-    "/characters/{id}/tavern/order": {
-      "post": {
-        "description": "Purchases and immediately consumes a meal or drink, restoring HP/MP and awarding raffle tickets.",
-        "operationId": "orderTavernMeal",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TavernItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernOrderResult"
-                }
-              }
-            },
-            "description": "Meal ordered and consumed successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Insufficient gold or invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character or menu item not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character is already full"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Order and eat a tavern meal",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
-    "/characters/{id}/tavern/talk": {
-      "post": {
-        "description": "Converses with Elena the tavern barkeep to receive randomized dialogue and tavern advice.",
-        "operationId": "talkTavernBarkeep",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TavernTalkResult"
-                }
-              }
-            },
-            "description": "Barkeep conversation dialogue returned"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Authentication required"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Talk to tavern barkeep NPC",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
-    "/characters/{id}/wishing-well": {
-      "get": {
-        "operationId": "getWishingWellStatus",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WishingWellStatus"
-                }
-              }
-            },
-            "description": "Wishing Well status and dialogues"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Wishing Well status, current SP, and goddess dialogues",
-        "tags": [
-          "WishingWell"
-        ]
-      }
-    },
-    "/characters/{id}/wishing-well/exchange": {
-      "post": {
-        "operationId": "exchangeWishingWellSP",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "sp": {
-                    "description": "Number of skill points to sacrifice (at least 1)",
-                    "type": "integer"
-                  },
-                  "stat": {
-                    "description": "Target stat to permanently increase (mhp, mmp, at, df, ag)",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "stat",
-                  "sp"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "description": "SP sacrifice request",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WishingwellExchangeResult"
-                }
-              }
-            },
-            "description": "Successful SP sacrifice and permanent stat increase"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid amount, insufficient SP, active JobMemory, or OverLevel restriction"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Sacrifice skill points to permanently increase a base stat",
-        "tags": [
-          "WishingWell"
-        ]
-      }
-    },
     "/contest/current": {
       "get": {
         "description": "Returns all photo submissions and current vote totals in the active contest round.",
@@ -29835,58 +27457,6 @@
         "summary": "Register character presence in Event Plaza",
         "tags": [
           "EventPlaza"
-        ]
-      }
-    },
-    "/god/dialogue": {
-      "get": {
-        "operationId": "getGodDialogue",
-        "parameters": [
-          {
-            "description": "Realm (heaven or underworld)",
-            "in": "query",
-            "name": "realm",
-            "required": false,
-            "schema": {
-              "default": "heaven",
-              "enum": [
-                "heaven",
-                "underworld"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DialogueResponse"
-                }
-              }
-            },
-            "description": "God NPC dialogue"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get celestial NPC dialogue",
-        "tags": [
-          "God"
         ]
       }
     },
@@ -32803,42 +30373,6 @@
         ]
       }
     },
-    "/lottery/takarakuji": {
-      "get": {
-        "operationId": "getTakarakujiStatus",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LotteryTakarakujiStatus"
-                }
-              }
-            },
-            "description": "Takarakuji round status, prize lineup, and talk phrases"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get current Takarakuji lottery status",
-        "tags": [
-          "Lottery"
-        ]
-      }
-    },
     "/maintenance": {
       "get": {
         "operationId": "getMaintenanceStatus",
@@ -33713,465 +31247,6 @@
         "summary": "Get OpenAPI 3.1 specification",
         "tags": [
           "System"
-        ]
-      }
-    },
-    "/park/npc/divinate": {
-      "post": {
-        "operationId": "divinateParkNPC",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParkDivinationResult"
-                }
-              }
-            },
-            "description": "Fortune divination result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping or awaiting wake-up"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get daily fortune divination from park NPC",
-        "tags": [
-          "Park"
-        ]
-      }
-    },
-    "/park/npc/inspect": {
-      "get": {
-        "operationId": "inspectParkNPC",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParkDialogueResponse"
-                }
-              }
-            },
-            "description": "Park NPC inspection info"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Inspect town park NPC status",
-        "tags": [
-          "Park"
-        ]
-      }
-    },
-    "/park/npc/talk": {
-      "post": {
-        "operationId": "talkParkNPC",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParkDialogueResponse"
-                }
-              }
-            },
-            "description": "Park NPC dialogue response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping or awaiting wake-up"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Talk to town park NPC",
-        "tags": [
-          "Park"
-        ]
-      }
-    },
-    "/park/posts": {
-      "get": {
-        "operationId": "getParkPosts",
-        "parameters": [
-          {
-            "description": "Number of posts to fetch",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Offset from beginning of result set (default 0)",
-            "in": "query",
-            "name": "offset",
-            "schema": {
-              "default": 0,
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Opaque cursor for keyset pagination (e.g. returned in next_cursor)",
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/PaginationCursorPageParkPost"
-                    },
-                    {
-                      "$ref": "#/components/schemas/PageParkPost"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Park board posts"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get town park bulletin board posts",
-        "tags": [
-          "Park"
-        ]
-      },
-      "post": {
-        "operationId": "postParkMessage",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  },
-                  "color": {
-                    "type": "string"
-                  },
-                  "content": {
-                    "type": "string"
-                  },
-                  "recipient_name": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id",
-                  "content"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParkPost"
-                }
-              }
-            },
-            "description": "Message posted successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping or awaiting wake-up"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Post message to town park board",
-        "tags": [
-          "Park"
         ]
       }
     },
@@ -36975,44 +34050,6 @@
         ]
       }
     },
-    "/tavern/menu": {
-      "get": {
-        "description": "Returns the complete catalog of foods, drinks, and courses available at the tavern.",
-        "operationId": "listTavernMenu",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "items": {
-                      "items": {
-                        "$ref": "#/components/schemas/TavernMenuItem"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "required": [
-                    "items"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Menu retrieved successfully"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List tavern menu",
-        "tags": [
-          "Tavern"
-        ]
-      }
-    },
     "/towns/{town_id}/houses": {
       "get": {
         "operationId": "getTownsTownIdHouses",
@@ -37177,10 +34214,6 @@
       "name": "Shop"
     },
     {
-      "description": "Town park bulletin board and NPC interactions",
-      "name": "Park"
-    },
-    {
       "description": "Small medal collection and rare reward exchange",
       "name": "Medals"
     },
@@ -37243,10 +34276,6 @@
     {
       "description": "Town event plaza and traveling merchant bazaar",
       "name": "EventPlaza"
-    },
-    {
-      "description": "Goddess wishing well and skill point stat sacrifice exchange",
-      "name": "WishingWell"
     },
     {
       "description": "Step-by-step combat battle replay playback and match history",

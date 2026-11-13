@@ -41,14 +41,14 @@ func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Char
 	}
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO characters
-			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, job_memory_kind, small_medals, help_count, hero_count, pvp_wins, casino_wins, monster_kills, mao_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit, crystal, wea_seal, wea_name, arm_name, pending_wake)
+			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, job_memory_kind, small_medals, help_count, hero_count, pvp_wins, casino_wins, monster_kills, mao_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit, crystal, wea_seal, wea_name, arm_name, pending_wake, god_visit)
 		VALUES (
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?
 		)
 	`, value.ID, value.PlayerID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
 		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
@@ -56,7 +56,7 @@ func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Char
 		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, memoryKind, value.SmallMedals, value.HelpCount, value.HeroCount, value.PvPWins, value.CasinoWins,
 		value.MonsterKills, value.MaoCount,
 		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
-		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName, value.PendingWake)
+		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName, value.PendingWake, value.GodVisit)
 	if err != nil {
 		return characterNameError(err)
 	}
@@ -199,7 +199,6 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM blackmarket_character_points WHERE character_id = ?`,
 		`DELETE FROM tavern_deliveries WHERE character_id = ?`,
 		`DELETE FROM tavern_character_status WHERE character_id = ?`,
-		`DELETE FROM park_posts WHERE character_id = ?`,
 		`DELETE FROM altar_ramia_awakenings WHERE character_id = ?`,
 		`DELETE FROM rescue_records WHERE character_id = ?`,
 		`DELETE FROM contest_votes WHERE voter_character_id = ?`,
@@ -211,7 +210,6 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM character_homes WHERE character_id = ?`,
 		`DELETE FROM character_boss_records WHERE character_id = ?`,
 		`DELETE FROM boss_challenge_history WHERE character_id = ?`,
-		`DELETE FROM character_dungeon_records WHERE character_id = ?`,
 		`DELETE FROM dungeon_active_expeditions WHERE character_id = ?`,
 		`DELETE FROM dungeon_expedition_history WHERE character_id = ?`,
 		`DELETE FROM character_challenge_records WHERE character_id = ?`,

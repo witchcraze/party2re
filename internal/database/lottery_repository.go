@@ -322,54 +322,6 @@ func (r *LotteryRepository) PurchaseTakarakujiTicket(ctx context.Context, roundI
 	return ticket, char, nil
 }
 
-func (r *LotteryRepository) GetCharacterTakarakujiTicket(ctx context.Context, roundID int, characterID string) (lottery.TakarakujiTicket, error) {
-	var t lottery.TakarakujiTicket
-	var wonItemID sql.NullString
-
-	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT id, round_id, character_id, purchased_at, won_rank, won_item_id
-		FROM takarakuji_tickets
-		WHERE round_id = ? AND character_id = ?
-	`, roundID, characterID).Scan(&t.ID, &t.RoundID, &t.CharacterID, &t.PurchasedAt, &t.WonRank, &wonItemID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return lottery.TakarakujiTicket{}, errors.New("ticket not found")
-	}
-	if err != nil {
-		return lottery.TakarakujiTicket{}, err
-	}
-	if wonItemID.Valid {
-		t.WonItemID = &wonItemID.String
-	}
-	return t, nil
-}
-
-func (r *LotteryRepository) ListCharacterTakarakujiTickets(ctx context.Context, characterID string) ([]lottery.TakarakujiTicket, error) {
-	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT id, round_id, character_id, purchased_at, won_rank, won_item_id
-		FROM takarakuji_tickets
-		WHERE character_id = ?
-		ORDER BY purchased_at DESC
-	`, characterID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tickets []lottery.TakarakujiTicket
-	for rows.Next() {
-		var t lottery.TakarakujiTicket
-		var wonItemID sql.NullString
-		if err := rows.Scan(&t.ID, &t.RoundID, &t.CharacterID, &t.PurchasedAt, &t.WonRank, &wonItemID); err != nil {
-			return nil, err
-		}
-		if wonItemID.Valid {
-			t.WonItemID = &wonItemID.String
-		}
-		tickets = append(tickets, t)
-	}
-	return tickets, rows.Err()
-}
-
 func (r *LotteryRepository) ListRoundTakarakujiTickets(ctx context.Context, roundID int) ([]lottery.TakarakujiTicket, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, round_id, character_id, purchased_at, won_rank, won_item_id

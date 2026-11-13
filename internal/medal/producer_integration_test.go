@@ -340,21 +340,19 @@ func (d *integrationDungeonRepo) DeleteActiveExpedition(_ context.Context, charI
 	return nil
 }
 
-func (d *integrationDungeonRepo) SaveRecord(_ context.Context, rec dungeon.CharacterDungeonRecord) error {
-	return nil
-}
-
-func (d *integrationDungeonRepo) GetRecord(_ context.Context, charID string) (dungeon.CharacterDungeonRecord, error) {
-	return dungeon.CharacterDungeonRecord{CharacterID: charID}, nil
-}
-
-func (d *integrationDungeonRepo) FinalizeExpedition(_ context.Context, _ dungeon.DungeonExpeditionHistory, _ dungeon.CharacterDungeonRecord, _ *corecharacter.Character, _ []coreitem.Instance, _ ...dungeon.ExpeditionMember) error {
+func (d *integrationDungeonRepo) FinalizeExpedition(_ context.Context, _ dungeon.DungeonExpeditionHistory, _ *corecharacter.Character, _ []coreitem.Instance, _ ...dungeon.ExpeditionMember) error {
 	return nil
 }
 
 func (d *integrationDungeonRepo) GetHistory(_ context.Context, charID string, limit int) ([]dungeon.DungeonExpeditionHistory, error) {
 	return nil, nil
 }
+
+// spawnRNG makes every native passage roll spawn the first monster.
+type spawnRNG struct{}
+
+func (spawnRNG) Intn(int) int     { return 0 }
+func (spawnRNG) Float64() float64 { return 0 }
 
 type integrationBattleEngine struct {
 	result corebattle.Result
@@ -590,6 +588,7 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 		dungeonRepo,
 		charRepo,
 		integrationBattleEngine{result: corebattle.Result{Outcome: corebattle.OutcomeWin, WinnerID: hero.ID, Reward: corebattle.Reward{Experience: 50}}},
+		dungeon.WithRNG(spawnRNG{}),
 	)
 	if err != nil {
 		t.Fatalf("failed to create dungeon service: %v", err)
@@ -655,10 +654,10 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	}
 
 	// (f) Dungeon Monster Slain
-	if _, err := dungeonService.StartExpedition(ctx, hero.ID, "dungeon-01"); err != nil {
+	if _, err := dungeonService.StartExpedition(ctx, hero.ID, dungeon.NativeMap0ID); err != nil {
 		t.Fatalf("failed start dungeon expedition: %v", err)
 	}
-	// Move East to (1, 0) which has a monster encounter
+	// Variant 1 starts at (0, 0); east is a passage and spawnRNG forces the encounter.
 	stepResult, err := dungeonService.Move(ctx, hero.ID, dungeon.DirectionEast)
 	if err != nil {
 		t.Fatalf("failed dungeon move: %v", err)

@@ -1,6 +1,6 @@
 # Adventurer's Tavern Design
 
-The Tavern Module (`internal/tavern`) reconstructs the legacy bar (`lib/bar.cgi`) as `冒険者の酒場`, run by the barkeep `@エレナ`; both names and the dish names in [`menu.json`](../../internal/tavern/data/menu.json) are clean-room replacements, while prices, healing and raffle tickets follow the legacy menu. The legacy personalised full course is tracked in #2088.
+The Tavern Module (`internal/tavern`) reconstructs the legacy bar (`lib/bar.cgi`) as `冒険者の酒場`, run by the barkeep `@エレナ`; both names and the dish names in [`menu.json`](../../internal/tavern/data/menu.json) are clean-room replacements, while prices, healing and raffle tickets follow the legacy menu.
 
 ## Standing Delivery Order
 

@@ -42,7 +42,7 @@ func TestDungeonRepository_RunQualifiedCleanup(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	old := dungeon.ActiveExpedition{ID: id.New(), CharacterID: char.ID, DungeonID: "dungeon-01", Status: dungeon.StatusExploring, CurrentFloor: 1, CurrentHP: char.Stats.HP, TurnsRemaining: 20, StartedAt: time.Now().UTC().Truncate(time.Second)}
+	old := dungeon.ActiveExpedition{ID: id.New(), CharacterID: char.ID, DungeonID: "dungeon-01", Status: dungeon.StatusExploring, CurrentHP: char.Stats.HP, TurnsRemaining: 20, StartedAt: time.Now().UTC().Truncate(time.Second)}
 	if err := repo.SaveActiveExpedition(ctx, old); err != nil {
 		t.Fatal(err)
 	}
@@ -67,13 +67,9 @@ func TestDungeonRepository_RunQualifiedCleanup(t *testing.T) {
 		}
 		assertReplacement()
 	}
-	record, err := repo.GetRecord(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
 	history := dungeon.DungeonExpeditionHistory{ID: old.ID, CharacterID: char.ID, DungeonID: old.DungeonID, Outcome: dungeon.StatusEscaped, GoldReward: 100, CreatedAt: time.Now().UTC()}
 	for i := 0; i < 2; i++ {
-		err := repo.FinalizeExpedition(ctx, history, record, &char, nil)
+		err := repo.FinalizeExpedition(ctx, history, &char, nil)
 		if (i == 0 && err != nil) || (i == 1 && !errors.Is(err, dungeon.ErrExpeditionAlreadyFinished)) {
 			t.Fatalf("finalization %d: %v", i, err)
 		}

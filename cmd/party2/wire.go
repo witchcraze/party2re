@@ -53,8 +53,8 @@ func wireApp(
 	}
 	soc.home.SetCompanionPhraseLimit(cfg.Home.CompanionPhraseLimit)
 	soc.home.SetLetterLimits(cfg.Home.LetterLogLimit, cfg.Home.LetterMaxLength)
-	soc.park.SetLimits(cfg.Park.PostLogLimit, cfg.Park.PostMaxLength)
 	soc.placeLog = placelog.New(valkeyClient, cfg.PlaceLog)
+	soc.placeMembers = placelog.NewMembers(valkeyClient, cfg.PlaceMemberTTL)
 	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
 	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, soc.exileRepo, referrals.DeliverReferral, cfg.Player.MaxPlayers, logger); err != nil {
 		return nil, err
@@ -304,6 +304,11 @@ func newHTTPHandler(
 	if soc.placeLog != nil {
 		opts = append(opts, http.WithPlaceLog(soc.placeLog), http.WithCharacterNames(core.charRepo))
 	}
+	var players http.PlayerService = core.playerService
+	if soc.placeMembers != nil {
+		opts = append(opts, http.WithPlaceMembers(soc.placeMembers))
+		players = placeMemberLogout{PlayerService: core.playerService, characters: core.charRepo, members: soc.placeMembers}
+	}
 	pc := newPlayerContext(core, soc, econ, cmbt, misc, playercontext.WithActionWait(soc.timer, cfg.ActionWait))
 	if soc.schedRepo != nil {
 		opts = append(opts, http.WithPlayerContext(pc))
@@ -313,7 +318,6 @@ func newHTTPHandler(
 		http.WithRescue(misc.rescue),
 		http.WithExile(soc.exile),
 		http.WithMedal(misc.medal),
-		http.WithPark(soc.park),
 		http.WithRanking(soc.ranking),
 		http.WithJob(misc.job),
 		http.WithChapel(misc.chapel),
@@ -354,7 +358,7 @@ func newHTTPHandler(
 		http.WithMaintenance(misc.maint),
 	)
 
-	return http.NewHandler(core.playerService, core.charService, cmbt.adv, econ.shop, opts...)
+	return http.NewHandler(players, core.charService, cmbt.adv, econ.shop, opts...)
 }
 
 type monsterTamerAdapter struct {

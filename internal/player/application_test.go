@@ -13,9 +13,32 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
+
+const testPlayerPassword = "testpassword123"
+
+// prehashedPlayerTemplate hashes testPlayerPassword once at production bcrypt cost
+// for stub unit tests that need a valid player fixture without testing hash generation.
+var prehashedPlayerTemplate = sync.OnceValues(func() (coreplayer.Player, error) {
+	return coreplayer.New("template", testPlayerPassword, time.Now())
+})
+
+func newPrehashedTestPlayer(t *testing.T, username string, now time.Time) coreplayer.Player {
+	t.Helper()
+	p, err := prehashedPlayerTemplate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.ID = id.New()
+	p.Username = username
+	p.CreatedAt = now
+	p.UpdatedAt = now
+	p.BannedAt = nil
+	return p
+}
 
 type playerRepositoryStub struct {
 	mu             sync.Mutex
@@ -162,6 +185,7 @@ func (r *sessionRepositoryStub) DeleteByPlayerID(context.Context, string) error 
 }
 
 func TestRegisterLogsStructuredSafeOperation(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	logger := logging.NewJSON(&output)
 	service, err := NewService(&playerRepositoryStub{}, &sessionRepositoryStub{}, WithLogger(logger))
@@ -193,10 +217,8 @@ func TestRegisterLogsStructuredSafeOperation(t *testing.T) {
 }
 
 func TestLoginFailureDoesNotLogAuthenticationValues(t *testing.T) {
-	value, err := coreplayer.New("alice", "password-value", time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Parallel()
+	value := newPrehashedTestPlayer(t, "alice", time.Now())
 	var output bytes.Buffer
 	logger := logging.NewJSON(&output)
 	service, err := NewService(&playerRepositoryStub{value: value}, &sessionRepositoryStub{}, WithLogger(logger))
@@ -211,7 +233,7 @@ func TestLoginFailureDoesNotLogAuthenticationValues(t *testing.T) {
 	if !strings.Contains(logOutput, `"operation":"player.login"`) {
 		t.Fatalf("log does not contain operation: %s", logOutput)
 	}
-	for _, secret := range []string{"wrong-password", "password-value"} {
+	for _, secret := range []string{"wrong-password", testPlayerPassword} {
 		if strings.Contains(logOutput, secret) {
 			t.Fatalf("log contains authentication value %q: %s", secret, logOutput)
 		}
@@ -222,6 +244,7 @@ func TestLoginFailureDoesNotLogAuthenticationValues(t *testing.T) {
 }
 
 func TestLogoutDoesNotLogSessionValue(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	logger := logging.NewJSON(&output)
 	service, err := NewService(&playerRepositoryStub{}, &sessionRepositoryStub{}, WithLogger(logger))
@@ -238,17 +261,15 @@ func TestLogoutDoesNotLogSessionValue(t *testing.T) {
 }
 
 func TestLoginSuccessCreatesActiveSession(t *testing.T) {
-	player, err := coreplayer.New("bob", "correct-password", time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Parallel()
+	player := newPrehashedTestPlayer(t, "bob", time.Now())
 	sessions := &sessionRepositoryStub{}
 	service, err := NewService(&playerRepositoryStub{value: player}, sessions)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	session, err := service.Login(context.Background(), "bob", "correct-password")
+	session, err := service.Login(context.Background(), "bob", testPlayerPassword)
 	if err != nil {
 		t.Fatalf("Login() unexpected error: %v", err)
 	}
@@ -258,10 +279,8 @@ func TestLoginSuccessCreatesActiveSession(t *testing.T) {
 }
 
 func TestAuthenticateReturnsPlayerForActiveSession(t *testing.T) {
-	player, err := coreplayer.New("carol", "pass", time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Parallel()
+	player := newPrehashedTestPlayer(t, "carol", time.Now())
 	sessions := &sessionRepositoryStub{}
 	service, err := NewService(&playerRepositoryStub{value: player}, sessions)
 	if err != nil {
@@ -269,7 +288,7 @@ func TestAuthenticateReturnsPlayerForActiveSession(t *testing.T) {
 	}
 
 	// Login to create a real active session.
-	session, err := service.Login(context.Background(), "carol", "pass")
+	session, err := service.Login(context.Background(), "carol", testPlayerPassword)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +303,8 @@ func TestAuthenticateReturnsPlayerForActiveSession(t *testing.T) {
 }
 
 func TestAuthenticateRejectsExpiredSession(t *testing.T) {
-	player, _ := coreplayer.New("dave", "pass", time.Now())
+	t.Parallel()
+	player := newPrehashedTestPlayer(t, "dave", time.Now())
 	sessions := &sessionRepositoryStub{}
 	service, err := NewService(&playerRepositoryStub{value: player}, sessions)
 	if err != nil {
@@ -351,7 +371,8 @@ func (t *txProviderStub) RunInTx(ctx context.Context, fn func(ctx context.Contex
 }
 
 func TestDeleteAccount(t *testing.T) {
-	player, _ := coreplayer.New("eve", "correctpassword", time.Now())
+	t.Parallel()
+	player := newPrehashedTestPlayer(t, "eve", time.Now())
 	players := &playerRepositoryStub{value: player}
 	sessions := &sessionRepositoryStub{
 		value: coreplayer.Session{ID: "sess-eve", PlayerID: player.ID},
@@ -370,7 +391,7 @@ func TestDeleteAccount(t *testing.T) {
 	})
 
 	t.Run("successfully deletes account with correct password", func(t *testing.T) {
-		err := service.DeleteAccount(context.Background(), player.ID, "correctpassword")
+		err := service.DeleteAccount(context.Background(), player.ID, testPlayerPassword)
 		if err != nil {
 			t.Fatalf("DeleteAccount failed: %v", err)
 		}
@@ -464,8 +485,9 @@ func (r *apiTokenRepositoryStub) DeleteByPlayerID(_ context.Context, playerID st
 }
 
 func TestAPITokenServiceLifecycleAndDualAuthentication(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
-	player, _ := coreplayer.New("bob", "password123", now)
+	player := newPrehashedTestPlayer(t, "bob", now)
 	players := &playerRepositoryStub{value: player}
 	sessions := &sessionRepositoryStub{
 		value: coreplayer.Session{ID: "sess-bob", PlayerID: player.ID, ExpiresAt: now.Add(24 * time.Hour)},
@@ -546,7 +568,7 @@ func TestAPITokenServiceLifecycleAndDualAuthentication(t *testing.T) {
 	}
 
 	// 8. DeleteAccount deletes the player row (SQL also removes its tokens) and then its sessions
-	if err := service.DeleteAccount(ctx, player.ID, "password123"); err != nil {
+	if err := service.DeleteAccount(ctx, player.ID, testPlayerPassword); err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
 	if players.value.ID != "" || sessions.value.ID != "" {
@@ -555,6 +577,7 @@ func TestAPITokenServiceLifecycleAndDualAuthentication(t *testing.T) {
 }
 
 func TestNewServiceValidation(t *testing.T) {
+	t.Parallel()
 	players := &playerRepositoryStub{}
 	sessions := &sessionRepositoryStub{}
 
@@ -600,6 +623,7 @@ func TestNewServiceValidation(t *testing.T) {
 }
 
 func TestRegisterErrorBranches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("invalid username returns error", func(t *testing.T) {
@@ -695,6 +719,7 @@ func TestRegisterErrorBranches(t *testing.T) {
 }
 
 func TestRegisterPopulationLimit_ConcurrentStress(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	initialPlayers := []coreplayer.Player{
 		{ID: "p1", Username: "existing1"},
@@ -742,28 +767,31 @@ func TestRegisterPopulationLimit_ConcurrentStress(t *testing.T) {
 }
 
 func TestLoginErrorBranches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
-	player, _ := coreplayer.New("alice", "password123", time.Now())
+	player := newPrehashedTestPlayer(t, "alice", time.Now())
 
 	t.Run("sessions.Save returns error", func(t *testing.T) {
+		t.Parallel()
 		expectedErr := errors.New("valkey save error")
 		players := &playerRepositoryStub{value: player}
 		sessions := &sessionRepositoryStub{saveErr: expectedErr}
 		svc, _ := NewService(players, sessions)
 
-		_, err := svc.Login(ctx, "alice", "password123")
+		_, err := svc.Login(ctx, "alice", testPlayerPassword)
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("expected error %v, got %v", expectedErr, err)
 		}
 	})
 
 	t.Run("session creation error when player id is empty", func(t *testing.T) {
+		t.Parallel()
 		emptyIDPlayer := player
 		emptyIDPlayer.ID = ""
 		players := &playerRepositoryStub{value: emptyIDPlayer}
 		svc, _ := NewService(players, &sessionRepositoryStub{})
 
-		_, err := svc.Login(ctx, "alice", "password123")
+		_, err := svc.Login(ctx, "alice", testPlayerPassword)
 		if !errors.Is(err, coreplayer.ErrInvalidSession) {
 			t.Fatalf("expected ErrInvalidSession, got %v", err)
 		}
@@ -771,6 +799,7 @@ func TestLoginErrorBranches(t *testing.T) {
 }
 
 func TestLogoutErrorBranches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	expectedErr := errors.New("valkey revoke error")
 	sessions := &sessionRepositoryStub{revokeErr: expectedErr}
@@ -783,6 +812,7 @@ func TestLogoutErrorBranches(t *testing.T) {
 }
 
 func TestAuthenticateErrorBranches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	now := time.Now()
 
@@ -838,6 +868,7 @@ func TestAuthenticateErrorBranches(t *testing.T) {
 }
 
 func TestAPITokenServiceErrorBranches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("methods return error when repository is nil", func(t *testing.T) {
@@ -895,29 +926,33 @@ func TestAPITokenServiceErrorBranches(t *testing.T) {
 }
 
 func TestDeleteAccountErrorBranches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
-	player, _ := coreplayer.New("eve", "password", time.Now())
+	player := newPrehashedTestPlayer(t, "eve", time.Now())
 
 	t.Run("empty playerID returns error", func(t *testing.T) {
+		t.Parallel()
 		svc, _ := NewService(&playerRepositoryStub{}, &sessionRepositoryStub{})
-		err := svc.DeleteAccount(ctx, "   ", "password")
+		err := svc.DeleteAccount(ctx, "   ", testPlayerPassword)
 		if err == nil || !strings.Contains(err.Error(), "player ID is required") {
 			t.Fatalf("expected player ID required error, got %v", err)
 		}
 	})
 
 	t.Run("players.FindByID returns error", func(t *testing.T) {
+		t.Parallel()
 		expectedErr := errors.New("player not found in db")
 		players := &playerRepositoryStub{findByIDErr: expectedErr}
 		svc, _ := NewService(players, &sessionRepositoryStub{})
 
-		err := svc.DeleteAccount(ctx, "player-1", "password")
+		err := svc.DeleteAccount(ctx, "player-1", testPlayerPassword)
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("expected %v, got %v", expectedErr, err)
 		}
 	})
 
 	t.Run("character deletion failure returns error", func(t *testing.T) {
+		t.Parallel()
 		players := &playerRepositoryStub{value: player}
 		expectedErr := errors.New("char delete failed")
 		chars := &charServiceStub{
@@ -927,7 +962,7 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 		sessions := &sessionRepositoryStub{value: coreplayer.Session{ID: "s1", PlayerID: player.ID}}
 		svc, _ := NewService(players, sessions, WithCharacterService(chars))
 
-		err := svc.DeleteAccount(ctx, player.ID, "password")
+		err := svc.DeleteAccount(ctx, player.ID, testPlayerPassword)
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("expected %v, got %v", expectedErr, err)
 		}
@@ -937,6 +972,7 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 	})
 
 	t.Run("session invalidation errors after commit are logged but not blocking", func(t *testing.T) {
+		t.Parallel()
 		players := &playerRepositoryStub{value: player}
 		sessions := &sessionRepositoryStub{deleteByIDErr: errors.New("valkey del error")}
 		chars := &charServiceStub{
@@ -945,7 +981,7 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 
 		svc, _ := NewService(players, sessions, WithCharacterService(chars))
 
-		err := svc.DeleteAccount(ctx, player.ID, "password")
+		err := svc.DeleteAccount(ctx, player.ID, testPlayerPassword)
 		if err != nil {
 			t.Fatalf("expected success despite non-fatal warnings, got %v", err)
 		}
@@ -955,13 +991,14 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 	})
 
 	t.Run("players.Delete in transaction returns error", func(t *testing.T) {
+		t.Parallel()
 		expectedErr := errors.New("tx player delete failed")
 		players := &playerRepositoryStub{value: player, deleteErr: expectedErr}
 		tx := &txProviderStub{}
 		sessions := &sessionRepositoryStub{value: coreplayer.Session{ID: "s1", PlayerID: player.ID}}
 		svc, _ := NewService(players, sessions, WithTransactionProvider(tx))
 
-		err := svc.DeleteAccount(ctx, player.ID, "password")
+		err := svc.DeleteAccount(ctx, player.ID, testPlayerPassword)
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("expected %v, got %v", expectedErr, err)
 		}
@@ -975,12 +1012,10 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 }
 
 func TestService_BanPlayer_And_BannedLogin(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	now := time.Now()
-	p, err := coreplayer.New("bob", "password", now)
-	if err != nil {
-		t.Fatal(err)
-	}
+	p := newPrehashedTestPlayer(t, "bob", now)
 
 	players := &playerRepositoryStub{value: p}
 	sessions := &sessionRepositoryStub{}
@@ -1004,7 +1039,7 @@ func TestService_BanPlayer_And_BannedLogin(t *testing.T) {
 	}
 
 	// Successful login with IP
-	sess, err := svc.Login(ctx, "bob", "password", "127.0.0.1")
+	sess, err := svc.Login(ctx, "bob", testPlayerPassword, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("Login failed: %v", err)
 	}
@@ -1062,7 +1097,7 @@ func TestService_BanPlayer_And_BannedLogin(t *testing.T) {
 	players.findByIDErr = nil
 
 	// Login rejected with ErrPlayerBanned
-	if _, err := svc.Login(ctx, "bob", "password"); !errors.Is(err, coreplayer.ErrPlayerBanned) {
+	if _, err := svc.Login(ctx, "bob", testPlayerPassword); !errors.Is(err, coreplayer.ErrPlayerBanned) {
 		t.Fatalf("expected ErrPlayerBanned, got %v", err)
 	}
 
@@ -1080,11 +1115,9 @@ func TestService_BanPlayer_And_BannedLogin(t *testing.T) {
 }
 
 func TestService_BanPlayerFailsWithoutInvalidatingSessions(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
-	p, err := coreplayer.New("bob", "password", time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	p := newPrehashedTestPlayer(t, "bob", time.Now())
 	cleanupErr := errors.New("guild cleanup failed")
 	for name, deps := range map[string]struct {
 		chars   *charServiceStub
@@ -1095,6 +1128,7 @@ func TestService_BanPlayerFailsWithoutInvalidatingSessions(t *testing.T) {
 		"listing":       {&charServiceStub{findErr: cleanupErr}, &guildMembershipCleanerStub{}, cleanupErr},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			tx := &txProviderStub{}
 			sessions := &sessionRepositoryStub{value: coreplayer.Session{ID: "s1", PlayerID: p.ID}}
 			svc, _ := NewService(&playerRepositoryStub{value: p}, sessions,
@@ -1110,10 +1144,11 @@ func TestService_BanPlayerFailsWithoutInvalidatingSessions(t *testing.T) {
 }
 
 func TestService_ListPlayers(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	now := time.Now()
-	p1, _ := coreplayer.New("alice", "pass", now)
-	p2, _ := coreplayer.New("bob", "pass", now)
+	p1 := newPrehashedTestPlayer(t, "alice", now)
+	p2 := newPrehashedTestPlayer(t, "bob", now)
 
 	players := &playerRepositoryStub{players: []coreplayer.Player{p1, p2}}
 	svc, err := NewService(players, &sessionRepositoryStub{})

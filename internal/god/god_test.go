@@ -3,7 +3,6 @@ package god_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -15,6 +14,9 @@ import (
 type mockCharacterRepo struct {
 	mu         sync.RWMutex
 	characters map[string]corecharacter.Character
+	// admit, when set, re-admits every locked read so catalog tests can grant
+	// several wishes; admission tests leave it empty.
+	admit god.Realm
 }
 
 func newMockCharacterRepo() *mockCharacterRepo {
@@ -34,7 +36,11 @@ func (m *mockCharacterRepo) FindByID(ctx context.Context, id string) (corecharac
 }
 
 func (m *mockCharacterRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
-	return m.FindByID(ctx, id)
+	c, err := m.FindByID(ctx, id)
+	if err == nil && m.admit != "" {
+		c.GodVisit = string(m.admit)
+	}
+	return c, err
 }
 
 func (m *mockCharacterRepo) Update(ctx context.Context, character corecharacter.Character) error {
@@ -230,6 +236,7 @@ func TestGod_GetWishes_Underworld(t *testing.T) {
 
 func TestGod_GrantWish_Heaven(t *testing.T) {
 	repo := newMockCharacterRepo()
+	repo.admit = god.RealmHeaven
 	svc, err := god.NewService(repo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -256,7 +263,7 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 	}
 	repo.characters[char.ID] = char
 
-	resStats, err := svc.GrantWish(ctx, "char_hero", "wish_stats", god.RealmHeaven)
+	resStats, err := svc.GrantWish(ctx, "char_hero", "wish_stats")
 	if err != nil {
 		t.Fatalf("GrantWish stats failed: %v", err)
 	}
@@ -271,7 +278,7 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 	}
 
 	// 2. Money wish
-	resMoney, err := svc.GrantWish(ctx, "char_hero", "wish_money", god.RealmHeaven)
+	resMoney, err := svc.GrantWish(ctx, "char_hero", "wish_money")
 	if err != nil {
 		t.Fatalf("GrantWish money failed: %v", err)
 	}
@@ -280,7 +287,7 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 	}
 
 	// 3. Small medals wish
-	resMedals, err := svc.GrantWish(ctx, "char_hero", "wish_small_medals", god.RealmHeaven)
+	resMedals, err := svc.GrantWish(ctx, "char_hero", "wish_small_medals")
 	if err != nil {
 		t.Fatalf("GrantWish small medals failed: %v", err)
 	}
@@ -290,13 +297,13 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 
 	// 4. The non-legacy refresh alias and the unreachable secret maid wish are rejected
 	for _, id := range []string{"wish_full_recovery", "wish_secret_maid"} {
-		if _, err := svc.GrantWish(ctx, "char_hero", id, god.RealmHeaven); !errors.Is(err, god.ErrWishNotFound) {
+		if _, err := svc.GrantWish(ctx, "char_hero", id); !errors.Is(err, god.ErrWishNotFound) {
 			t.Errorf("expected ErrWishNotFound for %s, got %v", id, err)
 		}
 	}
 
 	// 5. Limit break level (fail if < 99)
-	_, err = svc.GrantWish(ctx, "char_hero", "wish_limit_break_level", god.RealmHeaven)
+	_, err = svc.GrantWish(ctx, "char_hero", "wish_limit_break_level")
 	if !errors.Is(err, god.ErrWishRequirement) {
 		t.Errorf("expected ErrWishRequirement for Lv50 char, got %v", err)
 	}
@@ -308,7 +315,7 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 		JobID: "job-01",
 	}
 	repo.characters[char.ID] = char
-	_, err = svc.GrantWish(ctx, "char_hero", "wish_limit_break_level", god.RealmHeaven)
+	_, err = svc.GrantWish(ctx, "char_hero", "wish_limit_break_level")
 	if !errors.Is(err, god.ErrWishRequirement) {
 		t.Errorf("expected ErrWishRequirement for temporary JobMemory, got %v", err)
 	}
@@ -319,7 +326,7 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 		JobID: "job-01",
 	}
 	repo.characters[char.ID] = char
-	resLimit, err := svc.GrantWish(ctx, "char_hero", "wish_limit_break_level", god.RealmHeaven)
+	resLimit, err := svc.GrantWish(ctx, "char_hero", "wish_limit_break_level")
 	if err != nil {
 		t.Fatalf("GrantWish limit break failed for Lv99 with persistent JobMemory: %v", err)
 	}
@@ -328,13 +335,13 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 	}
 
 	// 6. Stats wish fails when OverLevel
-	_, err = svc.GrantWish(ctx, "char_hero", "wish_stats", god.RealmHeaven)
+	_, err = svc.GrantWish(ctx, "char_hero", "wish_stats")
 	if !errors.Is(err, god.ErrWishRequirement) {
 		t.Errorf("expected ErrWishRequirement for stats wish when OverLevel, got %v", err)
 	}
 
 	// 7. Restore level limit
-	resRestore, err := svc.GrantWish(ctx, "char_hero", "wish_restore_level_limit", god.RealmHeaven)
+	resRestore, err := svc.GrantWish(ctx, "char_hero", "wish_restore_level_limit")
 	if err != nil {
 		t.Fatalf("GrantWish restore level limit failed: %v", err)
 	}
@@ -343,7 +350,7 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 	}
 
 	// 8. Lover joke wish
-	resLover, err := svc.GrantWish(ctx, "char_hero", "wish_lover", god.RealmHeaven)
+	resLover, err := svc.GrantWish(ctx, "char_hero", "wish_lover")
 	if err != nil {
 		t.Fatalf("GrantWish lover failed: %v", err)
 	}
@@ -355,6 +362,7 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 
 func TestGod_GrantWish_Underworld(t *testing.T) {
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmUnderworld
 	depotRepo := newMockDepotRepo()
 
 	svc, err := god.NewService(charRepo, god.WithDepotRepository(depotRepo))
@@ -372,7 +380,7 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 
 	// 1. Expand depot 5 times
 	for tier := 1; tier <= 5; tier++ {
-		res, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_depot", god.RealmUnderworld)
+		res, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_depot")
 		if err != nil {
 			t.Fatalf("tier %d depot expand failed: %v", tier, err)
 		}
@@ -388,13 +396,13 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 	}
 
 	// 6th time -> fails (maxed)
-	_, err = svc.GrantWish(ctx, "char_underworld", "wish_expand_depot", god.RealmUnderworld)
+	_, err = svc.GrantWish(ctx, "char_underworld", "wish_expand_depot")
 	if !errors.Is(err, god.ErrLimitBreakMaxed) {
 		t.Errorf("expected ErrLimitBreakMaxed on 6th expand, got %v", err)
 	}
 
 	// 2. Expand flea market
-	resFlea, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_flea_market", god.RealmUnderworld)
+	resFlea, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_flea_market")
 	if err != nil {
 		t.Fatalf("expand flea market failed: %v", err)
 	}
@@ -403,7 +411,7 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 	}
 
 	// 3. Expand monster
-	resMon, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_monster", god.RealmUnderworld)
+	resMon, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_monster")
 	if err != nil {
 		t.Fatalf("expand monster failed: %v", err)
 	}
@@ -418,7 +426,7 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 	}
 
 	// 4. Expand job memory
-	resJob, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_job_memory", god.RealmUnderworld)
+	resJob, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_job_memory")
 	if err != nil {
 		t.Fatalf("expand job memory failed: %v", err)
 	}
@@ -427,62 +435,11 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 	}
 
 	// 5. Expand shop store
-	resStore, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_shop_store", god.RealmUnderworld)
+	resStore, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_shop_store")
 	if err != nil {
 		t.Fatalf("expand shop store failed: %v", err)
 	}
 	if resStore.Character.OverStore != 1 {
 		t.Errorf("expected OverStore 1, got %d", resStore.Character.OverStore)
-	}
-}
-
-func TestGod_Dialogue(t *testing.T) {
-	repo := newMockCharacterRepo()
-	svc, _ := god.NewService(repo)
-
-	hLines := svc.GetDialogue(god.RealmHeaven)
-	if len(hLines) == 0 {
-		t.Error("expected non-empty dialogue for heaven")
-	}
-
-	uLines := svc.GetDialogue(god.RealmUnderworld)
-	if len(uLines) == 0 {
-		t.Error("expected non-empty dialogue for underworld")
-	}
-}
-
-func TestGod_Concurrency(t *testing.T) {
-	repo := newMockCharacterRepo()
-	svc, _ := god.NewService(repo)
-
-	const workerCount = 20
-	errChan := make(chan error, workerCount)
-
-	for i := 0; i < workerCount; i++ {
-		charID := fmt.Sprintf("char_worker_%d", i)
-		char := corecharacter.Character{ID: charID, Name: "Worker", Money: 1000}
-		repo.characters[charID] = char
-	}
-
-	for i := 0; i < workerCount; i++ {
-		go func(workerID int) {
-			charID := fmt.Sprintf("char_worker_%d", workerID)
-			res, err := svc.GrantWish(context.Background(), charID, "wish_money", god.RealmHeaven)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			if res.Character.Money != 101000 {
-				errChan <- errors.New("unexpected money after wish")
-				return
-			}
-			errChan <- nil
-		}(i)
-	}
-
-	for i := 0; i < workerCount; i++ {
-		if err := <-errChan; err != nil {
-			t.Errorf("worker failed: %v", err)
-		}
 	}
 }

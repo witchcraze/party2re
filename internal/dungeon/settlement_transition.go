@@ -21,7 +21,6 @@ func (s *Service) freezeExpedition(ctx context.Context, exp *ActiveExpedition, s
 		ExpectedRevision:     &exp.Revision,
 		FinishStatus:         status,
 		Combat:               true,
-		NewFloor:             exp.CurrentFloor,
 		NewX:                 exp.PosX,
 		NewY:                 exp.PosY,
 		Now:                  time.Now().UTC(),
@@ -65,12 +64,6 @@ func (s *Service) resumeSettlement(ctx context.Context, exp *ActiveExpedition) (
 		return s.handleEscape(ctx, exp, &char, "探索を中断し、戦利品を持って無事に脱出した！")
 	case StatusWipedOut:
 		return s.handleWipeout(ctx, exp, &char, "探索に失敗した…")
-	case StatusCleared:
-		dungeon, ok := s.dungeonMap[exp.DungeonID]
-		if !ok {
-			return ExpeditionStepResult{}, ErrDungeonNotFound
-		}
-		return s.handleDungeonClear(ctx, exp, &char, dungeon)
 	default:
 		return ExpeditionStepResult{}, ErrNoActiveExpedition
 	}

@@ -214,18 +214,6 @@ var defaultFertilizers = []Fertilizer{
 	},
 }
 
-var DefaultLotusDialogues = []string{
-	"種をまいて何ができるかはお楽しみ〜♪",
-	"一日経つと収穫できるんだ",
-	"肥料をまくと良いものが収穫できたり、たくさん芽が出るよ！",
-	"肥料によっては枯れやすくなるかも…",
-	"肥料に使えるアイテムもあるみたいだよ",
-	"どの種をまこうか？",
-	"種によって採れるものが変わるよ！",
-	"今日は赤の種がおすすめだよ！",
-	"肥料はこめぬかをまくのはどうかな？",
-}
-
 // AllSeeds returns a copy of all available seed definitions.
 func AllSeeds() []Seed {
 	res := make([]Seed, len(defaultSeeds))

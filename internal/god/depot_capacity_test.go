@@ -36,6 +36,7 @@ func (m *errDepotRepo) Save(_ context.Context, dep depot.Depot) error {
 func TestGod_UnderworldDepot_PreservesJobLevelCapacity(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmUnderworld
 	depotRepo := newMockDepotRepo()
 
 	char := corecharacter.Character{
@@ -60,7 +61,7 @@ func TestGod_UnderworldDepot_PreservesJobLevelCapacity(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	res, err := svc.GrantWish(ctx, char.ID, god.WishExpandDepot, god.RealmUnderworld)
+	res, err := svc.GrantWish(ctx, char.ID, god.WishExpandDepot)
 	if err != nil {
 		t.Fatalf("GrantWish failed: %v", err)
 	}
@@ -86,6 +87,7 @@ func TestGod_UnderworldDepot_PreservesJobLevelCapacity(t *testing.T) {
 func TestGod_UnderworldDepot_PropagatesSaveError(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmUnderworld
 
 	char := corecharacter.Character{
 		ID:        "char_err",
@@ -107,7 +109,7 @@ func TestGod_UnderworldDepot_PropagatesSaveError(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	_, err = svc.GrantWish(ctx, char.ID, god.WishExpandDepot, god.RealmUnderworld)
+	_, err = svc.GrantWish(ctx, char.ID, god.WishExpandDepot)
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("expected saveErr %v, got %v", saveErr, err)
 	}
@@ -116,6 +118,7 @@ func TestGod_UnderworldDepot_PropagatesSaveError(t *testing.T) {
 func TestGod_UnderworldDepot_CreatesNewDepotIfNotFound(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmUnderworld
 
 	char := corecharacter.Character{
 		ID:        "char_new",
@@ -134,7 +137,7 @@ func TestGod_UnderworldDepot_CreatesNewDepotIfNotFound(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	res, err := svc.GrantWish(ctx, char.ID, god.WishExpandDepot, god.RealmUnderworld)
+	res, err := svc.GrantWish(ctx, char.ID, god.WishExpandDepot)
 	if err != nil {
 		t.Fatalf("GrantWish failed: %v", err)
 	}
@@ -151,6 +154,7 @@ func TestGod_UnderworldDepot_CreatesNewDepotIfNotFound(t *testing.T) {
 func TestGod_HeavenDepot_RefreshesCapacityWithJobLevel(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
+	charRepo.admit = god.RealmHeaven
 	depotRepo := newMockDepotRepo()
 
 	char := corecharacter.Character{
@@ -176,7 +180,7 @@ func TestGod_HeavenDepot_RefreshesCapacityWithJobLevel(t *testing.T) {
 	}
 
 	// 1. WishEroticBook refreshes capacity
-	_, err = svc.GrantWish(ctx, char.ID, god.WishEroticBook, god.RealmHeaven)
+	_, err = svc.GrantWish(ctx, char.ID, god.WishEroticBook)
 	if err != nil {
 		t.Fatalf("GrantWish WishEroticBook failed: %v", err)
 	}
@@ -206,7 +210,7 @@ func TestGod_HeavenDepot_RefreshesCapacityWithJobLevel(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	_, err = svc2.GrantWish(ctx, char2.ID, god.WishAlchemyRecipe, god.RealmHeaven)
+	_, err = svc2.GrantWish(ctx, char2.ID, god.WishAlchemyRecipe)
 	if err != nil {
 		t.Fatalf("GrantWish WishAlchemyRecipe failed: %v", err)
 	}

@@ -4,7 +4,7 @@ The Black Market (`internal/blackmarket`, legacy `party2/lib/black_market.cgi`, 
 
 ## Access
 
-Legacy `闇市場` is reachable only through the Oracle's hidden `＠やみいちば` action, which returns without moving the character below `job_lv` 15 (`lib/goods.cgi:51–56`). `CheckEligibility` applies the same threshold to scene entry, town discovery, the two commands and the retained NPC operations; rejected operations return `ErrAccessDenied` without moving assets.
+Legacy `闇市場` is reachable only through the Oracle's hidden `＠やみいちば` action, which returns without moving the character below `job_lv` 15 (`lib/goods.cgi:51–56`). The scene's parent is therefore the Oracle shop, not the town list; `oracle_blackmarket` enters it. `CheckEligibility` applies the same threshold to scene entry, the two commands and the retained NPC operations; rejected operations return `ErrAccessDenied` without moving assets.
 
 ## Gateway and Retained Routes
 

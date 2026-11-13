@@ -7,17 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/auction"
-	"github.com/witchcraze/party2re/internal/bank"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
-	"github.com/witchcraze/party2re/internal/secretshop"
-	"github.com/witchcraze/party2re/internal/shop"
 )
 
 // Legacy NPC presentation (lib/system.cgi:240-246,322-328,413; facility $npc_name,
@@ -29,59 +26,12 @@ const (
 )
 
 type npcProfile struct {
-	name    string
-	words   []string
-	inspect string // empty: npcInspectDefault
-}
-
-func shopNPC(kind shop.ShopType, inspect string) npcProfile {
-	_, name := shop.GetShopMeta(kind)
-	if inspect != "" {
-		inspect = name + "「" + inspect + "」"
-	}
-	return npcProfile{name: name, words: shop.GetShopWords(kind), inspect: inspect}
-}
-
-// npcProfiles is keyed by scene destination. Lines with item recommendations or
-// capacities ($gems/$ites/$max_depot) are omitted until those facts are wired.
-var npcProfiles = map[string]npcProfile{
-	"auction": {name: auction.NPCName, words: []string{ // auction.cgi @words
-		"ここはオークション会場です。他のプレイヤーとアイテム交換やアイテム売買をする場所です。",
-		"入札や出品のようなシステムはないです。自由に競りをしてください。",
-		"相手が実際にそのアイテムや落札金を持っているのか「＠しらべる」で見ることができます。",
-	}},
-	"bank":           {name: bank.NPCName, words: bank.NPCDialogues},
-	"blackmarket":    {name: "@闇商人", words: blackMarketTalkDialogues, inspect: "…お前の魂で取引したいのか？"},
-	"secretshop":     {name: secretshop.NPCName, words: secretshop.DefaultTalkDialogues, inspect: secretshop.InspectDialogue},
-	"shop_weapon":    shopNPC(shop.ShopTypeWeapon, "おいおい、俺は武器じゃねぇぜ"),
-	"shop_armor":     shopNPC(shop.ShopTypeArmor, "な、な、何を見ているッスか！？"),
-	"shop_item":      shopNPC(shop.ShopTypeItem, "ほえ？なんでしょうかぁ？"),
-	"shop_accessory": shopNPC(shop.ShopTypeAccessory, ""),
-	"gemstore": {name: "@ジェマ", words: []string{
-		"ここは宝石店です。色んな宝石を売っています", "どんな宝石がお好きですか？",
-		"アイテムや宝石を使って、新しい宝石に加工することもできますよ", "宝石ごとに不思議な力があるんです",
-	}},
-	"blacksmith": {name: "@ブッキー", words: []string{
-		"ここは鍛冶屋だ！武器を強化できるぜ！", "武器に刻印するには刻印晶がいるぜ！", "武器を預けたりすると、刻印は消えちまうぜ",
-	}},
-	"alchemy": {name: "@トロデ", words: []string{
-		"２つのアイテムを錬金することで新たなアイテムを作ることができるぞい", "錬金レシピを使うことで錬金することが可能になるぞい",
-		"錬金したアイテムの完成は、お主が寝て起きた次の日には完成しているじゃろう", "錬金で作ることでしか手に入らない武器や防具があるそうじゃ・・・",
-		"錬金レシピは習得済み以外のものを習得することができるぞい",
-	}, inspect: "@トロデ「いやん。どこをさわっとるんじゃっ！」"},
-	"depot": {name: "@ニキータ", words: []string{
-		"ここは預かり所だけど、何か用かい？", "転職回数が増えるごとに預けられる個数も増えていくぜ",
-		"＠おくる時は、送るアイテムと相手の名前を教えてくれな", "＠せいとんすると、武器、防具、道具の順に整頓できるぜ",
-		"預かり所がまんぱんだと、相手からのアイテムが受け取れないぜ", "預かり所がまんぱんだと、クエストでの宝物を手に入れることができないぜ",
-		"ここで売るのも専門店で売るのも売値は変わらないぜ",
-	}},
-	"fleamarket": {name: "@FMGKDP", words: []string{
-		"ここはフリーマーケットだ。物の売り買いができるぜ", "物の価値は人それぞれだ。思いのほか良い物があるかもな",
-		"１人で出せる品は限りがあるから気をつけな", "俺の名前を知らないようじゃピヨッコだ",
-	}},
-	"chapel": {name: "@シスター", words: []string{
-		"{name}に神のご加護があらんことを", "待つだけでは祈りは叶いません…", "{name}が力を尽くすとき、祈りは叶うことでしょう",
-	}},
+	name         string
+	words        []string
+	wordsOf      func(*Handler, context.Context, corecharacter.Character) ([]string, error) // replaces words built from live facts
+	inspect      string                                                                     // empty: npcInspectDefault
+	inspectWords []string                                                                   // inspection answered by ＠はなす: logged publicly
+	silent       bool                                                                       // inspection prints nothing (an empty shiraberu_npc)
 }
 
 // NPCResult is the NPC's reply. Private replies are shown only to the actor and
@@ -120,6 +70,9 @@ func (h *Handler) registerNPC(service *playercontext.Service) {
 		"secretshop_puffpuff": func(ctx context.Context, owner, actor string) (NPCResult, error) {
 			return h.puffPuff(ctx, service, owner, actor)
 		},
+		"park_divinate": func(ctx context.Context, owner, actor string) (NPCResult, error) {
+			return h.divinate(ctx, service, owner, actor)
+		},
 	}
 	for id, act := range acts {
 		def, _ := playercontext.GetAction(id)
@@ -156,14 +109,14 @@ func (h *Handler) currentScene(ctx context.Context, service *playercontext.Servi
 }
 
 // currentNPC resolves the NPC of the owner's current, still qualified facility.
-func (h *Handler) currentNPC(ctx context.Context, service *playercontext.Service, owner, actor string) (string, npcProfile, corecharacter.Character, error) {
+func (h *Handler) currentNPC(ctx context.Context, service *playercontext.Service, owner, actor string) (string, *npcProfile, corecharacter.Character, error) {
 	destination, char, ok, err := h.currentScene(ctx, service, owner, actor)
 	if err != nil {
-		return "", npcProfile{}, corecharacter.Character{}, err
+		return "", nil, corecharacter.Character{}, err
 	}
-	npc, found := npcProfiles[destination]
-	if !ok || !found {
-		return "", npcProfile{}, corecharacter.Character{}, errNPCUnavailable
+	npc := h.sceneAdapters[destination].npc
+	if !ok || npc == nil {
+		return "", nil, corecharacter.Character{}, errNPCUnavailable
 	}
 	return destination, npc, char, nil
 }
@@ -178,8 +131,22 @@ func (h *Handler) puffPuff(ctx context.Context, service *playercontext.Service, 
 	if destination != "secretshop" {
 		return NPCResult{}, errNPCUnavailable
 	}
-	word := fmt.Sprintf(secretshop.PuffPuffDialogueFormat, char.Name)
+	word := fmt.Sprintf(puffPuffDialogueFormat, char.Name)
 	h.appendNPCLog(ctx, destination, char, "＠ぱふぱふ", npc.name, word, char.ID)
+	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
+}
+
+// divinate is ＠うらない (park.cgi uranai): a public $npc_com that starts the wait.
+func (h *Handler) divinate(ctx context.Context, service *playercontext.Service, owner, actor string) (NPCResult, error) {
+	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
+	if err != nil {
+		return NPCResult{}, err
+	}
+	if destination != "town" {
+		return NPCResult{}, errNPCUnavailable
+	}
+	word := divination(random.Intn, char.Name)
+	h.appendNPCLog(ctx, destination, char, "＠うらない", npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
@@ -188,18 +155,29 @@ func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, ow
 	if err != nil {
 		return NPCResult{}, err
 	}
-	if !talk {
-		text := npc.inspect
+	if !talk && npc.silent {
+		return NPCResult{NPCName: npc.name, Private: true}, nil
+	}
+	command, words := "＠はなす", npc.words
+	if !talk && len(npc.inspectWords) > 0 {
+		command, words = "＠しらべる>"+npc.name, npc.inspectWords
+	} else if !talk {
+		text := strings.ReplaceAll(npc.inspect, "{name}", char.Name)
 		if text == "" {
 			text = npcInspectDefault
 		}
 		return NPCResult{NPCName: npc.name, Dialogue: text, Private: true}, nil
 	}
-	if len(npc.words) == 0 {
+	if talk && npc.wordsOf != nil {
+		if words, err = npc.wordsOf(h, ctx, char); err != nil {
+			return NPCResult{}, err
+		}
+	}
+	if len(words) == 0 {
 		return NPCResult{NPCName: npc.name, Dialogue: npcNoWords, Private: true}, nil
 	}
-	word := strings.ReplaceAll(npc.words[random.Intn(len(npc.words))], "{name}", char.Name)
-	h.appendNPCLog(ctx, destination, char, "＠はなす", npc.name, word, "")
+	word := strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP), "{job}", h.jobName(char.JobID)).Replace(words[random.Intn(len(words))])
+	h.appendNPCLog(ctx, destination, char, command, npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 

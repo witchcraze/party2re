@@ -13,9 +13,12 @@ func RoomSnapshotForTest(s *Service, ctx context.Context, roomID, characterID st
 
 // SetRoomLockObserverForTest sets a temporary hook to observe room lock wait and hold timings.
 func SetRoomLockObserverForTest(observer func(waitDur, holdDur time.Duration, acquired bool, err error)) func() {
-	prev := roomLockObserver
-	roomLockObserver = observer
+	var next *func(waitDur, holdDur time.Duration, acquired bool, err error)
+	if observer != nil {
+		next = &observer
+	}
+	prev := roomLockObserver.Swap(next)
 	return func() {
-		roomLockObserver = prev
+		roomLockObserver.Store(prev)
 	}
 }

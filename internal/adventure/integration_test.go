@@ -660,9 +660,13 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 
 	// Roll category 3 (tool/item, rng(4)==2) so treasure enters the empty tool hand,
 	// matching legacy _npc_action.cgi:66–78 ($m{ite} exception).
+	// Index 1 skips the low-stage legacy empty pool entry (#2118).
 	deterministicRng := func(n int) int {
-		if n == 4 {
+		switch {
+		case n == 4:
 			return 2
+		case n > 14:
+			return 1
 		}
 		return 0
 	}

@@ -21,6 +21,7 @@ func WithPlayerContext(service *playercontext.Service) Option {
 	return func(h *Handler) {
 		h.playerContext = service
 		h.registerNavigation(service)
+		h.registerOracleBlackMarket(service)
 		h.registerNPC(service)
 		h.registerScenes(service)
 	}
@@ -68,6 +69,7 @@ type SceneSnapshot struct {
 	Speaker    *SceneSpeaker          `json:"speaker,omitempty"`
 	Opponent   *SceneOpponent         `json:"opponent,omitempty"`
 	PlaceLog   []PlaceLogEntry        `json:"place_log"`
+	Members    []PlaceMember          `json:"members"`
 }
 
 type SceneSpeaker struct {
@@ -148,20 +150,13 @@ func (h *Handler) playerContextResponse(ctx context.Context, result playercontex
 		Character: CharacterSnapshot{ID: c.ID, Name: c.Name, JobID: c.JobID, Level: c.Level,
 			HP: c.Stats.HP, MaxHP: c.Stats.MaxHP, MP: c.Stats.MP, MaxMP: c.Stats.MaxMP,
 			Gold: c.Money, Tired: c.Tired, IsDead: c.Stats.HP <= 0, IsSleeping: s.Sleeping, IconURL: profile.Profile.AvatarURL, ActionWaitMS: s.ActionWait.Milliseconds()},
-		Scene: SceneSnapshot{LocationID: s.LocationID, Title: "始まりの街", Bgimg: "bg_town",
+		Scene: SceneSnapshot{LocationID: s.LocationID, Title: "交流広場", Bgimg: "bg_town",
 			BgimgURL: "data:image/svg+xml," + url.PathEscape(townBackgroundPlaceholder),
-			Dialogue: "広場へようこそ。次の行動を選んでください。", Speaker: &SceneSpeaker{Name: "広場の案内人"}, PlaceLog: []PlaceLogEntry{}},
+			Dialogue: "広場へようこそ。次の行動を選んでください。", Speaker: &SceneSpeaker{Name: parkNPCName}, PlaceLog: []PlaceLogEntry{}, Members: []PlaceMember{}},
 		OngoingActions:   make([]OngoingActionSnapshot, 0, len(s.OngoingActions)+1),
 		AvailableActions: make([]ContextAction, 0, len(result.AvailableActions)),
 	}
-	if h.jobs != nil {
-		for _, job := range h.jobs.ListDefinitions() {
-			if job.ID == c.JobID {
-				response.Character.JobName = job.Name
-				break
-			}
-		}
-	}
+	response.Character.JobName = h.jobName(c.JobID)
 	for _, action := range s.OngoingActions {
 		response.OngoingActions = append(response.OngoingActions, ongoingAction(action.ID, action.ActionType, "実行待ち", action.ExecuteAt, now))
 	}

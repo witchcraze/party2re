@@ -2,9 +2,11 @@ package god
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/guild"
 )
 
 type Option func(*Service)
@@ -136,7 +138,10 @@ func (s *Service) GetWishes(ctx context.Context, characterID string, realm Realm
 		inGuild := false
 		if s.guilds != nil {
 			_, _, err := s.guilds.GetGuildByCharacter(ctx, characterID)
-			inGuild = (err == nil)
+			if err != nil && !errors.Is(err, guild.ErrCharacterNotInGuild) {
+				return nil, fmt.Errorf("read guild: %w", err)
+			}
+			inGuild = err == nil
 		}
 
 		return buildHeavenWishes(char, inGuild), nil
@@ -149,20 +154,13 @@ func (s *Service) GetWishes(ctx context.Context, characterID string, realm Realm
 	}
 }
 
-func (s *Service) GrantWish(
-	ctx context.Context,
-	characterID string,
-	wishID string,
-	realm Realm,
-) (WishResult, error) {
+// GrantWish grants wishID in the realm the character's recorded visit names.
+func (s *Service) GrantWish(ctx context.Context, characterID, wishID string) (WishResult, error) {
 	if characterID == "" {
 		return WishResult{}, ErrInvalidCharacterID
 	}
 	if wishID == "" {
 		return WishResult{}, ErrInvalidWishID
-	}
-	if realm != RealmHeaven && realm != RealmUnderworld {
-		return WishResult{}, ErrInvalidRealm
 	}
 
 	var res WishResult
@@ -172,6 +170,10 @@ func (s *Service) GrantWish(
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrCharacterNotFound, err)
 		}
+		realm := Realm(char.GodVisit)
+		// A granted wish ends the visit; executors persist the character with it.
+		// Rejections roll back, and wish_lover persists nothing.
+		char.GodVisit = ""
 
 		switch realm {
 		case RealmHeaven:
@@ -179,7 +181,7 @@ func (s *Service) GrantWish(
 		case RealmUnderworld:
 			return s.executeUnderworldWish(txCtx, &char, wishID, &res)
 		default:
-			return ErrInvalidRealm
+			return ErrNotAdmitted
 		}
 	})
 
@@ -190,19 +192,18 @@ func (s *Service) GrantWish(
 	return res, nil
 }
 
-func (s *Service) GetDialogue(realm Realm) []string {
-	switch realm {
-	case RealmHeaven:
-		return []string{
-			"よくぞここまでたどり着いた旅人よ…。",
-			"私がお前の願いをひとつだけ叶えてやろう…。",
+// ForfeitVisit ends a recorded visit without a wish, as leaving the realm
+// does in legacy (＠いどう/＠まち/＠ほーむ replace $m{lib}).
+func (s *Service) ForfeitVisit(ctx context.Context, characterID string) error {
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrCharacterNotFound, err)
 		}
-	case RealmUnderworld:
-		return []string{
-			"深淵の闇を越え、よくぞ参った…。",
-			"貴様の限界を超越する力を授けよう…。",
+		if char.GodVisit == "" {
+			return nil
 		}
-	default:
-		return nil
-	}
+		char.GodVisit = ""
+		return s.characters.Update(txCtx, char)
+	})
 }

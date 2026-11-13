@@ -213,18 +213,12 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		currentHP = 0
 		finalStatus = StatusWipedOut
 	}
-	if turnsRemaining <= 0 {
-		turnsRemaining = 0
-		// Native maps keep exhausted runs active; only catalog runs wipe out on turns.
-		if exp.MapVariant == 0 {
-			finalStatus = StatusWipedOut
-		}
-	}
+	// Exhausted runs stay active; Escape remains available.
+	turnsRemaining = max(turnsRemaining, 0)
 
 	if params.FinishStatus != "" {
 		finalStatus = params.FinishStatus
 	}
-	exp.CurrentFloor = params.NewFloor
 	exp.PosX = params.NewX
 	exp.PosY = params.NewY
 	exp.CurrentHP = currentHP
@@ -250,7 +244,6 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	if eventConsumed {
 		exp.AccumulatedExp += params.ExpDelta
 		exp.AccumulatedGold += params.GoldDelta
-		exp.AccumulatedMedals += params.MedalsDelta
 		if params.RewardItemID != "" {
 			exp.AccumulatedItems = append(exp.AccumulatedItems, params.RewardItemID)
 		}

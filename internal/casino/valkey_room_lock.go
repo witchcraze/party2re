@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
@@ -30,7 +31,7 @@ var releaseRoomLockLua string
 var releaseRoomLockScript = valkey.NewLuaScript(releaseRoomLockLua)
 
 // roomLockObserver is an optional test hook to measure wait and hold timings.
-var roomLockObserver func(waitDur, holdDur time.Duration, acquired bool, err error)
+var roomLockObserver atomic.Pointer[func(waitDur, holdDur time.Duration, acquired bool, err error)]
 
 // WithRoomLock executes fn inside an exclusive distributed room lock in Valkey Master.
 // It supports reentrant calls within the same context.
@@ -48,11 +49,12 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 		startHold = time.Now()
 		return fn(withRoomLockedContext(ctx, roomID))
 	})
-	if roomLockObserver != nil {
+	if observerPtr := roomLockObserver.Load(); observerPtr != nil {
+		observer := *observerPtr
 		if startHold.IsZero() {
-			roomLockObserver(time.Since(startWait), 0, false, err)
+			observer(time.Since(startWait), 0, false, err)
 		} else {
-			roomLockObserver(startHold.Sub(startWait), time.Since(startHold), true, err)
+			observer(startHold.Sub(startWait), time.Since(startHold), true, err)
 		}
 	}
 	return err

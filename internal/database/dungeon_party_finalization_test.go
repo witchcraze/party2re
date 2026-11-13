@@ -65,25 +65,16 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 		t.Fatal(err)
 	}
 
-	rec, err := dungeonRepo.GetRecord(ctx, c1.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec.HighestDungeonCleared = 1
-	rec.TotalExpeditions = 1
-
 	now := time.Now().UTC()
 	expID := id.New()
 	history := dungeon.DungeonExpeditionHistory{
-		ID:            expID,
-		CharacterID:   c1.ID,
-		DungeonID:     "dungeon-01",
-		Outcome:       dungeon.StatusCleared,
-		FloorsReached: 2,
-		ExpReward:     250,
-		GoldReward:    400,
-		MedalsReward:  3,
-		CreatedAt:     now,
+		ID:          expID,
+		CharacterID: c1.ID,
+		DungeonID:   "dungeon-01",
+		Outcome:     dungeon.StatusEscaped,
+		ExpReward:   250,
+		GoldReward:  400,
+		CreatedAt:   now,
 	}
 
 	// Expedition members:
@@ -119,7 +110,6 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 		ID:             expID,
 		CharacterID:    c1.ID,
 		DungeonID:      "dungeon-01",
-		CurrentFloor:   2,
 		CurrentHP:      0,
 		TurnsRemaining: 10,
 		Status:         dungeon.StatusExploring,
@@ -132,7 +122,7 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	}
 
 	// FinalizeExpedition
-	err = dungeonRepo.FinalizeExpedition(ctx, history, rec, &c1, nil, members...)
+	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, nil, members...)
 	if err != nil {
 		t.Fatalf("FinalizeExpedition failed: %v", err)
 	}
@@ -158,9 +148,6 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	if reloadedLead.Money != 1150 {
 		t.Errorf("expected leader wallet 1150 (1000 + 150), got %d", reloadedLead.Money)
 	}
-	if reloadedLead.SmallMedals != 3 {
-		t.Errorf("expected leader small medals 3, got %d", reloadedLead.SmallMedals)
-	}
 	if reloadedLead.Experience < 100 {
 		t.Errorf("expected leader EXP to increase by at least 100, got %d", reloadedLead.Experience)
 	}
@@ -175,9 +162,6 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	}
 	if reloadedAlly.Money != 1400 {
 		t.Errorf("expected ally wallet 1400 (1000 + 400), got %d", reloadedAlly.Money)
-	}
-	if reloadedAlly.SmallMedals != 0 {
-		t.Errorf("expected ally small medals to remain 0 (leader only), got %d", reloadedAlly.SmallMedals)
 	}
 	if reloadedAlly.Experience < 250 {
 		t.Errorf("expected ally EXP to increase by at least 250, got %d", reloadedAlly.Experience)
@@ -233,13 +217,12 @@ func TestDungeonRepository_FinalizeExpedition_PreservesConcurrentWalletUpdates(t
 		t.Fatalf("Update money failed: %v", err)
 	}
 
-	rec, _ := dungeonRepo.GetRecord(ctx, c1.ID)
 	expID := id.New()
 	history := dungeon.DungeonExpeditionHistory{
 		ID:          expID,
 		CharacterID: c1.ID,
 		DungeonID:   "dungeon-01",
-		Outcome:     dungeon.StatusCleared,
+		Outcome:     dungeon.StatusEscaped,
 		GoldReward:  500,
 		CreatedAt:   time.Now().UTC(),
 	}
@@ -250,7 +233,7 @@ func TestDungeonRepository_FinalizeExpedition_PreservesConcurrentWalletUpdates(t
 	}
 
 	// FinalizeExpedition with 500 GoldReward
-	err = dungeonRepo.FinalizeExpedition(ctx, history, rec, &c1, nil, members...)
+	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, nil, members...)
 	if err != nil {
 		t.Fatalf("FinalizeExpedition failed: %v", err)
 	}
@@ -294,13 +277,12 @@ func TestDungeonRepository_FinalizeExpedition_RollbackOnMemberFailure(t *testing
 	c1.Money = 5000
 	_ = charRepo.Update(ctx, c1)
 
-	rec, _ := dungeonRepo.GetRecord(ctx, c1.ID)
 	expID := id.New()
 	history := dungeon.DungeonExpeditionHistory{
 		ID:          expID,
 		CharacterID: c1.ID,
 		DungeonID:   "dungeon-01",
-		Outcome:     dungeon.StatusCleared,
+		Outcome:     dungeon.StatusEscaped,
 		GoldReward:  1000,
 		CreatedAt:   time.Now().UTC(),
 	}
@@ -312,7 +294,7 @@ func TestDungeonRepository_FinalizeExpedition_RollbackOnMemberFailure(t *testing
 		{CharacterID: invalidMemberID, CurrentHP: 50, MaxHP: 100},
 	}
 
-	err = dungeonRepo.FinalizeExpedition(ctx, history, rec, &c1, nil, members...)
+	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, nil, members...)
 	if err == nil {
 		t.Fatal("expected FinalizeExpedition to fail with invalid member")
 	}

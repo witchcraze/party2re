@@ -171,19 +171,13 @@ func (s *Service) startRoster(
 		return nil, ErrTooManyPartyMembers
 	}
 
-	variant, turns := 0, dungeon.MaxTurnsPerFloor
-	var firstFloor Floor
-	switch {
-	case dungeon.native():
-		// Legacy picks one initial layout; accepted start is the leader's
-		// initial advance from round 0 to 1 without a tile event.
-		variant, turns = s.rng.Intn(len(dungeon.Variants))+1, dungeon.RoundLimit-1
-		firstFloor = dungeon.Variants[variant-1]
-	case len(dungeon.Floors) == 0:
-		return nil, errors.New("dungeon has no floors")
-	default:
-		firstFloor = dungeon.Floors[0]
+	if len(dungeon.Variants) == 0 {
+		return nil, errors.New("dungeon has no layouts")
 	}
+	// Legacy picks one initial layout; accepted start is the leader's
+	// initial advance from round 0 to 1 without a tile event.
+	variant, turns := s.rng.Intn(len(dungeon.Variants))+1, dungeon.RoundLimit-1
+	firstFloor := dungeon.Variants[variant-1]
 	members := make([]ExpeditionMember, 0, len(memberIDs))
 	leaderHP := 0
 
@@ -201,10 +195,6 @@ func (s *Service) startRoster(
 				return nil, ErrCharacterNotFound
 			}
 			return nil, err
-		}
-
-		if char.Level < dungeon.MinLevel {
-			return nil, ErrLevelRequirementNotMet
 		}
 
 		maxHP := char.Stats.MaxHP
@@ -263,25 +253,23 @@ func (s *Service) startRoster(
 
 	now := time.Now().UTC()
 	exp := ActiveExpedition{
-		ID:                id.New(),
-		CharacterID:       leaderCharID,
-		PartyID:           partyID,
-		Members:           members,
-		DungeonID:         dungeon.ID,
-		MapVariant:        variant,
-		CurrentFloor:      1,
-		PosX:              firstFloor.StartX,
-		PosY:              firstFloor.StartY,
-		CurrentHP:         leaderHP,
-		TurnsRemaining:    turns,
-		AccumulatedExp:    0,
-		AccumulatedGold:   0,
-		AccumulatedItems:  []string{},
-		AccumulatedMedals: 0,
-		ConsumedEvents:    []string{},
-		Status:            StatusExploring,
-		StartedAt:         now,
-		UpdatedAt:         now,
+		ID:               id.New(),
+		CharacterID:      leaderCharID,
+		PartyID:          partyID,
+		Members:          members,
+		DungeonID:        dungeon.ID,
+		MapVariant:       variant,
+		PosX:             firstFloor.StartX,
+		PosY:             firstFloor.StartY,
+		CurrentHP:        leaderHP,
+		TurnsRemaining:   turns,
+		AccumulatedExp:   0,
+		AccumulatedGold:  0,
+		AccumulatedItems: []string{},
+		ConsumedEvents:   []string{},
+		Status:           StatusExploring,
+		StartedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	if err := s.activeStore.SaveActiveExpedition(ctx, exp); err != nil {

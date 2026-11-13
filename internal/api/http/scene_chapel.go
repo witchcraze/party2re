@@ -28,3 +28,10 @@ func (h *Handler) chapelSceneData(ctx context.Context, r playercontext.Result) (
 	}
 	return ChapelSceneData{Parent: "town", Blessing: blessing, Status: status}, nil
 }
+
+var chapelFacility = facility{
+	title: "礼拝堂", commands: []string{"chapel_pray"}, read: (*Handler).chapelSceneData, placeLog: true,
+	npc: &npcProfile{name: "@シスター", words: []string{
+		"{name}に神のご加護があらんことを", "待つだけでは祈りは叶いません…", "{name}が力を尽くすとき、祈りは叶うことでしょう",
+	}},
+}

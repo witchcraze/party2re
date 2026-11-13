@@ -30,7 +30,7 @@ func encounterStore(t *testing.T, kind string) dungeon.ActiveExpeditionStore {
 
 func TestActiveEncounterLifecycle(t *testing.T) {
 	for _, kind := range []string{"memory", "valkey"} {
-		for _, ending := range []string{"win", "boss", "wipeout", "escape"} {
+		for _, ending := range []string{"win", "wipeout", "escape"} {
 			t.Run(kind+"/"+ending, func(t *testing.T) {
 				ctx := context.Background()
 				store := encounterStore(t, kind)
@@ -39,11 +39,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 				repo := newMockDungeonRepo()
 				monster := dungeon.DungeonMonster{ID: "enemy", Name: "Enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23, DropItemID: "potion"}
 				floor := dungeon.Floor{FloorNumber: 1, Width: 3, Height: 3, StartX: 1, StartY: 1, Grid: []string{"1T1", "ES0", "1D1"}, Monsters: []dungeon.DungeonMonster{monster}}
-				if ending == "boss" {
-					floor.Grid[1] = "ESB"
-					floor.Boss = &monster
-				}
-				catalog := []dungeon.Dungeon{{ID: "encounter", Tier: 1, MaxTurnsPerFloor: 20, Floors: []dungeon.Floor{floor}, ClearExpBonus: 7, ClearGoldBonus: 11}}
+				catalog := []dungeon.Dungeon{{ID: "encounter", RoundLimit: 21, Variants: []dungeon.Floor{floor}}}
 				calls := 0
 				engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 					calls++
@@ -73,7 +69,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 				}}
 				hookCalls := 0
 				newService := func() *dungeon.Service {
-					svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog))
+					svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(&minimalRandomSource{}))
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -114,10 +110,6 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 					if _, err = svc.Move(ctx, char.ID, dir); !errors.Is(err, dungeon.ErrCombatActive) {
 						t.Fatalf("move %s: %v", dir, err)
 					}
-				}
-				catalog[0].Floors[0].Grid[0] = "1X1"
-				if _, err = svc.Move(ctx, char.ID, dungeon.DirectionNorth); !errors.Is(err, dungeon.ErrCombatActive) {
-					t.Fatalf("trap bypass: %v", err)
 				}
 				after, err := store.GetActiveExpedition(ctx, char.ID)
 				if err != nil {
@@ -164,7 +156,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 					t.Fatal("settlement not exactly once")
 				}
 				wantHooks := 0
-				if ending == "win" || ending == "boss" {
+				if ending == "win" {
 					wantHooks = 1
 				}
 				if hookCalls != wantHooks {
@@ -193,7 +185,7 @@ func TestEncounterStepCAS(t *testing.T) {
 				}
 			})
 			enc := &dungeon.ActiveEncounter{Monster: dungeon.DungeonMonster{ID: "enemy", HP: 100}, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 70, 10, 10)}, EventType: dungeon.EventBattle, X: 1}
-			params := dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &exp.Revision, Combat: true, Encounter: enc, NewFloor: 1, TurnsDelta: -1, Now: time.Now().UTC()}
+			params := dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &exp.Revision, Combat: true, Encounter: enc, TurnsDelta: -1, Now: time.Now().UTC()}
 			if _, err := store.Step(ctx, exp.CharacterID, params); err != nil {
 				t.Fatal(err)
 			}

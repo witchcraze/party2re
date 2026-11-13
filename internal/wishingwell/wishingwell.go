@@ -8,24 +8,8 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-// Legacy facility constants (sp_change.cgi).
-const (
-	LocationName    = "願いの泉"
-	NPCName         = "@女神"
-	BackgroundImage = "bgimg/sp_change.gif"
-)
-
-// Legacy dialogue lines (sp_change.cgi:20-29).
-var DefaultDialogues = []string{
-	"スキルポイントはレベルが上がるごとに１ポイント増えていくのです",
-	"スキルポイントを早く上げるコツは、何度も同じ職業に転職することです",
-	"%sのスキルポイントは現在 %d ポイントです",
-	"スキル習得を目指している場合は、ささげずにとっておくのですよ",
-	"スキルポイントをささげるのです",
-	"スキルポイントのお礼に、%sのステータスを上げてあげましょう",
-	"一度ささげたスキルポイントを戻すことはできません",
-	"スキルポイントは、その職業のスキルを習得するのに必要です",
-}
+// NPCName is the well's goddess (sp_change.cgi $npc_name).
+const NPCName = "@女神"
 
 // Errors propagated from domain rules.
 var (
@@ -49,23 +33,17 @@ type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-// WishingWellStatus contains the current state and dialogues for a character.
+// WishingWellStatus is the exchange eligibility observed by the scene.
 type WishingWellStatus struct {
-	LocationName    string   `json:"location_name"`
-	NPCName         string   `json:"npc_name"`
-	BackgroundImage string   `json:"background_image"`
-	CharacterID     string   `json:"character_id"`
-	CharacterName   string   `json:"character_name"`
-	SP              int      `json:"sp"`
-	JobMemoryActive bool     `json:"job_memory_active"`
-	OverLevel       bool     `json:"over_level"`
-	CanExchange     bool     `json:"can_exchange"`
-	MaxHP           int      `json:"max_hp"`
-	MaxMP           int      `json:"max_mp"`
-	Attack          int      `json:"attack"`
-	Defense         int      `json:"defense"`
-	Agility         int      `json:"agility"`
-	Dialogues       []string `json:"dialogues"`
+	JobMemoryActive bool `json:"job_memory_active"`
+	OverLevel       bool `json:"over_level"`
+	CanExchange     bool `json:"can_exchange"`
+}
+
+// StatusOf reports whether char may offer SP; SP and stats are the character's own.
+func StatusOf(char corecharacter.Character) WishingWellStatus {
+	jobMemory := char.JobMemory != nil && char.JobMemory.IsPersistent()
+	return WishingWellStatus{JobMemoryActive: jobMemory, OverLevel: char.OverLevel, CanExchange: !jobMemory && !char.OverLevel}
 }
 
 // ExchangeRequest specifies which stat to raise and how much SP to spend.

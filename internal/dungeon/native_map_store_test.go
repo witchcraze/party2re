@@ -29,7 +29,7 @@ func nativeStoreContract(t *testing.T, store dungeon.ActiveExpeditionStore, char
 	stale := got.Revision
 	step := func(rev int, key string, enc *dungeon.ActiveEncounter, turns int) (dungeon.StepOutcome, error) {
 		return store.Step(ctx, charID, dungeon.StepParams{
-			ExpectedExpeditionID: exp.ID, ExpectedRevision: &rev, NewFloor: 1, NewX: 1, NewY: 0,
+			ExpectedExpeditionID: exp.ID, ExpectedRevision: &rev, NewX: 1, NewY: 0,
 			TurnsDelta: turns, EventKey: key, Encounter: enc, Now: time.Now().UTC(),
 		})
 	}
@@ -66,18 +66,6 @@ func nativeStoreContract(t *testing.T, store dungeon.ActiveExpeditionStore, char
 	}
 	if out.EventConsumed || out.Expedition.Encounter != nil || out.Status != dungeon.StatusExploring {
 		t.Fatalf("consumed replay %+v", out)
-	}
-
-	// Catalog runs keep their turn-limit wipeout.
-	catalog := sampleExpedition("catalog-"+charID, charID, "dungeon-01")
-	catalog.TurnsRemaining = 1
-	if err := store.SaveActiveExpedition(ctx, catalog); err != nil {
-		t.Fatal(err)
-	}
-	rev := 0
-	out, err = store.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: catalog.ID, ExpectedRevision: &rev, NewFloor: 1, TurnsDelta: -1, Now: time.Now().UTC()})
-	if err != nil || out.Status != dungeon.StatusWipedOut || out.Expedition.MapVariant != 0 {
-		t.Fatalf("catalog regression %+v err=%v", out, err)
 	}
 }
 

@@ -156,7 +156,7 @@ func newPublicationFixture(t *testing.T, ctx context.Context, db *sql.DB, raw va
 		return f.hookErr
 	})
 	for i, coins := range []int64{500, coinsB} {
-		ch, err := database.CreateTestCharacterWithFunds(ctx, db, "Wager", int(coins*20))
+		ch, err := database.CreateTestCharacterWithFunds(ctx, db, "W"+id.New()[:7], int(coins*20))
 		if err != nil {
 			t.Fatal(err)
 		}

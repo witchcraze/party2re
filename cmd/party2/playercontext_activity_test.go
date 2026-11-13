@@ -124,7 +124,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	f.party, f.member = party.Party{ID: "party", Status: party.StatusRecruiting, LeaderCharacterID: "hero"}, party.Member{PartyID: "party", CharacterID: "hero", IsLeader: true}
 	pv.room = pvp.RoomDetail{Room: pvp.ColosseumRoom{ID: "pvp", Status: pvp.StatusInProgress, LeaderCharacterID: "hero", Round: 2}, Members: []pvp.RoomMember{{CharacterID: "hero"}}}
 	gv.room = gvg.RoomDetail{Room: gvg.GvGRoom{ID: "gvg", Status: gvg.StatusInProgress, LeaderCharacterID: "hero", Round: 3}, Members: []gvg.GvGMember{{CharacterID: "hero"}}}
-	f.exp = &dungeon.ActiveExpedition{ID: "dungeon", CharacterID: "hero", Status: dungeon.StatusExploring, CurrentFloor: 4, TurnsRemaining: 20}
+	f.exp = &dungeon.ActiveExpedition{ID: "dungeon", CharacterID: "hero", Status: dungeon.StatusExploring, TurnsRemaining: 20}
 	f.session = &challenge.ChallengeSession{ID: "challenge", Revision: 1, CharacterID: "hero", Status: challenge.StatusActive, CurrentRound: 5}
 	f.casino = &casino.RoomView{Room: casino.RoomObservation{RoomSummary: casino.RoomSummary{ID: "casino", Status: casino.RoomStatusInProgress, GameType: casino.GameTypeIndian}, Round: 6}, Members: []casino.MemberObservation{{CharacterID: "hero", IsSpectator: true}}}
 	facts, err := r.read(ctx, "owner", "hero")
@@ -155,7 +155,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	*f.casino = before
 	// Current owner buffers remain observable even after the gameplay phase ends;
 	// observation never replays their pending settlement.
-	f.exp.Status, f.session.Status = dungeon.StatusCleared, challenge.StatusDefeated
+	f.exp.Status, f.session.Status = dungeon.StatusEscaped, challenge.StatusDefeated
 	got, err := r.read(ctx, "owner", "hero")
 	if err != nil || len(got) != 6 || !slices.Equal(got[3].Actions, []string{"dungeon_fight", "dungeon_escape"}) || len(got[4].Actions) != 0 {
 		t.Fatalf("terminal buffers: %+v %v", got, err)
@@ -287,7 +287,6 @@ func TestDungeonActivityEncounterAndTerminalCandidates(t *testing.T) {
 		{dungeon.StatusExploring, false, 10, []string{"dungeon_move", "dungeon_escape"}},
 		{dungeon.StatusExploring, true, 10, []string{"dungeon_fight", "dungeon_escape"}},
 		{dungeon.StatusExploring, false, 0, []string{"dungeon_escape"}},
-		{dungeon.StatusCleared, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 		{dungeon.StatusEscaped, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 		{dungeon.StatusWipedOut, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 	} {

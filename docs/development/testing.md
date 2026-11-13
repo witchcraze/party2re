@@ -369,7 +369,12 @@ own context. This budget is a cancellation safety net, not a latency assertion.
 
 Keep separate bounds for intentional lock waits and isolated stuck-worker checks;
 the workflow rule's 2–5 second dead-man guidance applies to those checks, not the
-whole DB scenario. Do not relax SQL lock-wait settings or suppress deadline,
+whole DB scenario. When verifying an intentional timeout-failure path (such as a
+stuck-worker diagnostic in an isolated test fixture), inject an explicit fixture timeout
+while still joining the worker before cleanup rather than relaxing normal deadlock bounds
+or adding wall-clock performance assertions; overlap legitimate multi-second lock/TTL
+boundary waits with unique-ID `t.Parallel()` isolation instead of weakening
+real Valkey `EX` expiry or caller-deadline checks. Do not relax SQL lock-wait settings or suppress deadline,
 deadlock or cancellation errors. Wait for barriers/state observations rather than
 fixed sleeps, make channel waits cancellation-aware, and join all workers before
 assertions and fixture cleanup. Existing concurrency helpers join workers; their
@@ -401,11 +406,14 @@ compares latency/allocations; the default +30% regression threshold exits with c
 ## 8. Continuous Integration and Delivery
 
 The [CI workflow](../../.github/workflows/ci.yml) runs formatting, OpenAPI sync
-validation, vet and tests with atomic coverage on the host Go toolchain against the
-[test stack](#4-container-roles) with a 30-minute package timeout, then builds the
-production image. It does not currently run the race detector or exercise the built
-production image. The GitHub-hosted runner is disposable per job; tests inside a job
-still follow the database ownership/isolation rules above.
+validation and vet, sharded Go test execution (`verify-shard`, partitioned by
+[scripts/ci_shard.sh](../../scripts/ci_shard.sh) with isolated MariaDB/Valkey
+containers and `-covermode=atomic`), the `verify` gate (which enforces shard
+outcomes and merges shard profiles into unified `coverage.out` / `coverage.txt`),
+and the production image build in parallel branches. It does not currently run
+the race detector or exercise the built production image. The GitHub-hosted
+runner is disposable per job; tests inside a job still follow the database
+ownership/isolation rules above.
 
 `actions/setup-go` restores Go build and module data; a miss only costs time. Tests run with `-count=1` because a restored build
 cache would otherwise replay earlier test results, so CI always runs the whole suite.

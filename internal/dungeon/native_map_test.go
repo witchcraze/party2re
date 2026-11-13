@@ -116,8 +116,8 @@ func strongHero(id string) corecharacter.Character {
 
 func TestNativeMap0_LayoutsAreIndependentFiveByFiveVariants(t *testing.T) {
 	d := nativeMap0Def(t)
-	if d.RoundLimit != 20 || len(d.Variants) != 6 || len(d.Floors) != 0 {
-		t.Fatalf("limit=%d variants=%d floors=%d", d.RoundLimit, len(d.Variants), len(d.Floors))
+	if d.RoundLimit != 20 || len(d.Variants) != 6 {
+		t.Fatalf("limit=%d variants=%d", d.RoundLimit, len(d.Variants))
 	}
 	for i, f := range d.Variants {
 		counts := map[byte]int{}
@@ -312,7 +312,7 @@ func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) 
 	}
 	exp := f.reload(t, "chest")
 	if res.EventType != dungeon.EventTreasure || exp.Encounter == nil || len(exp.Encounter.Chests) != 1 ||
-		exp.AccumulatedGold != start.AccumulatedGold || exp.AccumulatedMedals != 0 || len(exp.AccumulatedItems) != 0 ||
+		exp.AccumulatedGold != start.AccumulatedGold || len(exp.AccumulatedItems) != 0 ||
 		len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "C:2:4" || exp.TurnsRemaining != 16 {
 		t.Fatalf("treasure trigger %+v", exp)
 	}
@@ -422,7 +422,7 @@ func TestNativeMap0_BossTriggersOnceWithoutClearing(t *testing.T) {
 	}
 	exp := f.reload(t, "boss")
 	if res.EventType != dungeon.EventBoss || exp.Status != dungeon.StatusExploring || exp.Encounter != nil ||
-		exp.AccumulatedExp != boss.ExpReward || exp.AccumulatedMedals != 0 || len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "B:1:2" {
+		exp.AccumulatedExp != boss.ExpReward || len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "B:1:2" {
 		t.Fatalf("boss victory %+v / %+v", res, exp)
 	}
 	if len(f.repo.histories["boss"]) != 0 {

@@ -120,7 +120,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		t.Run(which, func(t *testing.T) {
 			start := func(actor string, ids []string) error {
 				if which == "dungeon" {
-					_, err := combat.dungeon.StartPartyExpedition(ctx, actor, ids, "dungeon-01", lobby.Party.ID)
+					_, err := combat.dungeon.StartPartyExpedition(ctx, actor, ids, dungeon.NativeMap0ID, lobby.Party.ID)
 					return err
 				}
 				_, err := combat.challenge.StartPartySession(ctx, actor, ids, "1", "Consented", "#FFFFFF")
@@ -186,7 +186,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 				if _, err := combat.challenge.GetSession(ctx, id.New(), run.ID); !errors.Is(err, challenge.ErrForbidden) {
 					t.Fatalf("private run exposed: %v", err)
 				}
-				if _, err := combat.dungeon.StartExpedition(ctx, member.ID, "dungeon-01"); !errors.Is(err, challenge.ErrActiveSessionExists) {
+				if _, err := combat.dungeon.StartExpedition(ctx, member.ID, dungeon.NativeMap0ID); !errors.Is(err, challenge.ErrActiveSessionExists) {
 					t.Fatalf("busy member accepted: %v", err)
 				}
 				for _, actor := range chars {
@@ -200,7 +200,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	// A solo start and the other owner's party start share one character lock.
 	first, second := testutil.RunRace2(
 		func() error {
-			_, err := combat.dungeon.StartPartyExpedition(ctx, leader.ID, nil, "dungeon-01", lobby.Party.ID)
+			_, err := combat.dungeon.StartPartyExpedition(ctx, leader.ID, nil, dungeon.NativeMap0ID, lobby.Party.ID)
 			return err
 		},
 		func() error { _, err := combat.challenge.StartSession(ctx, member.ID, "1"); return err },
@@ -239,7 +239,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		if _, err := combat.adv.StartStage(ctx, member.ID, adventure.StarterAdventure); !errors.Is(err, party.ErrMemberBusy) {
 			t.Fatal("batch bypassed enrollment", err)
 		}
-		if _, err := combat.dungeon.StartExpedition(ctx, member.ID, "dungeon-01"); !errors.Is(err, party.ErrMemberBusy) {
+		if _, err := combat.dungeon.StartExpedition(ctx, member.ID, dungeon.NativeMap0ID); !errors.Is(err, party.ErrMemberBusy) {
 			t.Fatal("Dungeon bypassed enrollment", err)
 		}
 		if _, err := combat.challenge.StartSession(ctx, member.ID, "1"); !errors.Is(err, party.ErrMemberBusy) {

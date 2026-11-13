@@ -79,7 +79,6 @@ graph TD
 - [`jobs-and-skills.md`](jobs-and-skills.md) — Job catalog, Level 20 job changes, job mastery, and skill activation mechanics.
 - [`items-and-equipment.md`](items-and-equipment.md) — 5-category item catalog, equipment invariants, and consumption helpers.
 - [`custom_skill.md`](custom_skill.md) — Custom skill synthesis using 3-gem formulas and trigger phrase matching.
-- [`wishing-well.md`](wishing-well.md) — Wishing Well (願いの泉, @女神) SP sacrifice exchange for permanent stat boosts.
 - [`god.md`](god.md) — Heaven and Underworld wish decisions and legacy pitfalls.
 
 ### 3. Combat, Adventure & Dungeon Exploration
@@ -108,15 +107,14 @@ graph TD
 
 ### 5. Living, Towns & Crafting
 - [`home.md`](home.md) — Private town estate construction (towns 1–4), companion phrase training, player mailbox (independent deletion), and free sleep recovery (`sleep.cgi`).
-- [`town_park.md`](town_park.md) — Public bulletin board messaging, NPC dialogs, and daily fortune divinations (@町娘).
 - [`tavern.md`](tavern.md) — Adventurer's Tavern clean-room naming and post-adventure standing delivery orders.
 - [`alchemy.md`](alchemy.md) — 114 crafting recipes consuming depot materials, recipe compendium, and overnight home sleep synthesis.
 - [`blacksmith.md`](blacksmith.md) — 12 authentic crystal weapon seals, equipment naming, and 3-slot dedicated weapon storage.
 - [`monster.md`](monster.md) — Monster Grandpa ranch capacity: Home limit equal to the box, gifts limited by the sender's capacity.
-- [`plantation.md`](plantation.md) — Seed cultivation with 6 seeds, 14 fertilizer reagents, midnight JST maturation, and depot harvest delivery.
-- [`oracle-shop.md`](oracle-shop.md) — Oracle Shop (@ラクル) job-gated costume rentals, gender icons, private estate wallpaper boutique, and Black Market hint.
+- [`plantation.md`](plantation.md) — Seed garden plot, fertilizer and harvest rules.
+- [`oracle-shop.md`](oracle-shop.md) — Oracle shop costume and wallpaper rules and the hidden way into the black market.
 - [`chapel.md`](chapel.md) — 5 town church blessings with single-active prayer constraint and daily reset.
-- [`altar-of-rebirth.md`](altar-of-rebirth.md) — 6-orb ritual offering, Ramia awakening, and 4 otherworld travel item wishes.
+- [`altar-of-rebirth.md`](altar-of-rebirth.md) — Orb offering source, Ramia awakening and otherworld travel item wishes.
 
 ### 6. Social, Community & Gambling
 - [`guild.md`](guild.md) — Guild founding, dynamic GP, custom roles, hex colors, broadcast callouts, and 20-day inactivity auto-disbandment.

@@ -19,6 +19,7 @@ import (
 )
 
 func TestApprovalRoleWorkerCleanup_StopTimeout(t *testing.T) {
+	t.Parallel()
 	const diagnostic = "blocked worker did not stop after cancellation"
 	const cleaned = "fixture cleanup after worker stopped"
 	if os.Getenv("PARTY2_APPROVAL_WORKER_SUBPROCESS") == "1" {
@@ -33,7 +34,7 @@ func TestApprovalRoleWorkerCleanup_StopTimeout(t *testing.T) {
 		})
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(cancel)
-		f := &approvalRoleFixture{ctx: ctx, cancel: cancel, db: db}
+		f := &approvalRoleFixture{ctx: ctx, cancel: cancel, db: db, stopTimeout: 250 * time.Millisecond}
 		finished := make(chan struct{})
 		t.Cleanup(func() {
 			select {

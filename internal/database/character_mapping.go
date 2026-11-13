@@ -9,7 +9,7 @@ import (
 )
 
 // characterColumns lists all standard columns of the characters table in canonical order.
-const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, job_memory_kind, small_medals, help_count, hero_count, pvp_wins, casino_wins, monster_kills, mao_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit, crystal, wea_seal, wea_name, arm_name, pending_wake"
+const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, job_memory_kind, small_medals, help_count, hero_count, pvp_wins, casino_wins, monster_kills, mao_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit, crystal, wea_seal, wea_name, arm_name, pending_wake, god_visit"
 
 // rowScanner abstracts *sql.Row, *sql.Rows, or any scanner implementation.
 type rowScanner interface {
@@ -69,6 +69,7 @@ func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 		&value.WeaponCustomName,
 		&value.ArmorCustomName,
 		&value.PendingWake,
+		&value.GodVisit,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
@@ -133,14 +134,14 @@ func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, va
 			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, sp = ?, job_level = ?, old_job_id = ?, old_sp = ?,
 			job_memory_job_id = ?, job_memory_sp = ?, job_memory_old_job_id = ?, job_memory_old_sp = ?, job_memory_kind = ?, small_medals = ?, help_count = ?, hero_count = ?, pvp_wins = ?, casino_wins = ?, monster_kills = ?, mao_count = ?,
 			orb = ?, tired = ?, over_level = ?, over_depot = ?, over_monster = ?, over_future = ?, over_flea = ?, over_store = ?, color = ?,
-			deposit = ?, crystal = ?, wea_seal = ?, wea_name = ?, arm_name = ?, pending_wake = ?
+			deposit = ?, crystal = ?, wea_seal = ?, wea_name = ?, arm_name = ?, pending_wake = ?, god_visit = ?
 		WHERE id = ?
 	`, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP, value.Stats.HP,
 		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
 		value.Level, value.Experience, value.SP, value.JobLevel, value.OldJobID, value.OldSP,
 		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, memoryKind, value.SmallMedals, value.HelpCount, value.HeroCount, value.PvPWins, value.CasinoWins, value.MonsterKills, value.MaoCount,
 		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
-		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName, value.PendingWake, value.ID)
+		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName, value.PendingWake, value.GodVisit, value.ID)
 	if err != nil {
 		return 0, characterNameError(err)
 	}

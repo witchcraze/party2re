@@ -323,11 +323,12 @@ func TestPVP_ConcurrentJoinRoom_Valkey(t *testing.T) {
 }
 
 func TestPVP_WithRoomLock_HonorsCallerDeadlineBeyondDefault(t *testing.T) {
+	t.Parallel()
 	repo, err := pvp.NewValkeyRoomRepository(newTestValkeyClient())
 	if err != nil {
 		t.Fatal(err)
 	}
-	const roomID = "room-long-deadline"
+	roomID := "room-long-deadline-" + t.Name()
 
 	held := make(chan struct{})
 	holderErr := make(chan error, 1)

@@ -45,7 +45,7 @@ type ActionDefinition struct {
 	ActivityKind   string    `json:"activity_kind,omitempty"`
 	Recovery       bool      `json:"recovery,omitempty"`
 	// WaitExempt explains why success does not start the legacy action wait;
-	// empty means it does. WaitRecovery and WaitSpeech are also never blocked.
+	// empty means it does. WaitRecovery, WaitSpeech and WaitReload are also never blocked.
 	WaitExempt WaitExemption `json:"-"`
 }
 
@@ -67,6 +67,7 @@ const (
 	WaitWhisper WaitExemption = "whisper"
 	// WaitSpeech: plain input is not a ＠ action (party.cgi:20-26).
 	WaitSpeech WaitExemption = "speech"
+	WaitReload WaitExemption = "reload" // a page reload carries no ＠ action (party.cgi:19-21)
 )
 
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
@@ -291,6 +292,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"item_id", "quantity"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
+	{ID: "park_divinate", Label: "うらない", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "secretshop_puffpuff", Label: "ぱふぱふ", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "blackmarket_sacrifice", Label: "闇市でレアアイテムをささげる", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "blackmarket_trade", Label: "闇市景品交換", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"prize_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
@@ -340,22 +342,12 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"name"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "plantation_sow",
-		Label:          "種菜園に種まき",
-		Category:       "crafting",
-		OperationID:    "postCharactersIdPlantationSow",
-		RequiredParams: []string{"seed_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "plantation_harvest",
-		Label:          "種菜園から収穫",
-		Category:       "crafting",
-		OperationID:    "postCharactersIdPlantationHarvest",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "oracle_buy", Label: "衣装を買う", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_no"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "oracle_wallpaper", Label: "壁紙を張り替える", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"wallpaper"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "oracle_blackmarket", Label: "やみいちば", Category: "shop", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "plantation_sow", Label: "種をまく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"seed_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "plantation_fertilize", Label: "肥料をまく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"fertilizer_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "plantation_harvest", Label: "収穫する", Category: "growth", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
 	// Category: entertainment (Casino, Lottery & Tavern)
@@ -368,30 +360,13 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"bet"},
 		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "lottery_raffle",
-		Label:          "福引を引く",
-		Category:       "entertainment",
-		OperationID:    "playRaffle",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "lottery_takarakuji_buy",
-		Label:          "宝くじ購入",
-		Category:       "entertainment",
-		OperationID:    "buyTakarakujiTicket",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
-	},
-	{
-		ID:             "tavern_order",
-		Label:          "酒場で食事注文",
-		Category:       "entertainment",
-		OperationID:    "orderTavernMeal",
-		RequiredParams: []string{"item_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
-	},
+	{ID: "lottery_raffle", Label: "福引を引く", Category: "entertainment", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	// No currency gate: takarakuzi.cgi kau answers sold-out and one-per-person before funds.
+	{ID: "takarakuji_buy", Label: "宝くじ購入", Category: "entertainment", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	// No currency gate: bar.cgi chuumon answers fullness before funds, so OrderMeal owns both.
+	{ID: "tavern_order", Label: "酒場で食事注文", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "tavern_delivery_reserve", Label: "でりばりーを頼む", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "tavern_delivery_cancel", Label: "でりばりーをキャンセル", Category: "entertainment", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{
 		ID:             "contest_enter",
 		Label:          "フォトコンテスト応募",
@@ -404,30 +379,10 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	// =========================================================================
 	// Category: growth (Sanctuary, Progression & Limit Break)
 	// =========================================================================
-	{
-		ID:             "wishingwell_exchange",
-		Label:          "願いの泉でSP交換",
-		Category:       "growth",
-		OperationID:    "exchangeWishingWellSP",
-		RequiredParams: []string{"stat", "sp"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "altar_pray",
-		Label:          "復活の祭壇（祈り）",
-		Category:       "growth",
-		OperationID:    "prayAltarRamia",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "god_wish",
-		Label:          "神の願い・限界突破",
-		Category:       "growth",
-		OperationID:    "grantGodWish",
-		RequiredParams: []string{"wish_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "wishingwell_exchange", Label: "願いの泉でSP交換", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"stat", "sp"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "altar_pray", Label: "復活の祭壇（祈り）", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "altar_wish", Label: "復活の祭壇（願い）", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "god_wish", Label: "神の願い・限界突破", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"wish_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{
 		ID:             "job_change",
 		Label:          "ダーマ神殿で転職",
@@ -456,14 +411,6 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "park_post",
-		Label:          "交流広場に伝言投稿",
-		Category:       "social",
-		OperationID:    "postParkMessage",
-		RequiredParams: []string{"content"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
 	// Common しらべる on a player (lib/system.cgi shiraberu): usable in every
 	// scene, so it carries no location gate; the private $mes starts no wait.
 	{ID: "player_inspect", Label: "しらべる", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck, WaitExempt: WaitPrivate},
@@ -477,6 +424,8 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		// Note: Emergency rescue can be invoked while dead or asleep to unstick state.
 		RequiredGates: 0,
 	},
+	// The legacy page reload; its only effect is the dispatcher's member refresh.
+	{ID: "presence_refresh", Label: "更新", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, WaitExempt: WaitReload},
 }, casinoCatalog...), exileCatalog...), continuationCatalog...)
 
 // AllActions returns a slice copy of the canonical default action catalog.

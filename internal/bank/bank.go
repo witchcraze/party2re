@@ -18,13 +18,6 @@ const (
 	NPCName = "@タクシード"
 )
 
-// NPCDialogues lists standard bank greeting and service dialogues.
-var NPCDialogues = []string{
-	"ゴールドをお預かりいたします",
-	"24時間いつでも、手数料もございません",
-	"99999999999999 Gまでお預かりいたします",
-}
-
 var (
 	ErrInvalidCharacterID   = errors.New("invalid character ID")
 	ErrInvalidAmount        = errors.New("amount must be positive")

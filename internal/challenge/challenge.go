@@ -364,10 +364,6 @@ func (s *Service) GetCharacterRecords(ctx context.Context, characterID string) (
 	return s.repo.FindRecordsByCharacter(ctx, characterID)
 }
 
-func (s *Service) GetRecord(ctx context.Context, characterID string, tierID string) (*CharacterChallengeRecord, error) {
-	return s.repo.FindRecord(ctx, characterID, tierID)
-}
-
 func (s *Service) GetLeaderboard(ctx context.Context, tierID string, limit int) ([]LeaderboardEntry, error) {
 	if limit <= 0 {
 		limit = 20

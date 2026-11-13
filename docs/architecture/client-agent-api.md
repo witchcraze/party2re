@@ -99,8 +99,10 @@ Online activity takes precedence over saved scene selection and reveals only
 Offline targets have no location. This read never admits, renews or recovers an
 activity, and never exposes activity IDs, phases, members or selected products.
 
-Planned owned Gateway commands are `presence_enter` (game entry, optional string
-`login_message`) and `presence_refresh` (saved screen refresh, empty params).
+The owned Gateway commands are `presence_enter` (game entry, optional string
+`login_message`, planned) and `presence_refresh` (saved screen refresh, empty
+params). `presence_refresh` is registered and currently only refreshes the
+[place member list](place-log.md#members); its sample effect is planned.
 Omitted message preserves it; `""` clears it; null/non-string/invalid text returns
 400 without changing message or clocks. Standard authentication/ownership wrappers
 and service ownership checks apply equally to session and PAT calls: 401 for
@@ -113,7 +115,7 @@ Preserve known command results on context refresh failure and use GET-only
 recovery; do not automatically replay POST. Public clients use escaped text
 bindings and safe image URLs, never message HTML or executable avatar markup.
 
-These are approved implementation targets, not registered routes/actions.
+The rest are approved implementation targets, not registered routes/actions.
 Their modular OpenAPI schemas are added with runtime implementation. Browser UI
 and external widget delivery remain separately scoped consumers.
 
@@ -221,8 +223,9 @@ and `scene_back`. Destinations, subject kinds and paging inputs are closed,
 typed contracts registered by the relevant adapter. Back means the registered
 parent scene, not browser history. A facility/subject change clears subordinate
 selection and paging. Navigation commands have no price, fatigue, scheduled
-cooldown or implicit feature mutation. Recovery and active-session restrictions
-still apply: browsing cannot bypass sleep or abandon a run.
+cooldown or implicit feature mutation. The one exception is a recorded god visit:
+it decides the observed scene, and leaving that scene clears it ([God](../design/god.md#visit)).
+Recovery and active-session restrictions still apply: browsing cannot bypass sleep or abandon a run.
 
 Registered destinations, their parents, subject kinds and paging are defined by
 the production registry (`newPlayerContext` in `cmd/party2/playercontext.go`).
@@ -330,12 +333,12 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | `いどう` → `idou`, registered `@places` → saved `$m{lib}` | Gateway `scene_enter` → `playercontext.Service.Enter`; the initial closed registry covers the destinations above. Remaining facilities belong to #948–#949. |
 | `まち` → `machi`, registered `@towns` → saved `$m{lib}` | The hub plus the four town scenes `town1`..`town4` through `scene_enter` / `scene_back`; town stores follow [Store](../design/store.md#town-scenes-and-commands). Estate projections remain #949 work. |
 | `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` through `scene_enter` and public Home targets through `scene_select` → Home.GetHomeView. Query authenticates the actor; unavailable targets remain explicit. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
-| Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh derives owned activity/recovery before ordinary selection. Expired sleep requires explicit Wake; conflicting activities remain explicit. The selector never ends an activity. |
+| Reload dispatch: sleep before `$m{lib}`, default `park` | The town hub is that park: `交流広場` with `@町娘`, the same place and log as `＠いどう>交流広場`. Shared GET/refresh derives owned activity/recovery before ordinary selection. Expired sleep requires explicit Wake; conflicting activities remain explicit. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
 | `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Shared `npc_talk`/`npc_inspect` in facility scenes ([place log](place-log.md#npc-interaction)); plain speech and `ささやき` are `place_say`/`place_whisper` in places with a log ([speech and whisper](place-log.md#writers)). `しらべる` on a player is the scene-independent `player_inspect` ([Auction design](../design/auction.md#2-player-inspection-しらべる)). Facilities outside Economy keep their REST dialogue until migrated. |
-| `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. |
+| `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. It removes the account's characters from the [place member lists](place-log.md#members). |
 | `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Stored photo acquisition/Contest reconciliation remains #949; client rendering belongs to #140. Separator superseded by structured actions. |
-| Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes. Place logs, the action wait and per-place members follow the planned [place-log contract](place-log.md). No room join/leave, recovery or settlement is introduced here. |
+| Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes. Place logs, the action wait and per-place members follow the [place-log contract](place-log.md). No room join/leave, recovery or settlement is introduced here. |
 
 The full scoped Home action/call-path reconciliation and retained REST ownership
 are maintained in [Home design](../design/home.md#observation-visibility-and-navigation).
@@ -455,7 +458,7 @@ authority; it makes no combat, wager or settlement formula parity claim.
 | `lib/vs_player.cgi:32–41`, `vs_guild.cgi:31–38`: `かいし`, pre-round `しらべる` and PvP `ぱーてぃー` | GetCharacterRoom verifies actor membership; leader start/advance and phase-legal leave/team candidates correspond to existing PvP/GvG services and retained character room routes. Detail/party inspection and full mutation migration remain #948. |
 | `lib/_casino.cgi:10–32,100–111`: `にげる`, `すくしょ`, `かいし`, `さそう`, leader `きっく`; delegated game actions | Casino.GetCharacterRoomView reuses owned admitted GetRoomView; context composes masked detail and role/phase choices. Leave/start/kick/turn candidates refer to retained service operations; mutation connection remains #949. Invitation/screenshot have no Casino service replacements and remain explicit #949/#140 reconciliation. |
 | `lib/casino_indian.cgi:10–16`: `つづける`, `しょうぶ`, `おりる`; `casino_highlow.cgi:10–27`: `つづける`, `ハイ`, conditional `ロウ`, `おりる`; `casino_doppel.cgi:10–15`: generated marks | Existing PlayRoomAction delegates to each game service. Context supplies service-owned game choices and visibility; legacy/current menu differences are recorded in the [scoped Casino mapping](../design/casino.md#scoped-legacy-dispatch-reconciliation). Gateway mutation connection remains #949; existing REST action route stays available. |
-| `lib/vs_dungeon.cgi:33–48`: leader initial `すすむ`, `にし`, `きた`, `みなみ`, `ひがし`, `ちず`, treasure `しらべる` | Owned ObserveExpedition supplies actor-visible map, floor/revision/turn facts and verified direction/Fight/Escape candidates. Standalone map GET is replaced by context; catalog listing and Move/Fight/Escape REST remain. Current StartPartyExpedition/Move bundle initialization/tile resolution; native initial advance/treasure inspection remains under the [Dungeon action mapping](../design/dungeon.md#legacy-action-reconciliation), and per-participant combat/exit remains #1204. |
+| `lib/vs_dungeon.cgi:33–48`: leader initial `すすむ`, `にし`, `きた`, `みなみ`, `ひがし`, `ちず`, treasure `しらべる` | Owned ObserveExpedition supplies actor-visible map, floor/revision/turn facts and verified direction/Fight/Escape candidates. Standalone map GET is replaced by context; map listing and Move/Fight/Escape REST remain. Current StartPartyExpedition/Move bundle initialization/tile resolution; native initial advance/treasure inspection remains under the [Dungeon action mapping](../design/dungeon.md#legacy-action-reconciliation), and per-participant combat/exit remains #1204. |
 | `lib/vs_challenge.cgi:20–46`: treasure `しらべる`, phase-dependent `すすむ` | Owned GetActiveSession supplies phase/round; AdvanceRound remains the retained character challenge advance operation and unconnected candidate. Treasure/battle/party detail reconciliation remains #948. |
 | `lib/_skill.cgi:158` → `lib/_battle.cgi:1184–1222,1330–1346`: participant `にげる` | Gateway `challenge_retire` → `Challenge.Service.ExitSession` settles the caller, preserves survivors and hands leadership to the first remaining member; last exit ends the run. Shared settlement owns resource/consumption/reward/record/fullness effects. |
 | Inherited `lib/_skill.cgi:22–29,78–79,282–317`: spectator `ささやき`/`にげる`/`すくしょ`, generated job/custom skills and `すとっく`, then `add_battle_action` | Shared member/spectator dispatch is inspected only to establish activity authority. No generated skill menu or per-turn battle command is replaced here; skill/stock/combat and battle spectator reconciliation remain #948, screenshot/social presentation #949/#140. Existing feature and battle operations stay registered. |

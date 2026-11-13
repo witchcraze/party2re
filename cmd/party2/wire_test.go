@@ -828,6 +828,11 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id = ?", c.ID)
 	})
 
+	c.GodVisit = string(god.RealmHeaven)
+	if err := charRepo.Update(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+
 	txProvider := database.NewTransactionProvider(db)
 	godSvc, err := god.NewService(
 		charRepo,
@@ -837,7 +842,7 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("god.NewService failed: %v", err)
 	}
-	if _, err := godSvc.GrantWish(ctx, c.ID, god.WishOrtega, god.RealmHeaven); err != nil {
+	if _, err := godSvc.GrantWish(ctx, c.ID, god.WishOrtega); err != nil {
 		t.Fatalf("GrantWish WishOrtega failed: %v", err)
 	}
 

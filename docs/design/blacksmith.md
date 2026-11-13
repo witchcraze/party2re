@@ -154,7 +154,7 @@ naming, leading/trailing whitespace trimming and ASCII `@` rejection. Legacy
 differs on these points, uses a wall-clock action cooldown and venue comment/NPC
 logs (`system.cgi:639–680`), and includes weapon names in storage dialogue.
 The Gateway applies the [action wait](../architecture/place-log.md#action-wait);
-the commands' log rows (#1941), presence (#1943) and the naming differences (#2060) remain open,
+the commands' log rows (#1941) and the naming differences (#2060) remain open,
 so there is no full gameplay-parity claim.
 
 `WithdrawWeapon` checks only the main-hand slot and does not reject a full

@@ -8,6 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/guild"
 )
 
 func (s *Service) executeHeavenWish(
@@ -85,8 +86,11 @@ func (s *Service) executeHeavenWish(
 			return ErrWishRequirement
 		}
 		g, _, err := s.guilds.GetGuildByCharacter(ctx, char.ID)
-		if err != nil {
+		if errors.Is(err, guild.ErrCharacterNotInGuild) {
 			return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
+		}
+		if err != nil {
+			return err
 		}
 		if err := s.guilds.AddPoints(ctx, g.ID, 1000); err != nil {
 			return err
@@ -100,8 +104,11 @@ func (s *Service) executeHeavenWish(
 			return ErrWishRequirement
 		}
 		g, _, err := s.guilds.GetGuildByCharacter(ctx, char.ID)
-		if err != nil {
+		if errors.Is(err, guild.ErrCharacterNotInGuild) {
 			return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
+		}
+		if err != nil {
+			return err
 		}
 		if err := s.guilds.UpdateBgimg(ctx, g.ID, "god.gif"); err != nil {
 			return err
@@ -246,6 +253,7 @@ func (s *Service) executeHeavenWish(
 		msg = "錬金レシピを預かり所に送致しました！"
 
 	case WishLover:
+		char.GodVisit = string(RealmHeaven) // refused: the visit continues
 		*res = WishResult{
 			Character: *char,
 			Wish: Wish{
@@ -255,8 +263,7 @@ func (s *Service) executeHeavenWish(
 				Description: "恋人が…？",
 				Available:   true,
 			},
-			Message:      "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…",
-			NextLocation: "",
+			Message: "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…",
 		}
 		return nil
 
@@ -295,8 +302,7 @@ func (s *Service) executeHeavenWish(
 			Description: desc,
 			Available:   true,
 		},
-		Message:      msg,
-		NextLocation: "home",
+		Message: msg,
 	}
 	return nil
 }

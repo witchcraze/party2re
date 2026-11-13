@@ -47,72 +47,27 @@ func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Contex
 	return fn(ctx)
 }
 
-func TestWishingWell_GetStatus(t *testing.T) {
-	repo := newMockCharacterRepo()
+func TestWishingWell_StatusOf(t *testing.T) {
 	char, _ := corecharacter.New("Warrior")
-	char.ID = "char-1"
-	char.SP = 15
-	repo.chars[char.ID] = char
-
-	svc, err := wishingwell.NewService(repo, wishingwell.WithTransactionProvider(&mockTxProvider{}))
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	status, err := svc.GetStatus(context.Background(), char.ID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if status.CharacterID != char.ID {
-		t.Errorf("got ID %s, want %s", status.CharacterID, char.ID)
-	}
-	if status.SP != 15 {
-		t.Errorf("got SP %d, want 15", status.SP)
-	}
-	if !status.CanExchange {
+	if !wishingwell.StatusOf(char).CanExchange {
 		t.Errorf("expected CanExchange to be true")
 	}
-	if len(status.Dialogues) != 8 {
-		t.Errorf("got %d dialogues, want 8", len(status.Dialogues))
-	}
 
-	// Test JobMemory persistent active
 	char.JobMemory = &corecharacter.JobMemory{JobID: "job-02", SP: 5}
-	repo.chars[char.ID] = char
-	status, err = svc.GetStatus(context.Background(), char.ID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if status.CanExchange {
-		t.Errorf("expected CanExchange to be false when persistent JobMemory is active")
+	if s := wishingwell.StatusOf(char); s.CanExchange || !s.JobMemoryActive {
+		t.Errorf("expected exchange blocked by persistent JobMemory, got %+v", s)
 	}
 
-	// Test JobMemory temporary active allows exchange (sp_change.cgi:74 checks only job_memory.cgi)
-	char.JobMemory = &corecharacter.JobMemory{
-		Kind:  corecharacter.JobMemoryKindTemporary,
-		JobID: "job-02",
-		SP:    5,
-	}
-	repo.chars[char.ID] = char
-	status, err = svc.GetStatus(context.Background(), char.ID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !status.CanExchange {
+	// A temporary memory does not block (sp_change.cgi:74 checks only job_memory.cgi).
+	char.JobMemory = &corecharacter.JobMemory{Kind: corecharacter.JobMemoryKindTemporary, JobID: "job-02", SP: 5}
+	if !wishingwell.StatusOf(char).CanExchange {
 		t.Errorf("expected CanExchange to be true when temporary JobMemory is active")
 	}
 
-	// Test OverLevel active
 	char.JobMemory = nil
 	char.OverLevel = true
-	repo.chars[char.ID] = char
-	status, err = svc.GetStatus(context.Background(), char.ID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if status.CanExchange {
-		t.Errorf("expected CanExchange to be false when OverLevel is active")
+	if s := wishingwell.StatusOf(char); s.CanExchange || !s.OverLevel {
+		t.Errorf("expected exchange blocked by OverLevel, got %+v", s)
 	}
 }
 

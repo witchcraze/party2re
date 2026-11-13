@@ -236,7 +236,8 @@ func TestPartyAdventure_DepotFallbackOnFullInventory_FallbackPath(t *testing.T) 
 		remainingMP: map[string]int{"leader": 35},
 		outcome:     corebattle.OutcomeWin,
 	}
-	svc, partyRepo, charRepo, invRepo, depotRepo := setupPartyAdventureTestService(t, engine)
+	// Floor 11 chests must not draw stage-01's legacy empty entry (#2139).
+	svc, partyRepo, charRepo, invRepo, depotRepo := setupPartyAdventureTestService(t, engine, WithRNG(func(int) int { return 0 }))
 
 	leader := corecharacter.Character{
 		ID:       "leader",
@@ -317,7 +318,8 @@ func TestPartyAdventure_LostDropOnFullDepot_FallbackPath(t *testing.T) {
 		remainingMP: map[string]int{"leader": 20},
 		outcome:     corebattle.OutcomeWin,
 	}
-	svc, partyRepo, charRepo, invRepo, depotRepo := setupPartyAdventureTestService(t, engine)
+	// Floor 11 chests must not draw stage-01's legacy empty entry (#2139).
+	svc, partyRepo, charRepo, invRepo, depotRepo := setupPartyAdventureTestService(t, engine, WithRNG(func(int) int { return 0 }))
 
 	leader := corecharacter.Character{
 		ID:       "leader",
@@ -521,6 +523,7 @@ func TestPartyAdventure_WithBattleSettler_FullIntegration(t *testing.T) {
 		engine,
 		WithPostBattleSettler(battleAdapter),
 		WithDepotRepository(depotRepo),
+		WithRNG(func(int) int { return 0 }), // never draw the empty chest entry (#2139)
 	)
 	if err != nil {
 		t.Fatal(err)

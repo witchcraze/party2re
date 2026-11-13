@@ -100,14 +100,6 @@ func (s *Service) Fight(ctx context.Context, characterID string) (ExpeditionStep
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	dungeon, ok := s.dungeonMap[exp.DungeonID]
-	if !ok {
-		return ExpeditionStepResult{}, ErrDungeonNotFound
-	}
-	// A native boss victory is an ordinary win, not a catalog clear.
-	if enc.EventType == EventBoss && !dungeon.native() {
-		return s.resolveBossCombat(ctx, exp, &char, dungeon, enc.Monster, enc.X, enc.Y)
-	}
 	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monster, enc.EventType, enc.X, enc.Y, "")
 }
 

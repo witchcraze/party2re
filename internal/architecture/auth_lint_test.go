@@ -95,12 +95,9 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /helpers/quests$`),
 		regexp.MustCompile(`^GET /news$`),
 		regexp.MustCompile(`^GET /news/\{id\}$`),
-		regexp.MustCompile(`^GET /park/posts$`),
-		regexp.MustCompile(`^GET /park/npc/inspect$`),
 		regexp.MustCompile(`^GET /eventplaza$`),
 		regexp.MustCompile(`^GET /eventplaza/merchant/items$`),
 		regexp.MustCompile(`^GET /eventplaza/banquets$`),
-		regexp.MustCompile(`^GET /tavern/menu$`),
 		regexp.MustCompile(`^GET /challenges/tiers$`),
 		regexp.MustCompile(`^GET /challenges/hall-of-fame$`),
 		regexp.MustCompile(`^GET /challenges/hall-of-fame/\{tier_id\}$`),
@@ -112,7 +109,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /gvg/leaderboard$`),
 		regexp.MustCompile(`^GET /replays/\{id\}$`),
 		regexp.MustCompile(`^GET /replays/recent$`),
-		regexp.MustCompile(`^GET /god/dialogue$`),
 		regexp.MustCompile(`^GET /monster/dialogue$`),
 		regexp.MustCompile(`^GET /naming-hall/dialogue$`),
 		regexp.MustCompile(`^GET /characters/\{id\}/profile$`),
@@ -136,7 +132,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /houses/check$`),
 		regexp.MustCompile(`^GET /towns/\{town_id\}/stores$`),
 		regexp.MustCompile(`^GET /stores/\{store_id\}$`),
-		regexp.MustCompile(`^GET /lottery/takarakuji$`),
 		regexp.MustCompile(`^GET /casino/prizes$`),
 		regexp.MustCompile(`^GET /casino/rooms$`),
 		regexp.MustCompile(`^GET /casino/rooms/\{roomId\}$`),
@@ -379,32 +374,15 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleExchangeJob":        "job.go",
 		"handleSaveFutureMemory":   "job.go",
 		"handleRecallFutureMemory": "job.go",
-		// Plantation
-		"handlePlantationSow":       "plantation.go",
-		"handlePlantationFertilize": "plantation.go",
-		"handlePlantationHarvest":   "plantation.go",
-		// Altar
-		"handleAltarPray":  "altar.go",
-		"handleAltarWish":  "altar.go",
-		"handleAltarOffer": "altar.go",
-		// Wishing Well
-		"handleWishingWellExchange": "wishingwell.go",
 		// Contest
 		"handleEnterContest":         "contest.go",
 		"handleVoteContest":          "contest.go",
 		"handleSaveCharacterPhoto":   "contest.go",
 		"handleDeleteCharacterPhoto": "contest.go",
-		// Lottery
-		"handlePlayRaffle":          "lottery.go",
-		"handleBuyTakarakujiTicket": "lottery.go",
 		// Event Plaza
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",
 		// Tavern
-		"handleTavernOrder":           "tavern.go",
-		"handleTavernReserveDelivery": "tavern.go",
-		"handleTavernCancelDelivery":  "tavern.go",
-		"handleTavernTalk":            "tavern.go",
 		// Custom Skill
 		"handleSetCustomSkill": "custom_skill.go",
 		// Guild
@@ -434,20 +412,12 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleTeachCompanionPhrase":  "home.go",
 		"handleForgetCompanionPhrase": "home.go",
 		"handleClearDeliveryNotices":  "home.go",
-		// Park
-		"handlePostParkMessage": "park.go",
-		"handleParkNPCTalk":     "park.go",
-		"handleParkNPCDivinate": "park.go",
 		// Monster
 		"handleBringMonsterToHome":  "monster.go",
 		"handleDepositMonsterToBox": "monster.go",
 		"handleRenameMonster":       "monster.go",
 		"handleSendMonster":         "monster.go",
 		"handleReleaseMonster":      "monster.go",
-		// Oracle
-		"handleOracleBuyCostume":   "oracle.go",
-		"handleOracleBuyWallpaper": "oracle.go",
-		"handleOracleBlackMarket":  "oracle.go",
 		// Helper
 		"handleCompleteHelperQuest": "helper_rescue.go",
 	}

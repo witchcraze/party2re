@@ -91,16 +91,30 @@ Command echoes (the actor and NPC rows of facility commands) are open in [#1941]
 
 ### NPC interaction
 
-- The HTTP layer keeps one NPC registry keyed by scene destination: name, words (with `{name}` for the actor) and an optional inspect text. The NPC colour is the legacy `$npc_color` `#FF69B4`. Facilities in the registry offer both commands; the facility comes from the current scene, and the scene's qualification is rechecked.
+- Each facility's HTTP registration, keyed by scene destination, may name its NPC with the legacy `@words` and `shiraberu_npc` text; the NPC colour is the legacy `$npc_color` `#FF69B4`. Facilities with an NPC offer both commands; the facility comes from the current scene, and the scene's qualification is rechecked.
 - **Talk**: `npc_talk` logs the actor row `＠はなす` and a random word as the NPC row, and starts the wait. A facility without words would answer privately with `返事がない、ただのしかばねのようだ…`.
 - **Inspect**: `npc_inspect` returns the facility's `shiraberu_npc` text, or the default `しかし何も見つからなかった…`, to the actor only (`private: true`). It writes no row and starts no wait (`WaitPrivate`).
+  The park (town hub) is the exception: its `shiraberu_npc` swaps `@words` and calls `&hanasu` (`lib/park.cgi`), so the line is a logged `$npc_com` with the actor row `＠しらべる>@町娘`, and it starts the wait.
 - Legacy word lines that embed live facts (Gem Store and Accessory item recommendations, Depot capacity) are omitted until those facts are wired.
 - Facility-specific NPC acts stay facility commands in the `npc` category, such as SecretShop `secretshop_puffpuff`. It logs `＠ぱふぱふ` and its reply as rows private to the actor and starts the wait.
 
-### Members ([#1943](https://github.com/witchcraze/party2re/issues/1943))
+### Members
 
-- Per-place membership uses the same place identity and the 300 s expiry. It is separate from global presence.
-- **Open question**: may an owned GET refresh membership, or may only commands do so? Global presence lets only commands record activity. This must be decided before implementation.
+- **Storage**
+  - Members are kept per place in Valkey Master ([keyspace](valkey-keyspace.md)), under the log's place identity. They are separate from global presence, and their loss is accepted as for the log.
+  - An entry holds the character's name, colour, avatar URL and aura effect as of its latest refresh. It expires 300 s after that refresh (configurable). It is still listed at exactly 300 s, because legacy drops a row only when `now - 300 > last`.
+  - A character is listed in one place at a time.
+- **Refresh** (decided 2026-11-13 in [#1943](https://github.com/witchcraze/party2re/issues/1943))
+  - Every owned Gateway command refreshes the actor in its current place before it runs, whether the command is then accepted or rejected. Legacy `read_member` likewise runs before the action. A refresh failure fails the preflight.
+  - `presence_refresh` stands in for the legacy page reload, including auto-reload. Its only effect is this refresh. A reload is not a `＠` action, so the wait never blocks it and it starts no wait, and it stays available while sleeping, dead or in an activity. [#1804](https://github.com/witchcraze/party2re/issues/1804) adds the saved-sample effect to the same command.
+  - GET never refreshes, as for global presence.
+- **Leave**
+  - A successful `scene_enter` or `scene_back` removes the actor, as legacy moves call `leave_member`. The actor appears in the new place with its next command.
+  - Logout (`DELETE /sessions`) removes every character of the account, because it replaces the per-character `ろぐあうと`.
+  - A failed removal is logged and the entry expires.
+- **Observation**
+  - The scenes with a place log expose `scene.members`: the facility NPC first when the facility has one, then characters in arrival order. Rows carry no character IDs.
+  - A store failure fails the observation.
 
 ## Alternatives rejected
 

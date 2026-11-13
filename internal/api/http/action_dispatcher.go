@@ -123,6 +123,10 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
 			return
 		}
+		if err := h.refreshPlaceMember(r.Context(), char.ID, current.Snapshot.LocationID); err != nil {
+			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to refresh the place member list.")
+			return
+		}
 		def, _ := actionDefinition(req.Action)
 		// Legacy rejects every registered action while $m{wt} runs (lib/system.cgi:641-644).
 		if current.Snapshot.ActionWait > 0 && !(playercontext.ActionWaitGate{}).Allows(def, &current.Snapshot) {
@@ -147,7 +151,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		if req.Action != "home_wake" && req.Action != "rescue_request" && !def.Recovery {
+		if req.Action != "home_wake" && req.Action != "rescue_request" && req.Action != "presence_refresh" && !def.Recovery {
 			message, err := h.sleepingCharacterMessage(r.Context(), char.ID)
 			if err != nil {
 				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current sleep state.")
@@ -161,7 +165,10 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 		// Claim the wait atomically before running, so concurrent commands cannot
 		// all pass the read-only check above.
 		var claim playercontext.ActionWaitClaim
-		if playercontext.StartsActionWait(def) {
+		// The park answers ＠しらべる>@町娘 through ＠はなす, a logged reply that waits.
+		npc := h.sceneAdapters[current.Snapshot.LocationID].npc
+		loggedInspect := req.Action == "npc_inspect" && npc != nil && len(npc.inspectWords) > 0
+		if playercontext.StartsActionWait(def) || loggedInspect {
 			var claimed bool
 			claim, claimed, err = h.playerContext.ClaimActionWait(r.Context(), char.ID)
 			if err != nil {

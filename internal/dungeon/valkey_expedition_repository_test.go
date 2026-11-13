@@ -44,21 +44,19 @@ func cleanupDungeonValkey(t *testing.T, client valkeygo.Client, charIDs ...strin
 func sampleExpedition(id, charID, dungeonID string) dungeon.ActiveExpedition {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	return dungeon.ActiveExpedition{
-		ID:                id,
-		CharacterID:       charID,
-		DungeonID:         dungeonID,
-		CurrentFloor:      1,
-		PosX:              0,
-		PosY:              0,
-		CurrentHP:         100,
-		TurnsRemaining:    50,
-		AccumulatedExp:    0,
-		AccumulatedGold:   0,
-		AccumulatedMedals: 0,
-		AccumulatedItems:  []string{},
-		Status:            dungeon.StatusExploring,
-		StartedAt:         now,
-		UpdatedAt:         now,
+		ID:               id,
+		CharacterID:      charID,
+		DungeonID:        dungeonID,
+		PosX:             0,
+		PosY:             0,
+		CurrentHP:        100,
+		TurnsRemaining:   50,
+		AccumulatedExp:   0,
+		AccumulatedGold:  0,
+		AccumulatedItems: []string{},
+		Status:           dungeon.StatusExploring,
+		StartedAt:        now,
+		UpdatedAt:        now,
 	}
 }
 
@@ -68,7 +66,7 @@ func TestMemoryExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 
 	charID := "mem-char-01"
 	expID := "mem-exp-01"
-	exp := sampleExpedition(expID, charID, "dungeon-01")
+	exp := sampleExpedition(expID, charID, dungeon.NativeMap0ID)
 
 	// 1. Initially nil
 	got, err := repo.GetActiveExpedition(ctx, charID)
@@ -89,21 +87,19 @@ func TestMemoryExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActiveExpedition failed: %v", err)
 	}
-	if got == nil || got.ID != expID || got.CurrentFloor != 1 {
+	if got == nil || got.ID != expID {
 		t.Fatalf("unexpected expedition: %#v", got)
 	}
 
 	// 4. Step: normal progression
 	stepParams := dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 1,
 		NewY:                 0,
 		HPDelta:              -10,
 		TurnsDelta:           -1,
 		ExpDelta:             25,
 		GoldDelta:            50,
-		MedalsDelta:          1,
 		RewardItemID:         "herb",
 		Now:                  time.Now().UTC(),
 	}
@@ -177,7 +173,7 @@ func TestMemoryExpeditionRepository_TTL(t *testing.T) {
 	repo := dungeon.NewMemoryExpeditionRepository(dungeon.WithExpeditionTTL(shortTTL))
 
 	charID := "mem-ttl-char"
-	exp := sampleExpedition("mem-ttl-exp", charID, "dungeon-01")
+	exp := sampleExpedition("mem-ttl-exp", charID, dungeon.NativeMap0ID)
 
 	if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
 		t.Fatal(err)
@@ -232,7 +228,7 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	}
 
 	// 2. SaveActiveExpedition
-	exp := sampleExpedition(expID, charID, "dungeon-01")
+	exp := sampleExpedition(expID, charID, dungeon.NativeMap0ID)
 	if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
 		t.Fatalf("SaveActiveExpedition failed: %v", err)
 	}
@@ -258,21 +254,19 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	if got == nil {
 		t.Fatalf("expected non-nil expedition")
 	}
-	if got.ID != expID || got.CharacterID != charID || got.CurrentFloor != 1 || got.CurrentHP != 100 {
+	if got.ID != expID || got.CharacterID != charID || got.CurrentHP != 100 {
 		t.Errorf("unexpected expedition values: %#v", got)
 	}
 
 	// 5. Atomic Step with Lua Script
 	stepParams := dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 2,
 		NewY:                 0,
 		HPDelta:              -15,
 		TurnsDelta:           -1,
 		ExpDelta:             40,
 		GoldDelta:            80,
-		MedalsDelta:          2,
 		RewardItemID:         "potion",
 		Now:                  time.Now().UTC(),
 	}
@@ -289,7 +283,7 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	if outcome.Expedition.TurnsRemaining != 49 {
 		t.Errorf("expected turns 49, got %d", outcome.Expedition.TurnsRemaining)
 	}
-	if outcome.Expedition.AccumulatedExp != 40 || outcome.Expedition.AccumulatedGold != 80 || outcome.Expedition.AccumulatedMedals != 2 {
+	if outcome.Expedition.AccumulatedExp != 40 || outcome.Expedition.AccumulatedGold != 80 {
 		t.Errorf("unexpected accumulated rewards: %#v", outcome.Expedition)
 	}
 	if len(outcome.Expedition.AccumulatedItems) != 1 || outcome.Expedition.AccumulatedItems[0] != "potion" {
@@ -299,14 +293,12 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	// 6. Step appending another item
 	stepParams2 := dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 2,
 		NewY:                 1,
 		HPDelta:              0,
 		TurnsDelta:           -1,
 		ExpDelta:             10,
 		GoldDelta:            20,
-		MedalsDelta:          0,
 		RewardItemID:         "magic_key",
 		Now:                  time.Now().UTC(),
 	}
@@ -329,25 +321,24 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 		t.Errorf("expected ErrExpeditionIDMismatch, got %v", err)
 	}
 
-	// 8. Test Step leading to wipeout (Turns exhausted)
+	// 8. Exhausted turns clamp to zero and keep the run active
 	turnsExhaustParams := dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 2,
 		NewY:                 2,
 		HPDelta:              0,
 		TurnsDelta:           -100, // exceeds remaining turns
 		Now:                  time.Now().UTC(),
 	}
-	wipeOutcome, err := repo.Step(ctx, charID, turnsExhaustParams)
+	exhausted, err := repo.Step(ctx, charID, turnsExhaustParams)
 	if err != nil {
-		t.Fatalf("wipeout step failed: %v", err)
+		t.Fatalf("exhaustion step failed: %v", err)
 	}
-	if wipeOutcome.Status != dungeon.StatusWipedOut {
-		t.Errorf("expected StatusWipedOut, got %v", wipeOutcome.Status)
+	if exhausted.Status != dungeon.StatusExploring || exhausted.Expedition.TurnsRemaining != 0 {
+		t.Errorf("expected exploring at 0 turns, got %v / %d", exhausted.Status, exhausted.Expedition.TurnsRemaining)
 	}
-	if wipeOutcome.Expedition.TurnsRemaining != 0 {
-		t.Errorf("expected 0 turns remaining, got %d", wipeOutcome.Expedition.TurnsRemaining)
+	if _, err := repo.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: expID, NewX: 2, NewY: 2, FinishStatus: dungeon.StatusWipedOut, Now: time.Now().UTC()}); err != nil {
+		t.Fatalf("freeze step failed: %v", err)
 	}
 
 	// 9. Test Step on inactive expedition returns ErrExpeditionNotActive
@@ -395,7 +386,7 @@ func TestValkeyExpeditionRepository_ConcurrentSteps(t *testing.T) {
 
 	// Initialize expeditions for all characters
 	for i, cid := range charIDs {
-		exp := sampleExpedition(fmt.Sprintf("conc-exp-%02d", i), cid, "dungeon-01")
+		exp := sampleExpedition(fmt.Sprintf("conc-exp-%02d", i), cid, dungeon.NativeMap0ID)
 		if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
 			t.Fatalf("SaveActiveExpedition for %s failed: %v", cid, err)
 		}
@@ -414,14 +405,12 @@ func TestValkeyExpeditionRepository_ConcurrentSteps(t *testing.T) {
 			for s := 1; s <= stepsPerChar; s++ {
 				_, stepErr := repo.Step(ctx, cid, dungeon.StepParams{
 					ExpectedExpeditionID: fmt.Sprintf("conc-exp-%s", cid[len(cid)-2:]),
-					NewFloor:             1,
 					NewX:                 s,
 					NewY:                 0,
 					HPDelta:              -2,
 					TurnsDelta:           -1,
 					ExpDelta:             10,
 					GoldDelta:            20,
-					MedalsDelta:          1,
 					Now:                  time.Now().UTC(),
 				})
 				if stepErr != nil {
@@ -450,13 +439,12 @@ func TestValkeyExpeditionRepository_ConcurrentSteps(t *testing.T) {
 		}
 		expectedExp := stepsPerChar * 10
 		expectedGold := stepsPerChar * 20
-		expectedMedals := stepsPerChar * 1
 		expectedTurns := 50 - stepsPerChar
 		expectedHP := 100 - (stepsPerChar * 2)
 
-		if exp.AccumulatedExp != expectedExp || exp.AccumulatedGold != expectedGold || exp.AccumulatedMedals != expectedMedals {
-			t.Errorf("char %s rewards mismatch: exp=%d (want %d), gold=%d (want %d), medals=%d (want %d)",
-				cid, exp.AccumulatedExp, expectedExp, exp.AccumulatedGold, expectedGold, exp.AccumulatedMedals, expectedMedals)
+		if exp.AccumulatedExp != expectedExp || exp.AccumulatedGold != expectedGold {
+			t.Errorf("char %s rewards mismatch: exp=%d (want %d), gold=%d (want %d)",
+				cid, exp.AccumulatedExp, expectedExp, exp.AccumulatedGold, expectedGold)
 		}
 		if exp.TurnsRemaining != expectedTurns || exp.CurrentHP != expectedHP {
 			t.Errorf("char %s stats mismatch: turns=%d (want %d), hp=%d (want %d)",
@@ -473,7 +461,6 @@ type failFinalizeMockDungeonRepo struct {
 func (m *failFinalizeMockDungeonRepo) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
-	record dungeon.CharacterDungeonRecord,
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
@@ -481,7 +468,7 @@ func (m *failFinalizeMockDungeonRepo) FinalizeExpedition(
 	if m.failFinalize {
 		return errors.New("simulated MariaDB commit failure")
 	}
-	return m.mockDungeonRepo.FinalizeExpedition(ctx, history, record, character, rewardItems, members...)
+	return m.mockDungeonRepo.FinalizeExpedition(ctx, history, character, rewardItems, members...)
 }
 
 func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
@@ -523,7 +510,7 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Start expedition
-	_, err = service.StartExpedition(ctx, charID, "dungeon-01")
+	_, err = service.StartExpedition(ctx, charID, dungeon.NativeMap0ID)
 	if err != nil {
 		t.Fatalf("StartExpedition failed: %v", err)
 	}
@@ -585,7 +572,7 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	exp := sampleExpedition(expID, charID, "dungeon-01")
+	exp := sampleExpedition(expID, charID, dungeon.NativeMap0ID)
 	if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
 		t.Fatalf("SaveActiveExpedition failed: %v", err)
 	}
@@ -604,12 +591,10 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 			<-start
 			outcomes[idx], errs[idx] = repo.Step(ctx, charID, dungeon.StepParams{
 				ExpectedExpeditionID: expID,
-				NewFloor:             1,
 				NewX:                 3,
 				NewY:                 0,
 				TurnsDelta:           -1,
 				GoldDelta:            100,
-				MedalsDelta:          1,
 				RewardItemID:         "potion",
 				EventKey:             "T:1:3:0",
 				Now:                  time.Now().UTC(),
@@ -637,9 +622,9 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	if err != nil || got == nil {
 		t.Fatalf("GetActiveExpedition failed: %v", err)
 	}
-	if got.AccumulatedGold != 100 || got.AccumulatedMedals != 1 || len(got.AccumulatedItems) != 1 {
-		t.Fatalf("expected single reward grant in Valkey, got gold=%d medals=%d items=%v",
-			got.AccumulatedGold, got.AccumulatedMedals, got.AccumulatedItems)
+	if got.AccumulatedGold != 100 || len(got.AccumulatedItems) != 1 {
+		t.Fatalf("expected single reward grant in Valkey, got gold=%d items=%v",
+			got.AccumulatedGold, got.AccumulatedItems)
 	}
 	if len(got.ConsumedEvents) != 1 || got.ConsumedEvents[0] != "T:1:3:0" {
 		t.Fatalf("expected ConsumedEvents=[T:1:3:0], got %v", got.ConsumedEvents)
@@ -651,12 +636,10 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	}
 	revisit, err := repo.Step(ctx, charID, dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 3,
 		NewY:                 0,
 		TurnsDelta:           -1,
 		GoldDelta:            100,
-		MedalsDelta:          1,
 		RewardItemID:         "potion",
 		EventKey:             "T:1:3:0",
 		Now:                  time.Now().UTC(),
@@ -667,19 +650,17 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	if revisit.EventConsumed {
 		t.Fatalf("expected EventConsumed=false on revisit after save/load")
 	}
-	if revisit.Expedition.AccumulatedGold != 100 || revisit.Expedition.AccumulatedMedals != 1 || len(revisit.Expedition.AccumulatedItems) != 1 {
+	if revisit.Expedition.AccumulatedGold != 100 || len(revisit.Expedition.AccumulatedItems) != 1 {
 		t.Fatalf("expected rewards unchanged after revisit, got %+v", revisit.Expedition)
 	}
 
 	// 4. Different floor treasure ("T:2:2:2") is consumed normally
 	floor2Out, err := repo.Step(ctx, charID, dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             2,
 		NewX:                 2,
 		NewY:                 2,
 		TurnsDelta:           -1,
 		GoldDelta:            200,
-		MedalsDelta:          1,
 		RewardItemID:         "high-potion",
 		EventKey:             "T:2:2:2",
 		Now:                  time.Now().UTC(),
@@ -690,7 +671,7 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	if !floor2Out.EventConsumed {
 		t.Fatalf("expected EventConsumed=true for distinct floor treasure T:2:2:2")
 	}
-	if floor2Out.Expedition.AccumulatedGold != 300 || floor2Out.Expedition.AccumulatedMedals != 2 || len(floor2Out.Expedition.AccumulatedItems) != 2 {
+	if floor2Out.Expedition.AccumulatedGold != 300 || len(floor2Out.Expedition.AccumulatedItems) != 2 {
 		t.Fatalf("expected cumulative rewards after floor 2 treasure, got %+v", floor2Out.Expedition)
 	}
 }
@@ -708,7 +689,7 @@ func TestValkeyExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t
 	}
 
 	ctx := context.Background()
-	exp := sampleExpedition(expID, charID, "dungeon-01")
+	exp := sampleExpedition(expID, charID, dungeon.NativeMap0ID)
 	exp.Members = []dungeon.ExpeditionMember{
 		{
 			CharacterID: charID,
@@ -725,7 +706,6 @@ func TestValkeyExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t
 	// 1. Step with explicit MemberHPDeltas (e.g. from combat)
 	stepParams := dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 1,
 		NewY:                 0,
 		HPDelta:              -25,
@@ -759,7 +739,6 @@ func TestValkeyExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t
 	// 2. Solo step without MemberHPDeltas (should keep leader CurrentHP synchronized)
 	stepParams2 := dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 2,
 		NewY:                 0,
 		HPDelta:              -15,
@@ -794,7 +773,7 @@ func TestMemoryExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t
 	repo := dungeon.NewMemoryExpeditionRepository()
 	ctx := context.Background()
 
-	exp := sampleExpedition(expID, charID, "dungeon-01")
+	exp := sampleExpedition(expID, charID, dungeon.NativeMap0ID)
 	exp.Members = []dungeon.ExpeditionMember{
 		{
 			CharacterID: charID,
@@ -811,7 +790,6 @@ func TestMemoryExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t
 	// 1. Explicit MemberHPDeltas
 	outcome, err := repo.Step(ctx, charID, dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 1,
 		NewY:                 0,
 		HPDelta:              -25,
@@ -830,7 +808,6 @@ func TestMemoryExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t
 	// 2. Solo step without MemberHPDeltas
 	outcome2, err := repo.Step(ctx, charID, dungeon.StepParams{
 		ExpectedExpeditionID: expID,
-		NewFloor:             1,
 		NewX:                 2,
 		NewY:                 0,
 		HPDelta:              -15,
@@ -865,7 +842,7 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 		Stats: corecharacter.Stats{
 			HP:      100,
 			MaxHP:   100,
-			Attack:  30,
+			Attack:  60,
 			Defense: 0,
 			Agility: 10, // Slower than monsters
 		},
@@ -874,10 +851,9 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 	repo := newMockDungeonRepo()
 
 	customDungeon := dungeon.Dungeon{
-		ID:               "dungeon-valkey-combat",
-		MinLevel:         1,
-		MaxTurnsPerFloor: 10,
-		Floors: []dungeon.Floor{
+		ID:         "dungeon-valkey-combat",
+		RoundLimit: 11,
+		Variants: []dungeon.Floor{
 			{
 				FloorNumber: 1,
 				Width:       3,
@@ -911,13 +887,14 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 		},
 	}
 
+	rng := &spawnNext{RandomSource: corerandom.NewDeterministic(1)}
 	service, err := dungeon.NewService(
 		repo,
 		charRepo,
 		corebattle.Engine{},
 		dungeon.WithActiveExpeditionStore(valkeyStore),
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
-		dungeon.WithRNG(corerandom.NewDeterministic(1)),
+		dungeon.WithRNG(rng),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -932,6 +909,7 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 	}
 
 	// Move 1: Combat with monster-2
+	rng.next = true
 	res1, err := service.Move(ctx, charID, dungeon.DirectionEast)
 	if err != nil {
 		t.Fatalf("Move 1 failed: %v", err)
@@ -959,6 +937,7 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 	}
 
 	// Move 2: Next monster
+	rng.next = true
 	res2, err := service.Move(ctx, charID, dungeon.DirectionEast)
 	if err != nil {
 		t.Fatalf("Move 2 failed: %v", err)

@@ -26,6 +26,7 @@ type approvalRoleFixture struct {
 	service                 *guild.Service
 	g                       guild.Guild
 	leader, active, pending corecharacter.Character
+	stopTimeout             time.Duration
 }
 
 type approvalRoleLetterAdapter struct{ service *home.Service }
@@ -256,6 +257,10 @@ func (f *approvalRoleFixture) startWorker(t *testing.T, name string, fn func() e
 		t.Logf("%s worker (including gates): %s, err=%v; pool: %+v", name, time.Since(start), err, f.db.Stats())
 		result <- err
 	}()
+	stopTimeout := f.stopTimeout
+	if stopTimeout <= 0 {
+		stopTimeout = 5 * time.Second
+	}
 	join := func() {
 		t.Helper()
 		select {
@@ -265,7 +270,7 @@ func (f *approvalRoleFixture) startWorker(t *testing.T, name string, fn func() e
 		}
 		select {
 		case <-stopped:
-		case <-time.After(5 * time.Second):
+		case <-time.After(stopTimeout):
 			t.Error(name + " worker did not stop after cancellation")
 			// Keep fixture cleanup behind worker termination, even after the diagnostic.
 			<-stopped

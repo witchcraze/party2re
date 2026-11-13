@@ -314,8 +314,8 @@ distributed two-phase commit across MariaDB and Valkey**.
 History and run/session identifiers must protect retries from duplicate grants.
 Do not assert that an endpoint is exactly-once solely because it uses `RunInTx`.
 Inspect the owning finalizer, durable idempotency guard, and failure tests when
-changing this boundary. Durable records include `character_dungeon_records`,
-`dungeon_expedition_history`, and `character_challenge_records`; legacy SQL
+changing this boundary. Durable records include `dungeon_expedition_history` and
+`character_challenge_records`; legacy SQL
 active-state migrations are historical work, not a remaining rollout plan.
 
 ### Dungeon finalization
@@ -327,8 +327,8 @@ expedition member characters in ascending ID order (`SELECT ... FOR UPDATE`, Ran
 claims the history row, delegates surviving vitality persistence (HP/MP, 1 HP floor for
 fallen characters) and consumable inventory item deduction to shared post-battle settlement
 (`battle.ApplyPostBattleResult`), applies experience and gold rewards to each participating
-member, awards small medals to the expedition leader, delivers reward items to inventory/depot
-(Rank 3/5), and atomically increments `character_dungeon_records` (Rank 8). Pre-cutover
+member, and delivers reward items to inventory/depot
+(Rank 3/5). Pre-cutover
 expedition `members` payloads that omit `current_mp` distinguish missing MP from explicit
 `"current_mp": 0` (`ExpeditionMember.HasCurrentMP()`): combat participant construction
 passes `nil` MP to `BuildParticipantWithState` so stored character MP is used and updated
@@ -349,6 +349,28 @@ SQL fallback deletion, including inside finalization, likewise requires both
 owner and run ID; replacing a fallback row also saves the new run's identity.
 Thus delayed finalization or cleanup retries cannot remove a later run or its
 unsettled rewards. SQL commit and Valkey cleanup remain separate boundaries.
+
+### Dungeon treasure claims
+
+**Decision (#1762), target; implementation [#2119](https://github.com/witchcraze/party2re/issues/2119).**
+Chest delivery is immediate ([gameplay](../design/dungeon.md#treasure-inspection-and-delivery)),
+so it cannot wait for Two-Phase Settlement. One SQL transaction locks the actor
+(Rank 2) and inserts a claim receipt that is unique per run and chest and records
+the actor, event, the event's allowance key and the result. The same transaction
+debits item 215 and delivers to the hand or Depot (Rank 3/5) and the Collection
+(Rank 8). The allowance compares the event's key with the key of the actor's
+latest receipt in the run, read under the actor lock and never from the possibly
+stale live run. Hand eligibility uses in-run state: the transaction debits the actor's
+pending consumed items, and publication removes them from the run so settlement
+does not debit them twice.
+
+After commit, a revision-checked step marks the chest opened in the Valkey run.
+Every later Dungeon mutation, settlement included, first publishes committed
+receipts the run does not show yet. An identical retry returns its receipt. A
+failure before commit changes nothing. A lost commit acknowledgement is resolved
+from the receipt with a bounded context; unreadable evidence reports an unknown
+outcome and keeps state. Valkey loss never regrants a receipt, and the receipts
+do not reconstruct the run.
 
 ### Challenge finalization
 

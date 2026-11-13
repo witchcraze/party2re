@@ -2,6 +2,7 @@ package adventure
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -262,17 +263,7 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 		Rng:                 s.Rng,
 	})
 
-	itemPool := s.Stage.TreasureItems
-	if len(itemPool) == 0 && len(s.Stage.TreasureWeapons) == 0 && len(s.Stage.TreasureArmors) == 0 {
-		itemPool = []string{"item-001", "item-002"}
-	}
-
-	pools := StageTreasurePools{
-		Weapons: s.Stage.TreasureWeapons,
-		Armors:  s.Stage.TreasureArmors,
-		Items:   itemPool,
-	}
-
+	pools := StageTreasurePools{Weapons: s.Stage.TreasureWeapons, Armors: s.Stage.TreasureArmors, Items: s.Stage.TreasureItems}
 	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, s.now(), s.Rng)
 	if isStage19(s.StageID, s.Stage.ID) {
 		s.UnsealDemonKing = true
@@ -327,9 +318,10 @@ func GenerateTreasureBoxes(count int, dropPool []string, rng func(n int) int) []
 	return GenerateTreasureBoxesWithPools(count, StageTreasurePools{Items: dropPool}, time.Now().UTC(), rng)
 }
 
-// GenerateTreasureBoxesWithPools creates treasure chests using authentic legacy drop distribution (_npc_action.cgi:540-550):
-// - Appends current day-of-week orb to items candidate pool
-// - 25% weapon, 25% armor, 50% tool/item (v = int(rand(4)) + 1; v = 3 if v > 3)
+// GenerateTreasureBoxesWithPools creates treasure chests with the legacy add_treasure draw:
+// each chest first adds the weekday orb to the tool pool (so orbs accumulate),
+// then picks weapon/armor/tool as 1/4, 1/4, 1/2, falling back to tools when the
+// chosen pool is empty. An empty pool entry ("") yields an empty chest.
 func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now time.Time, rng func(n int) int) []TreasureBox {
 	if count <= 0 {
 		return nil
@@ -338,14 +330,7 @@ func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now tim
 		rng = random.Intn
 	}
 
-	items := make([]string, len(pools.Items), len(pools.Items)+1)
-	copy(items, pools.Items)
-	orb := GetDayOfWeekOrb(now, rng)
-	items = append(items, orb)
-
-	weapons := pools.Weapons
-	armors := pools.Armors
-
+	items := slices.Clone(pools.Items)
 	boxes := make([]TreasureBox, count)
 	for i := 0; i < count; i++ {
 		baseName := defaultBoxNames[rng(len(defaultBoxNames))]
@@ -353,45 +338,20 @@ func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now tim
 		if i >= 26 {
 			suffix = rune('a' + ((i - 26) % 26))
 		}
+		items = append(items, GetDayOfWeekOrb(now, rng))
 
-		// Roll category: 1=weapon (25%), 2=armor (25%), 3 or 4=item (50%)
-		v := rng(4) + 1
-		if v > 3 {
-			v = 3
-		}
-
-		var itemDefID string
-		switch v {
-		case 1:
-			if len(weapons) > 0 {
-				itemDefID = weapons[rng(len(weapons))]
-			} else if len(items) > 0 {
-				itemDefID = items[rng(len(items))]
-			}
-		case 2:
-			if len(armors) > 0 {
-				itemDefID = armors[rng(len(armors))]
-			} else if len(items) > 0 {
-				itemDefID = items[rng(len(items))]
-			}
-		default: // 3
-			if len(items) > 0 {
-				itemDefID = items[rng(len(items))]
-			} else if len(weapons) > 0 {
-				itemDefID = weapons[rng(len(weapons))]
-			} else if len(armors) > 0 {
-				itemDefID = armors[rng(len(armors))]
-			}
-		}
-
-		if itemDefID == "" {
-			itemDefID = "item-001"
+		pool := items
+		switch v := rng(4) + 1; {
+		case v == 1 && len(pools.Weapons) > 0:
+			pool = pools.Weapons
+		case v == 2 && len(pools.Armors) > 0:
+			pool = pools.Armors
 		}
 
 		boxes[i] = TreasureBox{
 			ID:     fmt.Sprintf("box-%d", i+1),
 			Name:   fmt.Sprintf("%s%c", baseName, suffix),
-			ItemID: itemDefID,
+			ItemID: pool[rng(len(pool))],
 		}
 	}
 	return boxes

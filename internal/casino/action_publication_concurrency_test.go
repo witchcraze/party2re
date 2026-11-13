@@ -14,6 +14,7 @@ import (
 )
 
 func TestActionPublication_ConcurrentWagers(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -30,7 +31,9 @@ func TestActionPublication_ConcurrentWagers(t *testing.T) {
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	for _, game := range []casino.GameType{casino.GameTypeIndian, casino.GameTypeHighLow, casino.GameTypeDoppel} {
+		game := game
 		t.Run(string(game), func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 			cfg := testutil.GetStressConfig()

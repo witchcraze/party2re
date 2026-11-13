@@ -205,7 +205,7 @@ func TestGetSalesItemIDs_Accessory(t *testing.T) {
 	}
 }
 
-func TestAccessoryShopMetaAndDialogue(t *testing.T) {
+func TestAccessoryShopMeta(t *testing.T) {
 	if !shop.ValidateShopType(shop.ShopTypeAccessory) {
 		t.Errorf("ValidateShopType(ShopTypeAccessory) = false, want true")
 	}
@@ -213,10 +213,5 @@ func TestAccessoryShopMetaAndDialogue(t *testing.T) {
 	title, npc := shop.GetShopMeta(shop.ShopTypeAccessory)
 	if title != "アクセサリー屋" || npc != "@ミラ" {
 		t.Errorf("GetShopMeta(ShopTypeAccessory) = (%q, %q), want (アクセサリー屋, @ミラ)", title, npc)
-	}
-
-	words := shop.GetShopWords(shop.ShopTypeAccessory)
-	if len(words) == 0 {
-		t.Errorf("GetShopWords(ShopTypeAccessory) is empty")
 	}
 }

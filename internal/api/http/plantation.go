@@ -8,24 +8,17 @@ import (
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/plantation"
+	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
-// PlantationService defines the plantation operations exposed over HTTP.
+// PlantationService is the seed garden surface used by its scene and commands.
 type PlantationService interface {
 	GetStatus(ctx context.Context, characterID string) (plantation.StatusResponse, error)
 	Sow(ctx context.Context, characterID string, seedID string) (plantation.SowResult, error)
 	Fertilize(ctx context.Context, characterID string, fertilizerID string) (plantation.FertilizeResult, error)
 	Harvest(ctx context.Context, characterID string) (plantation.HarvestResult, error)
-}
-
-// WithPlantation configures the PlantationService for the HTTP handler.
-func WithPlantation(service PlantationService) Option {
-	return func(h *Handler) {
-		h.plantation = service
-	}
 }
 
 type plantationSowRequest struct {
@@ -36,160 +29,123 @@ type plantationFertilizeRequest struct {
 	FertilizerID string `json:"fertilizer_id"`
 }
 
-type plantationStatusResponse struct {
-	Plot        *plantation.Plot        `json:"plot,omitempty"`
-	Status      plantation.PlotStatus   `json:"status"`
-	Seeds       []plantation.Seed       `json:"seeds"`
-	Fertilizers []plantation.Fertilizer `json:"fertilizers"`
-	Dialogue    string                  `json:"dialogue"`
+// PlantationSceneData is the actor's plot, the seeds on sale and the usable
+// fertilizers (item fertilizers only while held, as legacy lists them).
+type PlantationSceneData struct {
+	Parent string `json:"parent"`
+	plantation.StatusResponse
 }
 
-type plantationSowResponse struct {
-	Plot    plantation.Plot `json:"plot"`
-	Message string          `json:"message"`
-}
-
-type plantationFertilizeResponse struct {
-	Plot    plantation.Plot `json:"plot"`
-	Message string          `json:"message"`
-}
-
-type plantationHarvestResponse struct {
-	Withered bool                      `json:"withered"`
+// PlantationResult is a seed garden command outcome with the gardener's reply.
+type PlantationResult struct {
+	Plot     *plantation.Plot          `json:"plot,omitempty"`
+	Withered bool                      `json:"withered,omitempty"`
 	Yields   []plantation.HarvestYield `json:"yields,omitempty"`
 	Message  string                    `json:"message"`
 }
 
-func (h *Handler) handleGetCharacterPlantation(w http.ResponseWriter, r *http.Request) {
-	if h.plantation == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("plantation service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		status, err := h.plantation.GetStatus(r.Context(), char.ID)
-		if err != nil {
-			h.writePlantationError(w, err)
+// WithPlantation configures the seed garden scene observation and its commands.
+func WithPlantation(service PlantationService) Option {
+	return func(h *Handler) {
+		h.plantation = service
+		if service == nil {
+			withActionCommand[plantationSowRequest]("plantation_sow", nil, nil)(h)
+			withActionCommand[plantationFertilizeRequest]("plantation_fertilize", nil, nil)(h)
+			withActionCommand[struct{}]("plantation_harvest", nil, nil)(h)
 			return
 		}
-
-		dialogue := ""
-		if len(plantation.DefaultLotusDialogues) > 0 {
-			dialogue = plantation.DefaultLotusDialogues[random.IntN(len(plantation.DefaultLotusDialogues))]
-		}
-
-		writeJSON(w, http.StatusOK, plantationStatusResponse{
-			Plot:        status.Plot,
-			Status:      status.Status,
-			Seeds:       status.Seeds,
-			Fertilizers: status.Fertilizers,
-			Dialogue:    dialogue,
-		})
-	})
-}
-
-func (h *Handler) handlePlantationSow(w http.ResponseWriter, r *http.Request) {
-	if h.plantation == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("plantation service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req plantationSowRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		res, err := h.plantation.Sow(r.Context(), char.ID, req.SeedID)
-		if err != nil {
-			h.writePlantationError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, plantationSowResponse{
-			Plot:    res.Plot,
-			Message: fmt.Sprintf("%sをまいたよ！", res.SeedName),
-		})
-	})
-}
-
-func (h *Handler) handlePlantationFertilize(w http.ResponseWriter, r *http.Request) {
-	if h.plantation == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("plantation service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req plantationFertilizeRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		res, err := h.plantation.Fertilize(r.Context(), char.ID, req.FertilizerID)
-		if err != nil {
-			h.writePlantationError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, plantationFertilizeResponse{
-			Plot:    res.Plot,
-			Message: fmt.Sprintf("%sをまくよ！", res.FertilizerName),
-		})
-	})
-}
-
-func (h *Handler) handlePlantationHarvest(w http.ResponseWriter, r *http.Request) {
-	if h.plantation == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("plantation service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		res, err := h.plantation.Harvest(r.Context(), char.ID)
-		if err != nil {
-			h.writePlantationError(w, err)
-			return
-		}
-
-		var msg string
-		if res.Withered {
-			msg = fmt.Sprintf("%sは芽が出なかったよ…", res.SeedName)
-		} else {
-			var msgBuilder strings.Builder
-			msgBuilder.WriteString("収穫したよ！\n")
-			for _, y := range res.Yields {
-				msgBuilder.WriteString(fmt.Sprintf("%sを%d個\n", y.ItemName, y.Quantity))
+		withActionCommand("plantation_sow", func(ctx context.Context, actor string, p plantationSowRequest) (any, error) {
+			res, err := service.Sow(ctx, actor, p.SeedID)
+			if err != nil {
+				return nil, err
 			}
-			msgBuilder.WriteString("倉庫に送っておいたよ")
-			msg = msgBuilder.String()
-		}
-
-		writeJSON(w, http.StatusOK, plantationHarvestResponse{
-			Withered: res.Withered,
-			Yields:   res.Yields,
-			Message:  msg,
-		})
-	})
+			return PlantationResult{Plot: &res.Plot, Message: res.SeedName + "をまいたよ！"}, nil
+		}, plantationRejection)(h)
+		withActionCommand("plantation_fertilize", func(ctx context.Context, actor string, p plantationFertilizeRequest) (any, error) {
+			res, err := service.Fertilize(ctx, actor, p.FertilizerID)
+			if err != nil {
+				return nil, err
+			}
+			return PlantationResult{Plot: &res.Plot, Message: res.FertilizerName + "をまくよ！"}, nil
+		}, plantationRejection)(h)
+		withActionCommand("plantation_harvest", func(ctx context.Context, actor string, _ struct{}) (any, error) {
+			res, err := service.Harvest(ctx, actor)
+			if err != nil {
+				return nil, err
+			}
+			return PlantationResult{Withered: res.Withered, Yields: res.Yields, Message: harvestMessage(res)}, nil
+		}, plantationRejection)(h)
+	}
 }
 
-func (h *Handler) writePlantationError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, plantation.ErrInvalidCharacterID),
-		errors.Is(err, plantation.ErrInvalidSeedID),
-		errors.Is(err, plantation.ErrInvalidFertilizerID):
-		writeError(w, http.StatusBadRequest, err)
-	case errors.Is(err, plantation.ErrNoActivePlot),
-		errors.Is(err, plantation.ErrPlotNotFound):
-		writeError(w, http.StatusNotFound, err)
-	case errors.Is(err, plantation.ErrPlotAlreadySown),
-		errors.Is(err, plantation.ErrFertilizerAlreadyApplied),
-		errors.Is(err, plantation.ErrCropNotMatured),
-		errors.Is(err, plantation.ErrInsufficientGold),
-		errors.Is(err, plantation.ErrMissingFertilizerItem):
-		writeError(w, http.StatusUnprocessableEntity, err)
-	default:
-		writeError(w, http.StatusInternalServerError, err)
+// harvestMessage follows plantation.cgi shukaku/getSeed.
+func harvestMessage(res plantation.HarvestResult) string {
+	if res.Withered {
+		return res.SeedName + "は芽が出なかったよ…"
 	}
+	var b strings.Builder
+	b.WriteString("収穫したよ！\n")
+	for _, y := range res.Yields {
+		fmt.Fprintf(&b, "%sを%d個\n", y.ItemName, y.Quantity)
+	}
+	b.WriteString("倉庫に送っておいたよ")
+	return b.String()
+}
+
+func (h *Handler) plantationSceneData(ctx context.Context, r playercontext.Result) (any, error) {
+	if h.plantation == nil {
+		return nil, errSceneNotConfigured
+	}
+	status, err := h.plantation.GetStatus(ctx, r.Snapshot.Character.ID)
+	if err != nil {
+		return nil, err
+	}
+	return PlantationSceneData{Parent: "town", StatusResponse: status}, nil
+}
+
+func plantationRejection(err error) (int, ErrorDetail) {
+	var applied plantation.FertilizerAppliedError
+	switch {
+	case errors.Is(err, corecharacter.ErrNotFound):
+		return http.StatusNotFound, ErrorDetail{Code: "CHARACTER_NOT_FOUND", Message: "Character not found."}
+	case errors.Is(err, plantation.ErrInvalidSeedID):
+		return http.StatusBadRequest, ErrorDetail{Code: "PLANTATION_INVALID_SEED", Message: "Choose one of the observed seeds."}
+	case errors.Is(err, plantation.ErrInvalidFertilizerID), errors.Is(err, plantation.ErrMissingFertilizerItem):
+		return http.StatusBadRequest, ErrorDetail{Code: "PLANTATION_INVALID_FERTILIZER", Message: "Choose one of the observed fertilizers."}
+	case errors.Is(err, plantation.ErrInsufficientGold):
+		return http.StatusConflict, ErrorDetail{Code: "PLANTATION_INSUFFICIENT_GOLD", Message: "お金が足りないよ！"}
+	case errors.Is(err, plantation.ErrPlotAlreadySown):
+		return http.StatusConflict, ErrorDetail{Code: "PLANTATION_ALREADY_SOWN", Message: "収穫するまでちょっと待ってね"}
+	case errors.As(err, &applied):
+		return http.StatusConflict, ErrorDetail{Code: "PLANTATION_ALREADY_FERTILIZED", Message: "もう" + applied.Name + "をまいてあるよ"}
+	case errors.Is(err, plantation.ErrNoActivePlot), errors.Is(err, plantation.ErrPlotNotFound):
+		return http.StatusConflict, ErrorDetail{Code: "PLANTATION_NO_PLOT", Message: "まず種をまいてね"}
+	case errors.Is(err, plantation.ErrCropNotMatured):
+		return http.StatusConflict, ErrorDetail{Code: "PLANTATION_NOT_MATURED", Message: "芽が出るまで一日待ってね"}
+	default:
+		return 0, ErrorDetail{}
+	}
+}
+
+var plantationFacility = facility{
+	title: "種菜園", commands: []string{"plantation_sow", "plantation_fertilize", "plantation_harvest"},
+	read: (*Handler).plantationSceneData, placeLog: true,
+	npc: &npcProfile{name: "@ロータス", wordsOf: plantationWords},
+}
+
+// plantationWords are plantation.cgi @words; the tips name a random seed and
+// one of the first seven fertilizers ($ferts[int(rand($#ferts-7))+1]).
+func plantationWords(*Handler, context.Context, corecharacter.Character) ([]string, error) {
+	seeds, ferts := plantation.AllSeeds(), plantation.AllFertilizers()
+	return []string{
+		"種をまいて何ができるかはお楽しみ〜♪",
+		"一日経つと収穫できるんだ",
+		"肥料をまくと良いものが収穫できたり、たくさん芽が出るよ！",
+		"肥料によっては枯れやすくなるかも…",
+		"肥料に使えるアイテムもあるみたいだよ",
+		"どの種をまこうか？",
+		"種によって採れるものが変わるよ！",
+		"今日は" + seeds[random.Intn(len(seeds))].Name + "がおすすめだよ！",
+		"肥料は" + ferts[random.Intn(7)].Name + "をまくのはどうかな？",
+	}, nil
 }

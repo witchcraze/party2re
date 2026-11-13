@@ -36,8 +36,8 @@ func (s *pauseEscapeRead) GetActiveExpedition(ctx context.Context, actor string)
 
 func TestEncounterFightEscapeStaleSettlement(t *testing.T) {
 	for _, kind := range []string{"memory", "valkey"} {
-		for _, event := range []dungeon.TileEventType{dungeon.EventBattle, dungeon.EventBoss} {
-			t.Run(kind+"/"+string(event), func(t *testing.T) {
+		{
+			t.Run(kind, func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 				defer cancel()
 				underlying := encounterStore(t, kind)
@@ -47,12 +47,9 @@ func TestEncounterFightEscapeStaleSettlement(t *testing.T) {
 				defer unblock()
 				char := createTestChar(id.New(), 10, 100, 30, 20)
 				repo := &errorInjectingDungeonRepo{mockDungeonRepo: newMockDungeonRepo()}
-				if event == dungeon.EventBoss {
-					repo.errFinalizeExpedition = errors.New("SQL unavailable after boss victory")
-				}
 				monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23, DropItemID: "potion"}
 				exp := sampleExpedition(id.New(), char.ID, "review")
-				exp.Encounter = &dungeon.ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: event, X: 1}
+				exp.Encounter = &dungeon.ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: dungeon.EventBattle, X: 1}
 				if err := underlying.SaveActiveExpedition(ctx, exp); err != nil {
 					t.Fatal(err)
 				}
@@ -64,7 +61,7 @@ func TestEncounterFightEscapeStaleSettlement(t *testing.T) {
 				engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 					return corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, WinnerSide: "allies", RemainingHP: map[string]int{char.ID: 80, "enemy": 0}}, nil
 				}}
-				svc, err := dungeon.NewService(repo, &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons([]dungeon.Dungeon{{ID: "review", Tier: 1, ClearExpBonus: 7, ClearGoldBonus: 11}}))
+				svc, err := dungeon.NewService(repo, &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons([]dungeon.Dungeon{{ID: "review"}}))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -92,9 +89,6 @@ func TestEncounterFightEscapeStaleSettlement(t *testing.T) {
 				}
 				repo.errFinalizeExpedition = nil
 				expectedGold, expectedExp := 23, 17
-				if event == dungeon.EventBoss {
-					expectedGold, expectedExp = 34, 24
-				}
 				if _, err = svc.Escape(ctx, char.ID); err != nil {
 					t.Fatal(err)
 				}
@@ -114,7 +108,7 @@ func TestEncounterAlliedStatusAcrossDraws(t *testing.T) {
 			char := createTestChar(id.New(), 10, 100, 30, 20)
 			chars := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10}
-			catalog := []dungeon.Dungeon{{ID: "status", MaxTurnsPerFloor: 20, Floors: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
+			catalog := []dungeon.Dungeon{{ID: "status", RoundLimit: 21, Variants: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
 			calls := 0
 			engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 				calls++
@@ -164,7 +158,7 @@ func TestEncounterAlliedStatusAcrossDraws(t *testing.T) {
 				}
 				return corebattle.PartyBattleResult{RemainingCMP: map[string]int{char.ID: remainingCMP}, FinalField: field, Outcome: corebattle.OutcomeDraw, RemainingHP: map[string]int{char.ID: 90, "enemy": 50}, RemainingStatus: map[string]string{char.ID: status}}, nil
 			}}
-			svc, err := dungeon.NewService(newMockDungeonRepo(), chars, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithParticipantBuilder(&customParticipantBuilder{buildFn: func(_ context.Context, actor string, hp int) (corebattle.Participant, error) {
+			svc, err := dungeon.NewService(newMockDungeonRepo(), chars, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(&minimalRandomSource{}), dungeon.WithParticipantBuilder(&customParticipantBuilder{buildFn: func(_ context.Context, actor string, hp int) (corebattle.Participant, error) {
 				return corebattle.Participant{ID: actor, HP: hp, MaxHP: 100, CMP: 25, MaxCMP: 25}, nil
 			}}))
 			if err != nil {
@@ -202,7 +196,7 @@ func TestEncounterRestoredParalysisUsesSharedResolver(t *testing.T) {
 			ctx := context.Background()
 			store := encounterStore(t, kind)
 			char := createTestChar(id.New(), 10, 1000, 30, 20)
-			exp := sampleExpedition(id.New(), char.ID, "dungeon-01")
+			exp := sampleExpedition(id.New(), char.ID, dungeon.NativeMap0ID)
 			exp.CurrentHP = 1000
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 1000, Attack: 0}
 			exp.Encounter = &dungeon.ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 1000, 0, 0)}, Statuses: map[string]string{char.ID: corebattle.StatusParalyze}, EventType: dungeon.EventBattle, X: 1}

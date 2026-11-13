@@ -54,7 +54,7 @@ func TestMemberIndex(t *testing.T) {
 			if got, err := store.GetActiveExpedition(ctx, id.New()); err != nil || got != nil {
 				t.Fatalf("unrelated actor: %+v %v", got, err)
 			}
-			outcome, err := store.Step(ctx, leader, dungeon.StepParams{ExpectedExpeditionID: run.ID, NewFloor: 1, NewX: 1, NewY: 0, TurnsDelta: -1, Now: time.Now()})
+			outcome, err := store.Step(ctx, leader, dungeon.StepParams{ExpectedExpeditionID: run.ID, NewX: 1, NewY: 0, TurnsDelta: -1, Now: time.Now()})
 			updated := outcome.Expedition
 			if err != nil || updated.PartyID != run.PartyID || len(updated.Members) != 2 {
 				t.Fatalf("transition lost roster: %+v %v", updated, err)

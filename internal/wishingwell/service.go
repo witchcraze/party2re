@@ -2,7 +2,6 @@ package wishingwell
 
 import (
 	"context"
-	"fmt"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -35,48 +34,6 @@ func NewService(characters CharacterRepository, opts ...Option) (*Service, error
 		opt(svc)
 	}
 	return svc, nil
-}
-
-// GetStatus returns the Wishing Well status for the specified character.
-func (s *Service) GetStatus(ctx context.Context, characterID string) (WishingWellStatus, error) {
-	char, err := s.characters.FindByID(ctx, characterID)
-	if err != nil {
-		return WishingWellStatus{}, err
-	}
-
-	jobMemoryActive := char.JobMemory != nil && char.JobMemory.IsPersistent()
-	overLevel := char.OverLevel
-	canExchange := !jobMemoryActive && !overLevel
-
-	dialogues := make([]string, len(DefaultDialogues))
-	for i, d := range DefaultDialogues {
-		switch i {
-		case 2:
-			dialogues[i] = fmt.Sprintf(d, char.Name, char.SP)
-		case 5:
-			dialogues[i] = fmt.Sprintf(d, char.Name)
-		default:
-			dialogues[i] = d
-		}
-	}
-
-	return WishingWellStatus{
-		LocationName:    LocationName,
-		NPCName:         NPCName,
-		BackgroundImage: BackgroundImage,
-		CharacterID:     char.ID,
-		CharacterName:   char.Name,
-		SP:              char.SP,
-		JobMemoryActive: jobMemoryActive,
-		OverLevel:       overLevel,
-		CanExchange:     canExchange,
-		MaxHP:           char.Stats.MaxHP,
-		MaxMP:           char.Stats.MaxMP,
-		Attack:          char.Stats.Attack,
-		Defense:         char.Stats.Defense,
-		Agility:         char.Stats.Agility,
-		Dialogues:       dialogues,
-	}, nil
 }
 
 // Exchange sacrifices character SP for a permanent stat increase according to legacy rates.

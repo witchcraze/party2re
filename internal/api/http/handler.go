@@ -123,6 +123,7 @@ type Handler struct {
 	playerContext  *playercontext.Service
 	sceneAdapters  map[string]sceneAdapter
 	placeLog       PlaceLog
+	placeMembers   PlaceMembers
 	characterNames CharacterNameLookup
 	actionCommands map[string]actionCommand
 	players        PlayerService
@@ -130,7 +131,6 @@ type Handler struct {
 	adventures     AdventureService
 	shops          ShopService
 	medals         MedalService
-	park           ParkService
 	helpers        HelperService
 	rescues        RescueService
 	notifications  NotificationService
@@ -165,7 +165,6 @@ type Handler struct {
 	contest        ContestService
 	parties        PartyService
 	altar          AltarService
-	wishingWell    WishingWellService
 	bank           BankService
 	blacksmith     BlacksmithService
 	replay         ReplayService
@@ -309,6 +308,7 @@ func NewHandler(
 		}
 	}
 	h.registerSpeech()
+	h.registerPresenceRefresh()
 	return h, nil
 }
 
@@ -350,12 +350,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /adventures", h.handleStartAdventure)
 	mux.HandleFunc("GET /characters/{id}/adventures", h.handleListCharacterAdventures)
 	mux.HandleFunc("GET /characters/{id}/adventure-chronicle", h.handleGetAdventureChronicle)
-
-	mux.HandleFunc("GET /park/posts", h.handleGetParkPosts)
-	mux.HandleFunc("POST /park/posts", h.handlePostParkMessage)
-	mux.HandleFunc("POST /park/npc/talk", h.handleParkNPCTalk)
-	mux.HandleFunc("POST /park/npc/divinate", h.handleParkNPCDivinate)
-	mux.HandleFunc("GET /park/npc/inspect", h.handleParkNPCInspect)
 
 	mux.HandleFunc("GET /eventplaza", h.handleGetEventPlaza)
 	mux.HandleFunc("POST /eventplaza/presence", h.handlePostEventPlazaPresence)
@@ -438,32 +432,9 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/custom-skills", h.handleGetCustomSkills)
 	mux.HandleFunc("POST /characters/{id}/custom-skills", h.handleSetCustomSkill)
 
-	// Chapel
-
-	// Altar of Rebirth
-	mux.HandleFunc("GET /characters/{id}/altar", h.handleGetAltar)
-	mux.HandleFunc("POST /characters/{id}/altar/pray", h.handleAltarPray)
-	mux.HandleFunc("POST /characters/{id}/altar/wish", h.handleAltarWish)
-	mux.HandleFunc("POST /characters/{id}/altar/offer", h.handleAltarOffer)
-
-	// Wishing Well
-	mux.HandleFunc("GET /characters/{id}/wishing-well", h.handleGetWishingWell)
-	mux.HandleFunc("POST /characters/{id}/wishing-well/exchange", h.handleWishingWellExchange)
-
 	// Tavern
-	mux.HandleFunc("GET /tavern/menu", h.handleGetTavernMenu)
-	mux.HandleFunc("GET /characters/{id}/tavern", h.handleGetCharacterTavernStatus)
-	mux.HandleFunc("POST /characters/{id}/tavern/order", h.handleTavernOrder)
-	mux.HandleFunc("POST /characters/{id}/tavern/delivery", h.handleTavernReserveDelivery)
-	mux.HandleFunc("GET /characters/{id}/tavern/delivery", h.handleGetTavernDelivery)
-	mux.HandleFunc("DELETE /characters/{id}/tavern/delivery", h.handleTavernCancelDelivery)
-	mux.HandleFunc("POST /characters/{id}/tavern/talk", h.handleTavernTalk)
 
 	// Plantation
-	mux.HandleFunc("GET /characters/{id}/plantation", h.handleGetCharacterPlantation)
-	mux.HandleFunc("POST /characters/{id}/plantation/sow", h.handlePlantationSow)
-	mux.HandleFunc("POST /characters/{id}/plantation/fertilize", h.handlePlantationFertilize)
-	mux.HandleFunc("POST /characters/{id}/plantation/harvest", h.handlePlantationHarvest)
 
 	// Black Market
 
@@ -479,11 +450,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/medals", h.handleGetCharacterMedals)
 
 	// Lottery & Raffle
-	mux.HandleFunc("GET /lottery/takarakuji", h.handleGetTakarakujiStatus)
-	mux.HandleFunc("GET /characters/{id}/lottery/tickets", h.handleGetLotteryTickets)
-	mux.HandleFunc("POST /characters/{id}/lottery/raffle", h.handlePlayRaffle)
-	mux.HandleFunc("POST /characters/{id}/lottery/takarakuji/buy", h.handleBuyTakarakujiTicket)
-	mux.HandleFunc("GET /characters/{id}/lottery/takarakuji/ticket", h.handleGetCharacterTakarakujiTicket)
 
 	// Casino
 	mux.HandleFunc("GET /characters/{id}/casino", h.handleGetCasinoAccount)
@@ -561,17 +527,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/guild", h.handleGetCharacterGuild)
 
 	// Oracle Shop (Town Boutique & Costumes)
-	mux.HandleFunc("GET /characters/{id}/oracle", h.handleGetOracleStatus)
-	mux.HandleFunc("POST /characters/{id}/oracle/talk", h.handleOracleTalk)
-	mux.HandleFunc("POST /characters/{id}/oracle/inspect", h.handleOracleInspect)
-	mux.HandleFunc("POST /characters/{id}/oracle/buy", h.handleOracleBuyCostume)
-	mux.HandleFunc("POST /characters/{id}/oracle/wallpaper", h.handleOracleBuyWallpaper)
-	mux.HandleFunc("POST /characters/{id}/oracle/blackmarket", h.handleOracleBlackMarket)
-
-	// God (Endgame Wishes & Limit Breaks)
-	mux.HandleFunc("GET /god/dialogue", h.handleGetGodDialogue)
-	mux.HandleFunc("GET /characters/{id}/god/wishes", h.handleGetGodWishes)
-	mux.HandleFunc("POST /characters/{id}/god/wish", h.handleGrantGodWish)
 
 	// Monster Grandpa & Pet Companions
 	mux.HandleFunc("GET /monster/dialogue", h.handleGetMonsterDialogue)

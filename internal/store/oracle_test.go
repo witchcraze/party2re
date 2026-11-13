@@ -214,69 +214,6 @@ func TestCostumeIcon_GenderParity(t *testing.T) {
 	}
 }
 
-func TestOracleTalk_CanonicalWords(t *testing.T) {
-	words := store.OracleWords
-	if len(words) != 5 {
-		t.Fatalf("expected 5 canonical talk dialogues, got %d", len(words))
-	}
-
-	talk := store.OracleTalk()
-	found := false
-	for _, w := range words {
-		if talk == w {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("OracleTalk() returned unrecognized dialogue: %q", talk)
-	}
-}
-
-func TestOracleInspect_LegacyParity(t *testing.T) {
-	// JobLevel < 15: No hint
-	res := store.OracleInspect(10)
-	if res.Hint != "" {
-		t.Errorf("expected no hint for jobLevel < 15, got: %q", res.Hint)
-	}
-
-	// JobLevel >= 15: Shows Black Market hint
-	res15 := store.OracleInspect(15)
-	if res15.Hint != "＠やみいちば に行きたい" {
-		t.Errorf("expected black market hint for jobLevel >= 15, got: %q", res15.Hint)
-	}
-}
-
-func TestDiscoverBlackMarket_Gating(t *testing.T) {
-	if err := store.DiscoverBlackMarket(14); !errors.Is(err, store.ErrBlackMarketNotDiscovered) {
-		t.Errorf("expected ErrBlackMarketNotDiscovered for jobLevel 14, got: %v", err)
-	}
-
-	if err := store.DiscoverBlackMarket(15); err != nil {
-		t.Errorf("expected nil error for jobLevel 15, got: %v", err)
-	}
-}
-
-func TestService_OracleDelegates(t *testing.T) {
-	svc := store.NewService(nil, nil, nil, nil, nil)
-	talk := svc.OracleTalk()
-	if talk == "" {
-		t.Error("expected non-empty talk message")
-	}
-
-	inspect := svc.OracleInspect(15)
-	if inspect.Hint != "＠やみいちば に行きたい" {
-		t.Errorf("expected hint from inspect, got %q", inspect.Hint)
-	}
-
-	if err := svc.DiscoverBlackMarket(10); !errors.Is(err, store.ErrBlackMarketNotDiscovered) {
-		t.Errorf("expected ErrBlackMarketNotDiscovered, got %v", err)
-	}
-	if err := svc.DiscoverBlackMarket(15); err != nil {
-		t.Errorf("expected nil error, got %v", err)
-	}
-}
-
 func TestOracleService_GetOracleStatus(t *testing.T) {
 	ctx := context.Background()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
@@ -306,12 +243,6 @@ func TestOracleService_GetOracleStatus(t *testing.T) {
 		t.Fatalf("GetOracleStatus failed: %v", err)
 	}
 
-	if status.LocationName != "オラクル屋" || status.NPCName != "@ラクル" || status.BgImg != "bgimg/goods.gif" {
-		t.Errorf("unexpected oracle metadata: %+v", status)
-	}
-	if !status.CanUnlockBlackMarket {
-		t.Errorf("expected CanUnlockBlackMarket to be true for job_lv 16")
-	}
 	if len(status.AvailableCostumes) != 17 {
 		t.Errorf("expected 17 costumes for job_lv 16, got %d", len(status.AvailableCostumes))
 	}
@@ -340,6 +271,26 @@ func TestOracleService_GetOracleStatus(t *testing.T) {
 	}
 	if status.ActiveCostume != nil {
 		t.Errorf("expected no active costume initially")
+	}
+}
+
+type failingCostumeRepo struct {
+	*costume.MemoryCostumeRepository
+}
+
+func (failingCostumeRepo) GetActiveCostume(context.Context, string) (*costume.ActiveCostume, error) {
+	return nil, errors.New("costume store down")
+}
+
+func TestOracleService_GetOracleStatusPropagatesCostumeReadErrors(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	_ = charRepo.Save(ctx, corecharacter.Character{ID: "char-1", JobLevel: 16})
+	svc := store.NewService(newMockStoreRepo(), charRepo, &mockDepotRepo{depots: make(map[string]depot.Depot)},
+		&mockCatalog{items: make(map[string]coreitem.Definition)}, &mockTxProvider{},
+		store.WithCostumeRepository(failingCostumeRepo{costume.NewMemoryCostumeRepository()}))
+	if status, err := svc.GetOracleStatus(ctx, "char-1"); err == nil || status != nil {
+		t.Fatalf("costume read failure hidden: %+v %v", status, err)
 	}
 }
 
@@ -908,4 +859,17 @@ func TestOracleService_BuyHomeWallpaper_RestoredChoices(t *testing.T) {
 			t.Errorf("home wallpaper should not be set")
 		}
 	})
+}
+
+func TestOracleCostumeNamesMatchTheItemCatalog(t *testing.T) {
+	catalog, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range store.AvailableCostumes(99) {
+		def, err := catalog.FindByID(fmt.Sprintf("item-%03d", c.ItemNo))
+		if err != nil || def.Name != c.Name {
+			t.Errorf("item %d: oracle %q, catalog %q (%v)", c.ItemNo, c.Name, def.Name, err)
+		}
+	}
 }
