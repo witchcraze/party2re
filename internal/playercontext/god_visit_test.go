@@ -83,3 +83,17 @@ func TestFailedForfeitKeepsTheGodScene(t *testing.T) {
 		t.Fatalf("visit lost: %+v %v", got.Navigation, err)
 	}
 }
+
+func TestReenteringTheGodSceneKeepsTheSavedSelection(t *testing.T) {
+	s, store, r, forfeits := godVisitFixture(t, character.GodVisitHeaven, nil)
+	if _, err := s.Enter(r.ctx, "owner", "hero", "god"); err != nil {
+		t.Fatal(err)
+	}
+	if store.selection.Destination != "home" || store.writes != 0 || len(*forfeits) != 0 {
+		t.Fatalf("re-entry overwrote the return selection: %+v writes=%d forfeits=%v", store.selection, store.writes, *forfeits)
+	}
+	r.character.GodVisit = "" // a granted wish clears the visit
+	if got, err := s.Query(r.ctx, "hero", "owner"); err != nil || got.Navigation.Selection.Destination != "home" || got.Navigation.Unavailable {
+		t.Fatalf("after the wish: %+v %v", got.Navigation, err)
+	}
+}

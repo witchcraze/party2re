@@ -201,6 +201,10 @@ func (s *Service) navigate(ctx context.Context, playerID, actorID string, transi
 	if !validSelection(n) {
 		return Selection{}, ErrInvalidSelection
 	}
+	// Staying in the visit's scene keeps the saved selection to return to after the wish.
+	if scene := godVisitScenes[r.Snapshot.Character.GodVisit]; scene != "" && n.Destination == scene {
+		return n, nil
+	}
 	if err := s.navigation.Save(ctx, actorID, n); err != nil {
 		return Selection{}, fmt.Errorf("save navigation: %w", err)
 	}
