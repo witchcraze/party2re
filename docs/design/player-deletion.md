@@ -19,11 +19,8 @@ Character deletion is one SQL transaction: guild departure (succession or
 dissolution, including its news) and the repository's dependent-record cleanup
 commit or roll back together, and a `CleanupHook` error aborts it. The concrete
 table list belongs to the [repository](../../internal/database/character_repository.go)
-and migrations. Locks follow the global rank order: the characters' Rank 0 rows
-(flea market listings, store sales and unneeded Challenge admissions), which
-purchases and run transitions lock before characters; then the deleted characters
-together with every member of their guilds in ascending ID order (Rank 2); then
-those guilds in ascending ID order (Rank 7); then dependent rows.
+and migrations. Concurrent market creation and purchase participate in the
+[SQL transaction contract](../architecture/cross-domain-primitives.md#43-lock-acquisition-and-ambient-transactions).
 
 Challenge admission is shared run evidence: deleting a departed original leader
 preserves the admission row while another participant's durable claim remains,

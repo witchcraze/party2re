@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
 
 type txKey struct{}
@@ -21,6 +22,7 @@ func RunInTx(ctx context.Context, db *sql.DB, fn func(ctx context.Context) error
 
 // RunInTxWithOptions executes the given function within a database transaction with the specified options.
 // If the context already contains an ambient transaction, it reuses it without re-configuring isolation options.
+// A changed character-deletion row set restarts only the root callback, up to three attempts.
 func RunInTxWithOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
 	if TxFromContext(ctx) != nil {
 		return fn(ctx)
@@ -29,7 +31,18 @@ func RunInTxWithOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn
 	if opts == nil {
 		opts = &sql.TxOptions{Isolation: sql.LevelReadCommitted}
 	}
+	for attempt := 0; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := runInNewTx(ctx, db, opts, fn)
+		if !errors.Is(err, errDeletionRowsChanged) || attempt >= 2 {
+			return err
+		}
+	}
+}
 
+func runInNewTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
 	tx, err := db.BeginTx(ctx, opts)
 	if err != nil {
 		return err
