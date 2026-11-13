@@ -21,13 +21,14 @@ var (
 	ErrWishNotFound       = errors.New("wish not found in catalog")
 	ErrWishRequirement    = errors.New("character does not meet requirements for this wish")
 	ErrLimitBreakMaxed    = errors.New("limit break is already at maximum tier")
+	ErrNotAdmitted        = errors.New("character has not entered this realm")
 )
 
 type Realm string
 
 const (
-	RealmHeaven     Realm = "heaven"
-	RealmUnderworld Realm = "underworld"
+	RealmHeaven     Realm = corecharacter.GodVisitHeaven
+	RealmUnderworld Realm = corecharacter.GodVisitUnderworld
 )
 
 const (
@@ -80,10 +81,9 @@ type Wish struct {
 
 // WishResult represents the outcome of having a wish granted.
 type WishResult struct {
-	Character    corecharacter.Character `json:"character"`
-	Wish         Wish                    `json:"wish"`
-	Message      string                  `json:"message"`
-	NextLocation string                  `json:"next_location,omitempty"`
+	Character corecharacter.Character `json:"character"`
+	Wish      Wish                    `json:"wish"`
+	Message   string                  `json:"message"`
 }
 
 // HomeMember represents a companion/resident at the player's home.

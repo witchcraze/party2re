@@ -92,6 +92,7 @@ func TestCelestialWishSynchronizesJobStateAcrossDatabaseReload(t *testing.T) {
 			}
 			// Level 5 proves the normal Lv20 gate is not applied.
 			char.JobID, char.OldJobID, char.SP, char.OldSP, char.Level = "job-01", "", tc.sp, 0, 5
+			char.GodVisit = string(god.RealmHeaven)
 			if err := chars.Update(ctx, char); err != nil {
 				t.Fatal(err)
 			}

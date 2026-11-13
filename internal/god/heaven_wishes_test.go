@@ -142,6 +142,7 @@ func setupHeavenService() (*god.Service, *mockCharacterRepo, *mockDepotRepo, *mo
 		god.WithJobChanger(fakeJobChanger{}),
 	)
 
+	charRepo.admit = god.RealmHeaven
 	return svc, charRepo, depotRepo, casinoRepo, lotteryRepo, guildRepo, homeMemberRepo, profileRepo, homeRepo
 }
 
@@ -171,8 +172,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if res.Character.Stats.Attack != 70 || res.Character.Stats.Defense != 65 || res.Character.Stats.Agility != 60 {
 			t.Errorf("unexpected stats: %+v", res.Character.Stats)
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 
 		// Reject if OverLevel
@@ -196,8 +197,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if res.Character.SP != 60 {
 			t.Errorf("expected SP 60, got %d", res.Character.SP)
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 	})
 
@@ -213,8 +214,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if res.Character.Money != 100500 {
 			t.Errorf("expected Money 100500, got %d", res.Character.Money)
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 	})
 
@@ -230,8 +231,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if casinoRepo.coins[char.ID] != 50000 {
 			t.Errorf("expected 50000 casino coins, got %d", casinoRepo.coins[char.ID])
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 	})
 
@@ -247,8 +248,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if res.Character.SmallMedals != 25 {
 			t.Errorf("expected SmallMedals 25, got %d", res.Character.SmallMedals)
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 	})
 
@@ -264,8 +265,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if lotteryRepo.tickets[char.ID] != 1000 {
 			t.Errorf("expected 1000 raffle tickets, got %d", lotteryRepo.tickets[char.ID])
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 	})
 
@@ -292,8 +293,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if guildRepo.guilds["guild-1"].Points != 1200 {
 			t.Errorf("expected 1200 guild points, got %d", guildRepo.guilds["guild-1"].Points)
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 
 		// Gorgeous wish
@@ -332,8 +333,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if res.Message != expectedMsg {
 			t.Errorf("expected Message %q, got %q", expectedMsg, res.Message)
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 	})
 
@@ -367,8 +368,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 				if res.Character.Orb != "srbgyp" {
 					t.Errorf("expected orb to be %q, got %q", "srbgyp", res.Character.Orb)
 				}
-				if res.NextLocation != "home" {
-					t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+				if res.Character.GodVisit != "" {
+					t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 				}
 			})
 		}
@@ -392,8 +393,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if res.Character.OverLevel != false {
 			t.Errorf("expected OverLevel false, got %v", res.Character.OverLevel)
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 
 		// Reject if already job-70
@@ -438,6 +439,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 
 	t.Run("wish_celestial_dragon leaves character unsaved when job records fail", func(t *testing.T) {
 		charRepo := newMockCharacterRepo()
+		charRepo.admit = god.RealmHeaven
 		sentinel := errors.New("job records failed")
 		svc, _ := god.NewService(charRepo, god.WithJobChanger(fakeJobChanger{err: sentinel}))
 		char := corecharacter.Character{ID: "char-celestial-fail", JobID: "job-01", Level: 50}
@@ -466,8 +468,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if homeRepo.bgimgs[char.ID] != "god.gif" {
 			t.Errorf("expected home bgimg god.gif, got %s", homeRepo.bgimgs[char.ID])
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 	})
 
@@ -484,8 +486,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if len(homeMemberRepo.members[char.ID]) != 1 || homeMemberRepo.members[char.ID][0].Name != "オルテガ" {
 			t.Errorf("expected オルテガ home member, got %+v", homeMemberRepo.members[char.ID])
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 
 		// Cat
@@ -521,8 +523,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if len(dep.Items) != 1 || dep.Items[0].DefinitionID != "item-058" {
 			t.Errorf("expected item-058 in depot, got %+v", dep.Items)
 		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		if res.Character.GodVisit != "" {
+			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 
 		// Alchemy recipe -> depot
@@ -548,8 +550,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if res.NextLocation != "" {
-			t.Errorf("expected empty NextLocation, got %s", res.NextLocation)
+		if res.Character.GodVisit != string(god.RealmHeaven) {
+			t.Errorf("expected the refused wish to keep the visit, got %q", res.Character.GodVisit)
 		}
 		if res.Message != "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…" {
 			t.Errorf("unexpected message: %s", res.Message)

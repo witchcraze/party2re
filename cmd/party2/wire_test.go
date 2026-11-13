@@ -828,6 +828,11 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id = ?", c.ID)
 	})
 
+	c.GodVisit = string(god.RealmHeaven)
+	if err := charRepo.Update(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+
 	txProvider := database.NewTransactionProvider(db)
 	godSvc, err := god.NewService(
 		charRepo,

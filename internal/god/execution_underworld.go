@@ -53,8 +53,7 @@ func (s *Service) executeUnderworldWish(
 				CurrentTier: char.OverDepot,
 				MaxTier:     MaxLimitBreakTier,
 			},
-			Message:      fmt.Sprintf("預かり所の預入上限が +50 拡張されました！ (段階: %d/5)", char.OverDepot),
-			NextLocation: "home",
+			Message: fmt.Sprintf("預かり所の預入上限が +50 拡張されました！ (段階: %d/5)", char.OverDepot),
 		}
 		return nil
 
@@ -79,8 +78,7 @@ func (s *Service) executeUnderworldWish(
 				CurrentTier: char.OverMonster,
 				MaxTier:     MaxLimitBreakTier,
 			},
-			Message:      fmt.Sprintf("モンスター預入上限が +50 拡張されました！ (段階: %d/5)", char.OverMonster),
-			NextLocation: "home",
+			Message: fmt.Sprintf("モンスター預入上限が +50 拡張されました！ (段階: %d/5)", char.OverMonster),
 		}
 		return nil
 
@@ -105,8 +103,7 @@ func (s *Service) executeUnderworldWish(
 				CurrentTier: char.OverFuture,
 				MaxTier:     MaxLimitBreakTier,
 			},
-			Message:      fmt.Sprintf("職業記憶上限が +1 拡張されました！ (段階: %d/5)", char.OverFuture),
-			NextLocation: "home",
+			Message: fmt.Sprintf("職業記憶上限が +1 拡張されました！ (段階: %d/5)", char.OverFuture),
 		}
 		return nil
 
@@ -131,8 +128,7 @@ func (s *Service) executeUnderworldWish(
 				CurrentTier: char.OverFlea,
 				MaxTier:     MaxLimitBreakTier,
 			},
-			Message:      fmt.Sprintf("フリーマーケット出品枠が +1 拡張されました！ (段階: %d/5, 最大 %d 出品)", char.OverFlea, 5+char.OverFlea),
-			NextLocation: "home",
+			Message: fmt.Sprintf("フリーマーケット出品枠が +1 拡張されました！ (段階: %d/5, 最大 %d 出品)", char.OverFlea, 5+char.OverFlea),
 		}
 		return nil
 
@@ -157,8 +153,7 @@ func (s *Service) executeUnderworldWish(
 				CurrentTier: char.OverStore,
 				MaxTier:     MaxLimitBreakTier,
 			},
-			Message:      fmt.Sprintf("店舗出品枠が +1 拡張されました！ (段階: %d/5)", char.OverStore),
-			NextLocation: "home",
+			Message: fmt.Sprintf("店舗出品枠が +1 拡張されました！ (段階: %d/5)", char.OverStore),
 		}
 		return nil
 

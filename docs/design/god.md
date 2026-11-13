@@ -1,6 +1,12 @@
 # Endgame Wishes & Limit Breaks Design (天界・裏天界)
 
-The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wish per audience in Heaven (`@神`, reached with item059) or the Underworld (`@神?`, reached with item262). The wish catalog, costs and effects are owned by `internal/god`; this document keeps decisions and non-obvious legacy findings. A granted wish returns the character home; a rejected or joke wish (`wish_lover`) mutates nothing and stays.
+The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wish per audience in Heaven (`@神`, reached with item059) or the Underworld (`@神?`, reached with item262). The wish catalog, costs and effects are owned by `internal/god`; this document keeps decisions and non-obvious legacy findings.
+
+## Visit
+
+- Using the reins from either Home source records the realm on the character (`god_visit`, the legacy `$m{lib}`) and consumes one in the same transaction. Wishes are accepted only for the recorded realm; a granted wish clears it in the wish's transaction. A rejected or joke wish (`wish_lover`) mutates nothing and the visit continues.
+- **Decision:** reins used while a visit is recorded have no effect and are kept. Legacy cannot reach this because items are used only at Home.
+- **Gap (#949):** legacy `＠いどう`/`＠ほーむ` (`system.cgi:266–290,416–421`) leave without a wish and forfeit the visit; God is not yet a Gateway scene, so Go keeps the visit until a wish is granted.
 
 ## Heaven wishes
 

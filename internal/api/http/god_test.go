@@ -12,6 +12,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/god"
+	"github.com/witchcraze/party2re/internal/home"
 )
 
 type stubGodService struct {
@@ -201,4 +202,42 @@ func TestGodEndpoints(t *testing.T) {
 			t.Fatalf("expected 403 Forbidden for IDOR access, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
+}
+
+func TestGodWish_RejectsUnadmittedAndSleeping(t *testing.T) {
+	player := coreplayer.Player{ID: "p1", Username: "hero"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero"}
+	pService := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cService := &stubCharacterService{getFn: func(context.Context, string) (corecharacter.Character, error) { return char, nil }}
+	notAdmitted := &stubGodService{grantWishFn: func(context.Context, string, string, god.Realm) (god.WishResult, error) {
+		return god.WishResult{}, god.ErrNotAdmitted
+	}}
+	asleep := &mockHomeService{getSleepStatusFn: func(context.Context, string) (home.SleepStatus, error) {
+		return home.SleepStatus{Sleeping: true}, nil
+	}}
+	granted := false
+	tracking := &stubGodService{grantWishFn: func(context.Context, string, string, god.Realm) (god.WishResult, error) {
+		granted = true
+		return god.WishResult{}, nil
+	}}
+
+	for name, opts := range map[string][]apihttp.Option{
+		"not admitted": {apihttp.WithGod(notAdmitted)},
+		"sleeping":     {apihttp.WithGod(tracking), apihttp.WithHome(asleep)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h, err := apihttp.NewHandler(pService, cService, &stubAdventureService{}, &stubShopService{}, opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/characters/c1/god/wish", bytes.NewReader([]byte(`{"realm":"heaven","wish_id":"wish_money"}`)))
+			req.Header.Set("Authorization", "Bearer valid-token")
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			h.Router().ServeHTTP(rec, req)
+			if rec.Code != http.StatusConflict || granted {
+				t.Fatalf("status=%d granted=%v, want 409 without granting: %s", rec.Code, granted, rec.Body.String())
+			}
+		})
+	}
 }

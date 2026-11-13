@@ -77,7 +77,14 @@ type Character struct {
 	WeaponCustomName string // Weapon custom name (wea_name): up to 20 runes.
 	ArmorCustomName  string // Armor custom name (arm_name): up to 20 runes.
 	PendingWake      bool   // Pending wake recovery flag (Issue #1118): persisted in SQL so long absence never skips recovery.
+	GodVisit         string // Realm entered with reins and not yet left by a granted wish: "", GodVisitHeaven or GodVisitUnderworld.
 }
+
+// GodVisit realms (legacy $m{lib} god/u_god).
+const (
+	GodVisitHeaven     = "heaven"
+	GodVisitUnderworld = "underworld"
+)
 
 type Stats struct {
 	MaxHP   int
