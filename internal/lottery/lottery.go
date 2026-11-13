@@ -36,8 +36,6 @@ type TakarakujiRepository interface {
 	CountTakarakujiTickets(ctx context.Context, roundID int) (int, error)
 	HasCharacterPurchasedTakarakuji(ctx context.Context, roundID int, characterID string) (bool, error)
 	PurchaseTakarakujiTicket(ctx context.Context, roundID int, characterID string, goldCost int) (TakarakujiTicket, corecharacter.Character, error)
-	GetCharacterTakarakujiTicket(ctx context.Context, roundID int, characterID string) (TakarakujiTicket, error)
-	ListCharacterTakarakujiTickets(ctx context.Context, characterID string) ([]TakarakujiTicket, error)
 	ListRoundTakarakujiTickets(ctx context.Context, roundID int) ([]TakarakujiTicket, error)
 	SettleTakarakujiRound(ctx context.Context, roundID int, drawnAt time.Time, winningTickets []TakarakujiTicket) error
 }
@@ -309,16 +307,12 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string) (RaffleRes
 		return RaffleResult{}, 0, corecharacter.Character{}, err
 	}
 
-	remainingAttempts := remainingTickets / cost
-	message := FormatLegacyRaffleMessage(raffleType, prize, transferredToDepot, remainingAttempts)
-
 	res := RaffleResult{
 		RaffleType:         raffleType,
 		TicketsUsed:        cost,
 		Roll:               roll,
 		Prize:              prize,
 		TransferredToDepot: transferredToDepot,
-		Message:            message,
 	}
 	return res, remainingTickets, updatedChar, nil
 }

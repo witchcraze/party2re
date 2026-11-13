@@ -28,10 +28,10 @@ const (
 type npcProfile struct {
 	name         string
 	words        []string
-	wordsOf      func(corecharacter.Character) []string // replaces words when they depend on the speaker
-	inspect      string                                 // empty: npcInspectDefault
-	inspectWords []string                               // inspection answered by ＠はなす: logged publicly
-	silent       bool                                   // inspection prints nothing (an empty shiraberu_npc)
+	wordsOf      func(*Handler, context.Context, corecharacter.Character) ([]string, error) // replaces words built from live facts
+	inspect      string                                                                     // empty: npcInspectDefault
+	inspectWords []string                                                                   // inspection answered by ＠はなす: logged publicly
+	silent       bool                                                                       // inspection prints nothing (an empty shiraberu_npc)
 }
 
 // NPCResult is the NPC's reply. Private replies are shown only to the actor and
@@ -162,14 +162,16 @@ func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, ow
 	if !talk && len(npc.inspectWords) > 0 {
 		command, words = "＠しらべる>"+npc.name, npc.inspectWords
 	} else if !talk {
-		text := npc.inspect
+		text := strings.ReplaceAll(npc.inspect, "{name}", char.Name)
 		if text == "" {
 			text = npcInspectDefault
 		}
 		return NPCResult{NPCName: npc.name, Dialogue: text, Private: true}, nil
 	}
 	if talk && npc.wordsOf != nil {
-		words = npc.wordsOf(char)
+		if words, err = npc.wordsOf(h, ctx, char); err != nil {
+			return NPCResult{}, err
+		}
 	}
 	if len(words) == 0 {
 		return NPCResult{NPCName: npc.name, Dialogue: npcNoWords, Private: true}, nil

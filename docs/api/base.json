@@ -2160,6 +2160,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/TavernSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LotterySceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TakarakujiSceneData"
                     }
                   ]
                 }
@@ -3017,6 +3023,66 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "lottery"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/LotterySceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "takarakuji"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TakarakujiSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -3683,7 +3749,9 @@
                         "town2",
                         "town3",
                         "town4",
-                        "tavern"
+                        "tavern",
+                        "lottery",
+                        "takarakuji"
                       ]
                     }
                   },
@@ -3792,7 +3860,9 @@
                         "town2",
                         "town3",
                         "town4",
-                        "tavern"
+                        "tavern",
+                        "lottery",
+                        "takarakuji"
                       ]
                     },
                     "offset": {
@@ -6719,6 +6789,56 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "lottery_raffle"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "takarakuji_buy"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
           }
         ]
       },
@@ -7108,7 +7228,9 @@
               "town2",
               "town3",
               "town4",
-              "tavern"
+              "tavern",
+              "lottery",
+              "takarakuji"
             ]
           },
           "offset": {
@@ -7244,7 +7366,9 @@
                   "town2",
                   "town3",
                   "town4",
-                  "tavern"
+                  "tavern",
+                  "lottery",
+                  "takarakuji"
                 ]
               }
             },
@@ -14842,31 +14966,8 @@
         "type": "object",
         "additionalProperties": false
       },
-      "PlayRaffleResponse": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "remaining_tickets": {
-            "type": "integer"
-          },
-          "result": {
-            "$ref": "#/components/schemas/LotteryRaffleResult"
-          }
-        },
-        "required": [
-          "result",
-          "remaining_tickets",
-          "character"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "LotteryRaffleResult": {
         "properties": {
-          "message": {
-            "type": "string"
-          },
           "prize": {
             "$ref": "#/components/schemas/LotteryRafflePrize"
           },
@@ -14901,9 +15002,6 @@
           "color_name": {
             "type": "string"
           },
-          "description": {
-            "type": "string"
-          },
           "item_definition_id": {
             "type": "string"
           },
@@ -14918,28 +15016,7 @@
           "tier",
           "name",
           "color",
-          "color_name",
-          "description"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "BuyTakarakujiTicketResponse": {
-        "properties": {
-          "npc_message": {
-            "type": "string"
-          },
-          "remaining_gold": {
-            "type": "integer"
-          },
-          "ticket": {
-            "$ref": "#/components/schemas/LotteryTakarakujiTicket"
-          }
-        },
-        "required": [
-          "ticket",
-          "remaining_gold",
-          "npc_message"
+          "color_name"
         ],
         "type": "object",
         "additionalProperties": false
@@ -14975,111 +15052,6 @@
           "character_id",
           "purchased_at",
           "won_rank"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GetCharacterTakarakujiTicketResponse": {
-        "properties": {
-          "current_ticket": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LotteryTakarakujiTicket"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "history": {
-            "items": {
-              "$ref": "#/components/schemas/LotteryTakarakujiTicket"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "history"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GetLotteryTicketsResponse": {
-        "properties": {
-          "tickets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "tickets"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "LotteryTakarakujiStatus": {
-        "properties": {
-          "draw_date": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "is_sold_out": {
-            "type": "boolean"
-          },
-          "max_tickets": {
-            "type": "integer"
-          },
-          "npc_name": {
-            "type": "string"
-          },
-          "prizes": {
-            "items": {
-              "$ref": "#/components/schemas/LotteryTakarakujiPrizeItem"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "remaining_tickets": {
-            "type": "integer"
-          },
-          "round_id": {
-            "type": "integer"
-          },
-          "sold_count": {
-            "type": "integer"
-          },
-          "talk_phrases": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "ticket_price": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "round_id",
-          "title",
-          "npc_name",
-          "ticket_price",
-          "max_tickets",
-          "sold_count",
-          "remaining_tickets",
-          "is_sold_out",
-          "draw_date",
-          "prizes",
-          "talk_phrases"
         ],
         "type": "object",
         "additionalProperties": false
@@ -17842,6 +17814,123 @@
           "menu",
           "is_full",
           "delivery"
+        ]
+      },
+      "LotterySceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's raffle coupons and the prize table of the raffle they would play; 300 or more coupons always play the special raffle. NPC dialogue comes from npc_talk/npc_inspect. Observation never draws.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "tickets": {
+            "type": "integer"
+          },
+          "special": {
+            "type": "boolean"
+          },
+          "cost": {
+            "type": "integer"
+          },
+          "prizes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "rank": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                },
+                "color_name": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "rank",
+                "color",
+                "color_name",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "tickets",
+          "special",
+          "cost",
+          "prizes"
+        ]
+      },
+      "TakarakujiSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The current takarakuji round. Reading it provisions the round when none is open; observation never draws or delivers.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "draw_date": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "is_sold_out": {
+            "type": "boolean"
+          },
+          "max_tickets": {
+            "type": "integer"
+          },
+          "prizes": {
+            "items": {
+              "$ref": "#/components/schemas/LotteryTakarakujiPrizeItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "remaining_tickets": {
+            "type": "integer"
+          },
+          "round_id": {
+            "type": "integer"
+          },
+          "sold_count": {
+            "type": "integer"
+          },
+          "ticket_price": {
+            "type": "integer"
+          },
+          "draw_date_label": {
+            "type": "string",
+            "description": "Draw date as the legacy unpadded JST year/month/day."
+          },
+          "purchased": {
+            "type": "boolean",
+            "description": "The actor holds this round's ticket."
+          }
+        },
+        "required": [
+          "parent",
+          "round_id",
+          "ticket_price",
+          "max_tickets",
+          "sold_count",
+          "remaining_tickets",
+          "is_sold_out",
+          "draw_date",
+          "prizes",
+          "draw_date_label",
+          "purchased"
         ]
       }
     },

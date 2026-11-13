@@ -129,7 +129,7 @@ func wishingWellActionRejection(err error) (int, ErrorDetail) {
 
 var altarFacility = facility{
 	title: "復活の祭壇", commands: []string{"altar_pray", "altar_wish"}, read: (*Handler).altarSceneData, placeLog: true,
-	npc: &npcProfile{name: altar.NPCName, wordsOf: mikoWords},
+	npc: &npcProfile{name: altar.NPCName, wordsOf: mikoNPCWords},
 }
 
 var wishingWellFacility = facility{
@@ -150,6 +150,10 @@ var (
 		"未知の世界にへは、その場にいた仲間と一緒に行くことができます",
 	}
 )
+
+func mikoNPCWords(_ *Handler, _ context.Context, char corecharacter.Character) ([]string, error) {
+	return mikoWords(char), nil
+}
 
 // mikoWords returns the lines the shrine maiden may say to char.
 func mikoWords(char corecharacter.Character) []string {

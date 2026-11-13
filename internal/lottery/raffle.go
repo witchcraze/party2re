@@ -1,10 +1,5 @@
 package lottery
 
-import (
-	"fmt"
-	"strings"
-)
-
 const (
 	StandardRaffleCost = 3
 	SpecialRaffleCost  = 300
@@ -32,7 +27,6 @@ type RafflePrize struct {
 	Color            string `json:"color"`
 	ColorName        string `json:"color_name"`
 	ItemDefinitionID string `json:"item_definition_id,omitempty"`
-	Description      string `json:"description"`
 }
 
 type RaffleResult struct {
@@ -41,7 +35,6 @@ type RaffleResult struct {
 	Roll               int         `json:"roll"`
 	Prize              RafflePrize `json:"prize"`
 	TransferredToDepot bool        `json:"transferred_to_depot"`
-	Message            string      `json:"message,omitempty"`
 }
 
 type GrandPrizeItem struct {
@@ -92,7 +85,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 				Color:            "gold",
 				ColorName:        "ゴールド",
 				ItemDefinitionID: item.ItemDefinitionID,
-				Description:      "！！！えっ！？あれっ！？なんだこれは？！え〜と…ハズレです！………な、なんですか！？…わかりましたよ。他の人には内緒ですよ。",
 			}
 		case roll < 15:
 			return RafflePrize{
@@ -101,7 +93,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 				Color:            "silver",
 				ColorName:        "シルバー",
 				ItemDefinitionID: "item-060",
-				Description:      "おおっ！シルバーオーブが出ました〜！おめでとうございま〜す！こちらがシルバーオーブになります！",
 			}
 		case roll < 30:
 			return RafflePrize{
@@ -110,7 +101,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 				Color:            "red",
 				ColorName:        "レッド",
 				ItemDefinitionID: "item-061",
-				Description:      "おおっ！レッドオーブが出ました〜！おめでとうございま〜す！こちらがレッドオーブになります！",
 			}
 		case roll < 40:
 			return RafflePrize{
@@ -119,7 +109,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 				Color:            "blue",
 				ColorName:        "ブルー",
 				ItemDefinitionID: "item-062",
-				Description:      "おおっ！ブルーオーブが出ました〜！おめでとうございま〜す！こちらがブルーオーブになります！",
 			}
 		case roll < 50:
 			return RafflePrize{
@@ -128,7 +117,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 				Color:            "green",
 				ColorName:        "グリーン",
 				ItemDefinitionID: "item-063",
-				Description:      "おおっ！グリーンオーブが出ました〜！おめでとうございま〜す！こちらがグリーンオーブになります！",
 			}
 		case roll < 60:
 			return RafflePrize{
@@ -137,7 +125,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 				Color:            "yellow",
 				ColorName:        "イエロー",
 				ItemDefinitionID: "item-064",
-				Description:      "おおっ！イエローオーブが出ました〜！おめでとうございま〜す！こちらがイエローオーブになります！",
 			}
 		case roll < 70:
 			return RafflePrize{
@@ -146,15 +133,13 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 				Color:            "purple",
 				ColorName:        "パープル",
 				ItemDefinitionID: "item-065",
-				Description:      "おおっ！パープルオーブが出ました〜！おめでとうございま〜す！こちらがパープルオーブになります！",
 			}
 		default:
 			return RafflePrize{
-				Tier:        PrizeTierMiss,
-				Name:        "なし",
-				Color:       "white",
-				ColorName:   "ホワイト",
-				Description: "おおっ！ホワイトオーブが出ました〜！って…それはハズレです…",
+				Tier:      PrizeTierMiss,
+				Name:      "なし",
+				Color:     "white",
+				ColorName: "ホワイト",
 			}
 		}
 	}
@@ -174,7 +159,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FFCC33",
 			ColorName:        "金",
 			ItemDefinitionID: gPrize.ItemDefinitionID,
-			Description:      fmt.Sprintf("！！！えっ！？えっ！？お、大当たり〜！大当たり〜！あれ？出ないはずなのにな…ゴニョゴニョ。お、おめでとうございます！特賞です！特賞が出ました〜！どうぞ！こちらが特賞の%sです！お受け取りください！", gPrize.Name),
 		}
 	case roll < 4:
 		return RafflePrize{
@@ -183,7 +167,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FF3333",
 			ColorName:        "赤",
 			ItemDefinitionID: "item-030",
-			Description:      "！！おっ！大当たり〜！大当たり〜！おめでとうございます！１等が出ました〜！こちらが１等の精霊の守りです！",
 		}
 	case roll < 8:
 		return RafflePrize{
@@ -192,7 +175,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#CC66FF",
 			ColorName:        "紫",
 			ItemDefinitionID: "item-033",
-			Description:      "！！おっ！大当たり〜！大当たり〜！おめでとうございます！２等が出ました〜！こちらが２等のスライムの心です！",
 		}
 	case roll < 14:
 		return RafflePrize{
@@ -201,7 +183,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FFFF00",
 			ColorName:        "黄",
 			ItemDefinitionID: "item-023",
-			Description:      "大当たり〜！大当たり〜！おめでとうございます！３等が出ました〜！こちらが３等の小さなメダルです！",
 		}
 	case roll < 20:
 		return RafflePrize{
@@ -210,7 +191,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FF33FF",
 			ColorName:        "桃",
 			ItemDefinitionID: "item-016",
-			Description:      "おおっ、当たりで〜す！おめでとうございま〜す！４等が出ました〜！こちらが４等の命の木の実です！",
 		}
 	case roll < 25:
 		return RafflePrize{
@@ -219,7 +199,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FF33FF",
 			ColorName:        "桃",
 			ItemDefinitionID: "item-017",
-			Description:      "おおっ、当たりで〜す！おめでとうございま〜す！４等が出ました〜！こちらが４等の不思議な木の実です！",
 		}
 	case roll < 30:
 		return RafflePrize{
@@ -228,7 +207,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FF33FF",
 			ColorName:        "桃",
 			ItemDefinitionID: "item-018",
-			Description:      "おおっ、当たりで〜す！おめでとうございま〜す！４等が出ました〜！こちらが４等の力の種です！",
 		}
 	case roll < 35:
 		return RafflePrize{
@@ -237,7 +215,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FF33FF",
 			ColorName:        "桃",
 			ItemDefinitionID: "item-019",
-			Description:      "おおっ、当たりで〜す！おめでとうございま〜す！４等が出ました〜！こちらが４等の守りの種です！",
 		}
 	case roll < 40:
 		return RafflePrize{
@@ -246,7 +223,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FF33FF",
 			ColorName:        "桃",
 			ItemDefinitionID: "item-020",
-			Description:      "おおっ、当たりで〜す！おめでとうございま〜す！４等が出ました〜！こちらが４等の素早さの種です！",
 		}
 	case roll < 45:
 		return RafflePrize{
@@ -255,7 +231,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#FF33FF",
 			ColorName:        "桃",
 			ItemDefinitionID: "item-021",
-			Description:      "おおっ、当たりで〜す！おめでとうございま〜す！４等が出ました〜！こちらが４等のスキルの種です！",
 		}
 	case roll < 55:
 		return RafflePrize{
@@ -264,7 +239,6 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#6666FF",
 			ColorName:        "青",
 			ItemDefinitionID: "item-012",
-			Description:      "当ったり〜！おめでとうございます！５等の祈りの指輪です！",
 		}
 	case roll < 75:
 		return RafflePrize{
@@ -273,45 +247,13 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int, wday int, specialSubRol
 			Color:            "#33FF33",
 			ColorName:        "緑",
 			ItemDefinitionID: "item-125",
-			Description:      "おめでとう。６等の福袋で〜す！",
 		}
 	default:
 		return RafflePrize{
-			Tier:        PrizeTierMiss,
-			Name:        "なし",
-			Color:       "#FFFFFF",
-			ColorName:   "白",
-			Description: "ハズレです…",
+			Tier:      PrizeTierMiss,
+			Name:      "なし",
+			Color:     "#FFFFFF",
+			ColorName: "白",
 		}
 	}
-}
-
-func FormatLegacyRaffleMessage(raffleType RaffleType, prize RafflePrize, transferredToDepot bool, remainingAttempts int) string {
-	var sb strings.Builder
-	if raffleType == RaffleSpecial {
-		sb.WriteString("ガラガラガラ…コロコロコロ…...,,,● 【")
-		sb.WriteString(prize.ColorName)
-		sb.WriteString("オーブ】 ")
-		sb.WriteString(prize.Description)
-	} else {
-		sb.WriteString("プニョプニョプニョ…コロコロコロ…...,,,● 【")
-		sb.WriteString(prize.ColorName)
-		sb.WriteString("スライム】 ")
-		sb.WriteString(prize.Description)
-	}
-
-	if prize.Tier == PrizeTierMiss {
-		if remainingAttempts > 0 {
-			sb.WriteString(fmt.Sprintf(" あと%d回まわせるよ", remainingAttempts))
-		} else {
-			sb.WriteString(" また挑戦してね")
-		}
-	} else {
-		if transferredToDepot {
-			sb.WriteString(fmt.Sprintf(" %sは、預かり所に送っておきますね", prize.Name))
-		} else {
-			sb.WriteString(" はい。どうぞ！")
-		}
-	}
-	return sb.String()
 }

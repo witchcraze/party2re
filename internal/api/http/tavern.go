@@ -188,7 +188,7 @@ var tavernDishes = func() []string {
 	return names
 }()
 
-func tavernWords(corecharacter.Character) []string {
+func tavernWords(*Handler, context.Context, corecharacter.Character) ([]string, error) {
 	return []string{
 		"いらっしゃい。何か食べてく？",
 		"{name}さんは" + tavernDishes[random.Intn(len(tavernDishes))] + "は好きかしら？",
@@ -197,5 +197,5 @@ func tavernWords(corecharacter.Character) []string {
 		"ＭＰを回復させたいならドリンクを飲んでいくといいわ",
 		"食べたり飲んだりした後は、運動しなきゃね",
 		"お酒は大人になってからね",
-	}
+	}, nil
 }

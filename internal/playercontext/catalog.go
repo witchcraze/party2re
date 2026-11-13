@@ -370,22 +370,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"bet"},
 		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "lottery_raffle",
-		Label:          "福引を引く",
-		Category:       "entertainment",
-		OperationID:    "playRaffle",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "lottery_takarakuji_buy",
-		Label:          "宝くじ購入",
-		Category:       "entertainment",
-		OperationID:    "buyTakarakujiTicket",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
-	},
+	{ID: "lottery_raffle", Label: "福引を引く", Category: "entertainment", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	// No currency gate: takarakuzi.cgi kau answers sold-out and one-per-person before funds.
+	{ID: "takarakuji_buy", Label: "宝くじ購入", Category: "entertainment", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	// No currency gate: bar.cgi chuumon answers fullness before funds, so OrderMeal owns both.
 	{ID: "tavern_order", Label: "酒場で食事注文", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "tavern_delivery_reserve", Label: "でりばりーを頼む", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
