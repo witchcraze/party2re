@@ -45,6 +45,23 @@ func (s *fleaMarketSceneService) PurchaseListing(_ context.Context, _, _ string,
 	return fleamarket.PurchaseResult{}, nil
 }
 
+func (s *fleaMarketSceneService) CancelListing(_ context.Context, actor, listingID string) (fleamarket.Listing, error) {
+	s.mutations++
+	var cancelled fleamarket.Listing
+	s.owned = slices.DeleteFunc(s.owned, func(l fleamarket.Listing) bool {
+		if l.ID == listingID && l.SellerCharacterID == actor {
+			cancelled = l
+			cancelled.Status = fleamarket.StatusCancelled
+			return true
+		}
+		return false
+	})
+	s.listings = slices.DeleteFunc(s.listings, func(l fleamarket.Listing) bool {
+		return l.ID == listingID
+	})
+	return cancelled, nil
+}
+
 func fleaMarketSceneRouter(t *testing.T, service FleaMarketService, selection playercontext.Selection) (*gatewayNavigationStore, http.Handler) {
 	t.Helper()
 	f := newGatewayFixture(t)
@@ -141,5 +158,34 @@ func TestFleaMarketSceneRequiredReadsFailWholeObservation(t *testing.T) {
 	_, router := fleaMarketSceneRouter(t, nil, playercontext.Selection{Destination: "fleamarket"})
 	if status, _ := navigationGET(t, router); status != 501 {
 		t.Fatalf("unconfigured: %d", status)
+	}
+}
+
+func TestFleaMarketSceneCancelRefreshesOwnedListings(t *testing.T) {
+	service := &fleaMarketSceneService{
+		listings: []fleamarket.Listing{
+			{ID: "mine-1", SellerCharacterID: "hero", Status: fleamarket.StatusActive},
+			{ID: "mine-2", SellerCharacterID: "hero", Status: fleamarket.StatusActive},
+		},
+		owned: []fleamarket.Listing{
+			{ID: "mine-1", SellerCharacterID: "hero", Status: fleamarket.StatusActive},
+			{ID: "mine-2", SellerCharacterID: "hero", Status: fleamarket.StatusActive},
+		},
+	}
+	_, router := fleaMarketSceneRouter(t, service, playercontext.Selection{Destination: "fleamarket"})
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"fleamarket_cancel","params":{"listing_id":"mine-1"}}`, nil)
+	if status != 200 || string(raw["success"]) != "true" || service.mutations != 1 {
+		t.Fatalf("cancel action: %d %s", status, raw)
+	}
+	var refreshed struct {
+		Scene struct {
+			Data FleaMarketSceneData `json:"data"`
+		} `json:"scene"`
+	}
+	if err := json.Unmarshal(raw["context"], &refreshed); err != nil {
+		t.Fatalf("decode refreshed context: %v (%s)", err, raw["context"])
+	}
+	if len(refreshed.Scene.Data.OwnedListings) != 1 || refreshed.Scene.Data.OwnedListings[0].ID != "mine-2" {
+		t.Fatalf("expected cancelled listing excluded from owned_listings, got %+v", refreshed.Scene.Data.OwnedListings)
 	}
 }

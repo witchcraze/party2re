@@ -41,6 +41,9 @@ func (s *blackMarketSceneService) SacrificeItem(_ context.Context, actor, id str
 		return nil, blackmarket.ErrAccessDenied
 	}
 	s.mutations++
+	s.status.SacrificeCandidates = slices.DeleteFunc(s.status.SacrificeCandidates, func(c blackmarket.SacrificeCandidate) bool {
+		return c.ItemInstanceID == id
+	})
 	return &blackmarket.SacrificeResult{CharacterID: actor, ItemInstanceID: id}, nil
 }
 
@@ -184,5 +187,37 @@ func TestBlackMarketSceneUnconfigured(t *testing.T) {
 	store, router := blackMarketSceneRouter(t, nil, blackmarket.MinAccessJobLevel)
 	if status, _ := navigationGET(t, router); status != http.StatusNotImplemented || store.writes != 0 {
 		t.Fatalf("missing service: %d", status)
+	}
+}
+
+func TestBlackMarketSceneEquippedCandidateAndSacrificeRefresh(t *testing.T) {
+	statusFixture := blackMarketTestStatus(0)
+	statusFixture.SacrificeCandidates = []blackmarket.SacrificeCandidate{
+		{ItemInstanceID: "eq-1", ItemDefinitionID: "item-eq", ItemName: "Equipped Rare", Source: blackmarket.SourceInventory, Equipped: true, Quantity: 1, RarePoints: 1},
+		{ItemInstanceID: "dep-1", ItemDefinitionID: "item-dep", ItemName: "Depot Rare", Source: blackmarket.SourceDepot, Equipped: false, Quantity: 1, RarePoints: 1},
+	}
+	service := &blackMarketSceneService{status: statusFixture}
+	_, router := blackMarketSceneRouter(t, service, blackmarket.MinAccessJobLevel)
+
+	httpStatus, observation := navigationGET(t, router)
+	data := decodeShopScene[BlackMarketSceneData](t, observation)
+	if httpStatus != 200 || len(data.SacrificeCandidates) != 2 || !data.SacrificeCandidates[0].Equipped || data.SacrificeCandidates[0].ItemInstanceID != "eq-1" {
+		t.Fatalf("unexpected initial candidates: %d %+v", httpStatus, data.SacrificeCandidates)
+	}
+
+	httpStatus, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"blackmarket_sacrifice","params":{"item_instance_id":"eq-1"}}`, nil)
+	if httpStatus != 200 || string(raw["success"]) != "true" || service.mutations != 1 {
+		t.Fatalf("sacrifice action: %d %s", httpStatus, raw)
+	}
+	var refreshed struct {
+		Scene struct {
+			Data BlackMarketSceneData `json:"data"`
+		} `json:"scene"`
+	}
+	if err := json.Unmarshal(raw["context"], &refreshed); err != nil {
+		t.Fatalf("decode refreshed context: %v (%s)", err, raw["context"])
+	}
+	if len(refreshed.Scene.Data.SacrificeCandidates) != 1 || refreshed.Scene.Data.SacrificeCandidates[0].ItemInstanceID != "dep-1" {
+		t.Fatalf("expected sacrificed candidate removed from scene context, got %+v", refreshed.Scene.Data.SacrificeCandidates)
 	}
 }
