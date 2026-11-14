@@ -16,12 +16,21 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-var errSalePersistence = errors.New("sale character save failed")
+var (
+	errSalePersistence = errors.New("sale character save failed")
+	errSaleDepotSave   = errors.New("sale depot save failed")
+)
 
 type saleFailingCharacterSave struct{ *database.CharacterRepository }
 
 func (saleFailingCharacterSave) Update(context.Context, corecharacter.Character) error {
 	return errSalePersistence
+}
+
+type saleFailingDepotSave struct{ *database.DepotRepository }
+
+func (saleFailingDepotSave) Save(context.Context, depot.Depot) error {
+	return errSaleDepotSave
 }
 
 type saleDBCatalog struct{ failID string }
@@ -33,7 +42,13 @@ func (c saleDBCatalog) FindByID(id string) (item.Definition, error) {
 	return item.Definition{ID: id, Price: 101}, nil
 }
 
-func saleDBFixture(t *testing.T, failSave bool, failID string) (*depot.Service, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, []item.Instance) {
+type saleFixedPriceCatalog struct{ price int }
+
+func (c saleFixedPriceCatalog) FindByID(id string) (item.Definition, error) {
+	return item.Definition{ID: id, Price: c.price}, nil
+}
+
+func saleDBFixtureWithOptions(t *testing.T, failCharSave, failDepotSave bool, catalog depot.ItemDefinitionProvider) (*depot.Service, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, []item.Instance) {
 	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -74,29 +89,44 @@ func saleDBFixture(t *testing.T, failSave bool, failID string) (*depot.Service, 
 	if _, err := database.CreateTestDepot(context.Background(), db, actor.ID, 0, items); err != nil {
 		t.Fatal(err)
 	}
+	var storage depot.Repository = depots
+	if failDepotSave {
+		storage = saleFailingDepotSave{depots}
+	}
 	var characters depot.CharacterRepository = chars
-	if failSave {
+	if failCharSave {
 		characters = saleFailingCharacterSave{chars}
 	}
-	svc, err := depot.NewServiceWithTransaction(depots, characters, inv, depots, depot.WithItemDefinitionProvider(saleDBCatalog{failID}))
+	var opts []depot.Option
+	if catalog != nil {
+		opts = append(opts, depot.WithItemDefinitionProvider(catalog))
+	}
+	svc, err := depot.NewServiceWithTransaction(storage, characters, inv, depots, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return svc, actor, chars, depots, items
 }
 
+func saleDBFixture(t *testing.T, failSave bool, failID string) (*depot.Service, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, []item.Instance) {
+	t.Helper()
+	return saleDBFixtureWithOptions(t, failSave, false, saleDBCatalog{failID})
+}
+
 func TestDepotSaleRollback_Integration(t *testing.T) {
 	for _, tc := range []struct {
-		name             string
-		single, failSave bool
-		failID           string
+		name                        string
+		single, failSave, failDepot bool
+		failID                      string
+		wantErr                     error
 	}{
-		{"single save failure", true, true, ""},
-		{"batch save failure", false, true, ""},
-		{"late catalog failure", false, false, "second"},
+		{"single save failure", true, true, false, "", errSalePersistence},
+		{"batch save failure", false, true, false, "", errSalePersistence},
+		{"depot save failure", false, false, true, "", errSaleDepotSave},
+		{"late catalog failure", false, false, false, "second", errSalePersistence},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, actor, chars, depots, items := saleDBFixture(t, tc.failSave, tc.failID)
+			svc, actor, chars, depots, items := saleDBFixtureWithOptions(t, tc.failSave, tc.failDepot, saleDBCatalog{tc.failID})
 			ctx := context.Background()
 			before, err := depots.FindByCharacterID(ctx, actor.ID)
 			if err != nil {
@@ -108,8 +138,8 @@ func TestDepotSaleRollback_Integration(t *testing.T) {
 			} else {
 				_, earned, err = svc.SellItems(ctx, actor.ID, []string{items[0].ID, items[1].ID})
 			}
-			if !errors.Is(err, errSalePersistence) || earned != 0 {
-				t.Fatalf("earned=%d error=%v", earned, err)
+			if !errors.Is(err, tc.wantErr) || earned != 0 {
+				t.Fatalf("earned=%d error=%v, want %v", earned, err, tc.wantErr)
 			}
 			after, err := depots.FindByCharacterID(ctx, actor.ID)
 			if err != nil {
@@ -121,6 +151,108 @@ func TestDepotSaleRollback_Integration(t *testing.T) {
 			}
 			if !reflect.DeepEqual(before, after) || wallet.Money != actor.Money {
 				t.Fatalf("failed sale changed assets: before=%+v after=%+v money=%d", before, after, wallet.Money)
+			}
+		})
+	}
+}
+
+func TestDepotSalePersistenceAndRejections_Integration(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		single   bool
+		price    int
+		provider bool
+		mode     string
+		wantEarn int
+		wantErr  error
+	}{
+		{"single", true, 101, true, "", 100, nil},
+		{"batch", false, 101, true, "", 150, nil},
+		{"zero price", true, 0, true, "", 0, nil},
+		{"batch zero price", false, 0, true, "", 0, nil},
+		{"missing provider", true, 101, false, "", 0, nil},
+		{"missing single", true, 101, true, "missing", 0, depot.ErrItemNotFound},
+		{"missing batch", false, 101, true, "missing", 0, depot.ErrItemNotFound},
+		{"duplicate batch", false, 101, true, "duplicate", 0, depot.ErrItemNotFound},
+		{"blank single", true, 101, true, "empty", 0, depot.ErrInvalidItemInstanceID},
+		{"empty batch", false, 101, true, "empty", 0, depot.ErrEmptyItemList},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var catalog depot.ItemDefinitionProvider
+			if tc.provider {
+				catalog = saleFixedPriceCatalog{price: tc.price}
+			}
+			svc, actor, chars, depots, items := saleDBFixtureWithOptions(t, false, false, catalog)
+			ctx := context.Background()
+			before, err := depots.FindByCharacterID(ctx, actor.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids := []string{items[0].ID}
+			if !tc.single {
+				ids = append(ids, items[1].ID)
+			}
+			switch tc.mode {
+			case "missing":
+				ids[len(ids)-1] = "missing"
+			case "duplicate":
+				ids[1] = ids[0]
+			case "empty":
+				if tc.single {
+					ids[0] = ""
+				} else {
+					ids = []string{}
+				}
+			}
+			var gotDepot depot.Depot
+			var earned int
+			if tc.single {
+				gotDepot, earned, err = svc.SellItem(ctx, actor.ID, ids[0])
+			} else {
+				gotDepot, earned, err = svc.SellItems(ctx, actor.ID, ids)
+			}
+			wantSuccess := tc.provider && tc.wantErr == nil
+			if wantSuccess {
+				if err != nil || earned != tc.wantEarn {
+					t.Fatalf("sale failed: earned=%d err=%v", earned, err)
+				}
+			} else {
+				if err == nil || earned != 0 || (tc.wantErr != nil && !errors.Is(err, tc.wantErr)) {
+					t.Fatalf("unexpected rejection: earned=%d err=%v want=%v", earned, err, tc.wantErr)
+				}
+			}
+			wallet, err := chars.FindByID(ctx, actor.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, err := depots.FindByCharacterID(ctx, actor.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !wantSuccess {
+				if !reflect.DeepEqual(before, after) || wallet.Money != actor.Money {
+					t.Fatalf("rejected sale changed assets: before=%+v after=%+v money=%d", before, after, wallet.Money)
+				}
+				return
+			}
+			gotDepot.ItemDefs = nil
+			if wallet.Money != actor.Money+tc.wantEarn || !reflect.DeepEqual(gotDepot, after) {
+				t.Fatalf("persisted sale mismatch: wallet=%d got=%+v after=%+v", wallet.Money, gotDepot, after)
+			}
+			remaining := map[string]item.Instance{}
+			for _, stored := range after.Items {
+				remaining[stored.ID] = stored
+			}
+			if len(remaining) != 3-len(ids) || !reflect.DeepEqual(remaining[items[2].ID], items[2]) {
+				t.Fatalf("unselected item changed: %+v", after.Items)
+			}
+			for _, id := range ids {
+				if _, exists := remaining[id]; exists {
+					t.Fatalf("sold item %s remains", id)
+				}
+			}
+			if tc.single && !reflect.DeepEqual(remaining[items[1].ID], items[1]) {
+				t.Fatalf("single sale changed second item: %+v", remaining[items[1].ID])
 			}
 		})
 	}

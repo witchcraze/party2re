@@ -77,6 +77,21 @@ func TestDepotRepositoryPreservesItemOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertOrder(dep.Items)
+	// Replacing an existing depot with an unsorted multi-kind slice (including kind-3 shield item-071)
+	// must not implicitly sort on Save or reload.
+	unsorted := []item.Instance{
+		{ID: actor.ID[:30] + "aa", DefinitionID: "item-071", Quantity: 1},
+		{ID: actor.ID[:30] + "bb", DefinitionID: "item-001", Quantity: 8},
+		{ID: actor.ID[:30] + "cc", DefinitionID: "armor-02", Quantity: 1},
+		{ID: actor.ID[:30] + "dd", DefinitionID: "armor-01", Quantity: 1, EnhancementLevel: 2},
+		{ID: actor.ID[:30] + "ee", DefinitionID: "weapon-02", Quantity: 1},
+		{ID: actor.ID[:30] + "ff", DefinitionID: "weapon-01", Quantity: 1, EnhancementLevel: 6},
+	}
+	dep.Items = slices.Clone(unsorted)
+	if err := repo.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+	assertOrder(unsorted)
 	before := slices.Clone(dep.Items)
 	dep.Items = append(dep.Items, dep.Items[0])
 	if err := repo.Save(ctx, dep); err == nil {
