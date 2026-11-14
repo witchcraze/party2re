@@ -75,6 +75,7 @@ func (h *Handler) registerContestCommands() {
 		return ContestResult{Entry: &entry, Message: entryMessage(entry)}, nil
 	}, contestRejection)(h)
 	withActionCommand("contest_vote", func(ctx context.Context, actor string, p contestVoteRequest) (any, error) {
+		p.EntryID = strings.TrimSpace(p.EntryID)
 		// The reply names the entry and round, so read them before voting.
 		entries, err := service.GetCurrentEntries(ctx)
 		if err != nil {
@@ -94,6 +95,7 @@ func (h *Handler) registerContestCommands() {
 		return ContestResult{Vote: &vote, Message: title + "に投票しました"}, nil
 	}, contestRejection)(h)
 	withActionCommand("contest_photo_delete", func(ctx context.Context, actor string, p contestPhotoRequest) (any, error) {
+		p.PhotoID = strings.TrimSpace(p.PhotoID)
 		photos, err := service.ListPhotos(ctx, actor)
 		if err != nil {
 			return nil, err
