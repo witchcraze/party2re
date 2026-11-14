@@ -240,68 +240,6 @@ func (s *Service) GetDefinition(id string) (corejob.Definition, error) {
 	return s.catalog.FindByID(id)
 }
 
-func (s *Service) Master(ctx context.Context, characterID string, jobID string) (corejob.CharacterJob, error) {
-	state, err := s.repository.FindByCharacterID(ctx, characterID)
-	if err != nil {
-		return corejob.CharacterJob{}, err
-	}
-	if s.characters != nil {
-		charName := ""
-		charSP := 0
-		if char, err := s.characters.FindByID(ctx, characterID); err == nil {
-			charName = char.Name
-			charSP = char.SP
-		}
-		if def, err := s.GetDefinition(jobID); err == nil {
-			if !state.RecordMastery(jobID, charSP, s.masterySP(def)) {
-				state.Master(jobID)
-			}
-		} else {
-			state.Master(jobID)
-		}
-		if err := s.checkAndNotifyCompletion(ctx, charName, &state); err != nil {
-			return corejob.CharacterJob{}, err
-		}
-	} else {
-		state.Master(jobID)
-		if err := s.checkAndNotifyCompletion(ctx, "", &state); err != nil {
-			return corejob.CharacterJob{}, err
-		}
-	}
-	if err := s.repository.Save(ctx, state); err != nil {
-		return corejob.CharacterJob{}, err
-	}
-	return state, nil
-}
-
-func (s *Service) CheckAndApplyMastery(ctx context.Context, characterID string, level int) (bool, error) {
-	state, err := s.repository.FindByCharacterID(ctx, characterID)
-	if err != nil {
-		return false, err
-	}
-	sp := level
-	charName := ""
-	if s.characters != nil {
-		char, err := s.characters.FindByID(ctx, characterID)
-		if err != nil {
-			return false, err
-		}
-		sp = char.SP
-		charName = char.Name
-	}
-	required := s.masterySPForJob(state.CurrentJobID)
-	if required <= 0 || !state.RecordMastery(state.CurrentJobID, sp, required) {
-		return false, nil
-	}
-	if err := s.checkAndNotifyCompletion(ctx, charName, &state); err != nil {
-		return false, err
-	}
-	if err := s.repository.Save(ctx, state); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
 // checkAndNotifyCompletion records the first all-jobs completion. Only the
 // trajectory entry is required; news and Hall of Fame stay best-effort.
 func (s *Service) checkAndNotifyCompletion(ctx context.Context, charName string, state *corejob.CharacterJob) error {
@@ -386,12 +324,4 @@ func (s *Service) masterySP(def corejob.Definition) int {
 		}
 	}
 	return def.MasteryThreshold()
-}
-
-func (s *Service) masterySPForJob(jobID string) int {
-	def, err := s.GetDefinition(jobID)
-	if err != nil {
-		return 0
-	}
-	return s.masterySP(def)
 }

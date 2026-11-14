@@ -608,85 +608,44 @@ func TestExchangeJob_Comprehensive(t *testing.T) {
 	}
 }
 
-func TestService_MasterAndCheckMasteryBranches(t *testing.T) {
+func TestChangeJob_RepositoryErrorPropagation(t *testing.T) {
 	ctx := context.Background()
-	state, _ := corejob.NewCharacterJob("char-1", "job-01")
-	repo := &repositoryStub{value: state}
+	char := corecharacter.Character{ID: "char-1", JobID: "job-01", Level: 20, Gender: "unspecified"}
 
-	// Master with repository error
-	errRepo := &errRepoStub{findErr: errors.New("repo find error")}
-	svcErrRepo, _ := NewService(errRepo)
-	_, err := svcErrRepo.Master(ctx, "char-1", "job-01")
-	if err == nil || err.Error() != "repo find error" {
+	// 1. Unexpected repository FindByCharacterID error is propagated (not treated as not-found).
+	findErr := errors.New("repo find error")
+	svcFindErr, _ := NewService(
+		&errRepoStub{findErr: findErr},
+		WithCharacterRepository(&charRepoStub{char: char}),
+		WithInventoryRepository(&inventoryRepoStub{}),
+	)
+	if _, _, err := svcFindErr.ChangeJob(ctx, char.ID, "job-02"); !errors.Is(err, findErr) {
 		t.Fatalf("expected repo find error, got %v", err)
 	}
 
-	// Master with character repo lookup error
-	charRepoErr := &errCharRepoStub{findErr: errors.New("char find error")}
-	svcCharErr, _ := NewService(repo, WithCharacterRepository(charRepoErr))
-	mastered, err := svcCharErr.Master(ctx, "char-1", "job-02")
-	if err != nil || !mastered.IsMastered("job-02") {
-		t.Fatalf("expected job-02 mastered despite char lookup error: err=%v", err)
+	// 2. Repository Save error is propagated.
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	saveErr := errors.New("save error")
+	svcSaveErr, _ := NewService(
+		&errRepoStub{value: state, saveErr: saveErr},
+		WithCharacterRepository(&charRepoStub{char: char}),
+		WithInventoryRepository(&inventoryRepoStub{}),
+	)
+	if _, _, err := svcSaveErr.ChangeJob(ctx, char.ID, "job-02"); !errors.Is(err, saveErr) {
+		t.Fatalf("expected save error, got %v", err)
 	}
 
-	// Master with unknown definition falls back to state.Master(jobID)
-	mastered, err = svcCharErr.Master(ctx, "char-1", "unknown-job-id")
-	if err != nil || !mastered.IsMastered("unknown-job-id") {
-		t.Fatalf("expected unknown-job-id mastered: err=%v", err)
-	}
-
-	// CheckAndApplyMastery: repo find error
-	svcRepoErr2, _ := NewService(errRepo)
-	_, err = svcRepoErr2.CheckAndApplyMastery(ctx, "char-1", 50)
-	if err == nil || err.Error() != "repo find error" {
-		t.Fatalf("expected repo find error, got %v", err)
-	}
-
-	// CheckAndApplyMastery: char repo error
-	_, err = svcCharErr.CheckAndApplyMastery(ctx, "char-1", 50)
-	if err == nil || err.Error() != "char find error" {
-		t.Fatalf("expected char find error, got %v", err)
-	}
-
-	// CheckAndApplyMastery: unknown current job -> required <= 0 -> returns false, nil
-	unknownState, _ := corejob.NewCharacterJob("char-1", "unknown-job")
+	// 3. Unknown departing CurrentJobID does not fail or master.
+	unknownChar := corecharacter.Character{ID: "char-unknown", JobID: "unknown-job", Level: 20, SP: 50, Gender: "unspecified"}
+	unknownState, _ := corejob.NewCharacterJob(unknownChar.ID, unknownChar.JobID)
 	repoUnknown := &repositoryStub{value: unknownState}
-	svcUnknown, _ := NewService(repoUnknown)
-	ok, err := svcUnknown.CheckAndApplyMastery(ctx, "char-1", 50)
-	if err != nil || ok {
-		t.Fatalf("expected false, nil for unknown job: ok=%v, err=%v", ok, err)
-	}
-}
-
-func TestService_ChangeMethod(t *testing.T) {
-	ctx := context.Background()
-
-	// 1. When FindByCharacterID returns error, Change falls back to NewCharacterJob and succeeds
-	errRepo := &errRepoStub{findErr: errors.New("not found")}
-	svc, _ := NewService(errRepo)
-	// Use a real job (job-01) since ChangeTo now rejects "starter" per legacy spec.
-	target, _ := corejob.NewDefinition("job-01", "Warrior", 1, 1, 1, 1, 1, 1, "")
-	state, err := svc.Change(ctx, "char-new", target, 20, "unspecified")
-	if err != nil {
-		t.Fatalf("expected Change to initialize new state on find error: %v", err)
-	}
-	if state.CharacterID != "char-new" || state.CurrentJobID != "job-01" {
-		t.Fatalf("unexpected state: %#v", state)
-	}
-
-	// 2. When ChangeTo fails (e.g. level below minimum), returns error
-	_, err = svc.Change(ctx, "char-new", target, 19, "unspecified")
-	if err == nil {
-		t.Fatal("expected level requirement error in Change")
-	}
-
-	// 3. When Save fails, returns error
-	initialState, _ := corejob.NewCharacterJob("char-new", "starter")
-	saveErrRepo := &errRepoStub{value: initialState, saveErr: errors.New("save error")}
-	svcSaveErr, _ := NewService(saveErrRepo)
-	_, err = svcSaveErr.Change(ctx, "char-new", target, 20, "unspecified")
-	if err == nil || err.Error() != "save error" {
-		t.Fatalf("expected save error in Change, got %v", err)
+	svcUnknown, _ := NewService(
+		repoUnknown,
+		WithCharacterRepository(&charRepoStub{char: unknownChar}),
+		WithInventoryRepository(&inventoryRepoStub{}),
+	)
+	if _, got, err := svcUnknown.ChangeJob(ctx, unknownChar.ID, "job-01"); err != nil || got.IsMastered("unknown-job") {
+		t.Fatalf("unexpected result for unknown departing job: err=%v, state=%#v", err, got)
 	}
 }
 
