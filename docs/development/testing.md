@@ -110,17 +110,11 @@ increasing them.
 For local resource pressure, `GOFLAGS=-p=2 make check` limits concurrent package
 builds and test binaries using Go's standard flag. It preserves each concurrency
 test's worker count and assertions without changing temporary-directory settings.
-All full-suite test entrypoints (`make test`, `make test-integration`, `make test-docker`,
-and `make check`) execute with an explicit default package-wide
-deadline of 30 minutes (`-timeout=30m`), replacing Go's implicit 10-minute timeout.
-Callers can override the package budget using `TEST_TIMEOUT=<duration>` (e.g.
-`make test TEST_TIMEOUT=45m` or `TEST_TIMEOUT=45m make check`) or standard Go flags
-(`GOFLAGS="-timeout=<duration>"`). Unrelated Go flags in `GOFLAGS` (such as `GOFLAGS=-p=2`
-or `-v`) are preserved and forwarded.
+The package deadline and its overrides are described under [execution budgets](#54-execution-budgets-and-stop-detection).
 
 ## 4. Container Roles
 
-- **`Dockerfile.dev` & `compose.yaml`**: Development and integration test environment. Spawns MariaDB and Valkey alongside Go test runner with bind-mounted source and BuildKit cache mounts. The default test command executes with the 30-minute default package timeout, honoring explicit `TEST_TIMEOUT` and standard `GOFLAGS="-timeout=..."` overrides with the same precedence as `Makefile` and `scripts/verify.sh`.
+- **`Dockerfile.dev` & `compose.yaml`**: Development and integration test environment. Spawns MariaDB and Valkey alongside Go test runner with bind-mounted source and BuildKit cache mounts.
 - **`compose.test.yaml`**: Test stack, a separate `party2re-test` Compose project whose MariaDB (`127.0.0.1:3307`) and Valkey (`127.0.0.1:6380`) keep their data on tmpfs, so a stop discards it and the development volumes are never touched. `make check`, `make check-changed` and CI use it; the first two start it on demand and leave it running until `make down`. `PARTY2_TEST_DB_PORT` and `PARTY2_TEST_VALKEY_PORT` change the local host ports. When the stack cannot start locally (for example occupied ports or no tmpfs support), `make check` and `make check-changed` warn and test against the development services instead. `make test-integration`, `make test-docker`, `make test-stress` and `make bench` keep using the development services.
 - **`Dockerfile`**: Production distribution image. Multi-stage build compiling a statically linked, stripped binary (`CGO_ENABLED=0`) on `golang:1.26.7-trixie` running on distroless `gcr.io/distroless/static-debian13:nonroot` with CA certificates only.
 
@@ -211,9 +205,8 @@ observable results at connections. Repeating every formula vector through every
 adapter adds cost without checking a new contract. Conversely, a helper test and
 a separately passing registry enumeration do not prove that the registered entry
 invokes it correctly. Synthetic catalogs certify only their exercised subset.
-The HTTP/context journey and reusable E2E harness are owned by
-[#650](https://github.com/witchcraze/party2re/issues/650); battle boundary diagnosis
-does not wait for that harness or use it as the numerical oracle.
+[Gameplay scenarios](#55-gameplay-scenarios) cover the HTTP/context journey; battle
+boundary diagnosis does not wait for them or use them as the numerical oracle.
 
 #### Choose a method
 
@@ -379,6 +372,27 @@ deadlock or cancellation errors. Wait for barriers/state observations rather tha
 fixed sleeps, make channel waits cancellation-aware, and join all workers before
 assertions and fixture cleanup. Existing concurrency helpers join workers; their
 callbacks must honor cancellation themselves.
+
+### 5.5 Gameplay Scenarios
+
+A gameplay scenario plays one continuous journey through the public routes. Choose the layer by what has to be real:
+
+| Subject | Layer |
+| --- | --- |
+| Production composition, real MariaDB/Valkey, authentication, ownership, persistence across restart | Scenario over `wireApp` in [`cmd/party2/gameplay_scenario_test.go`](../../cmd/party2/gameplay_scenario_test.go) |
+| Injected storage or refresh failures, and recovery from a known outcome | HTTP fixtures with doubles, as in [`action_dispatcher_integration_test.go`](../../internal/api/http/action_dispatcher_integration_test.go) |
+| Numeric combat results | [Battle test selection](#53-battle-test-selection) |
+
+Scenarios over `wireApp` follow these rules:
+
+- Replace nothing with a double. Register accounts through the public routes and issue only destinations, commands and parameters that the preceding observation or outcome offered.
+- Take expected values from legacy rules and invariants such as asset conservation and ownership, not from the response under test.
+- State that no connected command can produce yet may be written to the store as explicit setup. Such setup does not certify the command that will produce it, and a mode without Gateway commands has no scenario until its owner connects them.
+- Expire game timers through their store rather than sleeping or disabling them, so the wait itself stays under test.
+- Keep one mode per scenario, and remove its accounts through account deletion.
+- Scenarios are ordinary DB-backed tests: they run in `make check` and the CI shards and skip without connection settings. There is no separate runner, directory or CI tier.
+
+The Issue that connects a mode's commands to the Gateway adds or extends that mode's scenario.
 
 ## 6. Mechanical AST Static Analysis Linters
 
