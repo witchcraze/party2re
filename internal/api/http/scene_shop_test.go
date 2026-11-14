@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -206,6 +207,27 @@ func TestShopScenesUseRealCatalogAndExplicitSelection(t *testing.T) {
 				}
 				if (len(data.Recipes) > 0) != (kind == shop.ShopTypeAccessory) {
 					t.Fatalf("recipes: %d", len(data.Recipes))
+				}
+				if kind == shop.ShopTypeAccessory {
+					if len(data.Recipes) != 48 {
+						t.Fatalf("accessory recipes = %d, want 48", len(data.Recipes))
+					}
+					rawScene, err := json.Marshal(response.Scene.Data)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if strings.Contains(string(rawScene), `"legacy_name"`) {
+						t.Fatalf("accessory scene exposed legacy_name: %s", rawScene)
+					}
+					for _, rec := range data.Recipes {
+						def, err := f.catalog.FindByID(rec.ProductDefinitionID)
+						if err != nil {
+							t.Fatalf("recipe %s product %s: %v", rec.ID, rec.ProductDefinitionID, err)
+						}
+						if rec.ProductName != def.Name || !strings.HasPrefix(rec.Target, def.Name) {
+							t.Fatalf("recipe %s exposed non-catalog name: %+v (catalog=%q)", rec.ID, rec, def.Name)
+						}
+					}
 				}
 				for _, p := range data.Items {
 					var power, weight int

@@ -9,7 +9,10 @@ import (
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
 )
@@ -143,5 +146,80 @@ func TestShopRejectionKeepsStorageFailuresUnexpected(t *testing.T) {
 		if status, _ := shopActionRejection(err); status != 0 {
 			t.Fatalf("%v mapped to known rejection %d", err, status)
 		}
+	}
+}
+
+type shopDepotStub struct {
+	dep depot.Depot
+}
+
+func (s *shopDepotStub) FindByCharacterID(context.Context, string) (depot.Depot, error) {
+	return s.dep, nil
+}
+func (s *shopDepotStub) FindByCharacterIDForUpdate(context.Context, string) (depot.Depot, error) {
+	return s.dep, nil
+}
+func (s *shopDepotStub) Save(_ context.Context, dep depot.Depot) error {
+	s.dep = dep
+	return nil
+}
+
+func TestShopSynthesizeHTTPUsesCleanRoomNamesOnly(t *testing.T) {
+	catalog, err := coreitem.DefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &shopSceneRepository{gatewayFixture: newGatewayFixture(t), catalog: catalog}
+	hiyaku, _ := coreitem.NewInstance("item-180", 1)
+	f.inv = coreinventory.Inventory{CharacterID: "hero", Items: []coreitem.Instance{hiyaku}}
+
+	dep, err := depot.NewDepotWithCapacity("hero", 50, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mat1, _ := coreitem.NewInstance("item-177", 1)
+	mat2, _ := coreitem.NewInstance("item-144", 1)
+	_ = dep.AddItem(mat1)
+	_ = dep.AddItem(mat2)
+	depotStub := &shopDepotStub{dep: dep}
+
+	svc, err := shop.NewService(f, f, shopSceneDefinitions{f}, shop.WithHelperProvider(f), shop.WithDepotRepository(depotStub))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "shop_accessory"}}
+	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil),
+		playercontext.WithNavigation(store, playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{
+			ID: "shop_accessory", Parent: "town", SubjectKind: "item", Pageable: true,
+			SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil },
+		}))
+	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, svc, WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture })
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := h.Router()
+
+	// Legacy recipe name must be rejected.
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_synthesize","params":{"recipe_target":"ピオリムの書"}}`, nil)
+	if status != 404 {
+		t.Fatalf("legacy recipe target status = %d, want 404: %s", status, raw)
+	}
+	assertGatewayError(t, raw, "SHOP_RECIPE_NOT_FOUND")
+
+	// Clean-room target must succeed and omit legacy_name from the JSON payload.
+	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_synthesize","params":{"recipe_target":"全体敏捷強化の魔導書"}}`, nil)
+	if status != 200 {
+		t.Fatalf("clean-room recipe target status = %d: %s", status, raw)
+	}
+	if strings.Contains(string(raw["result"]), `"legacy_name"`) {
+		t.Fatalf("synthesis response exposed legacy_name: %s", raw["result"])
+	}
+	var result shopSynthesizeResponse
+	if err := json.Unmarshal(raw["result"], &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.Success || result.Recipe.ID != "recipe-41" || result.Recipe.Target != "全体敏捷強化の魔導書" ||
+		result.Recipe.ProductName != "全体敏捷強化の魔導書" || result.NPCMessage != "合成の秘薬を使って、全体敏捷強化の魔導書 が完成したわ。預り所にあるはずよ" {
+		t.Fatalf("unexpected synthesis response: %+v", result)
 	}
 }
