@@ -40,6 +40,9 @@ jobs:
       - name: Build production image (smoke test)
         run: docker build -f Dockerfile -t party2re:ci-smoke .
 
+      - name: Run production image smoke test
+        run: ./scripts/docker_smoke.sh party2re:ci-smoke
+
   verify-shard:
     name: verify-shard-${{ matrix.shard }}
     runs-on: ubuntu-latest

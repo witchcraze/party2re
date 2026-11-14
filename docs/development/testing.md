@@ -442,8 +442,8 @@ validation and vet, sharded Go test execution (`verify-shard`, partitioned by
 [scripts/ci_shard.sh](../../scripts/ci_shard.sh) with isolated MariaDB/Valkey
 containers and `-covermode=atomic`), the `verify` gate (which enforces shard
 outcomes and merges shard profiles into unified `coverage.out` / `coverage.txt`),
-and the production image build in parallel branches. It does not currently run
-the race detector or exercise the built production image. The GitHub-hosted
+and the production image smoke check ([scripts/docker_smoke.sh](../../scripts/docker_smoke.sh)) in parallel branches. It does not currently run
+the race detector. The GitHub-hosted
 runner is disposable per job; tests inside a job still follow the database
 ownership/isolation rules above.
 
@@ -459,8 +459,8 @@ and related-ticket synchronization follow the [workflow rule](../../.agents/rule
 
 Investigate a CI failure against the pre-change baseline in isolated checkouts
 under matching conditions. Record revisions, commands and reproducible seed/input;
-preserve behavioral assertions when fixing an unstable fixture. Container startup
-and headless gameplay coverage remain distinct from a successful image build.
+preserve behavioral assertions when fixing an unstable fixture. Headless
+gameplay coverage remains distinct from the container smoke check.
 
 ## 9. Related Documents
 
