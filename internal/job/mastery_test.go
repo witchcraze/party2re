@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/job"
 )
@@ -59,6 +60,31 @@ func (r *memoryCharRepository) FindByIDForUpdate(ctx context.Context, id string)
 
 func (r *memoryCharRepository) Update(ctx context.Context, value corecharacter.Character) error {
 	r.data[value.ID] = value
+	return nil
+}
+
+type memoryInventoryRepository struct {
+	data map[string]coreinventory.Inventory
+}
+
+func newMemoryInventoryRepository() *memoryInventoryRepository {
+	return &memoryInventoryRepository{data: make(map[string]coreinventory.Inventory)}
+}
+
+func (r *memoryInventoryRepository) FindByCharacterID(_ context.Context, id string) (coreinventory.Inventory, error) {
+	if v, ok := r.data[id]; ok {
+		return v, nil
+	}
+	inv, err := coreinventory.New(id)
+	return inv, err
+}
+
+func (r *memoryInventoryRepository) FindByCharacterIDForUpdate(ctx context.Context, id string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, id)
+}
+
+func (r *memoryInventoryRepository) Save(_ context.Context, value coreinventory.Inventory) error {
+	r.data[value.CharacterID] = value
 	return nil
 }
 
@@ -309,16 +335,18 @@ func (m *mockNewsPublisher) PublishNews(_ context.Context, _, _, _, _ string, _ 
 	return nil
 }
 
-func TestCheckAndApplyMastery_AllJobsMastered_LegendInduction(t *testing.T) {
+func TestChangeJob_AllJobsMastered_LegendInduction(t *testing.T) {
 	ctx := context.Background()
 	jobRepo := newMemoryJobRepository()
 	charRepo := newMemoryCharRepository()
+	invRepo := newMemoryInventoryRepository()
 	legend := &mockLegendInductor{}
 	news := &mockNewsPublisher{}
 
 	svc, err := job.NewService(
 		jobRepo,
 		job.WithCharacterRepository(charRepo),
+		job.WithInventoryRepository(invRepo),
 		job.WithLegendInductor(legend),
 		job.WithNewsPublisher(news),
 	)
@@ -333,10 +361,12 @@ func TestCheckAndApplyMastery_AllJobsMastered_LegendInduction(t *testing.T) {
 	}
 
 	charRepo.data["char-legend"] = corecharacter.Character{
-		ID:    "char-legend",
-		Name:  "JobMasterHero",
-		JobID: "job-72",
-		SP:    500, // plenty of SP
+		ID:     "char-legend",
+		Name:   "JobMasterHero",
+		JobID:  "job-72",
+		Level:  20,
+		SP:     500, // plenty of SP
+		Gender: "unspecified",
 	}
 	jobRepo.data["char-legend"] = corejob.CharacterJob{
 		CharacterID:  "char-legend",
@@ -344,13 +374,13 @@ func TestCheckAndApplyMastery_AllJobsMastered_LegendInduction(t *testing.T) {
 		MasteredJobs: mastered71,
 	}
 
-	// Master 72nd job
-	mastered, err := svc.CheckAndApplyMastery(ctx, "char-legend", 500)
+	// Departing 72nd job masters it and triggers all-jobs completion.
+	_, state, err := svc.ChangeJob(ctx, "char-legend", "job-01")
 	if err != nil {
-		t.Fatalf("CheckAndApplyMastery failed: %v", err)
+		t.Fatalf("ChangeJob failed: %v", err)
 	}
-	if !mastered {
-		t.Fatal("expected 72nd job to be mastered")
+	if !state.IsMastered("job-72") || !state.AllJobsMastered {
+		t.Fatalf("expected job-72 mastered and AllJobsMastered=true, got %#v", state)
 	}
 
 	// Verify news and legend induction
@@ -364,13 +394,17 @@ func TestCheckAndApplyMastery_AllJobsMastered_LegendInduction(t *testing.T) {
 		t.Errorf("unexpected legend call: %+v", legend.calls[0])
 	}
 
-	// Second check -> already completed, idempotent
-	masteredAgain, err := svc.CheckAndApplyMastery(ctx, "char-legend", 500)
+	// Subsequent job change -> already completed, idempotent
+	char := charRepo.data["char-legend"]
+	char.Level = 20
+	char.SP = 500
+	charRepo.data["char-legend"] = char
+	_, _, err = svc.ChangeJob(ctx, "char-legend", "job-02")
 	if err != nil {
-		t.Fatalf("second CheckAndApplyMastery failed: %v", err)
+		t.Fatalf("second ChangeJob failed: %v", err)
 	}
-	if masteredAgain {
-		t.Error("expected second mastery to return false")
+	if news.newsCount != 1 {
+		t.Errorf("expected still 1 news publication, got %d", news.newsCount)
 	}
 	if len(legend.calls) != 1 {
 		t.Errorf("expected still 1 legend call, got %d", len(legend.calls))
@@ -578,10 +612,12 @@ func TestJobMasteryThresholds_PriestAndMagePreserveLegacyRequirements(t *testing
 	ctx := context.Background()
 	jobRepo := newMemoryJobRepository()
 	charRepo := newMemoryCharRepository()
+	invRepo := newMemoryInventoryRepository()
 
 	svc, err := job.NewService(
 		jobRepo,
 		job.WithCharacterRepository(charRepo),
+		job.WithInventoryRepository(invRepo),
 	)
 	if err != nil {
 		t.Fatalf("failed to create job service: %v", err)
@@ -590,10 +626,12 @@ func TestJobMasteryThresholds_PriestAndMagePreserveLegacyRequirements(t *testing
 	// 1. Priest (job-05) requires SP 100 (_requirements.go legacyMasteryThresholds).
 	// Representative skill heal-30 has RequiredSP: 6; mastery must NOT regress to SP 6.
 	charRepo.data["priest-test"] = corecharacter.Character{
-		ID:    "priest-test",
-		Name:  "PriestTest",
-		JobID: "job-05",
-		SP:    6, // equal to representative skill heal-30 RequiredSP
+		ID:     "priest-test",
+		Name:   "PriestTest",
+		JobID:  "job-05",
+		Level:  20,
+		SP:     6, // equal to representative skill heal-30 RequiredSP
+		Gender: "unspecified",
 	}
 	mastery, err := svc.GetJobMastery(ctx, "priest-test")
 	if err != nil {
@@ -616,23 +654,25 @@ func TestJobMasteryThresholds_PriestAndMagePreserveLegacyRequirements(t *testing
 		t.Fatalf("job-05 with SP 6 status = %v, want Learning (mastery is at SP 100)", priestEntry.Status)
 	}
 
-	// Verify CheckAndApplyMastery for priest
+	// Verify ChangeJob departure mastery threshold for priest
 	jobRepo.data["priest-test"] = corejob.CharacterJob{CharacterID: "priest-test", CurrentJobID: "job-05"}
-	applied, err := svc.CheckAndApplyMastery(ctx, "priest-test", 6)
+	_, state, err := svc.ChangeJob(ctx, "priest-test", "job-01")
 	if err != nil {
-		t.Fatalf("CheckAndApplyMastery failed: %v", err)
+		t.Fatalf("ChangeJob(priest-test -> job-01) failed: %v", err)
 	}
-	if applied {
-		t.Fatal("CheckAndApplyMastery applied mastery at SP 6, want false (threshold is 100)")
+	if state.IsMastered("job-05") {
+		t.Fatal("ChangeJob applied priest mastery at SP 6, want false (threshold is 100)")
 	}
 
 	// 2. Mage (job-06) requires SP 90 (_requirements.go legacyMasteryThresholds).
 	// Representative skill magic-wave-25 has RequiredSP: 8; mastery must NOT regress to SP 8.
 	charRepo.data["mage-test"] = corecharacter.Character{
-		ID:    "mage-test",
-		Name:  "MageTest",
-		JobID: "job-06",
-		SP:    8, // equal to representative skill magic-wave-25 RequiredSP
+		ID:     "mage-test",
+		Name:   "MageTest",
+		JobID:  "job-06",
+		Level:  20,
+		SP:     8, // equal to representative skill magic-wave-25 RequiredSP
+		Gender: "unspecified",
 	}
 	mastery, err = svc.GetJobMastery(ctx, "mage-test")
 	if err != nil {
@@ -655,26 +695,28 @@ func TestJobMasteryThresholds_PriestAndMagePreserveLegacyRequirements(t *testing
 		t.Fatalf("job-06 with SP 8 status = %v, want Learning (mastery is at SP 90)", mageEntry.Status)
 	}
 
-	// Verify CheckAndApplyMastery for mage
+	// Verify ChangeJob departure mastery threshold for mage
 	jobRepo.data["mage-test"] = corejob.CharacterJob{CharacterID: "mage-test", CurrentJobID: "job-06"}
-	applied, err = svc.CheckAndApplyMastery(ctx, "mage-test", 8)
+	_, state, err = svc.ChangeJob(ctx, "mage-test", "job-01")
 	if err != nil {
-		t.Fatalf("CheckAndApplyMastery failed: %v", err)
+		t.Fatalf("ChangeJob(mage-test -> job-01) failed: %v", err)
 	}
-	if applied {
-		t.Fatal("CheckAndApplyMastery applied mastery at SP 8, want false (threshold is 90)")
+	if state.IsMastered("job-06") {
+		t.Fatal("ChangeJob applied mage mastery at SP 8, want false (threshold is 90)")
 	}
 
 	// Verify mastery IS applied at exact thresholds (100 and 90)
-	charRepo.data["priest-test"] = corecharacter.Character{ID: "priest-test", Name: "PriestTest", JobID: "job-05", SP: 100}
-	applied, err = svc.CheckAndApplyMastery(ctx, "priest-test", 100)
-	if err != nil || !applied {
-		t.Fatalf("CheckAndApplyMastery at SP 100 for priest applied=%v, err=%v", applied, err)
+	charRepo.data["priest-test"] = corecharacter.Character{ID: "priest-test", Name: "PriestTest", JobID: "job-05", Level: 20, SP: 100, Gender: "unspecified"}
+	jobRepo.data["priest-test"] = corejob.CharacterJob{CharacterID: "priest-test", CurrentJobID: "job-05"}
+	_, state, err = svc.ChangeJob(ctx, "priest-test", "job-01")
+	if err != nil || !state.IsMastered("job-05") {
+		t.Fatalf("ChangeJob at SP 100 for priest mastered=%v, err=%v", state.IsMastered("job-05"), err)
 	}
 
-	charRepo.data["mage-test"] = corecharacter.Character{ID: "mage-test", Name: "MageTest", JobID: "job-06", SP: 90}
-	applied, err = svc.CheckAndApplyMastery(ctx, "mage-test", 90)
-	if err != nil || !applied {
-		t.Fatalf("CheckAndApplyMastery at SP 90 for mage applied=%v, err=%v", applied, err)
+	charRepo.data["mage-test"] = corecharacter.Character{ID: "mage-test", Name: "MageTest", JobID: "job-06", Level: 20, SP: 90, Gender: "unspecified"}
+	jobRepo.data["mage-test"] = corejob.CharacterJob{CharacterID: "mage-test", CurrentJobID: "job-06"}
+	_, state, err = svc.ChangeJob(ctx, "mage-test", "job-01")
+	if err != nil || !state.IsMastered("job-06") {
+		t.Fatalf("ChangeJob at SP 90 for mage mastered=%v, err=%v", state.IsMastered("job-06"), err)
 	}
 }

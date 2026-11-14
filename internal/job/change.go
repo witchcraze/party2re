@@ -275,20 +275,3 @@ func (s *Service) consumeEquippedArmor(ctx context.Context, characterID string) 
 	}
 	return s.inventories.Save(ctx, inv)
 }
-
-func (s *Service) Change(ctx context.Context, characterID string, target corejob.Definition, level int, gender string) (corejob.CharacterJob, error) {
-	state, err := s.repository.FindByCharacterID(ctx, characterID)
-	if err != nil {
-		state, err = corejob.NewCharacterJob(characterID, "starter")
-		if err != nil {
-			return corejob.CharacterJob{}, err
-		}
-	}
-	if err := state.ChangeTo(target, level, gender); err != nil {
-		return corejob.CharacterJob{}, err
-	}
-	if err := s.repository.Save(ctx, state); err != nil {
-		return corejob.CharacterJob{}, err
-	}
-	return state, nil
-}

@@ -66,59 +66,69 @@ func (r *repositoryStub) FindByCharacterID(_ context.Context, _ string) (corejob
 	return r.value, nil
 }
 
-func TestServiceChangePersistsJobHistory(t *testing.T) {
-	state, _ := corejob.NewCharacterJob("character-1", "starter")
-	target, _ := corejob.NewDefinition("vanguard", "Vanguard", 6, 1, 3, 5, 2, 1, "")
-	repository := &repositoryStub{value: state}
-	service, _ := NewService(repository)
-	got, err := service.Change(context.Background(), "character-1", target, 20, "unspecified")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.CurrentJobID != "vanguard" || len(repository.value.History) != 1 {
-		t.Fatalf("got = %#v, saved = %#v", got, repository.value)
-	}
-}
-
-func TestServiceMaster(t *testing.T) {
-	state, _ := corejob.NewCharacterJob("character-1", "starter")
-	repository := &repositoryStub{value: state}
-	service, _ := NewService(repository)
-
-	got, err := service.Master(context.Background(), "character-1", "warrior")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !got.IsMastered("warrior") || !repository.value.IsMastered("warrior") {
-		t.Errorf("expected warrior to be mastered: %#v", got)
-	}
-}
-
-func TestServiceCheckAndApplyMastery(t *testing.T) {
+func TestServiceChangeJobMasteryThresholdAndIdempotency(t *testing.T) {
+	ctx := context.Background()
+	catalog, _ := corejob.NewCatalog([]corejob.Definition{
+		{ID: "mage", Name: "Mage", CMPTier: 1, MasterySP: 5},
+		{ID: "warrior", Name: "Warrior", CMPTier: 1, MasterySP: 5},
+	})
 	state, _ := corejob.NewCharacterJob("character-1", "mage")
-	repository := &repositoryStub{value: state}
-	catalog, _ := corejob.NewCatalog([]corejob.Definition{{ID: "mage", Name: "Mage", CMPTier: 1, MasterySP: 5}})
-	service, _ := NewService(repository, WithCatalog(catalog))
-
-	// Level 50 does not trigger mastery
-	applied, err := service.CheckAndApplyMastery(context.Background(), "character-1", 4)
-	if err != nil || applied {
-		t.Errorf("level 50 should not apply mastery: applied=%v, err=%v", applied, err)
+	repo := &repositoryStub{value: state}
+	charRepo := &charRepoStub{char: corecharacter.Character{
+		ID:     "character-1",
+		JobID:  "mage",
+		Level:  20,
+		SP:     4,
+		Gender: "unspecified",
+	}}
+	var masteryMemories int
+	svc, err := NewService(
+		repo,
+		WithCatalog(catalog),
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
+		WithMemoryRecorder(func(_ context.Context, _ string, kind corecharacter.MemoryKind, _ string) error {
+			if kind == corecharacter.MemoryJobMaster {
+				masteryMemories++
+			}
+			return nil
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// Level 99 triggers mastery
-	applied, err = service.CheckAndApplyMastery(context.Background(), "character-1", 5)
-	if err != nil || !applied {
-		t.Errorf("level 99 should apply mastery: applied=%v, err=%v", applied, err)
-	}
-	if !repository.value.IsMastered("mage") {
-		t.Errorf("expected mage to be mastered in repository")
+	// Below mastery SP threshold (4 < 5): departing mage does not master it.
+	if _, got, err := svc.ChangeJob(ctx, "character-1", "warrior"); err != nil {
+		t.Fatal(err)
+	} else if got.IsMastered("mage") || masteryMemories != 0 {
+		t.Fatalf("SP 4 should not master mage: mastered=%v memories=%d", got.IsMastered("mage"), masteryMemories)
 	}
 
-	// Re-checking does not re-apply
-	applied, err = service.CheckAndApplyMastery(context.Background(), "character-1", 99)
-	if err != nil || applied {
-		t.Errorf("already mastered should not re-apply: applied=%v", applied)
+	// Return to mage, reach threshold SP 5, and depart again: masters mage once.
+	charRepo.char.Level = 20
+	if _, _, err := svc.ChangeJob(ctx, "character-1", "mage"); err != nil {
+		t.Fatal(err)
+	}
+	charRepo.char.Level = 20
+	charRepo.char.SP = 5
+	if _, got, err := svc.ChangeJob(ctx, "character-1", "warrior"); err != nil {
+		t.Fatal(err)
+	} else if !got.IsMastered("mage") || masteryMemories != 1 {
+		t.Fatalf("SP 5 should master mage once: mastered=%v memories=%d", got.IsMastered("mage"), masteryMemories)
+	}
+
+	// Departing an already-mastered job at high SP does not re-emit mastery memory.
+	charRepo.char.Level = 20
+	if _, _, err := svc.ChangeJob(ctx, "character-1", "mage"); err != nil {
+		t.Fatal(err)
+	}
+	charRepo.char.Level = 20
+	charRepo.char.SP = 99
+	if _, got, err := svc.ChangeJob(ctx, "character-1", "warrior"); err != nil {
+		t.Fatal(err)
+	} else if !got.IsMastered("mage") || masteryMemories != 1 {
+		t.Fatalf("already-mastered mage should not re-emit mastery: mastered=%v memories=%d", got.IsMastered("mage"), masteryMemories)
 	}
 }
 
@@ -202,6 +212,9 @@ func TestServiceListAndChangeJob(t *testing.T) {
 	}
 	if updatedChar.JobID != "job-01" || updatedJob.CurrentJobID != "job-01" {
 		t.Fatalf("expected job job-01, got char=%s, job=%s", updatedChar.JobID, updatedJob.CurrentJobID)
+	}
+	if len(updatedJob.History) != 1 || updatedJob.History[0] != (corejob.Change{FromJobID: "starter", ToJobID: "job-01"}) {
+		t.Fatalf("expected job change history [{starter -> job-01}], got %#v", updatedJob.History)
 	}
 	if updatedChar.OverLevel {
 		t.Fatalf("expected OverLevel to be reset to false on job change, got %v", updatedChar.OverLevel)
@@ -460,30 +473,47 @@ func TestServiceRestoreActiveJob(t *testing.T) {
 }
 
 func TestServiceMasteryUsesFinalSkillSPInsteadOfLevel(t *testing.T) {
-	char := corecharacter.Character{ID: "character-1", JobID: "mage", SP: 7}
+	ctx := context.Background()
+	char := corecharacter.Character{ID: "character-1", JobID: "mage", Level: 20, SP: 6, Gender: "unspecified"}
 	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: char}
-	catalog, _ := corejob.NewCatalog([]corejob.Definition{{ID: "mage", Name: "Mage", CMPTier: 1}})
+	catalog, _ := corejob.NewCatalog([]corejob.Definition{
+		{ID: "mage", Name: "Mage", CMPTier: 1, MasterySP: 80},
+		{ID: "warrior", Name: "Warrior", CMPTier: 1, MasterySP: 80},
+	})
 	skills := skillProviderStub{"mage": {
 		{ID: "first", RequiredSP: 2, Effect: corebattle.Effect{Kind: "damage"}},
 		{ID: "final", RequiredSP: 7, Effect: corebattle.Effect{Kind: "damage"}},
 	}}
-	svc, _ := NewService(repo, WithCatalog(catalog), WithCharacterRepository(charRepo), WithSkillProvider(skills))
+	svc, _ := NewService(repo, WithCatalog(catalog), WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}), WithSkillProvider(skills))
 
-	applied, err := svc.CheckAndApplyMastery(context.Background(), char.ID, 1)
-	if err != nil || !applied || !repo.value.IsMastered("mage") {
-		t.Fatalf("mastery = %v, %v, state = %#v", applied, err, repo.value)
+	// Level 20 >= 7, but SP 6 < final skill RequiredSP 7 -> must not master mage.
+	if _, got, err := svc.ChangeJob(ctx, char.ID, "warrior"); err != nil || got.IsMastered("mage") {
+		t.Fatalf("SP 6 should not master mage: err=%v, state=%#v", err, got)
+	}
+
+	// Return to mage and depart with SP 7 (< MasterySP 80, == final skill RequiredSP 7) -> masters mage.
+	charRepo.char.Level = 20
+	if _, _, err := svc.ChangeJob(ctx, char.ID, "mage"); err != nil {
+		t.Fatal(err)
+	}
+	charRepo.char.Level = 20
+	charRepo.char.SP = 7
+	if _, got, err := svc.ChangeJob(ctx, char.ID, "warrior"); err != nil || !got.IsMastered("mage") {
+		t.Fatalf("SP 7 should master mage via final skill SP: err=%v, state=%#v", err, got)
 	}
 }
 
 func TestServiceAllJobsCompletionNotification(t *testing.T) {
+	ctx := context.Background()
 	char := corecharacter.Character{
-		ID:    "char-1",
-		Name:  "Hero",
-		JobID: "job-01",
-		Level: 25,
-		SP:    50,
+		ID:     "char-1",
+		Name:   "Hero",
+		JobID:  "job-72",
+		Level:  25,
+		SP:     500,
+		Gender: "unspecified",
 	}
 	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
 	// Master 71 completion jobs
@@ -493,14 +523,26 @@ func TestServiceAllJobsCompletionNotification(t *testing.T) {
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: char}
 	newsPub := &mockNewsPublisher{}
+	var completionMemories int
 
-	svc, err := NewService(repo, WithCharacterRepository(charRepo), WithNewsPublisher(newsPub))
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
+		WithNewsPublisher(newsPub),
+		WithMemoryRecorder(func(_ context.Context, _ string, kind corecharacter.MemoryKind, _ string) error {
+			if kind == corecharacter.MemoryCompletion {
+				completionMemories++
+			}
+			return nil
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Master 72nd job
-	_, err = svc.Master(context.Background(), char.ID, "job-72")
+	// Departing 72nd completion job with sufficient SP completes all jobs.
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,14 +557,19 @@ func TestServiceAllJobsCompletionNotification(t *testing.T) {
 	if newsPub.published[0] != fmt.Sprintf("job|全ジョブコンプリート|%s|@システム", expectedContent) {
 		t.Fatalf("unexpected news article: %s", newsPub.published[0])
 	}
+	if completionMemories != 1 {
+		t.Fatalf("expected 1 completion memory, got %d", completionMemories)
+	}
 
-	// Another mastery does not re-publish
-	_, err = svc.Master(context.Background(), char.ID, "job-73")
+	// Another job change does not re-publish or re-record completion.
+	charRepo.char.Level = 25
+	charRepo.char.SP = 500
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-02")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(newsPub.published) != 1 {
-		t.Fatalf("expected news article count to remain 1, got %d", len(newsPub.published))
+	if len(newsPub.published) != 1 || completionMemories != 1 {
+		t.Fatalf("expected completion notifications to remain 1, got news=%d memories=%d", len(newsPub.published), completionMemories)
 	}
 }
 
