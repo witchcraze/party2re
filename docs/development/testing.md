@@ -17,14 +17,14 @@ Verify a case once, at the lowest layer that can detect its defect. A lower laye
 | Concurrency harness | Real commits from independent workers | Exactly-once effects and conserved assets under contention | Single-actor outcomes, to the service layer | Races need concurrent transactions |
 | Feature command over HTTP | One feature behind the Gateway; authentication and navigation doubled | Parameter validation, each rejection's status and code, outcome shape, the scene in which the command is offered | The rule behind a rejection, to the service layer | The transport contract is per command, and doubles keep every rejection reachable |
 | Dispatcher fixture | Dispatcher and context refresh; stores doubled | Injected storage or refresh failures, known outcomes that survive them, recovery by GET | Anything that needs a real store | A failure can be injected only through a double |
-| Composition | Production service groups and adapters, called directly | Each hook and adapter reaches the service it is meant to | Feature behavior, to the feature's own layers | Wiring defects exist only in the composition root |
+| Composition | Production service groups and adapters | Each hook and adapter reaches the service it is meant to | Feature behavior, to the feature's own layers | Wiring defects exist only in the composition root |
 | [Gameplay scenario](#55-gameplay-scenarios) | Everything behind the router | Journeys and rejections that exist only when everything is composed | Feature-specific cases, injected failures and numeric boundaries | Sessions, ownership, restart and state carried between features cannot be assembled lower |
 | [Architecture checks](#6-mechanical-ast-static-analysis-linters) | Source | Structural rules | Runtime behavior | A structural rule holds for code no test executes |
 | [Benchmarks](#7-continuous-performance-verification--benchmarking) | Timing | Throughput and latency regressions | Correctness | Wall-clock assertions are unstable in functional tests |
 
 [Battle test selection](#53-battle-test-selection) subdivides the domain and service layers for combat.
 
-A reproducible bug receives a failing regression test before the fix, at the lowest layer that can detect it. When a higher layer caught it, the lower layer's missing case is the gap to close.
+A reproducible bug receives a failing regression test before the fix, at the lowest layer that can detect it. When a higher layer caught a defect that a lower layer could have detected, add the missing case there; a defect that exists only through composition keeps its test at the higher layer.
 
 ---
 
