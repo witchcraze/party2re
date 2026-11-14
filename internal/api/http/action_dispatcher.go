@@ -136,7 +136,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 		// A premature Wake reaches the service for its recognized rejection.
 		// GET still offers Wake only when recovery is ready; an awake actor
 		// remains subject to entry eligibility.
-		earlyWake := req.Action == "home_wake" && current.Snapshot.SleepRemaining > 0
+		earlyWake := def.RequiresWake && current.Snapshot.SleepRemaining > 0
 		if !earlyWake && !slices.Contains(current.AvailableActions, req.Action) {
 			replay := false
 			if command.replay != nil {
@@ -155,7 +155,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_UNAVAILABLE", Message: "Action is unavailable for the current selection."})
 			return
 		}
-		if req.Action != "home_wake" && req.Action != "rescue_request" && req.Action != "presence_refresh" && !def.Recovery {
+		if !def.ActivityExempt && !def.Recovery {
 			message, err := h.sleepingCharacterMessage(r.Context(), char.ID)
 			if err != nil {
 				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current sleep state.")

@@ -332,9 +332,8 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			hide("scene_page")
 		}
 	}
-	choices = append(choices, "player_inspect", "home_wake", "rescue_request", "presence_refresh")
 	for _, def := range playercontext.DefaultCatalog {
-		if !slices.Contains(choices, def.ID) {
+		if !def.GlobalSupport && !slices.Contains(choices, def.ID) {
 			continue
 		}
 		connected := h.actionCommands[def.ID].prepare != nil

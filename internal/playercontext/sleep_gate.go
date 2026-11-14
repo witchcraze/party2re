@@ -4,7 +4,7 @@ package playercontext
 type SleepGate struct{}
 
 func (SleepGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
-	if action.ID == "home_wake" {
+	if action.RequiresWake {
 		return snapshot.CanWake && snapshot.SleepRemaining <= 0
 	}
 	return !action.RequiredGates.Has(GateSleepCheck) || (!snapshot.Sleeping && snapshot.SleepRemaining <= 0)

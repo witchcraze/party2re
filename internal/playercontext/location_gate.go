@@ -7,7 +7,7 @@ import "slices"
 type LocationGate struct{}
 
 func (LocationGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
-	if !action.RequiredGates.Has(GateLocationCheck) || action.ID == "home_wake" || snapshot.SceneActions == nil {
+	if !action.RequiredGates.Has(GateLocationCheck) || action.RequiresWake || snapshot.SceneActions == nil {
 		return true
 	}
 	return slices.Contains(snapshot.SceneActions, action.ID)
