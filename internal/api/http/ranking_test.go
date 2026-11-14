@@ -154,6 +154,13 @@ func setupRankingHandler(mock *mockHTTPRankingService) *apihttp.Handler {
 func TestRankingEndpoints(t *testing.T) {
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	mock := &mockHTTPRankingService{
+		legendPages: map[ranking.LegendCategory]ranking.LegendCategoryPage{
+			ranking.LegendCategoryJobMastery: {
+				Category: ranking.LegendCategoryJobMastery,
+				Total:    1,
+				Entries:  []ranking.LegendEntry{{CharacterID: "c1", CharacterName: "Hero", Color: "#123456"}},
+			},
+		},
 		levelPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
 			RankingType:  ranking.RankingTypeLevel,
 			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", CharacterName: "Hero", Level: 50}},
@@ -429,6 +436,16 @@ func TestRankingEndpoints(t *testing.T) {
 			method:     http.MethodGet,
 			url:        "/legends/comp_job",
 			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var page ranking.LegendCategoryPage
+				if err := json.NewDecoder(rr.Body).Decode(&page); err != nil {
+					t.Fatal(err)
+				}
+				want := mock.legendPages[ranking.LegendCategoryJobMastery]
+				if page.Category != want.Category || page.Total != want.Total || len(page.Entries) != 1 || page.Entries[0] != want.Entries[0] {
+					t.Fatalf("legend response = %+v, want %+v", page, want)
+				}
+			},
 		},
 		{
 			name:       "GET /legends/invalid_cat (400 Bad Request)",

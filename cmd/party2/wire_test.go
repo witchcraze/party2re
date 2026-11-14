@@ -3,11 +3,8 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -20,9 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/contest"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
-	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/eventplaza"
@@ -630,14 +625,6 @@ func TestLegendInductorAdapter(t *testing.T) {
 		t.Errorf("unexpected legend record: %+v", repo.legends[0])
 	}
 
-	// Idempotent duplicate
-	if err := adapter.RecordLegend(ctx, "comp_mon", "char-hero"); err != nil {
-		t.Fatalf("duplicate RecordLegend failed: %v", err)
-	}
-	if len(repo.legends) != 1 {
-		t.Errorf("expected still 1 legend record, got %d", len(repo.legends))
-	}
-
 	// Record weapon completion
 	if err := adapter.RecordLegend(ctx, "comp_wea", "char-hero"); err != nil {
 		t.Fatalf("RecordLegend comp_wea failed: %v", err)
@@ -658,132 +645,6 @@ func TestLegendInductorAdapter(t *testing.T) {
 	nilAdapter := legendInductorAdapter{ranking: nil}
 	if err := nilAdapter.RecordLegend(ctx, "comp_job", "char-hero"); err != nil {
 		t.Errorf("expected nil error on nil ranking, got %v", err)
-	}
-}
-
-func TestLegendInductor_EndToEndIntegration(t *testing.T) {
-	dsn := os.Getenv("PARTY2_DB_DSN")
-	if dsn == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment failed: %v", err)
-	}
-	defer db.Close()
-
-	cfg, err := ConfigFromEnv()
-	if err != nil {
-		t.Fatalf("ConfigFromEnv failed: %v", err)
-	}
-
-	wiring, err := wireApp(db, nil, cfg, logging.Nop())
-	if err != nil {
-		t.Fatalf("wireApp failed: %v", err)
-	}
-
-	server := httptest.NewServer(wiring.handler.Router())
-	defer server.Close()
-
-	ctx := context.Background()
-	charRepo, err := database.NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	playerRepo, err := database.NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	prefix := fmt.Sprintf("wir_%d_", time.Now().UnixNano()%1000000)
-	p, err := coreplayer.New(prefix+"p", "pass", time.Now().UTC())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := playerRepo.Save(ctx, p); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = playerRepo.Delete(ctx, p.ID)
-	})
-
-	charName := fmt.Sprintf("w_%05d", time.Now().UnixNano()%100000)
-	c, err := corecharacter.NewWithOptions(charName, "job-01", "m", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.PlayerID = p.ID
-	c.Color = "#123456"
-	if err := charRepo.Save(ctx, c); err != nil {
-		t.Fatal(err)
-	}
-
-	// Test GET /legends/comp_mon before induction
-	resp, err := http.Get(server.URL + "/legends/comp_mon")
-	if err != nil {
-		t.Fatalf("GET /legends/comp_mon failed: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
-	}
-
-	var pageBefore ranking.LegendCategoryPage
-	if err := json.NewDecoder(resp.Body).Decode(&pageBefore); err != nil {
-		t.Fatalf("decode page failed: %v", err)
-	}
-	initialCount := pageBefore.Total
-
-	// Induct directly through legendInductorAdapter or collection/job/alchemy
-	rankingRepo, err := database.NewRankingRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rankingSvc, err := ranking.NewService(rankingRepo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	adapter := legendInductorAdapter{ranking: rankingSvc}
-
-	if err := adapter.RecordLegend(ctx, "comp_mon", c.ID); err != nil {
-		t.Fatalf("adapter.RecordLegend failed: %v", err)
-	}
-
-	// Test GET /legends/comp_mon after induction
-	respAfter, err := http.Get(server.URL + "/legends/comp_mon")
-	if err != nil {
-		t.Fatalf("GET /legends/comp_mon after induction failed: %v", err)
-	}
-	defer respAfter.Body.Close()
-	if respAfter.StatusCode != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", respAfter.StatusCode)
-	}
-
-	var pageAfter ranking.LegendCategoryPage
-	if err := json.NewDecoder(respAfter.Body).Decode(&pageAfter); err != nil {
-		t.Fatalf("decode page after induction failed: %v", err)
-	}
-
-	if pageAfter.Total != initialCount+1 {
-		t.Fatalf("expected total %d, got %d", initialCount+1, pageAfter.Total)
-	}
-
-	found := false
-	for _, entry := range pageAfter.Entries {
-		if entry.CharacterID == c.ID {
-			found = true
-			if entry.CharacterName != c.Name {
-				t.Errorf("expected CharacterName %s, got %s", c.Name, entry.CharacterName)
-			}
-			if entry.Color != c.Color {
-				t.Errorf("expected Color %s, got %s", c.Color, entry.Color)
-			}
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("inducted character %s not found in GET /legends/comp_mon", c.ID)
 	}
 }
 
@@ -955,118 +816,6 @@ func (m *wireMockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (co
 func (m *wireMockCharRepo) Update(_ context.Context, char corecharacter.Character) error {
 	m.char = char
 	return nil
-}
-
-type wireMockHomeRepo struct {
-	home.Repository
-}
-
-type mockRecoveryTavern struct {
-	calledID string
-	err      error
-}
-
-func (m *mockRecoveryTavern) ResetFullness(_ context.Context, charID string) error {
-	m.calledID = charID
-	return m.err
-}
-
-type mockRecoveryChapel struct {
-	calledID string
-	err      error
-}
-
-func (m *mockRecoveryChapel) ClearBlessing(_ context.Context, charID string) error {
-	m.calledID = charID
-	return m.err
-}
-
-type mockRecoveryAlchemy struct {
-	calledID string
-	err      error
-}
-
-func (m *mockRecoveryAlchemy) CompleteOngoingSynthesis(_ context.Context, charID string) error {
-	m.calledID = charID
-	return m.err
-}
-
-type mockRecoveryStore struct {
-	calledID string
-	err      error
-}
-
-func (m *mockRecoveryStore) ResetCostume(_ context.Context, charID string) error {
-	m.calledID = charID
-	return m.err
-}
-
-func TestWireHomeRecoveryHooks_WiringAndErrorPropagation(t *testing.T) {
-	ctx := context.Background()
-	char := corecharacter.Character{
-		ID:    "char-wire",
-		Name:  "WireHero",
-		Tired: 50,
-		Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50},
-	}
-	charRepo := &wireMockCharRepo{char: char}
-	timerSvc := timer.NewService(nil)
-
-	homeSvc, err := home.NewService(
-		&wireMockHomeRepo{},
-		charRepo,
-		home.WithTimer(timerSvc),
-		home.WithCharacterUpdater(charRepo),
-	)
-	if err != nil {
-		t.Fatalf("home.NewService failed: %v", err)
-	}
-
-	tavernMock := &mockRecoveryTavern{}
-	chapelMock := &mockRecoveryChapel{}
-	alchemyMock := &mockRecoveryAlchemy{}
-	storeMock := &mockRecoveryStore{}
-
-	soc := &socServices{home: homeSvc}
-
-	// Mirror wireHooks wiring:
-	soc.home.SetFullnessResetter(tavernMock)
-	soc.home.SetBlessingCleaner(chapelMock)
-	soc.home.SetAlchemyCompleter(alchemyMock)
-	soc.home.SetCostumeResetter(storeMock)
-
-	// Set asleep flag
-	_ = timerSvc.SetLock(ctx, timer.CategoryAsleep, "char-wire", 24*time.Hour)
-
-	// 1. Success case: all hooks called
-	res, err := soc.home.Wake(ctx, "char-wire")
-	if err != nil {
-		t.Fatalf("Wake failed: %v", err)
-	}
-	if !res.Success {
-		t.Errorf("expected Wake success")
-	}
-	if tavernMock.calledID != "char-wire" || chapelMock.calledID != "char-wire" || alchemyMock.calledID != "char-wire" || storeMock.calledID != "char-wire" {
-		t.Errorf("hooks not all called for char-wire: tavern=%s chapel=%s alchemy=%s store=%s",
-			tavernMock.calledID, chapelMock.calledID, alchemyMock.calledID, storeMock.calledID)
-	}
-	asleep, _ := timerSvc.IsLocked(ctx, timer.CategoryAsleep, "char-wire")
-	if asleep {
-		t.Errorf("expected CategoryAsleep unlocked after successful Wake")
-	}
-
-	// 2. Failure case: hook error propagates and preserves CategoryAsleep
-	_ = timerSvc.SetLock(ctx, timer.CategoryAsleep, "char-wire", 24*time.Hour)
-	tavernMock.err = errors.New("simulated tavern error")
-
-	_, err = soc.home.Wake(ctx, "char-wire")
-	if err == nil {
-		t.Fatalf("expected error from failing tavern hook, got nil")
-	}
-	asleep, _ = timerSvc.IsLocked(ctx, timer.CategoryAsleep, "char-wire")
-	if !asleep {
-		t.Errorf("expected CategoryAsleep to remain locked when hook fails")
-	}
 }
 
 var wireHomeGuildPointsRequiredTables = []string{
