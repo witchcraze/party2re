@@ -109,12 +109,16 @@ func TestWake_SQLRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close wake subtest db: %v", err)
+		}
+	})
 	client, err := valkey.NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	t.Cleanup(client.Close)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -141,18 +145,11 @@ func TestWake_SQLRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			database.RegisterCharacterCleanup(t, db, char)
 			t.Cleanup(func() {
-				cleanupCtx := context.Background()
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				defer cancel()
 				if err := timers.ReleaseLock(cleanupCtx, timer.CategoryAsleep, char.ID); err != nil {
-					t.Error(err)
-				}
-				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID); err != nil {
-					t.Error(err)
-				}
-				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID); err != nil {
-					t.Error(err)
-				}
-				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID); err != nil {
 					t.Error(err)
 				}
 			})
@@ -316,12 +313,16 @@ func TestWake_RealTavernFullnessReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close wake subtest db: %v", err)
+		}
+	})
 	client, err := valkey.NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	t.Cleanup(client.Close)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -368,13 +369,13 @@ func TestWake_RealTavernFullnessReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	database.RegisterCharacterCleanup(t, db, char)
 	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		_ = timers.ReleaseLock(cleanupCtx, timer.CategoryAsleep, char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := timers.ReleaseLock(cleanupCtx, timer.CategoryAsleep, char.ID); err != nil {
+			t.Error(err)
+		}
 	})
 
 	// Setup depleted vitality and ready Asleep in Valkey
@@ -476,7 +477,11 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close wake cycle db: %v", err)
+		}
+	})
 	client, err := valkey.NewClient()
 	if err != nil {
 		t.Fatal(err)
@@ -507,15 +512,20 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		database.RegisterCharacterCleanup(t, db, char)
 		t.Cleanup(func() {
-			cleanupCtx := context.Background()
-			_ = timers.ReleaseLock(cleanupCtx, timer.CategorySleep, char.ID)
-			_ = timers.ReleaseLock(cleanupCtx, timer.CategoryAsleep, char.ID)
-			_ = timers.ReleaseLock(cleanupCtx, timer.CategoryWaking, char.ID)
-			_ = timers.ReleaseLock(cleanupCtx, timer.CategoryDungeonOnce, char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			for _, cat := range []string{
+				timer.CategorySleep,
+				timer.CategoryAsleep,
+				timer.CategoryWaking,
+				timer.CategoryDungeonOnce,
+			} {
+				if err := timers.ReleaseLock(cleanupCtx, cat, char.ID); err != nil {
+					t.Errorf("release lock %s for %s: %v", cat, char.ID, err)
+				}
+			}
 		})
 		return char
 	}
@@ -1381,12 +1391,6 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 				defer cancel()
 				char := newChar(t, ctx, "SleepExpiredClaim_"+mode)
-				t.Cleanup(func() {
-					cleanupCtx := context.Background()
-					_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_job_masteries WHERE character_id = ?", char.ID)
-					_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_job_history WHERE character_id = ?", char.ID)
-					_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_jobs WHERE character_id = ?", char.ID)
-				})
 
 				char.Stats.HP, char.Stats.MP, char.Tired = 10, 5, 70
 				char.JobID = "warrior"
