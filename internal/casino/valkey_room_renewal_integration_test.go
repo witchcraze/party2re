@@ -371,18 +371,24 @@ func registerCasinoValkeyCleanup(t *testing.T, client valkeygo.Client, roomIDs [
 	t.Cleanup(func() {
 		ctx := context.Background()
 		for _, rID := range roomIDs {
-			_ = client.Do(ctx, client.B().Del().Key(casino.DefaultRoomKeyPrefix+rID).Build())
-			_ = client.Do(ctx, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(rID).Build())
+			if err := client.Do(ctx, client.B().Del().Key(casino.DefaultRoomKeyPrefix+rID).Build()).Error(); err != nil {
+				t.Errorf("cleanup room %s: %v", rID, err)
+			}
+			if err := client.Do(ctx, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(rID).Build()).Error(); err != nil {
+				t.Errorf("cleanup active room %s: %v", rID, err)
+			}
 		}
 		for _, cID := range charIDs {
-			_ = client.Do(ctx, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+cID).Build())
+			if err := client.Do(ctx, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+cID).Build()).Error(); err != nil {
+				t.Errorf("cleanup actor %s: %v", cID, err)
+			}
 		}
 	})
 }
 
 func TestValkeyRoomRenewal_PreservesAdmissionDiscoveryAcrossOriginalDeadline(t *testing.T) {
 	rawClient := openIsolatedTestValkey(t, 0)
-	defer rawClient.Close()
+	t.Cleanup(rawClient.Close)
 
 	ctx := context.Background()
 	prefix := "r1091-" + id.New()[:8]
@@ -427,6 +433,7 @@ func TestValkeyRoomRenewal_PreservesAdmissionDiscoveryAcrossOriginalDeadline(t *
 		t.Fatal(err)
 	}
 	roomID := created.Room.ID
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomID}, []string{leader, peer, spec, extra, unrenewedLeader})
 
 	unrenewedCreated, err := svc.CreateRoom(ctx, unrenewedLeader, casino.CreateRoomRequest{
 		Name:            "Idle-" + prefix,
@@ -440,7 +447,7 @@ func TestValkeyRoomRenewal_PreservesAdmissionDiscoveryAcrossOriginalDeadline(t *
 		t.Fatal(err)
 	}
 	unrenewedRoomID := unrenewedCreated.Room.ID
-	registerCasinoValkeyCleanup(t, rawClient, []string{roomID, unrenewedRoomID}, []string{leader, peer, spec, extra, unrenewedLeader})
+	registerCasinoValkeyCleanup(t, rawClient, []string{unrenewedRoomID}, nil)
 
 	if _, err := svc.JoinRoom(ctx, roomID, peer, "", 0); err != nil {
 		t.Fatal(err)
@@ -566,7 +573,7 @@ func TestValkeyRoomRenewal_PreservesAdmissionDiscoveryAcrossOriginalDeadline(t *
 
 func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 	rawClient := openIsolatedTestValkey(t, 0)
-	defer rawClient.Close()
+	t.Cleanup(rawClient.Close)
 
 	ctx := context.Background()
 	prefix := "iso1091-" + id.New()[:8]
@@ -600,6 +607,7 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	roomA := roomADetail.Room.ID
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomA}, allActors)
 
 	roomBDetail, err := svc.CreateRoom(ctx, leaderB, casino.CreateRoomRequest{
 		Name: "RoomB-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
@@ -608,7 +616,7 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	roomB := roomBDetail.Room.ID
-	registerCasinoValkeyCleanup(t, rawClient, []string{roomA, roomB}, allActors)
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomB}, nil)
 
 	if _, err := svc.JoinRoom(ctx, roomA, peerA, "", 0); err != nil {
 		t.Fatal(err)
@@ -746,7 +754,7 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 
 func TestValkeyRoomRenewal_ConcurrentMembershipAndRenewalSafety(t *testing.T) {
 	rawClient := openIsolatedTestValkey(t, 0)
-	defer rawClient.Close()
+	t.Cleanup(rawClient.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -840,7 +848,7 @@ func TestValkeyRoomRenewal_ConcurrentMembershipAndRenewalSafety(t *testing.T) {
 
 func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing.T) {
 	rawClient := openIsolatedTestValkey(t, 0)
-	defer rawClient.Close()
+	t.Cleanup(rawClient.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -875,6 +883,7 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 		t.Fatal(err)
 	}
 	roomA := roomADetail.Room.ID
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomA}, allActors)
 
 	roomBDetail, err := svc.CreateRoom(ctx, leaderB, casino.CreateRoomRequest{
 		Name: "SameB-" + prefix, GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 4, Rate: 10, AllowSpectators: true,
@@ -883,7 +892,7 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 		t.Fatal(err)
 	}
 	roomB := roomBDetail.Room.ID
-	registerCasinoValkeyCleanup(t, rawClient, []string{roomA, roomB}, allActors)
+	registerCasinoValkeyCleanup(t, rawClient, []string{roomB}, nil)
 
 	assertRosterAndMappingInvariant := func() error {
 		_, errA := repo.GetMember(ctx, roomA, mover)
@@ -1134,7 +1143,7 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 
 func TestValkeyRoomRenewal_CreateRoomClaimConflictBlocksJoinAndPropagatesErrors(t *testing.T) {
 	rawClient := openIsolatedTestValkey(t, 0)
-	defer rawClient.Close()
+	t.Cleanup(rawClient.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -1165,6 +1174,7 @@ func TestValkeyRoomRenewal_CreateRoomClaimConflictBlocksJoinAndPropagatesErrors(
 			// A foreign writer bypasses admission serialization; CAS rollback must still be safe.
 			if len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+creatorC && cmds[4] != wID {
 				loserRoomID.Store(cmds[4])
+				registerCasinoValkeyCleanup(t, rawClient, []string{cmds[4]}, nil)
 				publishedOnce.Do(func() { close(loserPublished) })
 				select {
 				case <-joinerAttemptedLock:
@@ -1192,16 +1202,7 @@ func TestValkeyRoomRenewal_CreateRoomClaimConflictBlocksJoinAndPropagatesErrors(
 	}
 
 	var createdRooms []string
-	t.Cleanup(func() {
-		bg := context.Background()
-		for _, rID := range createdRooms {
-			_ = rawClient.Do(bg, rawClient.B().Del().Key(casino.DefaultRoomKeyPrefix+rID).Build())
-			_ = rawClient.Do(bg, rawClient.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(rID).Build())
-		}
-		for _, cID := range allActors {
-			_ = rawClient.Do(bg, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+cID).Build())
-		}
-	})
+	defer func() { registerCasinoValkeyCleanup(t, rawClient, createdRooms, allActors) }()
 
 	// Seed a real winner; remove its mapping so the contender reaches publication.
 	now := time.Now().UTC()

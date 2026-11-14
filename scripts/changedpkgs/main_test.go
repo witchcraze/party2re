@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -29,7 +30,12 @@ func writeModule(t *testing.T) {
 		"namedreader/reader_test.go":  "package namedreader\n\nconst shared = \"assetreader/data/input.txt\"\n",
 		"testdata/ignored/ignored.go": "package ignored\n",
 	}
-	root := t.TempDir()
+	parent := t.TempDir()
+	// A temporary module must not inherit an unrelated, possibly invalid parent repository.
+	if err := os.Mkdir(filepath.Join(parent, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(parent, "module")
 	for name, content := range files {
 		target := filepath.Join(root, name)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -38,6 +44,9 @@ func writeModule(t *testing.T) {
 		if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("initialize module repository: %v\n%s", err, out)
 	}
 	t.Chdir(root)
 }

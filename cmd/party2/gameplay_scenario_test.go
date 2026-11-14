@@ -60,8 +60,8 @@ func (a *scenarioApp) restart() {
 	if err != nil {
 		a.t.Fatal(err)
 	}
-	// The shared test database holds other tests' players; the population cap is not under test.
-	cfg.Player.MaxPlayers = 1 << 30
+	// Registration caps have dedicated DB coverage; this journey must ignore unrelated players.
+	cfg.Player.MaxPlayers = 0
 	app, err := wireApp(a.db, a.valkey, cfg, logging.Nop())
 	if err != nil {
 		a.t.Fatal(err)
@@ -192,6 +192,29 @@ func (a *scenarioApp) enter(token, characterID string, observed scenarioContext,
 	}
 	a.t.Fatalf("destination %s is not offered: %+v", destination, observed.Scene.Data.Destinations)
 	return scenarioContext{}
+}
+
+func TestGameplayScenario_RegistrationIgnoresUnrelatedPopulation(t *testing.T) {
+	t.Setenv("PARTY2_MAX_PLAYERS", "1")
+	a := newScenarioApp(t)
+	ctx := context.Background()
+	unrelated, err := database.CreateTestPlayer(ctx, a.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	players, err := database.NewPlayerRepository(a.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := players.Delete(ctx, unrelated.ID); err != nil {
+			t.Error(err)
+		}
+	})
+	a.register()
+	if _, err := players.FindByID(ctx, unrelated.ID); err != nil {
+		t.Fatalf("scenario changed an unrelated player: %v", err)
+	}
 }
 
 func TestGameplayScenario_NoviceDepositPurchaseEquip(t *testing.T) {
