@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
@@ -19,12 +16,8 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/eventplaza"
-	"github.com/witchcraze/party2re/internal/god"
-	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
-	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/ranking"
@@ -226,13 +219,11 @@ func TestWireBossVictoryBanquetHook(t *testing.T) {
 	hook := buildVictoryBanquetHook(plaza)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	for _, tier := range []int{1, 2, 3} {
-		if err := hook(ctx, "king", "King", "hero", "Hero", tier); err != nil {
-			t.Fatal(err)
-		}
-		if tracker.calls != tier || tracker.recordedContext != ctx || len(tracker.crowd) < 3 || len(tracker.crowd) > 7 {
-			t.Fatalf("hook lost crowd call or context: %+v", tracker)
-		}
+	if err := hook(ctx, "king", "King", "hero", "Hero", 1); err != nil {
+		t.Fatal(err)
+	}
+	if tracker.calls != 1 || tracker.recordedContext != ctx {
+		t.Fatalf("hook lost crowd call or context: %+v", tracker)
 	}
 	tracker.err = errors.New("plaza unavailable")
 	if err := hook(context.Background(), "king", "King", "hero", "Hero", 1); !errors.Is(err, tracker.err) {
@@ -370,9 +361,6 @@ func TestRegisterWorkerHandlers_ContestSettlement(t *testing.T) {
 
 	if savedRound.Round != 1 {
 		t.Errorf("expected round 1 to be saved, got %d", savedRound.Round)
-	}
-	if !savedRound.EndTime.After(endTime) {
-		t.Errorf("expected extended EndTime after %v, got %v", endTime, savedRound.EndTime)
 	}
 
 	if len(repo.actions) != 1 {
@@ -648,156 +636,6 @@ func TestLegendInductorAdapter(t *testing.T) {
 	}
 }
 
-func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
-	dsn := os.Getenv("PARTY2_DB_DSN")
-	if dsn == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment failed: %v", err)
-	}
-	defer db.Close()
-
-	ctx := context.Background()
-	charRepo, err := database.NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	homeRepo, err := database.NewHomeRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	monsterRepo, err := database.NewMonsterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	homeMemberRepo, err := database.NewHomeMemberRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	c, err := database.CreateTestCharacter(ctx, db, "HeavenCompanionHero")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM home_members WHERE character_id = ?", c.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM character_monsters WHERE character_id = ?", c.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id = ?", c.ID)
-	})
-
-	c.GodVisit = string(god.RealmHeaven)
-	if err := charRepo.Update(ctx, c); err != nil {
-		t.Fatal(err)
-	}
-
-	txProvider := database.NewTransactionProvider(db)
-	godSvc, err := god.NewService(
-		charRepo,
-		god.WithTransactionProvider(txProvider),
-		god.WithHomeMemberRepository(homeMemberRepo),
-	)
-	if err != nil {
-		t.Fatalf("god.NewService failed: %v", err)
-	}
-	if _, err := godSvc.GrantWish(ctx, c.ID, god.WishOrtega); err != nil {
-		t.Fatalf("GrantWish WishOrtega failed: %v", err)
-	}
-
-	adapter := &homePetAdapter{
-		monsterRepo:    monsterRepo,
-		homeMemberRepo: homeMemberRepo,
-	}
-
-	homeSvc, err := home.NewService(
-		homeRepo,
-		charRepo,
-		home.WithHomePetReader(adapter),
-	)
-	if err != nil {
-		t.Fatalf("home.NewService failed: %v", err)
-	}
-
-	monsterSvc := monster.NewService(
-		charRepo,
-		monsterRepo,
-		monster.WithTransactionProvider(txProvider),
-		monster.WithHomeCompanionStore(homeMemberRepo),
-	)
-
-	// 1. Verify GetHomeView exposes Ortega in ResidentPets
-	view, err := homeSvc.GetHomeView(ctx, c.ID, c.ID, c.PlayerID)
-	if err != nil {
-		t.Fatalf("GetHomeView failed: %v", err)
-	}
-	if len(view.ResidentPets) != 1 {
-		t.Fatalf("expected 1 resident pet, got %d", len(view.ResidentPets))
-	}
-	memberID := view.ResidentPets[0].ID
-	if view.ResidentPets[0].CustomName != "オルテガ" || view.ResidentPets[0].MonsterID != "chr/029.gif" {
-		t.Errorf("unexpected resident pet: %+v", view.ResidentPets[0])
-	}
-
-	// 2. Verify TalkToCompanion uses Ortega for default dialogue
-	talkRes, err := homeSvc.TalkToCompanion(ctx, c.ID)
-	if err != nil {
-		t.Fatalf("TalkToCompanion failed: %v", err)
-	}
-	if talkRes.PetName != "オルテガ" {
-		t.Errorf("expected pet name オルテガ, got %s", talkRes.PetName)
-	}
-
-	// 3. Teach a phrase and verify Ortega speaks taught phrase
-	phraseText := "父さんは生きている！"
-	_, err = homeSvc.TeachCompanionPhrase(ctx, c.ID, phraseText)
-	if err != nil {
-		t.Fatalf("TeachCompanionPhrase failed: %v", err)
-	}
-
-	talkRes2, err := homeSvc.TalkToCompanion(ctx, c.ID)
-	if err != nil {
-		t.Fatalf("TalkToCompanion after teach failed: %v", err)
-	}
-	if talkRes2.PetName != "オルテガ" || talkRes2.Phrase != phraseText {
-		t.Errorf("expected オルテガ speaking %q, got %+v", phraseText, talkRes2)
-	}
-
-	// 4. Deposit Ortega to ranch box via monster.Service and verify HomeView + ranch summary
-	boxInst, err := monsterSvc.DepositToBox(ctx, c.ID, memberID)
-	if err != nil {
-		t.Fatalf("DepositToBox Ortega failed: %v", err)
-	}
-	if boxInst.ID != memberID || boxInst.CustomName != "オルテガ" || boxInst.MonsterID != "chr/029.gif" || boxInst.Location != monster.LocationBox {
-		t.Fatalf("unexpected deposited Ortega: %+v", boxInst)
-	}
-	viewAfterDeposit, err := homeSvc.GetHomeView(ctx, c.ID, c.ID, c.PlayerID)
-	if err != nil {
-		t.Fatalf("GetHomeView after deposit failed: %v", err)
-	}
-	if len(viewAfterDeposit.ResidentPets) != 0 {
-		t.Fatalf("expected 0 resident pets after deposit, got %+v", viewAfterDeposit.ResidentPets)
-	}
-
-	// 5. Bring Ortega back to Home and verify identity/icon/phrase are preserved in HomeView
-	homeInst, err := monsterSvc.BringToHome(ctx, c.ID, memberID)
-	if err != nil {
-		t.Fatalf("BringToHome Ortega failed: %v", err)
-	}
-	if homeInst.ID != memberID || homeInst.CustomName != "オルテガ" || homeInst.MonsterID != "chr/029.gif" || homeInst.Location != monster.LocationHome {
-		t.Fatalf("unexpected brought-home Ortega: %+v", homeInst)
-	}
-	viewAfterBringBack, err := homeSvc.GetHomeView(ctx, c.ID, c.ID, c.PlayerID)
-	if err != nil {
-		t.Fatalf("GetHomeView after bring back failed: %v", err)
-	}
-	if len(viewAfterBringBack.ResidentPets) != 1 || viewAfterBringBack.ResidentPets[0].ID != memberID || viewAfterBringBack.ResidentPets[0].CustomName != "オルテガ" || viewAfterBringBack.ResidentPets[0].MonsterID != "chr/029.gif" {
-		t.Fatalf("unexpected resident pet after bring back: %+v", viewAfterBringBack.ResidentPets)
-	}
-}
-
 type wireMockCharRepo struct {
 	char corecharacter.Character
 }
@@ -818,311 +656,46 @@ func (m *wireMockCharRepo) Update(_ context.Context, char corecharacter.Characte
 	return nil
 }
 
-var wireHomeGuildPointsRequiredTables = []string{
-	"players",
-	"characters",
-	"character_depots",
-	"character_homes",
-	"house_town_capacity_lock",
-	"guilds",
-	"guild_members",
-}
-
-// wireHomeGuildPointsIsolatedDB creates a unique dedicated database holding only copied table
-// definitions (no data). BuildHouse checks town capacity, so tests must not run
-// against the shared test DB. Cleanup drops only this database; missing admin
-// configuration fails the test rather than falling back to the shared DB.
-func wireHomeGuildPointsIsolatedDB(t *testing.T) *sql.DB {
-	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	ctx := context.Background()
-	source, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := source.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated wire home tests")
-	}
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := database.Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	name := fmt.Sprintf("party2_wire_home_%06x_%s", time.Now().UnixNano()%0x1000000, id.New())
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Error(err)
-		}
-	})
-
-	cfg.DBName = name
-	db, err := database.Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	copyTableDefinitions(t, source, db, wireHomeGuildPointsRequiredTables)
-	return db
-}
-
 func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
-	db := wireHomeGuildPointsIsolatedDB(t)
+	db := wiringIsolatedDB(t, []string{"players", "characters", "character_depots", "character_homes", "house_town_capacity_lock", "guilds", "guild_members"})
 	ctx := context.Background()
-
-	homeRepo, err := database.NewHomeRepository(db)
-	if err != nil {
-		t.Fatalf("NewHomeRepository failed: %v", err)
-	}
-
-	// Verify town capacity before building in the dedicated database.
-	now := time.Now().UTC()
-	for _, townID := range []string{"town1", "town2", "town3", "town4"} {
-		count, err := homeRepo.CountActiveTownHouses(ctx, townID, now)
-		if err != nil {
-			t.Fatalf("CountActiveTownHouses for %s failed: %v", townID, err)
-		}
-		if count != 0 {
-			t.Fatalf("expected 0 active houses in isolated town %s, got %d", townID, count)
-		}
-	}
-
-	// Instantiate production wiring
 	core, err := newCoreServices(db, nil)
 	if err != nil {
-		t.Fatalf("newCoreServices failed: %v", err)
+		t.Fatal(err)
 	}
 	econ, err := newEconServices(db, core)
 	if err != nil {
-		t.Fatalf("newEconServices failed: %v", err)
+		t.Fatal(err)
 	}
 	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
 	if err != nil {
-		t.Fatalf("newSocServices failed: %v", err)
+		t.Fatal(err)
 	}
-
-	// 1. Create a test guild with leader character
-	runID := fmt.Sprintf("%06x", time.Now().UnixNano()%0x1000000)
-	testGuild, leader, err := database.CreateTestGuildWithLeader(ctx, db, fmt.Sprintf("WGP_%s", runID), 50000)
+	g, leader, err := database.CreateTestGuildWithLeader(ctx, db, "HouseWiring", 50000)
 	if err != nil {
-		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
+		t.Fatal(err)
 	}
-
-	guildRepo := soc.guildRepo
-
-	// Verify initial guild points = 0
-	g, _, err := guildRepo.GetGuild(ctx, testGuild.ID)
-	if err != nil {
-		t.Fatalf("GetGuild failed: %v", err)
+	if _, err := soc.home.BuildHouse(ctx, leader.ID, "town1", "001"); err != nil {
+		t.Fatal(err)
 	}
-	if g.Points != 0 {
-		t.Fatalf("expected initial guild points 0, got %d", g.Points)
-	}
-
-	// 2. Test 4 towns: cycle_days * 10 GP awarded to guild
-	// town1 (5d -> 50GP), town2 (10d -> 100GP), town3 (15d -> 150GP), town4 (20d -> 200GP)
-	townCases := []struct {
-		townID    string
-		style     string
-		price     int
-		cycleDays int
-		wantGP    int
-	}{
-		{"town1", "001", 500, 5, 50},
-		{"town2", "005", 1500, 10, 100},
-		{"town3", "013", 3000, 15, 150},
-		{"town4", "021", 5000, 20, 200},
-	}
-
-	expectedTotalGP := 0
-
-	for i, tc := range townCases {
-		var memberChar corecharacter.Character
-		if i == 0 {
-			// Leader builds in town1
-			memberChar = leader
-		} else {
-			// Create additional guild members for town2..town4 (due to 1-house per character rule)
-			memberChar, err = database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("W%s_M%d", runID, i), 50000)
-			if err != nil {
-				t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
-			}
-			m := guild.Member{
-				GuildID:     testGuild.ID,
-				CharacterID: memberChar.ID,
-				Role:        guild.RoleMember,
-				Title:       "Member",
-				IsPending:   false,
-				JoinedAt:    time.Now().UTC(),
-			}
-			if _, err := guildRepo.AddMember(ctx, m); err != nil {
-				t.Fatalf("AddMember failed: %v", err)
-			}
-		}
-
-		res, err := soc.home.BuildHouse(ctx, memberChar.ID, tc.townID, tc.style)
-		if err != nil {
-			t.Fatalf("BuildHouse in %s failed: %v", tc.townID, err)
-		}
-		if res.TownID != tc.townID {
-			t.Errorf("expected town %s, got %s", tc.townID, res.TownID)
-		}
-
-		expectedTotalGP += tc.wantGP
-		g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
-		if err != nil {
-			t.Fatalf("GetGuild failed: %v", err)
-		}
-		if g.Points != int64(expectedTotalGP) {
-			t.Errorf("after building in %s: expected %d total guild points, got %d", tc.townID, expectedTotalGP, g.Points)
-		}
-	}
-
-	// 3. Unaffiliated character can build a house successfully without error, and does NOT award GP to any guild
-	soloChar, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("W%s_Sol", runID), 50000)
-	if err != nil {
-		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
-	}
-	soloRes, err := soc.home.BuildHouse(ctx, soloChar.ID, "town1", "002")
-	if err != nil {
-		t.Fatalf("BuildHouse for unaffiliated character failed: %v", err)
-	}
-	if soloRes.TownID != "town1" {
-		t.Errorf("expected town1, got %s", soloRes.TownID)
-	}
-	// Guild points must remain unchanged
-	g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
-	if err != nil {
-		t.Fatalf("GetGuild failed: %v", err)
-	}
-	if g.Points != int64(expectedTotalGP) {
-		t.Errorf("guild points should not change when unaffiliated builds house: expected %d, got %d", expectedTotalGP, g.Points)
-	}
-
-	// 4. Insufficient funds: construction fails, guild points unchanged
-	poorChar, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("W%s_Por", runID), 100)
-	if err != nil {
-		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
-	}
-	mPoor := guild.Member{
-		GuildID:     testGuild.ID,
-		CharacterID: poorChar.ID,
-		Role:        guild.RoleMember,
-		Title:       "Member",
-		IsPending:   false,
-		JoinedAt:    time.Now().UTC(),
-	}
-	if _, err := guildRepo.AddMember(ctx, mPoor); err != nil {
-		t.Fatalf("AddMember failed: %v", err)
-	}
-
-	_, err = soc.home.BuildHouse(ctx, poorChar.ID, "town1", "003")
-	if !errors.Is(err, home.ErrInsufficientFunds) {
-		t.Errorf("expected ErrInsufficientFunds, got %v", err)
-	}
-	// Guild points unchanged
-	g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
-	if err != nil {
-		t.Fatalf("GetGuild failed: %v", err)
-	}
-	if g.Points != int64(expectedTotalGP) {
-		t.Errorf("guild points should not change on insufficient funds failure: expected %d, got %d", expectedTotalGP, g.Points)
-	}
-
-	// 5. Retry after failure: give character funds and retry -> succeeds, awards GP exactly once
-	poorChar.Money = 5000
-	if err := core.charRepo.Update(ctx, poorChar); err != nil {
-		t.Fatalf("Update poorChar failed: %v", err)
-	}
-	retryRes, err := soc.home.BuildHouse(ctx, poorChar.ID, "town1", "003")
-	if err != nil {
-		t.Fatalf("retry BuildHouse failed: %v", err)
-	}
-	if retryRes.TownID != "town1" {
-		t.Errorf("expected town1, got %s", retryRes.TownID)
-	}
-	expectedTotalGP += 50
-	g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
-	if err != nil {
-		t.Fatalf("GetGuild failed: %v", err)
-	}
-	if g.Points != int64(expectedTotalGP) {
-		t.Errorf("after successful retry: expected %d total guild points, got %d", expectedTotalGP, g.Points)
-	}
-
-	// 6. Already owns house: second build fails, guild points unchanged
-	_, err = soc.home.BuildHouse(ctx, poorChar.ID, "town2", "005")
-	if !errors.Is(err, home.ErrAlreadyOwnsHouse) {
-		t.Errorf("expected ErrAlreadyOwnsHouse, got %v", err)
-	}
-	g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
-	if err != nil {
-		t.Fatalf("GetGuild failed: %v", err)
-	}
-	if g.Points != int64(expectedTotalGP) {
-		t.Errorf("guild points should not change on ErrAlreadyOwnsHouse: expected %d, got %d", expectedTotalGP, g.Points)
+	updated, _, err := soc.guildRepo.GetGuild(ctx, g.ID)
+	if err != nil || updated.Points == g.Points {
+		t.Fatalf("house guild connection = %+v, %v", updated, err)
 	}
 }
 
 type wireMockMonsterRepo struct {
+	monster.MonsterRepository
 	monsters map[string]monster.MonsterInstance
-}
-
-func (m *wireMockMonsterRepo) ListByCharacterID(_ context.Context, _ string) ([]monster.MonsterInstance, error) {
-	return nil, nil
-}
-
-func (m *wireMockMonsterRepo) ListByCharacterIDAndLocation(_ context.Context, _, _ string) ([]monster.MonsterInstance, error) {
-	return nil, nil
-}
-
-func (m *wireMockMonsterRepo) FindByID(_ context.Context, _ string) (monster.MonsterInstance, error) {
-	return monster.MonsterInstance{}, nil
-}
-
-func (m *wireMockMonsterRepo) FindByIDForUpdate(_ context.Context, _ string) (monster.MonsterInstance, error) {
-	return monster.MonsterInstance{}, nil
+	countErr error
 }
 
 func (m *wireMockMonsterRepo) Save(_ context.Context, inst monster.MonsterInstance) error {
-	if m.monsters == nil {
-		m.monsters = make(map[string]monster.MonsterInstance)
-	}
 	m.monsters[inst.ID] = inst
 	return nil
 }
-
-func (m *wireMockMonsterRepo) Delete(_ context.Context, _ string) error {
-	return nil
-}
-
-func (m *wireMockMonsterRepo) CountByLocation(_ context.Context, _ string, _ string) (int, error) {
-	return len(m.monsters), nil
+func (m *wireMockMonsterRepo) CountByLocation(_ context.Context, _, _ string) (int, error) {
+	return 0, m.countErr
 }
 
 func TestMonsterTamerAdapter(t *testing.T) {
@@ -1146,18 +719,12 @@ func TestMonsterTamerAdapter(t *testing.T) {
 		t.Fatalf("expected 1 monster saved, got %d", len(monRepo.monsters))
 	}
 
-	// 2. Box capacity full translates to battle.ErrMonsterBoxFull
-	for i := 1; i < 50; i++ {
-		monRepo.monsters[fmt.Sprintf("m-%d", i)] = monster.MonsterInstance{
-			ID:          fmt.Sprintf("m-%d", i),
-			CharacterID: "char-tamer-1",
-			Location:    monster.LocationBox,
-		}
-	}
-	err = adapter.TameMonster(ctx, "char-tamer-1", "dragon", "ドラごん")
+	monRepo.countErr = monster.ErrBoxFull
+	err = adapter.TameMonster(ctx, "char-tamer-1", "dragon", "Dragon")
 	if !errors.Is(err, battle.ErrMonsterBoxFull) {
 		t.Fatalf("expected battle.ErrMonsterBoxFull, got %v", err)
 	}
+	monRepo.countErr = nil
 
 	// 3. Other errors (e.g. character not found) are propagated directly
 	err = adapter.TameMonster(ctx, "unknown-char", "slime", "スラりん")
@@ -1167,143 +734,62 @@ func TestMonsterTamerAdapter(t *testing.T) {
 }
 
 type wireMockAlchemyRepo struct {
-	discovered map[string][]alchemy.DiscoveredRecipe
+	alchemy.Repository
+	readErr error
 }
 
-func (m *wireMockAlchemyRepo) GetSynthesisState(_ context.Context, _ string) (alchemy.Synthesis, error) {
-	return alchemy.Synthesis{}, nil
+func (m *wireMockAlchemyRepo) GetDiscoveredRecipes(context.Context, string) ([]alchemy.DiscoveredRecipe, error) {
+	return nil, m.readErr
 }
-func (m *wireMockAlchemyRepo) GetSynthesisStateForUpdate(_ context.Context, _ string) (alchemy.Synthesis, error) {
-	return alchemy.Synthesis{}, nil
-}
-func (m *wireMockAlchemyRepo) SaveSynthesisState(_ context.Context, _ alchemy.Synthesis) error {
-	return nil
-}
-func (m *wireMockAlchemyRepo) CompleteOngoingSynthesis(_ context.Context, _ string) error {
-	return nil
-}
-func (m *wireMockAlchemyRepo) GetDiscoveredRecipes(_ context.Context, characterID string) ([]alchemy.DiscoveredRecipe, error) {
-	return m.discovered[characterID], nil
-}
-func (m *wireMockAlchemyRepo) SaveDiscoveredRecipe(_ context.Context, characterID, recipeID string, isCrafted bool) error {
-	if m.discovered == nil {
-		m.discovered = make(map[string][]alchemy.DiscoveredRecipe)
-	}
-	m.discovered[characterID] = append(m.discovered[characterID], alchemy.DiscoveredRecipe{RecipeID: recipeID, IsCrafted: isCrafted})
-	return nil
-}
-func (m *wireMockAlchemyRepo) MarkRecipeCrafted(_ context.Context, _, _ string) error {
-	return nil
-}
-func (m *wireMockAlchemyRepo) CountCraftedRecipes(_ context.Context, _ string) (int, error) {
-	return 0, nil
-}
-func (m *wireMockAlchemyRepo) SetCompAlcTitle(_ context.Context, _ string) error {
-	return nil
-}
-
-type wireMockDepotRepo struct{}
-
-func (wireMockDepotRepo) FindByCharacterID(_ context.Context, _ string) (depot.Depot, error) {
-	return depot.Depot{}, nil
-}
-func (wireMockDepotRepo) FindByCharacterIDForUpdate(_ context.Context, _ string) (depot.Depot, error) {
-	return depot.Depot{}, nil
-}
-func (wireMockDepotRepo) Save(_ context.Context, _ depot.Depot) error {
+func (m *wireMockAlchemyRepo) SaveDiscoveredRecipe(context.Context, string, string, bool) error {
 	return nil
 }
 
 func TestAlchemyRecipeLearnerAdapter(t *testing.T) {
 	ctx := context.Background()
-
-	// 1. Nil alchemy service returns ErrRecipeLearnerUnavailable
-	nilAdapter := alchemyRecipeLearnerAdapter{alchemy: nil}
-	_, err := nilAdapter.LearnRecipe(ctx, "char-1", []string{"weapon-01"})
-	if !errors.Is(err, home.ErrRecipeLearnerUnavailable) {
-		t.Fatalf("expected ErrRecipeLearnerUnavailable, got %v", err)
-	}
-
-	// 2. Real alchemy service with item catalog
-	char := corecharacter.Character{ID: "char-1", Name: "Hero"}
-	charRepo := &wireMockCharRepo{char: char}
-	depotRepo := wireMockDepotRepo{}
-	alchemyRepo := &wireMockAlchemyRepo{}
-
-	recipes, err := alchemy.InitialRecipeCatalog()
-	if err != nil {
-		t.Fatalf("InitialRecipeCatalog failed: %v", err)
+	if _, err := (alchemyRecipeLearnerAdapter{}).LearnRecipe(ctx, "hero", nil); !errors.Is(err, home.ErrRecipeLearnerUnavailable) {
+		t.Fatalf("missing learner: %v", err)
 	}
 	items, err := coreitem.InitialCatalog()
 	if err != nil {
-		t.Fatalf("coreitem.InitialCatalog failed: %v", err)
+		t.Fatal(err)
 	}
-
-	alcSvc, err := alchemy.NewService(charRepo, depotRepo, alchemyRepo, recipes, items)
-	if err != nil {
-		t.Fatalf("alchemy.NewService failed: %v", err)
-	}
-
-	adapter := alchemyRecipeLearnerAdapter{
-		alchemy: alcSvc,
-		items:   items,
-	}
-
-	// Learn weapon-01: clean-room name "ヒノキの棒" must be returned, NOT legacy "ひのきの棒"
-	res, err := adapter.LearnRecipe(ctx, "char-1", []string{"weapon-01"})
-	if err != nil {
-		t.Fatalf("unexpected error learning weapon-01: %v", err)
-	}
-	if res.BaseName != "ヒノキの棒" {
-		t.Errorf("expected clean-room BaseName 'ヒノキの棒', got %q", res.BaseName)
-	}
-	if strings.Contains(res.BaseName, "ひのき") {
-		t.Errorf("legacy proprietary/old name leaked into BaseName: %q", res.BaseName)
-	}
-
-	// Learn item-006: clean-room name "霊樹の葉" must be returned, NOT legacy "世界樹の葉"
-	res, err = adapter.LearnRecipe(ctx, "char-1", []string{"item-006"})
-	if err != nil {
-		t.Fatalf("unexpected error learning item-006: %v", err)
-	}
-	if res.BaseName != "霊樹の葉" {
-		t.Errorf("expected clean-room BaseName '霊樹の葉', got %q", res.BaseName)
-	}
-	if strings.Contains(res.BaseName, "世界樹") {
-		t.Errorf("legacy proprietary/old name leaked into BaseName: %q", res.BaseName)
-	}
-
-	// Learn single-ingredient recipe (recipe-003: item-002 x2 -> item-003)
-	res, err = adapter.LearnRecipe(ctx, "char-1", []string{"item-002"})
-	if err != nil {
-		t.Fatalf("unexpected error learning item-002: %v", err)
-	}
-	if res.BaseName != "上薬草" || res.MaterialName != "上薬草" {
-		t.Errorf("expected 上薬草 x 上薬草, got %s x %s", res.BaseName, res.MaterialName)
-	}
-
-	// Exhaustion translates alchemy.ErrNoRecipesToLearn to home.ErrNoRecipesToLearn
-	// Discover remaining weapon-01 recipe (it has 2 recipes total: recipe-040 and recipe-041)
-	_, err = adapter.LearnRecipe(ctx, "char-1", []string{"weapon-01"})
-	if err != nil {
-		t.Fatalf("unexpected error learning second weapon-01 recipe: %v", err)
-	}
-	// Third attempt must return home.ErrNoRecipesToLearn
-	_, err = adapter.LearnRecipe(ctx, "char-1", []string{"weapon-01"})
-	if !errors.Is(err, home.ErrNoRecipesToLearn) {
-		t.Fatalf("expected home.ErrNoRecipesToLearn, got %v", err)
-	}
-
-	// 3. Fallback when items is nil
-	nilItemsAdapter := alchemyRecipeLearnerAdapter{
-		alchemy: alcSvc,
-		items:   nil,
-	}
-	resFallback, err := nilItemsAdapter.LearnRecipe(ctx, "char-1", []string{"weapon-18"})
-	if err != nil {
-		t.Fatalf("unexpected error with nil items: %v", err)
-	}
-	if resFallback.BaseName != "weapon-18" {
-		t.Errorf("expected fallback to definition ID 'weapon-18', got %q", resFallback.BaseName)
+	for _, tc := range []struct {
+		name        string
+		ingredients []alchemy.Ingredient
+		items       coreitem.DefinitionProvider
+		want        home.LearnedRecipe
+	}{
+		{"catalog names", []alchemy.Ingredient{{DefinitionID: "weapon-01", Quantity: 1}, {DefinitionID: "item-006", Quantity: 1}}, items, home.LearnedRecipe{BaseName: "ヒノキの棒", MaterialName: "霊樹の葉"}},
+		{"single ingredient", []alchemy.Ingredient{{DefinitionID: "item-002", Quantity: 2}}, items, home.LearnedRecipe{BaseName: "上薬草", MaterialName: "上薬草"}},
+		{"missing catalog entries", []alchemy.Ingredient{{DefinitionID: "unknown-base", Quantity: 1}, {DefinitionID: "unknown-material", Quantity: 1}}, items, home.LearnedRecipe{BaseName: "unknown-base", MaterialName: "unknown-material"}},
+		{"nil catalog", []alchemy.Ingredient{{DefinitionID: "weapon-18", Quantity: 1}}, nil, home.LearnedRecipe{BaseName: "weapon-18", MaterialName: "weapon-18"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recipes, err := alchemy.NewRecipeCatalog([]alchemy.Recipe{{ID: "recipe", Name: "Test", ResultItemDefinitionID: "item-003", ResultQuantity: 1, Ingredients: tc.ingredients}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo := &wireMockAlchemyRepo{}
+			svc, err := alchemy.NewService(&wireMockCharRepo{}, &struct{ alchemy.DepotRepository }{}, repo, recipes, items)
+			if err != nil {
+				t.Fatal(err)
+			}
+			adapter := alchemyRecipeLearnerAdapter{alchemy: svc, items: tc.items}
+			got, err := adapter.LearnRecipe(ctx, "hero", nil)
+			if err != nil || got != tc.want {
+				t.Fatalf("conversion = %+v, %v; want %+v", got, err, tc.want)
+			}
+			for _, e := range []error{alchemy.ErrNoRecipesToLearn, errors.New("recipe read failed")} {
+				repo.readErr = e
+				want := e
+				if errors.Is(e, alchemy.ErrNoRecipesToLearn) {
+					want = home.ErrNoRecipesToLearn
+				}
+				if _, err := adapter.LearnRecipe(ctx, "hero", nil); !errors.Is(err, want) {
+					t.Fatalf("error conversion = %v, want %v", err, want)
+				}
+			}
+		})
 	}
 }

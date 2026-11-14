@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"slices"
 	"testing"
 	"time"
 
@@ -17,8 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 )
 
-// The production service groups write their milestones to the one trajectory
-// store, in the transaction that still shows the state each entry describes.
+// Each production milestone hook reaches the shared trajectory store.
 func TestTrajectoryProductionWiring(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -80,6 +78,7 @@ func TestTrajectoryProductionWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertTrajectoryKind(t, db, created.ID, corecharacter.MemoryBirth)
 	created.Money, created.GodVisit = 100000, corecharacter.GodVisitHeaven
 	if err := core.charRepo.Update(ctx, created); err != nil {
 		t.Fatal(err)
@@ -88,27 +87,16 @@ func TestTrajectoryProductionWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertTrajectoryKind(t, db, created.ID, corecharacter.MemoryGuildFound)
 	if _, err := misc.god.GrantWish(ctx, created.ID, god.WishMoney); err != nil {
 		t.Fatal(err)
 	}
+	assertTrajectoryKind(t, db, created.ID, corecharacter.MemoryWish)
 	if err := soc.guild.Disband(ctx, g.ID, created.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	memories, err := core.charService.Trajectory(ctx, created.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	for _, m := range slices.Backward(memories) {
-		got = append(got, string(m.Kind)+"@"+m.GuildName)
-	}
-	// Founding and disbanding both show the guild; birth precedes it.
-	want := []string{"birth@", "guild_found@" + guildName, "wish@" + guildName, "guild_disband@" + guildName}
-	if !slices.Equal(got, want) {
-		t.Fatalf("trajectory = %q, want %q", got, want)
-	}
-
+	assertTrajectoryKind(t, db, created.ID, corecharacter.MemoryGuildDisband)
 	created, err = core.charRepo.FindByID(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)

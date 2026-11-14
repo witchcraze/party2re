@@ -2,6 +2,7 @@ package alchemy
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -9,6 +10,37 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
+
+func TestLearnRecipe_NativeWeaponPoolExhaustion(t *testing.T) {
+	recipes, err := InitialRecipeCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := newMemoryAlchemyRepo()
+	svc, err := NewService(newMemoryCharRepo(), newMemoryDepotRepo(), repo, recipes, items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	seen := map[string]bool{}
+	for range 2 {
+		r, err := svc.LearnRecipe(ctx, "hero", []string{"weapon-01"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Ingredients[0].DefinitionID != "weapon-01" || seen[r.ID] {
+			t.Fatalf("native discovery = %+v, seen=%v", r, seen)
+		}
+		seen[r.ID] = true
+	}
+	if _, err := svc.LearnRecipe(ctx, "hero", []string{"weapon-01"}); !errors.Is(err, ErrNoRecipesToLearn) {
+		t.Fatalf("native exhaustion: %v", err)
+	}
+}
 
 func TestInitialRecipeCatalogValid(t *testing.T) {
 	recipes, err := InitialRecipeCatalog()
