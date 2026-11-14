@@ -119,11 +119,15 @@ type scenarioContext struct {
 			SaleOffer *struct {
 				ItemDefinitionID string `json:"item_definition_id"`
 			} `json:"sale_offer"`
+			// Shop wares and Depot contents share the key.
 			Items []struct {
 				ID             string         `json:"id"`
 				RetailPrice    int            `json:"retail_price"`
 				PurchaseParams map[string]any `json:"purchase_params"`
+				DefinitionID   string         `json:"definition_id"`
+				Quantity       int            `json:"quantity"`
 			} `json:"items"`
+			ItemCount int `json:"item_count"`
 		} `json:"data"`
 	} `json:"scene"`
 	AvailableActions []struct {
@@ -263,9 +267,18 @@ func TestGameplayScenario_NoviceDepositPurchaseEquip(t *testing.T) {
 		}
 	}
 
+	// The Depot itself holds exactly the second purchase; the first stayed in the hand.
+	a.elapseActionWait(hero)
+	stored := func(c scenarioContext) bool {
+		d := c.Scene.Data
+		return c.Character.Gold == gold && d.ItemCount == 1 && len(d.Items) == 1 && d.Items[0].DefinitionID == item.ID && d.Items[0].Quantity == 1
+	}
+	if depot := a.enter(token, hero, town, "depot"); !stored(depot) {
+		t.Fatalf("depot does not hold the purchase: %+v", depot)
+	}
 	// GET observes without mutating: repeated reads agree with the last outcome.
 	for range 2 {
-		if final := a.context(token, hero); final.Character.Gold != gold || final.Scene.Data.SaleOffer == nil {
+		if final := a.context(token, hero); !stored(final) {
 			t.Fatalf("observation drifted: %+v", final)
 		}
 	}
