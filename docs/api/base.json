@@ -16436,9 +16436,6 @@
           "id": {
             "type": "string"
           },
-          "legacy_name": {
-            "type": "string"
-          },
           "material1_definition_id": {
             "type": "string"
           },
@@ -16467,7 +16464,6 @@
         "required": [
           "id",
           "target",
-          "legacy_name",
           "product_name",
           "product_definition_id",
           "material1_name",
