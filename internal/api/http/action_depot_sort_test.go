@@ -106,6 +106,15 @@ func TestDepotSortGatewayInputsErrorsAndDiscovery(t *testing.T) {
 	if resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" || f.executions != 0 || store.writes != 0 {
 		t.Fatalf("sort resolver/GET: %+v", resolved)
 	}
+	f.dep.Items = nil
+	status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"depot_sort"}`, nil)
+	var emptyResult depotResponse
+	if err := json.Unmarshal(got["result"], &emptyResult); err != nil {
+		t.Fatal(err)
+	}
+	if status != 200 || emptyResult.Items == nil || emptyResult.ItemCount != 0 {
+		t.Fatalf("empty sort result: %d %s", status, got)
+	}
 }
 
 func TestDepotSortGatewayGuards(t *testing.T) {

@@ -252,25 +252,24 @@ func TestDepot_RefreshCapacity(t *testing.T) {
 }
 
 func TestExpansionCost(t *testing.T) {
-	cost0, err := ExpansionCost(0)
-	if err != nil || cost0 != 200000 {
-		t.Errorf("expected 200000 at 0, got %d, err %v", cost0, err)
+	wantCosts := []int{
+		200000, 200000,
+		400000, 400000,
+		600000, 600000,
+		800000, 800000,
+		999999, 999999, 999999, 999999, 999999, 999999,
+		999999, 999999, 999999, 999999, 999999, 999999,
 	}
-	cost2, err := ExpansionCost(2)
-	if err != nil || cost2 != 400000 {
-		t.Errorf("expected 400000 at 2, got %d, err %v", cost2, err)
+	for count, want := range wantCosts {
+		got, err := ExpansionCost(count)
+		if err != nil || got != want {
+			t.Errorf("ExpansionCost(%d) = %d, err=%v; want %d", count, got, err, want)
+		}
 	}
-	cost8, err := ExpansionCost(8)
-	if err != nil || cost8 != 999999 {
-		t.Errorf("expected 999999 at 8, got %d, err %v", cost8, err)
-	}
-	cost19, err := ExpansionCost(19)
-	if err != nil || cost19 != 999999 {
-		t.Errorf("expected 999999 at 19, got %d, err %v", cost19, err)
-	}
-	_, err = ExpansionCost(20)
-	if !errors.Is(err, ErrDepotMaxExpanded) {
-		t.Errorf("expected ErrDepotMaxExpanded at 20, got %v", err)
+	for _, invalid := range []int{-1, MaxExDepot, MaxExDepot + 1} {
+		if _, err := ExpansionCost(invalid); !errors.Is(err, ErrDepotMaxExpanded) {
+			t.Errorf("ExpansionCost(%d) err = %v, want ErrDepotMaxExpanded", invalid, err)
+		}
 	}
 }
 
