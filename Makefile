@@ -69,8 +69,9 @@ bench:
 	@./scripts/benchmark.sh
 
 smoke:
-	@echo "Building smoke production image..."
+	@echo "Building and running smoke production image..."
 	@docker build -f Dockerfile -t party2re:smoke .
+	@./scripts/docker_smoke.sh party2re:smoke
 
 check verify:
 	@TEST_TIMEOUT="$(TEST_TIMEOUT)" ./scripts/verify.sh
