@@ -40,6 +40,8 @@ type Selection struct {
 type NavigationObservation struct {
 	Selection   Selection `json:"selection"`
 	Unavailable bool      `json:"unavailable"`
+	// SubjectOwned reports that the actor owns the selected subject.
+	SubjectOwned bool `json:"-"`
 }
 
 // NavigationRepository has no authority over feature activity or durable assets.
@@ -60,9 +62,13 @@ type SceneDefinition struct {
 	// CanEnter is a pure character qualification check; nil permits entry.
 	CanEnter         func(character.Character) bool
 	SubjectAvailable func(ctx context.Context, actorID, targetID string) (bool, error)
+	// SubjectOwned is an optional read-only adapter telling whether the actor
+	// owns an available subject; nil means subjects are never owned.
+	SubjectOwned func(ctx context.Context, actorID, targetID string) (bool, error)
 	// Actions are the facility commands the scene admits; non-nil SubjectActions
-	// replace them while a subject is selected. Set by AdmitSceneActions.
-	Actions, SubjectActions []string
+	// replace them while a subject is selected, and non-nil OwnedSubjectActions
+	// replace those for a subject the actor owns. Set by AdmitSceneActions.
+	Actions, SubjectActions, OwnedSubjectActions []string
 }
 
 type PageParams struct {
@@ -127,17 +133,17 @@ func WithNavigation(store NavigationRepository, definitions ...SceneDefinition) 
 
 // AdmitSceneActions registers, during composition, the facility commands a
 // scene admits. They must be location-gated entry actions outside navigation.
-func (s *Service) AdmitSceneActions(sceneID string, actions, subjectActions []string) {
+func (s *Service) AdmitSceneActions(sceneID string, actions, subjectActions, ownedSubjectActions []string) {
 	d, ok := s.scenes[sceneID]
 	if !ok {
 		panic("scene actions for unregistered scene: " + sceneID)
 	}
-	for _, id := range slices.Concat(actions, subjectActions) {
+	for _, id := range slices.Concat(actions, subjectActions, ownedSubjectActions) {
 		if def, known := GetAction(id); !known || !def.RequiredGates.Has(GateLocationCheck) || def.ActivityKind != "" || def.Category == "navigation" {
 			panic("scene " + sceneID + " cannot admit action: " + id)
 		}
 	}
-	d.Actions, d.SubjectActions = actions, subjectActions
+	d.Actions, d.SubjectActions, d.OwnedSubjectActions = actions, subjectActions, ownedSubjectActions
 	s.scenes[sceneID] = d
 }
 
@@ -153,6 +159,9 @@ func (s *Service) sceneActions(o *NavigationObservation) []string {
 		return actions
 	}
 	if o.Selection.Subject != (Subject{}) {
+		if o.SubjectOwned && d.OwnedSubjectActions != nil {
+			return append(actions, d.OwnedSubjectActions...)
+		}
 		if d.SubjectActions != nil {
 			return append(actions, d.SubjectActions...)
 		}
@@ -234,6 +243,11 @@ func (s *Service) observeNavigation(ctx context.Context, actor character.Charact
 				return nil, fmt.Errorf("read selected subject: %w", err)
 			}
 			observation.Unavailable = !available
+			if available && d.SubjectOwned != nil {
+				if observation.SubjectOwned, err = d.SubjectOwned(ctx, actor.ID, n.Subject.ID); err != nil {
+					return nil, fmt.Errorf("read selected subject owner: %w", err)
+				}
+			}
 		}
 	}
 	return observation, nil

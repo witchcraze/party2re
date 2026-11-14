@@ -55,7 +55,10 @@ func storeSceneRouter(t *testing.T, service *storeSceneService, selection player
 	scenes := []playercontext.SceneDefinition{{ID: "town", Pageable: true}}
 	for _, id := range []string{"town1", "town2", "town3", "town4"} {
 		scenes = append(scenes, playercontext.SceneDefinition{ID: id, Parent: "town", SubjectKind: "store",
-			SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil }})
+			SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil },
+			SubjectOwned: func(_ context.Context, actor, target string) (bool, error) {
+				return service.stores[target].CharacterID == actor, nil
+			}})
 	}
 	pc := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithNavigation(nav, scenes...))
 	h, err := NewHandler(f, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithPlayerContext(pc), WithStore(service), func(h *Handler) { h.homes = f })
@@ -156,6 +159,29 @@ func TestStoreSceneOwnerAndVisitorCommands(t *testing.T) {
 				t.Fatal("GET mutated")
 			}
 		})
+	}
+}
+
+// Owner commands act on the actor's own store whatever store is selected, so
+// they are admitted only while the actor's own store is the selected one.
+func TestStoreCommandsFollowTheSelectedStoreOwnership(t *testing.T) {
+	for _, tc := range []struct {
+		store, body string
+		status      int
+	}{
+		{"peer", `{"action":"store_rename","params":{"store_name":"x"}}`, 409},
+		{"peer", `{"action":"store_buy","params":{"sale_id":"s"}}`, 200},
+		{"mine", `{"action":"store_buy","params":{"sale_id":"s"}}`, 409},
+	} {
+		service := newStoreSceneService()
+		_, router := storeSceneRouter(t, service, playercontext.Selection{Destination: "town1", Subject: playercontext.Subject{Kind: "store", ID: tc.store}})
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", tc.body, nil)
+		if status != tc.status || (service.mutations != 0) != (tc.status == 200) {
+			t.Fatalf("%s %s: %d %s (mutations %d)", tc.store, tc.body, status, raw, service.mutations)
+		}
+		if tc.status == 409 {
+			assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
+		}
 	}
 }
 

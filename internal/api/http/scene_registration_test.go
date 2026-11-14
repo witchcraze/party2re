@@ -24,6 +24,7 @@ func TestEveryLocationBoundGatewayCommandBelongsToAFacility(t *testing.T) {
 	for _, d := range service.SceneDefinitions() {
 		admitted = append(admitted, d.Actions...)
 		admitted = append(admitted, d.SubjectActions...)
+		admitted = append(admitted, d.OwnedSubjectActions...)
 	}
 	for _, def := range playercontext.DefaultCatalog {
 		if def.OperationID != "executeCharacterAction" || !def.RequiredGates.Has(playercontext.GateLocationCheck) || def.ActivityKind != "" || def.Category == "navigation" || def.ID == "home_wake" {

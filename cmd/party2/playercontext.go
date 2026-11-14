@@ -76,6 +76,16 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 				}
 				return details.Store.TownID == t.ID, nil
 			},
+			SubjectOwned: func(ctx context.Context, actorID, target string) (bool, error) {
+				details, err := econ.store.GetStore(ctx, target)
+				if errors.Is(err, store.ErrStoreNotFound) || errors.Is(err, store.ErrStoreExpired) {
+					return false, nil
+				}
+				if err != nil {
+					return false, err
+				}
+				return details.Store.CharacterID == actorID, nil
+			},
 		})
 	}
 	for _, kind := range []shop.ShopType{shop.ShopTypeWeapon, shop.ShopTypeArmor, shop.ShopTypeItem, shop.ShopTypeAccessory} {

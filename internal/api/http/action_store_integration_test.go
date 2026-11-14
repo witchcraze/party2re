@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/character"
@@ -115,7 +116,11 @@ func (f *storeDB) request(t *testing.T, ctx context.Context, actor corecharacter
 	}
 	pc := playercontext.NewService(f.chars, emptyActionsReader{}, timer.NewService(nil), playercontext.WithNavigation(&lockedNavigationStore{selection: selection},
 		playercontext.SceneDefinition{ID: "town", Pageable: true},
-		playercontext.SceneDefinition{ID: "town1", Parent: "town", SubjectKind: "store", SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil }}))
+		playercontext.SceneDefinition{ID: "town1", Parent: "town", SubjectKind: "store", SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil },
+			// The request helper stands in the store its command belongs to.
+			SubjectOwned: func(context.Context, string, string) (bool, error) {
+				return slices.Contains(storeOwnerCommands, action), nil
+			}}))
 	h, err := NewHandler(expansionDBPlayer{owner: actor.PlayerID}, characters, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithStore(f.service), WithPlayerContext(pc))
 	if err != nil {
 		t.Fatal(err)

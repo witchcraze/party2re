@@ -21,8 +21,9 @@ var errSceneNotConfigured = errors.New("selected scene adapter not configured")
 type facility struct {
 	title    string
 	commands []string
-	// subjectCommands replace commands while a subject is selected.
-	subjectCommands []string
+	// subjectCommands replace commands while a subject is selected, and
+	// ownedSubjectCommands replace those for a subject the actor owns.
+	subjectCommands, ownedSubjectCommands []string
 	// bind fixes command inputs to the observed selection. Discovery offers
 	// them as schema constants and execution rejects any other submitted value.
 	bind func(n playercontext.Selection, actorID string) map[string]map[string]any
@@ -126,11 +127,14 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			if f.npc != nil {
 				shared = append(shared, "npc_talk", "npc_inspect")
 			}
-			var subject []string
+			var subject, owned []string
 			if f.subjectCommands != nil {
 				subject = slices.Concat(f.subjectCommands, shared)
 			}
-			service.AdmitSceneActions(definition.ID, slices.Concat(f.commands, shared), subject)
+			if f.ownedSubjectCommands != nil {
+				owned = slices.Concat(f.ownedSubjectCommands, shared)
+			}
+			service.AdmitSceneActions(definition.ID, slices.Concat(f.commands, shared), subject, owned)
 		}
 		adapter.read = func(_ context.Context, _ playercontext.Result) (any, error) {
 			return SelectionSceneData{Parent: definition.Parent}, nil
@@ -303,11 +307,6 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			scene.Title = data.Title
 		case StoreSceneData:
 			scene.Title = data.Details.Store.StoreName
-			if data.IsOwner {
-				hide(storeVisitorCommands...)
-			} else {
-				hide(storeOwnerCommands...)
-			}
 		case HomeSceneData:
 			scene.Title = data.View.Owner.Name + "の家"
 		case OracleSceneData:

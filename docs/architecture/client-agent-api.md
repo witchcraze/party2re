@@ -435,12 +435,13 @@ Entry is evaluated against the observed scene and actual activity. One
 availability result (`playercontext` Query) serves discovery and execution: a
 location-bound command is eligible only in a scene whose facility registers it,
 for the selection state it registers. The town hub admits only its own commands.
+A selected store admits owner commands to its owner and visitor commands to
+everyone else, because owner commands act on the actor's own store.
 Inputs the selection fixes (shop type, selected product or room, visited home,
 town district) are offered as schema constants, and a submitted value that
 differs is rejected with `409 ACTION_UNAVAILABLE` before execution. Discovery may
 additionally hide an eligible command that observed facts show its service would
-reject (store owner versus visitor commands, no delivery to cancel, no next
-page); that hiding grants nothing, and the owning service remains the authority
+reject (no delivery to cancel, no next page); that hiding grants nothing, and the owning service remains the authority
 for those facts. Navigation requires no active work. Active-session commands use the owning membership/role/run
 and turn state; a generic unfinished-work or town-entry gate must not block
 legal continuation, escape/leave or recovery. Pending/Processing scheduled work
