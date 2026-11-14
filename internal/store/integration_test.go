@@ -76,9 +76,12 @@ type storeDBFixture struct {
 func isolatedStoreDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sourceDSN := os.Getenv("PARTY2_DB_DSN")
+	if sourceDSN == "" {
+		t.Skip("PARTY2_DB_DSN not set")
+	}
 	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if sourceDSN == "" || adminDSN == "" {
-		t.Skip("PARTY2_DB_DSN or PARTY2_TEST_DB_ADMIN_DSN not set")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated store tests")
 	}
 
 	sourceCfg, err := mysql.ParseDSN(sourceDSN)
@@ -131,6 +134,19 @@ func isolatedStoreDB(t *testing.T) *sql.DB {
 		}
 	})
 
+	isolatedCfg := *adminCfg
+	isolatedCfg.DBName = dbName
+	isolatedCfg.ParseTime = true
+	db, err := database.Open(isolatedCfg.FormatDSN())
+	if err != nil {
+		t.Fatalf("open isolated db: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
 	tables := []string{
 		"players",
 		"characters",
@@ -149,26 +165,10 @@ func isolatedStoreDB(t *testing.T) *sql.DB {
 		if err := row.Scan(&name, &ddl); err != nil {
 			t.Fatalf("SHOW CREATE TABLE %s: %v", tbl, err)
 		}
-		if _, err := adminDB.ExecContext(ctx, fmt.Sprintf("USE `%s`", dbName)); err != nil {
-			t.Fatalf("use %s: %v", dbName, err)
-		}
-		if _, err := adminDB.ExecContext(ctx, ddl); err != nil {
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
 			t.Fatalf("create table %s: %v", tbl, err)
 		}
 	}
-
-	isolatedCfg := *adminCfg
-	isolatedCfg.DBName = dbName
-	isolatedCfg.ParseTime = true
-	db, err := database.Open(isolatedCfg.FormatDSN())
-	if err != nil {
-		t.Fatalf("open isolated db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
 	return db
 }
 

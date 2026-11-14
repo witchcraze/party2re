@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"os"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -349,24 +348,18 @@ func TestAuctionConcurrentGoldConservation_Integration(t *testing.T) {
 	defer cancel()
 
 	svc := f.service(t, false)
-	var netDelta atomic.Int64
-	const transferAmount = 10
+	const transferAmount = 1
+	cfg := testutil.GetStressConfig()
 
-	res := testutil.RunConcurrentStressTest(t, testutil.ConcurrencyStressConfig{
-		Workers:      8,
-		OpsPerWorker: 5,
-	}, func(workerID, op int) error {
+	res := testutil.RunConcurrentStressTest(t, cfg, func(workerID, _ int) error {
 		opCtx, opCancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer opCancel()
-		if (workerID+op)%2 == 0 {
+		if workerID%2 == 0 {
 			_, err := svc.Send(opCtx, auction.SendRequest{
 				SenderCharacterID: f.actor.ID,
 				TargetCharacterID: f.peer.ID,
 				Gold:              transferAmount,
 			})
-			if err == nil {
-				netDelta.Add(transferAmount)
-			}
 			return err
 		}
 		_, err := svc.Send(opCtx, auction.SendRequest{
@@ -374,13 +367,10 @@ func TestAuctionConcurrentGoldConservation_Integration(t *testing.T) {
 			TargetCharacterID: f.actor.ID,
 			Gold:              transferAmount,
 		})
-		if err == nil {
-			netDelta.Add(-transferAmount)
-		}
 		return err
 	})
-	if res.Successes == 0 {
-		t.Fatalf("expected successful concurrent transfers, got failures=%d", res.Failures)
+	if res.Failures != 0 || res.Successes != res.TotalOps {
+		t.Fatalf("concurrent transfers failed: %+v", res)
 	}
 
 	sender, err := f.chars.FindByID(ctx, f.actor.ID)
@@ -394,7 +384,8 @@ func TestAuctionConcurrentGoldConservation_Integration(t *testing.T) {
 	if total := sender.Money + peer.Money; total != 20000 {
 		t.Fatalf("gold not conserved: sender=%d peer=%d total=%d", sender.Money, peer.Money, total)
 	}
-	if int64(peer.Money-10000) != netDelta.Load() {
-		t.Fatalf("delta mismatch: peer=%d netDelta=%d", peer.Money, netDelta.Load())
+	wantActor := 10000 - ((cfg.Workers+1)/2-cfg.Workers/2)*cfg.OpsPerWorker*transferAmount
+	if sender.Money != wantActor {
+		t.Fatalf("successful commands were lost or replayed: want=%d got=%d", wantActor, sender.Money)
 	}
 }
