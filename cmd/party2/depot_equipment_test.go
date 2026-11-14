@@ -53,10 +53,28 @@ func newDepotEquipmentFixture(t *testing.T, slot item.Slot, equipped bool) depot
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := core.charRepo.Delete(ctx, sender.ID); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := core.playerRepo.Delete(ctx, sender.PlayerID); err != nil {
+			t.Error(err)
+		}
+	})
 	recipient, err := database.CreateTestCharacterWithFunds(ctx, db, "Depot equipped recipient", 2000)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := core.charRepo.Delete(ctx, recipient.ID); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := core.playerRepo.Delete(ctx, recipient.PlayerID); err != nil {
+			t.Error(err)
+		}
+	})
 	sender.WeaponCustomName, sender.ArmorCustomName, sender.WeaponSeal = "Weapon name", "Armor name", 3
 	recipient.WeaponCustomName, recipient.ArmorCustomName, recipient.WeaponSeal = "Recipient weapon", "Recipient armor", 2
 	for _, char := range []corecharacter.Character{sender, recipient} {

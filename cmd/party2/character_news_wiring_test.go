@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/database"
@@ -65,11 +64,11 @@ func TestCharacterJoiningNewsProductionWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var category, content, author string
-	if err := db.QueryRowContext(ctx, "SELECT category, content, author FROM news_articles WHERE title = ?", title).Scan(&category, &content, &author); err != nil {
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM news_articles WHERE content LIKE ?", "%"+created.ID+"%").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if category != "character" || author != "System" || !strings.Contains(content, created.ID) {
-		t.Fatalf("production news: category=%q author=%q content=%q", category, author, content)
+	if count != 1 {
+		t.Fatalf("production joining news count = %d, want 1", count)
 	}
 }

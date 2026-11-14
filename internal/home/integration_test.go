@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -261,6 +262,41 @@ func TestHomeServiceIntegration(t *testing.T) {
 			t.Fatalf("expected only the retained phrase, got %+v, err=%v", talk, err)
 		}
 	}
+
+	t.Run("delivery flag rearming", func(t *testing.T) {
+		for range 2 {
+			if err := svc.AddDeliveryFlag(ctx, char1.ID, "money_transfer", "flag"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		notices, err := svc.ListDeliveryNotices(ctx, char1.ID, true)
+		if err != nil || len(notices) != 1 {
+			t.Fatalf("deduplicated flag = %+v, %v", notices, err)
+		}
+		if err := svc.ClearDeliveryNotices(ctx, char1.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.AddDeliveryFlag(ctx, char1.ID, "money_transfer", "flag"); err != nil {
+			t.Fatal(err)
+		}
+		notices, err = svc.ListDeliveryNotices(ctx, char1.ID, true)
+		if err != nil || len(notices) != 1 {
+			t.Fatalf("rearmed flag = %+v, %v", notices, err)
+		}
+		older, newer := id.New(), id.New()
+		for _, notice := range []home.DeliveryNotice{
+			{ID: older, CharacterID: char1.ID, NoticeType: "item_transfer", Message: "older", CreatedAt: notices[0].CreatedAt.Add(-time.Hour)},
+			{ID: newer, CharacterID: char1.ID, NoticeType: "item_transfer", Message: "newer", CreatedAt: notices[0].CreatedAt.Add(time.Hour)},
+		} {
+			if err := homeRepo.AddDeliveryNotice(ctx, notice); err != nil {
+				t.Fatal(err)
+			}
+		}
+		notices, err = svc.ListDeliveryNotices(ctx, char1.ID, true)
+		if err != nil || len(notices) != 3 || notices[0].ID != newer || notices[2].ID != older {
+			t.Fatalf("notice order = %+v, %v", notices, err)
+		}
+	})
 
 	// 5. Town House Estate (メケメケ村: 500G)
 	char1.Money = 1000
