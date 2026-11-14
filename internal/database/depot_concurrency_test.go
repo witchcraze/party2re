@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"os"
 	"slices"
@@ -20,6 +21,13 @@ import (
 // Sparse tables can select different locking plans, so copy only DDL into a fresh DB.
 func depotIsolatedDB(t *testing.T) *sql.DB {
 	t.Helper()
+	return sparseIsolatedDB(t, "party2_depot_test_", "players", "characters", "character_depots", "depot_items")
+}
+
+// sparseIsolatedDB creates a dedicated database and copies DDL for the given tables
+// (or all base tables when none are specified) so sparse-table optimizer plans are isolated.
+func sparseIsolatedDB(t *testing.T, prefix string, tables ...string) *sql.DB {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -35,7 +43,7 @@ func depotIsolatedDB(t *testing.T) *sql.DB {
 	})
 	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
 	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated depot tests")
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated sparse DB tests")
 	}
 	cfg, err := mysql.ParseDSN(adminDSN)
 	if err != nil {
@@ -50,7 +58,7 @@ func depotIsolatedDB(t *testing.T) *sql.DB {
 			t.Error(err)
 		}
 	})
-	name := "party2_depot_test_" + id.New()
+	name := prefix + id.New()
 	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
 		t.Fatal(err)
 	}
@@ -69,13 +77,48 @@ func depotIsolatedDB(t *testing.T) *sql.DB {
 			t.Error(err)
 		}
 	})
-	for _, table := range []string{"players", "characters", "character_depots", "depot_items"} {
+	if len(tables) == 0 {
+		rows, err := source.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for rows.Next() {
+			var tbl string
+			if err := rows.Scan(&tbl); err != nil {
+				rows.Close()
+				t.Fatal(err)
+			}
+			tables = append(tables, tbl)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		rows.Close()
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
+			t.Errorf("restore foreign key checks: %v", err)
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn }) //lint:ignore error-swallow marks connection bad so the pool discards it
+		}
+		if err := conn.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range tables {
 		var tableName, ddl string
 		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.ExecContext(ctx, ddl); err != nil {
-			t.Fatal(err)
+		if _, err := conn.ExecContext(ctx, ddl); err != nil {
+			t.Fatalf("copy %s: %v", table, err)
 		}
 	}
 	return db
