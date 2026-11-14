@@ -68,6 +68,9 @@ func (h *Handler) depotSceneData(ctx context.Context, r playercontext.Result) (a
 var depotFacility = facility{
 	title: "預かり所", commands: []string{"depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort"},
 	read: (*Handler).depotSceneData, placeLog: true,
+	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+		return scenePresentation{next: data.(DepotSceneData).Page.Next}
+	},
 	// Lines with capacities ($max_depot) are omitted until those facts are wired.
 	npc: &npcProfile{name: "@ニキータ", words: []string{
 		"ここは預かり所だけど、何か用かい？", "転職回数が増えるごとに預けられる個数も増えていくぜ",

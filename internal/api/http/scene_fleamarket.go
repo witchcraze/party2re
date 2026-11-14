@@ -44,6 +44,9 @@ func (h *Handler) fleaMarketSceneData(ctx context.Context, r playercontext.Resul
 
 var fleaMarketFacility = facility{
 	title: "フリーマーケット", commands: []string{"fleamarket_list", "fleamarket_purchase", "fleamarket_cancel"}, read: (*Handler).fleaMarketSceneData, placeLog: true,
+	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+		return scenePresentation{next: data.(FleaMarketSceneData).Page.Next}
+	},
 	npc: &npcProfile{name: "@FMGKDP", words: []string{
 		"ここはフリーマーケットだ。物の売り買いができるぜ", "物の価値は人それぞれだ。思いのほか良い物があるかもな",
 		"１人で出せる品は限りがあるから気をつけな", "俺の名前を知らないようじゃピヨッコだ",

@@ -70,5 +70,11 @@ func townDistrictFacility(name string) facility {
 		bind: func(n playercontext.Selection, _ string) map[string]map[string]any {
 			return map[string]map[string]any{"store_build": {"town_id": n.Destination}}
 		},
+		present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+			if data, ok := data.(StoreSceneData); ok {
+				return scenePresentation{title: &data.Details.Store.StoreName}
+			}
+			return scenePresentation{}
+		},
 		read: (*Handler).townDistrictSceneData, placeLog: true}
 }
