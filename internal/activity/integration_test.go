@@ -220,18 +220,38 @@ func TestTrainingScheduledActionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 
 	valkeyClient, err := vk.NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer valkeyClient.Close()
+	t.Cleanup(valkeyClient.Close)
 
 	characters, _ := database.NewCharacterRepository(db)
 	characterService, _ := character.NewService(characters)
 	player, _ := database.CreateTestPlayer(ctx, db)
 	value, _ := characterService.Create(ctx, player.ID, id.New()[:8])
+
+	actorKey := "party2:scheduled:actor:" + value.ID
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		members, err := valkeyClient.Do(cleanupCtx, valkeyClient.B().Smembers().Key(actorKey).Build()).AsStrSlice()
+		if err != nil {
+			t.Errorf("list scheduled actions for %s: %v", value.ID, err)
+		}
+		for _, actionID := range members {
+			if err := valkeyClient.Do(cleanupCtx, valkeyClient.B().Del().Key("party2:scheduled:action:"+actionID, "party2:scheduled:lock:"+actionID).Build()).Error(); err != nil {
+				t.Errorf("delete scheduled action %s: %v", actionID, err)
+			}
+			if err := valkeyClient.Do(cleanupCtx, valkeyClient.B().Zrem().Key("party2:scheduled:pending").Member(actionID).Build()).Error(); err != nil {
+				t.Errorf("remove scheduled action %s from pending queue: %v", actionID, err)
+			}
+		}
+		if err := valkeyClient.Do(cleanupCtx, valkeyClient.B().Del().Key(actorKey).Build()).Error(); err != nil {
+			t.Errorf("delete scheduled actor index %s: %v", actorKey, err)
+		}
+	})
 
 	start := time.Now().UTC()
 	clock := &fixedClock{now: start}
@@ -249,20 +269,27 @@ func TestTrainingScheduledActionIntegration(t *testing.T) {
 
 	clock.now = scheduled.AvailableAt
 
-	due, err := schedRepo.FetchDue(ctx, clock.now, 10)
+	pending, err := schedRepo.FindPendingByActorID(ctx, value.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var foundAction *core_scheduling.ScheduledAction
-	for _, a := range due {
-		if a.Params["activity_id"] == scheduled.ID {
-			foundAction = &a
+	for i := range pending {
+		if pending[i].Params["activity_id"] == scheduled.ID {
+			foundAction = &pending[i]
 			break
 		}
 	}
 	if foundAction == nil {
-		t.Fatal("ScheduledAction was not enqueued or fetched")
+		t.Fatal("ScheduledAction was not enqueued for actor")
+	}
+	score, err := valkeyClient.Do(ctx, valkeyClient.B().Zscore().Key("party2:scheduled:pending").Member(foundAction.ID).Build()).AsFloat64()
+	if err != nil {
+		t.Fatalf("ScheduledAction %s missing from pending queue: %v", foundAction.ID, err)
+	}
+	if score > float64(clock.now.Unix()) {
+		t.Fatalf("ScheduledAction %s score = %v, want <= %d", foundAction.ID, score, clock.now.Unix())
 	}
 
 	handler := activity.NewTrainingHandler(service)
@@ -274,6 +301,4 @@ func TestTrainingScheduledActionIntegration(t *testing.T) {
 	if restoredCharacter.Experience != activity.TrainingReward {
 		t.Fatalf("restored character experience = %d, want %d", restoredCharacter.Experience, activity.TrainingReward)
 	}
-
-	valkeyClient.Do(ctx, valkeyClient.B().Del().Key("party2:scheduled:action:"+foundAction.ID).Build())
 }
