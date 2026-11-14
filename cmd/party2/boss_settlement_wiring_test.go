@@ -10,6 +10,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/collection"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
@@ -139,4 +140,5 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 	if after.legends != 1 || after.histories != 1 || after.completions != 1 {
 		t.Fatalf("retry state: %+v", after)
 	}
+	assertTrajectoryKind(t, db, char.ID, corecharacter.MemoryCompletion)
 }
