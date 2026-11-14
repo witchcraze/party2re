@@ -4,12 +4,27 @@
 
 Tests specify and protect game behavior. The most valuable tests are those that remain valid when implementation details change.
 
-1. **Domain invariants and game rules**: Progression calculations, job requirements, battle outcomes, item ownership/equipment rules, currency invariants, scheduled actions.
-2. **Observable component behavior**: Public service contracts and state transitions.
-3. **Integration flows**: Cross-package transactions and API contracts.
-4. **Regression tests**: A reproducible bug must receive a failing regression test before being fixed.
-
 Avoid tests tightly coupled to private data structures; a refactor preserving behavior should require minimal test churn.
+
+### 1.1 Layers and the Cases Each Owns
+
+Verify a case once, at the lowest layer that can detect its defect. A lower layer runs faster, fails closer to the cause and has one place to change when the rule changes. A higher layer checks only what first exists at its level. Coverage means every case has an owning layer, not that every case passes through every layer.
+
+| Layer | Real | Owns | Leaves to | Why here |
+| --- | --- | --- | --- | --- |
+| Domain and pure unit | Rules and calculations | Every branch, boundary value and state transition of a game rule | Persistence and transport | Only this layer can afford every branch, and a failure names the rule |
+| Service with repository | One feature's service, SQL and Valkey | Transaction boundaries, locks, rollback, and every rejection of that feature with its effect on stored state | Rule arithmetic, to the domain layer | A partial write is visible only in the real store |
+| Concurrency harness | Real commits from independent workers | Exactly-once effects and conserved assets under contention | Single-actor outcomes, to the service layer | Races need concurrent transactions |
+| Feature command over HTTP | One feature behind the Gateway; authentication and navigation doubled | Parameter validation, each rejection's status and code, outcome shape, the scene in which the command is offered | The rule behind a rejection, to the service layer | The transport contract is per command, and doubles keep every rejection reachable |
+| Dispatcher fixture | Dispatcher and context refresh; stores doubled | Injected storage or refresh failures, known outcomes that survive them, recovery by GET | Anything that needs a real store | A failure can be injected only through a double |
+| Composition | Production service groups and adapters | Each hook and adapter reaches the service it is meant to | Feature behavior, to the feature's own layers | Wiring defects exist only in the composition root |
+| [Gameplay scenario](#55-gameplay-scenarios) | Everything behind the router | Journeys and rejections that exist only when everything is composed | Feature-specific cases, injected failures and numeric boundaries | Sessions, ownership, restart and state carried between features cannot be assembled lower |
+| [Architecture checks](#6-mechanical-ast-static-analysis-linters) | Source | Structural rules | Runtime behavior | A structural rule holds for code no test executes |
+| [Benchmarks](#7-continuous-performance-verification--benchmarking) | Timing | Throughput and latency regressions | Correctness | Wall-clock assertions are unstable in functional tests |
+
+[Battle test selection](#53-battle-test-selection) subdivides the domain and service layers for combat.
+
+A reproducible bug receives a failing regression test before the fix, at the lowest layer that can detect it. When a higher layer caught a defect that a lower layer could have detected, add the missing case there; a defect that exists only through composition keeps its test at the higher layer.
 
 ---
 
@@ -375,15 +390,13 @@ callbacks must honor cancellation themselves.
 
 ### 5.5 Gameplay Scenarios
 
-A gameplay scenario plays one continuous journey through the public routes. Choose the layer by what has to be real:
+A gameplay scenario plays one continuous journey through the public routes of `wireApp`, as in [`cmd/party2/gameplay_scenario_test.go`](../../cmd/party2/gameplay_scenario_test.go). Its place among the [layers](#11-layers-and-the-cases-each-owns) fixes what it contains:
 
-| Subject | Layer |
-| --- | --- |
-| Production composition, real MariaDB/Valkey, authentication, ownership, persistence across restart | Scenario over `wireApp` in [`cmd/party2/gameplay_scenario_test.go`](../../cmd/party2/gameplay_scenario_test.go) |
-| Injected storage or refresh failures, and recovery from a known outcome | HTTP fixtures with doubles, as in [`action_dispatcher_integration_test.go`](../../internal/api/http/action_dispatcher_integration_test.go) |
-| Numeric combat results | [Battle test selection](#53-battle-test-selection) |
+- **Normal cases**: a representative journey per mode, not every branch. Prefer journeys that move assets or cannot be undone.
+- **Abnormal cases**: only rejections that arise from composition, namely real sessions and ownership, the action wait, sleep and unfinished work, and continuation after restart. One case per kind and per entry path is enough: the action dispatcher is one path, and each route outside it is its own. Assert that the rejection left state unchanged.
+- **Excluded**: parameter validation, rejections specific to one feature, injected failures and numeric boundaries. When their owning layer lacks the case, add it there.
 
-Scenarios over `wireApp` follow these rules:
+Scenarios follow these rules:
 
 - Replace nothing with a double. Register accounts through the public routes and issue only destinations, commands and parameters that the preceding observation or outcome offered.
 - Take expected values from legacy rules and invariants such as asset conservation and ownership, not from the response under test.
