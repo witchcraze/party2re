@@ -14927,26 +14927,6 @@
         ],
         "type": "object"
       },
-      "RescuePenaltyResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "is_under_penalty": {
-            "type": "boolean"
-          },
-          "remaining_seconds": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "is_under_penalty",
-          "remaining_seconds"
-        ],
-        "type": "object"
-      },
       "RescueRescueRecord": {
         "additionalProperties": false,
         "description": "Gateway rescue_request result in CharacterActionSuccess.result: id, character_id, reason, penalty_seconds and created_at, including idle/no-op results. A failed context refresh preserves the result; recover with GET only.",
@@ -33586,79 +33566,6 @@
         "summary": "Retrieve an owned personal replay archive by ID",
         "tags": [
           "Replay"
-        ]
-      }
-    },
-    "/rescues/penalty": {
-      "get": {
-        "operationId": "getRescuePenalty",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "query",
-            "name": "character_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RescuePenaltyResponse"
-                }
-              }
-            },
-            "description": "Rescue penalty status"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get emergency rescue penalty status",
-        "tags": [
-          "Rescues"
         ]
       }
     },

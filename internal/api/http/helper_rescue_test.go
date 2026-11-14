@@ -60,7 +60,6 @@ func (m *mockHelperService) CompleteQuest(ctx context.Context, characterID, ques
 
 type mockRescueService struct {
 	emergencyRescueFn func(ctx context.Context, characterID, reason string, now time.Time) (rescue.RescueRecord, error)
-	isUnderPenaltyFn  func(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error)
 	unstuckFn         func(ctx context.Context, characterID string) error
 }
 
@@ -75,13 +74,6 @@ func (m *mockRescueService) EmergencyRescue(ctx context.Context, characterID, re
 		PenaltySeconds: 600,
 		CreatedAt:      now,
 	}, nil
-}
-
-func (m *mockRescueService) IsUnderPenalty(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error) {
-	if m.isUnderPenaltyFn != nil {
-		return m.isUnderPenaltyFn(ctx, characterID, now)
-	}
-	return false, 0, nil
 }
 
 func (m *mockRescueService) Unstuck(ctx context.Context, characterID string) error {
@@ -259,45 +251,6 @@ func TestHelperAndRescueEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusConflict {
 			t.Errorf("expected 409, got %d (body: %s)", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("GET /rescues/penalty - unauthorized", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/rescues/penalty?character_id=char-1", nil)
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("expected 401, got %d", rec.Code)
-		}
-	})
-
-	t.Run("GET /rescues/penalty - forbidden for other player", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/rescues/penalty?character_id=char-2", nil)
-		req.Header.Set("Authorization", "Bearer valid-session")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusForbidden {
-			t.Errorf("expected 403, got %d", rec.Code)
-		}
-	})
-
-	t.Run("GET /rescues/penalty - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/rescues/penalty?character_id=char-1", nil)
-		req.Header.Set("Authorization", "Bearer valid-session")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", rec.Code)
-		}
-		var res map[string]any
-		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
-			t.Fatalf("failed to unmarshal penalty response: %v", err)
-		}
-		if res["is_under_penalty"] != false {
-			t.Errorf("expected is_under_penalty false, got %v", res["is_under_penalty"])
 		}
 	})
 }

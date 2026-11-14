@@ -222,23 +222,3 @@ func (s *Service) applyPenalty(ctx context.Context, rec RescueRecord, now time.T
 	}
 	return s.rescues.MarkApplied(ctx, rec.ID, now)
 }
-
-// IsUnderPenalty reports the latest rescue's owed sleep, including an unconfirmed one.
-func (s *Service) IsUnderPenalty(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return false, 0, ErrInvalidCharacterID
-	}
-
-	rec, err := s.rescues.FindLatestByCharacterID(ctx, characterID)
-	if err != nil {
-		if errors.Is(err, ErrNoRescueRecord) {
-			return false, 0, nil
-		}
-		return false, 0, err
-	}
-
-	if remaining := rec.SleepUntil.Sub(now); remaining > 0 {
-		return true, remaining, nil
-	}
-	return false, 0, nil
-}
