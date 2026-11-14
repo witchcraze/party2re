@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/character"
@@ -25,6 +26,25 @@ import (
 type failingGuildPoints struct{ err error }
 
 func (g *failingGuildPoints) AddGuildPoints(context.Context, string, int) error { return g.err }
+
+// lockedNavigationStore synchronizes concurrent navigation loads/saves in gateway tests.
+type lockedNavigationStore struct {
+	mu        sync.Mutex
+	selection playercontext.Selection
+}
+
+func (s *lockedNavigationStore) Load(context.Context, string) (playercontext.Selection, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.selection, nil
+}
+
+func (s *lockedNavigationStore) Save(_ context.Context, _ string, n playercontext.Selection) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.selection = n
+	return nil
+}
 
 type storeDB struct {
 	db      *sql.DB

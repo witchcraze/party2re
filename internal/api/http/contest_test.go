@@ -111,7 +111,13 @@ func (s *stubContestService) ReconcileSettlementSchedule(ctx context.Context) er
 func TestContestPublicEndpoints(t *testing.T) {
 	stub := &stubContestService{
 		getOverviewFn: func(ctx context.Context) (contest.ContestOverview, error) {
-			return contest.ContestOverview{MinEntries: 5}, nil
+			return contest.ContestOverview{
+				MinEntries: 5,
+				ActiveRound: &contest.ContestRound{
+					Round:  1,
+					Status: contest.StatusActive,
+				},
+			}, nil
 		},
 		getCurrentEntriesFn: func(ctx context.Context) ([]contest.ContestEntry, error) {
 			return []contest.ContestEntry{{ID: "e1", Title: "Entry 1"}}, nil
@@ -143,10 +149,14 @@ func TestContestPublicEndpoints(t *testing.T) {
 		t.Fatalf("GET /contest/venue failed: resp=%v, err=%v", resp, err)
 	}
 	var venue struct {
-		MinEntries int `json:"min_entries"`
+		MinEntries  int                   `json:"min_entries"`
+		ActiveRound *contest.ContestRound `json:"active_round"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&venue); err != nil {
 		t.Fatalf("failed to decode GET /contest/venue response: %v", err)
+	}
+	if venue.MinEntries != 5 || venue.ActiveRound == nil || venue.ActiveRound.Round != 1 {
+		t.Fatalf("unexpected GET /contest/venue payload: %+v", venue)
 	}
 
 	// 2. GET /contest/current

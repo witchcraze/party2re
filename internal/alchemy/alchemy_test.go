@@ -958,3 +958,52 @@ func TestViewRecipes_LocksCharacterBeforeSynthesisState(t *testing.T) {
 		t.Fatalf("lock order = %v, want %v", log, want)
 	}
 }
+
+func TestClaim_FullDepotDeliversOverCapacity(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	svc, charRepo, depotRepo, alchemyRepo, char := setupTestService(t, &now)
+
+	char.JobLevel = 1
+	charRepo.characters[char.ID] = *char
+
+	dep, err := depot.NewDepot(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dep.RefreshCapacity(char.JobLevel, char.OverDepot)
+	for len(dep.Items) < dep.Capacity {
+		filler, err := coreitem.NewInstance("weapon-01", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := dep.AddItem(filler, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+
+	alchemyRepo.states[char.ID] = Synthesis{
+		CharacterID: char.ID,
+		RecipeID:    "rec-super-herb",
+		State:       StateCompleted,
+	}
+
+	// alchemy.cgi:183-201 finishes through send_item, which ignores capacity.
+	res, err := svc.Claim(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("Claim on full depot failed: %v", err)
+	}
+	if res.CreatedItem.DefinitionID != "item-002" {
+		t.Fatalf("unexpected product: %+v", res.CreatedItem)
+	}
+	after, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Items) <= dep.Capacity || after.Quantity("item-002") != 1 {
+		t.Fatalf("expected delivery above capacity %d, got %d items (product qty=%d)", dep.Capacity, len(after.Items), after.Quantity("item-002"))
+	}
+}

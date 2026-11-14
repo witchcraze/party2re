@@ -292,6 +292,9 @@ func TestService_DepositAndWithdraw(t *testing.T) {
 		if _, err := service.Deposit(ctx, "c1", 1000000); !errors.Is(err, bank.ErrInsufficientFunds) {
 			t.Fatalf("expected ErrInsufficientFunds, got %v", err)
 		}
+		if repo.chars["c1"].Money != 400000 || repo.chars["c1"].Deposit != 300000 {
+			t.Fatalf("rejected deposit mutated persisted funds: %+v", repo.chars["c1"])
+		}
 	})
 
 	t.Run("deposit limit exceeded", func(t *testing.T) {
