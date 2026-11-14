@@ -47,7 +47,7 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 	}
 	for _, def := range playercontext.DefaultCatalog {
 		eligible := slices.Contains(result.AvailableActions, def.ID)
-		if def.ActivityKind == "" && def.ID != "home_wake" && def.ID != "rescue_request" && def.ID != "presence_refresh" {
+		if def.ActivityKind == "" && !def.ActivityExempt {
 			continue
 		}
 		if !eligible {
@@ -56,10 +56,10 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 		connected := h.actionCommands[def.ID].prepare != nil
 		support := SceneActionSupport{Action: def.ID, Connected: connected, Mode: "continuation"}
 		switch {
-		case def.ID == "presence_refresh": // the page reload is neither a continuation nor recovery
-			support.Mode, support.EntryEligible = "", true
-		case def.Recovery || def.ID == "home_wake" || def.ID == "rescue_request":
+		case def.Recovery:
 			support.Mode = "recovery"
+		case def.ActivityKind == "":
+			support.Mode, support.EntryEligible = "", true
 		}
 		scene.Support.Actions = append(scene.Support.Actions, support)
 		if !connected {

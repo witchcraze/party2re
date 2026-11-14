@@ -44,6 +44,12 @@ type ActionDefinition struct {
 	RequiredGates  GateFlags `json:"required_gates"`
 	ActivityKind   string    `json:"activity_kind,omitempty"`
 	Recovery       bool      `json:"recovery,omitempty"`
+	// ActivityExempt permits ordinary gates to run even during an activity.
+	ActivityExempt bool `json:"-"`
+	// GlobalSupport includes the action in every facility's support list.
+	GlobalSupport bool `json:"-"`
+	// RequiresWake admits only pending wake recovery after the sleep timer expires.
+	RequiresWake bool `json:"-"`
 	// WaitExempt explains why success does not start the legacy action wait;
 	// empty means it does. WaitRecovery, WaitSpeech and WaitReload are also never blocked.
 	WaitExempt WaitExemption `json:"-"`
@@ -136,6 +142,10 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{
 		ID:             "home_wake",
 		WaitExempt:     WaitRecovery,
+		Recovery:       true,
+		ActivityExempt: true,
+		GlobalSupport:  true,
+		RequiresWake:   true,
 		Label:          "目を覚ます",
 		Category:       "home",
 		OperationID:    "executeCharacterAction",
@@ -408,10 +418,13 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	},
 	// Common しらべる on a player (lib/system.cgi shiraberu): usable in every
 	// scene, so it carries no location gate; the private $mes starts no wait.
-	{ID: "player_inspect", Label: "しらべる", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck, WaitExempt: WaitPrivate},
+	{ID: "player_inspect", Label: "しらべる", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck, WaitExempt: WaitPrivate, GlobalSupport: true},
 	{
 		ID:             "rescue_request",
 		WaitExempt:     WaitRecovery,
+		Recovery:       true,
+		ActivityExempt: true,
+		GlobalSupport:  true,
 		Label:          "緊急救出要請",
 		Category:       "social",
 		OperationID:    "executeCharacterAction",
@@ -420,7 +433,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredGates: 0,
 	},
 	// The legacy page reload; its only effect is the dispatcher's member refresh.
-	{ID: "presence_refresh", Label: "更新", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, WaitExempt: WaitReload},
+	{ID: "presence_refresh", Label: "更新", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, WaitExempt: WaitReload, ActivityExempt: true, GlobalSupport: true},
 }, casinoCatalog...), exileCatalog...), continuationCatalog...)
 
 // AllActions returns a slice copy of the canonical default action catalog.
