@@ -156,13 +156,8 @@ func TestEmergencyRescueSuccess(t *testing.T) {
 	if len(rescueRepo.records) != 1 || rescueRepo.records[0].AppliedAt.IsZero() {
 		t.Fatalf("expected one confirmed record, got %+v", rescueRepo.records)
 	}
-
-	underPenalty, remaining, err := svc.IsUnderPenalty(ctx, "char-1", now.Add(time.Minute))
-	if err != nil || !underPenalty || remaining != 9*time.Minute {
-		t.Fatalf("after 1 min: under=%v remaining=%v err=%v", underPenalty, remaining, err)
-	}
-	if underPenalty, _, err := svc.IsUnderPenalty(ctx, "char-1", now.Add(11*time.Minute)); err != nil || underPenalty {
-		t.Fatalf("after 11 min: under=%v err=%v", underPenalty, err)
+	if got := rescueRepo.records[0].SleepUntil.Sub(now); got != DefaultPenaltySeconds*time.Second {
+		t.Fatalf("sleep_until = now+%v, want %ds", got, DefaultPenaltySeconds)
 	}
 }
 
@@ -233,9 +228,6 @@ func TestEmergencyRescue_IdleCharacterReturnsEarlyWithZeroPenalty(t *testing.T) 
 	if locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "char-1"); err != nil || locked {
 		t.Fatalf("expected no sleep for idle character, got locked=%v err=%v", locked, err)
 	}
-	if underPenalty, remaining, err := svc.IsUnderPenalty(ctx, "char-1", now); err != nil || underPenalty || remaining != 0 {
-		t.Fatalf("expected no penalty, got %v %v %v", underPenalty, remaining, err)
-	}
 }
 
 // Every failure point keeps existing sleep and leaves either no change or an
@@ -283,8 +275,8 @@ func TestEmergencyRescue_PartialFailuresResumeWithOnePenalty(t *testing.T) {
 			if cleared := !cleaner.hasWork("char-1"); cleared != tc.wantCleared {
 				t.Fatalf("work cleared = %v, want %v", cleared, tc.wantCleared)
 			}
-			if under, _, err := svc.IsUnderPenalty(ctx, "char-1", now); err != nil || under != tc.wantRecord {
-				t.Fatalf("owed penalty visible = %v (err %v), want %v", under, err, tc.wantRecord)
+			if tc.wantRecord && repo.records[0].SleepUntil.Sub(now) <= time.Hour {
+				t.Fatalf("owed deadline not recorded: %+v", repo.records[0])
 			}
 
 			*repo = stubRescueRepo{records: repo.records}

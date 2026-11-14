@@ -9,13 +9,13 @@ import (
 	"testing"
 )
 
-func TestRetiredRescueRequestDoesNotReadOrExecute(t *testing.T) {
+func TestRetiredRescueRoutesDoNotReadOrExecute(t *testing.T) {
 	for _, configured := range []bool{false, true} {
 		var service RescueService
 		if configured {
 			service = &struct{ RescueService }{}
 		}
-		// Nil embedded methods panic if the retired path reaches auth or any service.
+		// Nil embedded methods panic if a retired path reaches auth or any service.
 		h, err := NewHandler(&struct{ PlayerService }{}, &struct{ CharacterService }{},
 			&struct{ AdventureService }{}, &struct{ ShopService }{}, WithRescue(service))
 		if err != nil {
@@ -23,19 +23,26 @@ func TestRetiredRescueRequestDoesNotReadOrExecute(t *testing.T) {
 		}
 		router := h.Router()
 		for _, actor := range []struct{ id, token string }{{"hero", ""}, {"hero", "session"}, {"other", "session"}, {"missing", "session"}} {
-			r := httptest.NewRequest(http.MethodPost, "/rescues/request", strings.NewReader(`{"character_id":"`+actor.id+`","reason":"stuck"}`))
-			r.Header.Set("Authorization", "Bearer "+actor.token)
-			r.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
-			router.ServeHTTP(w, r)
-			if w.Code != http.StatusNotFound {
-				t.Fatalf("configured=%t actor=%s: status=%d body=%s", configured, actor.id, w.Code, w.Body.String())
+			for _, route := range []struct{ method, path, body string }{
+				{http.MethodPost, "/rescues/request", `{"character_id":"` + actor.id + `","reason":"stuck"}`},
+				{http.MethodGet, "/rescues/penalty?character_id=" + actor.id, ""},
+			} {
+				r := httptest.NewRequest(route.method, route.path, strings.NewReader(route.body))
+				r.Header.Set("Authorization", "Bearer "+actor.token)
+				if route.body != "" {
+					r.Header.Set("Content-Type", "application/json")
+				}
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, r)
+				if w.Code != http.StatusNotFound {
+					t.Fatalf("configured=%t %s %s actor=%s: status=%d body=%s", configured, route.method, route.path, actor.id, w.Code, w.Body.String())
+				}
 			}
 		}
 	}
 }
 
-func TestOpenAPIRescueRetirementKeepsReadAndGateway(t *testing.T) {
+func TestOpenAPIRescueRetirementKeepsGateway(t *testing.T) {
 	var spec struct {
 		Paths      map[string]map[string]json.RawMessage
 		Components struct{ Schemas map[string]json.RawMessage }
@@ -43,11 +50,15 @@ func TestOpenAPIRescueRetirementKeepsReadAndGateway(t *testing.T) {
 	if err := json.Unmarshal(OpenAPISpec(), &spec); err != nil {
 		t.Fatal(err)
 	}
-	if _, exists := spec.Paths["/rescues/request"]; exists {
-		t.Error("retired Rescue POST remains in OpenAPI")
+	for _, retired := range []string{"/rescues/request", "/rescues/penalty"} {
+		if _, exists := spec.Paths[retired]; exists {
+			t.Errorf("retired Rescue path remains in OpenAPI: %s", retired)
+		}
+	}
+	if _, exists := spec.Components.Schemas["RescuePenaltyResponse"]; exists {
+		t.Error("retired RescuePenaltyResponse schema remains in OpenAPI")
 	}
 	for _, route := range []struct{ method, path string }{
-		{"get", "/rescues/penalty"},
 		{"get", "/helpers/quests"},
 		{"post", "/helpers/complete"},
 		{"post", "/admin/characters/{id}/unstuck"},

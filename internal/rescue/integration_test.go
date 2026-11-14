@@ -92,7 +92,7 @@ func TestRescueServiceIntegration_ConcurrentRescueAddsOnePenalty(t *testing.T) {
 	if pending, err := schedService.FindPendingByActorID(ctx, char.ID); err != nil || len(pending) != 0 {
 		t.Fatalf("scheduled work remains: %v (err %v)", pending, err)
 	}
-	if under, remaining, err := svc.IsUnderPenalty(ctx, char.ID, now.Add(10*time.Second)); err != nil || !under || remaining < time.Hour {
-		t.Fatalf("penalty status = %v %v (err %v)", under, remaining, err)
+	if latest, err := rescueRepo.FindLatestByCharacterID(ctx, char.ID); err != nil || !latest.SleepUntil.After(now.Add(time.Hour)) {
+		t.Fatalf("latest rescue record = %+v (err %v)", latest, err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -300,4 +301,111 @@ func TestRescueGatewayRejectionsAndUnknownFailures(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestRescueContextSleepWindow(t *testing.T) {
+	getContext := func(t *testing.T, router http.Handler, expectedCtx context.Context) PlayerContextResponse {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/characters/hero/context", nil).WithContext(expectedCtx)
+		r.Header.Set("Authorization", "Bearer session")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET context status=%d body=%s", w.Code, w.Body.String())
+		}
+		var resp PlayerContextResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	t.Run("awake rescued character exposes sleep window and remaining time", func(t *testing.T) {
+		f := &rescueGatewayFixture{gatewayFixture: newGatewayFixture(t)}
+		f.expectedContext = context.WithValue(context.Background(), struct{}{}, "rescue-context")
+		f.actions = []scheduling.ScheduledAction{{ID: "work", ActorID: "hero", State: scheduling.StatePending, ExecuteAt: time.Now().Add(time.Hour)}}
+		timers := timer.NewService(nil)
+		router := f.router(timers)
+
+		status, _ := f.request(router, `,"params":{"reason":"stuck"}`)
+		if status != http.StatusOK {
+			t.Fatalf("rescue_request status=%d", status)
+		}
+
+		ctxResp := getContext(t, router, f.expectedContext)
+		if !ctxResp.Character.IsSleeping || ctxResp.Scene.LocationID != "sleep" {
+			t.Fatalf("rescued context did not enter sleep: char=%+v scene=%+v", ctxResp.Character, ctxResp.Scene)
+		}
+		if len(ctxResp.OngoingActions) != 1 {
+			t.Fatalf("expected 1 sleep ongoing action, got %+v", ctxResp.OngoingActions)
+		}
+		sleep := ctxResp.OngoingActions[0]
+		if sleep.ID != "sleep" || sleep.ActionType != "home_sleep" || sleep.IsReady {
+			t.Fatalf("unexpected sleep entry: %+v", sleep)
+		}
+		if sleep.RemainingSeconds < int64(rescue.DefaultPenaltySeconds-5) || sleep.RemainingSeconds > int64(rescue.DefaultPenaltySeconds) {
+			t.Fatalf("remaining_seconds=%d, want ~%d", sleep.RemainingSeconds, rescue.DefaultPenaltySeconds)
+		}
+		if sleep.ExecuteAt.Before(f.before.Add((rescue.DefaultPenaltySeconds-5)*time.Second)) || sleep.ExecuteAt.After(f.after.Add((rescue.DefaultPenaltySeconds+5)*time.Second)) {
+			t.Fatalf("execute_at=%s outside expected penalty window [%s..%s]+600s", sleep.ExecuteAt, f.before, f.after)
+		}
+		var actions []string
+		for _, a := range ctxResp.AvailableActions {
+			actions = append(actions, a.Action)
+		}
+		if strings.Contains(strings.Join(actions, ","), "home_wake") {
+			t.Fatalf("awake rescue penalty must not require home_wake: %v", actions)
+		}
+
+		if err := timers.ReleaseLock(f.expectedContext, timer.CategorySleep, "hero"); err != nil {
+			t.Fatal(err)
+		}
+		afterExpiry := getContext(t, router, f.expectedContext)
+		if afterExpiry.Character.IsSleeping || len(afterExpiry.OngoingActions) != 0 {
+			t.Fatalf("sleep remained after penalty expiry: char=%+v ongoing=%+v", afterExpiry.Character, afterExpiry.OngoingActions)
+		}
+	})
+
+	t.Run("sleeping rescued character preserves and extends sleep window", func(t *testing.T) {
+		f := &rescueGatewayFixture{gatewayFixture: newGatewayFixture(t)}
+		f.expectedContext = context.WithValue(context.Background(), struct{}{}, "sleeping-rescue-context")
+		f.actions = []scheduling.ScheduledAction{{ID: "work", ActorID: "hero", State: scheduling.StatePending, ExecuteAt: time.Now().Add(time.Hour)}}
+		timers := timer.NewService(nil)
+		for _, cat := range []string{timer.CategorySleep, timer.CategoryAsleep} {
+			if err := timers.SetLock(f.expectedContext, cat, "hero", time.Hour); err != nil {
+				t.Fatal(err)
+			}
+		}
+		router := f.router(timers)
+
+		status, _ := f.request(router, `,"params":{"reason":"stuck"}`)
+		if status != http.StatusOK {
+			t.Fatalf("rescue_request status=%d", status)
+		}
+
+		ctxResp := getContext(t, router, f.expectedContext)
+		if !ctxResp.Character.IsSleeping || len(ctxResp.OngoingActions) != 1 {
+			t.Fatalf("expected sleeping context with 1 action, got %+v", ctxResp)
+		}
+		sleep := ctxResp.OngoingActions[0]
+		if sleep.ID != "sleep" || sleep.IsReady || sleep.RemainingSeconds < 4190 || sleep.RemainingSeconds > 4205 {
+			t.Fatalf("remaining_seconds=%d, want ~4200s (1h + 600s)", sleep.RemainingSeconds)
+		}
+	})
+
+	t.Run("idle rescued character adds no sleep window", func(t *testing.T) {
+		f := &rescueGatewayFixture{gatewayFixture: newGatewayFixture(t)}
+		f.expectedContext = context.WithValue(context.Background(), struct{}{}, "idle-rescue-context")
+		router := f.router(timer.NewService(nil))
+
+		status, _ := f.request(router, `,"params":{"reason":"accidental"}`)
+		if status != http.StatusOK {
+			t.Fatalf("rescue_request status=%d", status)
+		}
+
+		ctxResp := getContext(t, router, f.expectedContext)
+		if ctxResp.Character.IsSleeping || len(ctxResp.OngoingActions) != 0 {
+			t.Fatalf("idle rescue created sleep observation: %+v", ctxResp)
+		}
+	})
 }

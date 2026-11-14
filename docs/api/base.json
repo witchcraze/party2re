@@ -16381,26 +16381,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "RescuePenaltyResponse": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "is_under_penalty": {
-            "type": "boolean"
-          },
-          "remaining_seconds": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "is_under_penalty",
-          "remaining_seconds"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "RescueRescueRecord": {
         "description": "Gateway rescue_request result in CharacterActionSuccess.result: id, character_id, reason, penalty_seconds and created_at, including idle/no-op results. A failed context refresh preserves the result; recover with GET only.",
         "properties": {

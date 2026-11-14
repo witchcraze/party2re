@@ -114,7 +114,6 @@ type HelperService interface {
 // RescueService defines the emergency rescue operations exposed over HTTP.
 type RescueService interface {
 	EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (rescue.RescueRecord, error)
-	IsUnderPenalty(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error)
 	Unstuck(ctx context.Context, characterID string) error
 }
 
@@ -361,8 +360,6 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("GET /helpers/quests", h.handleListHelperQuests)
 	mux.HandleFunc("POST /helpers/complete", h.handleCompleteHelperQuest)
-
-	mux.HandleFunc("GET /rescues/penalty", h.handleGetRescuePenalty)
 
 	mux.HandleFunc("GET /news", h.handleListNews)
 	mux.HandleFunc("GET /news/{id}", h.handleGetNews)
