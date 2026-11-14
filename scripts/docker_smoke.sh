@@ -71,8 +71,12 @@ while true; do
             base_url="http://${host_addr}"
         fi
     fi
-    if [ -n "$base_url" ] && curl -fsS "${base_url}/health" >/dev/null 2>&1; then
-        break
+    remaining=$((deadline - SECONDS))
+    if [ -n "$base_url" ] && [ "$remaining" -gt 0 ]; then
+        probe_timeout=$((remaining < 2 ? remaining : 2))
+        if curl --connect-timeout "$probe_timeout" --max-time "$probe_timeout" -fsS "${base_url}/health" >/dev/null 2>&1; then
+            break
+        fi
     fi
     if [ "$SECONDS" -ge "$deadline" ]; then
         echo "ERROR: timed out after ${health_timeout}s waiting for /health" >&2
@@ -87,8 +91,9 @@ LAST_BODY=""
 request() {
     local method="$1" path="$2" want_status="$3" body="${4:-}" token="${5:-}"
     local tmp status
+    local request_timeout="${PARTY2_SMOKE_REQUEST_TIMEOUT_SECONDS:-15}"
     tmp=$(mktemp)
-    local -a args=(-sS -o "$tmp" -w '%{http_code}' -X "$method" -H "Content-Type: application/json")
+    local -a args=(--connect-timeout "$request_timeout" --max-time "$request_timeout" -sS -o "$tmp" -w '%{http_code}' -X "$method" -H "Content-Type: application/json")
     if [ -n "$token" ]; then
         args+=(-H "Authorization: Bearer $token")
     fi

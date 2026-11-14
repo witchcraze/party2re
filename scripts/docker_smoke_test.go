@@ -1,10 +1,15 @@
 package scripts_test
 
 import (
+	"context"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 type dockerSmokeFixture struct {
@@ -85,7 +90,7 @@ case "${1:-}" in
         exit "${DOCKER_RUN_EXIT:-0}"
         ;;
     port)
-        echo "127.0.0.1:49152"
+        echo "${DOCKER_PORT_ADDR:-127.0.0.1:49152}"
         exit 0
         ;;
     logs)
@@ -119,7 +124,7 @@ while [ "$#" -gt 0 ]; do
             method="$2"
             shift 2
             ;;
-        -w|-H|-d)
+        -w|-H|-d|--connect-timeout|--max-time)
             shift 2
             ;;
         -sS|-fsS)
@@ -243,6 +248,11 @@ func TestDockerSmoke_HappyPath(t *testing.T) {
 			t.Fatalf("curl log missing %s %s:\n%s", want.method, want.url, string(curlLogBytes))
 		}
 	}
+	for _, line := range curlLines {
+		if !strings.Contains(line, "--max-time ") || !strings.Contains(line, "--connect-timeout ") {
+			t.Fatalf("curl invocation missing timeout flags: %s", line)
+		}
+	}
 }
 
 func TestDockerSmoke_EarlyExitPrintsContainerLogsAndCleansUp(t *testing.T) {
@@ -284,6 +294,86 @@ func TestDockerSmoke_HTTPFailurePrintsContainerLogsAndCleansUp(t *testing.T) {
 	}
 	if !strings.Contains(out, "error: simulated context handler failure") {
 		t.Fatalf("expected container logs in failure output, got:\n%s", out)
+	}
+}
+
+func TestDockerSmoke_HangingHealthTimesOutWithRealCurl(t *testing.T) {
+	realCurl, err := exec.LookPath("curl")
+	if err != nil {
+		t.Skip("curl not installed")
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			wg.Add(1)
+			go func(c net.Conn) {
+				defer wg.Done()
+				defer c.Close()
+				<-done
+			}(conn)
+		}
+	}()
+	t.Cleanup(func() {
+		close(done)
+		_ = ln.Close()
+		wg.Wait()
+	})
+
+	fix := setupDockerSmokeFixture(t)
+	if err := os.Remove(filepath.Join(fix.binDir, "curl")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realCurl, filepath.Join(fix.binDir, "curl")); err != nil {
+		t.Fatal(err)
+	}
+
+	env := append([]string{}, fix.env...)
+	env = append(env,
+		"DOCKER_PORT_ADDR="+ln.Addr().String(),
+		"DOCKER_CONTAINER_LOGS=server hung before responding to /health",
+		"PARTY2_SMOKE_HEALTH_TIMEOUT_SECONDS=2",
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", "./scripts/docker_smoke.sh", "party2re:hung")
+	cmd.Dir = fix.root
+	cmd.Env = env
+	outBytes, err := cmd.CombinedOutput()
+	out := string(outBytes)
+
+	if ctx.Err() != nil {
+		t.Fatalf("docker_smoke.sh did not terminate within dead-man bound: %v\n%s", ctx.Err(), out)
+	}
+	if err == nil {
+		t.Fatalf("expected non-zero exit when /health hangs:\n%s", out)
+	}
+	if !strings.Contains(out, "timed out after 2s waiting for /health") {
+		t.Fatalf("expected timeout message in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "server hung before responding to /health") {
+		t.Fatalf("expected container logs in output, got:\n%s", out)
+	}
+	dockerLogBytes, err := os.ReadFile(fix.dockerRecord)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(dockerLogBytes), "docker rm -f party2-smoke-") {
+		t.Fatalf("expected container cleanup on timeout:\n%s", dockerLogBytes)
 	}
 }
 
