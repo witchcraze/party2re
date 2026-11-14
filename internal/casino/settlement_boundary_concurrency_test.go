@@ -64,13 +64,24 @@ func TestSettlementBoundary_ConcurrencyStress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close casino settlement concurrency db: %v", err)
+		}
+	})
 
 	rawValkey := openIsolatedTestValkey(t, 12)
-	defer rawValkey.Close()
+	t.Cleanup(rawValkey.Close)
 
 	ctx := context.Background()
-	_ = rawValkey.Do(ctx, rawValkey.B().Flushdb().Build())
+	if err := rawValkey.Do(ctx, rawValkey.B().Flushdb().Build()).Error(); err != nil {
+		t.Fatalf("flush isolated valkey DB 12: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := rawValkey.Do(context.Background(), rawValkey.B().Flushdb().Build()).Error(); err != nil {
+			t.Errorf("cleanup flush isolated valkey DB 12: %v", err)
+		}
+	})
 
 	faultClient := &concurrentFaultValkeyClient{Client: rawValkey}
 	roomRepo, err := casino.NewValkeyRoomRepository(faultClient)
@@ -105,8 +116,6 @@ func TestSettlementBoundary_ConcurrencyStress(t *testing.T) {
 		charBID string
 	}
 	pairs := make([]charPair, numWorkers)
-	var allCharIDs []string
-	var allPlayerIDs []string
 
 	const initialCoins = int64(100000)
 	for w := 0; w < numWorkers; w++ {
@@ -114,13 +123,13 @@ func TestSettlementBoundary_ConcurrencyStress(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		database.RegisterCharacterCleanup(t, db, cA)
 		cB, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("ConcPokerB_%d_%d", w, time.Now().UnixNano()%1000000), 2000000)
 		if err != nil {
 			t.Fatal(err)
 		}
+		database.RegisterCharacterCleanup(t, db, cB)
 		pairs[w] = charPair{charAID: cA.ID, charBID: cB.ID}
-		allCharIDs = append(allCharIDs, cA.ID, cB.ID)
-		allPlayerIDs = append(allPlayerIDs, cA.PlayerID, cB.PlayerID)
 
 		if _, _, err := svc.ExchangeGoldToCoins(ctx, cA.ID, initialCoins); err != nil {
 			t.Fatal(err)
@@ -129,21 +138,6 @@ func TestSettlementBoundary_ConcurrencyStress(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
-	defer func() {
-		for _, cID := range allCharIDs {
-			//lint:ignore error-swallow test cleanup
-			_, _ = db.ExecContext(ctx, "DELETE FROM casino_accounts WHERE character_id = ?", cID)
-			//lint:ignore error-swallow test cleanup
-			_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id = ?", cID)
-		}
-		for _, pID := range allPlayerIDs {
-			//lint:ignore error-swallow test cleanup
-			_, _ = db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", pID)
-		}
-		//lint:ignore error-swallow test cleanup
-		_ = rawValkey.Do(ctx, rawValkey.B().Flushdb().Build())
-	}()
 
 	totalInitialExpectedCoins := initialCoins * 2 * int64(numWorkers)
 
@@ -257,12 +251,14 @@ func TestSettlementBoundary_ConcurrencyStress(t *testing.T) {
 
 	// Final global coin conservation check across all characters in MariaDB
 	var totalFinalCoins int64
-	for _, cID := range allCharIDs {
-		acc, err := casinoRepo.GetAccount(ctx, cID)
-		if err != nil {
-			t.Fatal(err)
+	for _, p := range pairs {
+		for _, cID := range []string{p.charAID, p.charBID} {
+			acc, err := casinoRepo.GetAccount(ctx, cID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			totalFinalCoins += acc.Coins
 		}
-		totalFinalCoins += acc.Coins
 	}
 
 	if totalFinalCoins != totalInitialExpectedCoins {

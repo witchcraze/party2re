@@ -67,13 +67,19 @@ func TestSettlementBoundary_HighLow_PostPayloadSecondarySyncFailure(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close casino highlow settlement db: %v", err)
+		}
+	})
 
 	rawValkey := openIsolatedTestValkey(t, 13)
-	defer rawValkey.Close()
+	t.Cleanup(rawValkey.Close)
 
 	ctx := context.Background()
-	_ = rawValkey.Do(ctx, rawValkey.B().Flushdb().Build())
+	if err := rawValkey.Do(ctx, rawValkey.B().Flushdb().Build()).Error(); err != nil {
+		t.Fatalf("flush isolated valkey DB 13: %v", err)
+	}
 
 	faultClient := &hlFaultValkeyClient{Client: rawValkey}
 	roomRepo, err := casino.NewValkeyRoomRepository(faultClient)
@@ -108,11 +114,7 @@ func TestSettlementBoundary_HighLow_PostPayloadSecondarySyncFailure(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM casino_accounts WHERE character_id IN (?, ?)", charA.ID, charB.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id IN (?, ?)", charA.ID, charB.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM players WHERE id IN (?, ?)", charA.PlayerID, charB.PlayerID)
-	}()
+	database.RegisterCharacterCleanup(t, db, charA, charB)
 
 	_, _, _ = svc.ExchangeGoldToCoins(ctx, charA.ID, 500)
 	_, _, _ = svc.ExchangeGoldToCoins(ctx, charB.ID, 500)
@@ -129,7 +131,11 @@ func TestSettlementBoundary_HighLow_PostPayloadSecondarySyncFailure(t *testing.T
 		t.Fatal(err)
 	}
 	roomID := createdRoom.Room.ID
-	defer func() { _ = roomRepo.DeleteRoom(ctx, roomID) }()
+	t.Cleanup(func() {
+		if err := roomRepo.DeleteRoom(context.Background(), roomID); err != nil {
+			t.Errorf("cleanup DeleteRoom %s: %v", roomID, err)
+		}
+	})
 
 	_, _ = svc.JoinRoom(ctx, roomID, charB.ID, "", 0)
 	_, _ = svc.StartHighLow(ctx, roomID, charA.ID)
@@ -201,13 +207,19 @@ func TestSettlementBoundary_HighLow_PrePayloadFailureRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close casino highlow settlement db: %v", err)
+		}
+	})
 
 	rawValkey := openIsolatedTestValkey(t, 13)
-	defer rawValkey.Close()
+	t.Cleanup(rawValkey.Close)
 
 	ctx := context.Background()
-	_ = rawValkey.Do(ctx, rawValkey.B().Flushdb().Build())
+	if err := rawValkey.Do(ctx, rawValkey.B().Flushdb().Build()).Error(); err != nil {
+		t.Fatalf("flush isolated valkey DB 13: %v", err)
+	}
 
 	faultClient := &hlFaultValkeyClient{Client: rawValkey}
 	roomRepo, err := casino.NewValkeyRoomRepository(faultClient)
@@ -242,11 +254,7 @@ func TestSettlementBoundary_HighLow_PrePayloadFailureRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM casino_accounts WHERE character_id IN (?, ?)", charA.ID, charB.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id IN (?, ?)", charA.ID, charB.ID)
-		_, _ = db.ExecContext(ctx, "DELETE FROM players WHERE id IN (?, ?)", charA.PlayerID, charB.PlayerID)
-	}()
+	database.RegisterCharacterCleanup(t, db, charA, charB)
 
 	_, _, _ = svc.ExchangeGoldToCoins(ctx, charA.ID, 500)
 	_, _, _ = svc.ExchangeGoldToCoins(ctx, charB.ID, 500)
@@ -263,7 +271,11 @@ func TestSettlementBoundary_HighLow_PrePayloadFailureRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	roomID := createdRoom.Room.ID
-	defer func() { _ = roomRepo.DeleteRoom(ctx, roomID) }()
+	t.Cleanup(func() {
+		if err := roomRepo.DeleteRoom(context.Background(), roomID); err != nil {
+			t.Errorf("cleanup DeleteRoom %s: %v", roomID, err)
+		}
+	})
 
 	_, _ = svc.JoinRoom(ctx, roomID, charB.ID, "", 0)
 	_, _ = svc.StartHighLow(ctx, roomID, charA.ID)

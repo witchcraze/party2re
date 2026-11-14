@@ -44,66 +44,6 @@ func openMonsterTestDB(t *testing.T) (*sql.DB, *CharacterRepository, *MonsterRep
 	return db, charRepo, monRepo, svc
 }
 
-func registerCharacterCleanup(t testing.TB, db *sql.DB, chars ...corecharacter.Character) {
-	t.Helper()
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		charRepo, err := NewCharacterRepository(db)
-		if err != nil {
-			t.Errorf("cleanup NewCharacterRepository: %v", err)
-			return
-		}
-		playerRepo, err := NewPlayerRepository(db)
-		if err != nil {
-			t.Errorf("cleanup NewPlayerRepository: %v", err)
-			return
-		}
-
-		seenPlayers := make(map[string]struct{})
-		var playerIDs []string
-		for _, c := range chars {
-			if c.ID == "" {
-				continue
-			}
-			pid := c.PlayerID
-			if pid == "" {
-				stored, err := charRepo.FindByID(cleanupCtx, c.ID)
-				if err != nil && !errors.Is(err, corecharacter.ErrNotFound) {
-					t.Errorf("cleanup FindByID %s: %v", c.ID, err)
-				} else if err == nil {
-					pid = stored.PlayerID
-				}
-			}
-			if err := charRepo.Delete(cleanupCtx, c.ID); err != nil {
-				t.Errorf("cleanup delete character %s: %v", c.ID, err)
-				continue
-			}
-			if pid != "" {
-				if _, seen := seenPlayers[pid]; !seen {
-					seenPlayers[pid] = struct{}{}
-					playerIDs = append(playerIDs, pid)
-				}
-			}
-		}
-
-		for _, pid := range playerIDs {
-			remaining, err := charRepo.FindByPlayerID(cleanupCtx, pid)
-			if err != nil {
-				t.Errorf("cleanup FindByPlayerID %s: %v", pid, err)
-				continue
-			}
-			if len(remaining) != 0 {
-				continue
-			}
-			if err := playerRepo.Delete(cleanupCtx, pid); err != nil {
-				t.Errorf("cleanup delete player %s: %v", pid, err)
-			}
-		}
-	})
-}
-
 func TestMonsterService_SQL_LocationAndOwnershipMatrix(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -119,7 +59,7 @@ func TestMonsterService_SQL_LocationAndOwnershipMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacter c2: %v", err)
 	}
-	registerCharacterCleanup(t, db, c1, c2)
+	RegisterCharacterCleanup(t, db, c1, c2)
 
 	// 1. Tame and bring a pet home for c1, then fill c1's box to capacity (50)
 	homePet, err := svc.TameMonster(ctx, c1.ID, "slime", "家スラ")
@@ -244,7 +184,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 			createHighCapChar(ctx, t, "SvS2"),
 			createHighCapChar(ctx, t, "SvS3"),
 		}
-		registerCharacterCleanup(t, db, chars[0], chars[1], chars[2])
+		RegisterCharacterCleanup(t, db, chars[0], chars[1], chars[2])
 
 		// Order characters so c2.ID < c1.ID < c3.ID, ensuring c1->c2 (sender > recipient)
 		// and c1->c3 (sender < recipient) exercise both ID lock ordering directions.
@@ -373,7 +313,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 
 		sender := createHighCapChar(ctx, t, "SvR1")
 		recipient := createHighCapChar(ctx, t, "SvR2")
-		registerCharacterCleanup(t, db, sender, recipient)
+		RegisterCharacterCleanup(t, db, sender, recipient)
 
 		totalMonsters := cfg.Workers / 2
 		if totalMonsters < 1 {
@@ -481,7 +421,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 			senders[w] = sender
 			cleanupChars = append(cleanupChars, sender)
 		}
-		registerCharacterCleanup(t, db, cleanupChars...)
+		RegisterCharacterCleanup(t, db, cleanupChars...)
 
 		now := time.Now().UTC()
 		// Pre-fill recipient box to one below the senders' limit plus 1 home pet
@@ -607,7 +547,7 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacter c2: %v", err)
 	}
-	registerCharacterCleanup(t, db, c1, c2)
+	RegisterCharacterCleanup(t, db, c1, c2)
 
 	txProvider := NewTransactionProvider(db)
 	svc := monster.NewService(
@@ -826,7 +766,7 @@ func TestMonsterFixtureCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacter unrelated: %v", err)
 	}
-	registerCharacterCleanup(t, observer, unrelated)
+	RegisterCharacterCleanup(t, observer, unrelated)
 
 	now := time.Now().UTC().Truncate(time.Second)
 	unrelatedMon := monster.MonsterInstance{
@@ -896,7 +836,7 @@ func TestMonsterFixtureCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateTestCharacter normal: %v", err)
 		}
-		registerCharacterCleanup(t, db, normalChar)
+		RegisterCharacterCleanup(t, db, normalChar)
 		seedOwnedFixtures(t, db, normalChar.ID)
 	})
 
@@ -907,7 +847,7 @@ func TestMonsterFixtureCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateTestCharacter early: %v", err)
 		}
-		registerCharacterCleanup(t, db, earlyChar)
+		RegisterCharacterCleanup(t, db, earlyChar)
 		seedOwnedFixtures(t, db, earlyChar.ID)
 		return
 	})
@@ -932,23 +872,17 @@ func TestMonsterFixtureCleanup(t *testing.T) {
 	if err := obsCharRepo.Save(ctx, sharedChar2); err != nil {
 		t.Fatalf("Save sharedChar2: %v", err)
 	}
-	registerCharacterCleanup(t, observer, sharedChar2)
+	RegisterCharacterCleanup(t, observer, sharedChar2)
 
 	t.Run("shared player retained while sibling remains", func(t *testing.T) {
 		db, _, _, _ := openMonsterTestDB(t)
-		registerCharacterCleanup(t, db, sharedChar1)
+		RegisterCharacterCleanup(t, db, sharedChar1)
 		seedOwnedFixtures(t, db, sharedChar1.ID)
 	})
 
-	assertRowCount := func(query string, arg string, want int) {
+	assertRowCount := func(query, arg string, want int) {
 		t.Helper()
-		var got int
-		if err := observer.QueryRowContext(ctx, query, arg).Scan(&got); err != nil {
-			t.Fatalf("query %q (%s): %v", query, arg, err)
-		}
-		if got != want {
-			t.Fatalf("query %q (%s) = %d, want %d", query, arg, got, want)
-		}
+		assertFixtureRowCount(t, ctx, observer, query, arg, want)
 	}
 
 	for _, c := range []corecharacter.Character{normalChar, earlyChar} {
@@ -981,7 +915,7 @@ func TestMonsterFixtureCleanup(t *testing.T) {
 			t.Fatalf("close brokenDB: %v", err)
 		}
 		spy := &cleanupSpyTB{TB: t}
-		registerCharacterCleanup(spy, brokenDB, corecharacter.Character{
+		RegisterCharacterCleanup(spy, brokenDB, corecharacter.Character{
 			ID:       "missing-" + id.New(),
 			PlayerID: "missing-" + id.New(),
 		})

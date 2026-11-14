@@ -28,7 +28,11 @@ func TestFutureMemory_Integration_ConcurrentSavesEnforceCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close job future memory test db: %v", err)
+		}
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -37,14 +41,7 @@ func TestFutureMemory_Integration_ConcurrentSavesEnforceCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_future_memories WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM inventory_items WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_jobs WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-	})
+	database.RegisterCharacterCleanup(t, db, char)
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -181,7 +178,11 @@ func TestFutureMemory_Integration_ConcurrentSaveAndJobMemoryConflict(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close job future memory conflict test db: %v", err)
+		}
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -190,14 +191,7 @@ func TestFutureMemory_Integration_ConcurrentSaveAndJobMemoryConflict(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_future_memories WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM inventory_items WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_jobs WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-	})
+	database.RegisterCharacterCleanup(t, db, char)
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {

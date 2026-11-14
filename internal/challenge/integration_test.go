@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -20,17 +21,24 @@ func TestChallengeIntegrationFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close challenge test db: %v", err)
+		}
+	})
 
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, "ChlgHero")
 	if err != nil {
 		t.Fatal(err)
 	}
+	database.RegisterCharacterCleanup(t, db, char)
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM character_challenge_records WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM challenge_sessions WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM characters WHERE id = ?", char.ID)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM challenge_sessions WHERE character_id = ?", char.ID); err != nil {
+			t.Errorf("cleanup challenge_sessions %s: %v", char.ID, err)
+		}
 	})
 
 	// Update character level to 10 and max HP to 300

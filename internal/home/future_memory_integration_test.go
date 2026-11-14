@@ -47,26 +47,18 @@ func newFutureMemoryFixture(t *testing.T, name string, overFuture int, inventory
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close home future memory test db: %v", err)
+		}
+	})
 	ctx := context.Background()
 
 	char, err := database.CreateTestCharacter(ctx, db, name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		for _, q := range []string{
-			"DELETE FROM character_future_memories WHERE character_id = ?",
-			"DELETE FROM inventory_items WHERE character_id = ?",
-			"DELETE FROM depot_items WHERE character_id = ?",
-			"DELETE FROM character_job_points WHERE character_id = ?",
-			"DELETE FROM character_jobs WHERE character_id = ?",
-			"DELETE FROM characters WHERE id = ?",
-		} {
-			_, _ = db.ExecContext(context.Background(), q, char.ID)
-		}
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM players WHERE id = ?", char.PlayerID)
-	})
+	database.RegisterCharacterCleanup(t, db, char)
 
 	f := futureMemoryFixture{db: db, ids: map[string]string{}}
 	for _, label := range append(append([]string{}, inventoryIDs...), depotIDs...) {

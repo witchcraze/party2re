@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -14,20 +15,31 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/exile"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func TestExileBoard_Integration(t *testing.T) {
+func openExileTestDB(t *testing.T) *sql.DB {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-	ctx := context.Background()
 	db, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close exile test db: %v", err)
+		}
+	})
+	return db
+}
+
+func TestExileBoard_Integration(t *testing.T) {
+	ctx := context.Background()
+	db := openExileTestDB(t)
 	repo, err := database.NewExileRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -36,23 +48,13 @@ func TestExileBoard_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Test-owned characters; deleting them cascades to the petition and its votes.
 	var cs []corecharacter.Character
-	t.Cleanup(func() {
-		for _, c := range cs {
-			//lint:ignore error-swallow best-effort removal of test-owned rows
-			_, _ = db.ExecContext(context.Background(), "DELETE FROM exile_votes WHERE voter_id = ?", c.ID)
-			//lint:ignore error-swallow best-effort removal of test-owned rows
-			_, _ = db.ExecContext(context.Background(), "DELETE FROM exile_petitions WHERE applicant_id = ?", c.ID)
-			//lint:ignore error-swallow best-effort removal of test-owned rows
-			_, _ = db.ExecContext(context.Background(), "DELETE FROM characters WHERE id = ?", c.ID)
-		}
-	})
 	for i := range 12 {
 		c, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("Ex%d", i))
 		if err != nil {
 			t.Fatal(err)
 		}
+		database.RegisterCharacterCleanup(t, db, c)
 		if _, err := db.ExecContext(ctx, "UPDATE characters SET job_level = ? WHERE id = ?", exile.MinJobLevel, c.ID); err != nil {
 			t.Fatal(err)
 		}
@@ -122,15 +124,8 @@ func TestExileBoard_Integration(t *testing.T) {
 // A rename and a petition naming the same character serialize on the character
 // row: exactly one succeeds, so no petition keeps a stale target name.
 func TestExileRenameAndPetitionRace_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openExileTestDB(t)
 	repo, err := database.NewExileRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -145,27 +140,17 @@ func TestExileRenameAndPetitionRace_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var owned []string
-	t.Cleanup(func() {
-		for _, id := range owned {
-			//lint:ignore error-swallow best-effort removal of test-owned rows
-			_, _ = db.ExecContext(context.Background(), "DELETE FROM exile_votes WHERE voter_id = ?", id)
-			//lint:ignore error-swallow best-effort removal of test-owned rows
-			_, _ = db.ExecContext(context.Background(), "DELETE FROM exile_petitions WHERE applicant_id = ?", id)
-			//lint:ignore error-swallow best-effort removal of test-owned rows
-			_, _ = db.ExecContext(context.Background(), "DELETE FROM characters WHERE id = ?", id)
-		}
-	})
 	for i := range 10 {
 		applicant, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("ExA%d", i))
 		if err != nil {
 			t.Fatal(err)
 		}
+		database.RegisterCharacterCleanup(t, db, applicant)
 		target, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("ExT%d", i), character.NameChangeCost)
 		if err != nil {
 			t.Fatal(err)
 		}
-		owned = append(owned, applicant.ID, target.ID)
+		database.RegisterCharacterCleanup(t, db, target)
 		if _, err := db.ExecContext(ctx, "UPDATE characters SET job_level = ? WHERE id = ?", exile.MinJobLevel, applicant.ID); err != nil {
 			t.Fatal(err)
 		}
@@ -282,4 +267,138 @@ func TestExileSelfPetitionAfterApplicantRename_Integration(t *testing.T) {
 	if total != 1 || len(articles) != 1 || articles[0].Category != "character" {
 		t.Errorf("only the committed rename should publish news: total=%d articles=%+v", total, articles)
 	}
+}
+
+func TestExileFixtureCleanup(t *testing.T) {
+	observer := openExileTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	obsExileRepo, err := database.NewExileRepository(observer)
+	if err != nil {
+		t.Fatalf("NewExileRepository observer: %v", err)
+	}
+
+	unrelatedApp, err := database.CreateTestCharacter(ctx, observer, "UnExA")
+	if err != nil {
+		t.Fatalf("CreateTestCharacter unrelatedApp: %v", err)
+	}
+	database.RegisterCharacterCleanup(t, observer, unrelatedApp)
+	unrelatedTarget, err := database.CreateTestCharacter(ctx, observer, "UnExT")
+	if err != nil {
+		t.Fatalf("CreateTestCharacter unrelatedTarget: %v", err)
+	}
+	database.RegisterCharacterCleanup(t, observer, unrelatedTarget)
+
+	unrelatedPetition := exile.Petition{
+		ID:            id.New(),
+		ApplicantID:   unrelatedApp.ID,
+		ApplicantName: unrelatedApp.Name,
+		TargetID:      unrelatedTarget.ID,
+		TargetName:    unrelatedTarget.Name,
+		Reason:        "unrelated",
+		CreatedAt:     now,
+		Votes: []exile.Vote{{
+			VoterID:   unrelatedApp.ID,
+			VoterName: unrelatedApp.Name,
+			Approve:   true,
+			VotedAt:   now,
+		}},
+	}
+	if err := obsExileRepo.CreatePetition(ctx, unrelatedPetition); err != nil {
+		t.Fatalf("CreatePetition unrelated: %v", err)
+	}
+	if err := obsExileRepo.SaveSentence(ctx, exile.Sentence{CharacterID: unrelatedTarget.ID, SleepUntil: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("SaveSentence unrelated: %v", err)
+	}
+
+	seed := func(t *testing.T, db *sql.DB, prefix string) (corecharacter.Character, corecharacter.Character, corecharacter.Character, string) {
+		t.Helper()
+		app, err := database.CreateTestCharacter(ctx, db, prefix+"A")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter applicant: %v", err)
+		}
+		database.RegisterCharacterCleanup(t, db, app)
+		target, err := database.CreateTestCharacter(ctx, db, prefix+"T")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter target: %v", err)
+		}
+		database.RegisterCharacterCleanup(t, db, target)
+		voter, err := database.CreateTestCharacter(ctx, db, prefix+"V")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter voter: %v", err)
+		}
+		database.RegisterCharacterCleanup(t, db, voter)
+
+		exRepo, err := database.NewExileRepository(db)
+		if err != nil {
+			t.Fatalf("NewExileRepository: %v", err)
+		}
+		petitionID := id.New()
+		if err := exRepo.CreatePetition(ctx, exile.Petition{
+			ID:            petitionID,
+			ApplicantID:   app.ID,
+			ApplicantName: app.Name,
+			TargetID:      target.ID,
+			TargetName:    target.Name,
+			Reason:        "owned",
+			CreatedAt:     now,
+			Votes: []exile.Vote{
+				{VoterID: app.ID, VoterName: app.Name, Approve: true, VotedAt: now},
+				{VoterID: voter.ID, VoterName: voter.Name, Approve: true, VotedAt: now},
+			},
+		}); err != nil {
+			t.Fatalf("CreatePetition owned: %v", err)
+		}
+		if err := exRepo.SaveSentence(ctx, exile.Sentence{CharacterID: target.ID, SleepUntil: now.Add(time.Hour)}); err != nil {
+			t.Fatalf("SaveSentence owned: %v", err)
+		}
+		return app, target, voter, petitionID
+	}
+
+	type exileRun struct {
+		app, target, voter corecharacter.Character
+		petitionID         string
+	}
+	var normalRun, earlyRun exileRun
+	t.Run("normal scope end", func(t *testing.T) {
+		db := openExileTestDB(t)
+		normalRun.app, normalRun.target, normalRun.voter, normalRun.petitionID = seed(t, db, "ExNm")
+	})
+	t.Run("early return path", func(t *testing.T) {
+		db := openExileTestDB(t)
+		earlyRun.app, earlyRun.target, earlyRun.voter, earlyRun.petitionID = seed(t, db, "ExEr")
+		return
+	})
+
+	assertRowCount := func(query, arg string, want int) {
+		t.Helper()
+		var got int
+		if err := observer.QueryRowContext(ctx, query, arg).Scan(&got); err != nil {
+			t.Fatalf("query %q (%s): %v", query, arg, err)
+		}
+		if got != want {
+			t.Fatalf("query %q (%s) = %d, want %d", query, arg, got, want)
+		}
+	}
+
+	for _, run := range []exileRun{normalRun, earlyRun} {
+		for _, c := range []corecharacter.Character{run.app, run.target, run.voter} {
+			assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", c.ID, 0)
+			assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", c.ID, 0)
+			assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", c.PlayerID, 0)
+		}
+		assertRowCount("SELECT COUNT(*) FROM exile_petitions WHERE id = ?", run.petitionID, 0)
+		assertRowCount("SELECT COUNT(*) FROM exile_votes WHERE petition_id = ?", run.petitionID, 0)
+		assertRowCount("SELECT COUNT(*) FROM exile_sentences WHERE character_id = ?", run.target.ID, 0)
+	}
+
+	for _, c := range []corecharacter.Character{unrelatedApp, unrelatedTarget} {
+		assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", c.ID, 1)
+		assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", c.ID, 1)
+		assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", c.PlayerID, 1)
+	}
+	assertRowCount("SELECT COUNT(*) FROM exile_petitions WHERE id = ?", unrelatedPetition.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM exile_votes WHERE petition_id = ?", unrelatedPetition.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM exile_sentences WHERE character_id = ?", unrelatedTarget.ID, 1)
 }

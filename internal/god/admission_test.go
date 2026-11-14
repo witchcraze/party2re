@@ -90,16 +90,17 @@ func TestGod_GrantWish_Integration_ConcurrentDoubleSubmit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close god admission test db: %v", err)
+		}
+	})
 	ctx := context.Background()
 	c, err := database.CreateTestCharacter(ctx, db, "GodDouble")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM characters WHERE id = ?", c.ID)
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM players WHERE id = ?", c.PlayerID)
-	})
+	database.RegisterCharacterCleanup(t, db, c)
 	repo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

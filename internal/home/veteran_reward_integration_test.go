@@ -48,22 +48,17 @@ func newVeteranFixture(t *testing.T, level, exp, gold int) veteranFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close veteran reward test db: %v", err)
+		}
+	})
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, "Veteran")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		for _, q := range []string{
-			"DELETE FROM inventory_items WHERE character_id = ?",
-			"DELETE FROM depot_items WHERE character_id = ?",
-			"DELETE FROM characters WHERE id = ?",
-		} {
-			_, _ = db.ExecContext(context.Background(), q, char.ID)
-		}
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM players WHERE id = ?", char.PlayerID)
-	})
+	database.RegisterCharacterCleanup(t, db, char)
 	f := veteranFixture{ids: map[string]string{"inventory": id.New(), "depot": id.New()}}
 	if f.charRepo, err = database.NewCharacterRepository(db); err != nil {
 		t.Fatal(err)

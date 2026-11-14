@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"testing"
 	"time"
@@ -10,13 +11,8 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
-func TestFutureMemoryRepositoryNilDB(t *testing.T) {
-	if _, err := NewFutureMemoryRepository(nil); err == nil {
-		t.Fatal("NewFutureMemoryRepository(nil) expected error, got nil")
-	}
-}
-
-func TestFutureMemoryRepositorySaveAndFind(t *testing.T) {
+func openFutureMemoryTestDB(t *testing.T) *sql.DB {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -25,18 +21,29 @@ func TestFutureMemoryRepositorySaveAndFind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close future memory test db: %v", err)
+		}
+	})
+	return db
+}
+
+func TestFutureMemoryRepositoryNilDB(t *testing.T) {
+	if _, err := NewFutureMemoryRepository(nil); err == nil {
+		t.Fatal("NewFutureMemoryRepository(nil) expected error, got nil")
+	}
+}
+
+func TestFutureMemoryRepositorySaveAndFind(t *testing.T) {
+	db := openFutureMemoryTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "FutureMem DB Test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-	})
+	RegisterCharacterCleanup(t, db, char)
 
 	repo, err := NewFutureMemoryRepository(db)
 	if err != nil {
@@ -93,26 +100,14 @@ func TestFutureMemoryRepositorySaveAndFind(t *testing.T) {
 }
 
 func TestFutureMemoryRepositoryAmbientTransaction(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openFutureMemoryTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "FutureMem Tx Test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-	})
+	RegisterCharacterCleanup(t, db, char)
 
 	repo, err := NewFutureMemoryRepository(db)
 	if err != nil {
@@ -147,4 +142,92 @@ func TestFutureMemoryRepositoryAmbientTransaction(t *testing.T) {
 	if len(memories) != 0 {
 		t.Fatalf("expected 0 memories after rollback, got %d", len(memories))
 	}
+}
+
+func TestFutureMemoryFixtureCleanup(t *testing.T) {
+	observer := openFutureMemoryTestDB(t)
+	ctx := context.Background()
+
+	obsRepo, err := NewFutureMemoryRepository(observer)
+	if err != nil {
+		t.Fatalf("NewFutureMemoryRepository observer: %v", err)
+	}
+
+	unrelated, err := CreateTestCharacter(ctx, observer, "UnrelFM")
+	if err != nil {
+		t.Fatalf("CreateTestCharacter unrelated: %v", err)
+	}
+	RegisterCharacterCleanup(t, observer, unrelated)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	unrelatedMem := corecharacter.FutureMemory{
+		ID:          id.New(),
+		CharacterID: unrelated.ID,
+		JobID:       "job-05",
+		OldJobID:    "job-01",
+		Level:       40,
+		CreatedAt:   now,
+	}
+	if err := obsRepo.Save(ctx, unrelatedMem); err != nil {
+		t.Fatalf("Save unrelated future memory: %v", err)
+	}
+
+	var normalChar, earlyChar corecharacter.Character
+	seed := func(t *testing.T, db *sql.DB, charID string) {
+		t.Helper()
+		repo, err := NewFutureMemoryRepository(db)
+		if err != nil {
+			t.Fatalf("NewFutureMemoryRepository: %v", err)
+		}
+		if err := repo.Save(ctx, corecharacter.FutureMemory{
+			ID:          id.New(),
+			CharacterID: charID,
+			JobID:       "job-05",
+			OldJobID:    "job-01",
+			Level:       50,
+			CreatedAt:   now,
+		}); err != nil {
+			t.Fatalf("Save owned future memory: %v", err)
+		}
+	}
+
+	t.Run("normal scope end", func(t *testing.T) {
+		db := openFutureMemoryTestDB(t)
+		var err error
+		normalChar, err = CreateTestCharacter(ctx, db, "FMNorm")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter normal: %v", err)
+		}
+		RegisterCharacterCleanup(t, db, normalChar)
+		seed(t, db, normalChar.ID)
+	})
+
+	t.Run("early return path", func(t *testing.T) {
+		db := openFutureMemoryTestDB(t)
+		var err error
+		earlyChar, err = CreateTestCharacter(ctx, db, "FMEarly")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter early: %v", err)
+		}
+		RegisterCharacterCleanup(t, db, earlyChar)
+		seed(t, db, earlyChar.ID)
+		return
+	})
+
+	assertRowCount := func(query, arg string, want int) {
+		t.Helper()
+		assertFixtureRowCount(t, ctx, observer, query, arg, want)
+	}
+
+	for _, c := range []corecharacter.Character{normalChar, earlyChar} {
+		assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM character_future_memories WHERE character_id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", c.PlayerID, 0)
+	}
+
+	assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", unrelated.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", unrelated.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM character_future_memories WHERE id = ?", unrelatedMem.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", unrelated.PlayerID, 1)
 }

@@ -41,7 +41,11 @@ func TestTavern_RealDatabase_ErrorPropagation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close tavern test db: %v", err)
+		}
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -70,14 +74,7 @@ func TestTavern_RealDatabase_ErrorPropagation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_deliveries WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-	})
+	database.RegisterCharacterCleanup(t, db, char)
 
 	// 1. Missing-status defaults for a character with NO status record yet in real SQL
 	status, err := svc.GetStatus(ctx, char.ID)
@@ -244,7 +241,11 @@ func TestTavern_RealDatabase_ResetFullness_Concurrency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close tavern test db: %v", err)
+		}
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -275,14 +276,7 @@ func TestTavern_RealDatabase_ResetFullness_Concurrency(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() {
-			cleanupCtx := context.Background()
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_deliveries WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-		})
+		database.RegisterCharacterCleanup(t, db, char)
 
 		seed := tavern.TavernCharacterStatus{
 			CharacterID:     char.ID,
@@ -385,14 +379,7 @@ func TestTavern_RealDatabase_ResetFullness_Concurrency(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() {
-			cleanupCtx := context.Background()
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_deliveries WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-		})
+		database.RegisterCharacterCleanup(t, db, char)
 
 		seed := tavern.TavernCharacterStatus{
 			CharacterID:     char.ID,
@@ -482,14 +469,7 @@ func TestTavern_RealDatabase_ResetFullness_Concurrency(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() {
-			cleanupCtx := context.Background()
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_deliveries WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-		})
+		database.RegisterCharacterCleanup(t, db, char)
 
 		err1, err2 := testutil.RunRace2(
 			func() error {
@@ -518,14 +498,7 @@ func TestTavern_RealDatabase_ResetFullness_Concurrency(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() {
-			cleanupCtx := context.Background()
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_deliveries WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-		})
+		database.RegisterCharacterCleanup(t, db, char)
 
 		// Case A: Reset then Order
 		seed := tavern.TavernCharacterStatus{
@@ -592,14 +565,7 @@ func TestTavern_RealDatabase_ResetFullness_Concurrency(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() {
-			cleanupCtx := context.Background()
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_deliveries WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-		})
+		database.RegisterCharacterCleanup(t, db, char)
 
 		cfg := testutil.ConcurrencyStressConfig{
 			Workers:      6,
@@ -677,7 +643,11 @@ func TestTavern_RealDatabase_OrderMealRewards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close tavern test db: %v", err)
+		}
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -709,14 +679,7 @@ func TestTavern_RealDatabase_OrderMealRewards(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() {
-			cleanupCtx := context.Background()
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_lottery WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-		})
+		database.RegisterCharacterCleanup(t, db, char)
 		char.Stats.HP = 1
 		if err := charRepo.Update(ctx, char); err != nil {
 			t.Fatal(err)

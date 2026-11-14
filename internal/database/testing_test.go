@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"strings"
@@ -175,4 +176,15 @@ func TestDatabaseTestEntityFactories(t *testing.T) {
 			t.Errorf("unexpected depot: %+v", dep)
 		}
 	})
+}
+
+func assertFixtureRowCount(t *testing.T, ctx context.Context, db *sql.DB, query, arg string, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRowContext(ctx, query, arg).Scan(&got); err != nil {
+		t.Fatalf("query %q (%s): %v", query, arg, err)
+	}
+	if got != want {
+		t.Fatalf("query %q (%s) = %d, want %d", query, arg, got, want)
+	}
 }

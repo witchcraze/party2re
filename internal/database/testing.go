@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 	"unicode"
 
@@ -242,4 +243,68 @@ func CreateTestDepot(ctx context.Context, db *sql.DB, charID string, exDepot int
 		return depot.Depot{}, err
 	}
 	return dep, nil
+}
+
+// RegisterCharacterCleanup registers a t.Cleanup hook that deletes the specified test
+// characters (with their auto-created depots and feature rows) via CharacterRepository.Delete,
+// then deletes any owning test players that no longer have remaining characters.
+// Callers must register db.Close() via t.Cleanup before calling this helper so db remains open.
+func RegisterCharacterCleanup(t testing.TB, db *sql.DB, chars ...corecharacter.Character) {
+	t.Helper()
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		charRepo, err := NewCharacterRepository(db)
+		if err != nil {
+			t.Errorf("cleanup NewCharacterRepository: %v", err)
+			return
+		}
+		playerRepo, err := NewPlayerRepository(db)
+		if err != nil {
+			t.Errorf("cleanup NewPlayerRepository: %v", err)
+			return
+		}
+
+		seenPlayers := make(map[string]struct{})
+		var playerIDs []string
+		for _, c := range chars {
+			if c.ID == "" {
+				continue
+			}
+			pid := c.PlayerID
+			if pid == "" {
+				stored, err := charRepo.FindByID(cleanupCtx, c.ID)
+				if err != nil && !errors.Is(err, corecharacter.ErrNotFound) {
+					t.Errorf("cleanup FindByID %s: %v", c.ID, err)
+				} else if err == nil {
+					pid = stored.PlayerID
+				}
+			}
+			if err := charRepo.Delete(cleanupCtx, c.ID); err != nil {
+				t.Errorf("cleanup delete character %s: %v", c.ID, err)
+				continue
+			}
+			if pid != "" {
+				if _, seen := seenPlayers[pid]; !seen {
+					seenPlayers[pid] = struct{}{}
+					playerIDs = append(playerIDs, pid)
+				}
+			}
+		}
+
+		for _, pid := range playerIDs {
+			remaining, err := charRepo.FindByPlayerID(cleanupCtx, pid)
+			if err != nil {
+				t.Errorf("cleanup FindByPlayerID %s: %v", pid, err)
+				continue
+			}
+			if len(remaining) != 0 {
+				continue
+			}
+			if err := playerRepo.Delete(cleanupCtx, pid); err != nil {
+				t.Errorf("cleanup delete player %s: %v", pid, err)
+			}
+		}
+	})
 }

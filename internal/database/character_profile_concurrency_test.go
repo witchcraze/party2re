@@ -26,22 +26,8 @@ func (r *interceptingProfileRepo) GetProfile(ctx context.Context, characterID st
 	return p, err
 }
 
-func cleanupTestCharacter(t *testing.T, db *sql.DB, char corecharacter.Character) {
+func openProfileTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	ctx := context.Background()
-	_, _ = db.ExecContext(ctx, "DELETE FROM character_profiles WHERE character_id = ?", char.ID)
-	_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id = ?", char.ID)
-	if char.PlayerID != "" {
-		_, _ = db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", char.PlayerID)
-	}
-}
-
-// TestCharacterService_ConcurrentProfilePatch_DisjointFields reproduces the interleaving
-// where two services update disjoint fields (Comment vs AvatarURL) concurrently.
-// It verifies that Service 2 blocks on the character row lock while Service 1 is in-flight,
-// and after Service 1 commits, Service 2 applies its change over the committed state,
-// preserving both new fields as well as existing bio data.
-func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -50,16 +36,28 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close profile test db: %v", err)
+		}
+	})
+	return db
+}
+
+// TestCharacterService_ConcurrentProfilePatch_DisjointFields reproduces the interleaving
+// where two services update disjoint fields (Comment vs AvatarURL) concurrently.
+// It verifies that Service 2 blocks on the character row lock while Service 1 is in-flight,
+// and after Service 1 commits, Service 2 applies its change over the committed state,
+// preserving both new fields as well as existing bio data.
+func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
+	db := openProfileTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "ProfDisjointTest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupTestCharacter(t, db, char)
-	})
+	RegisterCharacterCleanup(t, db, char)
 
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
@@ -196,24 +194,14 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 // when the character has no existing profile row in character_profiles.
 // It verifies that the row lock on characters serializes first-profile creation.
 func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openProfileTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "ProfFirstTest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupTestCharacter(t, db, char)
-	})
+	RegisterCharacterCleanup(t, db, char)
 
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
@@ -335,24 +323,14 @@ func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
 // TestCharacterService_ConcurrentAllOptionalFields verifies that Comment, AvatarURL,
 // AuraEffect, and BioData are all preserved across concurrent partial updates.
 func TestCharacterService_ConcurrentAllOptionalFields(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openProfileTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "ProfAllFieldsTest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupTestCharacter(t, db, char)
-	})
+	RegisterCharacterCleanup(t, db, char)
 
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
@@ -466,24 +444,14 @@ func TestCharacterService_ConcurrentAllOptionalFields(t *testing.T) {
 // failed profile reads (e.g. corrupt JSON) cause zero saves and do not overwrite
 // existing stored data with default empty profiles.
 func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openProfileTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "ProfCorruptTest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupTestCharacter(t, db, char)
-	})
+	RegisterCharacterCleanup(t, db, char)
 
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
@@ -537,4 +505,85 @@ func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T)
 	if !strings.Contains(savedBioData, "12345") {
 		t.Errorf("incompatible bio_data was lost or reset: got %q", savedBioData)
 	}
+}
+
+func TestCharacterProfileFixtureCleanup(t *testing.T) {
+	observer := openProfileTestDB(t)
+	ctx := context.Background()
+
+	obsRepo, err := NewCharacterRepository(observer)
+	if err != nil {
+		t.Fatalf("NewCharacterRepository observer: %v", err)
+	}
+
+	unrelated, err := CreateTestCharacter(ctx, observer, "UnrelProf")
+	if err != nil {
+		t.Fatalf("CreateTestCharacter unrelated: %v", err)
+	}
+	RegisterCharacterCleanup(t, observer, unrelated)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	if err := obsRepo.SaveProfile(ctx, character.Profile{
+		CharacterID: unrelated.ID,
+		Comment:     "unrelated profile",
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatalf("SaveProfile unrelated: %v", err)
+	}
+
+	seed := func(t *testing.T, db *sql.DB, charID string) {
+		t.Helper()
+		repo, err := NewCharacterRepository(db)
+		if err != nil {
+			t.Fatalf("NewCharacterRepository: %v", err)
+		}
+		if err := repo.SaveProfile(ctx, character.Profile{
+			CharacterID: charID,
+			Comment:     "owned profile",
+			UpdatedAt:   now,
+		}); err != nil {
+			t.Fatalf("SaveProfile owned: %v", err)
+		}
+	}
+
+	var normalChar, earlyChar corecharacter.Character
+	t.Run("normal scope end", func(t *testing.T) {
+		db := openProfileTestDB(t)
+		var err error
+		normalChar, err = CreateTestCharacter(ctx, db, "ProfNorm")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter normal: %v", err)
+		}
+		RegisterCharacterCleanup(t, db, normalChar)
+		seed(t, db, normalChar.ID)
+	})
+
+	t.Run("early return path", func(t *testing.T) {
+		db := openProfileTestDB(t)
+		var err error
+		earlyChar, err = CreateTestCharacter(ctx, db, "ProfEarly")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter early: %v", err)
+		}
+		RegisterCharacterCleanup(t, db, earlyChar)
+		seed(t, db, earlyChar.ID)
+		return
+	})
+
+	assertRowCount := func(query, arg string, want int) {
+		t.Helper()
+		assertFixtureRowCount(t, ctx, observer, query, arg, want)
+	}
+
+	for _, c := range []corecharacter.Character{normalChar, earlyChar} {
+		assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM character_profiles WHERE character_id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", c.PlayerID, 0)
+	}
+
+	assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", unrelated.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", unrelated.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM character_profiles WHERE character_id = ?", unrelated.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", unrelated.PlayerID, 1)
 }
