@@ -203,5 +203,12 @@ func (s *Service) deliverPrizeToDepot(ctx context.Context, characterID, itemID s
 		}
 	}
 
+	if s.deliveryNotifier != nil {
+		msg := fmt.Sprintf("預かり所に%sから%sが届いています", TakarakujiNPCName, s.resolveItemName(itemID))
+		if err := s.deliveryNotifier.AddDeliveryNotice(ctx, characterID, depot.NoticeItemTransfer, msg); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

@@ -1355,3 +1355,180 @@ func TestHasPurchasedTakarakujiUsesTheCurrentRound(t *testing.T) {
 		})
 	}
 }
+
+type recordedNotice struct {
+	characterID string
+	noticeType  string
+	message     string
+}
+
+type mockDeliveryNotifier struct {
+	notices []recordedNotice
+	err     error
+}
+
+func (m *mockDeliveryNotifier) AddDeliveryNotice(_ context.Context, characterID, noticeType, message string) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.notices = append(m.notices, recordedNotice{
+		characterID: characterID,
+		noticeType:  noticeType,
+		message:     message,
+	})
+	return nil
+}
+
+func TestDrawTakarakuji_CreatesDeliveryNoticesForRealWinnersOnly(t *testing.T) {
+	origReader := rand.Reader
+	rand.Reader = bytes.NewReader(make([]byte, 1024))
+	defer func() { rand.Reader = origReader }()
+
+	jst := time.FixedZone("JST", 9*60*60)
+	drawTime := time.Date(2026, 9, 11, 0, 0, 0, 0, jst)
+	// First 3 slots in the 20-slot pool are real winners because zero-roll rand always picks index 0.
+	activeRound := lottery.TakarakujiRound{
+		RoundID:      1,
+		DrawDate:     drawTime,
+		Prize1ItemID: "item-129",
+		Prize1Amount: 1,
+		Prize2ItemID: "weapon-40",
+		Prize2Amount: 1,
+		Prize3ItemID: "item-126",
+		Prize3Amount: 2, // 4th slot is <dummy_3> -> must NOT notify or deliver
+	}
+	tickets := []lottery.TakarakujiTicket{
+		{ID: "t-1", RoundID: 1, CharacterID: "char-1"},
+		{ID: "t-2", RoundID: 1, CharacterID: "char-2"},
+		{ID: "t-3", RoundID: 1, CharacterID: "char-3"},
+	}
+	repo := &mockLotteryRepo{
+		getActiveTakarakujiRoundFn: func(context.Context) (lottery.TakarakujiRound, error) {
+			return activeRound, nil
+		},
+		listRoundTakarakujiTicketsFn: func(context.Context, int) ([]lottery.TakarakujiTicket, error) {
+			return tickets, nil
+		},
+	}
+	depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+	notifier := &mockDeliveryNotifier{}
+	itemDefs := &mockItemDefProvider{
+		names: map[string]string{
+			"item-129":  "神の錬金レシピ",
+			"weapon-40": "流銀の剣",
+			"item-126":  "超魔力水",
+		},
+	}
+
+	svc, err := lottery.NewService(repo,
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithItemDefinitionProvider(itemDefs),
+		lottery.WithDeliveryNotifier(notifier),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.DrawTakarakuji(context.Background(), drawTime)
+	if err != nil {
+		t.Fatalf("DrawTakarakuji failed: %v", err)
+	}
+	if len(res.Winners) != 4 {
+		t.Fatalf("winners len = %d, want 4", len(res.Winners))
+	}
+
+	want := []recordedNotice{
+		{characterID: "char-1", noticeType: depot.NoticeItemTransfer, message: "預かり所に@クラゲから神の錬金レシピが届いています"},
+		{characterID: "char-2", noticeType: depot.NoticeItemTransfer, message: "預かり所に@クラゲから流銀の剣が届いています"},
+		{characterID: "char-3", noticeType: depot.NoticeItemTransfer, message: "預かり所に@クラゲから超魔力水が届いています"},
+	}
+	if len(notifier.notices) != len(want) {
+		t.Fatalf("notices = %+v, want %+v", notifier.notices, want)
+	}
+	for i := range want {
+		if notifier.notices[i] != want[i] {
+			t.Errorf("notice[%d] = %+v, want %+v", i, notifier.notices[i], want[i])
+		}
+	}
+}
+
+func TestDrawTakarakuji_PropagatesDeliveryNoticeErrorAndRollsBack(t *testing.T) {
+	origReader := rand.Reader
+	rand.Reader = bytes.NewReader(make([]byte, 1024))
+	defer func() { rand.Reader = origReader }()
+
+	jst := time.FixedZone("JST", 9*60*60)
+	drawTime := time.Date(2026, 9, 11, 0, 0, 0, 0, jst)
+	repo := &mockLotteryRepo{
+		getActiveTakarakujiRoundFn: func(context.Context) (lottery.TakarakujiRound, error) {
+			return lottery.TakarakujiRound{
+				RoundID:      1,
+				DrawDate:     drawTime,
+				Prize1ItemID: "item-129",
+				Prize1Amount: 1,
+			}, nil
+		},
+		listRoundTakarakujiTicketsFn: func(context.Context, int) ([]lottery.TakarakujiTicket, error) {
+			return []lottery.TakarakujiTicket{{ID: "t-1", RoundID: 1, CharacterID: "char-1"}}, nil
+		},
+	}
+	depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+	txProv := &mockTxProvider{}
+	noticeErr := errors.New("delivery notice failed")
+	notifier := &mockDeliveryNotifier{err: noticeErr}
+	itemDefs := &mockItemDefProvider{names: map[string]string{"item-129": "神の錬金レシピ"}}
+
+	svc, err := lottery.NewService(repo,
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithItemDefinitionProvider(itemDefs),
+		lottery.WithTransactionProvider(txProv),
+		lottery.WithDeliveryNotifier(notifier),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = svc.DrawTakarakuji(context.Background(), drawTime)
+	if !errors.Is(err, noticeErr) {
+		t.Fatalf("expected error %v, got %v", noticeErr, err)
+	}
+	if !txProv.rolledBack || txProv.committed {
+		t.Fatalf("expected transaction rollback on notice failure: rolledBack=%v committed=%v", txProv.rolledBack, txProv.committed)
+	}
+}
+
+func TestPlayRaffle_DoesNotSendDeliveryNotice(t *testing.T) {
+	origReader := rand.Reader
+	rand.Reader = bytes.NewReader(make([]byte, 1024))
+	defer func() { rand.Reader = origReader }()
+
+	repo := &mockLotteryRepo{
+		getRaffleTicketsFn: func(context.Context, string) (int, error) { return 3, nil },
+		useRaffleTicketsFn: func(context.Context, string, int) (int, error) { return 0, nil },
+	}
+	charRepo := &mockCharacterRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", JobLevel: 5},
+		},
+	}
+	invRepo := &mockInventoryRepo{}
+	depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+	notifier := &mockDeliveryNotifier{}
+
+	svc, err := lottery.NewService(repo,
+		lottery.WithCharacterRepository(charRepo),
+		lottery.WithInventoryRepository(invRepo),
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithDeliveryNotifier(notifier),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, _, err := svc.PlayRaffle(context.Background(), "char-1"); err != nil {
+		t.Fatalf("PlayRaffle failed: %v", err)
+	}
+	if len(notifier.notices) != 0 {
+		t.Fatalf("expected zero notices from raffle, got %+v", notifier.notices)
+	}
+}

@@ -245,6 +245,9 @@ func newMiscServices(
 	if collectionService != nil {
 		lotOpts = append(lotOpts, lottery.WithCollectionRecorder(collectionService))
 	}
+	if soc.home != nil {
+		lotOpts = append(lotOpts, lottery.WithDeliveryNotifier(soc.home))
+	}
 	lotteryService, err := lottery.NewService(lotteryRepo, lotOpts...)
 	if err != nil {
 		return nil, err
