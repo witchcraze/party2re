@@ -17,6 +17,7 @@ import (
 
 type contestFixture struct {
 	*gatewayFixture
+	service     ContestService
 	overview    contest.ContestOverview
 	overviewErr error
 	photos      []contest.Photo
@@ -69,7 +70,11 @@ func (f *contestFixture) router(t *testing.T, destination string, options ...Opt
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
 		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"},
 		playercontext.SceneDefinition{ID: "contest", Parent: "town"}))
-	opts := append([]Option{WithContest(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, options...)
+	service := f.service
+	if service == nil {
+		service = f
+	}
+	opts := append([]Option{WithContest(service), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, options...)
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, opts...)
 	if err != nil {
 		t.Fatal(err)
