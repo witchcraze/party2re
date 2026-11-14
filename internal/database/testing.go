@@ -119,32 +119,39 @@ func CreateTestCharacter(ctx context.Context, db *sql.DB, name string) (corechar
 // Automatically ensures the name adheres to the <= 8 char constraint.
 // If the sanitized label is taken, retries with a fresh eight-character name.
 func CreateTestCharacterWithFunds(ctx context.Context, db *sql.DB, name string, money int) (corecharacter.Character, error) {
-	p, err := CreateTestPlayer(ctx, db)
-	if err != nil {
-		return corecharacter.Character{}, err
-	}
-	safeName := sanitizeTestName(name, corecharacter.MaxNameLength, "Char")
-	char, err := corecharacter.New(safeName)
-	if err != nil {
-		return corecharacter.Character{}, err
-	}
-	char.PlayerID = p.ID
-	char.Money = money
 	repo, err := NewCharacterRepository(db)
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
-	for attempt := 0; attempt < 3; attempt++ {
-		err = repo.Save(ctx, char)
-		if err == nil {
-			return char, nil
+	var char corecharacter.Character
+	err = RunInTx(ctx, db, func(txCtx context.Context) error {
+		p, err := CreateTestPlayer(txCtx, db)
+		if err != nil {
+			return err
 		}
-		if !errors.Is(err, character.ErrNameAlreadyTaken) {
-			return corecharacter.Character{}, err
+		safeName := sanitizeTestName(name, corecharacter.MaxNameLength, "Char")
+		char, err = corecharacter.New(safeName)
+		if err != nil {
+			return err
 		}
-		char.Name = id.New()[:corecharacter.MaxNameLength]
+		char.PlayerID = p.ID
+		char.Money = money
+		for attempt := 0; attempt < 3; attempt++ {
+			err = repo.Save(txCtx, char)
+			if err == nil {
+				return nil
+			}
+			if !errors.Is(err, character.ErrNameAlreadyTaken) {
+				return err
+			}
+			char.Name = id.New()[:corecharacter.MaxNameLength]
+		}
+		return err
+	})
+	if err != nil {
+		return corecharacter.Character{}, err
 	}
-	return corecharacter.Character{}, err
+	return char, nil
 }
 
 // CreateTestGuildWithLeader creates and persists a guild with an associated leader character.
