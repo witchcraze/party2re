@@ -142,6 +142,7 @@ type Service struct {
 	synthesisHook SynthesisHook
 	legend        LegendInductor
 	news          NewsPublisher
+	memories      corecharacter.MemoryRecorder
 	nowFunc       func() time.Time
 	rngMu         sync.Mutex
 	rng           random.Generator
@@ -188,6 +189,11 @@ func (s *Service) SetNewsPublisher(news NewsPublisher) {
 
 func (s *Service) SetLegendInductor(inductor LegendInductor) {
 	s.legend = inductor
+}
+
+// SetMemoryRecorder records the recipe completion in the character's trajectory.
+func (s *Service) SetMemoryRecorder(recorder corecharacter.MemoryRecorder) {
+	s.memories = recorder
 }
 
 func (s *Service) now() time.Time {

@@ -186,6 +186,7 @@ func newSocServices(
 			return err
 		})),
 		guild.WithTransactionProvider(database.NewTransactionProvider(db)),
+		guild.WithMemoryRecorder(core.memories.AppendMemory),
 	)
 	if err != nil {
 		return nil, err

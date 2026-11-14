@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/casino"
@@ -44,8 +45,12 @@ func TestGod_GrantWish_Admission(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := newMockCharacterRepo()
-			repo.characters["c"] = corecharacter.Character{ID: "c", GodVisit: tc.visit}
-			opts := []god.Option{}
+			repo.characters["c"] = corecharacter.Character{ID: "c", Name: "Hero", GodVisit: tc.visit}
+			var memories []string
+			opts := []god.Option{god.WithMemoryRecorder(func(_ context.Context, id string, kind corecharacter.MemoryKind, content string) error {
+				memories = append(memories, id+"|"+string(kind)+"|"+content)
+				return nil
+			})}
 			if tc.casino != nil {
 				opts = append(opts, god.WithCasinoRepository(tc.casino))
 			}
@@ -59,6 +64,14 @@ func TestGod_GrantWish_Admission(t *testing.T) {
 			}
 			if c := repo.characters["c"]; c.GodVisit != tc.wantVisit || c.Money != tc.wantMoney {
 				t.Fatalf("stored visit=%q money=%d, want %q/%d", c.GodVisit, c.Money, tc.wantVisit, tc.wantMoney)
+			}
+			// Only a granted wish is a milestone (god.cgi negau).
+			var wantMemories []string
+			if tc.wantErr == nil && tc.wantVisit == "" {
+				wantMemories = []string{"c|wish|Heroの願い『お金がほしい』を叶えてもらう"}
+			}
+			if !slices.Equal(memories, wantMemories) {
+				t.Fatalf("memories = %q, want %q", memories, wantMemories)
 			}
 			if tc.wantErr == nil && tc.wantVisit == "" {
 				if _, err := svc.GrantWish(ctx, "c", tc.wish); !errors.Is(err, god.ErrNotAdmitted) {

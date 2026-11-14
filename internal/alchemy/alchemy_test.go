@@ -701,6 +701,11 @@ func TestViewRecipes_AwardsCompAlcOnceOnFirstCompleteView(t *testing.T) {
 	news := &mockNews{}
 	svc.SetLegendInductor(legend)
 	svc.SetNewsPublisher(news)
+	var memories []string
+	svc.SetMemoryRecorder(func(_ context.Context, id string, kind corecharacter.MemoryKind, content string) error {
+		memories = append(memories, id+"|"+string(kind)+"|"+content)
+		return nil
+	})
 
 	_ = svc.UnlockRecipe(ctx, char.ID, "rec-super-herb")
 	partial, err := svc.ViewRecipes(ctx, char.ID)
@@ -739,6 +744,9 @@ func TestViewRecipes_AwardsCompAlcOnceOnFirstCompleteView(t *testing.T) {
 	}
 	if again.CompAlcAwarded || !again.Compendium.CompAlc || len(legend.calls) != 1 || len(news.titles) != 1 {
 		t.Fatalf("repeat view must not award again: %+v legend=%d news=%d", again, len(legend.calls), len(news.titles))
+	}
+	if want := []string{char.ID + "|completion|Alchemy Complete!!"}; !slices.Equal(memories, want) {
+		t.Fatalf("memories = %q, want %q", memories, want)
 	}
 }
 

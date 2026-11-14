@@ -180,6 +180,7 @@ func newMiscServices(
 		job.WithEconomy(core.economy),
 		job.WithFutureMemoryRepository(futureMemoryRepo),
 		job.WithGuildPointAwarder(soc.guild),
+		job.WithMemoryRecorder(core.memories.AppendMemory),
 		job.WithNewsPublisher(job.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			if soc.notification != nil {
 				_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
@@ -205,7 +206,7 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
-	var colOpts []collection.Option
+	colOpts := []collection.Option{collection.WithMemoryRecorder(core.memories.AppendMemory)}
 	if core.charRepo != nil {
 		colOpts = append(colOpts, collection.WithCharacterRepository(core.charRepo))
 	}
@@ -336,6 +337,7 @@ func newMiscServices(
 		god.WithProfileRepository(homeMemberRepo),
 		god.WithHomeRepository(homeMemberRepo),
 		god.WithJobChanger(jobService),
+		god.WithMemoryRecorder(core.memories.AppendMemory),
 	)
 	if err != nil {
 		return nil, err
@@ -348,6 +350,7 @@ func newMiscServices(
 	contestOpts := []contest.Option{
 		contest.WithTransactionProvider(core.txProvider),
 		contest.WithGuildService(contestGuildAdapter{guild: soc.guild}),
+		contest.WithMemoryRecorder(core.memories.AppendMemory),
 		contest.WithNewsPublisher(contest.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err

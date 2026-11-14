@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -71,6 +72,13 @@ func WithJobChanger(jobs JobChanger) Option {
 	}
 }
 
+// WithMemoryRecorder records granted wishes in the character's trajectory.
+func WithMemoryRecorder(recorder corecharacter.MemoryRecorder) Option {
+	return func(s *Service) {
+		s.memories = recorder
+	}
+}
+
 func WithRandFloat(fn func() float64) Option {
 	return func(s *Service) {
 		s.randFloatFn = fn
@@ -89,6 +97,7 @@ type Service struct {
 	profiles    ProfileRepository
 	homes       HomeRepository
 	jobs        JobChanger
+	memories    corecharacter.MemoryRecorder
 	randFloatFn func() float64
 }
 
@@ -177,12 +186,17 @@ func (s *Service) GrantWish(ctx context.Context, characterID, wishID string) (Wi
 
 		switch realm {
 		case RealmHeaven:
-			return s.executeHeavenWish(txCtx, &char, wishID, &res)
+			err = s.executeHeavenWish(txCtx, &char, wishID, &res)
 		case RealmUnderworld:
-			return s.executeUnderworldWish(txCtx, &char, wishID, &res)
+			err = s.executeUnderworldWish(txCtx, &char, wishID, &res)
 		default:
 			return ErrNotAdmitted
 		}
+		if err != nil || char.GodVisit != "" {
+			return err // rejected, or refused with the visit continuing
+		}
+		return s.memories.Record(txCtx, characterID, corecharacter.MemoryWish,
+			char.Name+"の願い『"+res.Wish.Name+"』を叶えてもらう")
 	})
 
 	if err != nil {

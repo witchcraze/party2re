@@ -50,6 +50,13 @@ func WithNewsPublisher(np NewsPublisher) ServiceOption {
 	}
 }
 
+// WithMemoryRecorder records founding, joining, leaving and disbanding in members' trajectories.
+func WithMemoryRecorder(recorder corecharacter.MemoryRecorder) ServiceOption {
+	return func(s *Service) {
+		s.memories = recorder
+	}
+}
+
 func WithTransactionProvider(tx TransactionProvider) ServiceOption {
 	return func(s *Service) {
 		s.txProvider = tx

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -242,6 +243,12 @@ func (s *Service) departOne(ctx context.Context, guildID, characterID string, lo
 			return ErrCharacterNotInGuild
 		}
 		return nil
+	}
+	if strict && !self.IsPending {
+		// Only an explicit ＠だったい is a milestone; recorded while still a member so the entry shows the guild.
+		if err := s.memories.Record(ctx, characterID, corecharacter.MemoryGuildLeave, g.Name+"から脱退する"); err != nil {
+			return err
+		}
 	}
 	candidates := slices.Concat(titled, others)
 	if len(candidates) == 0 {

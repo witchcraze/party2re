@@ -137,6 +137,7 @@ func TestChangeJob_TransactionSuccess_TriggersSideEffectsExactlyOnce(t *testing.
 	news := &mockNewsPublisher{}
 	popTracker := &jobPopularityStub{}
 
+	var memories []string
 	dummyRepo := &repositoryStub{}
 	svc, err := NewService(
 		dummyRepo,
@@ -146,6 +147,10 @@ func TestChangeJob_TransactionSuccess_TriggersSideEffectsExactlyOnce(t *testing.
 		WithLegendInductor(legend),
 		WithNewsPublisher(news),
 		WithJobPopularityTracker(popTracker),
+		WithMemoryRecorder(func(_ context.Context, id string, kind corecharacter.MemoryKind, content string) error {
+			memories = append(memories, id+"|"+string(kind)+"|"+content)
+			return nil
+		}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -165,6 +170,15 @@ func TestChangeJob_TransactionSuccess_TriggersSideEffectsExactlyOnce(t *testing.
 	}
 	if len(legendCalls) != 1 {
 		t.Fatalf("expected exactly 1 legend call on transaction success, got %d: %v", len(legendCalls), legendCalls)
+	}
+	// Legacy order: the change, the departing job's mastery, then completion.
+	wantMemories := []string{
+		char.ID + "|job_change|" + svc.jobName("job-01") + "から" + svc.jobName("job-02") + "に転職",
+		char.ID + "|job_master|★ " + svc.jobName("job-01") + " Job Master! ★",
+		char.ID + "|completion|All Job Complete!!",
+	}
+	if !slices.Equal(memories, wantMemories) {
+		t.Fatalf("memories = %q, want %q", memories, wantMemories)
 	}
 	if len(popTracker.records) != 1 {
 		t.Fatalf("expected exactly 1 popularity record on transaction success, got %d", len(popTracker.records))

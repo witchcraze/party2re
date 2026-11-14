@@ -98,10 +98,17 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		if err != nil {
 			return err
 		}
-		if err := s.recordDeparture(&currentState, tc.Character.SP); err != nil {
+		// Legacy order: the change, then the departing job's mastery, then completion.
+		if err := s.memories.Record(tc.Context, characterID, corecharacter.MemoryJobChange,
+			s.jobName(tc.Character.JobID)+"から"+targetDef.Name+"に転職"); err != nil {
 			return err
 		}
-		s.checkAndNotifyCompletion(tc.Context, tc.Character.Name, &currentState)
+		if err := s.recordDeparture(tc.Context, &currentState, tc.Character.SP); err != nil {
+			return err
+		}
+		if err := s.checkAndNotifyCompletion(tc.Context, tc.Character.Name, &currentState); err != nil {
+			return err
+		}
 		if err := currentState.ChangeTo(targetDef, tc.Character.Level, tc.Character.Gender); err != nil {
 			return err
 		}
@@ -155,7 +162,7 @@ func (s *Service) ApplyGrantedJobChange(ctx context.Context, char *corecharacter
 	if err != nil {
 		return err
 	}
-	if err := s.recordDeparture(&state, char.SP); err != nil {
+	if err := s.recordDeparture(ctx, &state, char.SP); err != nil {
 		return err
 	}
 	if err := state.Grant(targetDef); err != nil {
@@ -171,10 +178,12 @@ func (s *Service) ApplyGrantedJobChange(ctx context.Context, char *corecharacter
 }
 
 // recordDeparture stores the leaving job's latest SP and first-time mastery.
-func (s *Service) recordDeparture(state *corejob.CharacterJob, sp int) error {
+func (s *Service) recordDeparture(ctx context.Context, state *corejob.CharacterJob, sp int) error {
 	jobID := state.CurrentJobID
-	if def, err := s.GetDefinition(jobID); err == nil {
-		state.RecordMastery(jobID, sp, s.masterySP(def))
+	if def, err := s.GetDefinition(jobID); err == nil && state.RecordMastery(jobID, sp, s.masterySP(def)) {
+		if err := s.memories.Record(ctx, state.CharacterID, corecharacter.MemoryJobMaster, "★ "+def.Name+" Job Master! ★"); err != nil {
+			return err
+		}
 	}
 	return state.RecordJobSP(jobID, sp)
 }

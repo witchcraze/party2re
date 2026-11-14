@@ -119,6 +119,7 @@ type Service struct {
 	cleanupHooks     []CleanupHook
 	jobProvider      corejob.DefinitionProvider
 	referralDelivery ReferralDelivery
+	memories         MemoryRepository
 }
 
 type CreationOptions struct {
@@ -200,6 +201,9 @@ func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, 
 			if err := s.referralDelivery(txCtx, referrerID, value); err != nil {
 				return err
 			}
+		}
+		if err := s.recordMemory(txCtx, value.ID, corecharacter.MemoryBirth, fmt.Sprintf("冒険者 %s 誕生！", value.Name)); err != nil {
+			return err
 		}
 		if s.news != nil {
 			return s.news.PublishNews(txCtx, "character",
@@ -328,6 +332,9 @@ func (s *Service) ChangeName(ctx context.Context, characterID, newName string) (
 		if err := s.repository.Update(txCtx, char); err != nil {
 			return err
 		}
+		if err := s.recordMemory(txCtx, characterID, corecharacter.MemoryNameChange, newName+" に名前を変更する"); err != nil {
+			return err
+		}
 
 		result = char
 		return nil
@@ -387,6 +394,13 @@ func (s *Service) ChangeGender(ctx context.Context, characterID, newGender strin
 		char.Gender = validatedGender
 
 		if err := s.repository.Update(txCtx, char); err != nil {
+			return err
+		}
+		content := "男をやめて女として生まれ変わる"
+		if validatedGender == "m" {
+			content = "女をやめて男として生まれ変わる"
+		}
+		if err := s.recordMemory(txCtx, characterID, corecharacter.MemoryGenderChange, content); err != nil {
 			return err
 		}
 

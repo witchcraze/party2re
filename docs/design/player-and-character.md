@@ -48,9 +48,9 @@ durable gameplay clock before automatic deletion can be enabled.
 
 ### 2.9 Transactional Character Creation & Joining News
 
-The character, its initial Depot, any eligible [referral delivery](#210-registration-referral-delivery) and the [joining news](notifications.md#character-joining-news) commit in one transaction. A failure in any of them rolls back the creation. After an unknown commit outcome, clients must not replay the creation automatically.
+The character, its initial Depot, its birth entry in the [trajectory](#214-trajectory-軌跡), any eligible [referral delivery](#210-registration-referral-delivery) and the [joining news](notifications.md#character-joining-news) commit in one transaction. A failure in any of them rolls back the creation. After an unknown commit outcome, clients must not replay the creation automatically.
 
-Legacy `party2/new_entry.cgi:155–206` routes `mode=new_entry` through `new_entry` → `create_user`, saving the character before writing birth memory and joining news. Account registration and character creation are separate in Party2re: only character creation emits joining news. The same-transaction news boundary strengthens failure atomicity over the legacy file writes. Birth memory and trajectory history remain separate work in [#773](https://github.com/witchcraze/party2re/issues/773); joining news does not implement or replace them.
+Legacy `party2/new_entry.cgi:155–206` routes `mode=new_entry` through `new_entry` → `create_user`, saving the character before writing birth memory and joining news. Account registration and character creation are separate in Party2re: only character creation emits joining news. The same-transaction boundary strengthens failure atomicity over the legacy file writes.
 
 ### 2.10 Registration Referral Delivery
 
@@ -241,3 +241,14 @@ gold, not permission to serialize Character/Profile/Home aggregates. Exclude
 Player IDs/usernames, IP/host, tokens, credentials, private biography, letters,
 notices, inventory contents, bank balances and timers. Apply §2.12's shared text
 and image-output safety without changing existing message input policy.
+
+### 2.14 Trajectory (軌跡)
+
+Legacy `player.cgi` publicly shows a character's milestone log (`write_memory`) and four completion rates. `GET /characters/{id}/trajectory` serves both without a session.
+
+- **Decision:** an entry stores a kind, the legacy line as plain text without HTML, and the character's name, guild, colour, level, job, gender and SP at write time. Clients style an entry by its kind.
+- **Decision:** an entry is written in the transaction of the action it records, so a failed write fails the action. Legacy file writes had no such tie.
+- **Decision:** entries older than the newest 999 (`$max_log`) are kept but not shown.
+- **Decision:** unlike `GET /characters/{id}/profile`, the trajectory exposes past level, job and gender, as legacy does.
+- **Pitfall:** legacy captures the entry's header where `write_memory` is called, not after the action completes. A job change or mastery therefore shows the departing job and its level, and leaving or disbanding a guild still shows the guild. **Known difference:** a job-memory recall shows the job before the recall; legacy shows the recalled job.
+- **Pitfall:** guild renaming (`＠かいめい`) and its entry are commented out of the dispatch table (`join_guild.cgi:55,63`), so no rename entry exists.

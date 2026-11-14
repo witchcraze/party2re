@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 var (
@@ -257,6 +259,9 @@ func (s *Service) ViewRecipes(ctx context.Context, characterID string) (RecipeLi
 				if err := s.legend.RecordLegend(txCtx, "comp_alc", characterID); err != nil {
 					return fmt.Errorf("record legend: %w", err)
 				}
+			}
+			if err := s.memories.Record(txCtx, characterID, corecharacter.MemoryCompletion, "Alchemy Complete!!"); err != nil {
+				return fmt.Errorf("record memory: %w", err)
 			}
 			res.CompAlcAwarded = true
 		}

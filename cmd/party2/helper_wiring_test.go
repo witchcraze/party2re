@@ -32,6 +32,7 @@ var helperWiringRequiredTables = []string{
 	"normal_adventure_recipients",
 	"guilds",
 	"guild_members",
+	"character_memories",
 	"helper_quests",
 	"character_monsters",
 }

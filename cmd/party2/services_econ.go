@@ -115,6 +115,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	if err != nil {
 		return nil, err
 	}
+	alchemyService.SetMemoryRecorder(core.memories.AppendMemory)
 
 	plantationRepo, err := database.NewPlantationRepository(db)
 	if err != nil {

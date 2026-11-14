@@ -26623,6 +26623,167 @@
         ]
       }
     },
+    "/characters/{id}/trajectory": {
+      "get": {
+        "description": "Public view of a character's milestone log and collection completion rates (legacy player.cgi). Returns the newest 999 entries, newest first. Each entry carries the character's name, guild, colour, level, job, gender and SP as they were when it was written. Rates are whole percentages rounded down and capped at 100.",
+        "operationId": "getCharacterTrajectory",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "completion_rates": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "alchemy": {
+                          "maximum": 100,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "armor": {
+                          "maximum": 100,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "item": {
+                          "maximum": 100,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "weapon": {
+                          "maximum": 100,
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "weapon",
+                        "armor",
+                        "item",
+                        "alchemy"
+                      ],
+                      "type": "object"
+                    },
+                    "memories": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "color": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "description": "Plain-text milestone line.",
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "gender": {
+                            "type": "string"
+                          },
+                          "guild_name": {
+                            "description": "Empty when the character had no guild.",
+                            "type": "string"
+                          },
+                          "job_id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "enum": [
+                              "birth",
+                              "name_change",
+                              "gender_change",
+                              "job_change",
+                              "job_master",
+                              "job_recall",
+                              "job_revert",
+                              "completion",
+                              "guild_found",
+                              "guild_join",
+                              "guild_leave",
+                              "guild_disband",
+                              "wish",
+                              "contest_prize"
+                            ],
+                            "type": "string"
+                          },
+                          "level": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "sp": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "content",
+                          "name",
+                          "guild_name",
+                          "color",
+                          "level",
+                          "job_id",
+                          "gender",
+                          "sp",
+                          "created_at"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 999,
+                      "type": "array"
+                    },
+                    "name": {
+                      "description": "Current character name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "completion_rates",
+                    "memories"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Trajectory retrieved successfully"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error",
+            "description": "Character not found"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error",
+            "description": "Internal Server Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error",
+            "description": "Trajectory is not configured"
+          }
+        },
+        "security": [],
+        "summary": "Get character trajectory",
+        "tags": [
+          "Character"
+        ]
+      }
+    },
     "/contest/current": {
       "get": {
         "description": "Returns all photo submissions and current vote totals in the active contest round.",

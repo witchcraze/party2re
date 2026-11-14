@@ -99,6 +99,7 @@ type Service struct {
 	jobPopularity  JobPopularityTracker
 	equipment      EquipmentRepository
 	legend         LegendInductor
+	memories       corecharacter.MemoryRecorder
 }
 
 type Option func(*Service)
@@ -169,6 +170,13 @@ func WithGuildPointAwarder(gpa GuildPointAwarder) Option {
 func WithCostumeResetter(c CostumeResetter) Option {
 	return func(s *Service) {
 		s.costume = c
+	}
+}
+
+// WithMemoryRecorder records job changes, masteries and completion in the character's trajectory.
+func WithMemoryRecorder(recorder corecharacter.MemoryRecorder) Option {
+	return func(s *Service) {
+		s.memories = recorder
 	}
 }
 
@@ -251,10 +259,14 @@ func (s *Service) Master(ctx context.Context, characterID string, jobID string) 
 		} else {
 			state.Master(jobID)
 		}
-		s.checkAndNotifyCompletion(ctx, charName, &state)
+		if err := s.checkAndNotifyCompletion(ctx, charName, &state); err != nil {
+			return corejob.CharacterJob{}, err
+		}
 	} else {
 		state.Master(jobID)
-		s.checkAndNotifyCompletion(ctx, "", &state)
+		if err := s.checkAndNotifyCompletion(ctx, "", &state); err != nil {
+			return corejob.CharacterJob{}, err
+		}
 	}
 	if err := s.repository.Save(ctx, state); err != nil {
 		return corejob.CharacterJob{}, err
@@ -281,18 +293,25 @@ func (s *Service) CheckAndApplyMastery(ctx context.Context, characterID string, 
 	if required <= 0 || !state.RecordMastery(state.CurrentJobID, sp, required) {
 		return false, nil
 	}
-	s.checkAndNotifyCompletion(ctx, charName, &state)
+	if err := s.checkAndNotifyCompletion(ctx, charName, &state); err != nil {
+		return false, err
+	}
 	if err := s.repository.Save(ctx, state); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (s *Service) checkAndNotifyCompletion(ctx context.Context, charName string, state *corejob.CharacterJob) {
+// checkAndNotifyCompletion records the first all-jobs completion. Only the
+// trajectory entry is required; news and Hall of Fame stay best-effort.
+func (s *Service) checkAndNotifyCompletion(ctx context.Context, charName string, state *corejob.CharacterJob) error {
 	if state == nil {
-		return
+		return nil
 	}
 	if state.CheckAndSetAllJobsMastered() {
+		if err := s.memories.Record(ctx, state.CharacterID, corecharacter.MemoryCompletion, "All Job Complete!!"); err != nil {
+			return err
+		}
 		if s.news != nil {
 			displayName := charName
 			if displayName == "" {
@@ -312,6 +331,15 @@ func (s *Service) checkAndNotifyCompletion(ctx context.Context, charName string,
 			_ = s.legend.RecordLegend(ctx, "comp_job", state.CharacterID)
 		}
 	}
+	return nil
+}
+
+// jobName returns the job's display name for trajectory entries.
+func (s *Service) jobName(jobID string) string {
+	if def, err := s.GetDefinition(jobID); err == nil {
+		return def.Name
+	}
+	return jobID
 }
 
 func isNotFound(err error) bool {

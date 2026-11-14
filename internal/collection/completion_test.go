@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -645,12 +646,17 @@ func TestCompletionInduction_NormalSuccessAllFourKinds(t *testing.T) {
 		},
 	}
 
+	var memories []string
 	svc, err := collection.NewService(repo, 1, 1,
 		collection.WithTotalWeapons(1),
 		collection.WithTotalArmors(1),
 		collection.WithNewsPublisher(pub),
 		collection.WithCharacterRepository(charRepo),
 		collection.WithLegendInductor(legend),
+		collection.WithMemoryRecorder(func(_ context.Context, id string, kind corecharacter.MemoryKind, content string) error {
+			memories = append(memories, id+"|"+string(kind)+"|"+content)
+			return nil
+		}),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -677,6 +683,20 @@ func TestCompletionInduction_NormalSuccessAllFourKinds(t *testing.T) {
 	// 4. Item completion
 	if err := svc.RecordItemDiscovered(ctx, "char-hero", "ite-elixir", "Elixir", "item"); err != nil {
 		t.Fatalf("item discovery failed: %v", err)
+	}
+
+	// A completed category stays one milestone when it is re-evaluated.
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "ite-elixir", "Elixir", "item"); err != nil {
+		t.Fatalf("repeated item discovery failed: %v", err)
+	}
+	wantMemories := []string{
+		"char-hero|completion|MonsterBook Complete!!",
+		"char-hero|completion|Weapon Complete!!",
+		"char-hero|completion|Armor Complete!!",
+		"char-hero|completion|Item Complete!!",
+	}
+	if !slices.Equal(memories, wantMemories) {
+		t.Fatalf("memories = %q, want %q", memories, wantMemories)
 	}
 
 	// Verify all 4 categories were inducted

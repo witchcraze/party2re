@@ -249,6 +249,10 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 						return err
 					}
 				}
+				if err := s.memories.Record(txCtx, char.ID, corecharacter.MemoryContestPrize,
+					fmt.Sprintf("★第%d回フォトコンテスト%d位入賞★", activeRound.Round, rank)); err != nil {
+					return err
+				}
 
 				if s.news != nil {
 					newsContent := fmt.Sprintf("★第%d回フォトコンテスト%d位 %s★", activeRound.Round, rank, entries[i].CharacterName)

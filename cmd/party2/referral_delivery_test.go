@@ -125,6 +125,7 @@ func (f referralFixture) assertCounts(t *testing.T, creations, rewards int) {
 		want  int
 	}{
 		{"characters", 1 + creations}, {"character_depots", 1 + creations}, {"news_articles", creations},
+		{"character_memories", creations},
 		{"depot_items", rewards}, {"character_delivery_notices", rewards},
 	} {
 		var count int
@@ -342,7 +343,7 @@ func TestRegistrationReferralToActiveRunRecipient(t *testing.T) {
 }
 
 func TestRegistrationReferralAtomicity(t *testing.T) {
-	for _, stage := range []string{"characters", "character_depots", "depot_items", "character_delivery_notices", "news_articles", "ambient_rollback", "commit_failure"} {
+	for _, stage := range []string{"characters", "character_depots", "character_memories", "depot_items", "character_delivery_notices", "news_articles", "ambient_rollback", "commit_failure"} {
 		t.Run(stage, func(t *testing.T) {
 			f := newReferralFixture(t)
 			ctx := context.Background()

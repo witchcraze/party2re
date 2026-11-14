@@ -81,6 +81,7 @@ type CharacterService interface {
 	ChangeGender(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	GetProfile(ctx context.Context, characterID string) (character.ProfileView, error)
 	UpdateProfile(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
+	Trajectory(ctx context.Context, characterID string) ([]character.Memory, error)
 	GetNamingHallDialogue() character.NamingHallDialogue
 	Delete(ctx context.Context, playerID, characterID string) error
 }
@@ -340,6 +341,7 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/characters/{id}/actions", h.handleCharacterAction)
 	mux.HandleFunc("DELETE /characters/{id}", h.handleDeleteCharacter)
 	mux.HandleFunc("GET /characters/{id}/profile", h.handleGetCharacterProfile)
+	mux.HandleFunc("GET /characters/{id}/trajectory", h.handleGetCharacterTrajectory)
 	mux.HandleFunc("POST /characters/{id}/profile", h.handleUpdateCharacterProfile)
 	mux.HandleFunc("PUT /characters/{id}/profile", h.handleUpdateCharacterProfile)
 	mux.HandleFunc("POST /characters/{id}/name", h.handleChangeCharacterName)

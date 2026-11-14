@@ -3,6 +3,7 @@ package job_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -85,7 +86,7 @@ func (r *memoryTestInvRepo) Save(_ context.Context, inv coreinventory.Inventory)
 	return nil
 }
 
-func setupJobMemoryService(t *testing.T) (*job.Service, *memoryTestCharRepo, *memoryTestJobRepo, *memoryTestInvRepo) {
+func setupJobMemoryService(t *testing.T, opts ...job.Option) (*job.Service, *memoryTestCharRepo, *memoryTestJobRepo, *memoryTestInvRepo) {
 	t.Helper()
 	charRepo := newMemoryTestCharRepo()
 	jobRepo := newMemoryTestJobRepo()
@@ -96,12 +97,11 @@ func setupJobMemoryService(t *testing.T) (*job.Service, *memoryTestCharRepo, *me
 		t.Fatalf("failed to create economy service: %v", err)
 	}
 
-	jobSvc, err := job.NewService(
-		jobRepo,
+	jobSvc, err := job.NewService(jobRepo, append([]job.Option{
 		job.WithCharacterRepository(charRepo),
 		job.WithInventoryRepository(invRepo),
 		job.WithEconomy(ecoSvc),
-	)
+	}, opts...)...)
 	if err != nil {
 		t.Fatalf("failed to create job service: %v", err)
 	}
@@ -111,7 +111,19 @@ func setupJobMemoryService(t *testing.T) (*job.Service, *memoryTestCharRepo, *me
 
 func TestJobMemory_PersistentLifecycle_Item168(t *testing.T) {
 	ctx := context.Background()
-	svc, charRepo, jobRepo, invRepo := setupJobMemoryService(t)
+	var memories []string
+	svc, charRepo, jobRepo, invRepo := setupJobMemoryService(t, job.WithMemoryRecorder(
+		func(_ context.Context, _ string, kind corecharacter.MemoryKind, content string) error {
+			memories = append(memories, string(kind)+"|"+content)
+			return nil
+		}))
+	jobName := func(id string) string {
+		def, err := svc.GetDefinition(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return def.Name
+	}
 
 	charID := "char-168"
 	char := corecharacter.Character{
@@ -196,6 +208,15 @@ func TestJobMemory_PersistentLifecycle_Item168(t *testing.T) {
 	}
 	if restoredJob.CurrentJobID != "job-01" {
 		t.Fatalf("expected character_jobs.current_job_id restored to job-01, got %s", restoredJob.CurrentJobID)
+	}
+
+	// Only the applied recall and revert are milestones; rejected attempts record nothing.
+	wantMemories := []string{
+		"job_recall|" + jobName("job-03") + "と" + jobName("job-04") + "の記憶を思い出す",
+		"job_revert|" + jobName("job-01") + "と" + jobName("job-02") + "に戻る",
+	}
+	if !slices.Equal(memories, wantMemories) {
+		t.Fatalf("memories = %q, want %q", memories, wantMemories)
 	}
 }
 

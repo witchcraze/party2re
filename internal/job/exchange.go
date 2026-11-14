@@ -80,6 +80,10 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 			if err := s.repository.Save(tc.Context, st); err != nil {
 				return err
 			}
+			if err := s.memories.Record(tc.Context, characterID, corecharacter.MemoryJobRevert,
+				s.jobName(memory.JobID)+"と"+s.jobName(memory.OldJobID)+"に戻る"); err != nil {
+				return err
+			}
 			restored = tc.Character
 			restoredState = st
 			return nil
@@ -174,6 +178,10 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		}
 		st.RestoreCurrentJob(targetJobID)
 		if err := s.repository.Save(tc.Context, st); err != nil {
+			return err
+		}
+		if err := s.memories.Record(tc.Context, characterID, corecharacter.MemoryJobRecall,
+			targetDef.Name+"と"+targetOldDef.Name+"の記憶を思い出す"); err != nil {
 			return err
 		}
 		updated = tc.Character

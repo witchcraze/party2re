@@ -30,7 +30,7 @@ Global server news and milestone broadcasts (`news.cgi`):
 
 Character creation publishes one joining article through the injected `character.NewsPublisher`, after saving the character, initial depot and any eligible [referral delivery](player-and-character.md#210-registration-referral-delivery) in the same SQL transaction. The publisher must propagate that transaction context without independent commits or external side effects. News becomes visible when the enclosing transaction commits; save/publication failures and outer rollback leave no joining article, referral grant or partially created character.
 
-Joining articles use category `character`, author `System`, and plain-text title/content containing the new character's name and ID, without account identity or legacy HTML. Ordinary character saves and updates do not emit joining news. This is a global feed entry; character birth memory and trajectory history are a separate responsibility described in [Player and Character](player-and-character.md#29-transactional-character-creation--joining-news).
+Joining articles use category `character`, author `System`, and plain-text title/content containing the new character's name and ID, without account identity or legacy HTML. Ordinary character saves and updates do not emit joining news. This is a global feed entry; the character's own birth entry belongs to its [trajectory](player-and-character.md#214-trajectory-軌跡).
 
 ### 2. Player Notification Inbox (`player_notifications`)
 

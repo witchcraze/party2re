@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -212,10 +213,15 @@ func TestSettleContest_DeletedCharacterIsSkippedGracefully(t *testing.T) {
 	delete(charRepo.characters, "char-2")
 	charRepo.mu.Unlock()
 
+	var memories []string
 	svc, err := contest.NewService(
 		charRepo,
 		contestRepo,
 		contest.WithNowFunc(func() time.Time { return now }),
+		contest.WithMemoryRecorder(func(_ context.Context, id string, kind corecharacter.MemoryKind, content string) error {
+			memories = append(memories, id+"|"+string(kind)+"|"+content)
+			return nil
+		}),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -234,6 +240,15 @@ func TestSettleContest_DeletedCharacterIsSkippedGracefully(t *testing.T) {
 	winner, _ := charRepo.FindByID(context.Background(), "char-1")
 	if winner.Money != 1000+contest.PrizeFirst.Gold {
 		t.Errorf("expected winner money %d, got %d", 1000+contest.PrizeFirst.Gold, winner.Money)
+	}
+
+	// Each prize winner that still exists gets one trajectory entry with its rank.
+	wantMemories := []string{
+		"char-1|contest_prize|★第1回フォトコンテスト1位入賞★",
+		"char-3|contest_prize|★第1回フォトコンテスト3位入賞★",
+	}
+	if !slices.Equal(memories, wantMemories) {
+		t.Fatalf("memories = %q, want %q", memories, wantMemories)
 	}
 }
 

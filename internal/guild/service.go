@@ -16,6 +16,7 @@ type Service struct {
 	charReader    CharacterReader
 	letterSender  LetterSender
 	newsPub       NewsPublisher
+	memories      corecharacter.MemoryRecorder
 	txProvider    TransactionProvider
 	nowFunc       func() time.Time
 }
@@ -108,7 +109,10 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 		}
 		var cErr error
 		createdGuild, createdMember, updatedChar, cErr = s.repo.CreateGuild(txCtx, g, m, CreationFee)
-		return cErr
+		if cErr != nil {
+			return cErr
+		}
+		return s.memories.Record(txCtx, creatorCharID, corecharacter.MemoryGuildFound, "新ギルド"+validName+"を設立！")
 	})
 	if err != nil {
 		return Guild{}, Member{}, corecharacter.Character{}, err
