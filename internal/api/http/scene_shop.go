@@ -102,15 +102,15 @@ func (h *Handler) shopSceneData(ctx context.Context, r playercontext.Result) (an
 	return ShopCatalogSceneData{ShopSceneInfo: info, Items: append([]ShopProduct{}, products[start:end]...), Page: page}, nil
 }
 
-// shopTemplates fixes the observed shop and sale target, and drops the sale
-// choice when the shop's hand is empty.
 // shopSaleOffer offers ＠うる only for the observed sale candidate.
-func shopSaleOffer(info ShopSceneInfo, choices []string, templates map[string]map[string]any) []string {
+func shopSaleOffer(info ShopSceneInfo) scenePresentation {
+	presentation := scenePresentation{title: &info.Title}
 	if info.SaleOffer == nil {
-		return slices.DeleteFunc(choices, func(id string) bool { return id == "shop_sell" })
+		presentation.hide = []string{"shop_sell"}
+	} else {
+		presentation.templates = map[string]map[string]any{"shop_sell": {"item_instance_id": info.SaleOffer.ItemInstanceID}}
 	}
-	templates["shop_sell"]["item_instance_id"] = info.SaleOffer.ItemInstanceID
-	return choices
+	return presentation
 }
 
 // shop.cgi files' @words and shiraberu_npc; an empty inspect uses the default.
@@ -165,5 +165,16 @@ func shopFacility(kind shop.ShopType) facility {
 		}
 		return bound
 	}
-	return facility{title: shopTitles[kind], commands: commands, bind: bind, read: (*Handler).shopSceneData, placeLog: true, npc: npc}
+	return facility{title: shopTitles[kind], commands: commands, bind: bind, read: (*Handler).shopSceneData, placeLog: true, npc: npc,
+		present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+			switch data := data.(type) {
+			case ShopCatalogSceneData:
+				presentation := shopSaleOffer(data.ShopSceneInfo)
+				presentation.next = data.Page.Next
+				return presentation
+			case ShopProductSceneData:
+				return shopSaleOffer(data.ShopSceneInfo)
+			}
+			return scenePresentation{}
+		}}
 }

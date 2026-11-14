@@ -172,6 +172,12 @@ func tavernRejection(err error) (int, ErrorDetail) {
 var tavernFacility = facility{
 	title: "冒険者の酒場", commands: []string{"tavern_order", "tavern_delivery_reserve", "tavern_delivery_cancel"},
 	read: (*Handler).tavernSceneData, placeLog: true,
+	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+		if data.(TavernSceneData).Delivery == nil {
+			return scenePresentation{hide: []string{"tavern_delivery_cancel"}}
+		}
+		return scenePresentation{}
+	},
 	npc: &npcProfile{name: tavern.NPCName, wordsOf: tavernWords},
 }
 

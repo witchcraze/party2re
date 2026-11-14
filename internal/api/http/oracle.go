@@ -155,6 +155,13 @@ func oracleRejection(err error) (int, ErrorDetail) {
 var oracleFacility = facility{
 	title: "オラクル屋", commands: []string{"oracle_buy", "oracle_wallpaper", "oracle_blackmarket"},
 	read: (*Handler).oracleSceneData, placeLog: true,
+	present: func(h *Handler, result playercontext.Result, _ any) scenePresentation {
+		// ＠やみいちば answers only characters the black market admits (goods.cgi yamiichiba).
+		if h.playerContext.Enterable(result, "blackmarket") != nil {
+			return scenePresentation{hide: []string{"oracle_blackmarket"}}
+		}
+		return scenePresentation{}
+	},
 	npc: &npcProfile{name: "@ラクル", words: []string{
 		"おっ！久しぶりのお客だ！よく来たよく来た！ここはオラクル屋だよ",
 		"＠かべがみでそなたの家をオシャレにすることができるよん",

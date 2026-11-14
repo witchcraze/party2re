@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/witchcraze/party2re/internal/altar"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/town"
@@ -28,9 +27,20 @@ type facility struct {
 	// them as schema constants and execution rejects any other submitted value.
 	bind func(n playercontext.Selection, actorID string) map[string]map[string]any
 	read func(*Handler, context.Context, playercontext.Result) (any, error)
+	// present only adjusts display facts; it cannot admit commands.
+	present      func(*Handler, playercontext.Result, any) scenePresentation
+	controlsOnly bool
 	// placeLog marks facilities with a shared legacy log (docs/architecture/place-log.md).
 	placeLog bool
 	npc      *npcProfile
+}
+
+type scenePresentation struct {
+	title     *string
+	next      *playercontext.PageParams
+	hide      []string
+	templates map[string]map[string]any
+	members   []PlaceMember
 }
 
 type sceneAdapter struct {
@@ -225,11 +235,6 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		choices = slices.DeleteFunc(choices, func(id string) bool { return slices.Contains(ids, id) })
 	}
 	templates := h.boundParams(result)
-	page := func(p *playercontext.PageParams) {
-		if p != nil {
-			templates["scene_page"] = map[string]any{"destination": p.Destination, "offset": p.Offset, "limit": p.Limit}
-		}
-	}
 	if slices.Contains(choices, "scene_select") {
 		templates["scene_select"] = map[string]any{"target_kind": adapter.definition.SubjectKind}
 	}
@@ -265,67 +270,33 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 				return err
 			}
 		}
-		switch data.(type) {
-		case SelectionSceneData, TownSceneData:
-		default:
+		if adapter.facility.read != nil && !adapter.controlsOnly {
 			scene.Support.Observation = "details"
 		}
-		switch data := data.(type) {
-		case TownSceneData:
-			page(data.Page.Next)
-		case AltarSceneData:
-			// Legacy ＠いのる lists Ramia as a member until she leaves (reborn.cgi:81-84).
-			if data.RamiaPresent && adapter.placeLog {
-				scene.Members = append(scene.Members, PlaceMember{Kind: "npc", Name: altar.RamiaMemberName, Color: npcColor})
+		if adapter.present != nil {
+			presentation := adapter.present(h, result, data)
+			if presentation.title != nil {
+				scene.Title = *presentation.title
 			}
-		case AlchemySceneData:
-			page(data.Page.Next)
-		case BlackMarketSceneData:
-			page(data.Page.Next)
-		case FleaMarketSceneData:
-			page(data.Page.Next)
-		case DepotSceneData:
-			page(data.Page.Next)
-		case CasinoLobbySceneData:
-			page(data.Page.Next)
-		case CasinoSelectedSceneData:
-			scene.Title = data.Room.Name
-			if data.SpectateParams == nil {
-				hide("casino_room_spectate")
+			hide(presentation.hide...)
+			for id, params := range presentation.templates {
+				if templates[id] == nil {
+					templates[id] = make(map[string]any)
+				}
+				for key, value := range params {
+					templates[id][key] = value
+				}
 			}
-		case ShopCatalogSceneData:
-			scene.Title = data.Title
-			choices = shopSaleOffer(data.ShopSceneInfo, choices, templates)
-			page(data.Page.Next)
-		case ShopProductSceneData:
-			scene.Title = data.Title
-			choices = shopSaleOffer(data.ShopSceneInfo, choices, templates)
-		case SecretShopCatalogSceneData:
-			scene.Title = data.Title
-			page(data.Page.Next)
-		case SecretShopProductSceneData:
-			scene.Title = data.Title
-		case StoreSceneData:
-			scene.Title = data.Details.Store.StoreName
-		case HomeSceneData:
-			scene.Title = data.View.Owner.Name + "の家"
-		case OracleSceneData:
-			// ＠やみいちば answers only characters the black market admits (goods.cgi yamiichiba).
-			if h.playerContext.Enterable(result, "blackmarket") != nil {
-				hide("oracle_blackmarket")
-			}
-		case TavernSceneData:
-			if data.Delivery == nil {
-				hide("tavern_delivery_cancel")
-			}
-		case HomeMailboxSceneData:
-			if p := data.Page.Next; p != nil {
+			if p := presentation.next; p != nil {
 				templates["scene_page"] = map[string]any{"destination": p.Destination, "limit": p.Limit}
 				if p.Cursor != nil {
 					templates["scene_page"]["cursor"] = *p.Cursor
 				} else {
 					templates["scene_page"]["offset"] = p.Offset
 				}
+			}
+			if adapter.placeLog {
+				scene.Members = append(scene.Members, presentation.members...)
 			}
 		}
 		if templates["scene_page"] == nil {

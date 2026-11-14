@@ -46,6 +46,9 @@ func (h *Handler) blackMarketSceneData(ctx context.Context, r playercontext.Resu
 
 var blackMarketFacility = facility{
 	title: "闇市場", commands: []string{"blackmarket_sacrifice", "blackmarket_trade"}, read: (*Handler).blackMarketSceneData, placeLog: true,
+	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+		return scenePresentation{next: data.(BlackMarketSceneData).Page.Next}
+	},
 	npc: &npcProfile{name: "@闇商人", words: []string{
 		"よく来たな…。ここは闇市場だ…",
 		"表の世界では手に入れられない物を取引している…",

@@ -129,6 +129,13 @@ func wishingWellActionRejection(err error) (int, ErrorDetail) {
 
 var altarFacility = facility{
 	title: "復活の祭壇", commands: []string{"altar_pray", "altar_wish"}, read: (*Handler).altarSceneData, placeLog: true,
+	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+		// Legacy ＠いのる lists Ramia as a member until she leaves (reborn.cgi:81-84).
+		if data.(AltarSceneData).RamiaPresent {
+			return scenePresentation{members: []PlaceMember{{Kind: "npc", Name: altar.RamiaMemberName, Color: npcColor}}}
+		}
+		return scenePresentation{}
+	},
 	npc: &npcProfile{name: altar.NPCName, wordsOf: mikoNPCWords},
 }
 

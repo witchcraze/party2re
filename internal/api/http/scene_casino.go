@@ -131,4 +131,17 @@ var casinoFacility = facility{
 		return map[string]map[string]any{"casino_room_join": room, "casino_room_spectate": room}
 	},
 	read: (*Handler).casinoSceneData, placeLog: true,
+	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+		switch data := data.(type) {
+		case CasinoLobbySceneData:
+			return scenePresentation{next: data.Page.Next}
+		case CasinoSelectedSceneData:
+			presentation := scenePresentation{title: &data.Room.Name}
+			if data.SpectateParams == nil {
+				presentation.hide = []string{"casino_room_spectate"}
+			}
+			return presentation
+		}
+		return scenePresentation{}
+	},
 }
