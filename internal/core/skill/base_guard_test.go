@@ -103,7 +103,7 @@ func TestBaseGuardManifest(t *testing.T) {
 			if id == "job-0-entry-3" && (a.Tension != 1.7 || c.TensionCalls != 1) {
 				t.Fatal(a, c)
 			}
-			if id == "job-1-entry-1" && (!c.AdditionalEffect || s.Actors[1].Defense != 68 || c.StatDownCalls != 1) {
+			if id == "job-1-entry-1" && (!c.AdditionalEffect || s.Actors[1].Defense != 68) {
 				t.Fatal(s, c)
 			}
 			if id == "job-2-entry-2" && s.Actors[1].Status != corebattle.StatusDofuu {
@@ -112,7 +112,7 @@ func TestBaseGuardManifest(t *testing.T) {
 			if row.tmp == corebattle.TemporaryCovering && s.Actors[2].Temporary != corebattle.TemporaryCover {
 				t.Fatal(s)
 			}
-			if id == "job-3-entry-5" && (s.Actors[2].Defense != 100 || c.PartyStatUpCalls != 1) {
+			if id == "job-3-entry-5" && s.Actors[2].Defense != 100 {
 				t.Fatal(s, c)
 			}
 		})

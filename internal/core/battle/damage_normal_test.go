@@ -85,7 +85,7 @@ func TestStatDamageSharesOperationCounter(t *testing.T) {
 	}
 	rng := &targetRNG{t: t, draws: []float64{0, 0}}
 	r, err := s.ApplyStatUp(&c.EffectContext, TargetEffect{TargetID: "ally", Payload: CallbackPayload{Number: .25}}, StatAgility, rng)
-	if err != nil || !r.Applied || c.DamageCalls != 1 || c.StatUpCalls != 1 || s.actor("enemy").HP != 922 {
+	if err != nil || !r.Applied || c.DamageCalls != 1 || s.actor("enemy").HP != 922 {
 		t.Fatal(r, err, c, s)
 	}
 	rng.done()

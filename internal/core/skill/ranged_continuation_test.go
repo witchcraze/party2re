@@ -27,15 +27,14 @@ func TestRangedReloadedContinuation(t *testing.T) {
 						s.Actors[1].Temporary = corebattle.TemporaryOneHitDefense
 					}
 					type checkpoint struct {
-						State                      corebattle.LifetimeState
-						Target                     corebattle.TargetContext
-						Entry                      string
-						Arguments                  []string
-						MPHealCalls, StatDownCalls int
-						End                        corebattle.EndProcessing
-						Cursor                     corebattle.TargetCursor
+						State     corebattle.LifetimeState
+						Target    corebattle.TargetContext
+						Entry     string
+						Arguments []string
+						End       corebattle.EndProcessing
+						Cursor    corebattle.TargetCursor
 					}
-					data, err := json.Marshal(checkpoint{s, c.TargetContext, entry.ID, args, c.MPHealCalls, c.StatDownCalls, c.End, c.Cursor})
+					data, err := json.Marshal(checkpoint{s, c.TargetContext, entry.ID, args, c.End, c.Cursor})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -44,7 +43,7 @@ func TestRangedReloadedContinuation(t *testing.T) {
 						t.Fatal(err)
 					}
 					_, resumed, rebuilt := rangedFixture()
-					resumed.TargetContext, resumed.MPHealCalls, resumed.StatDownCalls, resumed.End, resumed.Cursor = loaded.Target, loaded.MPHealCalls, loaded.StatDownCalls, loaded.End, loaded.Cursor
+					resumed.TargetContext, resumed.End, resumed.Cursor = loaded.Target, loaded.End, loaded.Cursor
 					rngs := []random.Generator{random.NewDeterministic(seed), random.NewDeterministic(seed)}
 					for i, run := range []struct {
 						s *corebattle.LifetimeState
@@ -67,7 +66,7 @@ func TestRangedReloadedContinuation(t *testing.T) {
 					if !reflect.DeepEqual(s, loaded.State) || !reflect.DeepEqual(left, right) || rngs[0].Float64() != rngs[1].Float64() {
 						t.Fatal(s, loaded.State, left, right)
 					}
-					if (entry.ID == "job-11-entry-2" || entry.ID == "job-54-entry-2") && (s.Actors[0].MP != 94 || s.Actors[1].MP != 85 || c.MPHealCalls != 1 || c.StatDownCalls != 1) {
+					if (entry.ID == "job-11-entry-2" || entry.ID == "job-54-entry-2") && (s.Actors[0].MP != 94 || s.Actors[1].MP != 85) {
 						t.Fatal("committed theft replayed", s, c)
 					}
 				})

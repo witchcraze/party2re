@@ -9,9 +9,7 @@ import (
 
 type StatusContext struct {
 	EffectContext
-	Defeat                                                  *DefeatContext
-	StatusCalls, AreaStatusCalls, CureCalls, PartyCureCalls int
-	DeathCalls, AreaDeathCalls                              int
+	Defeat *DefeatContext
 }
 
 type StatusApplication struct {
@@ -121,10 +119,7 @@ func (s *LifetimeState) ApplyStatus(c *StatusContext, e TargetEffect, chance flo
 	if err != nil {
 		return r, err
 	}
-	if death {
-		c.DeathCalls++
-	} else {
-		c.StatusCalls++
+	if !death {
 		r.Returned = true
 	}
 	if !death && s.Fields.Current() == "den" {
@@ -223,11 +218,6 @@ func (s *LifetimeState) ApplyAreaStatus(c *StatusContext, e TargetEffect, chance
 	if err != nil || !allowed {
 		return nil, err
 	}
-	if death {
-		c.AreaDeathCalls++
-	} else {
-		c.AreaStatusCalls++
-	}
 	var results []StatusApplication
 	for _, id := range c.EnemyIDs {
 		e.TargetID = id
@@ -257,7 +247,6 @@ func (s *LifetimeState) ApplyCure(c *StatusContext, e TargetEffect, rng random.G
 	if t.HP <= 0 {
 		return r, nil
 	}
-	c.CureCalls++
 	r.Returned = true
 	if t.Status == target.Payload.Symbol || (target.Payload.Symbol == StatusDeadlyPoison && (t.Status == StatusPoison || t.Status == StatusVirulentPoison)) {
 		t.Status = ""
@@ -283,7 +272,6 @@ func (s *LifetimeState) ApplyPartyCure(c *StatusContext, e TargetEffect, rng ran
 	if err != nil || !allowed {
 		return nil, err
 	}
-	c.PartyCureCalls++
 	c.AdditionalEffect = true
 	var results []StatusApplication
 	for _, id := range c.PartyIDs {

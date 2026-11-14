@@ -31,7 +31,7 @@ func assertAdvancedMagicRejected(t *testing.T, s *corebattle.LifetimeState, c *c
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.DamageCalls != 0 || c.Status.DeathCalls != 0 || c.Arguments != nil {
+	if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.DamageCalls != 0 || c.Arguments != nil {
 		t.Fatal(s, c, f)
 	}
 }

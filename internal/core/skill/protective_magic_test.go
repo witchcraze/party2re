@@ -79,10 +79,10 @@ func TestProtectiveMagicManifest(t *testing.T) {
 			if 900-e.HP != row.damage || a.HP != row.hp || a.Temporary != row.tmp || a.MP != 80 || a.CMP != 90 || fallen.HP != 0 || fallen.Temporary != "" {
 				t.Fatal(a, e, fallen)
 			}
-			if id == "job-33-entry-4" && (a.Attack != 200 || c.StatUpCalls != 1) {
+			if id == "job-33-entry-4" && a.Attack != 200 {
 				t.Fatal(a, c)
 			}
-			if id == "job-33-entry-7" && (a.Status != "" || a.Extended != corebattle.ExtendedAdditional || a.ExtendedTurns != 5 || c.CureCalls != 1) {
+			if id == "job-33-entry-7" && (a.Status != "" || a.Extended != corebattle.ExtendedAdditional || a.ExtendedTurns != 5) {
 				t.Fatal(a, c)
 			}
 			wantMP := 15

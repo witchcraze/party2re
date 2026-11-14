@@ -63,7 +63,7 @@ func TestNPC97AllPositionsAndRoles(t *testing.T) {
 					t.Fatal(entries)
 				}
 				executeNPC97(t, &s, c, d, pos, []string{"enemy", "tail"}, row.draws...)
-				if s.Actors[1].HP != row.enemyHP || s.Actors[0].HP != row.selfHP || s.Actors[0].Attack != row.attack || s.Actors[0].Defense != row.defense || c.DamageCalls != row.damage || c.AreaDamageCalls != row.area || c.StatusCalls != row.status || s.Actors[0].MP != 80 || s.Actors[0].CMP != 90 {
+				if s.Actors[1].HP != row.enemyHP || s.Actors[0].HP != row.selfHP || s.Actors[0].Attack != row.attack || s.Actors[0].Defense != row.defense || c.DamageCalls != row.damage || c.AreaDamageCalls != row.area || s.Actors[0].MP != 80 || s.Actors[0].CMP != 90 {
 					t.Fatal(s.Actors, c)
 				}
 				wantArgs := []string{"enemy", "tail"}

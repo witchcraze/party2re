@@ -27,7 +27,7 @@ func TestRitualDanceStripAndSacrificeBoundaries(t *testing.T) {
 		s, c, d := ritualDanceFixture()
 		s.Actors[0].HP = row.hp
 		executeRitualDance(t, &s, c, d, "job-75-entry-4", nil, row.draw, 0)
-		if s.Actors[0].HP != row.wantHP || s.Actors[0].MP != row.wantMP || c.MPHealCalls != 1 {
+		if s.Actors[0].HP != row.wantHP || s.Actors[0].MP != row.wantMP {
 			t.Fatal(row, s.Actors[0], c)
 		}
 	}
@@ -65,7 +65,7 @@ func TestRitualDanceTransferAccuracyAndProtection(t *testing.T) {
 	}{{0, corebattle.TemporaryNullAttack}, {.5, corebattle.TemporaryReduceAttack}} {
 		s, c, d := ritualDanceFixture()
 		executeRitualDance(t, &s, c, d, "job-76-entry-4", []string{"self"}, row.draw)
-		if s.Actors[0].Temporary != row.tmp || c.CureCalls != 0 {
+		if s.Actors[0].Temporary != row.tmp || s.Actors[0].Status != "" {
 			t.Fatal(s, c)
 		}
 	}
@@ -103,7 +103,7 @@ func TestRitualDanceCurseBranchesAndGuards(t *testing.T) {
 	for i, status := range []string{corebattle.StatusMagicSeal, corebattle.StatusPhysicalSeal, corebattle.StatusKinju} {
 		s, c, d := ritualDanceFixture()
 		executeRitualDance(t, &s, c, d, "job-75-entry-0", nil, (float64(i)+.1)/3, .749)
-		if s.Actors[1].Status != status || c.AreaStatusCalls != 0 {
+		if s.Actors[1].Status != status {
 			t.Fatal(s, c)
 		}
 	}

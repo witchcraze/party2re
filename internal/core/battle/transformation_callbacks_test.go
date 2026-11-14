@@ -64,7 +64,7 @@ func TestFormTuneOrderAndAdmission(t *testing.T) {
 	s.actor("self").Tension = 3
 	rng := &targetRNG{t: t, draws: []float64{0, .99}}
 	r, err := s.ApplyTransformation(&c, "job-300-tune", "", rng)
-	if err != nil || !r.Applied || len(r.Stats) != 2 || s.actor("self").Agility != 250 || s.actor("self").Attack != 200 || c.StatUpCalls != 2 {
+	if err != nil || !r.Applied || len(r.Stats) != 2 || s.actor("self").Agility != 250 || s.actor("self").Attack != 200 {
 		t.Fatal(r, err, s, c)
 	}
 	rng.done()
@@ -73,7 +73,7 @@ func TestFormTuneOrderAndAdmission(t *testing.T) {
 		s.actor("self").ItemDefinitionIDs = []string{"item-201"}
 		before := reloadLifetime(t, s)
 		r, err = s.ApplyTransformation(&c, id, "", &targetRNG{t: t})
-		if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || c.StatUpCalls != 0 {
+		if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
 			t.Fatal(id, r, err, s)
 		}
 		// At cap, the missing damage tail is unreachable and needs no executor.
@@ -96,7 +96,7 @@ func TestFormTuneOrderAndAdmission(t *testing.T) {
 	level := 99
 	c.RequesterLevel = &level
 	before := reloadLifetime(t, s)
-	if _, err := s.ApplyTransformation(&c, "job-300-tune", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || c.StatUpCalls != 0 {
+	if _, err := s.ApplyTransformation(&c, "job-300-tune", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
 		t.Fatal(err, s, c)
 	}
 }

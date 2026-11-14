@@ -21,7 +21,7 @@ func TestBasicMagicEveryPositionSealGuard(t *testing.T) {
 				draws = append([]float64{.999999}, draws...)
 			}
 			executeBasicMagic(t, &s, c, d, id, []string{"self", "tail"}, draws...)
-			if s.Actors[0].HP != 500 || s.Actors[0].MP != 80 || s.Actors[0].Status != corebattle.StatusMagicSeal || s.Actors[1].HP != 900 || c.DamageCalls != 0 || c.HealCalls != 0 || c.StatUpCalls != 0 || c.StatDownCalls != 0 || c.CureCalls != 0 || c.StatusCalls != 0 {
+			if s.Actors[0].HP != 500 || s.Actors[0].MP != 80 || s.Actors[0].Status != corebattle.StatusMagicSeal || s.Actors[1].HP != 900 || c.DamageCalls != 0 || c.HealCalls != 0 {
 				t.Fatal(s, c)
 			}
 		})
@@ -117,7 +117,7 @@ func TestBasicMagicHealingAndPoisonTargets(t *testing.T) {
 			} else if status != corebattle.StatusSleep {
 				wantAlly = ""
 			}
-			if s.Actors[0].Status != wantSelf || s.Actors[2].Status != wantAlly || c.CureCalls != 1 {
+			if s.Actors[0].Status != wantSelf || s.Actors[2].Status != wantAlly {
 				t.Fatal(status, hp, s, c)
 			}
 		}
@@ -129,7 +129,7 @@ func TestBasicMagicStatAndSleepBoundaries(t *testing.T) {
 		s, c, d := basicMagicFixture()
 		s.Actors[0].Defense = row.defense
 		executeBasicMagic(t, &s, c, d, "job-5-entry-1", []string{"self"})
-		if s.Actors[0].Defense != row.want || c.StatUpCalls != 1 {
+		if s.Actors[0].Defense != row.want {
 			t.Fatal(s, c)
 		}
 	}
@@ -145,7 +145,7 @@ func TestBasicMagicStatAndSleepBoundaries(t *testing.T) {
 		s, c, d := basicMagicFixture()
 		s.Actors[1].Hit = row.hit
 		executeBasicMagic(t, &s, c, d, "job-6-entry-4", nil)
-		if s.Actors[1].Hit != row.want || c.PartyStatDownCalls != 1 {
+		if s.Actors[1].Hit != row.want {
 			t.Fatal(s, c)
 		}
 	}
@@ -155,7 +155,7 @@ func TestBasicMagicStatAndSleepBoundaries(t *testing.T) {
 	}{{.649999, corebattle.StatusSleep}, {.65, ""}, {.999999, ""}} {
 		s, c, d := basicMagicFixture()
 		executeBasicMagic(t, &s, c, d, "job-6-entry-6", []string{"enemy"}, row.draw)
-		if s.Actors[1].Status != row.want || c.StatusCalls != 1 {
+		if s.Actors[1].Status != row.want {
 			t.Fatal(s, c)
 		}
 	}

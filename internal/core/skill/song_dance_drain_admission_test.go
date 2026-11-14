@@ -40,7 +40,7 @@ func TestSongDanceDrainRegistrationAndPureAdmission(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(original, f) || !reflect.DeepEqual(gear, *s.Actors[1].Gear) || c.Arguments != nil || c.DamageCalls != 0 || c.Status.DeathCalls != 0 {
+			if string(before) != string(after) || !reflect.DeepEqual(original, f) || !reflect.DeepEqual(gear, *s.Actors[1].Gear) || c.Arguments != nil || c.DamageCalls != 0 {
 				t.Fatal(entry, s, c, f)
 			}
 			if _, err := (BattleDefinitions{}).InvocationAction(&s, &f, []string{entry.ID}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
@@ -108,7 +108,7 @@ func TestSongDanceDrainWholeActionRejection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(args, []string{"enemy", "tail"}) || c.Arguments != nil || c.DamageCalls != 0 || c.StatUpCalls != 0 {
+			if string(before) != string(after) || !reflect.DeepEqual(args, []string{"enemy", "tail"}) || c.Arguments != nil || c.DamageCalls != 0 {
 				t.Fatal(s, c, f)
 			}
 		})
@@ -157,7 +157,7 @@ func TestSongDanceDrainDelegatedCostsAndCompletePools(t *testing.T) {
 			id, draws, wantMP = "tool", []float64{.2}, 80
 		}
 		executeSongDance(t, &s, c, d, id, []string{"enemy"}, draws...)
-		if s.Actors[0].MP != wantMP || c.MPHealCalls != 0 {
+		if s.Actors[0].MP != wantMP {
 			t.Fatal(delegated, s, c)
 		}
 	}

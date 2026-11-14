@@ -45,7 +45,7 @@ func TestBeastCloneAdmissionIsInert(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(original, f) || c.DamageCalls != 0 || c.StatusCalls != 0 || c.DeathCalls != 0 || c.StatUpCalls != 0 || c.HealCalls != 0 || c.End.ImmediateRiskCalls != 0 || !reflect.DeepEqual(c.Arguments, []string{"original", "tail"}) || weapon != 7 || history != 9 || *c.RequesterLevel != 40 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear || s.Actors[0].JobHistory["job-10"] != &history {
+			if string(before) != string(after) || !reflect.DeepEqual(original, f) || c.DamageCalls != 0 || c.HealCalls != 0 || c.End.ImmediateRiskCalls != 0 || !reflect.DeepEqual(c.Arguments, []string{"original", "tail"}) || weapon != 7 || history != 9 || *c.RequesterLevel != 40 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear || s.Actors[0].JobHistory["job-10"] != &history {
 				t.Fatal(id, s, c, f)
 			}
 		}
@@ -111,7 +111,7 @@ func TestBeastCloneMissingDescendantsRejectBeforeMutation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.DamageCalls != 0 || c.StatusCalls != 0 || c.StatUpCalls != 0 || c.Arguments != nil {
+			if string(before) != string(after) || c.DamageCalls != 0 || c.Arguments != nil {
 				t.Fatal(s, c)
 			}
 		})

@@ -51,13 +51,12 @@ func TestAdvancedMagicPoisonOrderedRecipientAndGuards(t *testing.T) {
 		chance          float64
 		selfHP, enemyHP int
 		status          string
-		calls           int
 	}{
-		{"cross999-success", 1000, "", .79999, 500, 973, corebattle.StatusDeadlyPoison, 1},
-		{"strict80-failure", 999, "", .8, 500, 972, "", 1},
-		{"one-hit-no-tuple", 900, corebattle.TemporaryOneHitDefense, 0, 500, 900, "", 0},
-		{"reflection-resolves-again", 900, corebattle.TemporaryReflectMagic, 0, 473, 900, "", 1},
-		{"death-before-status", 1, "", 0, 500, 0, "", 0},
+		{"cross999-success", 1000, "", .79999, 500, 973, corebattle.StatusDeadlyPoison},
+		{"strict80-failure", 999, "", .8, 500, 972, ""},
+		{"one-hit-no-tuple", 900, corebattle.TemporaryOneHitDefense, 0, 500, 900, ""},
+		{"reflection-resolves-again", 900, corebattle.TemporaryReflectMagic, 0, 473, 900, ""},
+		{"death-before-status", 1, "", 0, 500, 0, ""},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			s, c, d := advancedMagicFixture()
@@ -73,7 +72,7 @@ func TestAdvancedMagicPoisonOrderedRecipientAndGuards(t *testing.T) {
 				draws = []float64{0}
 			}
 			executeAdvancedMagic(t, &s, c, d, "job-15-entry-0", []string{"enemy"}, draws...)
-			if s.Actors[0].HP != row.selfHP || s.Actors[1].HP != row.enemyHP || s.Actors[1].Status != row.status || c.Status.StatusCalls != row.calls {
+			if s.Actors[0].HP != row.selfHP || s.Actors[1].HP != row.enemyHP || s.Actors[1].Status != row.status || (row.tmp == corebattle.TemporaryReflectMagic && s.Actors[0].Status != corebattle.StatusDeadlyPoison) {
 				t.Fatal(s, c.Status)
 			}
 		})
@@ -131,7 +130,7 @@ func TestAdvancedMagicMPTheftFloorsImmunityAndCap(t *testing.T) {
 			}
 			mp := s.Actors[1].MP
 			executeAdvancedMagic(t, &s, c, d, id, []string{"enemy"})
-			if s.Actors[0].MP != 80 || s.Actors[1].MP != mp || c.MPHealCalls != 0 {
+			if s.Actors[0].MP != 80 || s.Actors[1].MP != mp {
 				t.Fatal(id, blocked, s, c)
 			}
 		}
@@ -139,7 +138,7 @@ func TestAdvancedMagicMPTheftFloorsImmunityAndCap(t *testing.T) {
 		s.Actors[1].MP, s.Actors[1].MaxMP = 1000, 1000
 		s.Actors[0].MP, s.Actors[0].MaxMP = 0, 1000
 		executeAdvancedMagic(t, &s, c, d, id, []string{"enemy"}, .999, 0)
-		if s.Actors[1].MP != 851 || s.Actors[0].MP != 135 || c.MPHealCalls != 1 {
+		if s.Actors[1].MP != 851 || s.Actors[0].MP != 135 {
 			t.Fatal(id, s, c)
 		}
 	}

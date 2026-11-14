@@ -72,7 +72,7 @@ func TestRecoilDarkManifest(t *testing.T) {
 			mp := 80
 			if id == "job-38-entry-1" {
 				mp = 99
-				if e.MP != 80 || c.StatDownCalls != 1 {
+				if e.MP != 80 {
 					t.Fatal(e, c)
 				}
 			}
@@ -97,11 +97,11 @@ func TestRecoilDarkManifest(t *testing.T) {
 					t.Fatal(a, c)
 				}
 			case "job-22-entry-1", "job-38-entry-3":
-				if a.Defense != 41 || a.Attack != 200 || c.StatUpCalls != 1 {
+				if a.Defense != 41 || a.Attack != 200 {
 					t.Fatal(a, c)
 				}
 			case "job-22-entry-3":
-				if e.Hit != 86 || !c.AdditionalEffect || c.StatDownCalls != 1 {
+				if e.Hit != 86 || !c.AdditionalEffect {
 					t.Fatal(e, c)
 				}
 			case "job-38-entry-0", "job-38-entry-5":
@@ -114,7 +114,7 @@ func TestRecoilDarkManifest(t *testing.T) {
 				}
 			case "job-21-entry-2", "job-22-entry-2", "job-38-entry-4":
 				symbol := map[int]string{21: corebattle.StatusDofuu, 22: corebattle.StatusConfusion, 38: corebattle.StatusSleep}[row.job]
-				if e.Status != symbol || c.StatusCalls != 1 || c.AreaStatusCalls != 1 {
+				if e.Status != symbol {
 					t.Fatal(e, c)
 				}
 			}
@@ -137,7 +137,7 @@ func TestRecoilDarkGuardBoundaries(t *testing.T) {
 			s.Actors[1].Temporary = corebattle.TemporaryOneHitDefense
 			c.Defeat = nil
 			executeRecoilDark(t, &s, c, d, []string{id}, []string{"enemy"})
-			if s.Actors[0].HP != 500 || s.Actors[1].HP != 900 || s.Actors[1].Temporary != "" || c.HealCalls != 0 || c.StatDownCalls != 0 || c.End.ImmediateRiskCalls != 0 {
+			if s.Actors[0].HP != 500 || s.Actors[1].HP != 900 || s.Actors[1].Temporary != "" || c.HealCalls != 0 || c.End.ImmediateRiskCalls != 0 {
 				t.Fatal(s, c)
 			}
 			if id == "job-21-entry-3" && s.Actors[0].Temporary != corebattle.TemporaryDouble {
@@ -151,7 +151,7 @@ func TestRecoilDarkGuardBoundaries(t *testing.T) {
 	}{{"job-21-entry-2", .6}, {"job-22-entry-2", .5}, {"job-38-entry-4", .35}} {
 		s, c, d := recoilDarkFixture()
 		executeRecoilDark(t, &s, c, d, []string{row.id}, nil, row.chance)
-		if s.Actors[1].Status != "" || c.StatusCalls != 1 {
+		if s.Actors[1].Status != "" {
 			t.Fatal(row.id, s, c)
 		}
 	}

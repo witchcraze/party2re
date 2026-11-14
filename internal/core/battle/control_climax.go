@@ -16,7 +16,6 @@ type ControlClimaxContext struct {
 	Arguments      []string
 	PriorTemporary map[string]TemporaryEffect
 	MPDrain        *ControlMPDrain
-	StatusCalls    int
 }
 
 // ControlClimaxEntries preserves complete tables, including the field/revival
@@ -222,10 +221,9 @@ func (s *LifetimeState) ApplyControlClimax(c *ControlClimaxContext, id string, r
 }
 
 func (s *LifetimeState) controlStatus(c *ControlClimaxContext, e TargetEffect, chance float64, rng random.Generator) error {
-	status := StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls}
+	status := StatusContext{EffectContext: c.EffectContext}
 	_, err := s.ApplyStatus(&status, e, chance, false, false, rng)
 	c.EffectContext = status.EffectContext
-	c.StatusCalls = status.StatusCalls
 	return err
 }
 

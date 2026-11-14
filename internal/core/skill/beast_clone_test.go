@@ -85,7 +85,7 @@ func TestBeastCloneManifest(t *testing.T) {
 				}
 			case "job-10-entry-2":
 				consumed = true
-				if a.Defense != 112 || c.StatUpCalls != 1 {
+				if a.Defense != 112 {
 					t.Fatal(a, c)
 				}
 			case "job-10-entry-3":
@@ -99,7 +99,7 @@ func TestBeastCloneManifest(t *testing.T) {
 					t.Fatal(a, c)
 				}
 			case "job-10-entry-5":
-				if e.Status != corebattle.StatusSleep || c.StatusCalls != 1 || c.AreaStatusCalls != 1 {
+				if e.Status != corebattle.StatusSleep {
 					t.Fatal(e, c)
 				}
 			case "job-10-entry-6":
@@ -107,7 +107,7 @@ func TestBeastCloneManifest(t *testing.T) {
 					t.Fatal(a)
 				}
 			case "job-10-entry-7":
-				if a.Defense != 120 || a.Temporary != corebattle.TemporaryReduceMagic || c.StatUpCalls != 1 {
+				if a.Defense != 120 || a.Temporary != corebattle.TemporaryReduceMagic {
 					t.Fatal(a, c)
 				}
 			case "job-10-entry-8":
@@ -119,17 +119,17 @@ func TestBeastCloneManifest(t *testing.T) {
 					t.Fatal(c)
 				}
 			case "job-12-entry-2", "job-26-entry-3":
-				if e.Status != corebattle.StatusDeadlyPoison || c.StatusCalls != 1 || c.AreaStatusCalls != 1 {
+				if e.Status != corebattle.StatusDeadlyPoison {
 					t.Fatal(e, c)
 				}
 			case "job-12-entry-4":
 				consumed = true
-				if !c.AdditionalEffect || c.DamageCalls != 1 || c.StatusCalls != 1 || e.Status != corebattle.StatusParalyze {
+				if !c.AdditionalEffect || c.DamageCalls != 1 || e.Status != corebattle.StatusParalyze {
 					t.Fatal(e, c)
 				}
 			case "job-12-entry-5":
 				consumed = true
-				if e.Status != corebattle.StatusDofuu || c.StatusCalls != 1 {
+				if e.Status != corebattle.StatusDofuu {
 					t.Fatal(e, c)
 				}
 			case "job-12-entry-7":
@@ -138,29 +138,29 @@ func TestBeastCloneManifest(t *testing.T) {
 					t.Fatal(c)
 				}
 			case "job-26-entry-1":
-				if e.Status != corebattle.StatusParalyze || c.AreaStatusCalls != 1 {
+				if e.Status != corebattle.StatusParalyze {
 					t.Fatal(e, c)
 				}
 			case "job-26-entry-2":
-				if e.Hit != 80 || c.StatDownCalls != 1 || c.PartyStatDownCalls != 1 {
+				if e.Hit != 80 {
 					t.Fatal(e, c)
 				}
 			case "job-26-entry-4":
-				if a.Agility != 60 || c.StatUpCalls != 2 || c.PartyStatUpCalls != 1 {
+				if a.Agility != 60 {
 					t.Fatal(a, c)
 				}
 			case "job-26-entry-5":
 				consumed = true
-				if c.DeathCalls != 1 {
-					t.Fatal(c)
+				if e.HP != 0 {
+					t.Fatal(e, c)
 				}
 			case "job-26-entry-6":
-				if a.Agility != 80 || c.StatUpCalls != 1 {
+				if a.Agility != 80 {
 					t.Fatal(a, c)
 				}
 			case "job-26-entry-7":
 				consumed = true
-				if e.Tension != 1 || e.Temporary != "" || c.StatDownCalls != 1 {
+				if e.Tension != 1 || e.Temporary != "" {
 					t.Fatal(e, c)
 				}
 			case "job-26-entry-8":

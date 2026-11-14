@@ -108,10 +108,10 @@ func TestAdvancedMagicManifest(t *testing.T) {
 			if !reflect.DeepEqual(c.Arguments, want) {
 				t.Fatal(c.Arguments, want)
 			}
-			if row.job == 19 && row.pos == 0 && (e.Defense != 60 || c.StatDownCalls != 1 || c.PartyStatDownCalls != 1) {
+			if row.job == 19 && row.pos == 0 && e.Defense != 60 {
 				t.Fatal(e, c)
 			}
-			if id == "job-15-entry-0" && (!c.AdditionalEffect || c.DamageCalls != 1 || c.Status.StatusCalls != 1) || id == "job-16-entry-8" && (c.HealCalls != 2 || c.PartyHealCalls != 1) || id == "job-19-entry-8" && c.Status.DeathCalls != 4 {
+			if id == "job-15-entry-0" && (!c.AdditionalEffect || c.DamageCalls != 1) || id == "job-16-entry-8" && (c.HealCalls != 2 || c.PartyHealCalls != 1) || id == "job-19-entry-8" && c.DamageCalls != 0 {
 				t.Fatal(c)
 			}
 		})

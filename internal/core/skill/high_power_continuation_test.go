@@ -85,7 +85,7 @@ func TestHighPowerAreaStatusContinuesAfterCasterDeath(t *testing.T) {
 	s.Actors[0].HP = 1
 	s.Actors[1].Temporary = corebattle.TemporaryReflectMagic
 	executeHighPower(t, &s, c, d, []string{"job-48-entry-0"}, nil, 0, 0)
-	if s.Actors[0].HP != 0 || s.Actors[3].HP != 900 || s.Actors[3].Status != corebattle.StatusDeadlyPoison || c.DamageCalls != 1 || c.AreaStatusCalls != 1 || c.StatusCalls != 1 {
+	if s.Actors[0].HP != 0 || s.Actors[3].HP != 900 || s.Actors[3].Status != corebattle.StatusDeadlyPoison || c.DamageCalls != 1 {
 		t.Fatal(s, c)
 	}
 }

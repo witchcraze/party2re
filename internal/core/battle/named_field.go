@@ -17,7 +17,6 @@ type NamedFieldContext struct {
 	Discovered                                    []CallbackEntry
 	SubmittedCommand, SubmittedTarget, CustomName string
 	RequesterGender, RequesterIcon                string
-	PartyMPHealCalls, CureCalls                   int
 	ResponseSuppressed                            bool
 }
 

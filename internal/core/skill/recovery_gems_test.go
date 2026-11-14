@@ -107,7 +107,7 @@ func TestRecoveryGemCertifiedRegistrationAndBodies(t *testing.T) {
 				case 95:
 					ok = enemy.Agility == 113
 				case 96:
-					ok = enemy.Hit == 50 && c.StatDownCalls == 1
+					ok = enemy.Hit == 50
 				}
 				if !ok {
 					t.Fatal(entry, s, c)
@@ -350,7 +350,7 @@ func TestRecoveryGemTargetAlternativesSharedByDiscoveryAndInvocation(t *testing.
 			if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil {
 				t.Fatal(err)
 			}
-			if len(rng.draws) != 0 || s.Actors[3].Defense != 20 || s.Actors[0].Tension != 1 || s.Actors[2].Tension != 3 || c.PartyStatDownCalls != 1 || c.TensionCalls != 1 {
+			if len(rng.draws) != 0 || s.Actors[3].Defense != 20 || s.Actors[0].Tension != 1 || s.Actors[2].Tension != 3 || c.TensionCalls != 1 {
 				t.Fatal(s, c, rng.draws)
 			}
 		})

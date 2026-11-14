@@ -38,7 +38,7 @@ func TestRangedReturnedLivingTails(t *testing.T) {
 				}
 				executeRanged(t, &s, c, d, id, []string{"enemy"}, draws...)
 				if guard == "dead-after" || guard == "blocked" || guard == "absent" {
-					if c.StatDownCalls != 0 || c.Status.StatusCalls != 0 || c.Status.DeathCalls != 0 || !c.AdditionalEffect {
+					if s.Actors[1].Hit != 95 || s.Actors[1].Status != "" || !c.AdditionalEffect {
 						t.Fatal(s, c)
 					}
 				} else {
@@ -50,14 +50,14 @@ func TestRangedReturnedLivingTails(t *testing.T) {
 						}
 					}
 					if id == "job-11-entry-5" {
-						if c.StatDownCalls != 1 || s.Actors[index].Hit >= 95 {
+						if s.Actors[index].Hit >= 95 {
 							t.Fatal(s, c)
 						}
 					} else if id == "job-42-entry-6" {
-						if s.Actors[index].HP != 0 || c.Status.DeathCalls != 1 {
+						if s.Actors[index].HP != 0 {
 							t.Fatal(s, c)
 						}
-					} else if c.Status.StatusCalls != 1 || s.Actors[index].Status == "" {
+					} else if s.Actors[index].Status == "" {
 						t.Fatal(s, c)
 					}
 				}

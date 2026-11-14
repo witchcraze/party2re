@@ -89,19 +89,19 @@ func TestTimeMixedMagicManifest(t *testing.T) {
 			}
 			switch id {
 			case "job-29-entry-0":
-				if e.Agility != 22 || c.StatDownCalls != 1 {
+				if e.Agility != 22 {
 					t.Fatal(e, c)
 				}
 			case "job-29-entry-1":
-				if a.Agility != 58 || c.StatUpCalls != 1 {
+				if a.Agility != 58 {
 					t.Fatal(a, c)
 				}
 			case "job-29-entry-3":
-				if e.Agility != 26 || c.PartyStatDownCalls != 1 {
+				if e.Agility != 26 {
 					t.Fatal(e, c)
 				}
 			case "job-29-entry-4":
-				if a.Agility != 68 || c.PartyStatUpCalls != 1 {
+				if a.Agility != 68 {
 					t.Fatal(a, c)
 				}
 			case "job-30-entry-0", "job-30-entry-5":

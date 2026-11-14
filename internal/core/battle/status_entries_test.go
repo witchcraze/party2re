@@ -115,9 +115,6 @@ func TestStatusConcreteSealGuardsAndBreathIndependence(t *testing.T) {
 					t.Fatal(id, r)
 				}
 			}
-			if c.AreaDeathCalls != 0 || c.AreaStatusCalls != 0 {
-				t.Fatal(id, c)
-			}
 		}
 	}
 }

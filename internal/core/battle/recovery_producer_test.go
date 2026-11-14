@@ -84,7 +84,7 @@ func TestDistributionCursorMaximumAndTails(t *testing.T) {
 	s.actor("self").Tension = 3
 	rng := &targetRNG{t: t, draws: []float64{0, 0, 0, 0, 0, 0, 0}}
 	r, err = s.ApplyDistributedAttack(&c, "ally", TargetCursor{}, rng)
-	if err != nil || len(r.Tails) != 12 || c.PartyStatUpCalls != 3 || c.PartyHealCalls != 1 || s.actor("self").Attack != 250 || s.actor("ally").Attack != 200 || s.actor("self").Defense != 250 || s.actor("ally").Defense != 200 || s.actor("self").HP != 460 || s.actor("ally").HP != 280 {
+	if err != nil || len(r.Tails) != 12 || c.PartyHealCalls != 1 || s.actor("self").Attack != 250 || s.actor("ally").Attack != 200 || s.actor("self").Defense != 250 || s.actor("ally").Defense != 200 || s.actor("self").HP != 460 || s.actor("ally").HP != 280 {
 		t.Fatal(r, err, s, c)
 	}
 	rng.done()
@@ -92,7 +92,7 @@ func TestDistributionCursorMaximumAndTails(t *testing.T) {
 	s, c = recoveryFixture()
 	rng = &targetRNG{t: t, draws: []float64{.25, 0, .25, 0, 0, 0, 0}}
 	r, err = s.ApplyDistributedAttack(&c, "ally", TargetCursor{}, rng)
-	if err != nil || len(r.Tails) != 6 || c.PartyStatUpCalls != 1 || c.PartyHealCalls != 1 || s.actor("self").Attack != 150 || s.actor("self").Defense != 250 || s.actor("self").Agility != 150 {
+	if err != nil || len(r.Tails) != 6 || c.PartyHealCalls != 1 || s.actor("self").Attack != 150 || s.actor("self").Defense != 250 || s.actor("self").Agility != 150 {
 		t.Fatal(r, err, s, c)
 	}
 	rng.done()
@@ -236,7 +236,7 @@ func TestApplyRecoveryStatGemUnrelatedDeflection(t *testing.T) {
 			before := reloadLifetime(t, sReachable)
 			rngReachable := &targetRNG{t: t}
 			_, errReachable := sReachable.ApplyRecoveryStatGem(tc.id, &cReachable, "self", rngReachable)
-			if !errors.Is(errReachable, ErrUnsupportedEffect) || !reflect.DeepEqual(sReachable, before) || cReachable.StatUpCalls != 0 {
+			if !errors.Is(errReachable, ErrUnsupportedEffect) || !reflect.DeepEqual(sReachable, before) {
 				t.Fatalf("expected producer%d on reachable deflect to reject with ErrUnsupportedEffect without mutation, got err=%v",
 					tc.id, errReachable)
 			}

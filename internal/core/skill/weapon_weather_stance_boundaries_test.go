@@ -45,7 +45,7 @@ func TestWeaponWeatherStanceEveryPositionGuardBoundary(t *testing.T) {
 			}
 			switch id {
 			case "job-24-entry-2":
-				if s.Actors[0].Attack != 250 || c.StatUpCalls != 1 {
+				if s.Actors[0].Attack != 250 {
 					t.Fatal(s, c)
 				}
 			case "job-24-entry-5":
@@ -53,15 +53,15 @@ func TestWeaponWeatherStanceEveryPositionGuardBoundary(t *testing.T) {
 					t.Fatal(s)
 				}
 			case "job-27-entry-4":
-				if c.CureCalls != 0 || c.PartyCureCalls != 1 {
-					t.Fatal(c)
+				if s.Actors[0].HP != 0 || s.Actors[0].Status != "" || !c.AdditionalEffect {
+					t.Fatal(s, c)
 				}
 			case "job-27-entry-5":
 				if s.Actors[0].Temporary != corebattle.TemporaryReflectBreath || s.Actors[2].Temporary != corebattle.TemporaryRage || s.Actors[0].Status != corebattle.StatusDofuu {
 					t.Fatal(s)
 				}
 			case "job-27-entry-8":
-				if c.PartyHealCalls != 1 || c.HealCalls != 0 || c.CureCalls != 0 {
+				if c.PartyHealCalls != 1 || c.HealCalls != 0 {
 					t.Fatal(c)
 				}
 			case "job-28-entry-0":
@@ -160,7 +160,7 @@ func TestWeaponWeatherStanceHealingOrderAndFullFallenAllies(t *testing.T) {
 	s.Actors = append(s.Actors, ally)
 	c.PartyIDs = append(c.PartyIDs, "ally")
 	executeWeaponWeatherStance(t, &s, c, d, "job-27-entry-8", nil, 0, 0, 0)
-	if c.PartyHealCalls != 1 || c.HealCalls != 3 || c.CureCalls != 3 || c.PartyCureCalls != 0 || s.Actors[0].HP != 1000 || s.Actors[0].Status != "" || s.Actors[2].HP != 0 || s.Actors[2].Status != corebattle.StatusPoison || s.Actors[3].HP != 1000 || s.Actors[3].Status != "" {
+	if c.PartyHealCalls != 1 || c.HealCalls != 3 || s.Actors[0].HP != 1000 || s.Actors[0].Status != "" || s.Actors[2].HP != 0 || s.Actors[2].Status != corebattle.StatusPoison || s.Actors[3].HP != 1000 || s.Actors[3].Status != "" {
 		t.Fatal(s, c)
 	}
 }

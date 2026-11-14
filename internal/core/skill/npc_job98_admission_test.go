@@ -74,7 +74,7 @@ func TestNPC98WholeEntryRejectionIsInert(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.TensionCalls != 0 || c.Cursor != (corebattle.TargetCursor{}) || gear != s.Actors[1].Gear || !reflect.DeepEqual(args, c.Arguments) || !reflect.DeepEqual(f.Arguments, c.Arguments) || !reflect.DeepEqual(party, c.PartyIDs) || c.EquipmentReset != nil && c.EquipmentReset.Cursor != (corebattle.TargetCursor{}) {
+			if string(before) != string(after) || c.DamageCalls != 0 || c.TensionCalls != 0 || c.Cursor != (corebattle.TargetCursor{}) || gear != s.Actors[1].Gear || !reflect.DeepEqual(args, c.Arguments) || !reflect.DeepEqual(f.Arguments, c.Arguments) || !reflect.DeepEqual(party, c.PartyIDs) || c.EquipmentReset != nil && c.EquipmentReset.Cursor != (corebattle.TargetCursor{}) {
 				t.Fatal(s, c, f)
 			}
 		})

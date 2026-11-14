@@ -45,7 +45,7 @@ func TestRecoilDarkAdmissionPurity(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if string(before) != string(after) || !reflect.DeepEqual(original, frame) || c.DamageCalls != 0 || c.HealCalls != 0 || c.StatusCalls != 0 || c.StatUpCalls != 0 || c.StatDownCalls != 0 || c.TensionCalls != 0 || len(c.Arguments) != 0 || weapon != 7 || s.Actors[0].Gear != gear || gear.WeaponAttack != &weapon || !reflect.DeepEqual(raw.EquipmentResetContext, c.RawDefeat.EquipmentResetContext) {
+				if string(before) != string(after) || !reflect.DeepEqual(original, frame) || c.DamageCalls != 0 || c.HealCalls != 0 || c.TensionCalls != 0 || len(c.Arguments) != 0 || weapon != 7 || s.Actors[0].Gear != gear || gear.WeaponAttack != &weapon || !reflect.DeepEqual(raw.EquipmentResetContext, c.RawDefeat.EquipmentResetContext) {
 					t.Fatal(entry.ID, s, c, frame)
 				}
 			}

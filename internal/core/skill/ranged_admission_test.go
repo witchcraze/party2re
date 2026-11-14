@@ -37,7 +37,7 @@ func TestRangedRegistrationAndPureAdmission(t *testing.T) {
 					t.Fatal(err)
 				}
 				// Observe the referents independently of the shallow context copy.
-				if string(before) != string(after) || !reflect.DeepEqual(original, f) || !reflect.DeepEqual(gear, *s.Actors[1].Gear) || !reflect.DeepEqual(facts, c.EffectContext) || c.Arguments != nil || c.Status.DeathCalls != 0 || !reflect.DeepEqual(defeat.TargetContext, c.Status.Defeat.TargetContext) {
+				if string(before) != string(after) || !reflect.DeepEqual(original, f) || !reflect.DeepEqual(gear, *s.Actors[1].Gear) || !reflect.DeepEqual(facts, c.EffectContext) || c.Arguments != nil || !reflect.DeepEqual(defeat.TargetContext, c.Status.Defeat.TargetContext) {
 					t.Fatal(s, c, f)
 				}
 				for _, empty := range []BattleDefinitions{{}, func() BattleDefinitions { d.RegisterRanged(nil); return d }()} {

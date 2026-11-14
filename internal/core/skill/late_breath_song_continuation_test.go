@@ -39,15 +39,14 @@ func TestLateSongReloadedContinuation(t *testing.T) {
 						s.Actors[1].Temporary = corebattle.TemporaryNullMagic
 					}
 					type checkpoint struct {
-						State       corebattle.LifetimeState
-						Target      corebattle.TargetContext
-						Entry       string
-						Arguments   []string
-						Burn        bool
-						Books       map[string]string
-						MPHealCalls int
+						State     corebattle.LifetimeState
+						Target    corebattle.TargetContext
+						Entry     string
+						Arguments []string
+						Burn      bool
+						Books     map[string]string
 					}
-					input := checkpoint{s, c.TargetContext, entry.ID, args, c.BurnStrike, c.HeldBooks, c.MPHealCalls}
+					input := checkpoint{s, c.TargetContext, entry.ID, args, c.BurnStrike, c.HeldBooks}
 					data, err := json.Marshal(input)
 					if err != nil {
 						t.Fatal(err)
@@ -57,7 +56,7 @@ func TestLateSongReloadedContinuation(t *testing.T) {
 						t.Fatal(err)
 					}
 					_, resumed, rebuilt := lateSongFixture()
-					resumed.TargetContext, resumed.BurnStrike, resumed.HeldBooks, resumed.MPHealCalls = loaded.Target, loaded.Burn, loaded.Books, loaded.MPHealCalls
+					resumed.TargetContext, resumed.BurnStrike, resumed.HeldBooks = loaded.Target, loaded.Burn, loaded.Books
 					rngs := []random.Generator{random.NewDeterministic(seed), random.NewDeterministic(seed)}
 					for i, run := range []struct {
 						s *corebattle.LifetimeState
@@ -73,7 +72,7 @@ func TestLateSongReloadedContinuation(t *testing.T) {
 							t.Fatal(err)
 						}
 					}
-					if !reflect.DeepEqual(s, loaded.State) || !reflect.DeepEqual(c.TargetContext, resumed.TargetContext) || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || c.DamageCalls != resumed.DamageCalls || c.TensionCalls != resumed.TensionCalls || c.MPHealCalls != resumed.MPHealCalls || c.End != resumed.End || c.Death.DeathCalls != resumed.Death.DeathCalls || rngs[0].Float64() != rngs[1].Float64() {
+					if !reflect.DeepEqual(s, loaded.State) || !reflect.DeepEqual(c.TargetContext, resumed.TargetContext) || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || c.DamageCalls != resumed.DamageCalls || c.TensionCalls != resumed.TensionCalls || c.End != resumed.End || rngs[0].Float64() != rngs[1].Float64() {
 						t.Fatal(s, loaded.State, c, resumed)
 					}
 					if (entry.ID == "job-84-entry-0" || entry.ID == "job-84-entry-3" || entry.ID == "job-85-entry-2" || entry.ID == "job-85-entry-3") && s.Actors[0].HP != 230 {

@@ -15,14 +15,14 @@ func TestCounterResetReloadContinuesWithoutReplay(t *testing.T) {
 	c.Cursor = corebattle.TargetCursor{ActorID: "self", Source: "item159"}
 	executeCounterReset(t, &s, c, d, "job-35-entry-6", []string{"ignored"}, 0, 0)
 	type checkpoint struct {
-		State                                                                      corebattle.LifetimeState
-		Target                                                                     corebattle.TargetContext
-		DamageCalls, AreaDamageCalls, StatusCalls, AreaStatusCalls, RequesterLevel int
-		Cursor                                                                     corebattle.TargetCursor
-		Arguments                                                                  []string
-		EntryID                                                                    string
+		State                                        corebattle.LifetimeState
+		Target                                       corebattle.TargetContext
+		DamageCalls, AreaDamageCalls, RequesterLevel int
+		Cursor                                       corebattle.TargetCursor
+		Arguments                                    []string
+		EntryID                                      string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.AreaDamageCalls, c.StatusCalls, c.AreaStatusCalls, level, c.Cursor, []string{"enemy", "tail"}, "job-37-entry-7"}
+	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.AreaDamageCalls, level, c.Cursor, []string{"enemy", "tail"}, "job-37-entry-7"}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +34,7 @@ func TestCounterResetReloadContinuesWithoutReplay(t *testing.T) {
 	resumed := &corebattle.CounterResetContext{DamageContext: corebattle.DamageContext{
 		EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, AreaDamageCalls: loaded.AreaDamageCalls, RequesterLevel: &loaded.RequesterLevel, AdditionalEffect: true},
 		Cursor:        loaded.Cursor, GuaranteedHit: true, Defeat: func(string) error { return nil },
-	}, StatusCalls: loaded.StatusCalls, AreaStatusCalls: loaded.AreaStatusCalls}
+	}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterCounterReset(resumed)
 	for _, run := range []struct {
@@ -44,7 +44,7 @@ func TestCounterResetReloadContinuesWithoutReplay(t *testing.T) {
 	}{{&s, c, d}, {&loaded.State, resumed, rebuilt}} {
 		executeCounterReset(t, run.s, run.c, run.d, loaded.EntryID, loaded.Arguments)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 765 || s.Actors[1].Status != corebattle.StatusParalyze || s.Actors[1].Attack != 50 || s.Actors[1].Defense != 40 || resumed.DamageCalls != 1 || resumed.StatusCalls != 1 || resumed.AreaStatusCalls != 1 || resumed.AreaDamageCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || !reflect.DeepEqual(c.Cursor, resumed.Cursor) || resumed.Command != "frozen-counter-command" || !resumed.Custom || *resumed.RequesterLevel != 99 {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 765 || s.Actors[1].Status != corebattle.StatusParalyze || s.Actors[1].Attack != 50 || s.Actors[1].Defense != 40 || resumed.DamageCalls != 1 || resumed.AreaDamageCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || !reflect.DeepEqual(c.Cursor, resumed.Cursor) || resumed.Command != "frozen-counter-command" || !resumed.Custom || *resumed.RequesterLevel != 99 {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }
@@ -67,7 +67,7 @@ func TestCounterResetOrderedDamageChangesLaterEligibility(t *testing.T) {
 	s.Actors[0].HP = 1
 	s.Actors[1].Temporary = corebattle.TemporaryReflectMagic
 	executeCounterReset(t, &s, c, d, "job-35-entry-6", nil, 0, 0)
-	if s.Actors[0].HP != 0 || s.Actors[3].HP != 900 || s.Actors[3].Status != corebattle.StatusParalyze || c.DamageCalls != 1 || c.StatusCalls != 1 {
+	if s.Actors[0].HP != 0 || s.Actors[3].HP != 900 || s.Actors[3].Status != corebattle.StatusParalyze || c.DamageCalls != 1 {
 		t.Fatal(s, c)
 	}
 	// A supplied defeat owner may revive the caster and let damage continue.
@@ -93,7 +93,7 @@ func TestCounterResetOrderedDamageChangesLaterEligibility(t *testing.T) {
 	if err := s.ApplyInvocations(&f, d.Invocations, ops, rng); err != nil {
 		t.Fatal(err)
 	}
-	if rng.used != 5 || s.Actors[0].HP != 100 || s.Actors[0].Temporary != "" || s.Actors[0].Status != corebattle.StatusParalyze || s.Actors[3].HP != 786 || s.Actors[3].Status != corebattle.StatusParalyze || c.DamageCalls != 2 || c.StatusCalls != 2 {
+	if rng.used != 5 || s.Actors[0].HP != 100 || s.Actors[0].Temporary != "" || s.Actors[0].Status != corebattle.StatusParalyze || s.Actors[3].HP != 786 || s.Actors[3].Status != corebattle.StatusParalyze || c.DamageCalls != 2 {
 		t.Fatal(s, c, rng.used)
 	}
 }

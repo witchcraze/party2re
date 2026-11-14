@@ -7,9 +7,8 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // Damage's Reset/Defeat ports retain their complete-admission contract.
 type NPCStatusContext struct {
 	DamageContext
-	Death                                                    *DefeatContext
-	Arguments                                                []string
-	StatusCalls, AreaStatusCalls, DeathCalls, AreaDeathCalls int
+	Death     *DefeatContext
+	Arguments []string
 }
 
 func (c *NPCStatusContext) shift() string {
@@ -125,7 +124,7 @@ func npcStatusStrike(id string, attack int) (float64, CallbackCategory, bool, st
 }
 
 func (s *LifetimeState) npcStatus(c *NPCStatusContext, e TargetEffect, chance float64, area, death bool, rng random.Generator) error {
-	status := StatusContext{EffectContext: c.EffectContext, Defeat: c.Death, StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls, DeathCalls: c.DeathCalls, AreaDeathCalls: c.AreaDeathCalls}
+	status := StatusContext{EffectContext: c.EffectContext, Defeat: c.Death}
 	var err error
 	if area {
 		_, err = s.ApplyAreaStatus(&status, e, chance, false, death, rng)
@@ -133,6 +132,5 @@ func (s *LifetimeState) npcStatus(c *NPCStatusContext, e TargetEffect, chance fl
 		_, err = s.ApplyStatus(&status, e, chance, false, death, rng)
 	}
 	c.EffectContext = status.EffectContext
-	c.StatusCalls, c.AreaStatusCalls, c.DeathCalls, c.AreaDeathCalls = status.StatusCalls, status.AreaStatusCalls, status.DeathCalls, status.AreaDeathCalls
 	return err
 }

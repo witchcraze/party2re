@@ -16,7 +16,7 @@ func TestTreatmentChanceAllSymbolTuples(t *testing.T) {
 					s, c, d := chanceFixture()
 					draws := []float64{(float64(x) + .1) / 5, (float64(y) + .1) / 5, (float64(z) + .1) / 5}
 					wantHP, wantEnemy := 500, 900
-					heal, damage, death := 0, 1, 0
+					heal, damage := 0, 1
 					if x == y && y == z {
 						switch x {
 						case 0, 2:
@@ -25,7 +25,7 @@ func TestTreatmentChanceAllSymbolTuples(t *testing.T) {
 							wantHP = min(1000, 500+(x+2)*180)
 							draws = append(draws, 0, 0)
 						case 4:
-							wantEnemy, damage, death = 0, 0, 1
+							wantEnemy, damage = 0, 0
 							draws = append(draws, 0)
 						default:
 							wantEnemy -= int((float64((x+2)*100)*.5 - 24) * .9)
@@ -36,7 +36,7 @@ func TestTreatmentChanceAllSymbolTuples(t *testing.T) {
 						draws = append(draws, 0)
 					}
 					executeChance(t, &s, c, d, "job-46-entry-0", nil, draws...)
-					if s.Actors[0].HP != wantHP || s.Actors[1].HP != wantEnemy || c.PartyHealCalls != heal || c.AreaDamageCalls != damage || c.Status.AreaDeathCalls != death {
+					if s.Actors[0].HP != wantHP || s.Actors[1].HP != wantEnemy || c.PartyHealCalls != heal || c.AreaDamageCalls != damage {
 						t.Fatal(x, y, z, s.Actors, c)
 					}
 				})
@@ -87,13 +87,13 @@ func TestTreatmentChanceStatAndStatusGuards(t *testing.T) {
 	s, c, d := chanceFixture()
 	s.Actors[1].Abilities = []string{"curse"}
 	executeChance(t, &s, c, d, "job-45-entry-3", []string{"enemy"})
-	if s.Actors[0].MP != 80 || s.Actors[1].MP != 100 || c.MPHealCalls != 0 {
+	if s.Actors[0].MP != 80 || s.Actors[1].MP != 100 {
 		t.Fatal(s.Actors, c)
 	}
 	s, c, d = chanceFixture()
 	s.Actors[1].Attack = 20
 	executeChance(t, &s, c, d, "job-45-entry-4", []string{"enemy"})
-	if s.Actors[1].Defense != 80 || s.Actors[1].Icon != "" || c.StatDownCalls != 1 {
+	if s.Actors[1].Defense != 80 || s.Actors[1].Icon != "" {
 		t.Fatal(s.Actors, c)
 	}
 	// Phantom redirects can return different recipients from the two helpers.
@@ -126,7 +126,7 @@ func TestTreatmentChanceSealsAndCapturedCure(t *testing.T) {
 			draws = []float64{0, 0, .99, .25}
 		}
 		executeChance(t, &s, c, d, id, []string{"self"}, draws...)
-		if s.Actors[0].HP != 500 || s.Actors[0].Temporary != "" || s.Actors[1].HP != 900 || c.DamageCalls != 0 || c.Status.StatusCalls != 0 {
+		if s.Actors[0].HP != 500 || s.Actors[0].Temporary != "" || s.Actors[1].HP != 900 || c.DamageCalls != 0 {
 			t.Fatal(id, s.Actors, c)
 		}
 	}
@@ -134,7 +134,7 @@ func TestTreatmentChanceSealsAndCapturedCure(t *testing.T) {
 	s.Actors[0].Status = corebattle.StatusSleep
 	s.Actors[2].HP, s.Actors[2].Status, s.Actors[2].Temporary = 100, corebattle.StatusSleep, corebattle.TemporaryReflectMagic
 	executeChance(t, &s, c, d, "job-43-entry-4", []string{"fallen"})
-	if s.Actors[0].Status != "" || s.Actors[2].Status != corebattle.StatusSleep || c.Status.CureCalls != 1 {
+	if s.Actors[0].Status != "" || s.Actors[2].Status != corebattle.StatusSleep {
 		t.Fatal(s.Actors, c)
 	}
 }

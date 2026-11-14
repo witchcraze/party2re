@@ -38,7 +38,7 @@ func TestHighPowerAdmissionPurity(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if string(before) != string(after) || !reflect.DeepEqual(original, frame) || !reflect.DeepEqual(resetOriginal, *c.EquipmentReset) || c.DamageCalls != 0 || c.AreaDamageCalls != 0 || c.StatusCalls != 0 || c.TensionCalls != 0 || len(c.Arguments) != 0 || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
+				if string(before) != string(after) || !reflect.DeepEqual(original, frame) || !reflect.DeepEqual(resetOriginal, *c.EquipmentReset) || c.DamageCalls != 0 || c.AreaDamageCalls != 0 || c.TensionCalls != 0 || len(c.Arguments) != 0 || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
 					t.Fatal(entry.ID, s, c, frame)
 				}
 			}
@@ -201,7 +201,7 @@ func TestHighPowerDamageCountSuppressesUnreachableStatus(t *testing.T) {
 	s.Actors[1].Gear = nil
 	c.Defeat = nil
 	executeHighPower(t, &s, c, d, []string{"job-48-entry-0"}, nil, 0)
-	if s.Actors[1].HP != 900 || s.Actors[1].Status != "" || c.DamageCalls != 1 || c.StatusCalls != 1 {
+	if s.Actors[1].HP != 900 || s.Actors[1].Status != "" || c.DamageCalls != 1 {
 		t.Fatal(s, c)
 	}
 }

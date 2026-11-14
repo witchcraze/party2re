@@ -32,9 +32,7 @@ func (s *LifetimeState) CallingRandomReachable(c TargetContext) bool {
 }
 
 func callingStatusContext(c *RosterContext) StatusContext {
-	return StatusContext{EffectContext: c.EffectContext, Defeat: c.Death,
-		StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls,
-		DeathCalls: c.DeathCalls, AreaDeathCalls: c.AreaDeathCalls}
+	return StatusContext{EffectContext: c.EffectContext, Defeat: c.Death}
 }
 
 func (s *LifetimeState) applyCallingStatus(c *RosterContext, e TargetEffect, chance float64, area, death bool, rng random.Generator) (bool, error) {
@@ -49,8 +47,6 @@ func (s *LifetimeState) applyCallingStatus(c *RosterContext, e TargetEffect, cha
 		hits = []StatusApplication{hit}
 	}
 	c.EffectContext = child.EffectContext
-	c.StatusCalls, c.AreaStatusCalls = child.StatusCalls, child.AreaStatusCalls
-	c.DeathCalls, c.AreaDeathCalls = child.DeathCalls, child.AreaDeathCalls
 	applied := false
 	for _, hit := range hits {
 		applied = applied || hit.Applied

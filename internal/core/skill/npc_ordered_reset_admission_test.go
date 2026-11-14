@@ -58,7 +58,7 @@ func TestNPCOrderedWholeEntryAdmissionIsInert(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.EquipmentReset.Cursor != (corebattle.TargetCursor{}) || gear != s.Actors[1].Gear || gear.ArmorDefense != 0 || !reflect.DeepEqual(args, []string{"enemy", "tail"}) || !reflect.DeepEqual(party, []string{"self", "fallen"}) {
+			if string(before) != string(after) || c.DamageCalls != 0 || c.EquipmentReset.Cursor != (corebattle.TargetCursor{}) || gear != s.Actors[1].Gear || gear.ArmorDefense != 0 || !reflect.DeepEqual(args, []string{"enemy", "tail"}) || !reflect.DeepEqual(party, []string{"self", "fallen"}) {
 				t.Fatal(s, c, f)
 			}
 		})

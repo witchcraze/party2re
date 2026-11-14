@@ -77,7 +77,7 @@ func TestNPCStatusRejectsBeforeMutation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(c.Arguments, args) || !reflect.DeepEqual(f.Arguments, args) || c.EffectContext.DamageCalls != contextBefore.DamageCalls || c.StatusCalls != 0 || c.Cursor != (corebattle.TargetCursor{}) || c.Item195Activated != contextBefore.Item195Activated || c.Command != contextBefore.Command {
+			if string(before) != string(after) || !reflect.DeepEqual(c.Arguments, args) || !reflect.DeepEqual(f.Arguments, args) || c.EffectContext.DamageCalls != contextBefore.DamageCalls || c.Cursor != (corebattle.TargetCursor{}) || c.Item195Activated != contextBefore.Item195Activated || c.Command != contextBefore.Command {
 				t.Fatal(s, c, f)
 			}
 		})

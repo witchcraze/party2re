@@ -94,7 +94,7 @@ func TestMartialStatDescendantsAndOrderedTension(t *testing.T) {
 	s, c, d := martialFixture()
 	s.Actors[0].Tension = 3
 	executeMartial(t, &s, c, d, "job-23-entry-1", nil)
-	if s.Actors[0].Attack != 220 || s.Actors[0].Defense != 70 || c.StatUpCalls != 2 {
+	if s.Actors[0].Attack != 220 || s.Actors[0].Defense != 70 {
 		t.Fatal(s, c)
 	}
 	// A capped first helper preserves tension for the second, which still
@@ -103,7 +103,7 @@ func TestMartialStatDescendantsAndOrderedTension(t *testing.T) {
 	s.Actors[0].Attack, s.Actors[0].Tension = 250, 3
 	s.Actors[0].ItemDefinitionIDs = []string{"item-205"}
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext}
-	if _, err := d.InvocationAction(&s, &frame, []string{"job-4-entry-8"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Extended != "" || c.StatUpCalls != 0 {
+	if _, err := d.InvocationAction(&s, &frame, []string{"job-4-entry-8"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Extended != "" || s.Actors[0].Attack != 250 {
 		t.Fatal(err, s, c)
 	}
 	level := 99

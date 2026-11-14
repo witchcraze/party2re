@@ -5,10 +5,9 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // BeastCloneContext retains operation facts; ports are rebuilt after reload.
 type BeastCloneContext struct {
 	DamageContext
-	Arguments                                []string
-	RequesterItemID                          string
-	StatusDefeat                             *DefeatContext
-	StatusCalls, AreaStatusCalls, DeathCalls int
+	Arguments       []string
+	RequesterItemID string
+	StatusDefeat    *DefeatContext
 }
 
 // BeastCloneEntries preserves every position at _skill.cgi:1546–1596,
@@ -92,8 +91,7 @@ func beastStatus(id string) (string, CallbackCategory, float64, bool) {
 }
 
 func (c *BeastCloneContext) statusContext() StatusContext {
-	return StatusContext{EffectContext: c.EffectContext, Defeat: c.StatusDefeat,
-		StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls, DeathCalls: c.DeathCalls}
+	return StatusContext{EffectContext: c.EffectContext, Defeat: c.StatusDefeat}
 }
 
 func (s *LifetimeState) applyBeastStatus(c *BeastCloneContext, e TargetEffect, chance float64, area, death bool, rng random.Generator) error {
@@ -105,7 +103,6 @@ func (s *LifetimeState) applyBeastStatus(c *BeastCloneContext, e TargetEffect, c
 		_, err = s.ApplyStatus(&child, e, chance, false, death, rng)
 	}
 	c.EffectContext = child.EffectContext
-	c.StatusCalls, c.AreaStatusCalls, c.DeathCalls = child.StatusCalls, child.AreaStatusCalls, child.DeathCalls
 	return err
 }
 

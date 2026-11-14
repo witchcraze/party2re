@@ -59,13 +59,13 @@ func (s *LifetimeState) applyRainbow(c *NamedFieldContext, branch int, rng rando
 		}
 		if branch == 5 {
 			stat = StatAgility
-			status := StatusContext{EffectContext: c.EffectContext, CureCalls: c.CureCalls}
+			status := StatusContext{EffectContext: c.EffectContext}
 			for _, id := range c.PartyIDs {
 				if _, err := s.ApplyCure(&status, controlSymbol(id, s.actor(id).Status, CategoryUntyped), rng); err != nil {
 					return err
 				}
 			}
-			c.EffectContext, c.CureCalls = status.EffectContext, status.CureCalls
+			c.EffectContext = status.EffectContext
 		}
 		_, err := s.ApplyPartyStat(&c.EffectContext, 1, CategoryUntyped, stat, false, rng)
 		return err
@@ -87,7 +87,6 @@ func (s *LifetimeState) applyRainbow(c *NamedFieldContext, branch int, rng rando
 		_, err := s.ApplyPartyHealing(&c.EffectContext, 500, CategoryUntyped, rng)
 		return err
 	case 6:
-		c.PartyMPHealCalls++
 		for _, id := range c.PartyIDs {
 			if _, err := s.ApplyMPHealing(&c.EffectContext, controlEffect(id, 300, CategoryUntyped), rng); err != nil {
 				return err

@@ -119,7 +119,7 @@ func TestEquipmentTail208CureUsesBoundTargetAndCategory(t *testing.T) {
 	s.actor("ally-1").Status = StatusConfusion
 	// The holder's exact-status cure can select a nonholder through confusion.
 	rng := &targetRNG{t: t, draws: []float64{.3}}
-	if err := s.ApplyEquipmentTail(&c, "item-208-combat-tail", rng); err != nil || s.actor("self").Status != StatusConfusion || s.actor("ally-1").Status != "" || c.CureCalls != 1 {
+	if err := s.ApplyEquipmentTail(&c, "item-208-combat-tail", rng); err != nil || s.actor("self").Status != StatusConfusion || s.actor("ally-1").Status != "" {
 		t.Fatal(s, c, err)
 	}
 	rng.done()
@@ -281,7 +281,7 @@ func TestEquipmentTail208LaterItem110DefeatRejectsBeforeCure(t *testing.T) {
 	s.actor("enemy").Gear.AccessoryID, s.actor("enemy").ItemDefinitionIDs = "item-110", []string{"item-110"}
 	c.Defeat = nativeDefeatContext(c.TargetContext)
 	before := s.callbackCopy()
-	if err := s.ApplyEquipmentTail(&c, "item-208-combat-tail", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.CureCalls != 0 || c.DamageCalls != 0 {
+	if err := s.ApplyEquipmentTail(&c, "item-208-combat-tail", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DamageCalls != 0 {
 		t.Fatal(err, s, c)
 	}
 }

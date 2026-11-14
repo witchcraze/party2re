@@ -84,7 +84,7 @@ func TestStatDownImmunitiesFloorsAndCounts(t *testing.T) {
 			*a.currentStat(tc.stat) = tc.current
 			a.ItemDefinitionIDs = []string{tc.item}
 			r, err := s.ApplyStatDown(&c, TargetEffect{TargetID: "enemy", Payload: CallbackPayload{Number: .25}}, tc.stat, &targetRNG{t: t})
-			if err != nil || r.Returned != tc.returned || *a.currentStat(tc.stat) != tc.want || c.StatDownCalls != 1 {
+			if err != nil || r.Returned != tc.returned || *a.currentStat(tc.stat) != tc.want {
 				t.Fatal(r, err, s, c)
 			}
 		})

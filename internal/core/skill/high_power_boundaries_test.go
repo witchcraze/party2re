@@ -121,14 +121,14 @@ func TestHighPowerStatusAndStatGuards(t *testing.T) {
 		s.Actors[1].HP = 1000
 		id := fmt.Sprintf("job-48-entry-%d", pos)
 		executeHighPower(t, &s, c, d, []string{id}, nil, 0, chance)
-		if s.Actors[1].HP >= 1000 || s.Actors[1].Status != "" || c.StatusCalls != 1 {
+		if s.Actors[1].HP >= 1000 || s.Actors[1].Status != "" {
 			t.Fatal(s, c)
 		}
 		// A kill skips the status tail for that target.
 		s, c, d = highPowerFixture()
 		s.Actors[1].HP = 1
 		executeHighPower(t, &s, c, d, []string{id}, nil, 0)
-		if s.Actors[1].HP != 0 || c.StatusCalls != 0 {
+		if s.Actors[1].HP != 0 || s.Actors[1].Status != "" {
 			t.Fatal(s, c)
 		}
 	}
@@ -168,8 +168,8 @@ func TestHighPowerStatusAndStatGuards(t *testing.T) {
 	}
 	s, c, d := highPowerFixture()
 	executeHighPower(t, &s, c, d, []string{"job-49-entry-0"}, []string{"self"})
-	if c.CureCalls != 0 {
-		t.Fatal(c)
+	if s.Actors[0].Status != "" || s.Actors[0].HP != 500 {
+		t.Fatal(s, c)
 	}
 	for _, df := range []int{0, 1, 999, 1000} {
 		s, c, d = highPowerFixture()
@@ -234,7 +234,7 @@ func TestHighPowerAreaNoEffectAndIndependentSealChecks(t *testing.T) {
 	s, c, d := highPowerFixture()
 	s.Actors[0].Status = corebattle.StatusMagicSeal
 	executeHighPower(t, &s, c, d, []string{"job-48-entry-0"}, nil, .9, 0, 0)
-	if s.Actors[1].HP != 900 || s.Actors[1].Status != corebattle.StatusDeadlyPoison || c.AreaDamageCalls != 0 || c.AreaStatusCalls != 1 || s.Actors[0].Status != "" {
+	if s.Actors[1].HP != 900 || s.Actors[1].Status != corebattle.StatusDeadlyPoison || c.AreaDamageCalls != 0 || s.Actors[0].Status != "" {
 		t.Fatal(s, c)
 	}
 }

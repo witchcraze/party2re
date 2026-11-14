@@ -8,15 +8,12 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // its owner before supplying the item201 hook; nil retains whole-effect gating.
 type EffectContext struct {
 	TargetContext
-	DamageCalls, AreaDamageCalls         int
-	HealCalls, PartyHealCalls            int
-	MPHealCalls                          int
-	StatUpCalls, StatDownCalls           int
-	PartyStatUpCalls, PartyStatDownCalls int
-	TensionCalls                         int
-	Item185Activated, BowEffect          bool
-	AdditionalEffect, ActorNPC           bool
-	RequesterLevel                       *int
+	DamageCalls, AreaDamageCalls int
+	HealCalls, PartyHealCalls    int
+	TensionCalls                 int
+	Item185Activated, BowEffect  bool
+	AdditionalEffect, ActorNPC   bool
+	RequesterLevel               *int
 	// Damage's owner updates this context's DamageCalls after target/zero gates
 	// (_damage:8826–8831), including misses. The caller must not count again.
 	Damage func(TargetContext, TargetEffect, random.Generator) error

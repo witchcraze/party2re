@@ -41,7 +41,7 @@ func TestTreatmentChanceAdmissionPurity(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if string(before) != string(after) || !reflect.DeepEqual(f, frame) || !reflect.DeepEqual(c.Arguments, original.Arguments) || c.DamageCalls != 0 || c.Status.DeathCalls != 0 || c.Status.CureCalls != 0 || !reflect.DeepEqual(c.Status.Defeat.EquipmentResetContext, defeat.EquipmentResetContext) {
+				if string(before) != string(after) || !reflect.DeepEqual(f, frame) || !reflect.DeepEqual(c.Arguments, original.Arguments) || c.DamageCalls != 0 || !reflect.DeepEqual(c.Status.Defeat.EquipmentResetContext, defeat.EquipmentResetContext) {
 					t.Fatal(entry.ID, "admission changed caller facts")
 				}
 			}
@@ -58,7 +58,7 @@ func TestTreatmentChanceMissingDescendantsRejectWholeAction(t *testing.T) {
 		if err := s.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: id}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(id, err)
 		}
-		if !reflect.DeepEqual(s.Actors[0].Participant, before) || c.DamageCalls != 0 || c.Status.DeathCalls != 0 {
+		if !reflect.DeepEqual(s.Actors[0].Participant, before) || c.DamageCalls != 0 {
 			t.Fatal(id, s.Actors, c)
 		}
 	}
@@ -106,7 +106,7 @@ func TestTreatmentChanceCoinProjectsEarlierDefeatBeforeLaterBranch(t *testing.T)
 				t.Fatal(s.Actors)
 			}
 		}
-		if s.Actors[3].BaseStats.Defense != 1000 || changed && (s.Actors[1].HP != 900 || c.Status.DeathCalls != 0) {
+		if s.Actors[3].BaseStats.Defense != 1000 || changed && s.Actors[1].HP != 900 {
 			t.Fatal(s.Actors, c)
 		}
 	}

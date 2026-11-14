@@ -39,7 +39,7 @@ func TestRangedCollapseThresholdAndDirectPoison(t *testing.T) {
 			s.Actors[1].Temporary = corebattle.TemporaryNullMagic
 		}
 		executeRanged(t, &s, c, d, "job-42-entry-5", []string{"enemy"}, 0)
-		if s.Actors[1].HP != 900 || s.Actors[1].Status != corebattle.StatusDeadlyPoison || c.Status.StatusCalls != 0 {
+		if s.Actors[1].HP != 900 || s.Actors[1].Status != corebattle.StatusDeadlyPoison {
 			t.Fatal(blocked, s, c)
 		}
 	}
@@ -57,7 +57,7 @@ func TestRangedMPTheftCapAndNoReturn(t *testing.T) {
 				amount, draws = int(100+draw*50), []float64{draw, 0}
 			}
 			executeRanged(t, &s, c, d, "job-11-entry-4", []string{"enemy"}, draws...)
-			if s.Actors[1].MP != mp-amount || s.Actors[0].MP != 80+int(float64(amount)*.9)+1 || c.MPHealCalls != 1 {
+			if s.Actors[1].MP != mp-amount || s.Actors[0].MP != 80+int(float64(amount)*.9)+1 {
 				t.Fatal(mp, draw, s, c)
 			}
 		}
@@ -77,7 +77,7 @@ func TestRangedMPTheftCapAndNoReturn(t *testing.T) {
 			s.Actors[1].BaseStats.Defense = 1000
 		}
 		executeRanged(t, &s, c, d, "job-11-entry-4", []string{"enemy"})
-		if s.Actors[0].MP != 80 || c.MPHealCalls != 0 {
+		if s.Actors[0].MP != 80 {
 			t.Fatal(guard, s, c)
 		}
 	}

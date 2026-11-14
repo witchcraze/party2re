@@ -66,7 +66,7 @@ func TestNPC402AllPositionsAndRoles(t *testing.T) {
 				if s.Actors[1].HP != row.hp || c.DamageCalls != row.calls || !reflect.DeepEqual(c.Arguments, args[row.shifts:]) || s.Actors[0].MP != 80 || s.Actors[0].CMP != 90 {
 					t.Fatal(s.Actors, c)
 				}
-				if pos == 1 && (s.Actors[0].Attack != 200 || s.Actors[0].Defense != 160 || s.Actors[0].Agility != 80 || s.Actors[0].Status != corebattle.StatusDofuu || c.PartyStatUpCalls != 3) {
+				if pos == 1 && (s.Actors[0].Attack != 200 || s.Actors[0].Defense != 160 || s.Actors[0].Agility != 80 || s.Actors[0].Status != corebattle.StatusDofuu) {
 					t.Fatal(s.Actors, c)
 				}
 				if pos == 5 && (s.Actors[1].CMP != 80 || s.Actors[1].CMPCharge != 0 || s.Actors[1].CMPNeedCharge != 6) {

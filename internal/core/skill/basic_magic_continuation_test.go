@@ -18,15 +18,15 @@ func TestBasicMagicReloadFrozenInputWithoutReplay(t *testing.T) {
 	executeBasicMagic(t, &s, c, d, "job-5-entry-2", []string{"self"})
 	executeBasicMagic(t, &s, c, d, "job-6-entry-5", []string{"enemy"}, 0)
 	type checkpoint struct {
-		State                  corebattle.LifetimeState
-		Target                 corebattle.TargetContext
-		DamageCalls, CureCalls int
-		RequesterLevel         int
-		Cursor                 corebattle.TargetCursor
-		Entry                  string
-		Arguments              []string
+		State          corebattle.LifetimeState
+		Target         corebattle.TargetContext
+		DamageCalls    int
+		RequesterLevel int
+		Cursor         corebattle.TargetCursor
+		Entry          string
+		Arguments      []string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.CureCalls, level, c.Cursor, "job-5-entry-5", []string{"self", "tail"}}
+	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, level, c.Cursor, "job-5-entry-5", []string{"self", "tail"}}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -38,13 +38,13 @@ func TestBasicMagicReloadFrozenInputWithoutReplay(t *testing.T) {
 	resumed := &corebattle.BasicMagicContext{DamageContext: corebattle.DamageContext{
 		EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, RequesterLevel: &loaded.RequesterLevel},
 		Cursor:        loaded.Cursor, Defeat: func(string) error { t.Fatal("unexpected defeat"); return nil },
-	}, CureCalls: loaded.CureCalls}
+	}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterBasicMagic(resumed)
 	executeBasicMagic(t, &s, c, d, loaded.Entry, loaded.Arguments, 0)
 	executeBasicMagic(t, &loaded.State, resumed, rebuilt, loaded.Entry, loaded.Arguments, 0)
 	// Damage1 reduces the later base90 heal to45, then the .9 roll truncates40.
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 540 || s.Actors[0].Status != "" || s.Actors[1].HP != 837 || resumed.DamageCalls != 1 || resumed.CureCalls != 1 || resumed.HealCalls != 1 || resumed.Command != "frozen-basic-magic" || !resumed.Custom || *resumed.RequesterLevel != 99 || resumed.Cursor != c.Cursor || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || loaded.Arguments[0] != "self" {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 540 || s.Actors[0].Status != "" || s.Actors[1].HP != 837 || resumed.DamageCalls != 1 || resumed.HealCalls != 1 || resumed.Command != "frozen-basic-magic" || !resumed.Custom || *resumed.RequesterLevel != 99 || resumed.Cursor != c.Cursor || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || loaded.Arguments[0] != "self" {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

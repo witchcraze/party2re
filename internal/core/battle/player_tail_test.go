@@ -87,7 +87,7 @@ func TestPlayerTailItem189NormalGuardChanceAndCap(t *testing.T) {
 			a.ItemDefinitionIDs, a.MaxMP, a.MP = []string{"item-189"}, tc.maxMP, tc.mp
 			c.NormalAction, c.Completion.Suppressed = tc.normal, tc.suppressed
 			rng := &targetRNG{t: t, draws: tc.draws}
-			if err := s.ApplyPlayerTail(&c, "item-189-normal-tail", rng); err != nil || a.MP != tc.want || c.MPHealCalls != 0 {
+			if err := s.ApplyPlayerTail(&c, "item-189-normal-tail", rng); err != nil || a.MP != tc.want {
 				t.Fatal(a, c, err)
 			}
 			rng.done()

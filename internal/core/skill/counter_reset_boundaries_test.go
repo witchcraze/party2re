@@ -73,7 +73,7 @@ func TestCounterResetSealCuresAndIndependentComposition(t *testing.T) {
 	s, c, d := counterResetFixture()
 	s.Actors[0].Status = corebattle.StatusMagicSeal
 	executeCounterReset(t, &s, c, d, "job-35-entry-6", nil, .9, 0, 0)
-	if s.Actors[1].HP != 900 || s.Actors[1].Status != corebattle.StatusParalyze || c.AreaDamageCalls != 0 || c.AreaStatusCalls != 1 || s.Actors[0].Status != "" {
+	if s.Actors[1].HP != 900 || s.Actors[1].Status != corebattle.StatusParalyze || c.AreaDamageCalls != 0 || s.Actors[0].Status != "" {
 		t.Fatal(s, c)
 	}
 }
@@ -134,7 +134,7 @@ func TestCounterResetReflectionAliasingAndBaselines(t *testing.T) {
 	s.Actors[0].Temporary, s.Actors[0].Status, s.Actors[0].Extended = corebattle.TemporaryReduceMagic, corebattle.StatusPoison, corebattle.ExtendedCrown
 	s.Actors[1].Temporary = corebattle.TemporaryReflectAttack
 	executeCounterReset(t, &s, c, d, "job-37-entry-7", []string{"enemy"})
-	if a := s.Actors[0]; a.Attack != 100 || a.Defense != 80 || a.BaseStats.Attack != 100 || a.BaseStats.Defense != 80 || a.Temporary != "" || a.Tension != 1 || a.Status != corebattle.StatusPoison || a.Extended != corebattle.ExtendedCrown || c.StatDownCalls != 0 || s.Actors[1].Attack != 200 {
+	if a := s.Actors[0]; a.Attack != 100 || a.Defense != 80 || a.BaseStats.Attack != 100 || a.BaseStats.Defense != 80 || a.Temporary != "" || a.Tension != 1 || a.Status != corebattle.StatusPoison || a.Extended != corebattle.ExtendedCrown || s.Actors[1].Attack != 200 {
 		t.Fatal(s, c)
 	}
 	// Ally reflection writes through to the caster; a fallen ally falls back.

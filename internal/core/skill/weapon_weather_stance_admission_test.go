@@ -44,7 +44,7 @@ func TestWeaponWeatherStanceAdmissionIsInert(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(original, f) || c.Arguments != nil || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.StatDownCalls != 0 || c.HealCalls != 0 || c.PartyHealCalls != 0 || c.CureCalls != 0 || c.StatusCalls != 0 || c.DeathCalls != 0 || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
+			if string(before) != string(after) || !reflect.DeepEqual(original, f) || c.Arguments != nil || c.DamageCalls != 0 || c.HealCalls != 0 || c.PartyHealCalls != 0 || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
 				t.Fatal(id, s, c, f)
 			}
 		}
@@ -93,7 +93,7 @@ func TestWeaponWeatherStanceRejectsMissingDescendantsBeforeMutation(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.DamageCalls != 0 || c.StatusCalls != 0 || c.Arguments != nil {
+			if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.DamageCalls != 0 || c.Arguments != nil {
 				t.Fatal(s, c, f)
 			}
 		})

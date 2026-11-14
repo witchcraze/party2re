@@ -6,9 +6,8 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // arguments and target/cursor facts, then rebuild operation ports after reload.
 type WeaponWeatherStanceContext struct {
 	DamageContext
-	Arguments                                                           []string
-	StatusDefeat                                                        *DefeatContext
-	StatusCalls, AreaStatusCalls, DeathCalls, CureCalls, PartyCureCalls int
+	Arguments    []string
+	StatusDefeat *DefeatContext
 }
 
 func (c *WeaponWeatherStanceContext) shift() string {
@@ -21,9 +20,7 @@ func (c *WeaponWeatherStanceContext) shift() string {
 }
 
 func (c *WeaponWeatherStanceContext) statusContext() StatusContext {
-	return StatusContext{EffectContext: c.EffectContext, Defeat: c.StatusDefeat,
-		StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls, DeathCalls: c.DeathCalls,
-		CureCalls: c.CureCalls, PartyCureCalls: c.PartyCureCalls}
+	return StatusContext{EffectContext: c.EffectContext, Defeat: c.StatusDefeat}
 }
 
 func weaponWeatherDamage(id string, a *LifetimeActor) (TargetEffect, bool, bool) {
@@ -151,7 +148,6 @@ func (s *LifetimeState) ApplyWeaponWeatherStance(c *WeaponWeatherStanceContext, 
 	case "job-28-entry-6":
 		_, err = s.ApplyStatus(&child, controlSymbol(c.shift(), "death", CategoryPhysical), 25, false, true, rng)
 	}
-	c.EffectContext, c.StatusCalls, c.AreaStatusCalls, c.DeathCalls = child.EffectContext, child.StatusCalls, child.AreaStatusCalls, child.DeathCalls
-	c.CureCalls, c.PartyCureCalls = child.CureCalls, child.PartyCureCalls
+	c.EffectContext = child.EffectContext
 	return err
 }

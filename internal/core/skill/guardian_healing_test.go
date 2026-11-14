@@ -73,13 +73,13 @@ func TestGuardianHealingManifest(t *testing.T) {
 			}
 			executeGuardian(t, &s, c, d, id, args, row.draws...)
 			a, e, fallen := s.Actors[0], s.Actors[1], s.Actors[2]
-			if a.HP != row.hp || 900-e.HP != row.damage || a.Temporary != row.tmp || c.HealCalls != row.heals || c.CureCalls != row.cures || a.MP != 80 || a.CMP != 90 {
+			if a.HP != row.hp || 900-e.HP != row.damage || a.Temporary != row.tmp || c.HealCalls != row.heals || a.MP != 80 || a.CMP != 90 {
 				t.Fatal(a, e, c)
 			}
 			if row.cures > 0 && a.Status != "" {
 				t.Fatal(a)
 			}
-			if id == "job-18-entry-1" && (e.Status != corebattle.StatusDanceSeal || c.StatusCalls != 1 || c.AreaStatusCalls != 1) {
+			if id == "job-18-entry-1" && e.Status != corebattle.StatusDanceSeal {
 				t.Fatal(e, c)
 			}
 			if row.pos == 7 {

@@ -26,7 +26,7 @@ func TestAdvancedMagicLoopHPAndBaseDefense999Boundary(t *testing.T) {
 			}
 		}
 		executeAdvancedMagic(t, &s, c, d, "job-19-entry-8", []string{"self", "tail"}, draws...)
-		if s.Actors[1].HP != row.hp-row.damage || c.Status.DeathCalls != row.deaths || c.DamageCalls != 4-row.deaths {
+		if s.Actors[1].HP != row.hp-row.damage || c.DamageCalls != 4-row.deaths {
 			t.Fatal(row, s, c)
 		}
 	}
@@ -40,7 +40,7 @@ func TestAdvancedMagicLoopUpperHitAndPowerBounds(t *testing.T) {
 		draws = append(draws, 0, .999, 0)
 	}
 	executeAdvancedMagic(t, &s, c, d, "job-19-entry-8", nil, draws...)
-	if s.Actors[1].HP != 6766 || c.DamageCalls != 6 || c.Status.DeathCalls != 0 || len(c.Arguments) != 0 {
+	if s.Actors[1].HP != 6766 || c.DamageCalls != 6 || len(c.Arguments) != 0 {
 		t.Fatal(s, c)
 	}
 }
@@ -49,7 +49,7 @@ func TestAdvancedMagicLoopStopsAfterReflectedCasterDeath(t *testing.T) {
 	s, c, d := advancedMagicFixture()
 	s.Actors[1].Temporary = corebattle.TemporaryReflectMagic
 	executeAdvancedMagic(t, &s, c, d, "job-19-entry-8", nil, 0, 0, 0)
-	if s.Actors[0].HP != 0 || s.Actors[1].HP != 900 || c.Status.DeathCalls != 1 {
+	if s.Actors[0].HP != 0 || s.Actors[1].HP != 900 {
 		t.Fatal(s, c)
 	}
 }
@@ -59,14 +59,14 @@ func TestAdvancedMagicLoopRetainsFailedSelectionAndEmptyRoster(t *testing.T) {
 	// First death succeeds. Later outer and inner helpers both select the
 	// fallen entry, so no further death probability draw is reached.
 	executeAdvancedMagic(t, &s, c, d, "job-19-entry-8", nil, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-	if s.Actors[1].HP != 0 || c.Status.DeathCalls != 1 {
+	if s.Actors[1].HP != 0 {
 		t.Fatal(s, c)
 	}
 	s, c, d = advancedMagicFixture()
 	s.Actors = append(s.Actors[:1], s.Actors[2])
 	c.EnemyIDs = nil
 	executeAdvancedMagic(t, &s, c, d, "job-19-entry-8", nil, 0)
-	if c.Status.DeathCalls != 0 || c.DamageCalls != 0 || s.Actors[0].HP != 500 {
+	if c.DamageCalls != 0 || s.Actors[0].HP != 500 {
 		t.Fatal(s, c)
 	}
 }

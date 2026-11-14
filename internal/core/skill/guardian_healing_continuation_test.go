@@ -18,15 +18,15 @@ func TestGuardianReloadContinuesWithoutReplay(t *testing.T) {
 	executeGuardian(t, &s, c, d, "job-18-entry-7", []string{"enemy", "first-tail"}, 0, 0, 0)
 	s.Actors[0].HP = 0
 	type checkpoint struct {
-		State                                                                                           corebattle.LifetimeState
-		Target                                                                                          corebattle.TargetContext
-		DamageCalls, HealCalls, PartyHealCalls, CureCalls, PartyCureCalls, StatusCalls, AreaStatusCalls int
-		RequesterLevel                                                                                  int
-		Cursor                                                                                          corebattle.TargetCursor
-		EntryID                                                                                         string
-		Arguments                                                                                       []string
+		State                                  corebattle.LifetimeState
+		Target                                 corebattle.TargetContext
+		DamageCalls, HealCalls, PartyHealCalls int
+		RequesterLevel                         int
+		Cursor                                 corebattle.TargetCursor
+		EntryID                                string
+		Arguments                              []string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.HealCalls, c.PartyHealCalls, c.CureCalls, c.PartyCureCalls, c.StatusCalls, c.AreaStatusCalls, level, c.Cursor, "job-18-entry-7", []string{"enemy", "repeat-tail"}}
+	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.HealCalls, c.PartyHealCalls, level, c.Cursor, "job-18-entry-7", []string{"enemy", "repeat-tail"}}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +38,7 @@ func TestGuardianReloadContinuesWithoutReplay(t *testing.T) {
 	resumed := &corebattle.GuardianHealingContext{DamageContext: corebattle.DamageContext{
 		EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, HealCalls: loaded.HealCalls, PartyHealCalls: loaded.PartyHealCalls, RequesterLevel: &loaded.RequesterLevel},
 		Cursor:        loaded.Cursor, GuaranteedHit: true,
-	}, CureCalls: loaded.CureCalls, PartyCureCalls: loaded.PartyCureCalls, StatusCalls: loaded.StatusCalls, AreaStatusCalls: loaded.AreaStatusCalls}
+	}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterGuardianHealing(resumed)
 	// The repeated color needs no defeat port, including after reconstruction.

@@ -126,7 +126,7 @@ func TestStatusGemNoEffectAndConversionKeepCompletePredecessor(t *testing.T) {
 			}
 			found := false
 			for _, state := range states {
-				if reflect.DeepEqual(state.State, s) && state.Context.StatusCalls == c.StatusCalls && state.Context.DeathCalls == c.DeathCalls {
+				if reflect.DeepEqual(state.State, s) {
 					found = true
 				}
 			}
@@ -163,7 +163,7 @@ func TestStatusGemReflectedConfusionAndFallenCureFallback(t *testing.T) {
 	// A fallen cure target falls back to the actor, including62's first helper.
 	s.actor("self").Status = StatusSleep
 	states, err = s.ProjectStatusGemBranches(&c, "gem_cure_all_abnormal", "fallen")
-	if err != nil || len(states) != 1 || states[0].State.actor("self").Status != "" || states[0].Context.CureCalls != 1 {
+	if err != nil || len(states) != 1 || states[0].State.actor("self").Status != "" {
 		t.Fatal(states, err)
 	}
 }
@@ -192,7 +192,7 @@ func TestStatusGemDeathProjectsCoverResetRewardsAndCursor(t *testing.T) {
 	for _, state := range states {
 		if state.Context.Defeat.Cursor == (TargetCursor{Source: "item159", ActorID: "dead_enemy"}) {
 			seenReset = true
-			if state.State.actor("enemy").HP == 100 && state.State.actor("dead_enemy").HP == 0 && state.Context.DeathCalls == 1 && state.State.Fields.Current() == "sanctuary" {
+			if state.State.actor("enemy").HP == 100 && state.State.actor("dead_enemy").HP == 0 && state.State.Fields.Current() == "sanctuary" {
 				seenLater = true
 			}
 		}

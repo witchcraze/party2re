@@ -36,13 +36,13 @@ func TestCallingSpecialCommittedFactsReloadWithoutCallbackReplay(t *testing.T) {
 				State            corebattle.LifetimeState
 				Target           corebattle.TargetContext
 				Arguments        []string
-				Counts           [12]int
+				Counts           [4]int
 				AdditionalEffect bool
 				RequesterLevel   int
 				RequesterItemID  string
 			}
-			counts := func(c *corebattle.RosterContext) [12]int {
-				return [12]int{c.DamageCalls, c.AreaDamageCalls, c.HealCalls, c.PartyHealCalls, c.MPHealCalls, c.StatUpCalls, c.StatDownCalls, c.StatusCalls, c.AreaStatusCalls, c.DeathCalls, c.AreaDeathCalls, c.PartyMPHealCalls}
+			counts := func(c *corebattle.RosterContext) [4]int {
+				return [4]int{c.DamageCalls, c.AreaDamageCalls, c.HealCalls, c.PartyHealCalls}
 			}
 			frozen := snapshot{State: s, Target: f.TargetContext, Arguments: f.Arguments, Counts: counts(&c), AdditionalEffect: c.AdditionalEffect, RequesterLevel: *c.RequesterLevel, RequesterItemID: c.RequesterItemID}
 			data, err := json.Marshal(frozen)
@@ -58,8 +58,6 @@ func TestCallingSpecialCommittedFactsReloadWithoutCallbackReplay(t *testing.T) {
 			resumed.RequesterLevel, resumed.RequesterItemID = &loaded.RequesterLevel, loaded.RequesterItemID
 			resumed.AdditionalEffect = loaded.AdditionalEffect
 			resumed.DamageCalls, resumed.AreaDamageCalls, resumed.HealCalls, resumed.PartyHealCalls = loaded.Counts[0], loaded.Counts[1], loaded.Counts[2], loaded.Counts[3]
-			resumed.MPHealCalls, resumed.StatUpCalls, resumed.StatDownCalls = loaded.Counts[4], loaded.Counts[5], loaded.Counts[6]
-			resumed.StatusCalls, resumed.AreaStatusCalls, resumed.DeathCalls, resumed.AreaDeathCalls, resumed.PartyMPHealCalls = loaded.Counts[7], loaded.Counts[8], loaded.Counts[9], loaded.Counts[10], loaded.Counts[11]
 			rebuilt := BattleDefinitions{}
 			rebuilt.RegisterCallingJobs(&resumed)
 			rf := corebattle.CallbackContext{TargetContext: loaded.Target, Arguments: loaded.Arguments}

@@ -16,9 +16,8 @@ func TestTreatmentChanceFrozenReloadWithoutReplay(t *testing.T) {
 		Target    corebattle.TargetContext
 		Arguments []string
 		EntryID   string
-		StatDown  int
 	}
-	frozen := checkpoint{s, c.TargetContext, []string{"enemy", "tail"}, "job-46-entry-2", c.StatDownCalls}
+	frozen := checkpoint{s, c.TargetContext, []string{"enemy", "tail"}, "job-46-entry-2"}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +27,7 @@ func TestTreatmentChanceFrozenReloadWithoutReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, resumed, _ := chanceFixture()
-	resumed.TargetContext, resumed.StatDownCalls = loaded.Target, loaded.StatDown
+	resumed.TargetContext = loaded.Target
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterTreatmentChance(resumed)
 	frozen.Arguments[0] = "self"
@@ -39,7 +38,7 @@ func TestTreatmentChanceFrozenReloadWithoutReplay(t *testing.T) {
 	}{{&s, c, d}, {&loaded.State, resumed, rebuilt}} {
 		executeChance(t, run.s, run.c, run.d, loaded.EntryID, loaded.Arguments, 0, 0, .99, 0)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 851 || s.Actors[1].Attack != 60 || s.Actors[1].Defense != 48 || s.Actors[1].Icon != "assets/images/placeholders/battle/frog.svg" || resumed.StatDownCalls != 2 || c.StatDownCalls != 2 || resumed.End.ImmediateRiskCalls != 1 || !reflect.DeepEqual(loaded.Arguments, []string{"enemy", "tail"}) {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 851 || s.Actors[1].Attack != 60 || s.Actors[1].Defense != 48 || s.Actors[1].Icon != "assets/images/placeholders/battle/frog.svg" || resumed.End.ImmediateRiskCalls != 1 || !reflect.DeepEqual(loaded.Arguments, []string{"enemy", "tail"}) {
 		t.Fatal(s, loaded, c, resumed)
 	}
 }
@@ -87,9 +86,8 @@ func TestTreatmentChanceNativeCoinReloadWithoutNewPorts(t *testing.T) {
 		State     corebattle.LifetimeState
 		Target    corebattle.TargetContext
 		Arguments []string
-		StatUp    int
 	}
-	frozen := checkpoint{s, c.TargetContext, []string{"enemy", "tail"}, c.StatUpCalls}
+	frozen := checkpoint{s, c.TargetContext, []string{"enemy", "tail"}}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +97,7 @@ func TestTreatmentChanceNativeCoinReloadWithoutNewPorts(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, resumed, rebuilt := chanceFixture()
-	resumed.TargetContext, resumed.StatUpCalls = loaded.Target, loaded.StatUp
+	resumed.TargetContext = loaded.Target
 	frozen.Arguments[0] = "self"
 	for _, run := range []struct {
 		s *corebattle.LifetimeState
@@ -108,7 +106,7 @@ func TestTreatmentChanceNativeCoinReloadWithoutNewPorts(t *testing.T) {
 	}{{&s, c, d}, {&loaded.State, resumed, rebuilt}} {
 		executeChance(t, run.s, run.c, run.d, "job-46-entry-5", loaded.Arguments, 0, 0, 0, 0)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 0 || s.Actors[3].HP != 250 || c.StatUpCalls != 1 || resumed.StatUpCalls != 1 || c.DamageCalls != 1 || resumed.DamageCalls != 1 || s.Actors[0].Defense != 120 || !reflect.DeepEqual(loaded.Arguments, []string{"enemy", "tail"}) {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 0 || s.Actors[3].HP != 250 || c.DamageCalls != 1 || resumed.DamageCalls != 1 || s.Actors[0].Defense != 120 || !reflect.DeepEqual(loaded.Arguments, []string{"enemy", "tail"}) {
 		t.Fatal(s, loaded, c, resumed)
 	}
 }

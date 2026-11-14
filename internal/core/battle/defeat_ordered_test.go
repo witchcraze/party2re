@@ -30,7 +30,7 @@ func TestFinalStrikeRegisteredSingleAndAreaAdmission(t *testing.T) {
 		if err := s.ValidateStatusEntry(&c, nil, entry, "enemy", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) ||
 			*dc.RequesterLevel != levelBefore || *dc.Seals != sealsBefore ||
 			!slices.Equal(dc.PartyIDs, partyBefore) || !slices.Equal(dc.EnemyIDs, enemyBefore) ||
-			c.DeathCalls != 0 || c.AreaDeathCalls != 0 || c.Defeat != dc || applies != 0 {
+			c.Defeat != dc || applies != 0 {
 			t.Fatal(entry, s, err)
 		}
 		rng := &targetRNG{t: t, draws: []float64{0, 0, 0}}
@@ -53,7 +53,7 @@ func TestFinalStrikeOneHitDefenseIsConsumedInContinuation(t *testing.T) {
 	applies := 0
 	c.Defeat.Rewards.Apply = func(*LifetimeState, TargetContext, string) error { applies++; return nil }
 	before := reloadLifetime(t, s)
-	if _, err := s.ApplyStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 ||
+	if _, err := s.ApplyStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) ||
 		*c.Defeat.RequesterLevel != levelBefore || *c.Defeat.Seals != sealsBefore ||
 		!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) || applies != 0 {
 		t.Fatal(s, c, err)
@@ -115,7 +115,7 @@ func TestAreaFinalStrikeUsesDefenseAfterRevival(t *testing.T) {
 		if !reflect.DeepEqual(before, s) ||
 			*c.Defeat.RequesterLevel != levelBefore || *c.Defeat.Seals != sealsBefore ||
 			!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) ||
-			c.DeathCalls != 0 || c.AreaDeathCalls != 0 || applies != 0 {
+			applies != 0 {
 			t.Fatal("impure revival admission")
 		}
 		if defense == 100 {
@@ -162,7 +162,7 @@ func TestAreaDeathAdmissionRetainsTargetHelperManaBeforeRevival(t *testing.T) {
 	if err := s.ValidateStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); err != nil || !reflect.DeepEqual(before, s) ||
 		*dc.RequesterLevel != levelBefore || *dc.Seals != sealsBefore ||
 		!slices.Equal(dc.PartyIDs, partyBefore) || !slices.Equal(dc.EnemyIDs, enemyBefore) ||
-		c.DeathCalls != 0 || c.AreaDeathCalls != 0 || c.Defeat != dc || applies != 0 {
+		c.Defeat != dc || applies != 0 {
 		t.Fatal(s, err)
 	}
 	rng := &targetRNG{t: t, draws: []float64{.5, 0}}

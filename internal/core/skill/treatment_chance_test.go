@@ -87,7 +87,7 @@ func TestTreatmentChanceManifest(t *testing.T) {
 			}
 			switch id {
 			case "job-43-entry-0", "job-43-entry-1", "job-43-entry-2":
-				if a.Status != "" || c.Status.PartyCureCalls != 1 || !c.AdditionalEffect {
+				if a.Status != "" || !c.AdditionalEffect {
 					t.Fatal(a, c)
 				}
 			case "job-43-entry-3", "job-45-entry-5":
@@ -95,7 +95,7 @@ func TestTreatmentChanceManifest(t *testing.T) {
 					t.Fatal(a)
 				}
 			case "job-43-entry-4":
-				if a.Status != "" || c.Status.CureCalls != 1 {
+				if a.Status != "" {
 					t.Fatal(a, c.Status)
 				}
 			case "job-45-entry-0":
@@ -103,23 +103,23 @@ func TestTreatmentChanceManifest(t *testing.T) {
 					t.Fatal(a)
 				}
 			case "job-45-entry-1":
-				if e.Status != corebattle.StatusDofuu || e.Tension != 1 || c.Status.StatusCalls != 1 {
+				if e.Status != corebattle.StatusDofuu || e.Tension != 1 {
 					t.Fatal(e, c.Status)
 				}
 			case "job-45-entry-2":
-				if a.Defense != 120 || a.Temporary != corebattle.TemporaryReduceMagic || c.StatUpCalls != 1 {
+				if a.Defense != 120 || a.Temporary != corebattle.TemporaryReduceMagic {
 					t.Fatal(a, c)
 				}
 			case "job-45-entry-3":
-				if e.MP != 82 || c.MPHealCalls != 1 || c.StatDownCalls != 1 {
+				if e.MP != 82 {
 					t.Fatal(e, c)
 				}
 			case "job-45-entry-4":
-				if e.Attack != 60 || e.Defense != 48 || e.Icon != "assets/images/placeholders/battle/frog.svg" || c.StatDownCalls != 2 {
+				if e.Attack != 60 || e.Defense != 48 || e.Icon != "assets/images/placeholders/battle/frog.svg" {
 					t.Fatal(e, c)
 				}
 			case "job-45-entry-7":
-				if c.TensionCalls != 2 || c.HealCalls != 1 || c.MPHealCalls != 1 || s.Actors[2].Tension != 1.7 {
+				if c.TensionCalls != 2 || c.HealCalls != 1 || s.Actors[2].Tension != 1.7 {
 					t.Fatal(c, s.Actors)
 				}
 			case "job-46-entry-2":

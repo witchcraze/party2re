@@ -5,8 +5,7 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // BookContext retains operation facts; consumers rebuild ports after reload.
 type BookContext struct {
 	DamageContext
-	Arguments                                               []string
-	StatusCalls, AreaStatusCalls, CureCalls, PartyCureCalls int
+	Arguments []string
 }
 
 func (c *BookContext) shift() string {
@@ -137,11 +136,11 @@ func bookMagician(id string) bool {
 }
 
 func (c *BookContext) status() *StatusContext {
-	return &StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls, CureCalls: c.CureCalls, PartyCureCalls: c.PartyCureCalls}
+	return &StatusContext{EffectContext: c.EffectContext}
 }
 
 func (c *BookContext) keepStatus(sc *StatusContext) {
-	c.EffectContext, c.StatusCalls, c.AreaStatusCalls, c.CureCalls, c.PartyCureCalls = sc.EffectContext, sc.StatusCalls, sc.AreaStatusCalls, sc.CureCalls, sc.PartyCureCalls
+	c.EffectContext = sc.EffectContext
 }
 
 // ValidateBookAction is the ordinary held-book discovery and submission gate:

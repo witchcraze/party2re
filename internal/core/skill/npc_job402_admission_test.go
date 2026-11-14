@@ -74,7 +74,7 @@ func TestNPC402AdmissionRejectsBeforeAnyMutation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(gear, *s.Actors[0].Gear) || !reflect.DeepEqual(arguments, c.Arguments) || !reflect.DeepEqual(party, c.PartyIDs) || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.Cursor != (corebattle.TargetCursor{}) {
+			if string(before) != string(after) || !reflect.DeepEqual(gear, *s.Actors[0].Gear) || !reflect.DeepEqual(arguments, c.Arguments) || !reflect.DeepEqual(party, c.PartyIDs) || c.DamageCalls != 0 || c.Cursor != (corebattle.TargetCursor{}) {
 				t.Fatal(s, c)
 			}
 		})
@@ -103,7 +103,7 @@ func TestNPC402AdmissionSuccessIsPureAndNoEffectIsAccepted(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(before) != string(after) || !reflect.DeepEqual(args, c.Arguments) || c.DamageCalls != 0 || c.PartyStatUpCalls != 0 {
+		if string(before) != string(after) || !reflect.DeepEqual(args, c.Arguments) || c.DamageCalls != 0 {
 			t.Fatal(s, c)
 		}
 		// Complete empty-enemy contexts do not need a defeat/reset port.

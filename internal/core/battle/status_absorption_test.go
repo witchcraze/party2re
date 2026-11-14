@@ -54,12 +54,12 @@ func TestDeathAdmissionProjectsAbsorptionBeforeRevival(t *testing.T) {
 					}
 					if !reflect.DeepEqual(before, s) || level != 99 || seals != sealsBefore ||
 						!reflect.DeepEqual(c.PartyIDs, party) || !reflect.DeepEqual(c.EnemyIDs, enemies) ||
-						c.DeathCalls != 0 || c.AreaDeathCalls != 0 || c.Defeat != dc || applies != 0 {
+						c.Defeat != dc || applies != 0 {
 						t.Fatal("admission changed caller facts or executed reward hook")
 					}
 				}
 				if !tc.accept {
-					if _, err := s.ApplyStatusEntry(&c, nil, entry, "enemy", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 || applies != 0 {
+					if _, err := s.ApplyStatusEntry(&c, nil, entry, "enemy", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || applies != 0 {
 						t.Fatal("unsupported execution changed caller facts", err)
 					}
 				}
@@ -108,7 +108,7 @@ func TestAbsorbedDeathExecutionAndReload(t *testing.T) {
 						rng.draws = []float64{0}
 					}
 					r, err := s.ApplyStatusEntry(&c, nil, entry, "enemy", rng)
-					if err != nil || len(r) != 1 || !r[0].Applied || s.actor("enemy").HP != 101 || s.actor("enemy").MP != tc.wantMP || s.actor("self").HP != 1 || c.DeathCalls != 1 {
+					if err != nil || len(r) != 1 || !r[0].Applied || s.actor("enemy").HP != 101 || s.actor("enemy").MP != tc.wantMP || s.actor("self").HP != 1 {
 						t.Fatal(s, r, c, err)
 					}
 					rng.done()

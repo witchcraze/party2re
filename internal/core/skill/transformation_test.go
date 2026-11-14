@@ -98,10 +98,10 @@ func TestTransformationProjectionAdmitsChangedJobsAndCopyEligibility(t *testing.
 		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "job-36-copy"}, {Kind: "entry", EntryID: "job-79-speed"}}
 		err := s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t})
 		if copyAllowed {
-			if !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(s.Actors[0], before) || c.StatUpCalls != 0 || len(frame.Arguments) != 2 {
+			if !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(s.Actors[0], before) || len(frame.Arguments) != 2 {
 				t.Fatal("copy reopened an unsupported agility tail", err, s, c)
 			}
-		} else if err != nil || s.Actors[0].Agility != 250 || c.StatUpCalls != 1 {
+		} else if err != nil || s.Actors[0].Agility != 250 {
 			t.Fatal("fallen-copy no-effect lost later capped stat guard", err, s, c)
 		}
 	}

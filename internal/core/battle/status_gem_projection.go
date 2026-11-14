@@ -69,7 +69,6 @@ func (s *LifetimeState) projectStatusGemBranches(c *StatusContext, id, targetID 
 	ids := c.EnemyIDs
 	if source < 62 {
 		ids = c.PartyIDs
-		branches[0].Context.PartyCureCalls++
 		branches[0].Context.AdditionalEffect = true
 	}
 	if source == 70 {
@@ -82,11 +81,6 @@ func (s *LifetimeState) projectStatusGemBranches(c *StatusContext, id, targetID 
 				return nil, err
 			}
 			branches[0].State.actor(c.ActorID).Status = ""
-		}
-		if source == 71 {
-			branches[0].Context.AreaDeathCalls++
-		} else {
-			branches[0].Context.AreaStatusCalls++
 		}
 	}
 	for index, target := range ids {
@@ -129,7 +123,6 @@ func (s *LifetimeState) projectGemCure(c StatusContext, e TargetEffect) ([]Statu
 		child := c
 		r := branch.Resolution
 		if r.Resolved && r.Payload.Symbol != "" && branch.State.actor(r.TargetID).HP > 0 {
-			child.CureCalls++
 			t := branch.State.actor(r.TargetID)
 			if t.Status == r.Payload.Symbol || r.Payload.Symbol == StatusDeadlyPoison && (t.Status == StatusPoison || t.Status == StatusVirulentPoison) {
 				t.Status = ""
@@ -158,11 +151,6 @@ func (s *LifetimeState) projectGemStatus(c StatusContext, e TargetEffect, chance
 				return nil, err
 			}
 			continue
-		}
-		if death {
-			child.DeathCalls++
-		} else {
-			child.StatusCalls++
 		}
 		probability := TargetEffect{Category: r.Category, Payload: CallbackPayload{Number: chance}}
 		power := p.finalEffectPower(&child.EffectContext, p.initialEffectPower(&child.EffectContext, probability, ModifierStatus))

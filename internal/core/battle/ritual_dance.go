@@ -6,8 +6,7 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // Runtime hooks are rebuilt by the consumer; Arguments are invocation-local.
 type RitualDanceContext struct {
 	DamageContext
-	Arguments                               []string
-	StatusCalls, AreaStatusCalls, CureCalls int
+	Arguments []string
 }
 
 // RitualDanceEntries retains both complete tables, including the two revivals
@@ -63,7 +62,7 @@ func (s *LifetimeState) ApplyRitualDance(c *RitualDanceContext, id string, rng r
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-75-entry-0", "job-76-entry-1":
-		sc := StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls}
+		sc := StatusContext{EffectContext: c.EffectContext}
 		var err error
 		if id == "job-75-entry-0" {
 			for _, target := range c.EnemyIDs {
@@ -75,7 +74,7 @@ func (s *LifetimeState) ApplyRitualDance(c *RitualDanceContext, id string, rng r
 		} else {
 			_, err = s.ApplyAreaStatus(&sc, controlSymbol("", StatusSleep, CategorySong), 50, false, false, rng)
 		}
-		c.EffectContext, c.StatusCalls, c.AreaStatusCalls = sc.EffectContext, sc.StatusCalls, sc.AreaStatusCalls
+		c.EffectContext = sc.EffectContext
 		return err
 	case "job-75-entry-1":
 		r, err := s.ResolveEnemyTarget(c.TargetContext, controlEffect(c.shift(), 0, CategoryUntyped), rng)
@@ -119,9 +118,9 @@ func (s *LifetimeState) ApplyRitualDance(c *RitualDanceContext, id string, rng r
 			}
 		case "job-76-entry-4":
 			if t.Status != "" {
-				sc := StatusContext{EffectContext: c.EffectContext, CureCalls: c.CureCalls}
+				sc := StatusContext{EffectContext: c.EffectContext}
 				_, err := s.ApplyCure(&sc, controlSymbol(t.ID, t.Status, CategoryUntyped), rng)
-				c.EffectContext, c.CureCalls = sc.EffectContext, sc.CureCalls
+				c.EffectContext = sc.EffectContext
 				return err
 			}
 			t.Temporary = []TemporaryEffect{TemporaryNullAttack, TemporaryReduceAttack}[int(rng.Float64()*2)]

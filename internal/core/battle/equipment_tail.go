@@ -20,7 +20,6 @@ type EquipmentTailContext struct {
 	Completion LifetimeCompletion
 	Snapshot   EquipmentTailSnapshot
 	Defeat     *DefeatContext
-	CureCalls  int
 }
 
 // EquipmentTailEntries certifies _battle.cgi:862–921,984–989,1007–1038,1130–1134
@@ -171,11 +170,11 @@ func (s *LifetimeState) applyEquipment208(c *EquipmentTailContext, rng random.Ge
 		for _, id := range c.PartyIDs {
 			t := s.actor(id)
 			if hasItem(t.ItemDefinitionIDs, "item-208") && t.Status != "" {
-				child := StatusContext{EffectContext: c.EffectContext, CureCalls: c.CureCalls}
+				child := StatusContext{EffectContext: c.EffectContext}
 				previous := child.targetResources
 				child.targetResources = func(r TargetResolution) { applyStatusResources(s, r) }
 				_, err := s.ApplyCure(&child, controlSymbol(id, t.Status, CategoryUntyped), rng)
-				c.EffectContext, c.CureCalls = child.EffectContext, child.CureCalls
+				c.EffectContext = child.EffectContext
 				c.EffectContext.targetResources = previous
 				if err != nil {
 					return err

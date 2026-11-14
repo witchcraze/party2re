@@ -41,7 +41,7 @@ func TestBaseGuardAdmissionPurityEveryEntry(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if string(before) != string(after) || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear || !reflect.DeepEqual(args, []string{"enemy", "tail"}) || !reflect.DeepEqual(party, []string{"self", "fallen"}) || !reflect.DeepEqual(c.Arguments, []string{"frozen"}) || !reflect.DeepEqual(status, *c.Status) || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.StatDownCalls != 0 || c.TensionCalls != 0 || c.AreaDamageCalls != 0 {
+				if string(before) != string(after) || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear || !reflect.DeepEqual(args, []string{"enemy", "tail"}) || !reflect.DeepEqual(party, []string{"self", "fallen"}) || !reflect.DeepEqual(c.Arguments, []string{"frozen"}) || !reflect.DeepEqual(status, *c.Status) || c.DamageCalls != 0 || c.TensionCalls != 0 || c.AreaDamageCalls != 0 {
 					t.Fatal(entry.ID, s, c, frame)
 				}
 			}
@@ -89,7 +89,7 @@ func TestBaseGuardMissingDescendantsRejectWholeAction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.DamageCalls != 0 || c.PartyStatUpCalls != 0 {
+			if string(before) != string(after) || c.DamageCalls != 0 {
 				t.Fatal(s, c)
 			}
 		})

@@ -5,8 +5,7 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // GuardianHealingContext holds operation facts; rebuild ports after reload.
 type GuardianHealingContext struct {
 	DamageContext
-	Arguments                                               []string
-	StatusCalls, AreaStatusCalls, CureCalls, PartyCureCalls int
+	Arguments []string
 }
 
 // GuardianHealingEntries preserves full job17/18 order, including separately
@@ -122,7 +121,7 @@ func (s *LifetimeState) ApplyGuardianHealing(c *GuardianHealingContext, id strin
 		}
 		s.actor(c.ActorID).Tension = saved
 	default:
-		sc := StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls, CureCalls: c.CureCalls, PartyCureCalls: c.PartyCureCalls}
+		sc := StatusContext{EffectContext: c.EffectContext}
 		var err error
 		switch id {
 		case "job-17-entry-3":
@@ -135,7 +134,6 @@ func (s *LifetimeState) ApplyGuardianHealing(c *GuardianHealingContext, id strin
 			_, err = s.ApplyPartyCure(&sc, controlSymbol("", StatusSleep, CategorySong), rng)
 		}
 		c.EffectContext = sc.EffectContext
-		c.StatusCalls, c.AreaStatusCalls, c.CureCalls, c.PartyCureCalls = sc.StatusCalls, sc.AreaStatusCalls, sc.CureCalls, sc.PartyCureCalls
 		return err
 	}
 	return nil
