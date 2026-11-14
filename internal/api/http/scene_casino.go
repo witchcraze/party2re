@@ -125,5 +125,10 @@ func (h *Handler) casinoActivityData(ctx context.Context, result playercontext.R
 
 var casinoFacility = facility{
 	title: "カジノ", commands: []string{"casino_slot", "casino_exchange", "casino_prize_exchange", "casino_room_create"},
+	subjectCommands: []string{"casino_room_join", "casino_room_spectate"},
+	bind: func(n playercontext.Selection, _ string) map[string]map[string]any {
+		room := map[string]any{"room_id": n.Subject.ID}
+		return map[string]map[string]any{"casino_room_join": room, "casino_room_spectate": room}
+	},
 	read: (*Handler).casinoSceneData, placeLog: true,
 }

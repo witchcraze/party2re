@@ -134,6 +134,7 @@ func TestConfirmedRoomEntrySurvivesSelectionFailure(t *testing.T) {
 		store.loadErr = errors.New("selector failed")
 	}
 	router := f.router("pvp_room_create", timer.NewService(nil), WithPlayerContext(pc))
+	pc.AdmitSceneActions("town", []string{"pvp_room_create"}, nil) // no production scene admits it yet
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"pvp_room_create","params":{"name":"Test","bet":10}}`, nil)
 	var observed PlayerContextResponse
 	if err := json.Unmarshal(raw["context"], &observed); err != nil {

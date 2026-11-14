@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/store"
@@ -66,5 +67,9 @@ func (h *Handler) townDistrictSceneData(ctx context.Context, r playercontext.Res
 }
 
 func townDistrictFacility(name string) facility {
-	return facility{title: name, read: (*Handler).townDistrictSceneData, placeLog: true}
+	return facility{title: name, commands: []string{"store_build"}, subjectCommands: slices.Concat(storeOwnerCommands, storeVisitorCommands),
+		bind: func(n playercontext.Selection, _ string) map[string]map[string]any {
+			return map[string]map[string]any{"store_build": {"town_id": n.Destination}}
+		},
+		read: (*Handler).townDistrictSceneData, placeLog: true}
 }

@@ -108,7 +108,12 @@ func (f *storeDB) request(t *testing.T, ctx context.Context, actor corecharacter
 	if err != nil {
 		t.Fatal(err)
 	}
-	pc := playercontext.NewService(f.chars, emptyActionsReader{}, timer.NewService(nil), playercontext.WithNavigation(&lockedNavigationStore{selection: playercontext.Selection{Destination: "town1"}},
+	selection := playercontext.Selection{Destination: "town1"}
+	if action != "store_build" {
+		// Store commands belong to a selected store; the services check the sale's own store.
+		selection.Subject = playercontext.Subject{Kind: "store", ID: "selected"}
+	}
+	pc := playercontext.NewService(f.chars, emptyActionsReader{}, timer.NewService(nil), playercontext.WithNavigation(&lockedNavigationStore{selection: selection},
 		playercontext.SceneDefinition{ID: "town", Pageable: true},
 		playercontext.SceneDefinition{ID: "town1", Parent: "town", SubjectKind: "store", SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil }}))
 	h, err := NewHandler(expansionDBPlayer{owner: actor.PlayerID}, characters, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithStore(f.service), WithPlayerContext(pc))

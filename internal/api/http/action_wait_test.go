@@ -81,6 +81,9 @@ func TestSuccessfulCommandStartsActionWaitThatBlocksEveryAction(t *testing.T) {
 
 func TestRejectedCommandAndNavigationDoNotStartActionWait(t *testing.T) {
 	f, timers, router := actionWaitRouter(t, "town")
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", depositOne, nil); status != 409 || actionErrorCode(t, raw) != "ACTION_UNAVAILABLE" || waitMS(t, raw) != 0 || f.depositCalls != 0 {
+		t.Fatalf("deposit from town: %d %s (calls %d)", status, raw["error"], f.depositCalls)
+	}
 	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"bank"}}`, nil); status != 200 || waitMS(t, raw) != 0 {
 		t.Fatalf("scene_enter: %d %s", status, raw["error"])
 	}

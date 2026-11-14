@@ -160,7 +160,7 @@ func TestFaithGatewayErrors(t *testing.T) {
 
 func TestFaithGatewayGuards(t *testing.T) {
 	for _, input := range faithInputs {
-		for _, condition := range []string{"anonymous", "foreign", "location", "wake"} {
+		for _, condition := range []string{"anonymous", "foreign", "location", "town", "wake"} {
 			t.Run(input.action+condition, func(t *testing.T) {
 				f := newFaithFixture(t)
 				path, token, scene, want := "hero", "session", input.scene, 409
@@ -171,6 +171,8 @@ func TestFaithGatewayGuards(t *testing.T) {
 					path, want = "other", 403
 				case "location":
 					scene = "bank"
+				case "town":
+					scene = "town"
 				case "wake":
 					f.char.PendingWake = true
 				}

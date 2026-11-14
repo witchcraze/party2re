@@ -43,14 +43,15 @@ func (s *lockedNavigationStore) Save(_ context.Context, _ string, n playercontex
 }
 
 type alchemyDB struct {
-	router   http.Handler
-	actor    corecharacter.Character
-	depots   *database.DepotRepository
-	service  *alchemy.Service
-	hookErr  error
-	hookMu   sync.Mutex
-	recipeID string
-	product  string
+	router     http.Handler
+	navigation *lockedNavigationStore
+	actor      corecharacter.Character
+	depots     *database.DepotRepository
+	service    *alchemy.Service
+	hookErr    error
+	hookMu     sync.Mutex
+	recipeID   string
+	product    string
 }
 
 func newAlchemyDB(t *testing.T, ctx context.Context) *alchemyDB {
@@ -129,7 +130,8 @@ func newAlchemyDB(t *testing.T, ctx context.Context) *alchemyDB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pc := playercontext.NewService(chars, emptyActionsReader{}, timer.NewService(nil), playercontext.WithNavigation(&lockedNavigationStore{selection: playercontext.Selection{Destination: "town"}},
+	f.navigation = &lockedNavigationStore{selection: playercontext.Selection{Destination: "town"}}
+	pc := playercontext.NewService(chars, emptyActionsReader{}, timer.NewService(nil), playercontext.WithNavigation(f.navigation,
 		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "alchemy", Parent: "town", Pageable: true}))
 	h, err := NewHandler(expansionDBPlayer{owner: actor.PlayerID}, characters, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithAlchemy(f.service), WithPlayerContext(pc))
 	if err != nil {
@@ -153,9 +155,16 @@ func (f *alchemyDB) enter(t *testing.T, ctx context.Context) (int, map[string]js
 
 func (f *alchemyDB) synthesize(t *testing.T, ctx context.Context) {
 	t.Helper()
+	// Synthesis happens in the alchemy scene; tests then enter it again from town.
+	if err := f.navigation.Save(ctx, f.actor.ID, playercontext.Selection{Destination: "alchemy"}); err != nil {
+		t.Fatal(err)
+	}
 	status, got := gatewayRequest(t, f.router, f.actor.ID, "session", "application/json", fmt.Sprintf(`{"action":"alchemy_synthesize","params":{"recipe_id":%q}}`, f.recipeID), ctx)
 	if status != 200 {
 		t.Fatalf("synthesize: %d %s", status, got)
+	}
+	if err := f.navigation.Save(ctx, f.actor.ID, playercontext.Selection{Destination: "town"}); err != nil {
+		t.Fatal(err)
 	}
 }
 

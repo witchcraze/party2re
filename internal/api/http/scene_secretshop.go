@@ -80,6 +80,12 @@ func (h *Handler) secretShopSceneData(ctx context.Context, r playercontext.Resul
 
 var secretShopFacility = facility{
 	title: "秘密の店", commands: []string{"secretshop_purchase", "secretshop_puffpuff"}, read: (*Handler).secretShopSceneData, placeLog: true,
+	bind: func(n playercontext.Selection, _ string) map[string]map[string]any {
+		if n.Subject == (playercontext.Subject{}) {
+			return nil
+		}
+		return map[string]map[string]any{"secretshop_purchase": {"item_id": n.Subject.ID}}
+	},
 	npc: &npcProfile{name: secretshop.NPCName, words: []string{
 		"バレちゃったメェ〜。他の人には秘密だメェ〜。",
 		"値段は高いメェ〜けれど、他では手に入らないレアものだメェ〜。",

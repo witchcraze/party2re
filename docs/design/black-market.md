@@ -4,7 +4,7 @@ The Black Market (`internal/blackmarket`, legacy `party2/lib/black_market.cgi`, 
 
 ## Access
 
-Legacy `闇市場` is reachable only through the Oracle's hidden `＠やみいちば` action, which returns without moving the character below `job_lv` 15 (`lib/goods.cgi:51–56`). The scene's parent is therefore the Oracle shop, not the town list; `oracle_blackmarket` enters it. `CheckEligibility` applies the same threshold to scene entry, the two commands and the retained NPC operations; rejected operations return `ErrAccessDenied` without moving assets.
+Legacy `闇市場` is reachable only through the Oracle's hidden `＠やみいちば` action, which returns without moving the character below `job_lv` 15 (`lib/goods.cgi:51–56`). The scene's parent is therefore the Oracle shop, not the town list, and it is entered only from there: `oracle_blackmarket` enters it, and entry from any other scene is rejected. `CheckEligibility` applies the same threshold to scene entry, the two commands and the retained NPC operations; rejected operations return `ErrAccessDenied` without moving assets.
 
 ## Gateway and Retained Routes
 
@@ -12,7 +12,7 @@ Selecting `blackmarket` exposes owned Rare/U-Rare points, the visible prizes and
 
 | Former or retained REST operation | Supported replacement / disposition |
 | --- | --- |
-| GET `/characters/{id}/blackmarket`, GET `.../blackmarket/points` (retired) | POST `scene_enter` with `destination:blackmarket`, then GET `/api/v1/characters/{id}/context` |
+| GET `/characters/{id}/blackmarket`, GET `.../blackmarket/points` (retired) | POST `oracle_blackmarket` in the Oracle shop, then GET `/api/v1/characters/{id}/context` |
 | POST `.../blackmarket/sacrifice` (retired) | POST `/api/v1/characters/{id}/actions`, `action:blackmarket_sacrifice`, explicit `params.item_instance_id` |
 | POST `.../blackmarket/trade` (retired) | Same Gateway, `action:blackmarket_trade`, explicit `params.prize_id`; the result keeps the delivered Depot instance and remaining points |
 | POST `.../blackmarket/talk`, POST `.../blackmarket/inspect` (retired) | Same Gateway, `action:npc_talk` / `action:npc_inspect` in the Black Market scene; both require the scene's qualification |

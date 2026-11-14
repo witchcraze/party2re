@@ -160,8 +160,15 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 	if !slices.Equal(purchaseSchema.Required, []string{"item_id", "quantity"}) || purchaseSchema.Properties["item_id"].Const != product.ID || purchaseSchema.Properties["quantity"].Const != nil {
 		t.Fatalf("purchase schema: %+v", purchaseSchema)
 	}
-	// An explicit purchase must retain its target after another client changes selection.
+	// After another client changes selection, the earlier offer is rejected, never redirected.
+	observed := store.selection.Subject
 	store.selection.Subject = playercontext.Subject{Kind: "item", ID: "secret_item_magic_mirror"}
+	status, raw = f.request(router, fmt.Sprintf(`{"item_id":%q,"quantity":1}`, product.PurchaseParams.ItemID))
+	if status != 409 || f.executions != 0 || len(f.inv.Items) != 0 {
+		t.Fatalf("stale offer executed: %d %s", status, raw)
+	}
+	assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
+	store.selection.Subject = observed
 	status, raw = f.request(router, fmt.Sprintf(`{"item_id":%q,"quantity":1}`, product.PurchaseParams.ItemID))
 	if status != 200 || string(raw["success"]) != "true" || f.executions != 1 || len(f.inv.Items) != 1 || f.inv.Items[0].DefinitionID != "item-010" || f.char.Money != 100000-product.Price || store.writes != 2 {
 		t.Fatalf("explicit purchase redirected: %d %s", status, raw)
@@ -231,10 +238,10 @@ func TestSecretShopScenePagesFiltersAndUnavailableSelection(t *testing.T) {
 		`{"action":"scene_page","params":{"destination":"secretshop","offset":0}}`,
 	} {
 		status, raw = gatewayRequest(t, router, "hero", "session", "application/json", command, nil)
-		if status != 403 || store.writes != 1 || reads.reads != before {
+		if status != 409 || store.writes != 1 || reads.reads != before {
 			t.Fatalf("qualification bypass: %d %s", status, raw)
 		}
-		assertGatewayError(t, raw, "SCENE_ACCESS_DENIED")
+		assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
 	}
 	for range 2 {
 		status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_back","params":{}}`, nil)

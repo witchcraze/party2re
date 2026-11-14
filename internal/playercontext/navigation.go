@@ -54,9 +54,15 @@ type SceneDefinition struct {
 	ID, Parent, SubjectKind string
 	Pageable                bool
 	CursorPageable          bool
+	// ParentOnly admits entry only from Parent: a place legacy reaches through
+	// a facility action instead of ＠いどう.
+	ParentOnly bool
 	// CanEnter is a pure character qualification check; nil permits entry.
 	CanEnter         func(character.Character) bool
 	SubjectAvailable func(ctx context.Context, actorID, targetID string) (bool, error)
+	// Actions are the facility commands the scene admits; non-nil SubjectActions
+	// replace them while a subject is selected. Set by AdmitSceneActions.
+	Actions, SubjectActions []string
 }
 
 type PageParams struct {
@@ -117,6 +123,64 @@ func WithNavigation(store NavigationRepository, definitions ...SceneDefinition) 
 			}
 		}
 	}
+}
+
+// AdmitSceneActions registers, during composition, the facility commands a
+// scene admits. They must be location-gated entry actions outside navigation.
+func (s *Service) AdmitSceneActions(sceneID string, actions, subjectActions []string) {
+	d, ok := s.scenes[sceneID]
+	if !ok {
+		panic("scene actions for unregistered scene: " + sceneID)
+	}
+	for _, id := range slices.Concat(actions, subjectActions) {
+		if def, known := GetAction(id); !known || !def.RequiredGates.Has(GateLocationCheck) || def.ActivityKind != "" || def.Category == "navigation" {
+			panic("scene " + sceneID + " cannot admit action: " + id)
+		}
+	}
+	d.Actions, d.SubjectActions = actions, subjectActions
+	s.scenes[sceneID] = d
+}
+
+// sceneActions is the single list of location-bound commands the observed
+// scene admits. Discovery and execution both apply it through LocationGate.
+func (s *Service) sceneActions(o *NavigationObservation) []string {
+	d, ok := s.scenes[o.Selection.Destination]
+	actions := []string{"scene_enter"}
+	if ok && d.ID != LocationTown {
+		actions = append(actions, "scene_back")
+	}
+	if o.Unavailable {
+		return actions
+	}
+	if o.Selection.Subject != (Subject{}) {
+		if d.SubjectActions != nil {
+			return append(actions, d.SubjectActions...)
+		}
+		return append(actions, d.Actions...)
+	}
+	if d.SubjectKind != "" {
+		actions = append(actions, "scene_select")
+	}
+	if d.Pageable {
+		actions = append(actions, "scene_page")
+	}
+	return append(actions, d.Actions...)
+}
+
+// Enterable reports whether the observed actor may enter destination from the
+// observed scene. Enter enforces it; discovery offers only destinations it admits.
+func (s *Service) Enterable(r Result, destination string) error {
+	d, ok := s.scenes[destination]
+	if !ok {
+		return ErrInvalidSelection
+	}
+	if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
+		return ErrSceneAccessDenied
+	}
+	if d.ParentOnly && (r.Navigation == nil || r.Navigation.Unavailable || r.Navigation.Selection.Destination != d.Parent) {
+		return ErrSceneAccessDenied
+	}
+	return nil
 }
 
 func validSelection(n Selection) bool {
@@ -223,12 +287,8 @@ func (s *Service) navigate(ctx context.Context, playerID, actorID string, transi
 
 func (s *Service) Enter(ctx context.Context, playerID, actorID, destination string) (Selection, error) {
 	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
-		d, ok := s.scenes[destination]
-		if !ok {
-			return Selection{}, ErrInvalidSelection
-		}
-		if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
-			return Selection{}, ErrSceneAccessDenied
+		if err := s.Enterable(r, destination); err != nil {
+			return Selection{}, err
 		}
 		return Selection{Destination: destination}, nil
 	})

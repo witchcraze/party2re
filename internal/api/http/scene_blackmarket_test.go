@@ -138,11 +138,10 @@ func TestBlackMarketSceneQualificationAndSafeBack(t *testing.T) {
 		t.Fatalf("missing safe back: %+v", observation.AvailableActions)
 	}
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"blackmarket_sacrifice","params":{"item_instance_id":"i"}}`, nil)
-	// The selection does not gate commands; the service owns qualification.
-	if status != 403 || service.mutations != 0 {
+	if status != 409 || service.mutations != 0 {
 		t.Fatalf("unqualified command: %d %s", status, raw)
 	}
-	assertGatewayError(t, raw, "BLACKMARKET_ACCESS_DENIED")
+	assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
 
 	store.selection.Destination = "town"
 	if status, town := navigationGET(t, router); status != 200 || slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool { return d.ID == "blackmarket" }) {

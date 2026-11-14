@@ -34,8 +34,8 @@ func TestGates_BoundariesAndFlags(t *testing.T) {
 		}},
 		{"money zero", CurrencyGate{}, GateCurrencyCheck, func(s *Snapshot) { s.Character.Money = 0 }},
 		{"money negative", CurrencyGate{}, GateCurrencyCheck, func(s *Snapshot) { s.Character.Money = -1 }},
-		{"location unknown", LocationGate{}, GateLocationCheck, func(s *Snapshot) { s.LocationID = "" }},
-		{"location non-town", LocationGate{}, GateLocationCheck, func(s *Snapshot) { s.LocationID = "dungeon" }},
+		{"scene without the action", LocationGate{}, GateLocationCheck, func(s *Snapshot) { s.SceneActions = []string{"other"} }},
+		{"scene without actions", LocationGate{}, GateLocationCheck, func(s *Snapshot) { s.SceneActions = []string{} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			blocked := healthy
@@ -108,7 +108,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		{"processing", func(s *Snapshot) {
 			s.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StateProcessing}}
 		}, []string{"rescue_request", "presence_refresh"}},
-		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "npc_talk", "npc_inspect", "place_say", "place_whisper", "park_divinate", "secretshop_puffpuff", "player_inspect", "rescue_request", "presence_refresh"}},
+		{"scene actions", func(s *Snapshot) { s.SceneActions = []string{"scene_back", "bank_deposit"} }, []string{"scene_back", "bank_deposit", "player_inspect", "rescue_request", "presence_refresh"}},
 		{"all constraints", func(s *Snapshot) {
 			s.Character.Stats.HP = 0
 			s.Character.Tired = 100

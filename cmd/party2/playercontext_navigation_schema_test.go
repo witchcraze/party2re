@@ -16,6 +16,9 @@ func TestProductionSceneRegistryMatchesNavigationSchemas(t *testing.T) {
 		if d.ID == "depot" && (d.Parent != "town" || !d.Pageable || d.CursorPageable || d.SubjectKind != "") {
 			t.Fatalf("Depot must use the shared owned facility offset list: %+v", d)
 		}
+		if d.ID == "blackmarket" && (d.Parent != "oracle" || !d.ParentOnly || d.CanEnter == nil) {
+			t.Fatalf("the black market must be entered only from the Oracle shop by qualified characters: %+v", d)
+		}
 		if d.ID == "chapel" && (d.Parent != "town" || d.Pageable || d.CursorPageable || d.SubjectKind != "") {
 			t.Fatalf("Chapel must be an owned facility without subjects or paging: %+v", d)
 		}

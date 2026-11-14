@@ -31,10 +31,17 @@ func TestShopSellUsesObservedHandOffer(t *testing.T) {
 		i < 0 || response.AvailableActions[i].ParamsTemplate["item_instance_id"] != weapon.ID || response.AvailableActions[i].ParamsTemplate["shop_type"] != "weapon" {
 		t.Fatalf("sale offer: %+v %+v", data.SaleOffer, response.AvailableActions)
 	}
+	// The weapon shop's scene fixes shop_type, so another shop cannot be named from it.
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_sell","params":{"shop_type":"item","item_instance_id":"`+weapon.ID+`"}}`, nil)
+	if status != 409 || !strings.Contains(string(raw["error"]), "ACTION_UNAVAILABLE") || len(f.inv.Items) != 1 || f.char.Money != 1 {
+		t.Fatalf("weapon shop sold through the item shop: %d %s", status, raw)
+	}
+	store.selection.Destination = "shop_item"
+	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_sell","params":{"shop_type":"item","item_instance_id":"`+weapon.ID+`"}}`, nil)
 	if status != 409 || !strings.Contains(string(raw["error"]), "SHOP_ITEM_NOT_IN_HAND") || len(f.inv.Items) != 1 || f.char.Money != 1 {
 		t.Fatalf("item shop bought a weapon: %d %s", status, raw)
 	}
+	store.selection.Destination = "shop_weapon"
 	body, err := json.Marshal(map[string]any{"action": "shop_sell", "params": response.AvailableActions[i].ParamsTemplate})
 	if err != nil {
 		t.Fatal(err)
@@ -73,13 +80,13 @@ func TestShopBatchPurchaseAndSynthesisCommands(t *testing.T) {
 		h.shops = stub
 	})
 	f.char.Name = "Hero"
-	store.selection = playercontext.Selection{Destination: "shop_item"}
 	for _, tc := range []struct {
-		body, message string
+		scene, body, message string
 	}{
-		{`{"action":"shop_batch_purchase","params":{"shop_type":"item","items":[{"item_definition_id":"item-001","quantity":2}]}}`, "Heroニャンの預かり所の方に投げましたニャ！"},
-		{`{"action":"shop_synthesize","params":{"recipe_target":"ruby"}}`, "合成の秘薬を使って、ルビーのうでわ が完成したわ。預り所にあるはずよ"},
+		{"shop_item", `{"action":"shop_batch_purchase","params":{"shop_type":"item","items":[{"item_definition_id":"item-001","quantity":2}]}}`, "Heroニャンの預かり所の方に投げましたニャ！"},
+		{"shop_accessory", `{"action":"shop_synthesize","params":{"recipe_target":"ruby"}}`, "合成の秘薬を使って、ルビーのうでわ が完成したわ。預り所にあるはずよ"},
 	} {
+		store.selection = playercontext.Selection{Destination: tc.scene}
 		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", tc.body, nil)
 		var result struct {
 			NPCMessage string `json:"npc_message"`
@@ -97,21 +104,23 @@ func TestShopBatchPurchaseAndSynthesisCommands(t *testing.T) {
 }
 
 func TestShopCommandsRejectInvalidInputsWithoutWrites(t *testing.T) {
-	f, _, router := shopSceneRouter(t)
+	f, store, router := shopSceneRouter(t)
 	f.char.Money = 1000
 	for _, tc := range []struct {
-		body   string
-		status int
-		code   string
+		scene, body string
+		status      int
+		code        string
 	}{
-		{`{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01"}}`, 400, ""},
-		{`{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":1,"character_id":"other"}}`, 400, ""},
-		{`{"action":"shop_purchase","params":{"shop_type":"secret","item_definition_id":"weapon-01","quantity":1}}`, 400, "SHOP_INVALID_TYPE"},
-		{`{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":0}}`, 400, "SHOP_INVALID_QUANTITY"},
-		{`{"action":"shop_sell","params":{"shop_type":"weapon","item_instance_id":"missing"}}`, 404, "SHOP_ITEM_NOT_OWNED"},
-		{`{"action":"shop_batch_purchase","params":{"shop_type":"accessory","items":[{"item_definition_id":"item-143","quantity":1}]}}`, 400, "SHOP_INVALID_TYPE"},
-		{`{"action":"shop_batch_purchase","params":{"shop_type":"item","items":[]}}`, 400, "SHOP_EMPTY_PURCHASE_LIST"},
+		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01"}}`, 400, ""},
+		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":1,"character_id":"other"}}`, 400, ""},
+		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"secret","item_definition_id":"weapon-01","quantity":1}}`, 409, "ACTION_UNAVAILABLE"},
+		{"town", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":1}}`, 409, "ACTION_UNAVAILABLE"},
+		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":0}}`, 400, "SHOP_INVALID_QUANTITY"},
+		{"shop_weapon", `{"action":"shop_sell","params":{"shop_type":"weapon","item_instance_id":"missing"}}`, 404, "SHOP_ITEM_NOT_OWNED"},
+		{"shop_accessory", `{"action":"shop_batch_purchase","params":{"shop_type":"accessory","items":[{"item_definition_id":"item-143","quantity":1}]}}`, 409, "ACTION_UNAVAILABLE"},
+		{"shop_item", `{"action":"shop_batch_purchase","params":{"shop_type":"item","items":[]}}`, 400, "SHOP_EMPTY_PURCHASE_LIST"},
 	} {
+		store.selection = playercontext.Selection{Destination: tc.scene}
 		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", tc.body, nil)
 		var failure struct {
 			Error ErrorDetail `json:"error"`

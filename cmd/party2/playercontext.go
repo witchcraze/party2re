@@ -20,7 +20,7 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		{ID: "town", Pageable: true}, {ID: "alchemy", Parent: "town", Pageable: true},
 		{ID: "altar", Parent: "town"}, {ID: "auction", Parent: "town"}, {ID: "bank", Parent: "town"},
 		// Reached only through the Oracle shop's ＠やみいちば (goods.cgi).
-		{ID: "blackmarket", Parent: "oracle", Pageable: true, CanEnter: blackmarket.CheckEligibility},
+		{ID: "blackmarket", Parent: "oracle", ParentOnly: true, Pageable: true, CanEnter: blackmarket.CheckEligibility},
 		{ID: "blacksmith", Parent: "town"},
 		{ID: "chapel", Parent: "town"},
 		{ID: "depot", Parent: "town", Pageable: true},

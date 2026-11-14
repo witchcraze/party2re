@@ -55,3 +55,27 @@ func TestNavigationQualificationAndSafeBack(t *testing.T) {
 		t.Fatalf("safe back: %+v writes=%d", store.selection, store.writes)
 	}
 }
+
+func TestParentOnlySceneIsEnteredOnlyFromItsParent(t *testing.T) {
+	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner", JobLevel: 15}, ctx: context.Background()}
+	store := &navigationStore{}
+	s := NewService(r, r, r, WithNavigation(store, SceneDefinition{ID: "town"}, SceneDefinition{ID: "oracle", Parent: "town"},
+		SceneDefinition{ID: "hidden", Parent: "oracle", ParentOnly: true, CanEnter: func(c character.Character) bool { return c.JobLevel >= 15 }}))
+	if _, err := s.Enter(r.ctx, "owner", "hero", "hidden"); !errors.Is(err, ErrSceneAccessDenied) || store.writes != 0 {
+		t.Fatalf("entry from town: %v writes=%d", err, store.writes)
+	}
+	if _, err := s.Enter(r.ctx, "owner", "hero", "oracle"); err != nil {
+		t.Fatal(err)
+	}
+	r.character.JobLevel = 14
+	if _, err := s.Enter(r.ctx, "owner", "hero", "hidden"); !errors.Is(err, ErrSceneAccessDenied) || store.selection.Destination != "oracle" {
+		t.Fatalf("unqualified entry from the parent: %v %+v", err, store.selection)
+	}
+	r.character.JobLevel = 15
+	if _, err := s.Enter(r.ctx, "owner", "hero", "hidden"); err != nil || store.selection.Destination != "hidden" {
+		t.Fatalf("entry from the parent: %v %+v", err, store.selection)
+	}
+	if _, err := s.Back(r.ctx, "owner", "hero"); err != nil || store.selection.Destination != "oracle" {
+		t.Fatalf("back: %v %+v", err, store.selection)
+	}
+}

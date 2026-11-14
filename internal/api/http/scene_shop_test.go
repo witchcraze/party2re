@@ -374,20 +374,26 @@ func TestShopSceneActorOwnershipAndExplicitPurchase(t *testing.T) {
 	}
 	_, response := navigationGET(t, router)
 	product := decodeShopScene[ShopProductSceneData](t, response).Product
-	store.selection = playercontext.Selection{Destination: "shop_item", Subject: playercontext.Subject{Kind: "item", ID: "item-001"}}
 	i := slices.IndexFunc(response.AvailableActions, func(a ContextAction) bool { return a.Action == "shop_purchase" })
 	if i < 0 || response.AvailableActions[i].ParamsTemplate["item_definition_id"] != "weapon-01" {
 		t.Fatalf("purchase template: %+v", response.AvailableActions)
 	}
 	params := response.AvailableActions[i].ParamsTemplate
 	params["quantity"] = 1
-	// The command keeps the observed shop and product even after selection moves.
-	store.selection = playercontext.Selection{Destination: "shop_item", Subject: playercontext.Subject{Kind: "item", ID: "item-001"}}
 	body, err := json.Marshal(map[string]any{"action": "shop_purchase", "params": params})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Once the selection moves, the earlier offer no longer matches the scene.
+	observed := store.selection
+	store.selection = playercontext.Selection{Destination: "shop_item", Subject: playercontext.Subject{Kind: "item", ID: "item-001"}}
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", string(body), nil)
+	if status != 409 || len(f.inv.Items) != 0 || f.char.Money != 100 {
+		t.Fatalf("stale offer executed: %d %s", status, raw)
+	}
+	assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
+	store.selection = observed
+	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", string(body), nil)
 	var result shopPurchaseResponse
 	if err := json.Unmarshal(raw["result"], &result); err != nil {
 		t.Fatal(err)

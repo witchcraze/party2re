@@ -24,6 +24,8 @@ func godVisitFixture(t *testing.T, visit string, forfeitErr error) (*Service, *n
 			}
 			return forfeitErr
 		}))
+	s.AdmitSceneActions("god", []string{"god_wish"}, nil)
+	s.AdmitSceneActions("u_god", []string{"god_wish"}, nil)
 	return s, store, r, &forfeits
 }
 

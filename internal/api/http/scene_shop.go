@@ -104,10 +104,8 @@ func (h *Handler) shopSceneData(ctx context.Context, r playercontext.Result) (an
 
 // shopTemplates fixes the observed shop and sale target, and drops the sale
 // choice when the shop's hand is empty.
-func shopTemplates(info ShopSceneInfo, choices []string, templates map[string]map[string]any) []string {
-	for _, id := range []string{"shop_purchase", "shop_batch_purchase", "shop_sell"} {
-		templates[id] = map[string]any{"shop_type": string(info.ShopType)}
-	}
+// shopSaleOffer offers ＠うる only for the observed sale candidate.
+func shopSaleOffer(info ShopSceneInfo, choices []string, templates map[string]map[string]any) []string {
 	if info.SaleOffer == nil {
 		return slices.DeleteFunc(choices, func(id string) bool { return id == "shop_sell" })
 	}
@@ -157,5 +155,15 @@ func shopFacility(kind shop.ShopType) facility {
 	if inspect := shopNPCWords[kind].inspect; inspect != "" {
 		npc.inspect = name + "「" + inspect + "」"
 	}
-	return facility{title: shopTitles[kind], commands: commands, read: (*Handler).shopSceneData, placeLog: true, npc: npc}
+	bind := func(n playercontext.Selection, _ string) map[string]map[string]any {
+		bound := make(map[string]map[string]any)
+		for _, id := range []string{"shop_purchase", "shop_batch_purchase", "shop_sell"} {
+			bound[id] = map[string]any{"shop_type": string(kind)}
+		}
+		if n.Subject != (playercontext.Subject{}) {
+			bound["shop_purchase"]["item_definition_id"] = n.Subject.ID
+		}
+		return bound
+	}
+	return facility{title: shopTitles[kind], commands: commands, bind: bind, read: (*Handler).shopSceneData, placeLog: true, npc: npc}
 }

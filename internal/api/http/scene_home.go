@@ -88,7 +88,15 @@ func (h *Handler) homeMailboxSceneData(ctx context.Context, r playercontext.Resu
 }
 
 var (
-	homeFacility       = facility{title: "自宅", commands: []string{"home_sleep"}, read: (*Handler).homeSceneData}
+	// Legacy ＠ねる rests in the home being visited ($m{home}).
+	homeFacility = facility{title: "自宅", commands: []string{"home_sleep"}, read: (*Handler).homeSceneData,
+		bind: func(n playercontext.Selection, actorID string) map[string]map[string]any {
+			target := actorID
+			if n.Subject != (playercontext.Subject{}) {
+				target = n.Subject.ID
+			}
+			return map[string]map[string]any{"home_sleep": {"target_home_id": target}}
+		}}
 	homeInboxFacility  = facility{title: "受信箱", read: (*Handler).homeMailboxSceneData}
 	homeOutboxFacility = facility{title: "送信箱", read: (*Handler).homeMailboxSceneData}
 )

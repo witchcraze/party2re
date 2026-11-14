@@ -128,6 +128,7 @@ func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, er
 	}
 	if navigation != nil {
 		snapshot.LocationID = navigation.Selection.Destination
+		snapshot.SceneActions = s.sceneActions(navigation)
 	}
 	return Result{Snapshot: snapshot, AvailableActions: Evaluate(snapshot), Navigation: navigation}, nil
 }
