@@ -48,6 +48,15 @@ func TestSecretShopProductionHelperWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := core.charRepo.Delete(ctx, char.ID); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := core.playerRepo.Delete(ctx, char.PlayerID); err != nil {
+			t.Error(err)
+		}
+	})
 	char.JobLevel = 7
 	if err := core.charRepo.Update(ctx, char); err != nil {
 		t.Fatal(err)

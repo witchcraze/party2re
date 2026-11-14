@@ -30,6 +30,10 @@ func TestPurchaseItem_HelperExclusionAndConcurrentRouting_Integration(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	players, err := database.NewPlayerRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	invs, err := database.NewInventoryRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -42,6 +46,15 @@ func TestPurchaseItem_HelperExclusionAndConcurrentRouting_Integration(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := chars.Delete(ctx, char.ID); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := players.Delete(ctx, char.PlayerID); err != nil {
+			t.Error(err)
+		}
+	})
 	char.JobLevel = 7
 	if err := chars.Update(ctx, char); err != nil {
 		t.Fatal(err)
