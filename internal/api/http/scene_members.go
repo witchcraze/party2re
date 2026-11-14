@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/placelog"
+	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
 // PlaceMembers is the per-place member list (docs/architecture/place-log.md#members).
@@ -86,11 +87,11 @@ func (h *Handler) registerPresenceRefresh() {
 	if h.actionCommands == nil {
 		h.actionCommands = make(map[string]actionCommand)
 	}
-	h.actionCommands["presence_refresh"] = actionCommand{prepare: func(raw json.RawMessage) (func(context.Context, string, string) (any, error), error) {
+	h.actionCommands["presence_refresh"] = actionCommand{prepare: func(raw json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
 		var none struct{}
 		if err := decodeActionParams(raw, nil, &none); err != nil {
 			return nil, err
 		}
-		return func(context.Context, string, string) (any, error) { return struct{}{}, nil }, nil
+		return func(context.Context, string, string, playercontext.Result) (any, error) { return struct{}{}, nil }, nil
 	}}
 }

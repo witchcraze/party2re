@@ -19,6 +19,7 @@ import (
 type gatewayNavigationStore struct {
 	selection        playercontext.Selection
 	writes           int
+	loads            int
 	loadErr, saveErr error
 	afterSave        func()
 }
@@ -27,6 +28,7 @@ func (s *gatewayNavigationStore) Load(ctx context.Context, _ string) (playercont
 	if err := ctx.Err(); err != nil {
 		return playercontext.Selection{}, err
 	}
+	s.loads++
 	return s.selection, s.loadErr
 }
 

@@ -34,18 +34,13 @@ type SpeechResult struct {
 	Private bool   `json:"private"`
 }
 
-var errPlaceUnavailable = errors.New("no place log in the current scene")
-
 type recipientNotFoundError struct{ name string }
 
 func (e recipientNotFoundError) Error() string { return "whisper recipient not found: " + e.name }
 
 func speechRejection(err error) (int, ErrorDetail) {
 	var missing recipientNotFoundError
-	switch {
-	case errors.Is(err, errPlaceUnavailable):
-		return http.StatusConflict, ErrorDetail{Code: "PLACE_UNAVAILABLE", Message: "この場所では発言できません。"}
-	case errors.As(err, &missing):
+	if errors.As(err, &missing) {
 		return http.StatusNotFound, ErrorDetail{Code: "RECIPIENT_NOT_FOUND", Message: missing.name + "というプレイヤーが存在しません"}
 	}
 	return 0, ErrorDetail{}
@@ -65,15 +60,14 @@ type whisperParams struct {
 // dependencies. Text is validated before execution, so invalid input never
 // writes a row.
 func (h *Handler) registerSpeech() {
-	service := h.playerContext
-	if service == nil || h.placeLog == nil {
+	if h.playerContext == nil || h.placeLog == nil {
 		return
 	}
 	if h.actionCommands == nil {
 		h.actionCommands = make(map[string]actionCommand)
 	}
 	sayDef, _ := playercontext.GetAction("place_say")
-	h.actionCommands["place_say"] = actionCommand{reject: speechRejection, prepare: func(raw json.RawMessage) (func(context.Context, string, string) (any, error), error) {
+	h.actionCommands["place_say"] = actionCommand{reject: speechRejection, prepare: func(raw json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
 		var p sayParams
 		if err := decodeActionParams(raw, sayDef.RequiredParams, &p); err != nil {
 			return nil, err
@@ -82,15 +76,15 @@ func (h *Handler) registerSpeech() {
 		if err != nil {
 			return nil, err
 		}
-		return func(ctx context.Context, owner, actor string) (any, error) {
-			return h.speak(ctx, service, owner, actor, text, "")
+		return func(ctx context.Context, _, _ string, current playercontext.Result) (any, error) {
+			return h.speak(ctx, current, text, "")
 		}, nil
 	}}
 	if h.characterNames == nil {
 		return
 	}
 	whisperDef, _ := playercontext.GetAction("place_whisper")
-	h.actionCommands["place_whisper"] = actionCommand{reject: speechRejection, prepare: func(raw json.RawMessage) (func(context.Context, string, string) (any, error), error) {
+	h.actionCommands["place_whisper"] = actionCommand{reject: speechRejection, prepare: func(raw json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
 		var p whisperParams
 		if err := decodeActionParams(raw, whisperDef.RequiredParams, &p); err != nil {
 			return nil, err
@@ -113,8 +107,8 @@ func (h *Handler) registerSpeech() {
 		default:
 			row += " " + text
 		}
-		return func(ctx context.Context, owner, actor string) (any, error) {
-			return h.speak(ctx, service, owner, actor, row, name)
+		return func(ctx context.Context, _, _ string, current playercontext.Result) (any, error) {
+			return h.speak(ctx, current, row, name)
 		}, nil
 	}}
 }
@@ -122,14 +116,8 @@ func (h *Handler) registerSpeech() {
 // speak appends one character row to the current place. A nonempty recipient
 // name makes it a whisper, visible only to the sender and the recipient. The
 // row is the command's only effect, so an append failure is not swallowed.
-func (h *Handler) speak(ctx context.Context, service *playercontext.Service, owner, actor, text, recipientName string) (SpeechResult, error) {
-	destination, char, ok, err := h.currentScene(ctx, service, owner, actor)
-	if err != nil {
-		return SpeechResult{}, err
-	}
-	if !ok || !h.sceneAdapters[destination].placeLog {
-		return SpeechResult{}, errPlaceUnavailable
-	}
+func (h *Handler) speak(ctx context.Context, current playercontext.Result, text, recipientName string) (SpeechResult, error) {
+	destination, char := current.Snapshot.LocationID, current.Snapshot.Character
 	recipientID := ""
 	if recipientName != "" {
 		recipient, err := h.characterNames.FindByName(ctx, recipientName)
