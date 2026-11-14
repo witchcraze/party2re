@@ -69,7 +69,7 @@ func guildIsolatedDB(t *testing.T) *sql.DB {
 		}
 	})
 
-	for _, table := range []string{"players", "characters", "character_depots", "guilds", "guild_members"} {
+	for _, table := range []string{"players", "characters", "character_depots", "guilds", "guild_members", "character_memories"} {
 		var tableName, ddl string
 		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
 			t.Fatal(err)

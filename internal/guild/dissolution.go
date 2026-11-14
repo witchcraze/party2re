@@ -32,6 +32,12 @@ func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID stri
 
 	var disbandedGuildName string
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		// Rank 2 before Rank 7: the trajectory entry below locks the leader's character row.
+		if err := s.repo.LockCharacterForUpdate(txCtx, leaderCharID); errors.Is(err, ErrCharacterNotFound) {
+			return ErrUnauthorized
+		} else if err != nil {
+			return err
+		}
 		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err
