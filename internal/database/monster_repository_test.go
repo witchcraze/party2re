@@ -27,8 +27,9 @@ func openMonsterTestDB(t *testing.T) (*sql.DB, *CharacterRepository, *MonsterRep
 		t.Fatalf("OpenFromEnvironment: %v", err)
 	}
 	t.Cleanup(func() {
-		//lint:ignore error-swallow test cleanup close
-		_ = db.Close()
+		if err := db.Close(); err != nil {
+			t.Errorf("close monster test db: %v", err)
+		}
 	})
 
 	charRepo, err := NewCharacterRepository(db)
@@ -43,13 +44,62 @@ func openMonsterTestDB(t *testing.T) (*sql.DB, *CharacterRepository, *MonsterRep
 	return db, charRepo, monRepo, svc
 }
 
-func registerCharacterCleanup(t *testing.T, db *sql.DB, charIDs ...string) {
+func registerCharacterCleanup(t testing.TB, db *sql.DB, chars ...corecharacter.Character) {
 	t.Helper()
 	t.Cleanup(func() {
-		ctx := context.Background()
-		for _, cid := range charIDs {
-			//lint:ignore error-swallow best-effort test row cleanup
-			_, _ = db.ExecContext(ctx, "DELETE FROM characters WHERE id = ?", cid)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		charRepo, err := NewCharacterRepository(db)
+		if err != nil {
+			t.Errorf("cleanup NewCharacterRepository: %v", err)
+			return
+		}
+		playerRepo, err := NewPlayerRepository(db)
+		if err != nil {
+			t.Errorf("cleanup NewPlayerRepository: %v", err)
+			return
+		}
+
+		seenPlayers := make(map[string]struct{})
+		var playerIDs []string
+		for _, c := range chars {
+			if c.ID == "" {
+				continue
+			}
+			pid := c.PlayerID
+			if pid == "" {
+				stored, err := charRepo.FindByID(cleanupCtx, c.ID)
+				if err != nil && !errors.Is(err, corecharacter.ErrNotFound) {
+					t.Errorf("cleanup FindByID %s: %v", c.ID, err)
+				} else if err == nil {
+					pid = stored.PlayerID
+				}
+			}
+			if err := charRepo.Delete(cleanupCtx, c.ID); err != nil {
+				t.Errorf("cleanup delete character %s: %v", c.ID, err)
+				continue
+			}
+			if pid != "" {
+				if _, seen := seenPlayers[pid]; !seen {
+					seenPlayers[pid] = struct{}{}
+					playerIDs = append(playerIDs, pid)
+				}
+			}
+		}
+
+		for _, pid := range playerIDs {
+			remaining, err := charRepo.FindByPlayerID(cleanupCtx, pid)
+			if err != nil {
+				t.Errorf("cleanup FindByPlayerID %s: %v", pid, err)
+				continue
+			}
+			if len(remaining) != 0 {
+				continue
+			}
+			if err := playerRepo.Delete(cleanupCtx, pid); err != nil {
+				t.Errorf("cleanup delete player %s: %v", pid, err)
+			}
 		}
 	})
 }
@@ -69,7 +119,7 @@ func TestMonsterService_SQL_LocationAndOwnershipMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacter c2: %v", err)
 	}
-	registerCharacterCleanup(t, db, c1.ID, c2.ID)
+	registerCharacterCleanup(t, db, c1, c2)
 
 	// 1. Tame and bring a pet home for c1, then fill c1's box to capacity (50)
 	homePet, err := svc.TameMonster(ctx, c1.ID, "slime", "家スラ")
@@ -194,7 +244,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 			createHighCapChar(ctx, t, "SvS2"),
 			createHighCapChar(ctx, t, "SvS3"),
 		}
-		registerCharacterCleanup(t, db, chars[0].ID, chars[1].ID, chars[2].ID)
+		registerCharacterCleanup(t, db, chars[0], chars[1], chars[2])
 
 		// Order characters so c2.ID < c1.ID < c3.ID, ensuring c1->c2 (sender > recipient)
 		// and c1->c3 (sender < recipient) exercise both ID lock ordering directions.
@@ -323,7 +373,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 
 		sender := createHighCapChar(ctx, t, "SvR1")
 		recipient := createHighCapChar(ctx, t, "SvR2")
-		registerCharacterCleanup(t, db, sender.ID, recipient.ID)
+		registerCharacterCleanup(t, db, sender, recipient)
 
 		totalMonsters := cfg.Workers / 2
 		if totalMonsters < 1 {
@@ -422,16 +472,16 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 		// The gift limit is the sender's: a high-cap recipient is still full at the senders' base capacity.
 		recipient := createHighCapChar(ctx, t, "CapRec")
 		senders := make([]corecharacter.Character, cfg.Workers)
-		cleanupIDs := []string{recipient.ID}
+		cleanupChars := []corecharacter.Character{recipient}
 		for w := 0; w < cfg.Workers; w++ {
 			sender, err := CreateTestCharacter(ctx, db, fmt.Sprintf("CapS%d", w))
 			if err != nil {
 				t.Fatalf("CreateTestCharacter sender %d: %v", w, err)
 			}
 			senders[w] = sender
-			cleanupIDs = append(cleanupIDs, sender.ID)
+			cleanupChars = append(cleanupChars, sender)
 		}
-		registerCharacterCleanup(t, db, cleanupIDs...)
+		registerCharacterCleanup(t, db, cleanupChars...)
 
 		now := time.Now().UTC()
 		// Pre-fill recipient box to one below the senders' limit plus 1 home pet
@@ -557,7 +607,7 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacter c2: %v", err)
 	}
-	registerCharacterCleanup(t, db, c1.ID, c2.ID)
+	registerCharacterCleanup(t, db, c1, c2)
 
 	txProvider := NewTransactionProvider(db)
 	svc := monster.NewService(
@@ -741,4 +791,221 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 	if broughtHome.ID != ortegaID || broughtHome.CharacterID != c1.ID || broughtHome.MonsterID != "chr/029.gif" || broughtHome.CustomName != "オルテガ" || broughtHome.Location != monster.LocationHome {
 		t.Fatalf("unexpected broughtHome ortega: %+v", broughtHome)
 	}
+}
+
+func TestMonsterFixtureCleanup(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	observer, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatalf("OpenFromEnvironment observer: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := observer.Close(); err != nil {
+			t.Errorf("close observer db: %v", err)
+		}
+	})
+
+	ctx := context.Background()
+	obsCharRepo, err := NewCharacterRepository(observer)
+	if err != nil {
+		t.Fatalf("NewCharacterRepository observer: %v", err)
+	}
+	obsMonRepo, err := NewMonsterRepository(observer)
+	if err != nil {
+		t.Fatalf("NewMonsterRepository observer: %v", err)
+	}
+	obsHomeRepo, err := NewHomeMemberRepository(observer)
+	if err != nil {
+		t.Fatalf("NewHomeMemberRepository observer: %v", err)
+	}
+
+	unrelated, err := CreateTestCharacter(ctx, observer, "UnrelMon")
+	if err != nil {
+		t.Fatalf("CreateTestCharacter unrelated: %v", err)
+	}
+	registerCharacterCleanup(t, observer, unrelated)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	unrelatedMon := monster.MonsterInstance{
+		ID:          id.New(),
+		CharacterID: unrelated.ID,
+		MonsterID:   "slime",
+		CustomName:  "無関係スラ",
+		Location:    monster.LocationBox,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := obsMonRepo.Save(ctx, unrelatedMon); err != nil {
+		t.Fatalf("Save unrelated monster: %v", err)
+	}
+	unrelatedHomeID := id.New()
+	if err := obsHomeRepo.AddMember(ctx, god.HomeMember{
+		ID:          unrelatedHomeID,
+		CharacterID: unrelated.ID,
+		IsNPC:       true,
+		Name:        "無関係仲間",
+		Icon:        "chr/001.gif",
+		Color:       "#ffffff",
+		CreatedAt:   now,
+	}); err != nil {
+		t.Fatalf("AddMember unrelated: %v", err)
+	}
+
+	seedOwnedFixtures := func(t *testing.T, db *sql.DB, charID string) {
+		t.Helper()
+		monRepo, err := NewMonsterRepository(db)
+		if err != nil {
+			t.Fatalf("NewMonsterRepository: %v", err)
+		}
+		homeRepo, err := NewHomeMemberRepository(db)
+		if err != nil {
+			t.Fatalf("NewHomeMemberRepository: %v", err)
+		}
+		if err := monRepo.Save(ctx, monster.MonsterInstance{
+			ID:          id.New(),
+			CharacterID: charID,
+			MonsterID:   "slime",
+			CustomName:  "削除スラ",
+			Location:    monster.LocationBox,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}); err != nil {
+			t.Fatalf("Save owned monster: %v", err)
+		}
+		if err := homeRepo.AddMember(ctx, god.HomeMember{
+			ID:          id.New(),
+			CharacterID: charID,
+			IsNPC:       true,
+			Name:        "削除仲間",
+			Icon:        "chr/029.gif",
+			Color:       "#ffffff",
+			CreatedAt:   now,
+		}); err != nil {
+			t.Fatalf("AddMember owned: %v", err)
+		}
+	}
+
+	var normalChar, earlyChar corecharacter.Character
+	t.Run("normal scope end", func(t *testing.T) {
+		db, _, _, _ := openMonsterTestDB(t)
+		var err error
+		normalChar, err = CreateTestCharacter(ctx, db, "CleanNorm")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter normal: %v", err)
+		}
+		registerCharacterCleanup(t, db, normalChar)
+		seedOwnedFixtures(t, db, normalChar.ID)
+	})
+
+	t.Run("early return path", func(t *testing.T) {
+		db, _, _, _ := openMonsterTestDB(t)
+		var err error
+		earlyChar, err = CreateTestCharacter(ctx, db, "CleanEarly")
+		if err != nil {
+			t.Fatalf("CreateTestCharacter early: %v", err)
+		}
+		registerCharacterCleanup(t, db, earlyChar)
+		seedOwnedFixtures(t, db, earlyChar.ID)
+		return
+	})
+
+	sharedPlayer, err := CreateTestPlayer(ctx, observer)
+	if err != nil {
+		t.Fatalf("CreateTestPlayer shared: %v", err)
+	}
+	sharedChar1, err := corecharacter.New("ShrMon1")
+	if err != nil {
+		t.Fatalf("corecharacter.New sharedChar1: %v", err)
+	}
+	sharedChar1.PlayerID = sharedPlayer.ID
+	if err := obsCharRepo.Save(ctx, sharedChar1); err != nil {
+		t.Fatalf("Save sharedChar1: %v", err)
+	}
+	sharedChar2, err := corecharacter.New("ShrMon2")
+	if err != nil {
+		t.Fatalf("corecharacter.New sharedChar2: %v", err)
+	}
+	sharedChar2.PlayerID = sharedPlayer.ID
+	if err := obsCharRepo.Save(ctx, sharedChar2); err != nil {
+		t.Fatalf("Save sharedChar2: %v", err)
+	}
+	registerCharacterCleanup(t, observer, sharedChar2)
+
+	t.Run("shared player retained while sibling remains", func(t *testing.T) {
+		db, _, _, _ := openMonsterTestDB(t)
+		registerCharacterCleanup(t, db, sharedChar1)
+		seedOwnedFixtures(t, db, sharedChar1.ID)
+	})
+
+	assertRowCount := func(query string, arg string, want int) {
+		t.Helper()
+		var got int
+		if err := observer.QueryRowContext(ctx, query, arg).Scan(&got); err != nil {
+			t.Fatalf("query %q (%s): %v", query, arg, err)
+		}
+		if got != want {
+			t.Fatalf("query %q (%s) = %d, want %d", query, arg, got, want)
+		}
+	}
+
+	for _, c := range []corecharacter.Character{normalChar, earlyChar} {
+		assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM character_monsters WHERE character_id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM home_members WHERE character_id = ?", c.ID, 0)
+		assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", c.PlayerID, 0)
+	}
+
+	assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", sharedChar1.ID, 0)
+	assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", sharedChar1.ID, 0)
+	assertRowCount("SELECT COUNT(*) FROM character_monsters WHERE character_id = ?", sharedChar1.ID, 0)
+	assertRowCount("SELECT COUNT(*) FROM home_members WHERE character_id = ?", sharedChar1.ID, 0)
+	assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", sharedChar2.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", sharedPlayer.ID, 1)
+
+	assertRowCount("SELECT COUNT(*) FROM characters WHERE id = ?", unrelated.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM character_depots WHERE character_id = ?", unrelated.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM character_monsters WHERE id = ?", unrelatedMon.ID, 1)
+	assertRowCount("SELECT COUNT(*) FROM home_members WHERE id = ?", unrelatedHomeID, 1)
+	assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", unrelated.PlayerID, 1)
+
+	t.Run("cleanup errors reported", func(t *testing.T) {
+		brokenDB, err := OpenFromEnvironment()
+		if err != nil {
+			t.Fatalf("OpenFromEnvironment brokenDB: %v", err)
+		}
+		if err := brokenDB.Close(); err != nil {
+			t.Fatalf("close brokenDB: %v", err)
+		}
+		spy := &cleanupSpyTB{TB: t}
+		registerCharacterCleanup(spy, brokenDB, corecharacter.Character{
+			ID:       "missing-" + id.New(),
+			PlayerID: "missing-" + id.New(),
+		})
+		for i := len(spy.cleanups) - 1; i >= 0; i-- {
+			spy.cleanups[i]()
+		}
+		if len(spy.errs) == 0 {
+			t.Fatal("expected cleanup on closed db to report an error, got 0")
+		}
+	})
+}
+
+type cleanupSpyTB struct {
+	testing.TB
+	cleanups []func()
+	errs     []string
+}
+
+func (s *cleanupSpyTB) Helper() {}
+
+func (s *cleanupSpyTB) Cleanup(fn func()) {
+	s.cleanups = append(s.cleanups, fn)
+}
+
+func (s *cleanupSpyTB) Errorf(format string, args ...any) {
+	s.errs = append(s.errs, fmt.Sprintf(format, args...))
 }
