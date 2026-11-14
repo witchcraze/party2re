@@ -37,11 +37,8 @@ var helperWiringRequiredTables = []string{
 	"character_monsters",
 }
 
-// helperWiringIsolatedDB creates a unique dedicated database holding only copied table
-// definitions (no data). CompleteQuest scans and exchanges expired
-// requests in helper_quests, so tests must not run against the shared test DB.
-// Missing admin configuration fails the test rather than falling back to the shared DB.
-func helperWiringIsolatedDB(t *testing.T) *sql.DB {
+// wiringIsolatedDB copies only table definitions for operations that scan shared state.
+func wiringIsolatedDB(t *testing.T, tables []string) *sql.DB {
 	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -59,7 +56,7 @@ func helperWiringIsolatedDB(t *testing.T) *sql.DB {
 
 	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
 	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated helper quest tests")
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated wiring tests")
 	}
 	cfg, err := mysql.ParseDSN(adminDSN)
 	if err != nil {
@@ -75,7 +72,7 @@ func helperWiringIsolatedDB(t *testing.T) *sql.DB {
 		}
 	})
 
-	name := fmt.Sprintf("party2_helper_wire_%06x_%s", time.Now().UnixNano()%0x1000000, id.New())
+	name := fmt.Sprintf("party2_wire_%06x_%s", time.Now().UnixNano()%0x1000000, id.New())
 	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +93,7 @@ func helperWiringIsolatedDB(t *testing.T) *sql.DB {
 		}
 	})
 
-	copyTableDefinitions(t, source, db, helperWiringRequiredTables)
+	copyTableDefinitions(t, source, db, tables)
 	return db
 }
 
@@ -131,7 +128,7 @@ func copyTableDefinitions(t *testing.T, source, db *sql.DB, tables []string) {
 }
 
 func TestHelperProductionGuildWiring(t *testing.T) {
-	db := helperWiringIsolatedDB(t)
+	db := wiringIsolatedDB(t, helperWiringRequiredTables)
 	ctx := context.Background()
 
 	core, err := newCoreServices(db, nil)
@@ -347,7 +344,7 @@ func (f *faultyGuildPointAdapter) AddGuildPoints(ctx context.Context, guildID st
 }
 
 func TestHelperProductionGuildWiring_GPUpdateErrorRollsBack(t *testing.T) {
-	db := helperWiringIsolatedDB(t)
+	db := wiringIsolatedDB(t, helperWiringRequiredTables)
 	ctx := context.Background()
 
 	core, err := newCoreServices(db, nil)
@@ -463,7 +460,7 @@ func TestHelperProductionGuildWiring_GPUpdateErrorRollsBack(t *testing.T) {
 }
 
 func TestHelperProductionGuildWiring_ConcurrentClaimRace(t *testing.T) {
-	db := helperWiringIsolatedDB(t)
+	db := wiringIsolatedDB(t, helperWiringRequiredTables)
 	ctx := context.Background()
 
 	core, err := newCoreServices(db, nil)

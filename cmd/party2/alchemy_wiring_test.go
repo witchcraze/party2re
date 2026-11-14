@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/alchemy"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -353,4 +354,5 @@ func TestAlchemyProductionWiring_LegendRollbackAndRetry(t *testing.T) {
 	if !compAlc {
 		t.Fatal("character_alchemy.comp_alc should be TRUE after retry")
 	}
+	assertTrajectoryKind(t, db, char.ID, corecharacter.MemoryCompletion)
 }

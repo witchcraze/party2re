@@ -52,7 +52,7 @@ func (referralRunPenalty) ProjectRunPenalty(context.Context, string, time.Time) 
 
 func newReferralFixture(t *testing.T) referralFixture {
 	t.Helper()
-	db := helperWiringIsolatedDB(t)
+	db := wiringIsolatedDB(t, helperWiringRequiredTables)
 	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
