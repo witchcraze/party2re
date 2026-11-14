@@ -351,4 +351,69 @@ func TestReplayEndpoints(t *testing.T) {
 			t.Errorf("expected 501, got %d", rec.Code)
 		}
 	})
+
+	t.Run("auth and uniform denial contracts", func(t *testing.T) {
+		players := &stubPlayerService{
+			authenticateFn: func(_ context.Context, token string) (coreplayer.Player, error) {
+				switch token {
+				case "valid-token":
+					return coreplayer.Player{ID: "p1", Username: "owner"}, nil
+				case "other-token":
+					return coreplayer.Player{ID: "p2", Username: "other"}, nil
+				default:
+					return coreplayer.Player{}, coreplayer.ErrAuthentication
+				}
+			},
+		}
+		authHandler := newTestHandler(
+			t,
+			players,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithReplay(rService),
+		)
+		authRouter := authHandler.Router()
+
+		for _, auth := range []string{"Bearer invalid", "Bearer ", "Basic invalid"} {
+			for _, path := range []string{"/replays/rep-123", "/replays/nonexistent"} {
+				req := httptest.NewRequest(http.MethodGet, path, nil)
+				req.Header.Set("Authorization", auth)
+				rec := httptest.NewRecorder()
+				authRouter.ServeHTTP(rec, req)
+				if rec.Code != http.StatusUnauthorized {
+					t.Fatalf("%s with %q: got %d want 401", path, auth, rec.Code)
+				}
+			}
+		}
+
+		for _, path := range []string{"/replays/nonexistent", "/replays/rep-123"} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			if path == "/replays/rep-123" {
+				req.Header.Set("Authorization", "Bearer other-token")
+			}
+			rec := httptest.NewRecorder()
+			authRouter.ServeHTTP(rec, req)
+			if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":\"battle replay not found\"}\n" {
+				t.Fatalf("%s denial mismatch: code=%d body=%q", path, rec.Code, rec.Body.String())
+			}
+		}
+
+		for _, cursor := range []string{"", "?cursor="} {
+			req := httptest.NewRequest(http.MethodGet, "/characters/c1/replays"+cursor, nil)
+			rec := httptest.NewRecorder()
+			authRouter.ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("missing auth on %q: got %d want 401", cursor, rec.Code)
+			}
+
+			req = httptest.NewRequest(http.MethodGet, "/characters/c1/replays"+cursor, nil)
+			req.Header.Set("Authorization", "Bearer other-token")
+			rec = httptest.NewRecorder()
+			authRouter.ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("non-owner on %q: got %d want 403", cursor, rec.Code)
+			}
+		}
+	})
 }

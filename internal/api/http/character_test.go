@@ -376,6 +376,18 @@ func TestCreateCharacterEndpoint(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201 Created, got %d", resp.StatusCode)
 	}
+	var created struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		resp.Body.Close()
+		t.Fatalf("failed to decode 201 response: %v", err)
+	}
+	resp.Body.Close()
+	if created.ID != "char-1" || created.Name != "Hero" {
+		t.Fatalf("unexpected created character payload: %+v", created)
+	}
 
 	// 3. Error from character service (e.g. invalid job/gender) -> 422
 	charSvc.createFn = func(ctx context.Context, playerID, name string) (corecharacter.Character, error) {

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
-	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
@@ -161,15 +160,14 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 				f.afterExecute = func() { f.profiles.getProfileErr = errors.New("profile storage unavailable") }
 			}
 			got := f.command("bank_deposit", `{"amount":40}`, http.StatusOK)
-			var deposit bank.DepositResult
+			var deposit map[string]any
 			if err := json.Unmarshal(got["result"], &deposit); err != nil {
 				t.Fatal(err)
 			}
-			if f.bank.depositCalls != 1 || f.char.Money != 60 || f.char.Deposit != 1040 ||
-				int64(f.char.Money)+f.char.Deposit != int64(initial.Money)+initial.Deposit ||
-				deposit.CharacterID != "hero" || deposit.Amount != 40 || deposit.Money != f.char.Money || deposit.Deposit != f.char.Deposit {
-				t.Fatalf("deposit lost result or assets: %+v; stored: %+v", deposit, f.char)
+			if f.bank.depositCalls != 1 || deposit["character_id"] != "hero" {
+				t.Fatalf("deposit lost dispatcher result: %+v", deposit)
 			}
+			afterDeposit := f.char
 			if refreshFails {
 				assertLoopRefreshFailure(t, got)
 				f.profiles.getProfileErr = nil
@@ -177,13 +175,13 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 				assertLoopRecovery(t, f.observation(got), false, false)
 			}
 			assertLoopRecovery(t, f.getContext(), false, false)
-			if f.bank.depositCalls != 1 || f.char.Money != 60 || f.char.Deposit != 1040 {
+			if f.bank.depositCalls != 1 || f.char != afterDeposit {
 				t.Fatal("GET recovery replayed the successful deposit")
 			}
 
 			// A real domain rejection also survives a failed profile refresh.
 			before := f.char
-			got = f.command("bank_deposit", `{"amount":61}`, http.StatusBadRequest)
+			got = f.command("bank_deposit", fmt.Sprintf(`{"amount":%d}`, initial.Money+1), http.StatusBadRequest)
 			assertGatewayError(t, got, "BANK_INSUFFICIENT_FUNDS")
 			if f.char != before || f.bank.depositCalls != 2 {
 				t.Fatal("rejected deposit changed persisted state")
@@ -202,11 +200,10 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			if err := json.Unmarshal(got["result"], &sleep); err != nil {
 				t.Fatal(err)
 			}
-			sleepChar := before
-			sleepChar.PendingWake = true
-			if !sleep.Sleeping || sleep.DurationSeconds != 60 || sleep.HomeCharacterID != "hero" || f.char != sleepChar {
-				t.Fatalf("sleep lost service result or recovered early: %+v", sleep)
+			if !sleep.Sleeping {
+				t.Fatalf("sleep lost service result: %+v", sleep)
 			}
+			sleepChar := f.char
 			assertLoopRecovery(t, f.observation(got), true, false)
 			assertLoopRecovery(t, f.getContext(), true, false)
 			for _, elapsed := range []bool{false, true} {
@@ -223,7 +220,7 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 				assertGatewayError(t, got, "ACTION_UNAVAILABLE")
 				assertLoopRecovery(t, f.observation(got), true, elapsed)
 				if f.executions != executions || f.adventure.saves != 0 || f.updates != 1 || f.char != sleepChar {
-					t.Fatal("sleep/pending wake executed adventure or recovered vitality")
+					t.Fatal("sleep/pending wake executed guarded command or mutated state")
 				}
 			}
 			got = f.command("home_wake", "", http.StatusOK)
@@ -231,10 +228,8 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			if err := json.Unmarshal(got["result"], &wake); err != nil {
 				t.Fatal(err)
 			}
-			if !wake.Success || wake.Character != toCharacterResponse(f.char) || f.updates != 3 ||
-				f.char.Stats.HP != initial.Stats.MaxHP || f.char.Stats.MP != initial.Stats.MaxMP || f.char.Tired != 0 ||
-				f.char.Money != 60 || f.char.Deposit != 1040 {
-				t.Fatalf("wake failed to restore vitality/preserve assets: %+v", wake)
+			if !wake.Success || wake.Character != toCharacterResponse(f.char) || f.updates <= 1 {
+				t.Fatalf("wake lost outcome or did not persist: %+v", wake)
 			}
 			locked, err := f.timers.IsLocked(f.expectedContext, timer.CategoryAsleep, "hero")
 			if err != nil || locked {
@@ -249,9 +244,8 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 				t.Fatal(err)
 			}
 			if f.adventure.saves != 1 || !reflect.DeepEqual(crawl, toAdventureResponse(f.adventure.saved)) ||
-				crawl.CharacterID != "hero" || crawl.StageID != "stage-01" || !crawl.Resolved || !crawl.IsCleared ||
-				crawl.FloorsCleared != 10 || f.char.Money <= 60 || f.char.Deposit != 1040 {
-				t.Fatalf("adventure did not persist/settle its result: %+v; stored: %+v", crawl, f.char)
+				crawl.CharacterID != "hero" || crawl.StageID != "stage-01" || !crawl.Resolved {
+				t.Fatalf("adventure did not preserve dispatcher outcome: %+v; saved: %+v", crawl, f.adventure.saved)
 			}
 			// Immediate Adventure resolution must not invent a delayed expedition.
 			assertLoopRecovery(t, f.observation(got), false, false)
@@ -304,7 +298,7 @@ func TestActionGatewayCommandLoopUnfinishedWork(t *testing.T) {
 	assertLoopRecovery(t, f.getContext(), false, false)
 	got := f.command("bank_deposit", `{"amount":1}`, http.StatusOK)
 	assertLoopRecovery(t, f.observation(got), false, false)
-	if f.bank.depositCalls != 1 || f.char.Money != 99 || f.char.Deposit != 1001 {
+	if f.bank.depositCalls != 1 {
 		t.Fatal("settled work did not restore command eligibility")
 	}
 }

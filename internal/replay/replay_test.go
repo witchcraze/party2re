@@ -3,6 +3,7 @@ package replay_test
 import (
 	"context"
 	"errors"
+	"sort"
 	"testing"
 	"time"
 
@@ -61,6 +62,12 @@ func (m *mockReplayRepo) FindByCharacter(ctx context.Context, characterID string
 			}
 		}
 	}
+	sort.Slice(list, func(i, j int) bool {
+		if !list[i].CreatedAt.Equal(list[j].CreatedAt) {
+			return list[i].CreatedAt.After(list[j].CreatedAt)
+		}
+		return list[i].ID > list[j].ID
+	})
 	if len(list) > limit {
 		list = list[:limit]
 	}
@@ -90,6 +97,12 @@ func (m *mockReplayRepo) FindByCharacterByCursor(ctx context.Context, characterI
 			}
 		}
 	}
+	sort.Slice(list, func(i, j int) bool {
+		if !list[i].CreatedAt.Equal(list[j].CreatedAt) {
+			return list[i].CreatedAt.After(list[j].CreatedAt)
+		}
+		return list[i].ID > list[j].ID
+	})
 	if len(list) > limit {
 		list = list[:limit]
 	}

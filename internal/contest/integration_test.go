@@ -1237,7 +1237,7 @@ func TestContestSettlement_AdminSettle_ScheduleFailureReturnsCommittedResult_Int
 
 func TestContestSettlement_GetOverview_SchedulingFailureAndReconciliation_DatabaseIntegration(t *testing.T) {
 	ctx := context.Background()
-	_, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
+	db, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
 
 	now := time.Now().UTC().Truncate(time.Second)
 	schedRepo := newStatefulSchedRepo()
@@ -1336,9 +1336,15 @@ func TestContestSettlement_GetOverview_SchedulingFailureAndReconciliation_Databa
 		t.Errorf("expected action ExecuteAt %v, got %v", targetEndTime, createdAction.ExecuteAt)
 	}
 
-	// 3. Repeated reconciliation and reads must not duplicate the reservation.
+	// 3. Repeated reconciliation, reads, and unready settlement must preserve the single reservation.
 	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
 		t.Fatalf("subsequent reconciliation failed: %v", err)
+	}
+	if _, err := svc.SettleContest(ctx, false); !errors.Is(err, contest.ErrContestNotReadyToSettle) {
+		t.Fatalf("expected ErrContestNotReadyToSettle, got %v", err)
+	}
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("reconciliation after unready settlement failed: %v", err)
 	}
 	overview2, err := svc.GetOverview(ctx)
 	if err != nil {
@@ -1349,5 +1355,12 @@ func TestContestSettlement_GetOverview_SchedulingFailureAndReconciliation_Databa
 	}
 	if len(schedRepo.actions) != 1 {
 		t.Fatalf("expected still 1 scheduled action (no duplicate), got %d", len(schedRepo.actions))
+	}
+	var activeCount int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM contest_rounds WHERE status = ?", contest.StatusActive).Scan(&activeCount); err != nil {
+		t.Fatal(err)
+	}
+	if activeCount != 1 {
+		t.Fatalf("expected 1 reserved round preserved in SQL, got %d", activeCount)
 	}
 }

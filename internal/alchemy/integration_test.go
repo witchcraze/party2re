@@ -834,3 +834,130 @@ func TestAlchemyIntegrationViewRecipes_LegendRollbackAndRetry(t *testing.T) {
 		}
 	}
 }
+
+func TestAlchemyIntegrationConcurrentClaimsDeliverOnce(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alcRepo, err := database.NewAlchemyRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	charService, err := character.NewService(charRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char, err := charService.Create(ctx, player.ID, id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	itemCatalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipeCatalog, err := alchemy.InitialRecipeCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	alcService, err := alchemy.NewService(
+		charRepo,
+		depotRepo,
+		alcRepo,
+		recipeCatalog,
+		itemCatalog,
+		alchemy.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := alcService.UnlockRecipe(ctx, char.ID, "recipe-001"); err != nil {
+		t.Fatal(err)
+	}
+	dep, err := depot.NewDepot(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	herb, err := item.NewInstance("item-001", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dep.AddItem(herb, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := alcService.Synthesize(ctx, char.ID, "recipe-001"); err != nil {
+		t.Fatal(err)
+	}
+	if err := alcService.CompleteOngoingSynthesis(ctx, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	succeeded := 0
+	noActive := 0
+	claim := func() error {
+		_, err := alcService.Claim(ctx, char.ID)
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case err == nil:
+			succeeded++
+			return nil
+		case errors.Is(err, alchemy.ErrNoActiveSynthesis):
+			noActive++
+			return nil
+		default:
+			return err
+		}
+	}
+
+	for _, err := range testutil.RunRace(claim, claim, claim, claim) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if succeeded != 1 || noActive != 3 {
+		t.Fatalf("concurrent claims must deliver once: succeeded=%d noActive=%d", succeeded, noActive)
+	}
+
+	afterDepot, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := alcRepo.GetSynthesisState(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterDepot.Quantity("item-002") != 1 || state.TotalCrafts != 1 || state.State != alchemy.StateNone {
+		t.Fatalf("assets not conserved: product_qty=%d crafts=%d state=%s", afterDepot.Quantity("item-002"), state.TotalCrafts, state.State)
+	}
+}

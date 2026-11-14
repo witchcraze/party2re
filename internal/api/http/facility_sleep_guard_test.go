@@ -521,6 +521,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		}{
 			{"complete", `{"character_id":"char-1","quest_id":"quest-1"}`},
 			{"renew_only", `{"character_id":"char-1"}`},
+			{"renew_only_empty_quest_id", `{"character_id":"char-1","quest_id":""}`},
 		}
 
 		for _, cond := range conditions {
