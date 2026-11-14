@@ -20,6 +20,9 @@ type Snapshot struct {
 	SleepRemaining time.Duration
 	LocationID     string
 	Activities     []Activity
+	// SceneActions are the location-bound commands the observed scene admits;
+	// nil when no scene registry is configured.
+	SceneActions []string
 	// ActionWait is the remaining legacy action wait; zero when none.
 	ActionWait time.Duration
 }

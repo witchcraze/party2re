@@ -18,6 +18,9 @@ func TestCasinoConfirmedCommandsSurviveFailedObservation(t *testing.T) {
 		t.Run(command, func(t *testing.T) {
 			f := newCasinoSceneFixture(t)
 			f.room("room", casino.GameTypeHighLow, command != "casino_room_join")
+			if command == "casino_room_join" {
+				f.store.selection.Subject = playercontext.Subject{Kind: "room", ID: "room"}
+			}
 			var executions int
 			// Test-only adapters exercise the existing dispatcher boundary; this PR
 			// does not connect Casino mutations in production.

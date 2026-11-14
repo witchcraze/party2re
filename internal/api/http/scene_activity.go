@@ -79,7 +79,7 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 				template["expected_revision"] = a.Revision
 			}
 		}
-		action, err := h.contextAction(def.ID, template, result.Snapshot.Character)
+		action, err := h.contextAction(def.ID, template, result)
 		if err != nil {
 			return true, err
 		}

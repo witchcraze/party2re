@@ -121,7 +121,7 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 				t.Fatalf("held gold: %+v", data.PendingRemittances)
 			}
 			for _, action := range observation.AvailableActions {
-				if !slices.Contains([]string{"scene_back", "npc_talk", "npc_inspect", "place_say", "place_whisper", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw"}, action.Action) {
+				if !slices.Contains([]string{"scene_enter", "scene_back", "npc_talk", "npc_inspect", "place_say", "place_whisper", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw"}, action.Action) {
 					t.Fatalf("unconnected mutation offered: %+v", action)
 				}
 			}
@@ -212,7 +212,7 @@ func TestDepotSceneNavigationRefreshFailureAndGETRecovery(t *testing.T) {
 			f, store, router := depotSceneRouter(t)
 			body, wantStatus, wantWrites := `{"action":"scene_enter","params":{"destination":"depot"}}`, 200, 1
 			if rejected {
-				body, wantStatus, wantWrites = `{"action":"scene_select","params":{"target_kind":"item","target_id":"z"}}`, 400, 0
+				body, wantStatus, wantWrites = `{"action":"scene_page","params":{"destination":"bank","offset":0}}`, 400, 0
 				f.repoErr = errors.New("required Depot refresh failed")
 			} else {
 				store.selection.Destination = "town"

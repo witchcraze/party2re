@@ -63,6 +63,7 @@ func TestFacilityAndTerminalWorkEligibility(t *testing.T) {
 	ctx := readers.ctx
 	readers.character.Money = 100
 	store.selection = Selection{Destination: "bank"}
+	s.AdmitSceneActions("bank", []string{"bank_deposit"}, nil, nil)
 	readers.actions = []scheduling.ScheduledAction{{ID: "completed", State: scheduling.StateCompleted}, {ID: "failed", State: scheduling.StateFailed}}
 	r, err := s.Query(ctx, "hero", "owner")
 	if err != nil || r.Snapshot.LocationID != "bank" || len(r.Snapshot.OngoingActions) != 0 || !slices.Contains(r.AvailableActions, "bank_deposit") || slices.Contains(r.AvailableActions, "home_sleep") || slices.Contains(r.AvailableActions, "adventure_start") {

@@ -9,7 +9,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -41,7 +40,7 @@ func TestSelectedScenesAndConnectedChoices(t *testing.T) {
 	if status != 200 || selected.Scene.Kind != "subject" || selected.Scene.LocationID != "shop_weapon" || selected.Scene.Subject == nil || *selected.Scene.Subject != store.selection.Subject {
 		t.Fatalf("selected: %d %+v", status, selected.Scene)
 	}
-	if got := actionIDs(selected.AvailableActions); !slices.Equal(got, []string{"scene_back", "npc_talk", "npc_inspect", "shop_purchase", "shop_batch_purchase"}) {
+	if got := actionIDs(selected.AvailableActions); !slices.Equal(got, []string{"scene_enter", "scene_back", "npc_talk", "npc_inspect", "shop_purchase", "shop_batch_purchase"}) {
 		t.Fatalf("detail choices: %v", got)
 	}
 	available = false
@@ -148,7 +147,7 @@ func TestSceneAdapterFailureAndMissingConnection(t *testing.T) {
 	}
 	h.bank = newBankGatewayFixture(t).service
 	status, response = navigationGET(t, h.Router())
-	if got := actionIDs(response.AvailableActions); status != 200 || !slices.Equal(got, []string{"scene_back", "npc_talk", "npc_inspect"}) {
+	if got := actionIDs(response.AvailableActions); status != 200 || !slices.Equal(got, []string{"scene_enter", "scene_back", "npc_talk", "npc_inspect"}) {
 		t.Fatalf("bank: %d %v", status, got)
 	}
 	if !slices.ContainsFunc(response.Scene.Support.Actions, func(a SceneActionSupport) bool { return a.Action == "bank_deposit" && a.EntryEligible && !a.Connected }) {
@@ -180,7 +179,7 @@ func TestSceneAdapterFailureAndMissingConnection(t *testing.T) {
 	}
 }
 
-func TestHomeTemplateUsesExplicitActorAndDoesNotBindNavigation(t *testing.T) {
+func TestHomeSleepIsBoundToTheObservedHome(t *testing.T) {
 	f, store, router := homeSceneRouter(t)
 	status, observed := navigationGET(t, router)
 	if status != 200 {
@@ -190,16 +189,24 @@ func TestHomeTemplateUsesExplicitActorAndDoesNotBindNavigation(t *testing.T) {
 	if action.ParamsTemplate["target_home_id"] != "hero" || len(action.RequiredParams) != 0 {
 		t.Fatalf("full Home contract: %+v", action)
 	}
-	store.selection.Destination = "town"
+	for _, selection := range []playercontext.Selection{{Destination: "home"}, {Destination: "town"}} {
+		store.selection = selection
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"home_sleep","params":{"target_home_id":"other"}}`, nil)
+		if status != 409 || f.executions != 0 {
+			t.Fatalf("slept in an unobserved home from %+v: %d %s", selection, status, raw)
+		}
+		assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
+	}
+	store.selection = playercontext.Selection{Destination: "home", Subject: playercontext.Subject{Kind: "home", ID: "other"}}
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"home_sleep","params":{"target_home_id":"other"}}`, nil)
 	if status != 200 || string(raw["success"]) != "true" || f.target != "other" || f.executions != 1 || store.writes != 0 {
-		t.Fatalf("explicit target was redirected: %d %s", status, raw)
+		t.Fatalf("visited home rejected: %d %s", status, raw)
 	}
 }
 
 func TestOfferedParamsReuseGatewaySchemaAndKeepCompleteInputs(t *testing.T) {
 	h := &Handler{}
-	a, err := h.contextAction("scene_page", map[string]any{"destination": "shop_weapon", "offset": 20, "limit": 20}, character.Character{})
+	a, err := h.contextAction("scene_page", map[string]any{"destination": "shop_weapon", "offset": 20, "limit": 20}, playercontext.Result{})
 	if err != nil {
 		t.Fatal(err)
 	}

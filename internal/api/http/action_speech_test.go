@@ -160,7 +160,7 @@ func TestSpeechInTownAndRejectedOutsideAQualifiedPlace(t *testing.T) {
 	// A qualification lost after entry leaves the place, as for NPCs.
 	f, store, _, router := secretShopSceneRouterWith(t, []Option{WithPlaceLog(log)})
 	store.selection, f.char.JobLevel = playercontext.Selection{Destination: "secretshop"}, 6
-	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"place_say","params":{"text":"hi"}}`, nil); status != http.StatusConflict || actionErrorCode(t, raw) != "PLACE_UNAVAILABLE" {
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"place_say","params":{"text":"hi"}}`, nil); status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_UNAVAILABLE" {
 		t.Fatalf("unqualified place: %d %s", status, raw["error"])
 	}
 	if len(log.rows) != 1 {

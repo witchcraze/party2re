@@ -151,6 +151,10 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
+		if !matchesBoundParams(req.Params, h.boundParams(current)[req.Action]) {
+			h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_UNAVAILABLE", Message: "Action is unavailable for the current selection."})
+			return
+		}
 		if req.Action != "home_wake" && req.Action != "rescue_request" && req.Action != "presence_refresh" && !def.Recovery {
 			message, err := h.sleepingCharacterMessage(r.Context(), char.ID)
 			if err != nil {
@@ -199,6 +203,21 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 		observation, refreshError := h.refreshActionContext(r.Context(), player.ID, char.ID)
 		writeJSON(w, http.StatusOK, actionSuccessResponse{Success: true, Result: result, Context: observation, ContextError: refreshError})
 	})
+}
+
+// matchesBoundParams reports whether every submitted input the scene fixes
+// carries the fixed value, as the offered schema constants require.
+func matchesBoundParams(raw json.RawMessage, bound map[string]any) bool {
+	var fields map[string]any
+	if len(bound) == 0 || len(raw) == 0 || json.Unmarshal(raw, &fields) != nil {
+		return true // prepare already rejected malformed params
+	}
+	for name, want := range bound {
+		if got, submitted := fields[name]; submitted && got != want {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Handler) writeActionRejection(w http.ResponseWriter, r *http.Request, playerID, charID string, status int, detail ErrorDetail) {

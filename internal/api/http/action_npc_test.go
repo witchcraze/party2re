@@ -79,7 +79,7 @@ func TestNPCCommandsRejectedOutsideFacilitiesAndWithParams(t *testing.T) {
 		t.Fatalf("extra params: %d %s", status, raw["error"])
 	}
 	// ＠うらない belongs to the park (the town hub) only.
-	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"park_divinate","params":{}}`, nil); status != http.StatusConflict || actionErrorCode(t, raw) != "NPC_UNAVAILABLE" {
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"park_divinate","params":{}}`, nil); status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_UNAVAILABLE" {
 		t.Fatalf("park_divinate in bank: %d %s", status, raw["error"])
 	}
 	store.selection = playercontext.Selection{Destination: "home"}
@@ -126,7 +126,7 @@ func TestNPCRequiresTheFacilityQualification(t *testing.T) {
 	}
 	f.char.JobLevel = 6
 	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"npc_talk","params":{}}`, nil)
-	if status != http.StatusConflict || actionErrorCode(t, raw) != "NPC_UNAVAILABLE" {
+	if status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_UNAVAILABLE" {
 		t.Fatalf("unqualified talk: %d %s", status, raw["error"])
 	}
 }
@@ -168,7 +168,7 @@ func TestSecretShopPuffPuffOnlyInTheQualifiedSecretShop(t *testing.T) {
 		destination string
 		jobLevel    int
 		code        string
-	}{{"town", 7, "NPC_UNAVAILABLE"}, {"secretshop", 6, "NPC_UNAVAILABLE"}} {
+	}{{"town", 7, "ACTION_UNAVAILABLE"}, {"secretshop", 6, "ACTION_UNAVAILABLE"}} {
 		store.selection, f.char.JobLevel = playercontext.Selection{Destination: tc.destination}, tc.jobLevel
 		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"secretshop_puffpuff"}`, nil)
 		if status != http.StatusConflict || actionErrorCode(t, raw) != tc.code {

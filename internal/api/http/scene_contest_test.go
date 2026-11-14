@@ -177,9 +177,11 @@ func TestContestCommandErrors(t *testing.T) {
 }
 
 func TestContestCommandsRequireTheHall(t *testing.T) {
-	f := newContestFixture(t)
-	_, router := f.router(t, "bank")
-	if status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("contest_vote", `{"entry_id":"e9"}`), nil); status != 409 || f.executions != 0 {
-		t.Fatalf("vote outside the hall: %d %s", status, got)
+	for _, scene := range []string{"bank", "town"} {
+		f := newContestFixture(t)
+		_, router := f.router(t, scene)
+		if status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("contest_vote", `{"entry_id":"e9"}`), nil); status != 409 || f.executions != 0 {
+			t.Fatalf("vote from %s: %d %s", scene, status, got)
+		}
 	}
 }

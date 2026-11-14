@@ -2,9 +2,11 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,7 +47,7 @@ func (f *oracleFixture) router(t *testing.T, destination string, options ...Opti
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
 		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"},
 		playercontext.SceneDefinition{ID: "oracle", Parent: "town"},
-		playercontext.SceneDefinition{ID: "blackmarket", Parent: "oracle", CanEnter: func(c corecharacter.Character) bool { return c.JobLevel >= 15 }}))
+		playercontext.SceneDefinition{ID: "blackmarket", Parent: "oracle", ParentOnly: true, CanEnter: func(c corecharacter.Character) bool { return c.JobLevel >= 15 }}))
 	opts := append([]Option{WithOracleShop(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, options...)
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, opts...)
 	if err != nil {
@@ -167,8 +169,46 @@ func TestOracleBlackMarketMovesQualifiedCharacters(t *testing.T) {
 	}
 
 	f.char.JobLevel = 30
-	store.selection = playercontext.Selection{Destination: "bank"}
-	if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("oracle_blackmarket", `{}`), nil); status != 409 || store.selection.Destination != "bank" {
-		t.Fatalf("move outside the oracle shop: %d %+v", status, store.selection)
+	for _, scene := range []string{"bank", "town"} {
+		store.selection = playercontext.Selection{Destination: scene}
+		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("oracle_blackmarket", `{}`), nil); status != 409 || store.selection.Destination != scene {
+			t.Fatalf("move from %s: %d %+v", scene, status, store.selection)
+		}
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("scene_enter", `{"destination":"blackmarket"}`), nil)
+		if status != 403 || store.selection.Destination != scene {
+			t.Fatalf("direct entry from %s: %d %+v", scene, status, store.selection)
+		}
+		assertGatewayError(t, raw, "SCENE_ACCESS_DENIED")
+	}
+}
+
+// The offered scene_enter destinations are the ones Enter admits from the observed scene.
+func TestBlackMarketEntryDiscoveryMatchesExecution(t *testing.T) {
+	for _, tc := range []struct {
+		scene    string
+		jobLevel int
+		offered  bool
+	}{{"town", 30, false}, {"oracle", 14, false}, {"oracle", 15, true}} {
+		f := newOracleFixture(t)
+		f.char.JobLevel = tc.jobLevel
+		store, router := f.router(t, tc.scene)
+		_, observation := navigationGET(t, router)
+		enter := observation.AvailableActions[slices.IndexFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == "scene_enter" })]
+		var schema struct {
+			Properties map[string]struct{ Enum []string }
+		}
+		if err := json.Unmarshal(enter.ParamsSchema, &schema); err != nil {
+			t.Fatal(err)
+		}
+		status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("scene_enter", `{"destination":"blackmarket"}`), nil)
+		if offered := slices.Contains(schema.Properties["destination"].Enum, "blackmarket"); offered != tc.offered || (status == 200) != tc.offered {
+			t.Fatalf("%s job %d: offered=%v status=%d", tc.scene, tc.jobLevel, offered, status)
+		}
+		if !tc.offered {
+			continue
+		}
+		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("scene_back", `{}`), nil); status != 200 || store.selection.Destination != "oracle" {
+			t.Fatalf("back: %d %+v", status, store.selection)
+		}
 	}
 }

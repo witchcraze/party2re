@@ -101,10 +101,6 @@ func (h *Handler) currentScene(ctx context.Context, service *playercontext.Servi
 		return "", corecharacter.Character{}, false, nil
 	}
 	destination, char := n.Selection.Destination, current.Snapshot.Character
-	// A qualification lost after entry (e.g. job level) also leaves the scene.
-	if def, ok := h.sceneAdapters[destination]; !ok || (def.definition.CanEnter != nil && !def.definition.CanEnter(char)) {
-		return "", corecharacter.Character{}, false, nil
-	}
 	return destination, char, true, nil
 }
 

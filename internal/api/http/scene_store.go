@@ -25,8 +25,8 @@ type StoreBuildTerms struct {
 	HouseStyles []string `json:"house_styles"`
 }
 
-// StoreSceneData is a selected store. IsOwner chooses the owner or visitor
-// command set, as legacy store.cgi does.
+// StoreSceneData is a selected store. The scene registry admits the owner or
+// the visitor command set, as legacy store.cgi does.
 type StoreSceneData struct {
 	Parent  string             `json:"parent"`
 	Details store.StoreDetails `json:"details"`
@@ -66,5 +66,9 @@ func (h *Handler) townDistrictSceneData(ctx context.Context, r playercontext.Res
 }
 
 func townDistrictFacility(name string) facility {
-	return facility{title: name, read: (*Handler).townDistrictSceneData, placeLog: true}
+	return facility{title: name, commands: []string{"store_build"}, subjectCommands: storeVisitorCommands, ownedSubjectCommands: storeOwnerCommands,
+		bind: func(n playercontext.Selection, _ string) map[string]map[string]any {
+			return map[string]map[string]any{"store_build": {"town_id": n.Destination}}
+		},
+		read: (*Handler).townDistrictSceneData, placeLog: true}
 }

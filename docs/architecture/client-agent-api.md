@@ -180,15 +180,15 @@ and a browser smoke check for iframe isolation and script-free previews.
 The direction approved in [#1047](https://github.com/witchcraze/party2re/issues/1047)
 on 2026-10-06 replaces the initial globally broad town menu with choices derived
 from the current facility, previously selected subject and actual activity.
-This section specifies the replacement. Ordinary selection is implemented;
-facility composition and progressive action discovery remain separate work.
+This section specifies the replacement.
 Selection storage does not authorize route deletion.
 
 Clients retain two operations. GET observes the current interaction without a
 view selector. POST changes location/selection or executes a feature operation.
 For example, enter the weapon shop, select a product, then enter only quantity
 on the purchase form. The server supplies the selected product ID in a command
-template; the submitted mutation still explicitly identifies that product.
+template; the submitted mutation still explicitly identifies that product, and
+a value other than the observed selection is rejected instead of redirected.
 
 Ordinary facility and subject selection belongs to `playercontext`, behind a
 small repository contract, using the existing Valkey deployment. Store one
@@ -231,7 +231,11 @@ Registered destinations, their parents, subject kinds and paging are defined by
 the production registry (`newPlayerContext` in `cmd/party2/playercontext.go`).
 The OpenAPI `scene_enter` destination enum lists them, and each context's
 offered `scene_enter` schema narrows that enum to the destinations the actor may
-enter. Facility destinations have `town` as parent unless registered otherwise.
+enter from the observed scene; Enter applies the same rule. Legacy `＠いどう` is
+a base action of every place (`lib/system.cgi:9–24`), so every scene outside an
+activity offers `scene_enter`. Facility destinations have `town` as parent
+unless registered otherwise. A `ParentOnly` destination is entered only from its
+parent: the [Black Market](../design/black-market.md#access) from the Oracle shop.
 Shop subjects use `target_kind:item` and IDs validated by
 the owned actor's existing Shop catalog, including its eligibility filters.
 Home registers `target_kind:home` with a character ID validated by the public
@@ -244,11 +248,11 @@ SecretShop registers `target_kind:item` with its public status catalog IDs.
 A destination may register a pure `SceneDefinition.CanEnter` character predicate,
 such as SecretShop's JobLevel ≥7 qualification. Town and the `scene_enter` input
 schema omit disallowed destinations without reading their catalogs.
-Enter/select/page recheck qualification against the owned query snapshot and
-return `403 SCENE_ACCESS_DENIED` before a navigation
+Enter rechecks qualification against the owned query snapshot and returns
+`403 SCENE_ACCESS_DENIED` before a navigation
 write. A saved disallowed selection becomes `selection_unavailable` without a
-facility/subject read; back and entry to another permitted destination remain
-available. Feature execution still rechecks qualification independently.
+facility/subject read; only back and entry to another permitted destination
+remain eligible. Feature execution still rechecks qualification independently.
 `scene_back` clears a selected subject to its facility list; otherwise it selects
 the registered parent. Enter/select reset subject/page descendants.
 
@@ -427,9 +431,18 @@ errors propagated; they are not gameplay settlement.
 
 #### Entry and continuation
 
-Entry is evaluated against current facility and actual activity. Ordinary town
-entries remain available; selected facilities narrow applicable operations,
-while navigation requires no active work. Active-session commands use the owning membership/role/run
+Entry is evaluated against the observed scene and actual activity. One
+availability result (`playercontext` Query) serves discovery and execution: a
+location-bound command is eligible only in a scene whose facility registers it,
+for the selection state it registers. The town hub admits only its own commands.
+A selected store admits owner commands to its owner and visitor commands to
+everyone else, because owner commands act on the actor's own store.
+Inputs the selection fixes (shop type, selected product or room, visited home,
+town district) are offered as schema constants, and a submitted value that
+differs is rejected with `409 ACTION_UNAVAILABLE` before execution. Discovery may
+additionally hide an eligible command that observed facts show its service would
+reject (no delivery to cancel, no next page); that hiding grants nothing, and the owning service remains the authority
+for those facts. Navigation requires no active work. Active-session commands use the owning membership/role/run
 and turn state; a generic unfinished-work or town-entry gate must not block
 legal continuation, escape/leave or recovery. Pending/Processing scheduled work
 remains visible after its deadline. Sleep and pending Wake retain their explicit
@@ -584,8 +597,9 @@ Unmigrated entries retain their REST-operation checks. Removing a replaced REST
 operation therefore does not remove its migrated command's validation; route
 retirement still requires the tracked replacement verification.
 
-Re-read current entry eligibility before execution; reject an ineligible entry
-with `409 ACTION_UNAVAILABLE`. While the legacy [action wait](place-log.md#action-wait)
+Re-read current [entry eligibility](#entry-and-continuation) before execution;
+reject an ineligible entry or a selection-fixed input with another value with
+`409 ACTION_UNAVAILABLE`. While the legacy [action wait](place-log.md#action-wait)
 runs, every command except rescue, wake and speech is rejected first with
 `409 ACTION_WAIT` and no execution; `character.action_wait_ms` reports the
 remaining time. Scheduled/timer read errors stop execution with

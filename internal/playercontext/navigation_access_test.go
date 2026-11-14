@@ -3,6 +3,7 @@ package playercontext
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/character"
@@ -53,5 +54,51 @@ func TestNavigationQualificationAndSafeBack(t *testing.T) {
 	}
 	if store.selection.Destination != "town" || store.writes != 4 {
 		t.Fatalf("safe back: %+v writes=%d", store.selection, store.writes)
+	}
+}
+
+func TestParentOnlySceneIsEnteredOnlyFromItsParent(t *testing.T) {
+	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner", JobLevel: 15}, ctx: context.Background()}
+	store := &navigationStore{}
+	s := NewService(r, r, r, WithNavigation(store, SceneDefinition{ID: "town"}, SceneDefinition{ID: "oracle", Parent: "town"},
+		SceneDefinition{ID: "hidden", Parent: "oracle", ParentOnly: true, CanEnter: func(c character.Character) bool { return c.JobLevel >= 15 }}))
+	if _, err := s.Enter(r.ctx, "owner", "hero", "hidden"); !errors.Is(err, ErrSceneAccessDenied) || store.writes != 0 {
+		t.Fatalf("entry from town: %v writes=%d", err, store.writes)
+	}
+	if _, err := s.Enter(r.ctx, "owner", "hero", "oracle"); err != nil {
+		t.Fatal(err)
+	}
+	r.character.JobLevel = 14
+	if _, err := s.Enter(r.ctx, "owner", "hero", "hidden"); !errors.Is(err, ErrSceneAccessDenied) || store.selection.Destination != "oracle" {
+		t.Fatalf("unqualified entry from the parent: %v %+v", err, store.selection)
+	}
+	r.character.JobLevel = 15
+	if _, err := s.Enter(r.ctx, "owner", "hero", "hidden"); err != nil || store.selection.Destination != "hidden" {
+		t.Fatalf("entry from the parent: %v %+v", err, store.selection)
+	}
+	if _, err := s.Back(r.ctx, "owner", "hero"); err != nil || store.selection.Destination != "oracle" {
+		t.Fatalf("back: %v %+v", err, store.selection)
+	}
+}
+
+func TestOwnedSubjectAdmitsOwnerActionsAndPropagatesReadFailure(t *testing.T) {
+	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner", Money: 1}, ctx: context.Background()}
+	store := &navigationStore{selection: Selection{Destination: "district", Subject: Subject{Kind: "store", ID: "mine"}}}
+	var ownerErr error
+	s := NewService(r, r, r, WithNavigation(store, SceneDefinition{ID: "town"},
+		SceneDefinition{ID: "district", Parent: "town", SubjectKind: "store",
+			SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil },
+			SubjectOwned:     func(_ context.Context, _, target string) (bool, error) { return target == "mine", ownerErr }}))
+	s.AdmitSceneActions("district", nil, []string{"store_buy"}, []string{"store_rename"})
+	for subject, want := range map[string]string{"mine": "store_rename", "peer": "store_buy"} {
+		store.selection.Subject.ID = subject
+		got, err := s.Query(r.ctx, "hero", "owner")
+		if err != nil || !slices.Contains(got.AvailableActions, want) || slices.Contains(got.AvailableActions, map[string]string{"store_rename": "store_buy", "store_buy": "store_rename"}[want]) {
+			t.Fatalf("%s: %v %v", subject, got.AvailableActions, err)
+		}
+	}
+	ownerErr = errors.New("store read failed")
+	if _, err := s.Query(r.ctx, "hero", "owner"); !errors.Is(err, ownerErr) {
+		t.Fatalf("owner read failure was hidden: %v", err)
 	}
 }
