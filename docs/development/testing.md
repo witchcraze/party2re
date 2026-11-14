@@ -144,7 +144,9 @@ The package deadline and its overrides are described under [execution budgets](#
 
 ### 5.1 Database Ownership and Isolation
 
-The [workflow rule](../../.agents/rules/01-development-workflow.md#test-database-ownership-and-isolation) defines mandatory constraints. Ordinary DB-backed tests share the database selected by `PARTY2_DB_DSN` within one environment. Unit tests without a database dependency do not need a DB. Shared fixtures can coexist with temporary local development data; neither an empty database nor cleanup of every fixture after every test is a default requirement.
+The [workflow rule](../../.agents/rules/01-development-workflow.md#test-database-ownership-and-isolation) defines mandatory constraints. Ordinary DB-backed tests share the database selected by `PARTY2_DB_DSN` within one environment. Unit tests without a database dependency do not need a DB.
+
+The environment permits residual SQL rows and Valkey keys between tests and verification runs; it guarantees neither empty stores nor cleanup of every fixture. Tests must produce the same result with or without unrelated data, including data created concurrently in the same run. CI's fresh stack does not remove this requirement. Growth between explicit resets is accepted to preserve incremental verification and avoid resetting stores another test may be using; use the [reset procedure](development-environment.md#database-initialization-and-migration) to reclaim the environment when needed.
 
 Choose the smallest isolation boundary that preserves the behavior being verified:
 
@@ -153,7 +155,10 @@ Choose the smallest isolation boundary that preserves the behavior being verifie
 | Assertions can identify the test's own records | Shared DB; use unique fixture identifiers and scope assertions/optional cleanup to those records and their dependents |
 | SQL/migration assertions fit entirely within a connection-local temporary table or a guaranteed rollback transaction | Keep that existing isolation when it cannot change unrelated data or compromise concurrent tests |
 | Global counts, capacity limits, resets or lifecycle operations cannot be checked reliably alongside unrelated data | Dedicated DB; freely create, update, delete or reset data inside it |
+| A global limit is outside the behavior under test | Explicitly disable that limit in the test configuration; keep its boundary coverage in dedicated tests |
 | Real commits or independent worker transactions are part of the behavior | Retain those boundaries; use a dedicated DB if interference would otherwise prevent accurate verification |
+
+Rankings and paged lists must locate owned records across pages, or use a dedicated DB when exact totals/order are asserted. Shared-log tests use unique place/key identities when asserting contents; tests using real facility logs cannot assume they are empty. Valkey fixtures use unique owned keys or an exclusively owned keyspace when exact global contents matter. When fixture cleanup is registered, keep its clients/connections open until it finishes and report cleanup failures.
 
 Cleanup such as `DELETE ... WHERE character_id = ?` is appropriate when the character and affected dependent rows belong to that fixture. A common town ID, a test-like name prefix, absence of `t.Parallel()` or a cooperating test mutex does not establish ownership of all matching data. Go packages can run concurrently even when individual tests are sequential. Deleting shared rows and later restoring them can erase another test's writes.
 
