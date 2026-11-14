@@ -62,6 +62,10 @@ func (s *stubCharacterServiceExtended) ChangeGender(ctx context.Context, charact
 	return corecharacter.Character{ID: characterID, PlayerID: "player-1", Gender: newGender, Money: 990000}, nil
 }
 
+func (s *stubCharacterServiceExtended) Trajectory(context.Context, string) ([]character.Memory, error) {
+	return nil, nil
+}
+
 func (s *stubCharacterServiceExtended) GetProfile(ctx context.Context, characterID string) (character.ProfileView, error) {
 	if s.getProfileFn != nil {
 		return s.getProfileFn(ctx, characterID)

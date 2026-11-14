@@ -21,3 +21,5 @@ The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wis
 ## Underworld wishes
 
 Each Underworld wish raises one of `OverDepot`, `OverMonster`, `OverFuture`, `OverFlea` or `OverStore` by one tier up to 5; the capacity each tier adds is owned by the affected feature.
+
+**Pitfall:** `u_god.cgi:81–190` copies the job-change and mastery routines from `job_change.cgi`, but no Underworld wish calls them.

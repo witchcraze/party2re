@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"reflect"
 	"time"
+
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 // completeMilestone executes the atomic completion induction boundary for a collection category.
@@ -33,6 +35,11 @@ func (s *Service) completeMilestone(ctx context.Context, characterID, kind, lege
 	if err != nil {
 		return fmt.Errorf("mark %s completed: %w", kind, err)
 	}
+	if newlyCompleted {
+		if err := s.memories.Record(ctx, characterID, corecharacter.MemoryCompletion, completionMemories[kind]); err != nil {
+			return fmt.Errorf("record %s memory: %w", kind, err)
+		}
+	}
 	if newlyCompleted && s.newsPub != nil {
 		charName := s.resolveCharacterName(ctx, characterID)
 		msg := fmt.Sprintf(formatMsg, charName)
@@ -42,6 +49,14 @@ func (s *Service) completeMilestone(ctx context.Context, characterID, kind, lege
 		}
 	}
 	return nil
+}
+
+// completionMemories are the legacy trajectory lines per completion kind.
+var completionMemories = map[string]string{
+	"monster_book": "MonsterBook Complete!!",
+	"weapon":       "Weapon Complete!!",
+	"armor":        "Armor Complete!!",
+	"item":         "Item Complete!!",
 }
 
 func (s *Service) checkMonsterBookCompletion(ctx context.Context, characterID string) error {

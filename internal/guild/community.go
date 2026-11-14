@@ -137,6 +137,9 @@ func (s *Service) ApproveApplication(ctx context.Context, guildID string, leader
 		if err := s.repo.ApproveMember(txCtx, guildID, applicantID, normalizedTitle); err != nil {
 			return err
 		}
+		if err := s.memories.Record(txCtx, applicantID, corecharacter.MemoryGuildJoin, lockedGuild.Name+"ギルドに加入"); err != nil {
+			return err
+		}
 		s.touchActive(txCtx, guildID)
 		g = lockedGuild
 		return nil

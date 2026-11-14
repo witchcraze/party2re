@@ -139,6 +139,13 @@ func WithLegendInductor(inductor LegendInductor) Option {
 	}
 }
 
+// WithMemoryRecorder records collection completions in the character's trajectory.
+func WithMemoryRecorder(recorder corecharacter.MemoryRecorder) Option {
+	return func(s *Service) {
+		s.memories = recorder
+	}
+}
+
 func WithTotalWeapons(n int) Option {
 	return func(s *Service) {
 		s.totalWeapons = n
@@ -160,6 +167,7 @@ type Service struct {
 	newsPub       NewsPublisher
 	charRepo      CharacterRepository
 	legend        LegendInductor
+	memories      corecharacter.MemoryRecorder
 	milestoneMu   sync.Mutex
 }
 

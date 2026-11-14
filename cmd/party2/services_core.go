@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
@@ -23,6 +24,7 @@ type coreServices struct {
 	normalGuard        func(context.Context, string) error
 	txProvider         database.TransactionProvider
 	charRepo           *database.CharacterRepository
+	memories           *database.CharacterMemoryRepository
 	invRepo            *database.InventoryRepository
 	charJobRepo        *database.CharacterJobRepository
 	playerRepo         *database.PlayerRepository
@@ -55,6 +57,10 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 	}
 
 	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	memories, err := database.NewCharacterMemoryRepository(db)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +102,7 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 		txProvider:         txProvider,
 		presence:           presence,
 		charRepo:           charRepo,
+		memories:           memories,
 		invRepo:            invRepo,
 		charJobRepo:        charJobRepo,
 		playerRepo:         playerRepo,
@@ -123,17 +130,12 @@ func (c *coreServices) initPlayerAndChar(
 	charOpts = append(charOpts,
 		character.WithTransactionProvider(c.txProvider),
 		character.WithReferralDelivery(referralDelivery),
+		character.WithMemoryRepository(c.memories),
 		character.WithNewsPublisher(character.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err
 		})),
-		character.WithGuildChecker(character.GuildMembershipCheckerFunc(func(ctx context.Context, characterID string) (bool, error) {
-			g, _, err := guildRepo.GetGuildByCharacter(ctx, characterID)
-			if err != nil {
-				return false, nil
-			}
-			return g.ID != "", nil
-		})),
+		character.WithGuildChecker(guildMembership(guildRepo.GetGuildByCharacter)),
 		character.WithFleaMarketChecker(character.FleaMarketCheckerFunc(func(ctx context.Context, characterID string) (bool, error) {
 			count, err := fleamarketRepo.CountActiveListingsBySeller(ctx, characterID)
 			if err != nil {
@@ -182,4 +184,15 @@ func (c *coreServices) initPlayerAndChar(
 	c.charService = charService
 	c.playerService = playerService
 	return nil
+}
+
+// guildMembership reports active guild membership; only guild.ErrCharacterNotInGuild means "not a member".
+func guildMembership(lookup func(context.Context, string) (guild.Guild, guild.Member, error)) character.GuildMembershipCheckerFunc {
+	return func(ctx context.Context, characterID string) (bool, error) {
+		_, _, err := lookup(ctx, characterID)
+		if errors.Is(err, guild.ErrCharacterNotInGuild) {
+			return false, nil
+		}
+		return err == nil, err
+	}
 }

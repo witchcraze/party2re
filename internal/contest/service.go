@@ -20,6 +20,7 @@ type Service struct {
 	contests          ContestRepository
 	guilds            GuildService
 	news              NewsPublisher
+	memories          corecharacter.MemoryRecorder
 	scheduler         Scheduler
 	txProvider        TransactionProvider
 	nowFunc           func() time.Time
@@ -69,6 +70,13 @@ func WithGuildService(gs GuildService) Option {
 func WithNewsPublisher(np NewsPublisher) Option {
 	return func(s *Service) {
 		s.news = np
+	}
+}
+
+// WithMemoryRecorder records prize placements in the winners' trajectories.
+func WithMemoryRecorder(recorder corecharacter.MemoryRecorder) Option {
+	return func(s *Service) {
+		s.memories = recorder
 	}
 }
 

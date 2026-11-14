@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 func (s *Service) publishDissolutionNews(ctx context.Context, guildName string, publishedAt time.Time) {
@@ -39,6 +41,10 @@ func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID stri
 			return err
 		}
 
+		// Recorded before the guild disappears so the entry still shows it.
+		if err := s.memories.Record(txCtx, leaderCharID, corecharacter.MemoryGuildDisband, lockedGuild.Name+"を解散させる"); err != nil {
+			return err
+		}
 		if err := s.repo.DisbandGuild(txCtx, guildID); err != nil {
 			return err
 		}

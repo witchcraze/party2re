@@ -91,6 +91,7 @@ func (s *stubPlayerService) BanPlayer(ctx context.Context, playerID string) erro
 }
 
 type stubCharacterService struct {
+	trajectoryFn            func(ctx context.Context, characterID string) ([]character.Memory, error)
 	createFn                func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
 	createWithOptionsFn     func(ctx context.Context, playerID, name string, options character.CreationOptions) (corecharacter.Character, error)
 	getFn                   func(ctx context.Context, id string) (corecharacter.Character, error)
@@ -135,6 +136,12 @@ func (s *stubCharacterService) ChangeGender(ctx context.Context, characterID, ne
 		return s.changeGenderFn(ctx, characterID, newGender)
 	}
 	return corecharacter.Character{ID: characterID, Gender: newGender}, nil
+}
+func (s *stubCharacterService) Trajectory(ctx context.Context, characterID string) ([]character.Memory, error) {
+	if s.trajectoryFn != nil {
+		return s.trajectoryFn(ctx, characterID)
+	}
+	return nil, nil
 }
 func (s *stubCharacterService) GetProfile(ctx context.Context, characterID string) (character.ProfileView, error) {
 	if s.getProfileFn != nil {
