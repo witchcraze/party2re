@@ -3,10 +3,8 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -42,15 +40,6 @@ type NPCResult struct {
 	Private  bool   `json:"private"`
 }
 
-var errNPCUnavailable = errors.New("no NPC in the current scene")
-
-func npcRejection(err error) (int, ErrorDetail) {
-	if errors.Is(err, errNPCUnavailable) {
-		return http.StatusConflict, ErrorDetail{Code: "NPC_UNAVAILABLE", Message: "この場所には話せる相手がいません。"}
-	}
-	return 0, ErrorDetail{}
-}
-
 // registerNPC connects npc_talk and npc_inspect; the facility comes from the
 // owner's current scene, never from client input.
 func (h *Handler) registerNPC(service *playercontext.Service) {
@@ -60,97 +49,61 @@ func (h *Handler) registerNPC(service *playercontext.Service) {
 	if h.actionCommands == nil {
 		h.actionCommands = make(map[string]actionCommand)
 	}
-	acts := map[string]func(context.Context, string, string) (NPCResult, error){
-		"npc_talk": func(ctx context.Context, owner, actor string) (NPCResult, error) {
-			return h.npcAct(ctx, service, owner, actor, true)
+	acts := map[string]func(context.Context, playercontext.Result) (NPCResult, error){
+		"npc_talk": func(ctx context.Context, current playercontext.Result) (NPCResult, error) {
+			return h.npcAct(ctx, current, true)
 		},
-		"npc_inspect": func(ctx context.Context, owner, actor string) (NPCResult, error) {
-			return h.npcAct(ctx, service, owner, actor, false)
+		"npc_inspect": func(ctx context.Context, current playercontext.Result) (NPCResult, error) {
+			return h.npcAct(ctx, current, false)
 		},
-		"secretshop_puffpuff": func(ctx context.Context, owner, actor string) (NPCResult, error) {
-			return h.puffPuff(ctx, service, owner, actor)
+		"secretshop_puffpuff": func(ctx context.Context, current playercontext.Result) (NPCResult, error) {
+			return h.puffPuff(ctx, current)
 		},
-		"park_divinate": func(ctx context.Context, owner, actor string) (NPCResult, error) {
-			return h.divinate(ctx, service, owner, actor)
+		"park_divinate": func(ctx context.Context, current playercontext.Result) (NPCResult, error) {
+			return h.divinate(ctx, current)
 		},
 	}
 	for id, act := range acts {
 		def, _ := playercontext.GetAction(id)
 		h.actionCommands[id] = actionCommand{
-			reject: npcRejection,
-			prepare: func(raw json.RawMessage) (func(context.Context, string, string) (any, error), error) {
+			prepare: func(raw json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
 				var none struct{}
 				if err := decodeActionParams(raw, def.RequiredParams, &none); err != nil {
 					return nil, err
 				}
-				return func(ctx context.Context, owner, actor string) (any, error) { return act(ctx, owner, actor) }, nil
+				return func(ctx context.Context, _, _ string, current playercontext.Result) (any, error) {
+					return act(ctx, current)
+				}, nil
 			},
 		}
 	}
 }
 
-// currentScene resolves the owner's current, still qualified scene; ok is
-// false outside a registered scene.
-func (h *Handler) currentScene(ctx context.Context, service *playercontext.Service, owner, actor string) (string, corecharacter.Character, bool, error) {
-	current, err := service.Query(ctx, actor, owner)
-	if err != nil {
-		return "", corecharacter.Character{}, false, err
-	}
-	n := current.Navigation
-	if n == nil || n.Unavailable {
-		return "", corecharacter.Character{}, false, nil
-	}
-	destination, char := n.Selection.Destination, current.Snapshot.Character
-	return destination, char, true, nil
-}
-
-// currentNPC resolves the NPC of the owner's current, still qualified facility.
-func (h *Handler) currentNPC(ctx context.Context, service *playercontext.Service, owner, actor string) (string, *npcProfile, corecharacter.Character, error) {
-	destination, char, ok, err := h.currentScene(ctx, service, owner, actor)
-	if err != nil {
-		return "", nil, corecharacter.Character{}, err
-	}
-	npc := h.sceneAdapters[destination].npc
-	if !ok || npc == nil {
-		return "", nil, corecharacter.Character{}, errNPCUnavailable
-	}
-	return destination, npc, char, nil
+// currentNPC uses the scene already admitted by the dispatcher.
+func (h *Handler) currentNPC(current playercontext.Result) (string, *npcProfile, corecharacter.Character) {
+	destination := current.Snapshot.LocationID
+	return destination, h.sceneAdapters[destination].npc, current.Snapshot.Character
 }
 
 // puffPuff is ＠ぱふぱふ (secret.cgi:79-84): dialogue only, logged as a private
 // row pair addressed to the actor ($to_name = $m).
-func (h *Handler) puffPuff(ctx context.Context, service *playercontext.Service, owner, actor string) (NPCResult, error) {
-	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
-	if err != nil {
-		return NPCResult{}, err
-	}
-	if destination != "secretshop" {
-		return NPCResult{}, errNPCUnavailable
-	}
+func (h *Handler) puffPuff(ctx context.Context, current playercontext.Result) (NPCResult, error) {
+	destination, npc, char := h.currentNPC(current)
 	word := fmt.Sprintf(puffPuffDialogueFormat, char.Name)
 	h.appendNPCLog(ctx, destination, char, "＠ぱふぱふ", npc.name, word, char.ID)
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
 // divinate is ＠うらない (park.cgi uranai): a public $npc_com that starts the wait.
-func (h *Handler) divinate(ctx context.Context, service *playercontext.Service, owner, actor string) (NPCResult, error) {
-	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
-	if err != nil {
-		return NPCResult{}, err
-	}
-	if destination != "town" {
-		return NPCResult{}, errNPCUnavailable
-	}
+func (h *Handler) divinate(ctx context.Context, current playercontext.Result) (NPCResult, error) {
+	destination, npc, char := h.currentNPC(current)
 	word := divination(random.Intn, char.Name)
 	h.appendNPCLog(ctx, destination, char, "＠うらない", npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
-func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, owner, actor string, talk bool) (NPCResult, error) {
-	destination, npc, char, err := h.currentNPC(ctx, service, owner, actor)
-	if err != nil {
-		return NPCResult{}, err
-	}
+func (h *Handler) npcAct(ctx context.Context, current playercontext.Result, talk bool) (NPCResult, error) {
+	destination, npc, char := h.currentNPC(current)
 	if !talk && npc.silent {
 		return NPCResult{NPCName: npc.name, Private: true}, nil
 	}
@@ -165,6 +118,7 @@ func (h *Handler) npcAct(ctx context.Context, service *playercontext.Service, ow
 		return NPCResult{NPCName: npc.name, Dialogue: text, Private: true}, nil
 	}
 	if talk && npc.wordsOf != nil {
+		var err error
 		if words, err = npc.wordsOf(h, ctx, char); err != nil {
 			return NPCResult{}, err
 		}

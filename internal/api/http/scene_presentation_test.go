@@ -70,7 +70,9 @@ func TestFacilityScenePresentation(t *testing.T) {
 			// Connection is independent of registration and entry eligibility.
 			for _, id := range choices {
 				if contextParamsSchemas[id] != nil {
-					h.actionCommands[id] = actionCommand{prepare: func(json.RawMessage) (func(context.Context, string, string) (any, error), error) { return nil, nil }}
+					h.actionCommands[id] = actionCommand{prepare: func(json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
+						return nil, nil
+					}}
 				}
 			}
 			var response PlayerContextResponse
@@ -166,7 +168,9 @@ func TestScenePresentationCannotAdmitCommands(t *testing.T) {
 			}
 			h := &Handler{sceneAdapters: map[string]sceneAdapter{destination: adapter}, actionCommands: map[string]actionCommand{}}
 			for _, id := range []string{"scene_page", "shop_sell", "shop_purchase", "bank_deposit"} {
-				h.actionCommands[id] = actionCommand{prepare: func(json.RawMessage) (func(context.Context, string, string) (any, error), error) { return nil, nil }}
+				h.actionCommands[id] = actionCommand{prepare: func(json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
+					return nil, nil
+				}}
 			}
 			r := playercontext.Result{Snapshot: playercontext.Snapshot{SceneActions: []string{"scene_page", "shop_sell", "shop_purchase"}},
 				AvailableActions: []string{"scene_page", "shop_sell", "bank_deposit"},

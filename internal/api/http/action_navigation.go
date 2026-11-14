@@ -29,7 +29,7 @@ func navigationCommand[P, R any](h *Handler, id string, execute func(context.Con
 	}
 	h.actionCommands[id] = actionCommand{
 		reject: navigationRejection,
-		prepare: func(raw json.RawMessage) (func(context.Context, string, string) (any, error), error) {
+		prepare: func(raw json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
 			var p P
 			if err := decodeActionParams(raw, def.RequiredParams, &p); err != nil {
 				return nil, err
@@ -61,7 +61,7 @@ func navigationCommand[P, R any](h *Handler, id string, execute func(context.Con
 					}
 				}
 			}
-			return func(ctx context.Context, playerID, actorID string) (any, error) {
+			return func(ctx context.Context, playerID, actorID string, _ playercontext.Result) (any, error) {
 				return execute(ctx, playerID, actorID, p)
 			}, nil
 		},
