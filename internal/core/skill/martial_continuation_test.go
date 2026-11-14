@@ -18,15 +18,15 @@ func TestMartialReloadContinuesFrozenInputWithoutReplay(t *testing.T) {
 	level := 99
 	c.RequesterLevel, c.Command = &level, "frozen-martial-command"
 	type checkpoint struct {
-		State                                      corebattle.LifetimeState
-		Target                                     corebattle.TargetContext
-		Cursor                                     corebattle.TargetCursor
-		End                                        corebattle.EndProcessing
-		DamageCalls, HealCalls, StatUpCalls, Level int
-		Arguments                                  []string
-		EntryID                                    string
+		State                         corebattle.LifetimeState
+		Target                        corebattle.TargetContext
+		Cursor                        corebattle.TargetCursor
+		End                           corebattle.EndProcessing
+		DamageCalls, HealCalls, Level int
+		Arguments                     []string
+		EntryID                       string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.Cursor, c.End, c.DamageCalls, c.HealCalls, c.StatUpCalls, level, []string{"enemy", "enemy", "tail"}, "job-23-entry-3"}
+	frozen := checkpoint{s, c.TargetContext, c.Cursor, c.End, c.DamageCalls, c.HealCalls, level, []string{"enemy", "enemy", "tail"}, "job-23-entry-3"}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestMartialReloadContinuesFrozenInputWithoutReplay(t *testing.T) {
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatal(err)
 	}
-	resumed := &corebattle.MartialContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, HealCalls: loaded.HealCalls, StatUpCalls: loaded.StatUpCalls, RequesterLevel: &loaded.Level}, Cursor: loaded.Cursor, End: loaded.End, GuaranteedHit: true, Defeat: func(string) error { return nil }}}
+	resumed := &corebattle.MartialContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, HealCalls: loaded.HealCalls, RequesterLevel: &loaded.Level}, Cursor: loaded.Cursor, End: loaded.End, GuaranteedHit: true, Defeat: func(string) error { return nil }}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterMartial(resumed)
 	for _, run := range []struct {
@@ -52,7 +52,7 @@ func TestMartialReloadContinuesFrozenInputWithoutReplay(t *testing.T) {
 	}
 	// Flame reduces physical power to90%; only the two AG-based hits qualify
 	// for direct damage: floor151.2×.45 + 2×floor79.2×.9 = 210.
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 590 || s.Actors[1].HP != 790 || s.Actors[0].Extended != "" || s.Actors[0].ExtendedTurns != 0 || resumed.DamageCalls != 3 || resumed.HealCalls != 1 || resumed.StatUpCalls != 2 || c.DamageCalls != 3 || !reflect.DeepEqual(resumed.Arguments, []string{"tail"}) || resumed.Command != "frozen-martial-command" || *resumed.RequesterLevel != 99 {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 590 || s.Actors[1].HP != 790 || s.Actors[0].Extended != "" || s.Actors[0].ExtendedTurns != 0 || resumed.DamageCalls != 3 || resumed.HealCalls != 1 || c.DamageCalls != 3 || !reflect.DeepEqual(resumed.Arguments, []string{"tail"}) || resumed.Command != "frozen-martial-command" || *resumed.RequesterLevel != 99 {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

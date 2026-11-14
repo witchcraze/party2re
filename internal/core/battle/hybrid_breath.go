@@ -6,8 +6,7 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // reload and retain the selected entry and arguments with the frozen command.
 type HybridBreathContext struct {
 	DamageContext
-	Arguments                    []string
-	StatusCalls, AreaStatusCalls int
+	Arguments []string
 }
 
 // HybridBreathEntries preserves positions, including the separately owned
@@ -153,9 +152,9 @@ func (s *LifetimeState) ApplyHybridBreath(c *HybridBreathContext, id string, rng
 		if id == "job-41-entry-3" {
 			status, category, chance = StatusParalyze, CategoryBreath, 35
 		}
-		child := StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err := s.ApplyAreaStatus(&child, controlSymbol("", status, category), chance, false, false, rng)
-		c.EffectContext, c.StatusCalls, c.AreaStatusCalls = child.EffectContext, child.StatusCalls, child.AreaStatusCalls
+		c.EffectContext = child.EffectContext
 		return err
 	case "job-41-entry-5":
 		r, err := s.ResolveEnemyTarget(c.TargetContext, controlSymbol(c.shift(), "assault", CategoryUntyped), rng)

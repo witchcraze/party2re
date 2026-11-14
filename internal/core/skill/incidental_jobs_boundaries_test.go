@@ -84,7 +84,7 @@ func TestIncidentalJobEveryPositionBoundary(t *testing.T) {
 						t.Fatal(i, a, want)
 					}
 				}
-				if c.End.ImmediateRiskCalls != 0 || c.HealCalls != 0 || c.MPHealCalls != 0 {
+				if c.End.ImmediateRiskCalls != 0 || c.HealCalls != 0 {
 					t.Fatal(c)
 				}
 			})

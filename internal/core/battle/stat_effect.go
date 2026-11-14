@@ -159,7 +159,6 @@ func (s *LifetimeState) ApplyStatUp(c *EffectContext, e TargetEffect, stat Battl
 	if t.HP <= 0 || v <= 0 {
 		return r, nil
 	}
-	c.StatUpCalls++
 	cap := t.statUpCap(a, stat)
 	value := t.currentStat(stat)
 	if float64(*value) >= cap {
@@ -256,7 +255,6 @@ func (s *LifetimeState) ApplyStatDown(c *EffectContext, e TargetEffect, stat Bat
 	if err != nil || v == 0 {
 		return r, err
 	}
-	c.StatDownCalls++
 	if t.BaseStats.Defense > 999 || ((stat == StatHP || stat == StatAttack) && t.HP > 999) || hasItem(t.ItemDefinitionIDs, "item-159") || (stat == StatHit && hasItem(t.ItemDefinitionIDs, "item-197")) || (stat == StatMP && hasAbility(t.Abilities, "curse")) {
 		return r, nil
 	}
@@ -307,10 +305,7 @@ func (s *LifetimeState) ApplyPartyStat(c *EffectContext, coefficient float64, ca
 	}
 	ids := c.PartyIDs
 	if down {
-		c.PartyStatDownCalls++
 		ids = c.EnemyIDs
-	} else {
-		c.PartyStatUpCalls++
 	}
 	var results []EffectApplication
 	for _, id := range ids {

@@ -6,9 +6,8 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // and registrations after loading the frozen command and lifetime state.
 type HighPowerContext struct {
 	DamageContext
-	EquipmentReset                          *EquipmentResetContext
-	Arguments                               []string
-	StatusCalls, AreaStatusCalls, CureCalls int
+	EquipmentReset *EquipmentResetContext
+	Arguments      []string
 }
 
 // HighPowerEntries retains every position and listed cost, including extensions.
@@ -172,9 +171,9 @@ func (s *LifetimeState) ApplyHighPower(c *HighPowerContext, id string, rng rando
 		if _, err := s.ApplyAreaDamage(&c.DamageContext, power, CategoryMagic, true, rng); err != nil {
 			return err
 		}
-		child := StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err := s.ApplyAreaStatus(&child, controlSymbol("", status, CategoryMagic), chance, false, false, rng)
-		c.EffectContext, c.StatusCalls, c.AreaStatusCalls = child.EffectContext, child.StatusCalls, child.AreaStatusCalls
+		c.EffectContext = child.EffectContext
 		return err
 	case "job-48-entry-2":
 		c.AdditionalEffect = true
@@ -197,9 +196,9 @@ func (s *LifetimeState) ApplyHighPower(c *HighPowerContext, id string, rng rando
 		if !r.Resolved {
 			return nil
 		}
-		child := StatusContext{EffectContext: c.EffectContext, CureCalls: c.CureCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err = s.ApplyCure(&child, controlSymbol(r.TargetID, s.actor(r.TargetID).Status, CategoryUntyped), rng)
-		c.EffectContext, c.CureCalls = child.EffectContext, child.CureCalls
+		c.EffectContext = child.EffectContext
 		return err
 	case "job-49-entry-1", "job-52-entry-1":
 		stat, coefficient := StatDefense, .6

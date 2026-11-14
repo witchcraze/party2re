@@ -191,7 +191,7 @@ func TestEquipmentTail208RosterBoundariesAndTensionRestoration(t *testing.T) {
 				if a.HP != wantHP || s.actor("enemy").HP != wantEnemy || a.Tension != wantTension || s.actor("ally-1").Status != StatusPoison || s.actor("ally-1").Hit != 99 {
 					t.Fatal(s)
 				}
-				if count >= 3 && (a.Status != "" || a.Hit != 95 || s.actor("ally-2").HP != 0 || s.actor("ally-2").Hit != 95 || s.actor("ally-2").Status != StatusSleep || c.CureCalls != 2) {
+				if count >= 3 && (a.Status != "" || a.Hit != 95 || s.actor("ally-2").HP != 0 || s.actor("ally-2").Hit != 95 || s.actor("ally-2").Status != StatusSleep) {
 					t.Fatal(s, c)
 				}
 				if count == 2 && (a.Status != StatusSleep || a.Hit != 80) {
@@ -228,7 +228,7 @@ func TestEquipmentTailGuardianPresenceAndReflectionKinds(t *testing.T) {
 					}
 				}
 				rng := &targetRNG{t: t, draws: draws}
-				if err := s.ApplyEquipmentTail(&c, "guardian-mp-tail", rng); err != nil || s.actor("self").MP != want || c.MPHealCalls != 0 {
+				if err := s.ApplyEquipmentTail(&c, "guardian-mp-tail", rng); err != nil || s.actor("self").MP != want {
 					t.Fatal(s, c, err)
 				}
 				rng.done()

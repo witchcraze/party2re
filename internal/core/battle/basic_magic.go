@@ -5,8 +5,7 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // BasicMagicContext retains operation facts; consumers rebuild ports after reload.
 type BasicMagicContext struct {
 	DamageContext
-	Arguments              []string
-	CureCalls, StatusCalls int
+	Arguments []string
 }
 
 // BasicMagicEntries preserves source order, including the separately owned
@@ -98,9 +97,9 @@ func (s *LifetimeState) ApplyBasicMagic(c *BasicMagicContext, id string, rng ran
 		_, err := s.ApplyStatUp(&c.EffectContext, controlEffect(c.shift(), .4, CategoryMagic), StatDefense, rng)
 		return err
 	case "job-5-entry-2":
-		child := StatusContext{EffectContext: c.EffectContext, CureCalls: c.CureCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err := s.ApplyCure(&child, controlSymbol(c.shift(), StatusDeadlyPoison, CategoryMagic), rng)
-		c.EffectContext, c.CureCalls = child.EffectContext, child.CureCalls
+		c.EffectContext = child.EffectContext
 		return err
 	case "job-5-entry-3", "job-5-entry-5", "job-5-entry-8":
 		power := 90.0
@@ -119,9 +118,9 @@ func (s *LifetimeState) ApplyBasicMagic(c *BasicMagicContext, id string, rng ran
 		_, err := s.ApplyPartyStat(&c.EffectContext, .2, CategoryMagic, StatHit, true, rng)
 		return err
 	case "job-6-entry-6":
-		child := StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err := s.ApplyStatus(&child, controlSymbol(c.shift(), StatusSleep, CategoryMagic), 65, false, false, rng)
-		c.EffectContext, c.StatusCalls = child.EffectContext, child.StatusCalls
+		c.EffectContext = child.EffectContext
 		return err
 	}
 	power, width, area := s.basicMagicDamage(c, id)

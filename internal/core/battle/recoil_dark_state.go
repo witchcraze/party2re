@@ -6,9 +6,8 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // defeat/reset closure for the raw strike, which bypasses all damage helpers.
 type RecoilDarkStateContext struct {
 	DamageContext
-	RawDefeat                    *DefeatContext
-	Arguments                    []string
-	StatusCalls, AreaStatusCalls int
+	RawDefeat *DefeatContext
+	Arguments []string
 }
 
 // RecoilDarkStateEntries preserves source order, including the separately
@@ -106,9 +105,9 @@ func (s *LifetimeState) ApplyRecoilDarkState(c *RecoilDarkStateContext, id strin
 		a.Temporary = TemporaryDeflect
 	case "job-21-entry-2", "job-22-entry-2", "job-38-entry-4":
 		symbol, category, chance := recoilDarkStatus(id)
-		child := StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err := s.ApplyAreaStatus(&child, controlSymbol("", symbol, category), chance, false, false, rng)
-		c.EffectContext, c.StatusCalls, c.AreaStatusCalls = child.EffectContext, child.StatusCalls, child.AreaStatusCalls
+		c.EffectContext = child.EffectContext
 		return err
 	case "job-21-entry-5":
 		return s.applyRawRecoilStrike(c, rng)

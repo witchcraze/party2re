@@ -36,7 +36,7 @@ func TestRecoveryGemThreeSlotCapRetainsTension(t *testing.T) {
 		if err != nil || len(results) != 3 {
 			t.Fatal(id, results, err)
 		}
-		if !results[0][0].Applied || !results[2][0].Returned || results[2][0].Applied || s.actor("self").Tension != 3 || c.StatUpCalls != 2 || c.TensionCalls != 2 {
+		if !results[0][0].Applied || !results[2][0].Returned || results[2][0].Applied || s.actor("self").Tension != 3 || c.TensionCalls != 2 {
 			t.Fatal(id, results, s, c)
 		}
 		// A saved cap outcome preserves tension for admission of the next command.

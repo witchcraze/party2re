@@ -178,7 +178,7 @@ func TestRecoveryGemTargetAlternativesDoNotAccumulateInSameSlot(t *testing.T) {
 			}
 			rng := &targetRNG{t: t, draws: tc.draws}
 			r, err := s.ApplyRecoveryStatGems([]int{94, 28, 74}, &c, "enemy", rng)
-			if err != nil || len(r) != 3 || r[2][0].TargetID != tc.wantTarget || s.actor("enemy").Defense != 20 || s.actor("self").Tension != 1 || c.PartyStatDownCalls != 1 || c.TensionCalls != 1 {
+			if err != nil || len(r) != 3 || r[2][0].TargetID != tc.wantTarget || s.actor("enemy").Defense != 20 || s.actor("self").Tension != 1 || c.TensionCalls != 1 {
 				t.Fatal(r, err, s, c)
 			}
 			if tc.wantTarget == "ally" && s.actor("ally").Tension != 3 {

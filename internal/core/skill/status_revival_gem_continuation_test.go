@@ -73,7 +73,7 @@ func TestStatusGemConcreteProjectionAndChanceBoundaries(t *testing.T) {
 					t.Fatal("missing concrete producer")
 				}
 				branches, err := def.ProjectBranches(&s, &f)
-				if err != nil || len(branches) != 2 || applied != 0 || c.StatusCalls != 0 || c.DeathCalls != 0 {
+				if err != nil || len(branches) != 2 || applied != 0 {
 					t.Fatal(len(branches), err, c, applied)
 				}
 				draw := tc.chance / 100
@@ -100,11 +100,9 @@ func TestStatusGemConcreteProjectionAndChanceBoundaries(t *testing.T) {
 					t.Fatal(s.Actors[1], success)
 				}
 				if tc.death {
-					if f.Status.DeathCalls != 1 || f.Status.AreaDeathCalls != map[bool]int{false: 0, true: 1}[tc.area] || applied != map[bool]int{false: 0, true: 1}[success] {
+					if applied != map[bool]int{false: 0, true: 1}[success] {
 						t.Fatal(f.Status, applied)
 					}
-				} else if f.Status.StatusCalls != 1 || f.Status.AreaStatusCalls != 1 {
-					t.Fatal(f.Status)
 				}
 				matched := false
 				for _, branch := range branches {
@@ -153,13 +151,6 @@ func TestCureGemConcreteProjectionAndStatusCMP(t *testing.T) {
 			if err = s.ApplyInvocations(&f, d.Invocations, ops, &damageGemDraws{t: t, draws: draws}); err != nil || s.Actors[0].CMP != 10 || s.Actors[0].Status != "" {
 				t.Fatal(err, s)
 			}
-			wantCalls := len(c.PartyIDs)
-			if tc.id == "gem_cure_all_abnormal" {
-				wantCalls = 1
-			}
-			if f.Status.CureCalls != wantCalls {
-				t.Fatal(f.Status)
-			}
 		})
 	}
 }
@@ -204,14 +195,13 @@ func TestStatusRevivalGemFrozenReloadAndRebuiltPorts(t *testing.T) {
 		if err = input.State.ApplyInvocations(&f, d.Invocations, input.Ops, rng); err != nil {
 			t.Fatal(err)
 		}
-		if rng.used != 4 || input.State.Actors[0].MP != 0 || input.State.Actors[1].Status != corebattle.StatusDeadlyPoison || f.Defeat.Cursor != (corebattle.TargetCursor{Source: "item159", ActorID: "self"}) || f.Status.StatusCalls != 1 {
+		if rng.used != 4 || input.State.Actors[0].MP != 0 || input.State.Actors[1].Status != corebattle.StatusDeadlyPoison || f.Defeat.Cursor != (corebattle.TargetCursor{Source: "item159", ActorID: "self"}) {
 			t.Fatal(input.State, f, rng.used)
 		}
 		saved := struct {
-			State                        corebattle.LifetimeState
-			Cursor                       corebattle.TargetCursor
-			StatusCalls, AreaStatusCalls int
-		}{input.State, f.Defeat.Cursor, f.Status.StatusCalls, f.Status.AreaStatusCalls}
+			State  corebattle.LifetimeState
+			Cursor corebattle.TargetCursor
+		}{input.State, f.Defeat.Cursor}
 		facts, err := json.Marshal(saved)
 		if err != nil {
 			t.Fatal(err)
@@ -221,11 +211,11 @@ func TestStatusRevivalGemFrozenReloadAndRebuiltPorts(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		status = corebattle.StatusContext{EffectContext: corebattle.EffectContext{TargetContext: input.Target}, StatusCalls: saved.StatusCalls, AreaStatusCalls: saved.AreaStatusCalls}
+		status = corebattle.StatusContext{EffectContext: corebattle.EffectContext{TargetContext: input.Target}}
 		defeat = corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: input.Target, Cursor: saved.Cursor}}
 		f = corebattle.CallbackContext{TargetContext: input.Target, Arguments: input.Arguments, Status: &status, Defeat: &defeat}
 		d.RegisterStatuses(&status, nil)
-		if err = saved.State.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_cure_poison"}}, noArithmeticDraws{t}); err != nil || f.Status.StatusCalls != 1 || f.Status.AreaStatusCalls != 1 || f.Status.CureCalls != 2 || f.Defeat.Cursor != saved.Cursor {
+		if err = saved.State.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_cure_poison"}}, noArithmeticDraws{t}); err != nil || saved.State.Actors[0].Status != "" || saved.State.Actors[1].Status != corebattle.StatusDeadlyPoison || f.Defeat.Cursor != saved.Cursor {
 			t.Fatal("lost saved operation facts", f, err)
 		}
 		input.State = saved.State
@@ -290,7 +280,7 @@ func TestStatusRevivalGemUnsupportedTailIsAtomicAndUnknownStaysGated(t *testing.
 			t.Fatal(first, err)
 		}
 		after, err := json.Marshal(s)
-		if err != nil || string(before) != string(after) || status.CureCalls != 0 || status.StatusCalls != 0 || !reflect.DeepEqual(f.Arguments, []string{"fallen", "tail"}) {
+		if err != nil || string(before) != string(after) || !reflect.DeepEqual(f.Arguments, []string{"fallen", "tail"}) {
 			t.Fatal(first, "caller mutated", err)
 		}
 	}
@@ -375,7 +365,7 @@ func TestRegisteredInstantDeathRejectsUnsupportedAwakenedResetTailBeforeMutation
 	}
 	rng := &damageGemDraws{t: t, draws: []float64{0, .9, .9}}
 	if err = s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || rng.used != 3 ||
-		s.Actors[1].HP != 101 || s.Actors[1].MP != 40 || s.Actors[1].Attack != 295 || status.DeathCalls != 1 {
+		s.Actors[1].HP != 101 || s.Actors[1].MP != 40 || s.Actors[1].Attack != 295 {
 		t.Fatal("registered instant-death continuation missed the projected maximum", err, s, status, rng.used)
 	}
 }

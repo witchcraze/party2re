@@ -143,8 +143,8 @@ func TestOrdinaryToolCuresAndTemporaries(t *testing.T) {
 			draws = []float64{.99}
 		}
 		executeOrdinaryTool(t, &s, c, d, row.id, []string{"ally"}, draws...)
-		if s.Actors[3].Status != "" || c.CureCalls != 1 {
-			t.Fatal(row, s.Actors, c.CureCalls)
+		if s.Actors[3].Status != "" {
+			t.Fatal(row, s.Actors)
 		}
 	}
 	for _, row := range []struct {

@@ -63,7 +63,7 @@ func TestSummonAppearanceGemBindingsAndGates(t *testing.T) {
 			t.Fatal(id, err)
 		}
 	}
-	if c.DamageCalls != 0 || tc.StatUpCalls != 0 {
+	if c.DamageCalls != 0 {
 		t.Fatal("discovery changed counters")
 	}
 }

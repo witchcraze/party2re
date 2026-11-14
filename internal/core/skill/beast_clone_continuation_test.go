@@ -15,14 +15,14 @@ func TestBeastCloneReloadContinuesWithoutReplay(t *testing.T) {
 	s.Actors[0].Status = corebattle.StatusDeadlyPoison
 	executeBeastClone(t, &s, c, d, "job-26-entry-8", nil, 0, 0, 0, 0, 0)
 	type checkpoint struct {
-		State                                    corebattle.LifetimeState
-		Target                                   corebattle.TargetContext
-		DamageCalls, StatusCalls, RequesterLevel int
-		End                                      corebattle.EndProcessing
-		Arguments                                []string
-		EntryID                                  string
+		State                       corebattle.LifetimeState
+		Target                      corebattle.TargetContext
+		DamageCalls, RequesterLevel int
+		End                         corebattle.EndProcessing
+		Arguments                   []string
+		EntryID                     string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.StatusCalls, *c.RequesterLevel, c.End, []string{"enemy", "tail"}, "job-26-entry-8"}
+	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, *c.RequesterLevel, c.End, []string{"enemy", "tail"}, "job-26-entry-8"}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +34,7 @@ func TestBeastCloneReloadContinuesWithoutReplay(t *testing.T) {
 	resumed := &corebattle.BeastCloneContext{DamageContext: corebattle.DamageContext{
 		EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, RequesterLevel: &loaded.RequesterLevel},
 		End:           loaded.End, GuaranteedHit: true, Defeat: func(string) error { return nil },
-	}, StatusCalls: loaded.StatusCalls}
+	}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterBeastClone(resumed)
 	for _, run := range []struct {
@@ -46,7 +46,7 @@ func TestBeastCloneReloadContinuesWithoutReplay(t *testing.T) {
 		executeBeastClone(t, run.s, run.c, run.d, loaded.EntryID, loaded.Arguments)
 		executeBeastClone(t, run.s, run.c, run.d, "job-12-entry-7", loaded.Arguments, 0, 0)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.RosterSequence != 1 || len(s.Actors) != 4 || s.Actors[0].HP != 611 || s.Actors[3].HP != 1 || s.Actors[3].Status != corebattle.StatusDeadlyPoison || s.Actors[0].Status != "" || s.Actors[1].HP != 707 || c.DamageCalls != 3 || resumed.DamageCalls != 3 || resumed.StatusCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || resumed.Command != "frozen-command" || !resumed.Custom || *resumed.RequesterLevel != 40 {
+	if !reflect.DeepEqual(s, loaded.State) || s.RosterSequence != 1 || len(s.Actors) != 4 || s.Actors[0].HP != 611 || s.Actors[3].HP != 1 || s.Actors[3].Status != corebattle.StatusDeadlyPoison || s.Actors[0].Status != "" || s.Actors[1].HP != 707 || c.DamageCalls != 3 || resumed.DamageCalls != 3 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || resumed.Command != "frozen-command" || !resumed.Custom || *resumed.RequesterLevel != 40 {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

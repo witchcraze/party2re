@@ -119,7 +119,7 @@ func TestSongDanceDrainReturnedDamageAndFloors(t *testing.T) {
 		s, c, d := songDanceFixture()
 		s.Actors[1].Temporary = corebattle.TemporaryOneHitDefense
 		executeSongDance(t, &s, c, d, id, []string{"enemy"})
-		if c.HealCalls != 0 || c.MPHealCalls != 0 || s.Actors[1].Temporary != "" {
+		if c.HealCalls != 0 || s.Actors[0].MP != 80 || s.Actors[1].Temporary != "" {
 			t.Fatal(c, s)
 		}
 	}

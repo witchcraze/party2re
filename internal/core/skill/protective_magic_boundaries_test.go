@@ -28,7 +28,7 @@ func TestProtectiveMagicEveryPositionGuard(t *testing.T) {
 				a.HP, draws = 1000, []float64{0}
 			}
 			executeProtectiveMagic(t, &s, c, d, id, args, draws...)
-			if a.MP != 80 || s.Actors[2].MP != 15 || c.DamageCalls != 0 || c.AreaDamageCalls != 0 || c.StatUpCalls != 0 || c.PartyHealCalls != 0 || c.CureCalls != 0 || a.Temporary != "" || s.Actors[1].HP != 900 {
+			if a.MP != 80 || s.Actors[2].MP != 15 || c.DamageCalls != 0 || c.AreaDamageCalls != 0 || c.PartyHealCalls != 0 || a.Temporary != "" || s.Actors[1].HP != 900 {
 				t.Fatal(id, s, c)
 			}
 			if id == "job-33-entry-7" && (a.Extended != corebattle.ExtendedAdditional || a.ExtendedTurns != 5) {
@@ -133,7 +133,7 @@ func TestProtectiveMagicCoverAndStatGuards(t *testing.T) {
 		if attack == 1000 {
 			wantTension = 2
 		}
-		if s.Actors[0].Attack != 1000 || s.Actors[0].Tension != wantTension || c.StatUpCalls != 1 {
+		if s.Actors[0].Attack != 1000 || s.Actors[0].Tension != wantTension {
 			t.Fatal(s, c)
 		}
 	}
@@ -145,7 +145,7 @@ func TestProtectiveMagicCureAndFiveSubmissions(t *testing.T) {
 	s.Actors[0].Status, s.Actors[0].Temporary = corebattle.StatusPoison, corebattle.TemporaryCover
 	s.Actors[2].HP, s.Actors[2].Status, s.Actors[2].Temporary = 100, corebattle.StatusPoison, corebattle.TemporaryCovering
 	executeProtectiveMagic(t, &s, c, d, "job-33-entry-7", nil)
-	if s.Actors[0].Status != corebattle.StatusPoison || s.Actors[2].Status != "" || c.CureCalls != 1 {
+	if s.Actors[0].Status != corebattle.StatusPoison || s.Actors[2].Status != "" {
 		t.Fatal(s, c)
 	}
 	for i := 1; i <= 5; i++ {
@@ -185,7 +185,7 @@ func TestProtectiveMagicCureCapturesStatusBeforeConfusion(t *testing.T) {
 	s, c, d := protectiveMagicFixture()
 	c.Item195Activated = true
 	executeProtectiveMagic(t, &s, c, d, "job-33-entry-7", []string{"unused", "tail"}, 0, .4)
-	if s.Actors[0].Status != corebattle.StatusConfusion || s.Actors[0].ExtendedTurns != 5 || c.CureCalls != 0 || len(c.Arguments) != 2 {
+	if s.Actors[0].Status != corebattle.StatusConfusion || s.Actors[0].ExtendedTurns != 5 || len(c.Arguments) != 2 {
 		t.Fatal(s, c)
 	}
 }

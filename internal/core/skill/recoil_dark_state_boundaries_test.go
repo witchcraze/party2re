@@ -167,14 +167,14 @@ func TestRecoilDarkResourceAndStatusTails(t *testing.T) {
 			s.Actors[1].MP, s.Actors[1].Abilities = 100, []string{"curse"}
 		}
 		executeRecoilDark(t, &s, c, d, []string{"job-38-entry-1"}, []string{"enemy"})
-		if s.Actors[0].MP != 80 || c.MPHealCalls != 0 || c.StatDownCalls != 1 {
+		if s.Actors[0].MP != 80 {
 			t.Fatal(s, c)
 		}
 	}
 	s, c, d := recoilDarkFixture()
 	s.Actors[1].HP = 1
 	executeRecoilDark(t, &s, c, d, []string{"job-22-entry-3"}, []string{"enemy"}, 0)
-	if s.Actors[1].HP != 0 || s.Actors[1].Hit != 95 || c.StatDownCalls != 0 || !c.AdditionalEffect {
+	if s.Actors[1].HP != 0 || s.Actors[1].Hit != 95 || !c.AdditionalEffect {
 		t.Fatal(s, c)
 	}
 	// The second tension invocation crosses the requester-level-dependent stage.

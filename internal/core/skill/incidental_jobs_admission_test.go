@@ -37,7 +37,7 @@ func TestIncidentalJobAdmissionIsInertForEveryBody(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.Arguments != nil || c.DamageCalls != 0 || c.HealCalls != 0 || c.StatUpCalls != 0 || len(c.JokeOutcomes) != 0 {
+			if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.Arguments != nil || c.DamageCalls != 0 || c.HealCalls != 0 || len(c.JokeOutcomes) != 0 {
 				t.Fatal(s, c, f)
 			}
 		})
@@ -84,7 +84,7 @@ func TestIncidentalJobMissingDescendantsRejectBeforeReset(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.DamageCalls != 0 || c.StatUpCalls != 0 {
+			if string(before) != string(after) || c.DamageCalls != 0 {
 				t.Fatal(s, c)
 			}
 		})

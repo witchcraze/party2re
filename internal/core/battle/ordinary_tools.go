@@ -47,7 +47,6 @@ type OrdinaryToolContext struct {
 	// Death owns tool248's damage descendants; nil keeps them whole gates.
 	Death     *DefeatContext
 	Arguments []string
-	CureCalls int
 	Results   []OrdinaryToolResult
 }
 
@@ -166,11 +165,10 @@ func (s *LifetimeState) ApplyOrdinaryTool(c *OrdinaryToolContext, id string, rng
 					e.TargetID, e.Payload.Symbol = r.TargetID, s.actor(r.TargetID).Status
 				}
 			}
-			status := StatusContext{EffectContext: c.EffectContext, CureCalls: c.CureCalls}
+			status := StatusContext{EffectContext: c.EffectContext}
 			if _, err := s.ApplyCure(&status, e, rng); err != nil {
 				return err
 			}
-			c.CureCalls = status.CureCalls
 		case "tool-41":
 			if _, err := s.ApplyDamage(&c.DamageContext, dualAgilityEffect(c.toolTarget(), 80, CategoryTool, true), rng); err != nil {
 				return err

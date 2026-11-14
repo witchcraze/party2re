@@ -43,7 +43,7 @@ func TestStatusProjectionLoadCompletenessAndRejection(t *testing.T) {
 			} else if err != nil || len(branches) != tc.want {
 				t.Fatal(len(branches), err)
 			}
-			if !reflect.DeepEqual(before, s) || c.StatusCalls != 0 || c.admissionBudget != nil {
+			if !reflect.DeepEqual(before, s) || c.admissionBudget != nil {
 				t.Fatal("load admission changed caller")
 			}
 			if tc.name == "absorb2" {
@@ -101,7 +101,7 @@ func TestStatusContinuationIndexCannotMergeOmittedOrContextFacts(t *testing.T) {
 	if err := set.add(changed, c); err != nil {
 		t.Fatal(err)
 	}
-	c.CureCalls++
+	c.AdditionalEffect = true
 	if err := set.add(s, c); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestAreaDeathGemLoadRejectsBeforeIntrinsicExecution(t *testing.T) {
 	s.Actors[0].NPC = true // Rewards are unreachable; reset still has real gear.
 	c.Defeat = &DefeatContext{EquipmentResetContext: EquipmentResetContext{TargetContext: c.TargetContext}}
 	before := s.callbackCopy()
-	if _, err := s.ApplyStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 {
+	if _, err := s.ApplyStatusEntry(&c, nil, "gem_instant_death_sky", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) {
 		t.Fatal("area-death guard escaped bounded admission", err, c)
 	}
 }

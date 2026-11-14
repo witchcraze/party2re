@@ -201,7 +201,7 @@ func TestRecoveryGemMagicSealAndSelfRoles(t *testing.T) {
 					t.Fatal(id, r)
 				}
 			}
-			if c.HealCalls != 0 || c.StatUpCalls != 0 || c.PartyHealCalls != 0 {
+			if c.HealCalls != 0 || c.PartyHealCalls != 0 {
 				t.Fatal(id, c)
 			}
 		}
@@ -236,7 +236,7 @@ func TestRecoveryGemDefenseStillRoundsToNoEffect(t *testing.T) {
 	a.Temporary = TemporaryNullMagic
 	rng := &targetRNG{t: t, draws: []float64{0, 0}}
 	r, err := s.ApplyRecoveryStatGems([]int{74, 33}, &c, "ally", rng)
-	if err != nil || r[1][0].Applied || c.StatUpCalls != 1 || a.Agility != 1 {
+	if err != nil || !r[1][0].Resolved || r[1][0].Returned || r[1][0].Applied || a.Agility != 1 || a.Temporary != TemporaryDefense {
 		t.Fatal(r, err, s, c)
 	}
 	rng.done()
@@ -258,7 +258,7 @@ func TestRecoveryGemReductionReopensOnlyReachableCaps(t *testing.T) {
 			if err != nil || r[1][0].Applied || !r[1][0].Returned {
 				t.Fatal(r, err)
 			}
-		} else if !errors.Is(err, ErrUnsupportedEffect) || c.PartyStatDownCalls != 0 {
+		} else if !errors.Is(err, ErrUnsupportedEffect) {
 			t.Fatal(r, err, c)
 		}
 		if !reflect.DeepEqual(s, before) {

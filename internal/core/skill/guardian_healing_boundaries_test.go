@@ -28,13 +28,13 @@ func TestGuardianHealingEveryPositionGuard(t *testing.T) {
 				draws = []float64{.9, .9, .9}
 			}
 			executeGuardian(t, &s, c, d, id, []string{"self", "tail"}, draws...)
-			if s.Actors[0].HP != 500 || s.Actors[1].HP != 900 || s.Actors[0].Temporary != "" || c.HealCalls != 0 || c.DamageCalls != 0 || c.StatusCalls != 0 || s.Actors[0].MP != 80 {
+			if s.Actors[0].HP != 500 || s.Actors[1].HP != 900 || s.Actors[0].Temporary != "" || c.HealCalls != 0 || c.DamageCalls != 0 || s.Actors[0].MP != 80 {
 				t.Fatal(s, c)
 			}
 			if id == "job-18-entry-7" && (s.Actors[2].HP != 1 || !s.SkillHistory["party"][id]) {
 				t.Fatal(s)
 			}
-			if id == "job-18-entry-2" && (s.Actors[0].Status != "" || c.PartyCureCalls != 1 || c.CureCalls != 2 || !c.AdditionalEffect) {
+			if id == "job-18-entry-2" && (s.Actors[0].Status != "" || !c.AdditionalEffect) {
 				t.Fatal(s, c)
 			}
 		})
@@ -77,7 +77,7 @@ func TestGuardianCoverBarrierReflectionAndCureBoundaries(t *testing.T) {
 		if status == corebattle.StatusSleep {
 			want = status
 		}
-		if s.Actors[2].Status != want || c.CureCalls != 1 {
+		if s.Actors[2].Status != want {
 			t.Fatal(s, c)
 		}
 	}

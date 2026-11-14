@@ -24,7 +24,6 @@ func TestNPCStatusDamageReturnAndArmedClaw(t *testing.T) {
 			s, c, d := npcStatusFixture()
 			c.GuaranteedHit = false
 			draws := []float64{0, .5, 0}
-			wantCalls := 0
 			switch key {
 			case "one-hit":
 				s.Actors[1].Temporary = corebattle.TemporaryOneHitDefense
@@ -50,15 +49,13 @@ func TestNPCStatusDamageReturnAndArmedClaw(t *testing.T) {
 				s.Actors[1].HP = 1
 				c.Defeat = func(string) error { s.Actors[1].HP = 300; return nil }
 				draws = append(draws, 0)
-				wantCalls = 1
 			case "zero-modifier":
 				s.Actors[0].ItemDefinitionIDs = []string{"item-239"}
 				c.DamageCalls = 1
 				draws = append(draws, 0)
-				wantCalls = 1
 			}
 			executeNPCStatus(t, &s, c, d, 90, 0, []string{"enemy"}, draws...)
-			if c.StatusCalls != wantCalls || key != "revived" && s.Actors[1].Status != "" || key == "revived" && s.Actors[1].Status != corebattle.StatusDeadlyPoison {
+			if key != "revived" && s.Actors[1].Status != "" || key == "revived" && s.Actors[1].Status != corebattle.StatusDeadlyPoison {
 				t.Fatal(s.Actors, c)
 			}
 		})

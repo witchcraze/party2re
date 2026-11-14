@@ -199,7 +199,7 @@ func TestCallingCurrentAppearanceAndFallenRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	rng.done()
-	if s.actor("fallen").HP != 60 || s.actor("fallen").MP != 7 || s.actor("fallen").Status != StatusPoison || c.PartyHealCalls != 1 || c.PartyMPHealCalls != 1 {
+	if s.actor("fallen").HP != 60 || s.actor("fallen").MP != 7 || s.actor("fallen").Status != StatusPoison || c.PartyHealCalls != 1 {
 		t.Fatal(s, c)
 	}
 }

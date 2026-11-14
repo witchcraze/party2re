@@ -25,7 +25,6 @@ func (s *LifetimeState) ApplyMPHealing(c *EffectContext, e TargetEffect, rng ran
 	if err != nil || v == 0 {
 		return r, err
 	}
-	c.MPHealCalls++
 	if t.Temporary == TemporaryRage {
 		t.Temporary = ""
 	}

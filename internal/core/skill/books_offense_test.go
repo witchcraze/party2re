@@ -120,7 +120,7 @@ func TestBookCureVariantsAndNoEffect(t *testing.T) {
 		s, c, d := bookFixture()
 		s.Actors[0].Status = status
 		executeBook(t, &s, c, d, "book-218", []string{"self"})
-		if s.Actors[0].Status != "" || c.CureCalls != 1 {
+		if s.Actors[0].Status != "" {
 			t.Fatal(status, s.Actors[0], c)
 		}
 	}
@@ -128,11 +128,11 @@ func TestBookCureVariantsAndNoEffect(t *testing.T) {
 	s.Actors[0].Status = corebattle.StatusSleep
 	executeBook(t, &s, c, d, "book-219", nil)
 	executeBook(t, &s, c, d, "book-218", []string{"self"})
-	if s.Actors[0].Status != corebattle.StatusSleep || c.PartyCureCalls != 1 || c.CureCalls != 3 {
+	if s.Actors[0].Status != corebattle.StatusSleep || !c.AdditionalEffect {
 		t.Fatal(s.Actors[0], c)
 	}
 	executeBook(t, &s, c, d, "book-220", nil)
-	if s.Actors[0].Status != "" || c.PartyCureCalls != 2 || c.CureCalls != 5 {
+	if s.Actors[0].Status != "" {
 		t.Fatal(s.Actors[0], c)
 	}
 }
@@ -151,7 +151,7 @@ func TestBookOffenseMagicSeal(t *testing.T) {
 			target = "self"
 		}
 		executeBook(t, &s, c, d, row.id, []string{target}, row.draws...)
-		if s.Actors[0].Status != corebattle.StatusMagicSeal || s.Actors[1].HP != 900 || s.Actors[1].Status != "" || c.DamageCalls != 0 || c.AreaStatusCalls != 0 || c.CureCalls != 0 {
+		if s.Actors[0].Status != corebattle.StatusMagicSeal || s.Actors[1].HP != 900 || s.Actors[1].Status != "" || c.DamageCalls != 0 {
 			t.Fatal(row.id, s.Actors, c)
 		}
 	}
@@ -167,14 +167,14 @@ func TestBookAreaOrderAndImmunity(t *testing.T) {
 	c.EnemyIDs = append(c.EnemyIDs, other.ID)
 	executeBook(t, &s, c, d, "book-225", nil, 0, 0)
 	executeBook(t, &s, c, d, "book-229", nil, .4, .6)
-	if s.Actors[1].HP != 878 || s.Actors[3].HP != 881 || s.Actors[1].Status != corebattle.StatusConfusion || s.Actors[3].Status != "" || c.DamageCalls != 2 || c.AreaDamageCalls != 1 || c.AreaStatusCalls != 1 || c.StatusCalls != 2 {
+	if s.Actors[1].HP != 878 || s.Actors[3].HP != 881 || s.Actors[1].Status != corebattle.StatusConfusion || s.Actors[3].Status != "" || c.DamageCalls != 2 || c.AreaDamageCalls != 1 {
 		t.Fatal(s.Actors, c)
 	}
 	// Above 999 HP the target is immune without a probability draw (_st_d:9396).
 	s, c, d = bookFixture()
 	s.Actors[1].HP = 1000
 	executeBook(t, &s, c, d, "book-228", []string{"enemy"})
-	if s.Actors[1].Status != "" || c.StatusCalls != 1 {
+	if s.Actors[1].Status != "" {
 		t.Fatal(s.Actors[1], c)
 	}
 }
@@ -203,13 +203,11 @@ func TestBookOffenseReloadWithoutReplay(t *testing.T) {
 	type checkpoint struct {
 		State                        corebattle.LifetimeState
 		Target                       corebattle.TargetContext
-		StatusCalls, AreaStatusCalls int
-		CureCalls, PartyCureCalls    int
 		DamageCalls, AreaDamageCalls int
 		Entry                        string
 		Arguments                    []string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.StatusCalls, c.AreaStatusCalls, c.CureCalls, c.PartyCureCalls, c.DamageCalls, c.AreaDamageCalls, "book-230", []string{"enemy"}}
+	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.AreaDamageCalls, "book-230", []string{"enemy"}}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -218,13 +216,12 @@ func TestBookOffenseReloadWithoutReplay(t *testing.T) {
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatal(err)
 	}
-	resumed := &corebattle.BookContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, AreaDamageCalls: loaded.AreaDamageCalls}, GuaranteedHit: true, Defeat: c.Defeat},
-		StatusCalls: loaded.StatusCalls, AreaStatusCalls: loaded.AreaStatusCalls, CureCalls: loaded.CureCalls, PartyCureCalls: loaded.PartyCureCalls}
+	resumed := &corebattle.BookContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, AreaDamageCalls: loaded.AreaDamageCalls}, GuaranteedHit: true, Defeat: c.Defeat}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterBooks(resumed)
 	executeBook(t, &s, c, d, loaded.Entry, loaded.Arguments, 0)
 	executeBook(t, &loaded.State, resumed, rebuilt, loaded.Entry, loaded.Arguments, 0)
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].Status != corebattle.StatusMagicSeal || resumed.StatusCalls != 2 || resumed.AreaStatusCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].Status != corebattle.StatusMagicSeal || resumed.DamageCalls != c.DamageCalls || resumed.AreaDamageCalls != c.AreaDamageCalls || !reflect.DeepEqual(c.Arguments, resumed.Arguments) {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

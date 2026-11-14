@@ -36,7 +36,7 @@ func TestStatusProjectionRegisteredSequentialLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	rng := &damageGemDraws{t: t, draws: []float64{0, 0, 0, 0, 0, .99, .99, .99, .99, .99}}
-	if err = s.ApplyInvocations(&f, d.Invocations, ops, rng); err != nil || rng.used != 10 || c.StatusCalls != 10 || s.Actors[0].CMP != 20 {
+	if err = s.ApplyInvocations(&f, d.Invocations, ops, rng); err != nil || rng.used != 10 || s.Actors[0].CMP != 20 {
 		t.Fatal(err, rng.used, c)
 	}
 	for _, a := range s.Actors[1:] {
@@ -67,7 +67,7 @@ func TestStatusProjectionRegisteredCumulativeBudgetRejectsAtomically(t *testing.
 		if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(before, s) || c.StatusCalls != 0 || c.AreaStatusCalls != 0 || c.DeathCalls != 0 || c.AreaDeathCalls != 0 || f.Damage != nil || f.Status != nil || !reflect.DeepEqual(f.Arguments, []string{"self", "tail"}) {
+		if !reflect.DeepEqual(before, s) || f.Damage != nil || f.Status != nil || !reflect.DeepEqual(f.Arguments, []string{"self", "tail"}) {
 			t.Fatal("budget rejection changed caller")
 		}
 	}

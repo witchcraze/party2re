@@ -87,7 +87,7 @@ func TestJobAssetScavengingWeightedDrawAndSuppression(t *testing.T) {
 	for position, want := range pool {
 		s, c, f, d := jobAssetFixture()
 		executeJobAsset(t, &s, &f, d, "job-78-entry-5", 0, 0, (float64(position)+.1)/22)
-		if *s.Actors[0].HeldToolID != "item-"+want || *f.Assets.HeldToolID != "item-"+want || s.Actors[0].Agility != 50 || 1000-s.Actors[1].HP != 25 || c.StatUpCalls != 1 {
+		if *s.Actors[0].HeldToolID != "item-"+want || *f.Assets.HeldToolID != "item-"+want || s.Actors[0].Agility != 50 || 1000-s.Actors[1].HP != 25 {
 			t.Fatal(position, s, f.Assets, c)
 		}
 	}
@@ -183,7 +183,7 @@ func TestJobAssetAdmissionAndNoTargetGuards(t *testing.T) {
 		}
 		after, _ := json.Marshal(s)
 		saved, _ := json.Marshal(f.Assets)
-		if string(before) != string(after) || string(assets) != string(saved) || c.DamageCalls != 0 || c.StatUpCalls != 0 {
+		if string(before) != string(after) || string(assets) != string(saved) || c.DamageCalls != 0 {
 			t.Fatal(bad, s, c, f.Assets)
 		}
 	}

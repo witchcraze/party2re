@@ -36,7 +36,7 @@ func TestGuardianAdmissionIsInertAndRejectsCompleteAction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.Arguments != nil || c.HealCalls != 0 || c.CureCalls != 0 || c.DamageCalls != 0 || c.StatusCalls != 0 {
+			if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.Arguments != nil || c.HealCalls != 0 || c.DamageCalls != 0 {
 				t.Fatal(id, s, c, f)
 			}
 		}
@@ -78,7 +78,7 @@ func TestGuardianAdmissionIsInertAndRejectsCompleteAction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.Arguments != nil || c.HealCalls != 0 || c.DamageCalls != 0 || c.StatusCalls != 0 || f.Arguments[0] != "enemy" {
+			if string(before) != string(after) || c.Arguments != nil || c.HealCalls != 0 || c.DamageCalls != 0 || f.Arguments[0] != "enemy" {
 				t.Fatal(s, c, f)
 			}
 		})

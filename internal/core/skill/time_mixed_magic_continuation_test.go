@@ -33,7 +33,7 @@ func TestTimeMixedMagicReloadFrozenCommandWithoutReplay(t *testing.T) {
 		var definitions BattleDefinitions
 		definitions.RegisterTimeMixedMagic(rebuilt)
 		executeTimeMagic(t, state, rebuilt, definitions, loaded.Entry, loaded.Arguments, 0, 0, 0, 0, 0, 0)
-		if rebuilt.DamageCalls != 3 || rebuilt.StatDownCalls != 0 || rebuilt.Arguments[0] != "tail" {
+		if rebuilt.DamageCalls != 3 || rebuilt.Arguments[0] != "tail" {
 			t.Fatal(rebuilt)
 		}
 	}

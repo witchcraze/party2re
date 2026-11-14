@@ -6,7 +6,6 @@ import "github.com/witchcraze/party2re/internal/core/random"
 type ProtectiveMagicContext struct {
 	DamageContext
 	Arguments []string
-	CureCalls int
 }
 
 // ProtectiveMagicEntries includes the separately owned revival32.4/33.6 bodies.
@@ -158,9 +157,9 @@ func (s *LifetimeState) ApplyProtectiveMagic(c *ProtectiveMagicContext, id strin
 		_, err := s.ApplyStatUp(&c.EffectContext, controlEffect(c.shift(), 1, CategoryMagic), StatAttack, rng)
 		return err
 	case "job-33-entry-7":
-		child := StatusContext{EffectContext: c.EffectContext, CureCalls: c.CureCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err := s.ApplyCure(&child, controlSymbol(c.ActorID, a.Status, CategoryUntyped), rng)
-		c.EffectContext, c.CureCalls = child.EffectContext, child.CureCalls
+		c.EffectContext = child.EffectContext
 		if err != nil {
 			return err
 		}

@@ -40,7 +40,7 @@ func TestTreatmentMischiefFrozenReloadWithoutReplay(t *testing.T) {
 	}{{&s, c, d}, {&loaded.State, resumed, rebuilt}} {
 		executeTreatment(t, run.s, run.c, run.d, loaded.EntryID, loaded.Arguments, 0, 0)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 680 || s.Actors[0].Defense != 64 || s.Actors[1].HP != 851 || s.Actors[1].Status != corebattle.StatusSleep || c.HealCalls != 1 || resumed.HealCalls != 1 || c.Status.StatusCalls != resumed.Status.StatusCalls || !reflect.DeepEqual(loaded.Arguments, []string{"enemy", "tail"}) {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 680 || s.Actors[0].Defense != 64 || s.Actors[1].HP != 851 || s.Actors[1].Status != corebattle.StatusSleep || c.HealCalls != 1 || resumed.HealCalls != 1 || !reflect.DeepEqual(loaded.Arguments, []string{"enemy", "tail"}) {
 		t.Fatal(s, loaded, c, resumed)
 	}
 }

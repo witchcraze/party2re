@@ -93,7 +93,8 @@ func TestTransformationCapturedAppearanceAndArgumentFrames(t *testing.T) {
 			calls++
 			return nil
 		}
-		if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: selected.ID}}, noArithmeticDraws{t}); err != nil || calls != 1 || c.StatUpCalls != 0 {
+		before := s.Actors[0]
+		if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: selected.ID}}, noArithmeticDraws{t}); err != nil || calls != 1 || !reflect.DeepEqual(s.Actors[0], before) {
 			t.Fatal("captured body changed with appearance", err, c)
 		}
 		// Naked callback consumes one argument; the outer gem boundary gives each

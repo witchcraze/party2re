@@ -156,7 +156,7 @@ func TestLateSongDeathImmunityAndChance(t *testing.T) {
 			c.Death.Defeat = nil
 		}
 		executeLateSong(t, &s, c, d, "job-85-entry-1", nil, row.draws...)
-		if s.Actors[1].HP != row.want || c.Death.DeathCalls != 1 {
+		if s.Actors[1].HP != row.want {
 			t.Fatal(row, s, c)
 		}
 	}

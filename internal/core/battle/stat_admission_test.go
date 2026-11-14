@@ -56,7 +56,7 @@ func TestStatUpAdmissionFollowsReachableTargets(t *testing.T) {
 				rng := &targetRNG{t: t, draws: tc.draws}
 				r, err := s.ApplyStatUp(&c, TargetEffect{TargetID: tc.target, Category: CategoryMagic, Payload: CallbackPayload{Number: .25}}, stat, rng)
 				if tc.reject {
-					if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || c.StatUpCalls != 0 {
+					if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
 						t.Fatal(r, err, s, c)
 					}
 				} else if err != nil || !r.Applied || r.TargetID != tc.want || *s.actor(tc.want).currentStat(stat) != 175 {
@@ -82,7 +82,7 @@ func TestStatUpDeflectionAdmissionAndDraws(t *testing.T) {
 		}
 		r, err := s.ApplyStatUp(&c, TargetEffect{TargetID: "ally", Category: CategoryPhysical, Payload: CallbackPayload{Number: .25}}, StatAgility, rng)
 		if reject {
-			if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || c.StatUpCalls != 0 {
+			if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
 				t.Fatal(r, err, s, c)
 			}
 		} else if err != nil || !r.Applied || r.TargetID != "enemy" {
@@ -119,7 +119,7 @@ func TestCompositeStatAdmissionBeforeAnyEffects(t *testing.T) {
 					_, err = s.ApplyPartyStat(&c, .25, CategoryMagic, stat, false, rng)
 				}
 				if reachable {
-					if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || c.PartyStatUpCalls != 0 || c.StatUpCalls != 0 {
+					if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) {
 						t.Fatal(distributed, item, err, s, c)
 					}
 				} else if err != nil || reflect.DeepEqual(s, before) {
@@ -225,7 +225,7 @@ func TestStatUpAdmissionNoEffectGuards(t *testing.T) {
 					if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(c, contextBefore) {
 						t.Fatal(r, err, c)
 					}
-				} else if err != nil || r.Applied || r.Returned != (!tc.zero && !tc.additional) || c.StatUpCalls != map[bool]int{true: 0, false: 1}[tc.zero] {
+				} else if err != nil || r.Applied || r.Returned != (!tc.zero && !tc.additional) {
 					t.Fatal(r, err, c)
 				}
 				if !reflect.DeepEqual(s, before) {
@@ -287,7 +287,7 @@ func TestStatUpAdmissionMixedReachableCaps(t *testing.T) {
 					if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || !reflect.DeepEqual(c, contextBefore) {
 						t.Fatal(path, item, r, err, s, c)
 					}
-				} else if err != nil || r.Applied || !r.Returned || c.StatUpCalls != 1 {
+				} else if err != nil || r.Applied || !r.Returned {
 					t.Fatal(path, item, r, err, c)
 				}
 				rng.done()
@@ -308,11 +308,9 @@ func TestStatUpAdmissionZeroPathsPreserveModifierOrder(t *testing.T) {
 				s.actor("ally").ItemDefinitionIDs = []string{item}
 				e := TargetEffect{TargetID: "ally", Category: CategoryMagic, Payload: CallbackPayload{Number: .25}}
 				rng := &targetRNG{t: t}
-				wantCount := 1
 				switch guard {
 				case "null magic":
 					s.actor("ally").Temporary = TemporaryNullMagic
-					wantCount = 0
 				case "darkness":
 					s.Fields.Default = "darkness"
 				case "239 after 186":
@@ -324,11 +322,10 @@ func TestStatUpAdmissionZeroPathsPreserveModifierOrder(t *testing.T) {
 					s.actor("ally").Temporary = TemporaryCover
 					s.actor("fallen").Temporary = TemporaryCovering
 					s.actor("fallen").ItemDefinitionIDs = []string{item}
-					wantCount = 0
 				}
 				before := reloadLifetime(t, s)
 				r, err := s.ApplyStatUp(&c, e, stat, rng)
-				if err != nil || r.Applied || r.Returned || c.StatUpCalls != wantCount {
+				if err != nil || r.Applied || r.Returned {
 					t.Fatal(r, err, c)
 				}
 				if guard == "239 after 186" {
@@ -363,10 +360,10 @@ func TestStatUpAdmissionRoundedZero(t *testing.T) {
 			rng := &targetRNG{t: t}
 			r, err := s.ApplyStatUp(&c, TargetEffect{TargetID: "ally", Payload: CallbackPayload{Number: .5}}, stat, rng)
 			if doubled {
-				if !errors.Is(err, ErrUnsupportedEffect) || c.StatUpCalls != 0 {
+				if !errors.Is(err, ErrUnsupportedEffect) {
 					t.Fatal(r, err, c)
 				}
-			} else if err != nil || r.Returned || r.Applied || c.StatUpCalls != 1 {
+			} else if err != nil || r.Returned || r.Applied {
 				t.Fatal(r, err, c)
 			}
 			if !reflect.DeepEqual(s, before) {

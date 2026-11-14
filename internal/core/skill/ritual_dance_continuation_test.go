@@ -19,13 +19,13 @@ func TestRitualDanceFrozenCostAndReloadWithoutReplay(t *testing.T) {
 	s.Actors = append(s.Actors, late)
 	c.PartyIDs = append(c.PartyIDs, late.ID)
 	type checkpoint struct {
-		State                               corebattle.LifetimeState
-		Target                              corebattle.TargetContext
-		Arguments                           []string
-		EntryID                             string
-		PartySize, DamageCalls, MPHealCalls int
+		State                  corebattle.LifetimeState
+		Target                 corebattle.TargetContext
+		Arguments              []string
+		EntryID                string
+		PartySize, DamageCalls int
 	}
-	frozen := checkpoint{s, c.TargetContext, []string{"enemy", "tail"}, "job-76-entry-5", frozenSize, c.DamageCalls, c.MPHealCalls}
+	frozen := checkpoint{s, c.TargetContext, []string{"enemy", "tail"}, "job-76-entry-5", frozenSize, c.DamageCalls}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestRitualDanceFrozenCostAndReloadWithoutReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, resumed, _ := ritualDanceFixture()
-	resumed.TargetContext, resumed.DamageCalls, resumed.MPHealCalls = loaded.Target, loaded.DamageCalls, loaded.MPHealCalls
+	resumed.TargetContext, resumed.DamageCalls = loaded.Target, loaded.DamageCalls
 	rebuilt := BattleDefinitions{}
 	rebuilt.RegisterRitualDance(resumed, loaded.PartySize)
 	for _, run := range []struct {
@@ -49,7 +49,7 @@ func TestRitualDanceFrozenCostAndReloadWithoutReplay(t *testing.T) {
 		}
 		executeRitualDance(t, run.s, run.c, run.d, loaded.EntryID, loaded.Arguments, 0, 0, 0, .25, 0, 0)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 230 || c.DamageCalls != 2 || resumed.DamageCalls != 2 || c.MPHealCalls != 1 || resumed.MPHealCalls != 1 || !reflect.DeepEqual(loaded.Arguments, []string{"enemy", "tail"}) {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 230 || c.DamageCalls != 2 || resumed.DamageCalls != 2 || !reflect.DeepEqual(loaded.Arguments, []string{"enemy", "tail"}) {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

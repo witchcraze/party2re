@@ -194,7 +194,7 @@ func TestBookFallenAndPartyOrder(t *testing.T) {
 	s.Actors[2].BaseStats, s.Actors[2].Defense = s.Actors[0].BaseStats, 80
 	executeBook(t, &s, c, d, "book-171", nil, 0, .5)
 	executeBook(t, &s, c, d, "book-176", nil)
-	if s.Actors[0].HP != 635 || s.Actors[2].HP != 226 || s.Actors[0].Defense != 100 || s.Actors[2].Defense != 100 || c.PartyHealCalls != 1 || c.PartyStatUpCalls != 1 || c.StatUpCalls != 2 {
+	if s.Actors[0].HP != 635 || s.Actors[2].HP != 226 || s.Actors[0].Defense != 100 || s.Actors[2].Defense != 100 || c.PartyHealCalls != 1 {
 		t.Fatal(s.Actors, c)
 	}
 	// A capped caster returns without a write; the later ally still rises.
@@ -250,7 +250,7 @@ func TestBookUnsupportedDescendantRejectsBeforeMutation(t *testing.T) {
 	if _, err := d.InvocationAction(&s, &f, []string{"book-178"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatal(err)
 	}
-	if after, _ := json.Marshal(s); string(before) != string(after) || c.StatUpCalls != 0 {
+	if after, _ := json.Marshal(s); string(before) != string(after) {
 		t.Fatal(string(after))
 	}
 }
@@ -260,13 +260,13 @@ func TestBookReloadFrozenInputWithoutReplay(t *testing.T) {
 	s.Fields.Create("library", 11)
 	executeBook(t, &s, c, d, "book-175", []string{"self"})
 	type checkpoint struct {
-		State                  corebattle.LifetimeState
-		Target                 corebattle.TargetContext
-		StatUpCalls, HealCalls int
-		Entry                  string
-		Arguments              []string
+		State     corebattle.LifetimeState
+		Target    corebattle.TargetContext
+		HealCalls int
+		Entry     string
+		Arguments []string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.StatUpCalls, c.HealCalls, "book-170", []string{"self", "tail"}}
+	frozen := checkpoint{s, c.TargetContext, c.HealCalls, "book-170", []string{"self", "tail"}}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -275,12 +275,12 @@ func TestBookReloadFrozenInputWithoutReplay(t *testing.T) {
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatal(err)
 	}
-	resumed := &corebattle.BookContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, StatUpCalls: loaded.StatUpCalls, HealCalls: loaded.HealCalls}}}
+	resumed := &corebattle.BookContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, HealCalls: loaded.HealCalls}}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterBooks(resumed)
 	executeBook(t, &s, c, d, loaded.Entry, loaded.Arguments, 0)
 	executeBook(t, &loaded.State, resumed, rebuilt, loaded.Entry, loaded.Arguments, 0)
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].Defense != 128 || s.Actors[0].HP != 621 || resumed.StatUpCalls != 1 || resumed.HealCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || loaded.Arguments[0] != "self" {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].Defense != 128 || s.Actors[0].HP != 621 || resumed.HealCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || loaded.Arguments[0] != "self" {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

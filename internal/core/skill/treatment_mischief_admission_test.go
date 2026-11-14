@@ -51,7 +51,7 @@ func TestTreatmentMischiefInertAdmissionAndWholeActionRejection(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.Arguments != nil || c.DamageCalls != 0 || c.HealCalls != 0 || c.Status.DeathCalls != 0 || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
+					if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.Arguments != nil || c.DamageCalls != 0 || c.HealCalls != 0 || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
 						t.Fatal(s, c, f)
 					}
 				}
@@ -101,7 +101,7 @@ func TestTreatmentMischiefMissingDescendantsRejectBeforeEarlierHeal(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.HealCalls != 0 || c.DamageCalls != 0 || c.Status.StatusCalls != 0 {
+			if string(before) != string(after) || c.HealCalls != 0 || c.DamageCalls != 0 {
 				t.Fatal(s, c)
 			}
 		})

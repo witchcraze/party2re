@@ -41,7 +41,7 @@ func TestProtectiveMagicAdmissionIsInert(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(original, f) || c.DamageCalls != 0 || c.AreaDamageCalls != 0 || c.HealCalls != 0 || c.StatUpCalls != 0 || c.CureCalls != 0 || c.Arguments != nil || weapon != 7 || level != 99 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
+			if string(before) != string(after) || !reflect.DeepEqual(original, f) || c.DamageCalls != 0 || c.AreaDamageCalls != 0 || c.HealCalls != 0 || c.Arguments != nil || weapon != 7 || level != 99 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
 				t.Fatal(id, s, c, f)
 			}
 		}

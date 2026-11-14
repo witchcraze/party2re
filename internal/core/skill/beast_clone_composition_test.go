@@ -57,7 +57,7 @@ func TestBeastEarlierDamageChangesEligibility(t *testing.T) {
 			draws = append(draws, 0)
 		}
 		executeBeastClone(t, &s, c, d, "job-12-entry-4", []string{"enemy"}, draws...)
-		if (s.Actors[1].Status == corebattle.StatusParalyze) != (hp == 1000) || c.StatusCalls != map[bool]int{false: 0, true: 1}[hp == 1000] {
+		if (s.Actors[1].Status == corebattle.StatusParalyze) != (hp == 1000) {
 			t.Fatal(s, c)
 		}
 	}
@@ -80,7 +80,7 @@ func TestBeastIndependentSealsAndArmorReset(t *testing.T) {
 	s, c, d := beastCloneFixture()
 	s.Actors[0].Status = corebattle.StatusPhysicalSeal
 	executeBeastClone(t, &s, c, d, "job-12-entry-4", []string{"enemy"}, .25)
-	if !c.AdditionalEffect || c.StatusCalls != 0 || s.Actors[1].HP != 900 {
+	if !c.AdditionalEffect || s.Actors[1].Status != "" || s.Actors[1].HP != 900 {
 		t.Fatal(s, c)
 	}
 	for _, tmp := range []corebattle.TemporaryEffect{corebattle.TemporaryOneHitDefense, corebattle.TemporaryReflectAttack} {
@@ -95,7 +95,7 @@ func TestBeastIndependentSealsAndArmorReset(t *testing.T) {
 			draws = []float64{0}
 		}
 		executeBeastClone(t, &s, c, d, "job-26-entry-7", []string{"enemy", "tail"}, draws...)
-		if s.Actors[target].Defense != 72 || s.Actors[target].Temporary != "" || s.Actors[target].Tension != 1 || c.StatDownCalls != 1 {
+		if s.Actors[target].Defense != 72 || s.Actors[target].Temporary != "" || s.Actors[target].Tension != 1 {
 			t.Fatal(s, c)
 		}
 	}

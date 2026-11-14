@@ -68,7 +68,7 @@ func TestMachineFamiliarManifest(t *testing.T) {
 			wantMP := 80
 			if id == "job-79-entry-0" {
 				wantMP = 103 // requested25 -> floor(25×.9)+1.
-				if e.MP != 75 || c.StatDownCalls != 1 || c.MPHealCalls != 1 || a.HP != 500 {
+				if e.MP != 75 || a.HP != 500 {
 					t.Fatal(s, c)
 				}
 			}
@@ -81,15 +81,15 @@ func TestMachineFamiliarManifest(t *testing.T) {
 					t.Fatal(a, c)
 				}
 			case "job-81-entry-4":
-				if a.Attack != 120 || a.Defense != 96 || a.HP != 635 || c.StatUpCalls != 2 || c.HealCalls != 1 || c.PartyStatUpCalls != 0 || s.Actors[2].Attack != 0 {
+				if a.Attack != 120 || a.Defense != 96 || a.HP != 635 || c.HealCalls != 1 || s.Actors[2].Attack != 0 {
 					t.Fatal(s, c)
 				}
 			case "job-82-entry-2":
-				if a.HP != 635 || a.Status != "" || c.HealCalls != 1 || c.CureCalls != 1 {
+				if a.HP != 635 || a.Status != "" || c.HealCalls != 1 {
 					t.Fatal(a, c)
 				}
 			case "job-82-entry-3":
-				if a.Attack != 118 || c.StatUpCalls != 1 {
+				if a.Attack != 118 {
 					t.Fatal(a, c)
 				}
 			case "job-82-entry-4":

@@ -36,7 +36,7 @@ func TestJobAssetReloadAndIndirectMPRestoration(t *testing.T) {
 	definitions.RegisterPlayerCallbacks(PlayerCallbackContexts{JobAssets: rebuilt}, 2)
 	executeJobAsset(t, &s, &f, d, "job-78-entry-5", 0, 0, 0)
 	executeJobAsset(t, &saved.State, &loaded, definitions, "job-78-entry-5", 0, 0, 0)
-	if !reflect.DeepEqual(s, saved.State) || f.Assets.Wallet != 108 || saved.Assets.Wallet != 108 || *f.Assets.HeldToolID != "item-001" || *saved.Assets.HeldToolID != "item-001" || c.DamageCalls != rebuilt.DamageCalls || c.StatUpCalls != rebuilt.StatUpCalls {
+	if !reflect.DeepEqual(s, saved.State) || f.Assets.Wallet != 108 || saved.Assets.Wallet != 108 || *f.Assets.HeldToolID != "item-001" || *saved.Assets.HeldToolID != "item-001" || c.DamageCalls != rebuilt.DamageCalls {
 		t.Fatal(s, saved, c, rebuilt)
 	}
 	for _, kind := range []string{"entry", "tool-84", "random"} {

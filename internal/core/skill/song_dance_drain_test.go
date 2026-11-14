@@ -73,7 +73,7 @@ func TestSongDanceDrainManifest(t *testing.T) {
 				if row.job == 14 {
 					want = 60
 				}
-				if e.MP != want || c.StatDownCalls != 1 || c.PartyStatDownCalls != map[int]int{13: 1, 14: 0}[row.job] {
+				if e.MP != want {
 					t.Fatal(e, c)
 				}
 			case "job-13-entry-1", "job-14-entry-6":
@@ -86,11 +86,11 @@ func TestSongDanceDrainManifest(t *testing.T) {
 					t.Fatal(c)
 				}
 			case "job-13-entry-2":
-				if a.Status != "" || s.Actors[2].Status != corebattle.StatusSleep || c.Status.PartyCureCalls != 1 || c.Status.CureCalls != 2 || !c.AdditionalEffect {
+				if a.Status != "" || s.Actors[2].Status != corebattle.StatusSleep || !c.AdditionalEffect {
 					t.Fatal(s.Actors, c.Status)
 				}
 			case "job-13-entry-3":
-				if a.Defense != 90 || c.StatUpCalls != 2 || c.PartyStatUpCalls != 1 {
+				if a.Defense != 90 {
 					t.Fatal(a, c)
 				}
 			case "job-13-entry-4", "job-20-entry-3", "job-20-entry-4":
@@ -98,15 +98,15 @@ func TestSongDanceDrainManifest(t *testing.T) {
 				if id == "job-20-entry-4" {
 					want = corebattle.StatusConfusion
 				}
-				if e.Status != want || c.Status.AreaStatusCalls != 1 || c.Status.StatusCalls != 1 {
+				if e.Status != want {
 					t.Fatal(e, c.Status)
 				}
 			case "job-13-entry-5":
-				if a.Attack != 220 || c.StatUpCalls != 2 || c.PartyStatUpCalls != 1 {
+				if a.Attack != 220 {
 					t.Fatal(a, c)
 				}
 			case "job-14-entry-0":
-				if a.Agility != 56 || c.StatUpCalls != 1 {
+				if a.Agility != 56 {
 					t.Fatal(a, c)
 				}
 			case "job-14-entry-2":
@@ -122,12 +122,12 @@ func TestSongDanceDrainManifest(t *testing.T) {
 					t.Fatal(c)
 				}
 			case "job-20-entry-0":
-				if e.Status != corebattle.StatusDofuu || c.Status.StatusCalls != 1 || c.Status.AreaStatusCalls != 0 {
+				if e.Status != corebattle.StatusDofuu {
 					t.Fatal(e, c.Status)
 				}
 			case "job-20-entry-1":
 				wantMP = 84
-				if c.DamageCalls != 1 || c.MPHealCalls != 1 {
+				if c.DamageCalls != 1 {
 					t.Fatal(c)
 				}
 			case "job-20-entry-2":
@@ -135,7 +135,7 @@ func TestSongDanceDrainManifest(t *testing.T) {
 					t.Fatal(a)
 				}
 			case "job-20-entry-5":
-				if c.Status.AreaDeathCalls != 1 || c.Status.DeathCalls != 1 {
+				if e.HP != 0 {
 					t.Fatal(c.Status)
 				}
 			case "job-20-entry-6":

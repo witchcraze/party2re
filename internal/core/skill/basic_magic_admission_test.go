@@ -34,7 +34,7 @@ func TestBasicMagicAdmissionIsInert(t *testing.T) {
 			if (err != nil) != reject {
 				t.Fatal(id, reject, err)
 			}
-			if before != basicMagicSnapshot(t, s) || f.Arguments[0] != "enemy" || f.PartyIDs[0] != "self" || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.HealCalls != 0 || c.StatusCalls != 0 || c.CureCalls != 0 || c.Arguments != nil || weapon != 7 || s.Actors[0].Gear != gear || gear.WeaponAttack != &weapon {
+			if before != basicMagicSnapshot(t, s) || f.Arguments[0] != "enemy" || f.PartyIDs[0] != "self" || c.DamageCalls != 0 || c.HealCalls != 0 || c.Arguments != nil || weapon != 7 || s.Actors[0].Gear != gear || gear.WeaponAttack != &weapon {
 				t.Fatal(id, s, c, f)
 			}
 		}

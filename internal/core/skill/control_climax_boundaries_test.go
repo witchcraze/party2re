@@ -62,7 +62,7 @@ func TestControlClimaxCasterDeathAdmission(t *testing.T) {
 			if err := s.ApplyInvocations(&frame, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{0}}); err != nil {
 				t.Fatal(err)
 			}
-			if s.Actors[0].HP != 0 || s.Actors[0].Agility != 100 || c.StatUpCalls != 0 || c.DamageCalls != 1 || defeats != 1 {
+			if s.Actors[0].HP != 0 || s.Actors[0].Agility != 100 || c.DamageCalls != 1 || defeats != 1 {
 				t.Fatal(s, c, defeats)
 			}
 		})
@@ -108,7 +108,7 @@ func TestControlClimaxLivingAlternativesRemainGated(t *testing.T) {
 	s.Actors[0].Agility, s.Actors[0].BaseStats.Agility = 200, 200
 	s.Actors[0].ItemDefinitionIDs = []string{"item-201"}
 	executeControl(t, &s, c, d, "job-70-entry-4", []string{"self"}, 0)
-	if s.Actors[0].HP != 0 || c.StatUpCalls != 0 {
+	if s.Actors[0].HP != 0 || s.Actors[0].Agility != 200 {
 		t.Fatal(s, c)
 	}
 }
@@ -172,7 +172,7 @@ func TestControlStatusBoundaries(t *testing.T) {
 				draws = append([]float64{.9}, draws...)
 			}
 			executeControl(t, &s, c, d, row.id, []string{"enemy"}, draws...)
-			if s.Actors[1].Status != "" || c.StatusCalls != 1 {
+			if s.Actors[1].Status != "" {
 				t.Fatal(row, immune, s, c)
 			}
 		}
@@ -188,7 +188,7 @@ func TestControlChanceAndNoEffectBoundaries(t *testing.T) {
 	} {
 		s, c, d := controlFixture()
 		executeControl(t, &s, c, d, row.id, []string{"enemy"}, row.boundary)
-		if s.Actors[1].HP != 900 || c.StatDownCalls != 0 {
+		if s.Actors[1].HP != 900 || s.Actors[1].MP != 100 {
 			t.Fatal(row, s, c)
 		}
 	}

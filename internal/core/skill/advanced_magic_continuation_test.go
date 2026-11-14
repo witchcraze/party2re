@@ -14,15 +14,15 @@ func TestAdvancedMagicReloadFrozenFactsWithoutReplay(t *testing.T) {
 	c.Cursor = corebattle.TargetCursor{ActorID: "enemy", Source: "item159"}
 	executeAdvancedMagic(t, &s, c, d, "job-15-entry-0", []string{"enemy"}, 0, 0)
 	type checkpoint struct {
-		State                    corebattle.LifetimeState
-		Target                   corebattle.TargetContext
-		Cursor                   corebattle.TargetCursor
-		Entry                    string
-		Arguments                []string
-		DamageCalls, StatusCalls int
-		AdditionalEffect         bool
+		State            corebattle.LifetimeState
+		Target           corebattle.TargetContext
+		Cursor           corebattle.TargetCursor
+		Entry            string
+		Arguments        []string
+		DamageCalls      int
+		AdditionalEffect bool
 	}
-	frozen := checkpoint{s, c.TargetContext, c.Cursor, "job-19-entry-8", []string{"missing", "tail"}, c.DamageCalls, c.Status.StatusCalls, c.AdditionalEffect}
+	frozen := checkpoint{s, c.TargetContext, c.Cursor, "job-19-entry-8", []string{"missing", "tail"}, c.DamageCalls, c.AdditionalEffect}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -34,12 +34,12 @@ func TestAdvancedMagicReloadFrozenFactsWithoutReplay(t *testing.T) {
 	executeAdvancedMagic(t, &s, c, d, frozen.Entry, frozen.Arguments, 0, 0, .99, 0, .99, 0, .99, 0, .99)
 	_, rebuilt, _ := advancedMagicFixture()
 	rebuilt.TargetContext, rebuilt.Cursor = loaded.Target, loaded.Cursor
-	rebuilt.DamageCalls, rebuilt.Status.StatusCalls = loaded.DamageCalls, loaded.StatusCalls
+	rebuilt.DamageCalls = loaded.DamageCalls
 	rebuilt.AdditionalEffect = loaded.AdditionalEffect
 	var definitions BattleDefinitions
 	definitions.RegisterAdvancedMagic(rebuilt)
 	executeAdvancedMagic(t, &loaded.State, rebuilt, definitions, loaded.Entry, loaded.Arguments, 0, 0, .99, 0, .99, 0, .99, 0, .99)
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 873 || rebuilt.DamageCalls != 1 || rebuilt.Status.StatusCalls != 1 || rebuilt.Status.DeathCalls != 4 || rebuilt.Cursor != c.Cursor || rebuilt.Command != c.Command || !rebuilt.Custom || !reflect.DeepEqual(rebuilt.Arguments, frozen.Arguments) {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 873 || rebuilt.DamageCalls != 1 || rebuilt.Cursor != c.Cursor || rebuilt.Command != c.Command || !rebuilt.Custom || !reflect.DeepEqual(rebuilt.Arguments, frozen.Arguments) {
 		t.Fatal(s, loaded.State, rebuilt)
 	}
 }

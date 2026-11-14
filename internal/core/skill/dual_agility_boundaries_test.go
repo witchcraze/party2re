@@ -193,7 +193,7 @@ func TestDualAgilityDeathChanceAndDefeatDescendant(t *testing.T) {
 		}}
 		c.Status = &corebattle.StatusContext{Defeat: defeat}
 		executeDual(t, &s, c, d, "job-83-entry-2", []string{"enemy"}, draw)
-		if (s.Actors[1].HP == 0) != (draw == .19) || c.Status.DeathCalls != 1 {
+		if (s.Actors[1].HP == 0) != (draw == .19) {
 			t.Fatal(s, c.Status)
 		}
 	}

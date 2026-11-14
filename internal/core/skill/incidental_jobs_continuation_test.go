@@ -16,16 +16,16 @@ func TestIncidentalJobReloadContinuesFrozenFactsWithoutReplay(t *testing.T) {
 	executeIncidental(t, &s, c, d, "job-8-entry-7", nil, .9, .5, .5)
 	executeIncidental(t, &s, c, d, "job-9-entry-8", []string{"enemy"})
 	type checkpoint struct {
-		State                                                      corebattle.LifetimeState
-		Target                                                     corebattle.TargetContext
-		Cursor                                                     corebattle.TargetCursor
-		End                                                        corebattle.EndProcessing
-		DamageCalls, HealCalls, StatDownCalls, TensionCalls, Level int
-		Jokes                                                      []int
-		Arguments                                                  []string
-		EntryID                                                    string
+		State                                       corebattle.LifetimeState
+		Target                                      corebattle.TargetContext
+		Cursor                                      corebattle.TargetCursor
+		End                                         corebattle.EndProcessing
+		DamageCalls, HealCalls, TensionCalls, Level int
+		Jokes                                       []int
+		Arguments                                   []string
+		EntryID                                     string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.Cursor, c.End, c.DamageCalls, c.HealCalls, c.StatDownCalls, c.TensionCalls, level, c.JokeOutcomes, []string{"enemy", "tail"}, "job-9-entry-9"}
+	frozen := checkpoint{s, c.TargetContext, c.Cursor, c.End, c.DamageCalls, c.HealCalls, c.TensionCalls, level, c.JokeOutcomes, []string{"enemy", "tail"}, "job-9-entry-9"}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestIncidentalJobReloadContinuesFrozenFactsWithoutReplay(t *testing.T) {
 	}
 	_, resumed, _ := incidentalFixture()
 	resumed.TargetContext, resumed.Cursor, resumed.End = loaded.Target, loaded.Cursor, loaded.End
-	resumed.DamageCalls, resumed.HealCalls, resumed.StatDownCalls, resumed.TensionCalls = loaded.DamageCalls, loaded.HealCalls, loaded.StatDownCalls, loaded.TensionCalls
+	resumed.DamageCalls, resumed.HealCalls, resumed.TensionCalls = loaded.DamageCalls, loaded.HealCalls, loaded.TensionCalls
 	resumed.RequesterLevel, resumed.JokeOutcomes = &loaded.Level, loaded.Jokes
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterIncidentalJobs(resumed)
@@ -49,7 +49,7 @@ func TestIncidentalJobReloadContinuesFrozenFactsWithoutReplay(t *testing.T) {
 	}{{&s, c, d}, {&loaded.State, resumed, rebuilt}} {
 		executeIncidental(t, run.s, run.c, run.d, loaded.EntryID, loaded.Arguments, 0, 0)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 519 || s.Actors[1].HP != 878 || s.Actors[1].Defense != 72 || c.StatDownCalls != 1 || resumed.StatDownCalls != 1 || c.DamageCalls != 1 || resumed.DamageCalls != 1 || resumed.Command != "frozen-incidental" || *resumed.RequesterLevel != 60 || !reflect.DeepEqual(c.JokeOutcomes, []int{6}) || !reflect.DeepEqual(c.JokeOutcomes, resumed.JokeOutcomes) || !reflect.DeepEqual(c.Arguments, []string{"tail"}) || !reflect.DeepEqual(c.Arguments, resumed.Arguments) {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[0].HP != 519 || s.Actors[1].HP != 878 || s.Actors[1].Defense != 72 || c.DamageCalls != 1 || resumed.DamageCalls != 1 || resumed.Command != "frozen-incidental" || *resumed.RequesterLevel != 60 || !reflect.DeepEqual(c.JokeOutcomes, []int{6}) || !reflect.DeepEqual(c.JokeOutcomes, resumed.JokeOutcomes) || !reflect.DeepEqual(c.Arguments, []string{"tail"}) || !reflect.DeepEqual(c.Arguments, resumed.Arguments) {
 		t.Fatal(s, loaded, c, resumed)
 	}
 }

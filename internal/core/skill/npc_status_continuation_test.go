@@ -16,14 +16,14 @@ func TestNPCStatusFrozenReloadAndCompletedCallback(t *testing.T) {
 	s.Actors[0].ItemDefinitionIDs = []string{"item-249"} // No player cost modifier here.
 	executeNPCStatus(t, &s, c, d, 90, 0, []string{"enemy", "tail"}, 0, 0)
 	type checkpoint struct {
-		State                    corebattle.LifetimeState
-		Target                   corebattle.TargetContext
-		Entries                  []corebattle.CallbackEntry
-		Arguments                []string
-		Completed                bool
-		DamageCalls, StatusCalls int
+		State       corebattle.LifetimeState
+		Target      corebattle.TargetContext
+		Entries     []corebattle.CallbackEntry
+		Arguments   []string
+		Completed   bool
+		DamageCalls int
 	}
-	frozen := checkpoint{State: s, Target: c.TargetContext, Entries: d.Invocations.JobTables[90].Variants[0], Arguments: c.Arguments, Completed: true, DamageCalls: c.DamageCalls, StatusCalls: c.StatusCalls}
+	frozen := checkpoint{State: s, Target: c.TargetContext, Entries: d.Invocations.JobTables[90].Variants[0], Arguments: c.Arguments, Completed: true, DamageCalls: c.DamageCalls}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +32,7 @@ func TestNPCStatusFrozenReloadAndCompletedCallback(t *testing.T) {
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatal(err)
 	}
-	if !loaded.Completed || loaded.State.Actors[1].HP != 751 || loaded.State.Actors[1].Status != corebattle.StatusDeadlyPoison || loaded.State.Actors[0].MP != 80 || loaded.DamageCalls != 1 || loaded.StatusCalls != 1 || !reflect.DeepEqual(loaded.Entries, corebattle.NPCJobEntries(90)) || !reflect.DeepEqual(loaded.Arguments, []string{"tail"}) {
+	if !loaded.Completed || loaded.State.Actors[1].HP != 751 || loaded.State.Actors[1].Status != corebattle.StatusDeadlyPoison || loaded.State.Actors[0].MP != 80 || loaded.DamageCalls != 1 || !reflect.DeepEqual(loaded.Entries, corebattle.NPCJobEntries(90)) || !reflect.DeepEqual(loaded.Arguments, []string{"tail"}) {
 		t.Fatal(loaded)
 	}
 	resumed := &corebattle.NPCStatusContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, ActorNPC: true}}, Death: &corebattle.DefeatContext{}}

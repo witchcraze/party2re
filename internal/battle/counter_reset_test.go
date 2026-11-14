@@ -49,7 +49,7 @@ func TestCounterResetUsesReloadedAdapterBaselines(t *testing.T) {
 		t.Fatal(err)
 	}
 	a = loaded.Actors[0]
-	if a.Attack != 100 || a.Defense != 80 || a.BaseStats.Attack != 100 || a.BaseStats.Defense != 80 || a.Temporary != "" || a.Tension != 1 || a.HP != 1000 || a.MP != 80 || c.StatDownCalls != 0 || !reflect.DeepEqual(c.Arguments, []string{"tail"}) {
+	if a.Attack != 100 || a.Defense != 80 || a.BaseStats.Attack != 100 || a.BaseStats.Defense != 80 || a.Temporary != "" || a.Tension != 1 || a.HP != 1000 || a.MP != 80 || !reflect.DeepEqual(c.Arguments, []string{"tail"}) {
 		t.Fatal(a, c)
 	}
 	if !reflect.DeepEqual(chars.characters[char.ID], char) {

@@ -93,13 +93,10 @@ func TestCounterResetManifest(t *testing.T) {
 			if !reflect.DeepEqual(c.Arguments, wantArgs) {
 				t.Fatal(c.Arguments, wantArgs)
 			}
-			if row.job == 37 && row.pos == 7 && (e.Attack != 50 || e.Defense != 40 || e.Tension != 1 || e.Temporary != "" || c.StatDownCalls != 0) {
+			if row.job == 37 && row.pos == 7 && (e.Attack != 50 || e.Defense != 40 || e.Tension != 1 || e.Temporary != "") {
 				t.Fatal(e, c)
 			}
-			if id == "job-35-entry-6" && (!c.AdditionalEffect || c.DamageCalls != 1 || c.AreaDamageCalls != 1 || c.StatusCalls != 1 || c.AreaStatusCalls != 1) {
-				t.Fatal(c)
-			}
-			if id == "job-35-entry-2" && c.DeathCalls != 1 {
+			if id == "job-35-entry-6" && (!c.AdditionalEffect || c.DamageCalls != 1 || c.AreaDamageCalls != 1) {
 				t.Fatal(c)
 			}
 		})

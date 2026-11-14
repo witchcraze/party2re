@@ -48,7 +48,7 @@ func TestControlAdmissionPurityAndRegistration(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if string(before) != string(after) || !reflect.DeepEqual(frame, original) || !reflect.DeepEqual(gear, *s.Actors[1].Gear) || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.StatusCalls != 0 || calls != 0 || c.Arguments != nil || c.PriorTemporary["self"] != corebattle.TemporaryDouble {
+				if string(before) != string(after) || !reflect.DeepEqual(frame, original) || !reflect.DeepEqual(gear, *s.Actors[1].Gear) || c.DamageCalls != 0 || calls != 0 || c.Arguments != nil || c.PriorTemporary["self"] != corebattle.TemporaryDouble {
 					t.Fatal(entry.ID, reject, s, c, frame)
 				}
 			}
@@ -148,7 +148,7 @@ func TestControlOrderedAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(before) != string(after) || c.StatusCalls != 0 {
+	if string(before) != string(after) {
 		t.Fatal(s, c)
 	}
 }

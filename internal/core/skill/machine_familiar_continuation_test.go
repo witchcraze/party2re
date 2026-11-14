@@ -14,18 +14,17 @@ func TestMachineFamiliarReloadContinuesWithoutReplay(t *testing.T) {
 	c.RequesterLevel, c.Command, c.Custom = &level, "frozen-command", true
 	executeMachineFamiliar(t, &s, c, d, "job-79-entry-0", []string{"enemy"}, 0)
 	type checkpoint struct {
-		State                      corebattle.LifetimeState
-		Target                     corebattle.TargetContext
-		StatDownCalls, MPHealCalls int
-		RequesterLevel             int
-		RequesterGender, EntryID   string
-		Arguments                  []string
-		Draws                      []float64
+		State                    corebattle.LifetimeState
+		Target                   corebattle.TargetContext
+		RequesterLevel           int
+		RequesterGender, EntryID string
+		Arguments                []string
+		Draws                    []float64
 	}
-	// Ports are transient; persist the already committed counters and the
-	// frozen next command, not the earlier drain callback or function values.
+	// Ports are transient; persist the frozen next command, not the earlier
+	// drain callback or function values.
 	s.Actors[0].Status = corebattle.StatusPoison
-	data, err := json.Marshal(checkpoint{s, c.TargetContext, c.StatDownCalls, c.MPHealCalls, level, c.RequesterGender, "job-82-entry-2", []string{"self", "tail"}, []float64{0}})
+	data, err := json.Marshal(checkpoint{s, c.TargetContext, level, c.RequesterGender, "job-82-entry-2", []string{"self", "tail"}, []float64{0}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +33,7 @@ func TestMachineFamiliarReloadContinuesWithoutReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	resumed := &corebattle.MachineFamiliarContext{DamageContext: corebattle.DamageContext{
-		EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, StatDownCalls: loaded.StatDownCalls, MPHealCalls: loaded.MPHealCalls, RequesterLevel: &loaded.RequesterLevel},
+		EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, RequesterLevel: &loaded.RequesterLevel},
 		GuaranteedHit: true, Defeat: func(string) error { return nil },
 	}, RequesterGender: loaded.RequesterGender}
 	var rebuilt BattleDefinitions
@@ -46,7 +45,7 @@ func TestMachineFamiliarReloadContinuesWithoutReplay(t *testing.T) {
 	}{{&s, c, d}, {&loaded.State, resumed, rebuilt}} {
 		executeMachineFamiliar(t, run.s, run.c, run.d, loaded.EntryID, loaded.Arguments, loaded.Draws...)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].MP != 75 || s.Actors[0].MP != 103 || s.Actors[0].HP != 635 || s.Actors[0].Status != "" || resumed.StatDownCalls != 1 || resumed.MPHealCalls != 1 || resumed.HealCalls != 1 || resumed.CureCalls != 1 || resumed.RequesterGender != "f" || *resumed.RequesterLevel != 99 || resumed.Command != "frozen-command" || !resumed.Custom || !reflect.DeepEqual(c.Arguments, resumed.Arguments) {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].MP != 75 || s.Actors[0].MP != 103 || s.Actors[0].HP != 635 || s.Actors[0].Status != "" || resumed.HealCalls != 1 || resumed.RequesterGender != "f" || *resumed.RequesterLevel != 99 || resumed.Command != "frozen-command" || !resumed.Custom || !reflect.DeepEqual(c.Arguments, resumed.Arguments) {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

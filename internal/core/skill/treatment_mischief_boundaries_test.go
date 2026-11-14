@@ -25,11 +25,12 @@ func TestTreatmentMischiefArmorReturnBoundary(t *testing.T) {
 			case "fallen-confusion":
 				s.Actors[0].Status = corebattle.StatusConfusion
 			}
+			before := s.Actors[0]
 			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self"}}
 			if _, err := d.InvocationAction(&s, &f, []string{"job-50-entry-3"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 				t.Fatal(err)
 			}
-			if c.StatUpCalls != 0 || c.TensionCalls != 0 {
+			if s.Actors[0].Attack != before.Attack || s.Actors[0].Defense != before.Defense || s.Actors[0].Agility != before.Agility || c.TensionCalls != 0 {
 				t.Fatal(c)
 			}
 		})
@@ -50,7 +51,7 @@ func TestTreatmentMischiefReturnedDamageAndMPDrain(t *testing.T) {
 		executeTreatment(t, &s, c, d, "job-51-entry-7", []string{"enemy"}, 0, 0)
 		// Requested126 damage, not actual HP lost, yields floor(126*.05)=6,
 		// then MP helper floor(6*.9)+1=6.
-		if s.Actors[0].MP != 86 || c.MPHealCalls != 1 {
+		if s.Actors[0].MP != 86 {
 			t.Fatal(s.Actors[0], c)
 		}
 	}
@@ -113,7 +114,7 @@ func TestTreatmentMischiefFreshStatusChoiceAndProbabilityBoundary(t *testing.T) 
 		if roll < .5 {
 			first, second = corebattle.StatusConfusion, corebattle.StatusSleep
 		}
-		if s.Actors[1].Status != first || s.Actors[3].Status != second || c.Status.StatusCalls != 2 {
+		if s.Actors[1].Status != first || s.Actors[3].Status != second {
 			t.Fatal(s.Actors, c.Status)
 		}
 	}
@@ -122,14 +123,14 @@ func TestTreatmentMischiefFreshStatusChoiceAndProbabilityBoundary(t *testing.T) 
 func TestTreatmentMischiefDeathPrecedesAreaAndArrowLivingGuard(t *testing.T) {
 	s, c, d := treatmentFixture()
 	executeTreatment(t, &s, c, d, "job-51-entry-6", nil, .1)
-	if s.Actors[1].HP != 0 || c.Status.DeathCalls != 1 || c.AreaDamageCalls != 1 || c.DamageCalls != 0 {
+	if s.Actors[1].HP != 0 || c.AreaDamageCalls != 1 || c.DamageCalls != 0 {
 		t.Fatal(s.Actors, c)
 	}
 	for _, id := range []string{"job-57-entry-1", "job-57-entry-3"} {
 		s, c, d := treatmentFixture()
 		s.Actors[1].HP = 1
 		executeTreatment(t, &s, c, d, id, []string{"enemy"}, 0)
-		if s.Actors[1].HP != 0 || s.Actors[1].Hit != 95 || s.Actors[1].Status != "" || c.StatDownCalls != 0 || c.Status.StatusCalls != 0 {
+		if s.Actors[1].HP != 0 || s.Actors[1].Hit != 95 || s.Actors[1].Status != "" {
 			t.Fatal(s.Actors[1], c)
 		}
 	}
@@ -158,7 +159,7 @@ func TestTreatmentMischiefArrowCarriesHitCountersIntoStatusAdmission(t *testing.
 	// First hit activates confusion. The subsequent helper can select the ally,
 	// but item239 zeros status after that hit, so ally gear is unreachable.
 	executeTreatment(t, &s, c, d, "job-57-entry-3", []string{"enemy"}, 0, 0, .7, .7, .5)
-	if s.Actors[0].Status != corebattle.StatusConfusion || s.Actors[2].Status != "" || c.Status.StatusCalls != 1 || c.DamageCalls != 1 {
+	if s.Actors[0].Status != corebattle.StatusConfusion || s.Actors[2].Status != "" || c.DamageCalls != 1 {
 		t.Fatal(s.Actors, c)
 	}
 }
@@ -167,7 +168,7 @@ func TestTreatmentMischiefBlockedArrowNeedsNoStatusDescendants(t *testing.T) {
 	s, c, d := treatmentFixture()
 	s.Actors[1].Temporary, s.Actors[1].Gear, c.Defeat = corebattle.TemporaryOneHitDefense, nil, nil
 	executeTreatment(t, &s, c, d, "job-57-entry-3", []string{"enemy"})
-	if c.Status.StatusCalls != 0 || s.Actors[1].HP != 900 || s.Actors[1].Temporary != "" {
+	if s.Actors[1].HP != 900 || s.Actors[1].Temporary != "" || s.Actors[1].Status != "" {
 		t.Fatal(s.Actors, c)
 	}
 }

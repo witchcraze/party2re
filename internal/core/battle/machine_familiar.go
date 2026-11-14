@@ -8,7 +8,6 @@ type MachineFamiliarContext struct {
 	DamageContext
 	Arguments       []string
 	RequesterGender string
-	CureCalls       int
 }
 
 // FamiliarEntries retains the inspection and wallet positions owned elsewhere.
@@ -112,9 +111,9 @@ func (s *LifetimeState) ApplyMachineFamiliar(c *MachineFamiliarContext, id strin
 		if _, err := s.ApplyHealing(&c.EffectContext, controlEffect(r.TargetID, 150, CategoryMagic), rng); err != nil {
 			return err
 		}
-		child := StatusContext{EffectContext: c.EffectContext, CureCalls: c.CureCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err = s.ApplyCure(&child, controlSymbol(r.TargetID, s.actor(r.TargetID).Status, CategoryMagic), rng)
-		c.EffectContext, c.CureCalls = child.EffectContext, child.CureCalls
+		c.EffectContext = child.EffectContext
 		return err
 	case "job-82-entry-3":
 		stat := []BattleStat{StatAttack, StatDefense, StatAgility}[int(rng.Float64()*3)]

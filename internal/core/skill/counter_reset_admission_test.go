@@ -45,7 +45,7 @@ func TestCounterResetAdmissionIsInert(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(original, f) || !reflect.DeepEqual(originalDefeat.EquipmentResetContext, c.StatusDefeat.EquipmentResetContext) || c.DamageCalls != 0 || c.AreaDamageCalls != 0 || c.StatusCalls != 0 || c.DeathCalls != 0 || c.HealCalls != 0 || c.Arguments != nil || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
+			if string(before) != string(after) || !reflect.DeepEqual(original, f) || !reflect.DeepEqual(originalDefeat.EquipmentResetContext, c.StatusDefeat.EquipmentResetContext) || c.DamageCalls != 0 || c.AreaDamageCalls != 0 || c.HealCalls != 0 || c.Arguments != nil || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
 				t.Fatal(id, s, c, f)
 			}
 		}
@@ -97,7 +97,7 @@ func TestCounterResetRejectsMissingDescendantsBeforeMutation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.DamageCalls != 0 || c.StatusCalls != 0 || c.DeathCalls != 0 || c.Arguments != nil {
+			if string(before) != string(after) || c.DamageCalls != 0 || c.Arguments != nil {
 				t.Fatal(s, c)
 			}
 		})
@@ -108,7 +108,7 @@ func TestCounterResetRejectsMissingDescendantsBeforeMutation(t *testing.T) {
 	s.Actors[1].Temporary, s.Actors[1].Gear = corebattle.TemporaryOneHitDefense, nil
 	c.Defeat = nil
 	executeCounterReset(t, &s, c, d, "job-35-entry-6", nil, 0)
-	if s.Actors[1].HP != 900 || s.Actors[1].Status != "" || c.DamageCalls != 1 || c.StatusCalls != 1 {
+	if s.Actors[1].HP != 900 || s.Actors[1].Status != "" || c.DamageCalls != 1 {
 		t.Fatal(s, c)
 	}
 }

@@ -59,9 +59,8 @@ func TestControlClimaxManifest(t *testing.T) {
 					}
 					return nil
 				},
-				Apply: func(s *corebattle.LifetimeState, c *corebattle.EffectContext, e corebattle.TargetEffect, _ random.Generator) (corebattle.EffectApplication, error) {
+				Apply: func(s *corebattle.LifetimeState, _ *corebattle.EffectContext, e corebattle.TargetEffect, _ random.Generator) (corebattle.EffectApplication, error) {
 					s.Actors[1].MP = 60
-					c.StatDownCalls++
 					return corebattle.EffectApplication{}, nil
 				},
 			}
@@ -112,7 +111,7 @@ func TestControlClimaxManifest(t *testing.T) {
 					t.Fatal(e)
 				}
 			case "job-58-entry-3":
-				if e.MP != 60 || c.StatDownCalls != 1 {
+				if e.MP != 60 {
 					t.Fatal(e, c)
 				}
 			case "job-58-entry-4":

@@ -118,7 +118,7 @@ func TestMachineFamiliarSongOrderAndIndependentHeal(t *testing.T) {
 		if chance < .25 {
 			wantHP, allyHP = 635, 100
 		}
-		if a.Attack != 160 || a.Defense != 96 || ally.Attack != 60 || ally.Defense != 48 || a.HP != wantHP || ally.HP != allyHP || a.Status != corebattle.StatusMagicSeal || c.StatUpCalls != 4 {
+		if a.Attack != 160 || a.Defense != 96 || ally.Attack != 60 || ally.Defense != 48 || a.HP != wantHP || ally.HP != allyHP || a.Status != corebattle.StatusMagicSeal {
 			t.Fatal(chance, s, c)
 		}
 	}
@@ -149,13 +149,13 @@ func TestMachineFamiliarTeaResolvesThenHealsThenCures(t *testing.T) {
 	s.Actors[0].Temporary, s.Actors[2].Temporary = corebattle.TemporaryCover, corebattle.TemporaryCovering
 	s.Actors[0].Status, s.Actors[2].Status = corebattle.StatusPoison, corebattle.StatusSleep
 	executeMachineFamiliar(t, &s, c, d, "job-82-entry-2", []string{"self"})
-	if s.Actors[0].HP != 500 || s.Actors[0].Status != corebattle.StatusPoison || s.Actors[2].Status != corebattle.StatusSleep || c.CureCalls != 0 {
+	if s.Actors[0].HP != 500 || s.Actors[0].Status != corebattle.StatusPoison || s.Actors[2].Status != corebattle.StatusSleep {
 		t.Fatal(s, c)
 	}
 	s, c, d = machineFamiliarFixture()
 	s.Actors[0].Status = corebattle.StatusMagicSeal
 	executeMachineFamiliar(t, &s, c, d, "job-82-entry-2", []string{"self"}, .25)
-	if c.HealCalls != 0 || c.CureCalls != 0 || s.Actors[0].Status != corebattle.StatusMagicSeal {
+	if c.HealCalls != 0 || s.Actors[0].Status != corebattle.StatusMagicSeal {
 		t.Fatal(s, c)
 	}
 	// Confusion makes all three helpers select independently. Cure takes the
@@ -165,7 +165,7 @@ func TestMachineFamiliarTeaResolvesThenHealsThenCures(t *testing.T) {
 	s.Actors[2].HP, s.Actors[2].Status = 100, corebattle.StatusSleep
 	s.Actors[1].Status = corebattle.StatusSleep
 	executeMachineFamiliar(t, &s, c, d, "job-82-entry-2", []string{"self"}, .9, 0, 0, .5)
-	if s.Actors[0].HP != 635 || s.Actors[0].Status != corebattle.StatusConfusion || s.Actors[1].Status != "" || s.Actors[2].Status != corebattle.StatusSleep || c.CureCalls != 1 {
+	if s.Actors[0].HP != 635 || s.Actors[0].Status != corebattle.StatusConfusion || s.Actors[1].Status != "" || s.Actors[2].Status != corebattle.StatusSleep {
 		t.Fatal(s, c)
 	}
 }

@@ -5,9 +5,8 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // CounterResetContext contains operation facts; ports are rebuilt after reload.
 type CounterResetContext struct {
 	DamageContext
-	Arguments                                []string
-	StatusDefeat                             *DefeatContext
-	StatusCalls, AreaStatusCalls, DeathCalls int
+	Arguments    []string
+	StatusDefeat *DefeatContext
 }
 
 // CounterResetEntries includes the separately owned reset35.1 and copy36.4.
@@ -73,8 +72,7 @@ func counterResetTemporary(id string) TemporaryEffect {
 }
 
 func (c *CounterResetContext) statusContext() StatusContext {
-	return StatusContext{EffectContext: c.EffectContext, Defeat: c.StatusDefeat,
-		StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls, DeathCalls: c.DeathCalls}
+	return StatusContext{EffectContext: c.EffectContext, Defeat: c.StatusDefeat}
 }
 
 // ApplyCounterReset executes intrinsic callbacks. The enclosing invocation
@@ -158,7 +156,7 @@ func (s *LifetimeState) ApplyCounterReset(c *CounterResetContext, id string, rng
 		case "job-37-entry-5":
 			_, err = s.ApplyStatus(&child, controlSymbol(c.shift(), StatusPhysicalSeal, CategoryUntyped), 80, false, false, rng)
 		}
-		c.EffectContext, c.StatusCalls, c.AreaStatusCalls, c.DeathCalls = child.EffectContext, child.StatusCalls, child.AreaStatusCalls, child.DeathCalls
+		c.EffectContext = child.EffectContext
 		return err
 	}
 	return nil

@@ -85,23 +85,19 @@ func TestIncidentalJobManifest(t *testing.T) {
 			}
 			switch id {
 			case "job-7-entry-1":
-				if s.Actors[0].Defense != 112 || c.StatUpCalls != 1 {
+				if s.Actors[0].Defense != 112 {
 					t.Fatal(s, c)
 				}
 			case "job-7-entry-3":
-				if s.Actors[1].Hit != 76 || c.PartyStatDownCalls != 1 {
+				if s.Actors[1].Hit != 76 {
 					t.Fatal(s, c)
 				}
 			case "job-7-entry-5":
 				if c.DamageCalls != 1 || c.End.ImmediateRiskCalls != 1 {
 					t.Fatal(c)
 				}
-			case "job-7-entry-6":
-				if c.MPHealCalls != 1 {
-					t.Fatal(c)
-				}
 			case "job-7-entry-7", "job-9-entry-3":
-				if s.Actors[1].Status != corebattle.StatusConfusion || c.Status.AreaStatusCalls != 1 {
+				if s.Actors[1].Status != corebattle.StatusConfusion {
 					t.Fatal(s, c)
 				}
 			case "job-8-entry-1":

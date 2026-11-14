@@ -71,7 +71,7 @@ func TestRitualDanceManifest(t *testing.T) {
 			}
 			switch id {
 			case "job-75-entry-0":
-				if e.Status != corebattle.StatusMagicSeal || c.StatusCalls != 1 {
+				if e.Status != corebattle.StatusMagicSeal {
 					t.Fatal(e, c)
 				}
 			case "job-75-entry-1":
@@ -87,7 +87,7 @@ func TestRitualDanceManifest(t *testing.T) {
 					t.Fatal(a, e)
 				}
 			case "job-75-entry-4":
-				if a.HP != 230 || a.MP != 182 || c.MPHealCalls != 1 {
+				if a.HP != 230 || a.MP != 182 {
 					t.Fatal(a, c)
 				}
 			case "job-75-entry-6":
@@ -95,11 +95,11 @@ func TestRitualDanceManifest(t *testing.T) {
 					t.Fatal(e)
 				}
 			case "job-76-entry-0":
-				if e.Hit != 86 || c.PartyStatDownCalls != 1 || c.StatDownCalls != 1 {
+				if e.Hit != 86 {
 					t.Fatal(e, c)
 				}
 			case "job-76-entry-1":
-				if e.Status != corebattle.StatusSleep || c.AreaStatusCalls != 1 {
+				if e.Status != corebattle.StatusSleep {
 					t.Fatal(e, c)
 				}
 			case "job-76-entry-2":
@@ -107,7 +107,7 @@ func TestRitualDanceManifest(t *testing.T) {
 					t.Fatal(a, e, c)
 				}
 			case "job-76-entry-4":
-				if a.Status != "" || c.CureCalls != 1 {
+				if a.Status != "" {
 					t.Fatal(a, c)
 				}
 			case "job-76-entry-5":

@@ -39,7 +39,6 @@ func (s *LifetimeState) applyCallingFairy(c *RosterContext, helperID string, rng
 			return r, err
 		}
 		if allowed {
-			c.PartyMPHealCalls++
 			for _, target := range c.PartyIDs {
 				heal, err := s.ApplyMPHealing(&c.EffectContext, rosterEffect(target, 200, CategoryUntyped, false), rng)
 				r.Effects = append(r.Effects, heal)

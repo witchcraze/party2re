@@ -78,7 +78,7 @@ func TestRangedManifest(t *testing.T) {
 			wantMP := 80
 			switch id {
 			case "job-11-entry-1", "job-54-entry-0", "job-54-entry-3":
-				if e.Status != corebattle.StatusDofuu || c.Status.StatusCalls != 1 {
+				if e.Status != corebattle.StatusDofuu {
 					t.Fatal(e, c.Status)
 				}
 			case "job-11-entry-2", "job-54-entry-2":
@@ -87,15 +87,15 @@ func TestRangedManifest(t *testing.T) {
 				}
 			case "job-11-entry-4":
 				wantMP = 94
-				if e.MP != 85 || c.StatDownCalls != 1 || c.MPHealCalls != 1 {
+				if e.MP != 85 {
 					t.Fatal(e, c)
 				}
 			case "job-11-entry-5":
-				if e.Hit != 89 || c.StatDownCalls != 1 || !c.AdditionalEffect {
+				if e.Hit != 89 || !c.AdditionalEffect {
 					t.Fatal(e, c)
 				}
 			case "job-11-entry-6":
-				if e.Status != corebattle.StatusSleep || c.Status.StatusCalls != 1 {
+				if e.Status != corebattle.StatusSleep {
 					t.Fatal(e, c.Status)
 				}
 			case "job-11-entry-8":
@@ -111,7 +111,7 @@ func TestRangedManifest(t *testing.T) {
 					t.Fatal(e)
 				}
 			case "job-42-entry-2":
-				if a.Agility != 80 || c.StatUpCalls != 1 {
+				if a.Agility != 80 {
 					t.Fatal(a, c)
 				}
 			case "job-42-entry-3", "job-42-entry-5":
@@ -123,7 +123,7 @@ func TestRangedManifest(t *testing.T) {
 					t.Fatal(e)
 				}
 			case "job-42-entry-6":
-				if c.Status.DeathCalls != 1 || c.DamageCalls != 1 {
+				if c.DamageCalls != 1 {
 					t.Fatal(c)
 				}
 			}

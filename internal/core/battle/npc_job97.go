@@ -6,9 +6,8 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // Selection, listed costs and durable operation deduplication remain consumer-owned.
 type NPCJob97Context struct {
 	DamageContext
-	EquipmentReset               *EquipmentResetContext
-	Arguments                    []string
-	StatusCalls, AreaStatusCalls int
+	EquipmentReset *EquipmentResetContext
+	Arguments      []string
 }
 
 func (c *NPCJob97Context) shift() string {
@@ -91,9 +90,9 @@ func (s *LifetimeState) ApplyNPCJob97(c *NPCJob97Context, id string, rng random.
 		if _, err := s.ApplyAreaDamage(&c.DamageContext, power, CategoryMagic, true, rng); err != nil {
 			return err
 		}
-		child := StatusContext{EffectContext: c.EffectContext, StatusCalls: c.StatusCalls, AreaStatusCalls: c.AreaStatusCalls}
+		child := StatusContext{EffectContext: c.EffectContext}
 		_, err := s.ApplyAreaStatus(&child, controlSymbol("", status, CategoryMagic), chance, false, false, rng)
-		c.EffectContext, c.StatusCalls, c.AreaStatusCalls = child.EffectContext, child.StatusCalls, child.AreaStatusCalls
+		c.EffectContext = child.EffectContext
 		return err
 	case "npc-job-97-position-9":
 		r, err := s.ResolveEnemyTarget(c.TargetContext, controlSymbol(c.shift(), "life-reduction", CategoryMagic), rng)

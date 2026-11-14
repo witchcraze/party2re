@@ -133,7 +133,7 @@ func TestNamedFieldRainbowSevenBranches(t *testing.T) {
 		rng.done()
 		switch branch {
 		case 0:
-			if s.actor("self").Attack != 250 || c.PartyStatUpCalls != 1 {
+			if s.actor("self").Attack != 250 {
 				t.Fatal(s, c)
 			}
 		case 1:
@@ -153,11 +153,11 @@ func TestNamedFieldRainbowSevenBranches(t *testing.T) {
 				t.Fatal(s)
 			}
 		case 5:
-			if s.actor("self").Status != "" || s.actor("self").Agility != 250 || c.CureCalls != 1 {
+			if s.actor("self").Status != "" || s.actor("self").Agility != 250 {
 				t.Fatal(s, c)
 			}
 		case 6:
-			if s.actor("self").MP != 816 || c.PartyMPHealCalls != 1 {
+			if s.actor("self").MP != 816 {
 				t.Fatal(s, c)
 			}
 		}

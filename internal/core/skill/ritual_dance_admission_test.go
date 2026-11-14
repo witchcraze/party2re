@@ -45,7 +45,7 @@ func TestRitualDanceRegistrationAndWholeActionRejection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(before) != string(after) || c.DamageCalls != 0 || c.MPHealCalls != 0 || c.ActorID != "self" || s.Actors[1].Gear != gear || !reflect.DeepEqual(args, []string{"enemy", "tail"}) {
+		if string(before) != string(after) || c.DamageCalls != 0 || c.ActorID != "self" || s.Actors[1].Gear != gear || !reflect.DeepEqual(args, []string{"enemy", "tail"}) {
 			t.Fatal(id, s, c, f)
 		}
 	}

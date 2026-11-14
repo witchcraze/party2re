@@ -23,15 +23,15 @@ func TestProtectiveMagicReloadContinuesWithoutReplay(t *testing.T) {
 		}
 	}
 	type checkpoint struct {
-		State                                             corebattle.LifetimeState
-		Target                                            corebattle.TargetContext
-		DamageCalls, HealCalls, PartyHealCalls, CureCalls int
-		RequesterLevel                                    int
-		Cursor                                            corebattle.TargetCursor
-		Arguments                                         []string
-		EntryID                                           string
+		State                                  corebattle.LifetimeState
+		Target                                 corebattle.TargetContext
+		DamageCalls, HealCalls, PartyHealCalls int
+		RequesterLevel                         int
+		Cursor                                 corebattle.TargetCursor
+		Arguments                              []string
+		EntryID                                string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.HealCalls, c.PartyHealCalls, c.CureCalls, level, c.Cursor, []string{"enemy", "tail"}, "job-32-entry-1"}
+	frozen := checkpoint{s, c.TargetContext, c.DamageCalls, c.HealCalls, c.PartyHealCalls, level, c.Cursor, []string{"enemy", "tail"}, "job-32-entry-1"}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestProtectiveMagicReloadContinuesWithoutReplay(t *testing.T) {
 	resumed := &corebattle.ProtectiveMagicContext{DamageContext: corebattle.DamageContext{
 		EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, DamageCalls: loaded.DamageCalls, HealCalls: loaded.HealCalls, PartyHealCalls: loaded.PartyHealCalls, RequesterLevel: &loaded.RequesterLevel},
 		Cursor:        loaded.Cursor, GuaranteedHit: true, Defeat: func(string) error { return nil },
-	}, CureCalls: loaded.CureCalls}
+	}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterProtectiveMagic(resumed)
 	for _, run := range []struct {
@@ -56,7 +56,7 @@ func TestProtectiveMagicReloadContinuesWithoutReplay(t *testing.T) {
 			t.Fatal("did not expire at fifth submission")
 		}
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 734 || s.Actors[2].MP != 0 || s.Actors[0].HP != 634 || s.Actors[0].Extended != "" || resumed.DamageCalls != 1 || resumed.CureCalls != 1 || resumed.HealCalls != 2 || resumed.PartyHealCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || !reflect.DeepEqual(c.Cursor, resumed.Cursor) || resumed.Command != "frozen-protective-command" || !resumed.Custom || *resumed.RequesterLevel != 99 {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].HP != 734 || s.Actors[2].MP != 0 || s.Actors[0].HP != 634 || s.Actors[0].Extended != "" || resumed.DamageCalls != 1 || resumed.HealCalls != 2 || resumed.PartyHealCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || !reflect.DeepEqual(c.Cursor, resumed.Cursor) || resumed.Command != "frozen-protective-command" || !resumed.Custom || *resumed.RequesterLevel != 99 {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

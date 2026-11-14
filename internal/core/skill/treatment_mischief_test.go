@@ -104,15 +104,15 @@ func TestTreatmentMischiefManifest(t *testing.T) {
 					t.Fatal(a)
 				}
 			case "job-50-entry-2":
-				if c.Status.DeathCalls != 1 {
-					t.Fatal(c.Status)
+				if e.HP != 0 {
+					t.Fatal(e, c.Status)
 				}
 			case "job-50-entry-3":
-				if a.Defense != 112 || a.Temporary != corebattle.TemporaryReduceBreath || c.StatUpCalls != 1 {
+				if a.Defense != 112 || a.Temporary != corebattle.TemporaryReduceBreath {
 					t.Fatal(a, c)
 				}
 			case "job-51-entry-0":
-				if e.Hit != 76 || c.PartyStatDownCalls != 1 {
+				if e.Hit != 76 {
 					t.Fatal(e, c)
 				}
 			case "job-51-entry-1":
@@ -124,11 +124,11 @@ func TestTreatmentMischiefManifest(t *testing.T) {
 					t.Fatal(c)
 				}
 			case "job-51-entry-3":
-				if e.Status != corebattle.StatusConfusion || c.Status.StatusCalls != 1 || c.Status.AreaStatusCalls != 0 {
+				if e.Status != corebattle.StatusConfusion {
 					t.Fatal(e, c.Status)
 				}
 			case "job-51-entry-6":
-				if !c.AdditionalEffect || c.Status.AreaDeathCalls != 1 || c.AreaDamageCalls != 1 {
+				if !c.AdditionalEffect || c.AreaDamageCalls != 1 {
 					t.Fatal(c)
 				}
 			case "job-51-entry-7":
@@ -143,7 +143,7 @@ func TestTreatmentMischiefManifest(t *testing.T) {
 				}
 			case "job-55-entry-1", "job-57-entry-5":
 				wantMP = 94
-				if e.MP != 85 || c.MPHealCalls != 1 {
+				if e.MP != 85 {
 					t.Fatal(e, c)
 				}
 			case "job-55-entry-3", "job-55-entry-5":
@@ -167,7 +167,7 @@ func TestTreatmentMischiefManifest(t *testing.T) {
 					t.Fatal(f)
 				}
 			case "job-57-entry-6":
-				if a.Attack != 240 || c.StatUpCalls != 2 {
+				if a.Attack != 240 {
 					t.Fatal(a, c)
 				}
 			case "job-78-entry-3":

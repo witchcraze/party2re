@@ -83,12 +83,12 @@ func TestLateSongManifest(t *testing.T) {
 				}
 			case "job-85-entry-0":
 				wantMP = 182
-				if a.HP != 230 || c.MPHealCalls != 1 {
+				if a.HP != 230 {
 					t.Fatal(a, c)
 				}
 			case "job-85-entry-1":
-				if c.Death.DeathCalls != 1 || c.Death.AreaDeathCalls != 1 {
-					t.Fatal(c.Death)
+				if e.HP != 0 {
+					t.Fatal(e)
 				}
 			case "job-85-entry-2":
 				if e.Status != "" || e.Temporary != "" {

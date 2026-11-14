@@ -31,7 +31,7 @@ func TestNPCStatusSacrificeRevivalThenOuterCharge(t *testing.T) {
 				s.Actors[0].Temporary = corebattle.TemporaryRevival
 			}
 			executeNPCStatus(t, &s, c, d, 94, 0, nil, row.draws...)
-			if s.Actors[0].HP != row.hp || s.Actors[0].MP != 1 || c.AreaDeathCalls != 1 {
+			if s.Actors[0].HP != row.hp || s.Actors[0].MP != 1 {
 				t.Fatal(s.Actors, c)
 			}
 			if row.kind == "amulet" && (s.Actors[0].Status != corebattle.StatusDofuu || len(s.Actors[0].ConsumedItems) != 1) {
@@ -56,7 +56,7 @@ func TestNPCStatusAreaDeathContinuesAfterActorDefeat(t *testing.T) {
 	s.Actors[0].HP = 500
 	s.Actors[1].Temporary = corebattle.TemporaryReflectMagic
 	executeNPCStatus(t, &s, c, d, 93, 1, nil, 0, 0)
-	if s.Actors[0].HP != 0 || s.Actors[1].HP != 800 || s.Actors[3].HP != 0 || c.DeathCalls != 2 {
+	if s.Actors[0].HP != 0 || s.Actors[1].HP != 800 || s.Actors[3].HP != 0 {
 		t.Fatal(s.Actors, c)
 	}
 }

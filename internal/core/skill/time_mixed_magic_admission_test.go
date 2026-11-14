@@ -44,7 +44,7 @@ func TestTimeMixedMagicAdmissionIsInert(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(original, f) || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.HealCalls != 0 || c.Arguments != nil || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
+			if string(before) != string(after) || !reflect.DeepEqual(original, f) || c.DamageCalls != 0 || c.HealCalls != 0 || c.Arguments != nil || weapon != 7 || gear.WeaponAttack != &weapon || s.Actors[0].Gear != gear {
 				t.Fatal(id, s, c, f)
 			}
 		}
@@ -98,7 +98,7 @@ func TestTimeMixedMagicMissingDescendantsRejectBeforeMutation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.DamageCalls != 0 || c.StatUpCalls != 0 || c.Arguments != nil || f.Arguments[0] != target {
+			if string(before) != string(after) || c.DamageCalls != 0 || c.Arguments != nil || f.Arguments[0] != target {
 				t.Fatal(s, c, f)
 			}
 		})

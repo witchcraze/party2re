@@ -160,7 +160,7 @@ func TestAreaDeathFinalStrikeAccumulatesDamage(t *testing.T) {
 			sc := StatusContext{EffectContext: EffectContext{TargetContext: c.TargetContext}, Defeat: c}
 			before := reloadLifetime(t, s)
 			err := s.ValidateAreaStatus(&sc, TargetEffect{Payload: CallbackPayload{Symbol: "death"}}, 100, true, true, &targetRNG{t: t})
-			if !reflect.DeepEqual(before, s) || sc.DeathCalls != 0 || sc.AreaDeathCalls != 0 ||
+			if !reflect.DeepEqual(before, s) ||
 				*c.RequesterLevel != levelBefore || *c.Seals != sealsBefore ||
 				!slices.Equal(c.PartyIDs, partyBefore) || !slices.Equal(c.EnemyIDs, enemyBefore) ||
 				sc.Defeat != c || applies != 0 {
@@ -177,7 +177,7 @@ func TestAreaDeathFinalStrikeAccumulatesDamage(t *testing.T) {
 			}
 			rng := &targetRNG{t: t, draws: []float64{0, 0, 0, 0, 0, 0}}
 			_, err = s.ApplyAreaStatus(&sc, TargetEffect{Payload: CallbackPayload{Symbol: "death"}}, 100, true, true, rng)
-			if err != nil || s.actor("self").HP != 47 || sc.DeathCalls != 2 {
+			if err != nil || s.actor("self").HP != 47 {
 				t.Fatal(s, sc, err)
 			}
 			rng.done()

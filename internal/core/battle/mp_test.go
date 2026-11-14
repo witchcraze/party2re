@@ -29,7 +29,7 @@ func TestMPHealingBoundaries(t *testing.T) {
 			s.Fields.Default = tc.field
 			rng := &targetRNG{t: t, draws: []float64{0}}
 			r, err := s.ApplyMPHealing(&c, controlEffect("ally", float64(tc.power), CategoryMagic), rng)
-			if err != nil || !r.Returned || r.Amount != tc.amount || target.MP != tc.want || target.HP != 100 || target.Temporary != "" || a.Tension != 1 || c.MPHealCalls != 1 {
+			if err != nil || !r.Returned || r.Amount != tc.amount || target.MP != tc.want || target.HP != 100 || target.Temporary != "" || a.Tension != 1 {
 				t.Fatal(r, err, *target, c)
 			}
 			rng.done()
@@ -66,7 +66,7 @@ func TestMPHealingTargetAndModifierOrder(t *testing.T) {
 	s, c := recoveryFixture()
 	s.actor("self").HP = 0
 	r, err := s.ApplyMPHealing(&c, controlEffect("self", 50, CategoryMagic), &targetRNG{t: t})
-	if err != nil || r.Returned || c.MPHealCalls != 0 {
+	if err != nil || r.Returned {
 		t.Fatal(r, err, c)
 	}
 }
@@ -290,7 +290,7 @@ func TestResourceJob50RecoveryBoundaries(t *testing.T) {
 		s.actor("ally").MP, s.actor("ally").MaxMP = tc.before, 100
 		rng := &targetRNG{t: t, draws: tc.draws}
 		r, err := s.ApplyResource(&c, "job-50-entry-5", tc.target, rng)
-		if err != nil || len(r) != 1 || !r[0].Returned || r[0].Amount != 46 || s.actor(r[0].TargetID).MP != tc.want || c.MPHealCalls != 1 {
+		if err != nil || len(r) != 1 || !r[0].Returned || r[0].Amount != 46 || s.actor(r[0].TargetID).MP != tc.want {
 			t.Fatal(tc, r, err, s)
 		}
 		rng.done()

@@ -44,7 +44,7 @@ func TestNonlethalFinalStrikeThroughRegisteredAndDelegatedInvocation(t *testing.
 				}
 			}
 			after, err := json.Marshal(s)
-			if err != nil || !reflect.DeepEqual(before, after) || c.DeathCalls != 0 {
+			if err != nil || !reflect.DeepEqual(before, after) {
 				t.Fatal(s, err)
 			}
 			draws := []float64{0, 0, 0}
@@ -104,7 +104,7 @@ func TestStatusRegistryConcreteBindingsAndWholeInvocationAdmission(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(before) != string(after) || c.DeathCalls != 0 || c.CureCalls != 0 {
+	if string(before) != string(after) {
 		t.Fatal("rejected closure mutated state")
 	}
 	// A real registered body is used through delegation once its complete
@@ -201,11 +201,11 @@ func TestStatusRegistryAbsorbedDeathDirectAndDelegatedAfterReload(t *testing.T) 
 					t.Fatal(entry, delegated, reload, err)
 				}
 				after, err := json.Marshal(s)
-				if err != nil || string(before) != string(after) || c.DeathCalls != 0 || c.AreaDeathCalls != 0 || len(frame.Arguments) != 1 || frame.Arguments[0] != "enemy" {
+				if err != nil || string(before) != string(after) || len(frame.Arguments) != 1 || frame.Arguments[0] != "enemy" {
 					t.Fatal("registry admission changed caller facts", err)
 				}
 				rng := &damageGemDraws{t: t, draws: draws}
-				if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || s.Actors[0].HP != 1 || s.Actors[1].HP != 101 || s.Actors[1].MP != 20 || c.DeathCalls != 1 || rng.used != len(draws) {
+				if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || s.Actors[0].HP != 1 || s.Actors[1].HP != 101 || s.Actors[1].MP != 20 || rng.used != len(draws) {
 					t.Fatal(entry, delegated, reload, s, c, err, rng.used)
 				}
 				if reload && !reflect.DeepEqual(reference, s) {

@@ -42,14 +42,14 @@ func TestWeaponWeatherStanceHealCureChangesLaterEligibility(t *testing.T) {
 	s.Actors[0].Temporary = corebattle.TemporaryRage
 	s.Actors[0].Status, s.Actors[2].Status = corebattle.StatusPoison, corebattle.StatusSleep
 	executeWeaponWeatherStance(t, &s, c, d, "job-27-entry-8", nil, 0, 0)
-	if s.Actors[0].HP != 1000 || s.Actors[0].Temporary != "" || s.Actors[0].Status != "" || s.Actors[2].Status != corebattle.StatusSleep || c.PartyHealCalls != 1 || c.HealCalls != 2 || c.CureCalls != 2 {
+	if s.Actors[0].HP != 1000 || s.Actors[0].Temporary != "" || s.Actors[0].Status != "" || s.Actors[2].Status != corebattle.StatusSleep || c.PartyHealCalls != 1 || c.HealCalls != 2 {
 		t.Fatal(s, c)
 	}
 	// A first cure of the caster's confusion changes later target selection.
 	s, c, d = weaponWeatherStanceFixture()
 	s.Actors[0].Status = corebattle.StatusConfusion
 	executeWeaponWeatherStance(t, &s, c, d, "job-27-entry-8", nil, 0, 0, 0, 0)
-	if s.Actors[0].HP != 1000 || s.Actors[0].Status != "" || c.HealCalls != 2 || c.CureCalls != 1 {
+	if s.Actors[0].HP != 1000 || s.Actors[0].Status != "" || c.HealCalls != 2 {
 		t.Fatal(s, c)
 	}
 }
@@ -63,14 +63,14 @@ func TestWeaponWeatherStanceReloadContinuesWithoutReplay(t *testing.T) {
 	s.Actors[0].Status = corebattle.StatusPoison
 	executeWeaponWeatherStance(t, &s, c, d, "job-27-entry-8", nil, 0, 0)
 	type checkpoint struct {
-		State                                                corebattle.LifetimeState
-		Target                                               corebattle.TargetContext
-		Cursor                                               corebattle.TargetCursor
-		HealCalls, PartyHealCalls, CureCalls, RequesterLevel int
-		Arguments                                            []string
-		EntryID                                              string
+		State                                     corebattle.LifetimeState
+		Target                                    corebattle.TargetContext
+		Cursor                                    corebattle.TargetCursor
+		HealCalls, PartyHealCalls, RequesterLevel int
+		Arguments                                 []string
+		EntryID                                   string
 	}
-	frozen := checkpoint{s, c.TargetContext, c.Cursor, c.HealCalls, c.PartyHealCalls, c.CureCalls, level, []string{"enemy", "tail"}, "job-27-entry-7"}
+	frozen := checkpoint{s, c.TargetContext, c.Cursor, c.HealCalls, c.PartyHealCalls, level, []string{"enemy", "tail"}, "job-27-entry-7"}
 	data, err := json.Marshal(frozen)
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestWeaponWeatherStanceReloadContinuesWithoutReplay(t *testing.T) {
 	resumed := &corebattle.WeaponWeatherStanceContext{DamageContext: corebattle.DamageContext{
 		EffectContext: corebattle.EffectContext{TargetContext: loaded.Target, HealCalls: loaded.HealCalls, PartyHealCalls: loaded.PartyHealCalls, RequesterLevel: &loaded.RequesterLevel},
 		Cursor:        loaded.Cursor,
-	}, CureCalls: loaded.CureCalls}
+	}}
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterWeaponWeatherStance(resumed)
 	for _, run := range []struct {
@@ -92,7 +92,7 @@ func TestWeaponWeatherStanceReloadContinuesWithoutReplay(t *testing.T) {
 	}{{&s, c, d}, {&loaded.State, resumed, rebuilt}} {
 		executeWeaponWeatherStance(t, run.s, run.c, run.d, loaded.EntryID, loaded.Arguments)
 	}
-	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].Attack != 40 || s.Actors[0].HP != 1000 || resumed.HealCalls != 2 || resumed.PartyHealCalls != 1 || resumed.CureCalls != 1 || resumed.StatDownCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || !reflect.DeepEqual(c.Cursor, resumed.Cursor) || resumed.Command != "frozen-command" || !resumed.Custom || *resumed.RequesterLevel != 99 {
+	if !reflect.DeepEqual(s, loaded.State) || s.Actors[1].Attack != 40 || s.Actors[0].HP != 1000 || resumed.HealCalls != 2 || resumed.PartyHealCalls != 1 || !reflect.DeepEqual(c.Arguments, resumed.Arguments) || !reflect.DeepEqual(c.Cursor, resumed.Cursor) || resumed.Command != "frozen-command" || !resumed.Custom || *resumed.RequesterLevel != 99 {
 		t.Fatal(s, loaded.State, c, resumed)
 	}
 }

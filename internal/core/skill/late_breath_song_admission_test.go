@@ -32,7 +32,7 @@ func TestLateSongRegistrationAndPureAdmission(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.DamageCalls != 0 || c.Death.DeathCalls != 0 || c.TensionCalls != 0 || c.Arguments != nil {
+			if string(before) != string(after) || !reflect.DeepEqual(f, original) || c.DamageCalls != 0 || c.TensionCalls != 0 || c.Arguments != nil {
 				t.Fatal(entry.ID, s, c, f)
 			}
 			if _, err := (BattleDefinitions{}).InvocationAction(&s, &f, []string{entry.ID}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
@@ -106,7 +106,7 @@ func TestLateSongMissingDescendantsAndOrderedProjection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(before) != string(after) || c.DamageCalls != 0 || c.TensionCalls != 0 || c.MPHealCalls != 0 || c.Arguments != nil {
+			if string(before) != string(after) || c.DamageCalls != 0 || c.TensionCalls != 0 || c.Arguments != nil {
 				t.Fatal(s, c)
 			}
 		})
