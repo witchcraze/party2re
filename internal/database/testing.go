@@ -156,37 +156,44 @@ func CreateTestCharacterWithFunds(ctx context.Context, db *sql.DB, name string, 
 
 // CreateTestGuildWithLeader creates and persists a guild with an associated leader character.
 func CreateTestGuildWithLeader(ctx context.Context, db *sql.DB, guildName string, leaderMoney int) (guild.Guild, corecharacter.Character, error) {
-	safeGuildName := sanitizeTestName(guildName, guild.MaxNameLength, "Gld")
-	leaderName := sanitizeTestName(safeGuildName+"_Ldr", corecharacter.MaxNameLength, "Ldr")
-	leaderChar, err := CreateTestCharacterWithFunds(ctx, db, leaderName, leaderMoney)
-	if err != nil {
-		return guild.Guild{}, corecharacter.Character{}, err
-	}
-
-	now := time.Now().UTC()
-	testGuild := guild.Guild{
-		ID:                id.New(),
-		Name:              safeGuildName,
-		LeaderCharacterID: leaderChar.ID,
-		Points:            0,
-		Notice:            "Test Guild Notice",
-		Color:             guild.DefaultColor,
-		CreatedAt:         now,
-		UpdatedAt:         now,
-	}
-	creatorMember := guild.Member{
-		GuildID:     testGuild.ID,
-		CharacterID: leaderChar.ID,
-		Role:        guild.RoleLeader,
-		Title:       guild.DefaultTitleLeader,
-		JoinedAt:    now,
-	}
-
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
 		return guild.Guild{}, corecharacter.Character{}, err
 	}
-	createdGuild, _, _, err := guildRepo.CreateGuild(ctx, testGuild, creatorMember, 0)
+	safeGuildName := sanitizeTestName(guildName, guild.MaxNameLength, "Gld")
+	leaderName := sanitizeTestName(safeGuildName+"_Ldr", corecharacter.MaxNameLength, "Ldr")
+
+	var createdGuild guild.Guild
+	var leaderChar corecharacter.Character
+	err = RunInTx(ctx, db, func(txCtx context.Context) error {
+		var err error
+		leaderChar, err = CreateTestCharacterWithFunds(txCtx, db, leaderName, leaderMoney)
+		if err != nil {
+			return err
+		}
+
+		now := time.Now().UTC()
+		testGuild := guild.Guild{
+			ID:                id.New(),
+			Name:              safeGuildName,
+			LeaderCharacterID: leaderChar.ID,
+			Points:            0,
+			Notice:            "Test Guild Notice",
+			Color:             guild.DefaultColor,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		creatorMember := guild.Member{
+			GuildID:     testGuild.ID,
+			CharacterID: leaderChar.ID,
+			Role:        guild.RoleLeader,
+			Title:       guild.DefaultTitleLeader,
+			JoinedAt:    now,
+		}
+
+		createdGuild, _, _, err = guildRepo.CreateGuild(txCtx, testGuild, creatorMember, 0)
+		return err
+	})
 	if err != nil {
 		return guild.Guild{}, corecharacter.Character{}, err
 	}
