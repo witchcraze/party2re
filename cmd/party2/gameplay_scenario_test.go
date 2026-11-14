@@ -55,11 +55,17 @@ func newScenarioApp(t *testing.T) *scenarioApp {
 			t.Error(err)
 		}
 	})
-	return newScenarioAppWithDB(t, db)
+	client, err := vk.NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	return newScenarioAppWithDB(t, db, client)
 }
 
-// newIsolatedScenarioApp runs wireApp against a dedicated cloned MariaDB database
-// for scenarios that advance or inspect shared singleton schedules (e.g. takarakuji_rounds).
+// newIsolatedScenarioApp runs wireApp against dedicated MariaDB and Valkey (DB 10)
+// stores so singleton schedules (e.g. takarakuji_rounds, takarakuji_draw) never affect
+// or observe shared DB 0 state used by other tests or running processes.
 func newIsolatedScenarioApp(t *testing.T) *scenarioApp {
 	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
@@ -98,16 +104,26 @@ func newIsolatedScenarioApp(t *testing.T) *scenarioApp {
 	}
 
 	db := wiringIsolatedDB(t, tables)
-	return newScenarioAppWithDB(t, db)
-}
-
-func newScenarioAppWithDB(t *testing.T, db *sql.DB) *scenarioApp {
-	t.Helper()
-	client, err := vk.NewClient()
+	vkCfg := vk.ConfigFromEnvironment()
+	vkCfg.DB = 10 // Isolated from shared DB 0 and casino integration DBs (11-15).
+	client, err := vk.NewClientWithConfig(vkCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(client.Close)
+	if err := client.Do(context.Background(), client.B().Flushdb().Build()).Error(); err != nil {
+		t.Fatalf("flush isolated valkey DB %d: %v", vkCfg.DB, err)
+	}
+	t.Cleanup(func() {
+		if err := client.Do(context.Background(), client.B().Flushdb().Build()).Error(); err != nil {
+			t.Errorf("flush isolated valkey DB %d: %v", vkCfg.DB, err)
+		}
+	})
+	return newScenarioAppWithDB(t, db, client)
+}
+
+func newScenarioAppWithDB(t *testing.T, db *sql.DB, client valkeygo.Client) *scenarioApp {
+	t.Helper()
 	uid := id.New()
 	// Give each scenario run its own documentation IP so repeated runs do not
 	// share Valkey's per-IP public auth rate-limit bucket (192.0.2.1).
@@ -597,38 +613,9 @@ func (r *scenarioZeroRollReader) Read(p []byte) (int, error) {
 	return r.orig.Read(p)
 }
 
-func cleanTakarakujiValkeySchedule(t *testing.T, client valkeygo.Client) {
-	t.Helper()
-	ctx := context.Background()
-	const actorKey = "party2:scheduled:actor:system"
-	const pendingKey = "party2:scheduled:pending"
-	ids, err := client.Do(ctx, client.B().Smembers().Key(actorKey).Build()).AsStrSlice()
-	if err != nil && !valkeygo.IsValkeyNil(err) {
-		t.Fatalf("read system schedule index: %v", err)
-	}
-	for _, actionID := range ids {
-		if !strings.HasPrefix(actionID, lottery.ActionTypeTakarakujiDraw+":") {
-			continue
-		}
-		if err := client.Do(ctx, client.B().Zrem().Key(pendingKey).Member(actionID).Build()).Error(); err != nil && !valkeygo.IsValkeyNil(err) {
-			t.Fatalf("remove pending %s: %v", actionID, err)
-		}
-		if err := client.Do(ctx, client.B().Srem().Key(actorKey).Member(actionID).Build()).Error(); err != nil && !valkeygo.IsValkeyNil(err) {
-			t.Fatalf("remove actor index %s: %v", actionID, err)
-		}
-		if err := client.Do(ctx, client.B().Del().Key("party2:scheduled:action:"+actionID, "party2:scheduled:lock:"+actionID).Build()).Error(); err != nil && !valkeygo.IsValkeyNil(err) {
-			t.Fatalf("delete action/lock %s: %v", actionID, err)
-		}
-	}
-}
-
 func TestGameplayScenario_TakarakujiDraw(t *testing.T) {
 	a := newIsolatedScenarioApp(t)
 	ctx := context.Background()
-	cleanTakarakujiValkeySchedule(t, a.valkey)
-	t.Cleanup(func() { cleanTakarakujiValkeySchedule(t, a.valkey) })
-	// Re-run wireTakarakujiDrawing after clearing any prior shared-Valkey takarakuji entry.
-	a.restart()
 
 	token, hero := a.register()
 	// Fund the ticket cost directly (starting gold is 200G; no fast Gateway gold source exists).
