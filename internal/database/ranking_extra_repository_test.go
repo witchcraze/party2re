@@ -90,6 +90,7 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	c.Level = 25
 	c.Experience = 500
 	c.CasinoWins = 15
+	c.Color = "#123456"
 	if err := charRepo.Save(ctx, c); err != nil {
 		t.Fatal(err)
 	}
@@ -351,8 +352,8 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	for _, ind := range monInductees {
 		if ind.CharacterID == charID {
 			foundMon = true
-			if ind.CharacterName != c.Name {
-				t.Fatalf("expected auto-enriched CharacterName %s, got %s", c.Name, ind.CharacterName)
+			if ind.CharacterName != c.Name || ind.Color != c.Color {
+				t.Fatalf("expected auto-enriched name/color %s/%s, got %s/%s", c.Name, c.Color, ind.CharacterName, ind.Color)
 			}
 			break
 		}
