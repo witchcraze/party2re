@@ -11,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
@@ -62,13 +63,16 @@ func (r *failingPlayerRepo) Delete(ctx context.Context, id string) error {
 }
 
 type deletionFixture struct {
-	db       *sql.DB
-	chars    *failingCharacterRepo
-	players  *failingPlayerRepo
-	guilds   *guild.Service
-	charSvc  *character.Service
-	accounts *player.Service
-	tokens   *database.PlayerAPITokenRepository
+	db           *sql.DB
+	chars        *failingCharacterRepo
+	players      *failingPlayerRepo
+	guilds       *guild.Service
+	charSvc      *character.Service
+	accounts     *player.Service
+	tokens       *database.PlayerAPITokenRepository
+	playerIDs    []string
+	characterIDs []string
+	newsIDs      []string
 }
 
 func newDeletionFixture(t *testing.T) *deletionFixture {
@@ -110,7 +114,10 @@ func newDeletionFixture(t *testing.T) *deletionFixture {
 	}
 	f.guilds, err = guild.NewService(guildRepo, guild.WithTransactionProvider(tx),
 		guild.WithNewsPublisher(newsFunc(func(ctx context.Context, cat, title, content, author string, at time.Time) error {
-			_, err := news.PublishNews(ctx, cat, title, content, author, at)
+			n, err := news.PublishNews(ctx, cat, title, content, author, at)
+			if err == nil {
+				f.newsIDs = append(f.newsIDs, n.ID)
+			}
 			return err
 		})))
 	if err != nil {
@@ -126,7 +133,38 @@ func newDeletionFixture(t *testing.T) *deletionFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		// Workers join before cleanup; rollback injections must not prevent teardown.
+		f.chars.failDelete, f.chars.failListing, f.players.failDelete = "", false, false
+		for _, charID := range f.characterIDs {
+			if err := f.charSvc.Delete(ctx, "", charID); err != nil && !errors.Is(err, character.ErrNotFound) {
+				t.Error(err)
+			}
+		}
+		for _, playerID := range f.playerIDs {
+			if err := f.players.PlayerRepository.Delete(ctx, playerID); err != nil {
+				t.Error(err)
+			}
+		}
+		for _, newsID := range f.newsIDs {
+			if _, err := f.db.ExecContext(ctx, `DELETE FROM news_articles WHERE id = ?`, newsID); err != nil {
+				t.Error(err)
+			}
+		}
+	})
 	return f
+}
+
+func (f *deletionFixture) player(t *testing.T) coreplayer.Player {
+	t.Helper()
+	p, err := database.CreateTestPlayer(context.Background(), f.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.playerIDs = append(f.playerIDs, p.ID)
+	return p
 }
 
 type newsFunc func(ctx context.Context, cat, title, content, author string, at time.Time) error
@@ -143,6 +181,8 @@ func (f *deletionFixture) character(t *testing.T, playerID string) corecharacter
 	if err != nil {
 		t.Fatal(err)
 	}
+	f.playerIDs = append(f.playerIDs, c.PlayerID)
+	f.characterIDs = append(f.characterIDs, c.ID)
 	if playerID != "" {
 		if _, err := f.db.ExecContext(ctx, `UPDATE characters SET player_id = ? WHERE id = ?`, playerID, c.ID); err != nil {
 			t.Fatal(err)
@@ -229,10 +269,7 @@ func TestAccountDeletionRollsBackOnFailure(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newDeletionFixture(t)
-			owner, err := database.CreateTestPlayer(ctx, f.db)
-			if err != nil {
-				t.Fatal(err)
-			}
+			owner := f.player(t)
 			a, b := f.character(t, owner.ID), f.character(t, owner.ID)
 			other := f.character(t, "")
 			solo := f.createGuild(t, a)          // A alone: deletion would disband it
@@ -282,10 +319,7 @@ func TestCharacterDeletionRollsBackGuildDeparture(t *testing.T) {
 func TestAccountDeletionSucceedsAcrossSharedGuild(t *testing.T) {
 	f := newDeletionFixture(t)
 	ctx := context.Background()
-	owner, err := database.CreateTestPlayer(ctx, f.db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	owner := f.player(t)
 	a, b := f.character(t, owner.ID), f.character(t, owner.ID)
 	other, solo := f.character(t, ""), f.character(t, owner.ID)
 	shared := f.createGuild(t, a, b, other) // both owned characters leave; other inherits
@@ -319,10 +353,7 @@ func TestAccountDeletionRacingGuildDeparture(t *testing.T) {
 	ctx := context.Background()
 	cfg := testutil.GetStressConfig()
 	for round := 0; round < cfg.Workers/3+1; round++ {
-		owner, err := database.CreateTestPlayer(ctx, f.db)
-		if err != nil {
-			t.Fatal(err)
-		}
+		owner := f.player(t)
 		a, b := f.character(t, owner.ID), f.character(t, owner.ID)
 		x, y := f.character(t, ""), f.character(t, "")
 		g := f.createGuild(t, a, x, b, y)
@@ -465,11 +496,9 @@ func (l lockOrderTx) waitBlocked(t *testing.T, db *sql.DB, done <-chan error, pa
 // player row first too, so a concurrent ban waits instead of deadlocking.
 func TestAccountDeletionSerializesWithBanLockOrder(t *testing.T) {
 	f := newDeletionFixture(t)
-	ctx := context.Background()
-	owner, err := database.CreateTestPlayer(ctx, f.db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	owner := f.player(t)
 	a := f.character(t, owner.ID)
 
 	monitor := lockMonitor(t)
@@ -478,7 +507,15 @@ func TestAccountDeletionSerializesWithBanLockOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { done <- f.accounts.DeleteAccount(ctx, owner.ID, "") }()
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		done <- f.accounts.DeleteAccount(ctx, owner.ID, "")
+	}()
+	t.Cleanup(func() {
+		_ = ban.Rollback()
+		<-finished
+	})
 	ban.waitBlocked(t, monitor, done,
 		"%FROM players WHERE id = ? FOR UPDATE", // current: player row first
 		"DELETE FROM players WHERE id = ?")      // previous order: player row last
@@ -497,7 +534,8 @@ func TestAccountDeletionSerializesWithBanLockOrder(t *testing.T) {
 // listings before locking characters, so a concurrent purchase completes first.
 func TestCharacterDeletionSerializesWithListingPurchase(t *testing.T) {
 	f := newDeletionFixture(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 	seller := f.character(t, "")
 	listingID := id.New()
 	if _, err := f.db.ExecContext(ctx, `INSERT INTO fleamarket_listings (id, seller_character_id, seller_name, item_id, item_name, price)
@@ -511,7 +549,15 @@ func TestCharacterDeletionSerializesWithListingPurchase(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { done <- f.charSvc.Delete(ctx, seller.PlayerID, seller.ID) }()
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		done <- f.charSvc.Delete(ctx, seller.PlayerID, seller.ID)
+	}()
+	t.Cleanup(func() {
+		_ = purchase.Rollback()
+		<-finished
+	})
 	purchase.waitBlocked(t, monitor, done, "DELETE FROM fleamarket_listings WHERE seller_character_id = ?")
 	if err := purchase.lock("characters", seller.ID); err != nil {
 		t.Fatalf("purchase-order seller lock: %v", err)
