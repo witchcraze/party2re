@@ -2,21 +2,29 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
 
+	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/lottery"
+	"github.com/witchcraze/party2re/internal/scheduling"
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -28,6 +36,7 @@ type scenarioApp struct {
 	db         *sql.DB
 	valkey     valkeygo.Client
 	router     http.Handler
+	worker     *scheduling.Worker
 	adminKey   string
 	remoteAddr string
 }
@@ -46,6 +55,54 @@ func newScenarioApp(t *testing.T) *scenarioApp {
 			t.Error(err)
 		}
 	})
+	return newScenarioAppWithDB(t, db)
+}
+
+// newIsolatedScenarioApp runs wireApp against a dedicated cloned MariaDB database
+// for scenarios that advance or inspect shared singleton schedules (e.g. takarakuji_rounds).
+func newIsolatedScenarioApp(t *testing.T) *scenarioApp {
+	t.Helper()
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("requires MariaDB and Valkey")
+	}
+	source, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := source.QueryContext(context.Background(), "SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
+	if err != nil {
+		_ = source.Close() //lint:ignore error-swallow test setup error takes precedence
+		t.Fatal(err)
+	}
+	var tables []string
+	for rows.Next() {
+		var name, tableType string
+		if err := rows.Scan(&name, &tableType); err != nil {
+			_ = rows.Close()   //lint:ignore error-swallow test setup error takes precedence
+			_ = source.Close() //lint:ignore error-swallow test setup error takes precedence
+			t.Fatal(err)
+		}
+		tables = append(tables, name)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()   //lint:ignore error-swallow test setup error takes precedence
+		_ = source.Close() //lint:ignore error-swallow test setup error takes precedence
+		t.Fatal(err)
+	}
+	if err := rows.Close(); err != nil {
+		_ = source.Close() //lint:ignore error-swallow test setup error takes precedence
+		t.Fatal(err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db := wiringIsolatedDB(t, tables)
+	return newScenarioAppWithDB(t, db)
+}
+
+func newScenarioAppWithDB(t *testing.T, db *sql.DB) *scenarioApp {
+	t.Helper()
 	client, err := vk.NewClient()
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +134,7 @@ func (a *scenarioApp) restart() {
 		a.t.Fatal(err)
 	}
 	a.router = app.handler.Router()
+	a.worker = app.worker
 }
 
 func (a *scenarioApp) call(token, method, path, body string, wantStatus int, out any) {
@@ -148,6 +206,9 @@ type scenarioContext struct {
 				ID          string          `json:"id"`
 				EnterParams json.RawMessage `json:"enter_params"`
 			} `json:"destinations"`
+			Page struct {
+				Next json.RawMessage `json:"next"`
+			} `json:"page"`
 			Deposit   int64 `json:"deposit"`
 			SaleOffer *struct {
 				ItemDefinitionID string `json:"item_definition_id"`
@@ -160,7 +221,12 @@ type scenarioContext struct {
 				DefinitionID   string         `json:"definition_id"`
 				Quantity       int            `json:"quantity"`
 			} `json:"items"`
-			ItemCount int `json:"item_count"`
+			ItemCount int                           `json:"item_count"`
+			RoundID   int                           `json:"round_id"`
+			SoldCount int                           `json:"sold_count"`
+			DrawDate  time.Time                     `json:"draw_date"`
+			Purchased bool                          `json:"purchased"`
+			Prizes    []lottery.TakarakujiPrizeItem `json:"prizes"`
 		} `json:"data"`
 	} `json:"scene"`
 	AvailableActions []struct {
@@ -212,16 +278,26 @@ func (a *scenarioApp) elapseActionWait(characterID string) {
 	}
 }
 
-// enter follows a destination the current town observation offers.
+// enter follows a destination the current observation offers, paging hubs when needed.
 func (a *scenarioApp) enter(token, characterID string, observed scenarioContext, destination string) scenarioContext {
 	a.t.Helper()
-	if !observed.offers("scene_enter") {
-		a.t.Fatalf("scene_enter is not offered: %+v", observed.AvailableActions)
-	}
-	for _, d := range observed.Scene.Data.Destinations {
-		if d.ID == destination {
-			return a.command(token, characterID, "scene_enter", d.EnterParams, http.StatusOK).Context
+	for {
+		if !observed.offers("scene_enter") {
+			a.t.Fatalf("scene_enter is not offered: %+v", observed.AvailableActions)
 		}
+		for _, d := range observed.Scene.Data.Destinations {
+			if d.ID == destination {
+				return a.command(token, characterID, "scene_enter", d.EnterParams, http.StatusOK).Context
+			}
+		}
+		if len(observed.Scene.Data.Page.Next) == 0 || string(observed.Scene.Data.Page.Next) == "null" {
+			break
+		}
+		if !observed.offers("scene_page") {
+			a.t.Fatalf("scene_page is not offered: %+v", observed.AvailableActions)
+		}
+		a.elapseActionWait(characterID)
+		observed = a.command(token, characterID, "scene_page", observed.Scene.Data.Page.Next, http.StatusOK).Context
 	}
 	a.t.Fatalf("destination %s is not offered: %+v", destination, observed.Scene.Data.Destinations)
 	return scenarioContext{}
@@ -504,5 +580,218 @@ func TestGameplayScenario_AccountLogoutBanDeletion(t *testing.T) {
 	a.call("", http.MethodGet, "/characters/"+reused.ID+"/profile", "", http.StatusOK, &profile)
 	if profile.Character.Name != nameA {
 		t.Fatalf("want reused profile name %q, got %q", nameA, profile.Character.Name)
+	}
+}
+
+type scenarioZeroRollReader struct {
+	orig io.Reader
+}
+
+func (r *scenarioZeroRollReader) Read(p []byte) (int, error) {
+	if len(p) < 16 {
+		for i := range p {
+			p[i] = 0
+		}
+		return len(p), nil
+	}
+	return r.orig.Read(p)
+}
+
+func cleanTakarakujiValkeySchedule(t *testing.T, client valkeygo.Client) {
+	t.Helper()
+	ctx := context.Background()
+	const actorKey = "party2:scheduled:actor:system"
+	const pendingKey = "party2:scheduled:pending"
+	ids, err := client.Do(ctx, client.B().Smembers().Key(actorKey).Build()).AsStrSlice()
+	if err != nil && !valkeygo.IsValkeyNil(err) {
+		t.Fatalf("read system schedule index: %v", err)
+	}
+	for _, actionID := range ids {
+		if !strings.HasPrefix(actionID, lottery.ActionTypeTakarakujiDraw+":") {
+			continue
+		}
+		if err := client.Do(ctx, client.B().Zrem().Key(pendingKey).Member(actionID).Build()).Error(); err != nil && !valkeygo.IsValkeyNil(err) {
+			t.Fatalf("remove pending %s: %v", actionID, err)
+		}
+		if err := client.Do(ctx, client.B().Srem().Key(actorKey).Member(actionID).Build()).Error(); err != nil && !valkeygo.IsValkeyNil(err) {
+			t.Fatalf("remove actor index %s: %v", actionID, err)
+		}
+		if err := client.Do(ctx, client.B().Del().Key("party2:scheduled:action:"+actionID, "party2:scheduled:lock:"+actionID).Build()).Error(); err != nil && !valkeygo.IsValkeyNil(err) {
+			t.Fatalf("delete action/lock %s: %v", actionID, err)
+		}
+	}
+}
+
+func TestGameplayScenario_TakarakujiDraw(t *testing.T) {
+	a := newIsolatedScenarioApp(t)
+	ctx := context.Background()
+	cleanTakarakujiValkeySchedule(t, a.valkey)
+	t.Cleanup(func() { cleanTakarakujiValkeySchedule(t, a.valkey) })
+	// Re-run wireTakarakujiDrawing after clearing any prior shared-Valkey takarakuji entry.
+	a.restart()
+
+	token, hero := a.register()
+	// Fund the ticket cost directly (starting gold is 200G; no fast Gateway gold source exists).
+	if _, err := a.db.ExecContext(ctx, `UPDATE characters SET money = ? WHERE id = ?`, lottery.TakarakujiCostGold, hero); err != nil {
+		t.Fatal(err)
+	}
+
+	origReader := rand.Reader
+	rand.Reader = &scenarioZeroRollReader{orig: origReader}
+	defer func() { rand.Reader = origReader }()
+
+	town := a.context(token, hero)
+	takScene := a.enter(token, hero, town, "takarakuji")
+	if !takScene.offers("takarakuji_buy") {
+		t.Fatalf("takarakuji scene did not offer takarakuji_buy: %+v", takScene.AvailableActions)
+	}
+	roundID := takScene.Scene.Data.RoundID
+	if roundID <= 0 || takScene.Scene.Data.Purchased || len(takScene.Scene.Data.Prizes) != 3 {
+		t.Fatalf("unexpected initial takarakuji scene: %+v", takScene.Scene.Data)
+	}
+	wantPrizeID := lottery.IttoPrizeCandidates[0]
+	if takScene.Scene.Data.Prizes[0].ItemID != wantPrizeID {
+		t.Fatalf("1st prize item = %s, want %s under deterministic roll", takScene.Scene.Data.Prizes[0].ItemID, wantPrizeID)
+	}
+	wantPrizeName := takScene.Scene.Data.Prizes[0].ItemName
+	wantNoticeMsg := fmt.Sprintf("預かり所に%sから%sが届いています", lottery.TakarakujiNPCName, wantPrizeName)
+
+	a.elapseActionWait(hero)
+	bought := a.command(token, hero, "takarakuji_buy", map[string]any{}, http.StatusOK)
+	var buyResult struct {
+		Purchased     bool `json:"purchased"`
+		RemainingGold int  `json:"remaining_gold"`
+		Ticket        struct {
+			RoundID     int    `json:"round_id"`
+			CharacterID string `json:"character_id"`
+		} `json:"ticket"`
+	}
+	if err := json.Unmarshal(bought.Result, &buyResult); err != nil {
+		t.Fatal(err)
+	}
+	if !buyResult.Purchased || buyResult.RemainingGold != 0 || buyResult.Ticket.RoundID != roundID || buyResult.Ticket.CharacterID != hero {
+		t.Fatalf("unexpected buy result: %s", bought.Result)
+	}
+
+	// Expire both the SQL round deadline and the scheduled Valkey action through their stores.
+	past := time.Now().UTC().Add(-2 * time.Minute)
+	if _, err := a.db.ExecContext(ctx, `UPDATE takarakuji_rounds SET draw_date = ? WHERE round_id = ?`, past, roundID); err != nil {
+		t.Fatal(err)
+	}
+	schedRepo := scheduling.NewValkeyRepository(a.valkey)
+	pendingBefore, err := schedRepo.FindPendingByActorID(ctx, "system")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var drawAction core_scheduling.ScheduledAction
+	foundAction := false
+	for _, act := range pendingBefore {
+		if act.ActionType == lottery.ActionTypeTakarakujiDraw {
+			act.ExecuteAt = past
+			if err := schedRepo.Schedule(ctx, act); err != nil {
+				t.Fatal(err)
+			}
+			drawAction = act
+			foundAction = true
+			break
+		}
+	}
+	if !foundAction {
+		t.Fatalf("expected wireApp to schedule %s action under system actor", lottery.ActionTypeTakarakujiDraw)
+	}
+
+	// Before the worker runs, GET shows the purchase and settles nothing even past the deadline.
+	beforeWorker := a.context(token, hero)
+	if beforeWorker.Scene.Data.RoundID != roundID || !beforeWorker.Scene.Data.Purchased || beforeWorker.Scene.Data.SoldCount != 1 {
+		t.Fatalf("GET before worker unexpectedly settled or lost purchase: %+v", beforeWorker.Scene.Data)
+	}
+	var noticesBefore []home.DeliveryNotice
+	a.call(token, http.MethodGet, "/homes/"+hero+"/notices?uncleared_only=true", "", http.StatusOK, &noticesBefore)
+	if len(noticesBefore) != 0 {
+		t.Fatalf("expected 0 delivery notices before worker runs, got %+v", noticesBefore)
+	}
+
+	// Trigger settlement strictly through the production worker returned by wireApp.
+	dueActions, err := schedRepo.FetchDue(ctx, time.Now().UTC(), 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dueDraw core_scheduling.ScheduledAction
+	foundDue := false
+	for _, act := range dueActions {
+		if act.ID == drawAction.ID {
+			dueDraw = act
+			foundDue = true
+			break
+		}
+	}
+	if !foundDue {
+		t.Fatalf("expired takarakuji draw action %s not returned by FetchDue", drawAction.ID)
+	}
+
+	beforeRun := time.Now().UTC()
+	a.worker.ProcessAction(ctx, dueDraw)
+	afterRun := time.Now().UTC()
+
+	// Observe the settled draw and next round through Gateway GET.
+	afterWorker := a.context(token, hero)
+	nextRoundID := afterWorker.Scene.Data.RoundID
+	if nextRoundID != roundID+1 || afterWorker.Scene.Data.Purchased || afterWorker.Scene.Data.SoldCount != 0 {
+		t.Fatalf("expected settled round and clean next round in GET context, got %+v", afterWorker.Scene.Data)
+	}
+	wantNextA := lottery.NextDrawDateJST(beforeRun)
+	wantNextB := lottery.NextDrawDateJST(afterRun)
+	gotNext := afterWorker.Scene.Data.DrawDate
+	if !gotNext.Equal(wantNextA) && !gotNext.Equal(wantNextB) {
+		t.Fatalf("next round DrawDate = %v, want %v (or %v)", gotNext, wantNextA, wantNextB)
+	}
+	jst := time.FixedZone("JST", 9*60*60)
+	gotNextJST := gotNext.In(jst)
+	if (gotNextJST.Day() != 1 && gotNextJST.Day() != 11 && gotNextJST.Day() != 21) ||
+		gotNextJST.Hour() != 0 || gotNextJST.Minute() != 0 || gotNextJST.Second() != 0 || !gotNext.After(beforeRun) {
+		t.Fatalf("next round DrawDate %v violates docs/design/lottery.md (1st/11th/21st 00:00 JST in future)", gotNextJST)
+	}
+
+	// Verify the prize landed in Depot and produced one @クラゲ Home delivery notice.
+	a.elapseActionWait(hero)
+	depotCtx := a.enter(token, hero, town, "depot")
+	if depotCtx.Scene.Data.ItemCount != 1 || len(depotCtx.Scene.Data.Items) != 1 ||
+		depotCtx.Scene.Data.Items[0].DefinitionID != wantPrizeID || depotCtx.Scene.Data.Items[0].Quantity != 1 {
+		t.Fatalf("expected 1 prize %s in depot, got %+v", wantPrizeID, depotCtx.Scene.Data)
+	}
+	var noticesAfter []home.DeliveryNotice
+	a.call(token, http.MethodGet, "/homes/"+hero+"/notices?uncleared_only=true", "", http.StatusOK, &noticesAfter)
+	if len(noticesAfter) != 1 || noticesAfter[0].NoticeType != depot.NoticeItemTransfer || noticesAfter[0].Message != wantNoticeMsg {
+		t.Fatalf("expected 1 notice %q, got %+v", wantNoticeMsg, noticesAfter)
+	}
+
+	// Re-processing the same action through the worker must credit prize and notice only once.
+	a.worker.ProcessAction(ctx, dueDraw)
+
+	depotAgain := a.context(token, hero)
+	if depotAgain.Scene.Data.ItemCount != 1 || len(depotAgain.Scene.Data.Items) != 1 ||
+		depotAgain.Scene.Data.Items[0].DefinitionID != wantPrizeID || depotAgain.Scene.Data.Items[0].Quantity != 1 {
+		t.Fatalf("re-processing worker action duplicated depot prize: %+v", depotAgain.Scene.Data)
+	}
+	var noticesAgain []home.DeliveryNotice
+	a.call(token, http.MethodGet, "/homes/"+hero+"/notices?uncleared_only=true", "", http.StatusOK, &noticesAgain)
+	if len(noticesAgain) != 1 {
+		t.Fatalf("re-processing worker action duplicated delivery notice: %+v", noticesAgain)
+	}
+
+	// Verify the next round draw action remains scheduled in Valkey.
+	pendingAfter, err := schedRepo.FindPendingByActorID(ctx, "system")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nextActionFound bool
+	for _, act := range pendingAfter {
+		if act.ActionType == lottery.ActionTypeTakarakujiDraw && act.State == core_scheduling.StatePending && act.ExecuteAt.Equal(gotNext) {
+			nextActionFound = true
+			break
+		}
+	}
+	if !nextActionFound {
+		t.Fatalf("expected pending next takarakuji draw action at %v in Valkey, got %+v", gotNext, pendingAfter)
 	}
 }

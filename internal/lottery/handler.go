@@ -2,6 +2,7 @@ package lottery
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
@@ -52,9 +53,9 @@ func NewDrawHandler(service *Service, opts ...DrawOption) *DrawHandler {
 
 // Handle executes the takarakuji drawing logic and schedules the next round.
 func (h *DrawHandler) Handle(ctx context.Context, action core_scheduling.ScheduledAction) error {
-	now := action.ExecuteAt
-	if now.IsZero() {
-		now = time.Now().UTC()
+	now := h.service.now()
+	if action.ExecuteAt.After(now) {
+		now = action.ExecuteAt
 	}
 	result, err := h.service.DrawTakarakuji(ctx, now)
 	if err != nil {
@@ -63,7 +64,14 @@ func (h *DrawHandler) Handle(ctx context.Context, action core_scheduling.Schedul
 
 	if h.scheduler != nil {
 		nextDrawDate := result.NextRound.DrawDate
-		_ = h.scheduler.ScheduleWithID(ctx, DrawActionID(nextDrawDate), ActionTypeTakarakujiDraw, "system", nil, nextDrawDate)
+		nextID := DrawActionID(nextDrawDate)
+		if nextID == action.ID {
+			// Avoid overwriting the next-round Pending record when Worker marks action.ID completed.
+			nextID = fmt.Sprintf("%s:round-%d", nextID, result.NextRound.RoundID)
+		}
+		if err := h.scheduler.ScheduleWithID(ctx, nextID, ActionTypeTakarakujiDraw, "system", nil, nextDrawDate); err != nil {
+			return err
+		}
 	}
 
 	return nil

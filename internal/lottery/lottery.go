@@ -72,6 +72,11 @@ type CollectionRecorder interface {
 	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
 }
 
+// DeliveryNotifier records a recipient Home delivery notice inside the caller's transaction.
+type DeliveryNotifier interface {
+	AddDeliveryNotice(ctx context.Context, characterID, noticeType, message string) error
+}
+
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
@@ -94,6 +99,7 @@ type Service struct {
 	charRepo           CharacterRepository
 	itemDefProvider    ItemDefinitionProvider
 	collectionRecorder CollectionRecorder
+	deliveryNotifier   DeliveryNotifier
 	txProvider         TransactionProvider
 	clock              Clock
 }
@@ -118,6 +124,11 @@ func WithItemDefinitionProvider(p ItemDefinitionProvider) Option {
 
 func WithCollectionRecorder(r CollectionRecorder) Option {
 	return func(s *Service) { s.collectionRecorder = r }
+}
+
+// WithDeliveryNotifier enables Home delivery notices for delivered takarakuji prizes.
+func WithDeliveryNotifier(n DeliveryNotifier) Option {
+	return func(s *Service) { s.deliveryNotifier = n }
 }
 
 func WithTransactionProvider(tp TransactionProvider) Option {
