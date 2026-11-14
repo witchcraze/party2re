@@ -28,7 +28,7 @@ func (r *ShopRepository) CommitTransaction(ctx context.Context, character corech
 			return err
 		}
 
-		if _, err := executor.ExecContext(txCtx, "DELETE FROM inventory_items WHERE character_id = ?", inventory.CharacterID); err != nil {
+		if _, err := executor.ExecContext(txCtx, "DELETE inventory_items FROM inventory_items FORCE INDEX (idx_inventory_items_character) WHERE character_id = ?", inventory.CharacterID); err != nil {
 			return err
 		}
 		for _, instance := range inventory.Items {

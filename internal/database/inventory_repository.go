@@ -26,7 +26,7 @@ func (r *InventoryRepository) Save(ctx context.Context, value coreinventory.Inve
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 		if len(value.Items) == 0 {
-			_, err := executor.ExecContext(txCtx, "DELETE FROM inventory_items WHERE character_id = ?", value.CharacterID)
+			_, err := executor.ExecContext(txCtx, "DELETE inventory_items FROM inventory_items FORCE INDEX (idx_inventory_items_character) WHERE character_id = ?", value.CharacterID)
 			return err
 		}
 
@@ -48,7 +48,7 @@ func (r *InventoryRepository) Save(ctx context.Context, value coreinventory.Inve
 			}
 		}
 
-		query := fmt.Sprintf("DELETE FROM inventory_items WHERE character_id = ? AND id NOT IN (%s)", strings.Join(placeholders, ","))
+		query := fmt.Sprintf("DELETE inventory_items FROM inventory_items FORCE INDEX (idx_inventory_items_character) WHERE character_id = ? AND id NOT IN (%s)", strings.Join(placeholders, ","))
 		if _, err := executor.ExecContext(txCtx, query, currentIDs...); err != nil {
 			return err
 		}
@@ -66,9 +66,10 @@ func (r *InventoryRepository) FindByCharacterID(ctx context.Context, characterID
 }
 
 func (r *InventoryRepository) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	// Full scans on sparse tables can lock another character's items.
 	return r.findByCharacterIDWithQuery(ctx, characterID, `
 		SELECT id, definition_id, quantity, enhancement_level
-		FROM inventory_items
+		FROM inventory_items FORCE INDEX (idx_inventory_items_character)
 		WHERE character_id = ?
 		ORDER BY id FOR UPDATE
 	`)

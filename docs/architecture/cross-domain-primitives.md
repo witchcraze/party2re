@@ -67,11 +67,14 @@ changing timestamps only for current positive balances under lock. This includes
 GP awarded while decay waits; a bulk update through the points index can acquire
 locks in a conflicting order.
 
-Depot serializes changes through the `character_depots` parent row and reads
-items with `FOR UPDATE` to retain the latest committed state. Both locking item
-reads and item deletions explicitly use `idx_depot_items_character`: sparse
-tables can otherwise select a full scan and lock another character's rows.
-`READ COMMITTED` alone does not bound this scan to the owning character.
+Depot and Gem Box serialize changes through their parent rows (`character_depots`
+and `character_gem_boxes`) and read items with `FOR UPDATE` to retain the latest
+committed state; Inventory reads `inventory_items` with `FOR UPDATE` under the
+character lock. Locking item reads and item deletions on `depot_items`,
+`inventory_items`, and `gem_box_items` (including character deletion) explicitly
+force their `character_id` secondary indexes: sparse tables can otherwise select
+a primary scan and lock another character's rows. `READ COMMITTED` alone does
+not bound this scan to the owning character.
 
 The runner acquires character before inventory. A callback must not first lock
 a later-rank table and then cause lazy inventory acquisition through `AddGrant`;

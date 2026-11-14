@@ -78,9 +78,10 @@ func (r *GemBoxRepository) FindByCharacterIDForUpdate(ctx context.Context, chara
 		return gemstore.GemBox{}, err
 	}
 
+	// Full scans on sparse tables can lock another character's items.
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, definition_id
-		FROM gem_box_items
+		FROM gem_box_items FORCE INDEX (idx_gem_box_items_character)
 		WHERE character_id = ?
 		ORDER BY slot_index, id FOR UPDATE
 	`, characterID)
@@ -123,7 +124,7 @@ func saveGemBoxTx(ctx context.Context, executor sqlContextExecutor, value gemsto
 	}
 
 	if len(value.Items) == 0 {
-		_, err = executor.ExecContext(ctx, "DELETE FROM gem_box_items WHERE character_id = ?", value.CharacterID)
+		_, err = executor.ExecContext(ctx, "DELETE gem_box_items FROM gem_box_items FORCE INDEX (idx_gem_box_items_character) WHERE character_id = ?", value.CharacterID)
 		return err
 	}
 
@@ -134,7 +135,7 @@ func saveGemBoxTx(ctx context.Context, executor sqlContextExecutor, value gemsto
 	placeholders := strings.Repeat("?,", len(ids))
 	placeholders = placeholders[:len(placeholders)-1]
 	args := append([]any{value.CharacterID}, ids...)
-	if _, err := executor.ExecContext(ctx, fmt.Sprintf("DELETE FROM gem_box_items WHERE character_id = ? AND id NOT IN (%s)", placeholders), args...); err != nil {
+	if _, err := executor.ExecContext(ctx, fmt.Sprintf("DELETE gem_box_items FROM gem_box_items FORCE INDEX (idx_gem_box_items_character) WHERE character_id = ? AND id NOT IN (%s)", placeholders), args...); err != nil {
 		return err
 	}
 
