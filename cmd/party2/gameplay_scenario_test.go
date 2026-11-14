@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,10 +24,12 @@ import (
 // router with real MariaDB, Valkey and authentication. Nothing is a double, so
 // a scenario acts only on what registration, context and outcomes return.
 type scenarioApp struct {
-	t      *testing.T
-	db     *sql.DB
-	valkey valkeygo.Client
-	router http.Handler
+	t          *testing.T
+	db         *sql.DB
+	valkey     valkeygo.Client
+	router     http.Handler
+	adminKey   string
+	remoteAddr string
 }
 
 func newScenarioApp(t *testing.T) *scenarioApp {
@@ -48,7 +51,11 @@ func newScenarioApp(t *testing.T) *scenarioApp {
 		t.Fatal(err)
 	}
 	t.Cleanup(client.Close)
-	a := &scenarioApp{t: t, db: db, valkey: client}
+	uid := id.New()
+	// Give each scenario run its own documentation IP so repeated runs do not
+	// share Valkey's per-IP public auth rate-limit bucket (192.0.2.1).
+	remoteAddr := fmt.Sprintf("[2001:db8:%s:%s:%s:%s]:1234", uid[0:4], uid[4:8], uid[8:12], uid[12:16])
+	a := &scenarioApp{t: t, db: db, valkey: client, remoteAddr: remoteAddr}
 	a.restart()
 	return a
 }
@@ -62,6 +69,9 @@ func (a *scenarioApp) restart() {
 	}
 	// Registration caps have dedicated DB coverage; this journey must ignore unrelated players.
 	cfg.Player.MaxPlayers = 0
+	if a.adminKey != "" {
+		cfg.Admin.APIKey = a.adminKey
+	}
 	app, err := wireApp(a.db, a.valkey, cfg, logging.Nop())
 	if err != nil {
 		a.t.Fatal(err)
@@ -71,10 +81,21 @@ func (a *scenarioApp) restart() {
 
 func (a *scenarioApp) call(token, method, path, body string, wantStatus int, out any) {
 	a.t.Helper()
+	a.callWithHeaders(token, method, path, body, nil, wantStatus, out)
+}
+
+func (a *scenarioApp) callWithHeaders(token, method, path, body string, headers map[string]string, wantStatus int, out any) {
+	a.t.Helper()
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
+	if a.remoteAddr != "" {
+		r.RemoteAddr = a.remoteAddr
+	}
 	r.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	for k, v := range headers {
+		r.Header.Set(k, v)
 	}
 	w := httptest.NewRecorder()
 	a.router.ServeHTTP(w, r)
@@ -92,16 +113,28 @@ func (a *scenarioApp) call(token, method, path, body string, wantStatus int, out
 // deletes the account, with everything it owns, when the test ends.
 func (a *scenarioApp) register() (token, characterID string) {
 	a.t.Helper()
-	name := "s" + id.New()[:7]
+	_, _, token, characterID = a.registerAccount(true)
+	return token, characterID
+}
+
+func (a *scenarioApp) registerAccount(autoCleanup bool) (playerID, name, token, characterID string) {
+	a.t.Helper()
+	name = "s" + id.New()[:7]
 	credentials := `{"username":"` + name + `","password":"scenario-pass-1"}`
 	a.call("", http.MethodPost, "/players", credentials, http.StatusCreated, nil)
-	var session, character struct{ ID string }
+	var session struct {
+		ID       string `json:"id"`
+		PlayerID string `json:"player_id"`
+	}
+	var character struct{ ID string }
 	a.call("", http.MethodPost, "/sessions", credentials, http.StatusCreated, &session)
-	a.t.Cleanup(func() {
-		a.call(session.ID, http.MethodDelete, "/players/me", `{"password":"scenario-pass-1"}`, http.StatusOK, nil)
-	})
+	if autoCleanup {
+		a.t.Cleanup(func() {
+			a.call(session.ID, http.MethodDelete, "/players/me", `{"password":"scenario-pass-1"}`, http.StatusOK, nil)
+		})
+	}
 	a.call(session.ID, http.MethodPost, "/characters", `{"name":"`+name+`","job_id":"job-01","gender":"m"}`, http.StatusCreated, &character)
-	return session.ID, character.ID
+	return session.PlayerID, name, session.ID, character.ID
 }
 
 type scenarioContext struct {
@@ -258,17 +291,7 @@ func TestGameplayScenario_NoviceDepositPurchaseEquip(t *testing.T) {
 		t.Fatalf("unexpected weapon shop: %+v", shop)
 	}
 	item := shop.Scene.Data.Items[0]
-	params := map[string]any{"quantity": 1}
-	for _, action := range shop.AvailableActions {
-		if action.Action == "shop_purchase" {
-			for k, v := range action.ParamsTemplate {
-				params[k] = v
-			}
-		}
-	}
-	for k, v := range item.PurchaseParams {
-		params[k] = v
-	}
+	params := shopPurchaseParams(shop)
 
 	gold := startingGold - 10
 	// Legacy purchase: the first item goes to the empty hand, later ones to the Depot.
@@ -304,5 +327,182 @@ func TestGameplayScenario_NoviceDepositPurchaseEquip(t *testing.T) {
 		if final := a.context(token, hero); !stored(final) {
 			t.Fatalf("observation drifted: %+v", final)
 		}
+	}
+}
+
+func shopPurchaseParams(shop scenarioContext) map[string]any {
+	item := shop.Scene.Data.Items[0]
+	params := map[string]any{"quantity": 1}
+	for _, action := range shop.AvailableActions {
+		if action.Action == "shop_purchase" {
+			for k, v := range action.ParamsTemplate {
+				params[k] = v
+			}
+		}
+	}
+	for k, v := range item.PurchaseParams {
+		params[k] = v
+	}
+	return params
+}
+
+func (a *scenarioApp) assertRejectedTransport(token, method, path, body string, wantStatus int, wantErr string) {
+	a.t.Helper()
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	a.call(token, method, path, body, wantStatus, &errResp)
+	if wantErr != "" && errResp.Error != wantErr {
+		a.t.Fatalf("%s %s: want error %q, got %q", method, path, wantErr, errResp.Error)
+	}
+}
+
+func (a *scenarioApp) assertRejectedSession(token, charID string) {
+	a.t.Helper()
+	a.assertRejectedTransport(token, http.MethodGet, "/api/v1/characters/"+charID+"/context", "", http.StatusUnauthorized, "invalid session")
+	a.assertRejectedTransport(token, http.MethodPost, "/api/v1/characters/"+charID+"/actions", `{"action":"presence_refresh","params":{}}`, http.StatusUnauthorized, "invalid session")
+}
+
+func (a *scenarioApp) assertRowCount(query string, arg any, want int) {
+	a.t.Helper()
+	var count int
+	if err := a.db.QueryRowContext(context.Background(), query, arg).Scan(&count); err != nil {
+		a.t.Fatalf("%s: %v", query, err)
+	}
+	if count != want {
+		a.t.Fatalf("%s (%v): want %d rows, got %d", query, arg, want, count)
+	}
+}
+
+func TestGameplayScenario_AccountLogoutBanDeletion(t *testing.T) {
+	a := newScenarioApp(t)
+	a.adminKey = "scenario-admin-" + id.New()[:8]
+	a.restart()
+
+	// Account A holds a bank deposit and a Depot item before logout and self-deletion.
+	playerA, nameA, tokenA, charA := a.registerAccount(false)
+	townA := a.context(tokenA, charA)
+	a.enter(tokenA, charA, townA, "bank")
+	deposited := a.command(tokenA, charA, "bank_deposit", map[string]any{"amount": 10}, http.StatusOK).Context
+	if deposited.Scene.Data.Deposit != 10 {
+		t.Fatalf("expected bank deposit 10, got %+v", deposited.Scene.Data)
+	}
+	a.elapseActionWait(charA)
+	shopA := a.enter(tokenA, charA, townA, "shop_weapon")
+	if !shopA.offers("shop_purchase") || len(shopA.Scene.Data.Items) == 0 {
+		t.Fatalf("unexpected weapon shop: %+v", shopA)
+	}
+	buyParams := shopPurchaseParams(shopA)
+	for range 2 {
+		a.elapseActionWait(charA)
+		a.command(tokenA, charA, "shop_purchase", buyParams, http.StatusOK)
+	}
+	a.elapseActionWait(charA)
+	if depot := a.enter(tokenA, charA, townA, "depot"); depot.Scene.Data.ItemCount != 1 {
+		t.Fatalf("expected 1 depot item before deletion, got %+v", depot.Scene.Data)
+	}
+
+	// Logout invalidates the session for both observation and commands; a new login succeeds.
+	a.call(tokenA, http.MethodDelete, "/sessions", "", http.StatusNoContent, nil)
+	a.assertRejectedSession(tokenA, charA)
+
+	credsA := `{"username":"` + nameA + `","password":"scenario-pass-1"}`
+	var reloginResp struct {
+		ID string `json:"id"`
+	}
+	a.call("", http.MethodPost, "/sessions", credsA, http.StatusCreated, &reloginResp)
+	if reloginResp.ID == "" || reloginResp.ID == tokenA {
+		t.Fatalf("expected fresh session token on relogin, got %+v", reloginResp)
+	}
+	tokenA = reloginResp.ID
+	if recovered := a.context(tokenA, charA); recovered.Scene.LocationID != "depot" || recovered.Scene.Data.ItemCount != 1 {
+		t.Fatalf("relogin did not preserve depot state: %+v", recovered)
+	}
+
+	// Register Account B (to ban) and Account C (unaffected observer).
+	playerB, nameB, tokenB, charB := a.registerAccount(false)
+	t.Cleanup(func() {
+		ctx := context.Background()
+		charRepo, err := database.NewCharacterRepository(a.db)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		playerRepo, err := database.NewPlayerRepository(a.db)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if err := charRepo.Delete(ctx, charB); err != nil {
+			t.Error(err)
+		}
+		if err := playerRepo.Delete(ctx, playerB); err != nil {
+			t.Error(err)
+		}
+	})
+	tokenC, charC := a.register()
+	a.context(tokenB, charB)
+
+	// Banning Account B with the configured admin key revokes its existing session (401)
+	// and blocks new logins (403) while leaving Account C unaffected.
+	a.callWithHeaders("", http.MethodPost, "/admin/players/"+playerB+"/ban", "", map[string]string{"X-Admin-Key": a.adminKey}, http.StatusOK, nil)
+	a.assertRejectedSession(tokenB, charB)
+	credsB := `{"username":"` + nameB + `","password":"scenario-pass-1"}`
+	a.assertRejectedTransport("", http.MethodPost, "/sessions", credsB, http.StatusForbidden, "player account is banned")
+
+	a.context(tokenC, charC)
+	a.command(tokenC, charC, "presence_refresh", map[string]any{}, http.StatusOK)
+
+	// Before deletion, public reads return charA and its assets exist.
+	var profile struct {
+		Character struct {
+			Name string `json:"name"`
+		} `json:"character"`
+	}
+	a.call("", http.MethodGet, "/characters/"+charA+"/profile", "", http.StatusOK, &profile)
+	if profile.Character.Name != nameA {
+		t.Fatalf("want profile name %q, got %q", nameA, profile.Character.Name)
+	}
+	a.call("", http.MethodGet, "/characters/"+charA+"/trajectory", "", http.StatusOK, nil)
+	a.call("", http.MethodGet, "/homes/"+charA, "", http.StatusOK, nil)
+	a.assertRowCount(`SELECT COUNT(*) FROM characters WHERE id = ? AND deposit = 10`, charA, 1)
+	a.assertRowCount(`SELECT COUNT(*) FROM character_depots WHERE character_id = ?`, charA, 1)
+	a.assertRowCount(`SELECT COUNT(*) FROM depot_items WHERE character_id = ?`, charA, 1)
+
+	// Self-deletion invalidates the session, removes owned rows/public reads, and frees the character name.
+	var deleted struct {
+		Deleted  bool   `json:"deleted"`
+		PlayerID string `json:"player_id"`
+	}
+	a.call(tokenA, http.MethodDelete, "/players/me", `{"password":"scenario-pass-1"}`, http.StatusOK, &deleted)
+	if !deleted.Deleted || deleted.PlayerID != playerA {
+		t.Fatalf("unexpected delete response: %+v", deleted)
+	}
+
+	a.assertRejectedSession(tokenA, charA)
+	a.assertRejectedTransport("", http.MethodPost, "/sessions", credsA, http.StatusUnauthorized, "authentication failed")
+
+	a.assertRejectedTransport("", http.MethodGet, "/characters/"+charA+"/profile", "", http.StatusNotFound, "character not found")
+	a.assertRejectedTransport("", http.MethodGet, "/characters/"+charA+"/trajectory", "", http.StatusNotFound, "character not found")
+	a.assertRejectedTransport("", http.MethodGet, "/homes/"+charA, "", http.StatusNotFound, "")
+	a.assertRejectedTransport(tokenC, http.MethodGet, "/characters/"+charA, "", http.StatusNotFound, "")
+
+	a.assertRowCount(`SELECT COUNT(*) FROM characters WHERE id = ?`, charA, 0)
+	a.assertRowCount(`SELECT COUNT(*) FROM character_depots WHERE character_id = ?`, charA, 0)
+	a.assertRowCount(`SELECT COUNT(*) FROM depot_items WHERE character_id = ?`, charA, 0)
+	a.assertRowCount(`SELECT COUNT(*) FROM players WHERE id = ?`, playerA, 0)
+
+	// Legacy frees the character name upon directory deletion (new_entry.cgi, delete.cgi).
+	var reused struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	a.call(tokenC, http.MethodPost, "/characters", `{"name":"`+nameA+`","job_id":"job-01","gender":"m"}`, http.StatusCreated, &reused)
+	if reused.ID == "" || reused.Name != nameA {
+		t.Fatalf("expected reused character name %q, got %+v", nameA, reused)
+	}
+	a.call("", http.MethodGet, "/characters/"+reused.ID+"/profile", "", http.StatusOK, &profile)
+	if profile.Character.Name != nameA {
+		t.Fatalf("want reused profile name %q, got %q", nameA, profile.Character.Name)
 	}
 }

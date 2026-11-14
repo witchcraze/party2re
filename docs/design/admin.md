@@ -43,7 +43,7 @@ All `/admin/*` routes enforce strict credential verification:
 - **Guild Cleanup**: Automatically removes all characters owned by the banned player from their respective guilds, transferring leadership or disbanding as necessary.
 - **Enforcement**:
   - `POST /sessions` (Login): Returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
-  - Authenticated character and gameplay requests: Returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
+  - Authenticated character and gameplay requests: Synchronously purged sessions and deleted PATs return HTTP `401 Unauthorized`; any unrevoked session or PAT still resolving to the banned player returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
 
 ### 3.3 Optional IP Registration Denial (Planned)
 
