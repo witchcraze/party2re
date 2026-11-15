@@ -217,6 +217,12 @@ type scenarioContext struct {
 		Gold         int   `json:"gold"`
 		Tired        int   `json:"tired"`
 		ActionWaitMS int64 `json:"action_wait_ms"`
+		HP           int   `json:"hp"`
+		MaxHP        int   `json:"max_hp"`
+		MP           int   `json:"mp"`
+		MaxMP        int   `json:"max_mp"`
+		IsDead       bool  `json:"is_dead"`
+		IsSleeping   bool  `json:"is_sleeping"`
 	} `json:"character"`
 	Scene struct {
 		LocationID string `json:"location_id"`
@@ -279,6 +285,13 @@ type scenarioContext struct {
 		Action         string         `json:"action"`
 		ParamsTemplate map[string]any `json:"params_template"`
 	} `json:"available_actions"`
+	OngoingActions []struct {
+		ID               string    `json:"id"`
+		ActionType       string    `json:"action_type"`
+		ExecuteAt        time.Time `json:"execute_at"`
+		RemainingSeconds int64     `json:"remaining_seconds"`
+		IsReady          bool      `json:"is_ready"`
+	} `json:"ongoing_actions"`
 }
 
 func (c scenarioContext) offers(action string) bool {
