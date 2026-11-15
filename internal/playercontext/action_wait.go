@@ -16,6 +16,7 @@ const DefaultActionWait = 4 * time.Second
 type ActionWaitWriter interface {
 	TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error)
 	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
+	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
 }
 
 // ActionWaitGate rejects every action while the legacy wait runs, except the
@@ -41,6 +42,20 @@ func WithActionWait(writer ActionWaitWriter, duration time.Duration) func(*Servi
 // StartsActionWait reports whether a successful action starts the wait.
 func StartsActionWait(action ActionDefinition) bool { return action.WaitExempt == "" }
 
+// ActionPace is the wait an activity-paced continuation starts: its activity's
+// own pace, or zero while the owner keeps no wait-based pacing.
+func ActionPace(action ActionDefinition, snapshot Snapshot) time.Duration {
+	if action.WaitExempt != WaitActivityPacing {
+		return 0
+	}
+	for _, a := range snapshot.Activities {
+		if a.Kind == action.ActivityKind {
+			return a.Pace
+		}
+	}
+	return 0
+}
+
 // ActionWaitClaim is held by one in-flight command; Release undoes it when the
 // command is rejected or its outcome is unknown.
 type ActionWaitClaim struct {
@@ -52,12 +67,17 @@ type ActionWaitClaim struct {
 // runs, so concurrent commands cannot all pass the read-only check. Like legacy
 // `$m{wt} = $time + $act_time`, the wait is measured from the request start.
 // ok is false while another wait is held; a disabled wait always succeeds.
-func (s *Service) ClaimActionWait(ctx context.Context, charID string) (claim ActionWaitClaim, ok bool, err error) {
+// A positive pace replaces the default duration.
+func (s *Service) ClaimActionWait(ctx context.Context, charID string, pace time.Duration) (claim ActionWaitClaim, ok bool, err error) {
 	if s.waitWriter == nil {
 		return ActionWaitClaim{}, true, nil
 	}
+	duration := s.waitDuration
+	if pace > 0 {
+		duration = pace
+	}
 	token := id.New()
-	ok, err = s.waitWriter.TryLockWithToken(ctx, timer.CategoryActionWait, charID, token, s.waitDuration)
+	ok, err = s.waitWriter.TryLockWithToken(ctx, timer.CategoryActionWait, charID, token, duration)
 	if err != nil {
 		return ActionWaitClaim{}, false, fmt.Errorf("claim action wait: %w", err)
 	}
@@ -74,6 +94,18 @@ func (c ActionWaitClaim) Release(ctx context.Context) error {
 	}
 	if _, err := c.s.waitWriter.ReleaseLockWithToken(ctx, timer.CategoryActionWait, c.charID, c.token); err != nil {
 		return fmt.Errorf("release action wait: %w", err)
+	}
+	return nil
+}
+
+// ImposeActionWait replaces charID's wait, like a legacy write of another
+// player's $m{wt}; a disabled wait imposes nothing.
+func (s *Service) ImposeActionWait(ctx context.Context, charID string, duration time.Duration) error {
+	if s.waitWriter == nil {
+		return nil
+	}
+	if err := s.waitWriter.SetLock(ctx, timer.CategoryActionWait, charID, duration); err != nil {
+		return fmt.Errorf("impose action wait: %w", err)
 	}
 	return nil
 }

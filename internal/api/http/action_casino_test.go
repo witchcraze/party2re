@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -114,6 +115,45 @@ func TestCasinoSlotStartsNoActionWait(t *testing.T) {
 	}
 	if !reflect.DeepEqual(counter.calls, []string{"slot", "slot", "exchange"}) {
 		t.Fatalf("calls %v", counter.calls)
+	}
+}
+
+// Legacy room commands wait the room speed and a kicked member waits 60 s
+// (_casino.cgi:57,114,167); rejections start no wait.
+func TestCasinoRoomCommandsWaitRoomSpeed(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct{ name, action, params string }{
+		{"start", "casino_room_start", `{"room_id":"room"}`},
+		{"kick", "casino_room_kick", `{"room_id":"room","target_character_id":"peer"}`},
+		{"leave", "casino_room_leave", `{"room_id":"room"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newCasinoSceneFixture(t)
+			waits := timer.NewService(nil)
+			f.waits = &waits
+			f.room("room", casino.GameTypeIndian, true)
+			router := f.router()
+			remaining := func(id string) time.Duration {
+				t.Helper()
+				d, err := waits.GetRemainingLock(ctx, timer.CategoryActionWait, id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return d
+			}
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"hero"}}`, nil)
+			if status != 403 || remaining("hero") != 0 {
+				t.Fatalf("rejected kick: %d %s wait %v", status, raw, remaining("hero"))
+			}
+			status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"`+tc.action+`","params":`+tc.params+`}`, nil)
+			speed := time.Duration(casino.SpeedNormal) * time.Second
+			if got := remaining("hero"); status != 200 || got <= playercontext.DefaultActionWait || got > speed {
+				t.Fatalf("%s: %d %s wait %v, want room speed %v", tc.action, status, raw, got, speed)
+			}
+			if got := remaining("peer"); (tc.action == "casino_room_kick") != (got > 59*time.Second) {
+				t.Fatalf("peer wait %v", got)
+			}
+		})
 	}
 }
 

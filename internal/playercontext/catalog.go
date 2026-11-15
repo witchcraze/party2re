@@ -63,8 +63,8 @@ const (
 	WaitNavigation WaitExemption = "navigation"
 	// WaitRecovery: rescue.cgi and sleep.cgi run outside the party.cgi action path.
 	WaitRecovery WaitExemption = "recovery"
-	// WaitActivityPacing: battle and room turns keep their own pacing, owned by
-	// the combat and room migrations (#948, #949).
+	// WaitActivityPacing: battle turns keep their own pacing (#948); an activity
+	// with a Pace, such as a Casino room's speed, makes them wait that long.
 	WaitActivityPacing WaitExemption = "activity_pacing"
 	// WaitPrivate: the result is a private $mes (e.g. NPC しらべる), which
 	// writes no log and starts no wait (lib/system.cgi:322-328,413,651).

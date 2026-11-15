@@ -174,9 +174,10 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 		// The park answers ＠しらべる>@町娘 through ＠はなす, a logged reply that waits.
 		npc := h.sceneAdapters[current.Snapshot.LocationID].npc
 		loggedInspect := req.Action == "npc_inspect" && npc != nil && len(npc.inspectWords) > 0
-		if playercontext.StartsActionWait(def) || loggedInspect {
+		pace := playercontext.ActionPace(def, current.Snapshot)
+		if playercontext.StartsActionWait(def) || loggedInspect || pace > 0 {
 			var claimed bool
-			claim, claimed, err = h.playerContext.ClaimActionWait(r.Context(), char.ID)
+			claim, claimed, err = h.playerContext.ClaimActionWait(r.Context(), char.ID, pace)
 			if err != nil {
 				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify the action wait.")
 				return
