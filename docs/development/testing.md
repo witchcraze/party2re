@@ -170,9 +170,9 @@ Future development with multiple concurrent sessions should isolate each environ
 
 ### 5.2 Dedicated Database Setup
 
-Dedicated fixtures create uniquely named databases, copy the required schema
-including foreign keys, and drop only their own databases. Preserve real
-worker/commit boundaries when those are the subject of the test.
+Use [`database.CreateTestDatabase`](../../internal/database/testing.go) with the
+required table names for a dedicated fixture. Preserve real worker/commit
+boundaries when those are the subject of the test.
 `PARTY2_TEST_DB_ADMIN_DSN` must permit database creation/deletion; Compose,
 `make test-integration` and `make check` provide it. For direct host tests use
 `root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails

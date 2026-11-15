@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -23,65 +22,7 @@ import (
 // The failure trigger must never change another test's database behavior.
 func participantSettlementDB(t *testing.T) *sql.DB {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated participant settlement tests")
-	}
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := source.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	admin, err := database.Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	ctx := context.Background()
-	name := "party2_challenge_test_" + id.New()
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Error(err)
-		}
-	})
-	cfg.DBName = name
-	db, err := database.Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	for _, table := range []string{"players", "characters", "inventory_items", "equipment_slots", "character_depots", "depot_items", "challenge_sessions", "character_challenge_records", "challenge_run_transitions", "challenge_participants", "challenge_character_claims", "challenge_command_results", "tavern_character_status", "challenge_hall_of_fame"} {
-		var tableName, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.ExecContext(ctx, ddl); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return db
+	return database.CreateTestDatabase(t, []string{"players", "characters", "inventory_items", "equipment_slots", "character_depots", "depot_items", "challenge_sessions", "character_challenge_records", "challenge_run_transitions", "challenge_participants", "challenge_character_claims", "challenge_command_results", "tavern_character_status", "challenge_hall_of_fame"}...)
 }
 
 func TestChallengeParticipantFinalizationIntegration(t *testing.T) {

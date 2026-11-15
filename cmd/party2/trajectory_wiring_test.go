@@ -113,10 +113,10 @@ func TestTrajectoryProductionWiring(t *testing.T) {
 
 func TestContestTrajectoryProductionWiring(t *testing.T) {
 	// Settlement selects rounds globally, so it needs a dedicated database.
-	db := wiringIsolatedDB(t, []string{
+	db := database.CreateTestDatabase(t, []string{
 		"players", "characters", "character_depots", "guilds", "guild_members", "character_memories",
 		"character_photos", "contest_rounds", "contest_entries", "contest_votes", "contest_legends", "news_articles",
-	})
+	}...)
 	ctx := context.Background()
 	core, err := newCoreServices(db, nil)
 	if err != nil {

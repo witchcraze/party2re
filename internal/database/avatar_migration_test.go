@@ -11,7 +11,7 @@ import (
 )
 
 func TestAvatarImgurOnlyMigrationClearsOnlyNonCanonical(t *testing.T) {
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members", "character_profiles", "character_presence_snapshots", "schema_migrations")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members", "character_profiles", "character_presence_snapshots", "schema_migrations")
 	ctx := context.Background()
 	values := map[string]string{
 		"https://i.imgur.com/abc12.gif":      "https://i.imgur.com/abc12.gif",

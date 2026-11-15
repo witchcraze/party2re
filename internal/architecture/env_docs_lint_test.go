@@ -141,6 +141,10 @@ func collectProductionEnvReads(repoRoot string) ([]envRead, []string, error) {
 			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
+			// Cross-package database fixtures are test support despite their .go suffix.
+			if path == filepath.Join(repoRoot, "internal", "database", "testing.go") {
+				return nil
+			}
 			fileReads, fileProblems, err := collectEnvReadsFromSource(path, nil)
 			if err != nil {
 				return err
@@ -334,5 +338,38 @@ func TestFindEnvDocProblems(t *testing.T) {
 				t.Errorf("expected %q in:\n%s", tc.want, joined)
 			}
 		})
+	}
+}
+
+func TestCollectProductionEnvReadsExcludesTestSupport(t *testing.T) {
+	root := t.TempDir()
+	for path, name := range map[string]string{
+		"cmd/app/main.go":               "APP",
+		"internal/database/database.go": "DB",
+		"internal/database/testing.go":  "TEST_DB",
+		"internal/database/db_test.go":  "TEST",
+		"internal/testutil/fixture.go":  "TEST_UTIL",
+		"internal/feature/testing.go":   "FEATURE",
+	} {
+		fullPath := filepath.Join(root, path)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		src := fmt.Sprintf("package p\nimport \"os\"\nvar value = os.Getenv(%q)\n", name)
+		if err := os.WriteFile(fullPath, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reads, problems, err := collectProductionEnvReads(root)
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("collect reads: error=%v problems=%v", err, problems)
+	}
+	var names []string
+	for _, read := range reads {
+		names = append(names, read.Name)
+	}
+	sort.Strings(names)
+	if got := strings.Join(names, ","); got != "APP,DB,FEATURE" {
+		t.Fatalf("production variables = %s, want APP,DB,FEATURE", got)
 	}
 }

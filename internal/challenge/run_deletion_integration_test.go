@@ -18,6 +18,7 @@ import (
 
 // Real deletion traverses tables outside the settlement fixture. Copy their
 // definitions, including foreign keys, into that fixture's dedicated database.
+// This extends an already populated fixture; CreateTestDatabase creates a new DB.
 func (f *protocolFixture) deletionService(t *testing.T, account bool) func(context.Context) error {
 	t.Helper()
 	source, err := database.OpenFromEnvironment()

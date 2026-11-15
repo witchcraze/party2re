@@ -661,7 +661,7 @@ func (m *wireMockCharRepo) Update(_ context.Context, char corecharacter.Characte
 }
 
 func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
-	db := wiringIsolatedDB(t, []string{"players", "characters", "character_depots", "character_homes", "house_town_capacity_lock", "guilds", "guild_members"})
+	db := database.CreateTestDatabase(t, []string{"players", "characters", "character_depots", "character_homes", "house_town_capacity_lock", "guilds", "guild_members"}...)
 	ctx := context.Background()
 	core, err := newCoreServices(db, nil)
 	if err != nil {

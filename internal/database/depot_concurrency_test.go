@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"os"
 	"slices"
@@ -11,73 +10,36 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 // Sparse tables can select different locking plans, so copy only DDL into a fresh DB.
 func depotIsolatedDB(t *testing.T) *sql.DB {
 	t.Helper()
-	return sparseIsolatedDB(t, "party2_depot_test_", "players", "characters", "character_depots", "depot_items")
+	return sparseIsolatedDB(t, "players", "characters", "character_depots", "depot_items")
 }
 
-// sparseIsolatedDB creates a dedicated database and copies DDL for the given tables
-// (or all base tables when none are specified) so sparse-table optimizer plans are isolated.
-func sparseIsolatedDB(t *testing.T, prefix string, tables ...string) *sql.DB {
+// sparseIsolatedDB keeps empty-table optimizer plans isolated, including the full
+// schema needed by the character-deletion regression.
+func sparseIsolatedDB(t *testing.T, tables ...string) *sql.DB {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	ctx := context.Background()
-	source, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := source.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated sparse DB tests")
-	}
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	name := prefix + id.New()
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Error(err)
-		}
-	})
-	cfg.DBName = name
-	db, err := Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	// Character deletion traverses all tables; other sparse tests specify their subset.
 	if len(tables) == 0 {
+		if os.Getenv("PARTY2_DB_DSN") == "" {
+			t.Skip("PARTY2_DB_DSN is not configured")
+		}
+		source, err := OpenFromEnvironment()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := source.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+		ctx := context.Background()
 		rows, err := source.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'")
 		if err != nil {
 			t.Fatal(err)
@@ -96,32 +58,7 @@ func sparseIsolatedDB(t *testing.T, prefix string, tables ...string) *sql.DB {
 		}
 		rows.Close()
 	}
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
-			t.Errorf("restore foreign key checks: %v", err)
-			_ = conn.Raw(func(any) error { return driver.ErrBadConn }) //lint:ignore error-swallow marks connection bad so the pool discards it
-		}
-		if err := conn.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
-	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
-		t.Fatal(err)
-	}
-	for _, table := range tables {
-		var tableName, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := conn.ExecContext(ctx, ddl); err != nil {
-			t.Fatalf("copy %s: %v", table, err)
-		}
-	}
-	return db
+	return CreateTestDatabase(t, tables...)
 }
 
 func TestDepotRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {

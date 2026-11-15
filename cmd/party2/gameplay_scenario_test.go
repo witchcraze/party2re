@@ -104,7 +104,7 @@ func newIsolatedScenarioApp(t *testing.T) *scenarioApp {
 		t.Fatal(err)
 	}
 
-	db := wiringIsolatedDB(t, tables)
+	db := database.CreateTestDatabase(t, tables...)
 	vkCfg := vk.ConfigFromEnvironment()
 	vkCfg.DB = 10 // Isolated from shared DB 0 and casino integration DBs (11-15).
 	client, err := vk.NewClientWithConfig(vkCfg)

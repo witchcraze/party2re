@@ -15,22 +15,8 @@ import (
 
 func factoryIsolatedDB(t *testing.T, extraTables ...string) *sql.DB {
 	t.Helper()
-	db, _ := playerIsolatedDB(t)
-	source, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer source.Close()
-	for _, table := range extraTables {
-		var name, ddl string
-		if err := source.QueryRow("SHOW CREATE TABLE `"+table+"`").Scan(&name, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.Exec(ddl); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return db
+	tables := append([]string{"players", "system_maintenance", "player_notifications", "player_api_tokens"}, extraTables...)
+	return CreateTestDatabase(t, tables...)
 }
 
 func characterFactoryDB(t *testing.T) *sql.DB {

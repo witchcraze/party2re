@@ -27,7 +27,7 @@ type presenceFixture struct {
 // Observation deletes expired rows table-wide, so every test owns a dedicated DB.
 func newPresenceFixture(t *testing.T) *presenceFixture {
 	t.Helper()
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members", "character_profiles", "character_presence_snapshots")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members", "character_profiles", "character_presence_snapshots")
 	repo, err := database.NewPresenceRepository(db)
 	if err != nil {
 		t.Fatal(err)

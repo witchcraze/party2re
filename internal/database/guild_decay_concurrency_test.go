@@ -25,7 +25,7 @@ type guildDecayFixture struct {
 
 func newGuildDecayFixture(t *testing.T, points ...int64) guildDecayFixture {
 	t.Helper()
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "guilds", "guild_members", "gvg_standings", "gvg_match_transitions")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "guilds", "guild_members", "gvg_standings", "gvg_match_transitions")
 	guilds, err := database.NewGuildRepository(db)
 	if err != nil {
 		t.Fatal(err)

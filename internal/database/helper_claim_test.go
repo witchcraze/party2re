@@ -64,7 +64,7 @@ type helperClaimFixture struct {
 
 func newHelperClaimFixture(t *testing.T, count int) helperClaimFixture {
 	t.Helper()
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "helper_quests")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "helper_quests")
 	quests, err := database.NewHelperRepository(db)
 	if err != nil {
 		t.Fatal(err)

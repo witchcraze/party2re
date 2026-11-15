@@ -17,7 +17,7 @@ import (
 )
 
 func TestInventoryRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
-	db := sparseIsolatedDB(t, "party2_inv_test_", "players", "characters", "character_depots", "inventory_items", "equipment_slots")
+	db := sparseIsolatedDB(t, "players", "characters", "character_depots", "inventory_items", "equipment_slots")
 	ctx := context.Background()
 	repo, err := NewInventoryRepository(db)
 	if err != nil {
@@ -134,7 +134,7 @@ func TestInventoryRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 }
 
 func TestCharacterDeleteAndAdjacentInventorySaveNoDeadlock(t *testing.T) {
-	db := sparseIsolatedDB(t, "party2_inv_del_test_")
+	db := sparseIsolatedDB(t)
 	ctx := context.Background()
 	invRepo, err := NewInventoryRepository(db)
 	if err != nil {
