@@ -93,14 +93,23 @@ var errInjectedBook = errors.New("injected failure")
 
 type failingEconomyCharacters struct {
 	*database.CharacterRepository
-	fail *atomic.Bool
+	fail        *atomic.Bool
+	afterUpdate *atomic.Pointer[func(context.Context)]
 }
 
 func (r failingEconomyCharacters) Update(ctx context.Context, c corecharacter.Character) error {
 	if r.fail == nil || r.fail.Load() {
 		return errInjectedBook
 	}
-	return r.CharacterRepository.Update(ctx, c)
+	if err := r.CharacterRepository.Update(ctx, c); err != nil {
+		return err
+	}
+	if r.afterUpdate != nil {
+		if fn := r.afterUpdate.Load(); fn != nil && *fn != nil {
+			(*fn)(ctx)
+		}
+	}
+	return nil
 }
 
 type failingDepotConsume struct {
@@ -135,6 +144,7 @@ type bookFixture struct {
 	// beforeDepotFail runs inside a failing Depot consumption, after the appearance write.
 	beforeDepotFail func(characterID string)
 	charSaveFail    *atomic.Bool
+	afterCharUpdate *atomic.Pointer[func(context.Context)]
 	invRepo         *database.InventoryRepository
 	depots          *database.DepotRepository
 	charRepo        *database.CharacterRepository
@@ -162,7 +172,8 @@ func newBookFixture(t *testing.T, fail bookFailures) *bookFixture {
 			repo:  repo,
 			fail:  fail.appearance,
 		},
-		charSaveFail: charSaveFail,
+		charSaveFail:    charSaveFail,
+		afterCharUpdate: &atomic.Pointer[func(context.Context)]{},
 	}
 	var err error
 	if f.charRepo, err = database.NewCharacterRepository(db); err != nil {
@@ -203,10 +214,7 @@ func newBookFixture(t *testing.T, fail bookFailures) *bookFixture {
 	if f.presence, err = character.NewPresenceService(presenceRepo, tx, nil); err != nil {
 		t.Fatal(err)
 	}
-	var ecoChars economy.CharacterRepository = f.charRepo
-	if fail.characterSave {
-		ecoChars = failingEconomyCharacters{f.charRepo, f.charSaveFail}
-	}
+	ecoChars := failingEconomyCharacters{f.charRepo, f.charSaveFail, f.afterCharUpdate}
 	eco, err := economy.NewService(ecoChars, f.invRepo, economy.WithTransactionProvider(tx))
 	if err != nil {
 		t.Fatal(err)
@@ -712,4 +720,230 @@ func TestItemAppearance_AmbientTxRollbackRestoresPriorStateAndJoinsUndoError(t *
 			t.Fatalf("expected joined outerErr and undoErr, got %v", err)
 		}
 	})
+}
+
+// When a writer's context is canceled after modifying external Valkey state
+// (either mid-transaction or right before SQL commit), the SQL row lock remains
+// held until compensation finishes so concurrent writers cannot observe or
+// inherit the failed appearance.
+func TestItemAppearance_ContextCancelHoldsLockUntilUndoAndBlocksConcurrentWriter(t *testing.T) {
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name      string
+		withPrior bool
+	}{
+		{"without prior appearance", false},
+		{"with committed prior appearance", true},
+	} {
+		t.Run("cancel after appearance write/"+tc.name, func(t *testing.T) {
+			f := newBookFixture(t, bookFailures{})
+			c := f.character(t, "m")
+			var priorCostume *costume.ActiveCostume
+			if tc.withPrior {
+				priorID := f.stockItemWithID(t, c, "inventory", id.New(), "item-044")
+				if _, err := f.svc.UseHomeItem(ctx, c.ID, priorID, "inventory"); err != nil {
+					t.Fatalf("seed prior costume: %v", err)
+				}
+				priorCostume = f.costume.active(t, c.ID)
+			}
+
+			itemA := f.stockItemWithID(t, c, "inventory", id.New(), bookDefinition)
+			itemB := f.stockItemWithID(t, c, "inventory", id.New(), "item-045")
+
+			ctxA, cancelA := context.WithCancel(ctx)
+			defer cancelA()
+
+			undoEntered := make(chan struct{})
+			releaseUndo := make(chan struct{})
+			bApplied := make(chan struct{})
+			var undoHeldLock atomic.Bool
+			var applyCalls atomic.Int32
+			var wrapCalls atomic.Int32
+
+			f.costume.mu.Lock()
+			f.costume.onApply = func(string) {
+				if applyCalls.Add(1) == 2 {
+					close(bApplied)
+				}
+			}
+			f.costume.wrapUndo = func(charID string, undo func(context.Context) error) func(context.Context) error {
+				callIdx := wrapCalls.Add(1)
+				if callIdx != 1 {
+					return undo
+				}
+				// Cancel writer A right after A writes Valkey appearance, before subsequent SQL steps complete.
+				cancelA()
+				var once sync.Once
+				return func(rbCtx context.Context) error {
+					once.Do(func() {
+						_, lockErr := f.db.ExecContext(ctx, `SELECT id FROM characters WHERE id = ? FOR UPDATE NOWAIT`, charID)
+						undoHeldLock.Store(lockErr != nil)
+						close(undoEntered)
+						<-releaseUndo
+					})
+					return undo(rbCtx)
+				}
+			}
+			f.costume.mu.Unlock()
+
+			errA := make(chan error, 1)
+			go func() {
+				_, err := f.svc.UseHomeItem(ctxA, c.ID, itemA, "inventory")
+				errA <- err
+			}()
+
+			<-undoEntered
+			if !undoHeldLock.Load() {
+				close(releaseUndo)
+				<-errA
+				t.Fatal("A's undo ran after the character row lock was released on context cancel")
+			}
+
+			f.charSaveFail.Store(true)
+			bStarted := make(chan struct{})
+			errB := make(chan error, 1)
+			go func() {
+				close(bStarted)
+				_, err := f.svc.UseHomeItem(ctx, c.ID, itemB, "inventory")
+				errB <- err
+			}()
+			<-bStarted
+
+			timer := time.NewTimer(100 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-bApplied:
+				close(releaseUndo)
+				<-errA
+				<-errB
+				t.Fatal("B entered ApplyCostume while canceled writer A's undo still held the character lock")
+			case <-timer.C:
+			}
+
+			close(releaseUndo)
+			if gotErrA := <-errA; !errors.Is(gotErrA, context.Canceled) {
+				t.Fatalf("want A error context.Canceled, got %v", gotErrA)
+			}
+			if gotErrB := <-errB; !errors.Is(gotErrB, errInjectedBook) {
+				t.Fatalf("want B error errInjectedBook, got %v", gotErrB)
+			}
+			select {
+			case <-bApplied:
+			default:
+				t.Fatal("B never entered ApplyCostume after A released lock")
+			}
+
+			got := f.costume.active(t, c.ID)
+			if priorCostume == nil {
+				if got != nil {
+					t.Fatalf("expected nil appearance after cancel + concurrent failure, got %+v", got)
+				}
+			} else if !sameCostume(got, *priorCostume) {
+				t.Fatalf("expected prior costume %+v restored, got %+v", priorCostume, got)
+			}
+
+			st, err := f.presence.State(ctx, c.ID)
+			if err != nil || st.LoginMessage != "" || !f.held(t, c, "inventory", itemA) || !f.held(t, c, "inventory", itemB) || f.newsCount(t, c) != 0 {
+				t.Fatalf("SQL state mutated on canceled rollback: message=%q heldA=%v heldB=%v news=%d err=%v",
+					st.LoginMessage, f.held(t, c, "inventory", itemA), f.held(t, c, "inventory", itemB), f.newsCount(t, c), err)
+			}
+		})
+	}
+
+	t.Run("cancel after final SQL update before commit", func(t *testing.T) {
+		f := newBookFixture(t, bookFailures{})
+		c := f.character(t, "f")
+		priorID := f.stockItemWithID(t, c, "inventory", id.New(), "item-044")
+		if _, err := f.svc.UseHomeItem(ctx, c.ID, priorID, "inventory"); err != nil {
+			t.Fatalf("seed prior costume: %v", err)
+		}
+		priorCostume := f.costume.active(t, c.ID)
+
+		bookID := f.stockItemWithID(t, c, "depot", id.New(), bookDefinition)
+		ctxA, cancelA := context.WithCancel(ctx)
+		defer cancelA()
+
+		var undoCalls atomic.Int32
+		var undoLocked atomic.Bool
+		f.costume.mu.Lock()
+		f.costume.wrapUndo = func(charID string, undo func(context.Context) error) func(context.Context) error {
+			return func(rbCtx context.Context) error {
+				undoCalls.Add(1)
+				_, lockErr := f.db.ExecContext(ctx, `SELECT id FROM characters WHERE id = ? FOR UPDATE NOWAIT`, charID)
+				undoLocked.Store(lockErr != nil)
+				return undo(rbCtx)
+			}
+		}
+		f.costume.mu.Unlock()
+
+		cancelAfterSQL := func(context.Context) { cancelA() }
+		f.afterCharUpdate.Store(&cancelAfterSQL)
+		defer f.afterCharUpdate.Store(nil)
+
+		_, err := f.svc.UseHomeItem(ctxA, c.ID, bookID, "depot")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("want context.Canceled, got %v", err)
+		}
+		if undoCalls.Load() != 1 || !undoLocked.Load() {
+			t.Fatalf("expected 1 undo call under lock, calls=%d locked=%v", undoCalls.Load(), undoLocked.Load())
+		}
+		if got := f.costume.active(t, c.ID); !sameCostume(got, *priorCostume) {
+			t.Fatalf("expected prior costume %+v restored, got %+v", priorCostume, got)
+		}
+		st, err := f.presence.State(ctx, c.ID)
+		if err != nil || st.LoginMessage != "" || !f.held(t, c, "depot", bookID) || f.newsCount(t, c) != 0 {
+			t.Fatalf("SQL state mutated on pre-commit cancel: message=%q held=%v news=%d err=%v",
+				st.LoginMessage, f.held(t, c, "depot", bookID), f.newsCount(t, c), err)
+		}
+	})
+}
+
+// When root SQL commit fails after SQL writes complete, commit outcome is
+// indeterminate (or committed) after lock release: Valkey compensation must not
+// run and the commit error must propagate directly without being masked as no_effect.
+func TestItemAppearance_CommitErrorSkipsRollbackAndPropagatesError(t *testing.T) {
+	ctx := context.Background()
+	f := newBookFixture(t, bookFailures{})
+	c := f.character(t, "m")
+	priorID := f.stockItemWithID(t, c, "inventory", id.New(), "item-044")
+	if _, err := f.svc.UseHomeItem(ctx, c.ID, priorID, "inventory"); err != nil {
+		t.Fatalf("seed prior costume: %v", err)
+	}
+
+	bookID := f.stockItemWithID(t, c, "depot", id.New(), bookDefinition)
+	var undoCalls atomic.Int32
+	f.costume.mu.Lock()
+	f.costume.wrapUndo = func(_ string, undo func(context.Context) error) func(context.Context) error {
+		return func(rbCtx context.Context) error {
+			undoCalls.Add(1)
+			return undo(rbCtx)
+		}
+	}
+	f.costume.mu.Unlock()
+
+	forceCommitErr := func(txCtx context.Context) {
+		if tx := database.TxFromContext(txCtx); tx != nil {
+			_ = tx.Commit()
+		}
+	}
+	f.afterCharUpdate.Store(&forceCommitErr)
+	defer f.afterCharUpdate.Store(nil)
+
+	res, err := f.svc.UseHomeItem(ctx, c.ID, bookID, "depot")
+	if !errors.Is(err, sql.ErrTxDone) || res != nil {
+		t.Fatalf("want (nil, sql.ErrTxDone), got res=%+v err=%v", res, err)
+	}
+	if undoCalls.Load() != 0 {
+		t.Fatalf("expected 0 rollback hook invocations on commit error, got %d", undoCalls.Load())
+	}
+	got := f.costume.active(t, c.ID)
+	if got == nil || got.ItemNo != 58 {
+		t.Fatalf("expected Valkey appearance retained on committed SQL + commit error, got %+v", got)
+	}
+	st, err := f.presence.State(ctx, c.ID)
+	if err != nil || st.LoginMessage != "性格：ムッツリスケベ" || f.held(t, c, "depot", bookID) || f.newsCount(t, c) != 1 {
+		t.Fatalf("committed SQL state unexpected: message=%q held=%v news=%d err=%v",
+			st.LoginMessage, f.held(t, c, "depot", bookID), f.newsCount(t, c), err)
+	}
 }

@@ -45,7 +45,10 @@ func RunInTxWithOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn
 }
 
 func runInNewTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
-	tx, err := db.BeginTx(ctx, opts)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	tx, err := db.BeginTx(context.WithoutCancel(ctx), opts)
 	if err != nil {
 		return err
 	}
@@ -57,23 +60,57 @@ func runInNewTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ct
 	}()
 
 	txCtx := context.WithValue(ctx, txKey{}, tx)
-	return economy.WithRollbackScope(txCtx, func(scopedCtx context.Context) error {
+	if err := economy.WithRollbackScope(txCtx, func(scopedCtx context.Context) error {
 		if err := fn(scopedCtx); err != nil {
 			return err
 		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-		committed = true
-		return nil
-	})
+		return scopedCtx.Err()
+	}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+type txExecutor struct {
+	tx *sql.Tx
+}
+
+func (e txExecutor) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if economy.HasRollbackHooks(ctx) {
+		ctx = context.WithoutCancel(ctx)
+	}
+	return e.tx.ExecContext(ctx, query, args...)
+}
+
+func (e txExecutor) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	if ctx.Err() == nil && economy.HasRollbackHooks(ctx) {
+		ctx = context.WithoutCancel(ctx)
+	}
+	return e.tx.QueryRowContext(ctx, query, args...)
+}
+
+func (e txExecutor) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if economy.HasRollbackHooks(ctx) {
+		ctx = context.WithoutCancel(ctx)
+	}
+	return e.tx.QueryContext(ctx, query, args...)
 }
 
 // ExecutorFromContext returns the transaction from the context if it exists,
 // otherwise it returns the provided fallback executor (usually *sql.DB).
 func ExecutorFromContext(ctx context.Context, fallback sqlContextExecutor) sqlContextExecutor {
 	if tx := TxFromContext(ctx); tx != nil {
-		return tx
+		return txExecutor{tx: tx}
 	}
 	return fallback
 }

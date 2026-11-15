@@ -49,9 +49,11 @@ an ambient transaction; nested calls are not independent commits or savepoints.
 External compensations register on the transaction context via
 [`economy.OnRollback`](../../internal/economy/runner.go) within a
 [`WithRollbackScope`](../../internal/economy/runner.go): succeeding nested
-scopes promote their hooks to the enclosing scope so failures (including root
-commit errors) run compensations in LIFO order before SQL rollback releases row
-locks. Root transactions use `READ COMMITTED` (`sql.LevelReadCommitted`) to avoid
+scopes promote their hooks to the enclosing scope so pre-commit failures and
+pre-commit context cancellations run compensations in LIFO order while the root
+SQL transaction still holds its row locks, before SQL rollback releases them.
+Root `tx.Commit()` errors leave commit state indeterminate after lock release
+and propagate without running rollback compensation. Root transactions use `READ COMMITTED` (`sql.LevelReadCommitted`) to avoid
 secondary index range gap locks and stale snapshots under MariaDB InnoDB.
 Rank order applies to acquiring new locks, not merely the textual order of
 updates to rows already locked. The complete hierarchy is owned by

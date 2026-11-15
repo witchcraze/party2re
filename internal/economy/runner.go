@@ -78,7 +78,8 @@ type TransactionCallback func(tc *TxContext) error
 type rollbackScopeKey struct{}
 
 type rollbackScope struct {
-	hooks []func(context.Context) error
+	parent *rollbackScope
+	hooks  []func(context.Context) error
 }
 
 // WithRollbackScope runs fn inside a rollback scope. If fn returns an error,
@@ -90,7 +91,7 @@ func WithRollbackScope(ctx context.Context, fn func(context.Context) error) erro
 		ctx = context.Background()
 	}
 	parent, _ := ctx.Value(rollbackScopeKey{}).(*rollbackScope)
-	scope := &rollbackScope{}
+	scope := &rollbackScope{parent: parent}
 	scopedCtx := context.WithValue(ctx, rollbackScopeKey{}, scope)
 
 	err := fn(scopedCtx)
@@ -109,6 +110,20 @@ func WithRollbackScope(ctx context.Context, fn func(context.Context) error) erro
 		parent.hooks = append(parent.hooks, scope.hooks...)
 	}
 	return nil
+}
+
+// HasRollbackHooks reports whether ctx has an active rollback scope with at
+// least one registered compensation hook.
+func HasRollbackHooks(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	for scope, _ := ctx.Value(rollbackScopeKey{}).(*rollbackScope); scope != nil; scope = scope.parent {
+		if len(scope.hooks) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // OnRollback registers hook on the active rollback scope in ctx, if any.
