@@ -12,15 +12,16 @@ var ErrTransitionConflict = errors.New("colosseum transition changed; retry the 
 // Transition is the durable financial claim and the exact publication to retry.
 // PasswordHash is persisted separately because the public room DTO omits it.
 type Transition struct {
-	Version      int
-	Kind         string
-	ActorID      string
-	Detail       RoomDetail
-	PasswordHash string
-	AddedID      string
-	RemovedIDs   []string
-	Result       *RoundResolution
-	Pending      bool
+	Version       int
+	Kind          string
+	ActorID       string
+	Detail        RoomDetail
+	PasswordHash  string
+	AddedID       string
+	RemovedIDs    []string
+	Result        *RoundResolution
+	ForfeitedPool int
+	Pending       bool
 }
 
 // TransitionRepository commits a unique room version with its asset mutation.

@@ -120,12 +120,9 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if !found {
 			return nil, errors.New("pvp activity membership mismatch")
 		}
-		a := playercontext.Activity{Kind: "pvp", ID: pv.Room.ID, Phase: pv.Room.Status, Round: pv.Room.Round, Role: "member", Actions: []string{}}
+		a := playercontext.Activity{Kind: "pvp", ID: pv.Room.ID, Phase: pv.Room.Status, Round: pv.Room.Round, Role: "member", Actions: []string{"pvp_leave"}}
 		if pv.Room.LeaderCharacterID == actor {
 			a.Role = "leader"
-		}
-		if pv.Room.Status != pvp.StatusInProgress {
-			a.Actions = append(a.Actions, "pvp_leave")
 		}
 		if pv.Room.Status == pvp.StatusRecruiting && pv.Room.Round == 0 {
 			a.Actions = append(a.Actions, "pvp_team")

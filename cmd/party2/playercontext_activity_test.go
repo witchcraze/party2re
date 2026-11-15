@@ -131,7 +131,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	if err != nil || len(facts) != 6 {
 		t.Fatalf("all facts: %+v %v", facts, err)
 	}
-	for i, want := range [][]string{{"party_leave", "party_ready", "party_start"}, {"pvp_advance"}, {"gvg_leave", "gvg_advance"}, {"dungeon_move", "dungeon_escape"}, {"challenge_advance", "challenge_retire"}, {"casino_room_leave"}} {
+	for i, want := range [][]string{{"party_leave", "party_ready", "party_start"}, {"pvp_leave", "pvp_advance"}, {"gvg_leave", "gvg_advance"}, {"dungeon_move", "dungeon_escape"}, {"challenge_advance", "challenge_retire"}, {"casino_room_leave"}} {
 		if !slices.Equal(facts[i].Actions, want) {
 			t.Fatalf("%s actions=%v want=%v", facts[i].Kind, facts[i].Actions, want)
 		}
@@ -221,8 +221,8 @@ func TestActivityRoleAndPhaseControls(t *testing.T) {
 		{"party", party.StatusInProgress, "member", 0, []string{"party_leave"}},
 		{"pvp", pvp.StatusRecruiting, "leader", 0, []string{"pvp_leave", "pvp_team", "pvp_start"}},
 		{"pvp", pvp.StatusRecruiting, "member", 0, []string{"pvp_leave", "pvp_team"}},
-		{"pvp", pvp.StatusInProgress, "leader", 1, []string{"pvp_advance"}},
-		{"pvp", pvp.StatusInProgress, "member", 1, []string{}},
+		{"pvp", pvp.StatusInProgress, "leader", 1, []string{"pvp_leave", "pvp_advance"}},
+		{"pvp", pvp.StatusInProgress, "member", 1, []string{"pvp_leave"}},
 		{"pvp", pvp.StatusCompleted, "member", 1, []string{"pvp_leave"}},
 		{"gvg", gvg.StatusRecruiting, "leader", 0, []string{"gvg_leave", "gvg_start"}},
 		{"gvg", gvg.StatusRecruiting, "member", 0, []string{"gvg_leave"}},

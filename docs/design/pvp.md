@@ -48,7 +48,10 @@ A character can host a Colosseum room with configurable parameters:
      - `#6666FF` (ブルー / Blue)
      - `#CC66FF` (パープル / Purple)
      - `#CCCCCC` (グレイ / Gray)
-3. **Live-room departure (`@にげる`)**: participant exit, leader handover and bet disposition still diverge from legacy; correction is tracked in [#2045](https://github.com/witchcraze/party2re/issues/2045).
+3. **Live-room departure (`@にげる`)**:
+   - Before match start (`recruiting`, round 0), departure refunds only the departing participant's bet, promotes the next remaining member to leader when the leader leaves, and disbands the room only when the last member departs.
+   - During (`in_progress`) and after (`completed`) a match, participants can leave (`pvp_leave`) without refunding bets or duplicating awarded prizes; leader exit promotes the next remaining member. In `in_progress`, remaining bets stay in `prize_pool` for surviving participants until settlement, or close as forfeited escrow when the last participant departs.
+   - Unverified legacy escape side-effects (vitality copyback, fatigue increment, items `105`/`106`, consumed `ite` clearing, bar food delivery) and lobby actions (`@さそう`, `@きっく`, `@しらべる`) remain tracked in [#2287](https://github.com/witchcraze/party2re/issues/2287).
 
 **Recovery decision:** use the legacy missing-member-file path (`_battle.cgi:453-461`) for arbitrary live-room loss, so neither a refund nor an inactivity penalty is inferred from missing state. Deliberate inactivity deletion instead adds 3600 seconds of sleep without refunding bets (`quest.cgi:50,85-90,172-184`); recoverable cleanup remains [#2046](https://github.com/witchcraze/party2re/issues/2046). SQL/Valkey recovery ownership is defined by [financial publication](../architecture/transient-run-state.md#pvp-financial-publication).
 
@@ -63,7 +66,8 @@ A character can host a Colosseum room with configurable parameters:
 
 ### 4. Round Combat Resolution (`_battle.cgi:486`, `vs_player.cgi:106-122`)
 
-- Each round resolves a party battle between opposing teams using `ResolvePartyBattle`.
+- If mid-match departures leave only one team in the room, that surviving team is awarded the round win without invoking `ResolvePartyBattle`.
+- Otherwise, each round resolves a party battle between opposing teams using `ResolvePartyBattle`.
 - The round winner is determined from the unique surviving team among participants (`res.RemainingHP`):
   - If exactly 1 team has surviving members (`alive_team_c == 1`), that team receives 1 round win point (`round_win`).
   - If 0 teams survive (mutual wipeout) or multiple teams remain (turn limit reached), the round is scored as a draw (`draw`).
@@ -71,7 +75,8 @@ A character can host a Colosseum room with configurable parameters:
 
 ### 5. Match Settlement & Prize Pool Split
 
-The current implementation refunds all original bets on an undecided maximum-round termination; legacy post-start departure does not. This settlement difference is part of [#2045](https://github.com/witchcraze/party2re/issues/2045).
+- When a team reaches `target_wins`, `prize_pool` is split evenly among its members (`prize_per_member = prize_pool / winners`), awarding `pvp_wins` to each winner and retaining any integer-division remainder as closed forfeited escrow.
+- If no team reaches `target_wins` by round 10 (`MaxRounds`), the match finishes as a draw (`match_draw`) without refunding bets, closing the remaining `prize_pool` as forfeited escrow.
 
 ---
 

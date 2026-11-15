@@ -139,44 +139,52 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			}
 		}
 
-		req := corebattle.PartyBattleRequest{
-			Allies:  allies,
-			Enemies: enemies,
-		}
-
-		res, err := s.battleEngine.ResolvePartyBattle(req)
-		if err != nil {
-			return fmt.Errorf("resolve pvp battle round: %w", err)
-		}
-
+		var res corebattle.PartyBattleResult
 		var roundWinnerTeam string
 		var roundOutcome string
 
-		if len(res.RemainingHP) > 0 {
-			aliveTeams := make(map[string]bool)
-			for _, m := range detail.Members {
-				if hp, ok := res.RemainingHP[m.CharacterID]; ok && hp > 0 {
-					aliveTeams[m.TeamColor] = true
-				}
+		if len(enemies) == 0 {
+			// Legacy vs_player.cgi awards the round win when only one team remains.
+			roundWinnerTeam = leaderTeam
+			roundOutcome = "round_win"
+		} else {
+			req := corebattle.PartyBattleRequest{
+				Allies:  allies,
+				Enemies: enemies,
 			}
 
-			if len(aliveTeams) == 1 {
-				for team := range aliveTeams {
-					roundWinnerTeam = team
-				}
-				roundOutcome = "round_win"
-			} else {
-				roundOutcome = "draw"
+			var err error
+			res, err = s.battleEngine.ResolvePartyBattle(req)
+			if err != nil {
+				return fmt.Errorf("resolve pvp battle round: %w", err)
 			}
-		} else {
-			if res.Outcome == corebattle.OutcomeWin {
-				roundWinnerTeam = leaderTeam
-				roundOutcome = "round_win"
-			} else if res.Outcome == corebattle.OutcomeDefeat {
-				roundWinnerTeam = otherTeam
-				roundOutcome = "round_win"
+
+			if len(res.RemainingHP) > 0 {
+				aliveTeams := make(map[string]bool)
+				for _, m := range detail.Members {
+					if hp, ok := res.RemainingHP[m.CharacterID]; ok && hp > 0 {
+						aliveTeams[m.TeamColor] = true
+					}
+				}
+
+				if len(aliveTeams) == 1 {
+					for team := range aliveTeams {
+						roundWinnerTeam = team
+					}
+					roundOutcome = "round_win"
+				} else {
+					roundOutcome = "draw"
+				}
 			} else {
-				roundOutcome = "draw"
+				if res.Outcome == corebattle.OutcomeWin {
+					roundWinnerTeam = leaderTeam
+					roundOutcome = "round_win"
+				} else if res.Outcome == corebattle.OutcomeDefeat {
+					roundWinnerTeam = otherTeam
+					roundOutcome = "round_win"
+				} else {
+					roundOutcome = "draw"
+				}
 			}
 		}
 
@@ -188,8 +196,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		var overallWinner string
 		var prizePerMember int
 		var awardedIDs []string
-		var refundIDs []string
-		var refundAmount int
+		var forfeitedPool int
 
 		if roundWinnerTeam != "" {
 			detail.Room.TeamScores[roundWinnerTeam]++
@@ -207,28 +214,24 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 					}
 				}
 
+				beforePool := detail.Room.PrizePool
 				if len(winIDs) > 0 {
-					prizePerMember = detail.Room.PrizePool / len(winIDs)
+					prizePerMember = beforePool / len(winIDs)
 					awardedIDs = sortCharacterIDs(winIDs)
 				}
+				forfeitedPool = beforePool - len(awardedIDs)*prizePerMember
 				detail.Room.PrizePerMember = prizePerMember
 				detail.Room.PrizePool = 0
 			}
 		}
 
-		// Forced end if round > 10 without decider
+		// Forced end if round > 10 without decider (no bet refund per legacy vs_player.cgi)
 		if !matchCompleted && detail.Room.Round >= MaxRounds {
 			matchCompleted = true
 			roundOutcome = "match_draw"
 			detail.Room.Status = StatusCompleted
-			// Refund remaining prize pool equally among all members
-			if len(detail.Members) > 0 {
-				refundAmount = detail.Room.PrizePool / len(detail.Members)
-				for _, m := range detail.Members {
-					refundIDs = append(refundIDs, m.CharacterID)
-				}
-				detail.Room.PrizePool = 0
-			}
+			forfeitedPool = detail.Room.PrizePool
+			detail.Room.PrizePool = 0
 		}
 
 		// Advance to next round if match not completed
@@ -254,11 +257,8 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			BattleLog:           res.Logs,
 		}
 		if matchCompleted {
-			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &result}, func(txCtx context.Context) error {
+			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &result, ForfeitedPool: forfeitedPool}, func(txCtx context.Context) error {
 				if err := s.awardPrizes(txCtx, awardedIDs, detail.Room.Name, prizePerMember); err != nil {
-					return err
-				}
-				if err := s.refundMembers(txCtx, refundIDs, refundAmount); err != nil {
 					return err
 				}
 				if s.victoryHook != nil {

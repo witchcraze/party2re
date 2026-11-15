@@ -72,17 +72,25 @@ func TestPvPIntegration_DisbandRefundTransactional(t *testing.T) {
 		t.Fatalf("expected 800G in DB after bets, got c1=%d, c2=%d", c1DB.Money, c2DB.Money)
 	}
 
-	// Leader leaves room -> triggers disband and transactional refund
+	// Leader leaves room while member remains -> refunds only leader, promotes member to leader
 	err = svc.LeaveRoom(ctx, c1.ID, detail.Room.ID)
 	if err != nil {
 		t.Fatalf("LeaveRoom failed: %v", err)
 	}
 
-	// Verify both characters have 1000G restored in DB
 	c1DBAfter, _ := charRepo.FindByID(ctx, c1.ID)
 	c2DBAfter, _ := charRepo.FindByID(ctx, c2.ID)
-	if c1DBAfter.Money != 1000 || c2DBAfter.Money != 1000 {
-		t.Fatalf("expected 1000G in DB after refund, got c1=%d, c2=%d", c1DBAfter.Money, c2DBAfter.Money)
+	if c1DBAfter.Money != 1000 || c2DBAfter.Money != 800 {
+		t.Fatalf("expected only leader refunded in DB (c1=1000, c2=800), got c1=%d, c2=%d", c1DBAfter.Money, c2DBAfter.Money)
+	}
+
+	// Remaining member (now leader) leaves -> disbands and refunds remaining bet
+	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
+		t.Fatalf("final LeaveRoom failed: %v", err)
+	}
+	c2DBFinal, _ := charRepo.FindByID(ctx, c2.ID)
+	if c2DBFinal.Money != 1000 {
+		t.Fatalf("expected c2 refunded to 1000G in DB after disband, got %d", c2DBFinal.Money)
 	}
 }
 

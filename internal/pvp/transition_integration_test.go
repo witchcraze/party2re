@@ -262,13 +262,13 @@ func (f *transitionFixture) prepare(t *testing.T, kind string) {
 	if err := f.create(t); err != nil {
 		t.Fatal(err)
 	}
-	if kind == "join" {
+	if kind == "join" || kind == "disband" {
 		return
 	}
 	if _, err := f.service.JoinRoom(ctx, f.member.ID, f.room.Room.ID, "secret"); err != nil {
 		t.Fatal(err)
 	}
-	if kind == "settle" || kind == "draw" {
+	if kind == "inprogress-leave" || kind == "forfeit" || kind == "forfeit-win" || kind == "settle" || kind == "draw" {
 		if _, err := f.service.SelectTeam(ctx, f.leader.ID, f.room.Room.ID, pvp.ColorRed); err != nil {
 			t.Fatal(err)
 		}
@@ -278,6 +278,11 @@ func (f *transitionFixture) prepare(t *testing.T, kind string) {
 		detail, err := f.service.StartMatch(ctx, f.leader.ID, f.room.Room.ID)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if kind == "forfeit" || kind == "forfeit-win" {
+			if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if kind == "draw" {
 			f.battle.outcome = corebattle.OutcomeDraw
@@ -297,9 +302,9 @@ func (f *transitionFixture) act(t *testing.T, kind string) error {
 	case "join":
 		_, err := f.service.JoinRoom(ctx, f.member.ID, f.room.Room.ID, "secret")
 		return err
-	case "leave":
+	case "leave", "inprogress-leave":
 		return f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID)
-	case "disband":
+	case "handover", "disband", "forfeit":
 		return f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID)
 	default:
 		_, err := f.service.AdvanceRound(ctx, f.leader.ID, f.room.Room.ID)
@@ -307,6 +312,9 @@ func (f *transitionFixture) act(t *testing.T, kind string) error {
 	}
 }
 func (f *transitionFixture) assertFunds(t *testing.T, leaderMoney, memberMoney, wins, pool int) {
+	f.assertConservedFunds(t, leaderMoney, memberMoney, wins, pool, 0)
+}
+func (f *transitionFixture) assertConservedFunds(t *testing.T, leaderMoney, memberMoney, wins, pool, forfeited int) {
 	t.Helper()
 	ctx := context.Background()
 	leader, err := f.chars.FindByID(ctx, f.leader.ID)
@@ -332,8 +340,8 @@ func (f *transitionFixture) assertFunds(t *testing.T, leaderMoney, memberMoney, 
 		t.Fatal(err)
 	}
 	actualPool := state.Detail.Room.PrizePool
-	if actualPool != pool {
-		t.Fatalf("durable escrow=%d; want %d", actualPool, pool)
+	if actualPool != pool || state.ForfeitedPool != forfeited {
+		t.Fatalf("durable escrow=%d forfeited=%d; want pool=%d forfeited=%d", actualPool, state.ForfeitedPool, pool, forfeited)
 	}
 	var held, notices, receipts int
 	if err := f.db.QueryRowContext(ctx, "SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM character_pending_remittances WHERE character_id IN (?, ?)", f.leader.ID, f.member.ID).Scan(&held, &receipts); err != nil {
@@ -345,19 +353,41 @@ func (f *transitionFixture) assertFunds(t *testing.T, leaderMoney, memberMoney, 
 	if held != wins*200 || notices != wins || receipts != wins {
 		t.Fatalf("held=%d receipts=%d notices=%d; wins=%d", held, receipts, notices, wins)
 	}
-	if leader.Money+member.Money+actualPool+held != 2000 {
-		t.Fatal("assets not conserved")
+	if leader.Money+member.Money+actualPool+held+state.ForfeitedPool != 2000 {
+		t.Fatalf("assets not conserved: leader=%d member=%d pool=%d held=%d forfeited=%d", leader.Money, member.Money, actualPool, held, state.ForfeitedPool)
+	}
+}
+
+func (f *transitionFixture) assertOutcome(t *testing.T, kind string) {
+	t.Helper()
+	switch kind {
+	case "create":
+		f.assertConservedFunds(t, 900, 1000, 0, 100, 0)
+	case "join":
+		f.assertConservedFunds(t, 900, 900, 0, 200, 0)
+	case "leave":
+		f.assertConservedFunds(t, 900, 1000, 0, 100, 0)
+	case "handover":
+		f.assertConservedFunds(t, 1000, 900, 0, 100, 0)
+	case "disband":
+		f.assertConservedFunds(t, 1000, 1000, 0, 0, 0)
+	case "inprogress-leave":
+		f.assertConservedFunds(t, 900, 900, 0, 200, 0)
+	case "forfeit", "draw":
+		f.assertConservedFunds(t, 900, 900, 0, 0, 200)
+	case "forfeit-win", "settle":
+		f.assertConservedFunds(t, 900, 900, 1, 0, 0)
 	}
 }
 
 func TestPvPFinancialPublicationIntegration(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"create", "join", "leave", "disband", "settle", "draw"} {
+	for _, kind := range []string{"create", "join", "leave", "handover", "disband", "inprogress-leave", "forfeit", "forfeit-win", "settle", "draw"} {
 		faults := []string{"save", "set"}
-		if kind == "leave" {
+		if kind == "leave" || kind == "handover" || kind == "inprogress-leave" {
 			faults = append(faults, "delete-member")
 		}
-		if kind == "disband" {
+		if kind == "disband" || kind == "forfeit" {
 			faults = []string{"delete-room", "delete-member"}
 		}
 		for _, fault := range faults {
@@ -378,24 +408,23 @@ func TestPvPFinancialPublicationIntegration(t *testing.T) {
 					if err := f.act(t, kind); err != nil {
 						t.Fatal(err)
 					}
-					switch kind {
-					case "create":
-						f.assertFunds(t, 900, 1000, 0, 100)
-					case "join":
-						f.assertFunds(t, 900, 900, 0, 200)
-					case "leave":
-						f.assertFunds(t, 900, 1000, 0, 100)
-					case "disband", "draw":
-						f.assertFunds(t, 1000, 1000, 0, 0)
-					case "settle":
-						f.assertFunds(t, 900, 900, 1, 0)
-					}
-					if kind == "settle" || kind == "draw" {
+					f.assertOutcome(t, kind)
+					if kind == "settle" || kind == "draw" || kind == "forfeit-win" {
 						if err := f.act(t, kind); err != nil {
 							t.Fatal(err)
 						}
-						if f.battle.calls.Load() != 1 {
-							t.Fatalf("battle reran: %d", f.battle.calls.Load())
+						wantCalls := int64(1)
+						if kind == "forfeit-win" {
+							wantCalls = 0
+						}
+						if f.battle.calls.Load() != wantCalls {
+							t.Fatalf("unexpected battle calls: got %d want %d", f.battle.calls.Load(), wantCalls)
+						}
+					}
+					if kind == "handover" {
+						rm, err := f.service.GetRoom(context.Background(), f.room.Room.ID)
+						if err != nil || rm.Room.LeaderCharacterID != f.member.ID {
+							t.Fatalf("expected member promoted to leader, got %+v err=%v", rm.Room, err)
 						}
 					}
 					if kind == "create" || kind == "join" {
@@ -410,7 +439,7 @@ func TestPvPFinancialPublicationIntegration(t *testing.T) {
 }
 
 func TestPvPFinancialRollbackIntegration(t *testing.T) {
-	for _, kind := range []string{"create", "join", "leave", "disband", "settle", "draw"} {
+	for _, kind := range []string{"create", "join", "leave", "handover", "disband", "forfeit-win", "settle"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newTransitionFixture(t)
 			f.prepare(t, kind)
@@ -425,7 +454,7 @@ func TestPvPFinancialRollbackIntegration(t *testing.T) {
 			switch kind {
 			case "create":
 				f.assertFunds(t, 1000, 1000, 0, 0)
-			case "join":
+			case "join", "disband":
 				f.assertFunds(t, 900, 1000, 0, 100)
 			default:
 				f.assertFunds(t, 900, 900, 0, 200)
@@ -446,7 +475,7 @@ func TestPvPFinancialRollbackIntegration(t *testing.T) {
 
 func TestPvPFinancialConcurrentIntegration(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"create", "join", "leave", "disband", "settle", "draw"} {
+	for _, kind := range []string{"create", "join", "leave", "handover", "disband", "inprogress-leave", "forfeit", "forfeit-win", "settle", "draw"} {
 		kind := kind
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
@@ -463,9 +492,9 @@ func TestPvPFinancialConcurrentIntegration(t *testing.T) {
 				case "join":
 					_, err := f.service.JoinRoom(ctx, f.member.ID, f.room.Room.ID, "secret")
 					return err
-				case "leave":
+				case "leave", "inprogress-leave":
 					return f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID)
-				case "disband":
+				case "handover", "disband", "forfeit":
 					return f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID)
 				default:
 					_, err := f.service.AdvanceRound(ctx, f.leader.ID, f.room.Room.ID)
@@ -475,16 +504,7 @@ func TestPvPFinancialConcurrentIntegration(t *testing.T) {
 			if result.Successes < 1 {
 				t.Fatalf("no operation succeeded: %+v", result)
 			}
-			switch kind {
-			case "create", "leave":
-				f.assertFunds(t, 900, 1000, 0, 100)
-			case "join":
-				f.assertFunds(t, 900, 900, 0, 200)
-			case "disband", "draw":
-				f.assertFunds(t, 1000, 1000, 0, 0)
-			case "settle":
-				f.assertFunds(t, 900, 900, 1, 0)
-			}
+			f.assertOutcome(t, kind)
 		})
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -361,91 +360,6 @@ func (s *Service) SelectTeam(ctx context.Context, characterID string, roomID str
 	return result, err
 }
 
-// LeaveRoom removes a participant or disbands the room (@にげる).
-func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID string) error {
-	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		last, err := s.transitions.FindTransition(lockedCtx, roomID)
-		if err != nil {
-			return err
-		}
-		if last.Kind == "disband" && last.ActorID == characterID {
-			return nil
-		}
-		if last.Kind == "abandon" && slices.Contains(last.RemovedIDs, characterID) {
-			return nil
-		}
-		detail, err := s.repo.GetRoom(lockedCtx, roomID)
-		if errors.Is(err, ErrRoomNotFound) {
-			return s.abandonLostRoom(lockedCtx, characterID, last)
-		}
-		if err != nil {
-			return err
-		}
-
-		char, err := s.characters.FindByID(lockedCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		found := false
-		isLeader := false
-		for _, m := range detail.Members {
-			if m.CharacterID == characterID {
-				found = true
-				isLeader = m.IsLeader
-				break
-			}
-		}
-		if !found {
-			if last.Kind == "leave" && last.ActorID == characterID {
-				return nil
-			}
-			return ErrCharacterNotInRoom
-		}
-		if detail.Room.Status == StatusInProgress {
-			return ErrMatchAlreadyStarted
-		}
-
-		now := time.Now().UTC()
-
-		// If recruiting: leader leaving disbands and refunds everyone; non-leader leaving refunds themselves.
-		if detail.Room.Status == StatusRecruiting {
-			if isLeader {
-				// Disband and refund all members
-				var memberIDs []string
-				for _, m := range detail.Members {
-					memberIDs = append(memberIDs, m.CharacterID)
-				}
-				detail.Room.Status = StatusDisbanded
-				detail.Room.PrizePool = 0
-				detail.Room.UpdatedAt = now
-				return s.commitTransition(lockedCtx, Transition{Kind: "disband", ActorID: characterID, Detail: detail, RemovedIDs: memberIDs}, func(txCtx context.Context) error {
-					return s.refundMembers(txCtx, memberIDs, detail.Room.Bet)
-				})
-			}
-
-			var updatedMembers []RoomMember
-			for _, m := range detail.Members {
-				if m.CharacterID != characterID {
-					updatedMembers = append(updatedMembers, m)
-				}
-			}
-			detail.Members = updatedMembers
-			detail.Room.PrizePool -= detail.Room.Bet
-			if detail.Room.PrizePool < 0 {
-				detail.Room.PrizePool = 0
-			}
-			detail.Room.UpdatedAt = now
-			return s.commitTransition(lockedCtx, Transition{Kind: "leave", ActorID: characterID, Detail: detail, RemovedIDs: []string{char.ID}}, func(txCtx context.Context) error {
-				return s.refundMembers(txCtx, []string{char.ID}, detail.Room.Bet)
-			})
-		}
-
-		// In completed or disbanded status: simply remove mapping
-		return s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID)
-	})
-}
-
 func (s *Service) GetRoom(ctx context.Context, roomID string) (RoomDetail, error) {
 	return s.repo.GetRoom(ctx, roomID)
 }
@@ -459,5 +373,12 @@ func (s *Service) GetCharacterRoom(ctx context.Context, characterID string) (Roo
 	if err != nil {
 		return RoomDetail{}, err
 	}
-	return s.repo.GetRoom(ctx, roomID)
+	detail, err := s.repo.GetRoom(ctx, roomID)
+	if err != nil {
+		return RoomDetail{}, err
+	}
+	if detail.Room.Status == StatusCompleted && !hasRoomMember(detail.Members, characterID) {
+		return RoomDetail{}, ErrRoomNotFound
+	}
+	return detail, nil
 }

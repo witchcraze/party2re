@@ -164,7 +164,7 @@ func TestSettlement_LeaveRoom_LeaderDisband_RollbackOnFailure(t *testing.T) {
 	charRepo.failUpdateIDs["char-3"] = errDBFailure
 	charRepo.resetLockCalls()
 
-	// Leader leaves room -> triggers disband and refund
+	// Leader leaves recruiting room -> refunds only leader (char-3), hands leadership to first remaining member on retry.
 	err = svc.LeaveRoom(ctx, c1.ID, detail.Room.ID)
 	if err == nil {
 		t.Fatal("expected error on LeaveRoom, got nil")
@@ -173,7 +173,7 @@ func TestSettlement_LeaveRoom_LeaderDisband_RollbackOnFailure(t *testing.T) {
 		t.Fatalf("expected error wrapping %v, got %v", errDBFailure, err)
 	}
 
-	// Verify atomic rollback: no character should have received a partial refund
+	// Verify atomic rollback: no character should have received a refund
 	for _, id := range []string{c1.ID, c2.ID, c3.ID} {
 		c, _ := charRepo.FindByID(ctx, id)
 		if c.Money != 400 {
@@ -181,25 +181,19 @@ func TestSettlement_LeaveRoom_LeaderDisband_RollbackOnFailure(t *testing.T) {
 		}
 	}
 
-	// Verify room is NOT deleted or disbanded
+	// Verify room is NOT deleted or modified
 	roomDetail, err := svc.GetRoom(ctx, detail.Room.ID)
 	if err != nil {
 		t.Fatalf("expected room to still exist after failed refund, got %v", err)
 	}
-	if roomDetail.Room.Status != pvp.StatusRecruiting {
-		t.Fatalf("expected room to still be recruiting, got %v", roomDetail.Room.Status)
+	if roomDetail.Room.Status != pvp.StatusRecruiting || roomDetail.Room.LeaderCharacterID != c1.ID {
+		t.Fatalf("expected room still recruiting with original leader, got %+v", roomDetail.Room)
 	}
 
-	// Verify Rank 2 lock ordering: characters locked ascending by ID
+	// Only the departing character is locked and refunded
 	calls := charRepo.getLockCalls()
-	expectedOrder := []string{"char-1", "char-2", "char-3"}
-	if len(calls) < len(expectedOrder) {
-		t.Fatalf("expected at least %d lock calls, got %v", len(expectedOrder), calls)
-	}
-	for i, exp := range expectedOrder {
-		if calls[i] != exp {
-			t.Fatalf("expected lock call %d to be %s, got %s (full calls: %v)", i, exp, calls[i], calls)
-		}
+	if len(calls) != 1 || calls[0] != "char-3" {
+		t.Fatalf("expected single lock call [char-3], got %v", calls)
 	}
 }
 
@@ -364,10 +358,11 @@ func TestSettlement_AdvanceRound_PrizeDistribution_RollbackOnFailure(t *testing.
 	}
 }
 
-func TestSettlement_AdvanceRound_DrawRefund_RollbackOnFailure(t *testing.T) {
+func TestSettlement_AdvanceRound_MaxRoundsDraw_NoRefund(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newTransactionalCharRepo()
 	roomRepo := pvp.NewMemoryRoomRepository()
+	transRepo := pvp.NewMemoryTransitionRepository()
 
 	c1 := createTestCharacter("char-2", "MemberA", 500)
 	c2 := createTestCharacter("char-1", "MemberB", 500)
@@ -387,14 +382,14 @@ func TestSettlement_AdvanceRound_DrawRefund_RollbackOnFailure(t *testing.T) {
 		charRepo,
 		battleEngine,
 		pvp.WithTransactionProvider(charRepo),
-		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
+		pvp.WithTransitionRepository(transRepo),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Draw Rollback Test",
+		Name:       "MaxRounds Draw Test",
 		Bet:        100,
 		MaxMembers: 2,
 		TargetWins: 1,
@@ -412,30 +407,29 @@ func TestSettlement_AdvanceRound_DrawRefund_RollbackOnFailure(t *testing.T) {
 	r, _ := svc.GetRoom(ctx, detail.Room.ID)
 	r.Room.Round = pvp.MaxRounds
 	_ = roomRepo.SaveRoom(ctx, r.Room, r.Members)
-
-	// Fail update on char-2
-	errDrawFail := errors.New("simulated draw failure")
-	charRepo.failUpdateIDs["char-2"] = errDrawFail
 	charRepo.resetLockCalls()
 
-	_, err = svc.AdvanceRound(ctx, c1.ID, detail.Room.ID)
-	if err == nil {
-		t.Fatal("expected error on AdvanceRound draw, got nil")
+	res, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID)
+	if err != nil {
+		t.Fatalf("unexpected error on AdvanceRound draw: %v", err)
+	}
+	if !res.MatchCompleted || res.Outcome != "match_draw" {
+		t.Fatalf("expected completed match_draw, got %+v", res)
 	}
 
-	// Verify rollback: char-1 money unchanged
-	char1, _ := charRepo.FindByID(ctx, "char-1")
-	if char1.Money != 400 {
-		t.Fatalf("expected char-1 money 400 after rollback, got %d", char1.Money)
+	// Verify no refunds occur and no wallet updates happen on max-round draw
+	for _, id := range []string{"char-1", "char-2"} {
+		ch, _ := charRepo.FindByID(ctx, id)
+		if ch.Money != 400 {
+			t.Fatalf("expected %s money 400 (no refund on draw), got %d", id, ch.Money)
+		}
 	}
-
-	// Verify lock order was ascending: char-1 before char-2
-	calls := charRepo.getLockCalls()
-	if len(calls) < 2 {
-		t.Fatalf("expected at least 2 lock calls, got %v", calls)
+	if calls := charRepo.getLockCalls(); len(calls) != 0 {
+		t.Fatalf("expected zero wallet lock calls on draw, got %v", calls)
 	}
-	if calls[0] != "char-1" || calls[1] != "char-2" {
-		t.Fatalf("expected lock order [char-1, char-2], got %v", calls)
+	tr, err := transRepo.FindTransition(ctx, detail.Room.ID)
+	if err != nil || tr.ForfeitedPool != 200 || tr.Detail.Room.PrizePool != 0 {
+		t.Fatalf("expected 200G forfeited escrow recorded, got tr=%+v err=%v", tr, err)
 	}
 }
 
@@ -444,16 +438,24 @@ func TestSettlement_HappyPath_AscendingLockOrder_AndCommit(t *testing.T) {
 	charRepo := newTransactionalCharRepo()
 	roomRepo := pvp.NewMemoryRoomRepository()
 
-	c1 := createTestCharacter("char-3", "Leader", 500)
-	c2 := createTestCharacter("char-1", "MemberA", 500)
+	c1 := createTestCharacter("char-3", "RedLeader", 500)
+	c2 := createTestCharacter("char-1", "RedWing", 500)
+	c3 := createTestCharacter("char-2", "BlueFoe", 500)
 	charRepo.add(c1)
 	charRepo.add(c2)
+	charRepo.add(c3)
 
 	svc, err := pvp.NewService(
 		roomRepo,
 		charRepo,
-		mockBattleEngine{result: corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin}},
+		mockBattleEngine{result: corebattle.PartyBattleResult{
+			Outcome:    corebattle.OutcomeWin,
+			WinnerSide: pvp.ColorRed,
+			WinnerTeam: pvp.ColorRed,
+			Turns:      1,
+		}},
 		pvp.WithTransactionProvider(charRepo),
+		pvp.WithPrizeRemitter(charRepo),
 		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 	)
 	if err != nil {
@@ -461,9 +463,9 @@ func TestSettlement_HappyPath_AscendingLockOrder_AndCommit(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Happy Path Disband",
+		Name:       "Happy Path Settlement",
 		Bet:        100,
-		MaxMembers: 2,
+		MaxMembers: 3,
 		TargetWins: 1,
 	})
 	if err != nil {
@@ -471,31 +473,28 @@ func TestSettlement_HappyPath_AscendingLockOrder_AndCommit(t *testing.T) {
 	}
 
 	_, _ = svc.JoinRoom(ctx, c2.ID, detail.Room.ID, "")
+	_, _ = svc.JoinRoom(ctx, c3.ID, detail.Room.ID, "")
+	_, _ = svc.SelectTeam(ctx, c1.ID, detail.Room.ID, pvp.ColorRed)
+	_, _ = svc.SelectTeam(ctx, c2.ID, detail.Room.ID, pvp.ColorRed)
+	_, _ = svc.SelectTeam(ctx, c3.ID, detail.Room.ID, pvp.ColorBlue)
+	_, _ = svc.StartMatch(ctx, c1.ID, detail.Room.ID)
 
 	charRepo.resetLockCalls()
 
-	// Leader leaves -> refunds both members (100G each)
-	err = svc.LeaveRoom(ctx, c1.ID, detail.Room.ID)
-	if err != nil {
-		t.Fatalf("LeaveRoom failed: %v", err)
+	if _, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID); err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
 	}
 
-	// Both characters should have 500G restored
-	c1After, _ := charRepo.FindByID(ctx, c1.ID)
-	c2After, _ := charRepo.FindByID(ctx, c2.ID)
-	if c1After.Money != 500 || c2After.Money != 500 {
-		t.Fatalf("expected both characters to have 500G, got c1=%d, c2=%d", c1After.Money, c2After.Money)
+	// Winners receive 150G held prize each and remain at 400G wallet
+	for _, id := range []string{c1.ID, c2.ID} {
+		if charRepo.prizes[id] != 150 {
+			t.Fatalf("expected 150G held prize for %s, got %d", id, charRepo.prizes[id])
+		}
 	}
 
-	// Room should be deleted
-	_, err = svc.GetRoom(ctx, detail.Room.ID)
-	if !errors.Is(err, pvp.ErrRoomNotFound) {
-		t.Fatalf("expected ErrRoomNotFound, got %v", err)
-	}
-
-	// Lock calls must be in ascending order
+	// Lock calls must be in ascending order (char-1 before char-3)
 	calls := charRepo.getLockCalls()
-	if !sort.StringsAreSorted(calls) {
+	if len(calls) != 2 || !sort.StringsAreSorted(calls) {
 		t.Fatalf("lock calls were not sorted ascending: %v", calls)
 	}
 }
