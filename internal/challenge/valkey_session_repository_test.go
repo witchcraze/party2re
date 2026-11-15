@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -13,20 +12,8 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
-
-func openTestValkey(t *testing.T) valkeygo.Client {
-	t.Helper()
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("open valkey client: %v", err)
-	}
-	return client
-}
 
 func cleanupChallengeValkey(t *testing.T, client valkeygo.Client, charIDs ...string) {
 	t.Helper()
@@ -177,8 +164,7 @@ func TestMemorySessionRepository_TTL(t *testing.T) {
 }
 
 func TestValkeySessionRepository_LifecycleAndErrors(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	charID := "vk-chal-char-01"
 	sessID := "vk-chal-sess-01"
@@ -313,8 +299,7 @@ func TestValkeySessionRepository_LifecycleAndErrors(t *testing.T) {
 }
 
 func TestValkeySessionRepository_ConcurrentRounds(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	repo, err := challenge.NewValkeySessionRepository(client)
 	if err != nil {
@@ -417,8 +402,7 @@ func (m *failFinalizeMockChallengeRepo) FinalizeSession(
 }
 
 func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	charID := "two-phase-chal-char"
 	cleanupChallengeValkey(t, client, charID)
@@ -503,8 +487,7 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 }
 
 func TestValkeySessionRepository_DiscardActiveSession(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	repo, err := challenge.NewValkeySessionRepository(client)
 	if err != nil {
@@ -552,8 +535,7 @@ func TestValkeySessionRepository_DiscardActiveSession(t *testing.T) {
 }
 
 func TestValkeySessionRepository_DiscardActiveSession_ReplacementPreserved(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	repo, err := challenge.NewValkeySessionRepository(client)
 	if err != nil {

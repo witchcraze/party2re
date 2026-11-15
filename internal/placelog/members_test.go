@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -16,7 +15,6 @@ import (
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/testutil"
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
-	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func TestMembersReadFailure(t *testing.T) {
@@ -30,14 +28,7 @@ func TestMembersReadFailure(t *testing.T) {
 
 func realMembers(t *testing.T) (*placelog.Members, valkey.Client, placelog.Place) {
 	t.Helper()
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("connect valkey: %v", err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	p := placelog.Place{Kind: "test", ID: id.New()}
 	t.Cleanup(func() {
 		base := "party2:placemember:{test:" + p.ID + "}:"
@@ -121,14 +112,7 @@ func TestValkeyMembersExpiryOrderAndLeave(t *testing.T) {
 }
 
 func TestValkeyMembersPhysicalTTLBoundary(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("connect valkey: %v", err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 
 	newPlace := func() placelog.Place {
 		p := placelog.Place{Kind: "test", ID: id.New()}
@@ -692,14 +676,7 @@ func TestValkeyMembersBoundedExpiryCleanupAndReturningOrder(t *testing.T) {
 }
 
 func BenchmarkValkeyMembersRefreshExpiredCohort(b *testing.B) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		b.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		b.Fatalf("connect valkey: %v", err)
-	}
-	b.Cleanup(client.Close)
+	client := testutil.OpenValkey(b)
 
 	ctx := context.Background()
 	t0 := time.Unix(1_800_000_000, 0)

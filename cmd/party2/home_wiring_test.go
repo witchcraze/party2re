@@ -20,7 +20,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/monster"
-	"github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func newHomePetCharacter(t *testing.T) (*sql.DB, corecharacter.Character) {
@@ -195,14 +195,7 @@ func TestHomePetFixtureCleanup(t *testing.T) {
 }
 
 func TestHomeWakeProductionHooks(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := valkey.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	f := newHookWiringFixture(t, client)
 	ctx := context.Background()
 	f.char.PendingWake = true

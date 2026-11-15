@@ -15,7 +15,6 @@ import (
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
-
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
@@ -26,6 +25,7 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/scheduling"
+	"github.com/witchcraze/party2re/internal/testutil"
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -56,11 +56,7 @@ func newScenarioApp(t *testing.T) *scenarioApp {
 			t.Error(err)
 		}
 	})
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	return newScenarioAppWithDB(t, db, client)
 }
 

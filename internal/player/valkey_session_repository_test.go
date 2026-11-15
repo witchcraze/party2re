@@ -3,13 +3,12 @@ package player_test
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/player"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func TestValkeySessionRepository_InMemoryFallback(t *testing.T) {
@@ -94,15 +93,7 @@ func TestValkeySessionRepository_DeleteByPlayerID_InMemory(t *testing.T) {
 }
 
 func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("connect to valkey: %v", err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	testSessionPrefix := "party2:test:session:"
@@ -257,15 +248,7 @@ func TestValkeySessionRepository_InMemory_Eviction(t *testing.T) {
 }
 
 func TestValkeySessionRepository_NoInMemoryCachingWhenClientAvailable(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("connect to valkey: %v", err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	testSessionPrefix := "party2:test:session:"
@@ -298,15 +281,7 @@ func TestValkeySessionRepository_NoInMemoryCachingWhenClientAvailable(t *testing
 }
 
 func TestValkeySessionRepository_ZSet_TrackingAndLazyPurge(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("connect to valkey: %v", err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	testSessionPrefix := "party2:test:session:"
@@ -374,15 +349,7 @@ func TestValkeySessionRepository_ZSet_TrackingAndLazyPurge(t *testing.T) {
 }
 
 func TestValkeySessionRepository_WrongTypeRecovery(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("connect to valkey: %v", err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	testSessionPrefix := "party2:test:session:"

@@ -3,13 +3,12 @@ package player_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/player"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func BenchmarkValkeySessionSave_InMemory(b *testing.B) {
@@ -59,16 +58,7 @@ func BenchmarkValkeySessionFind_InMemory(b *testing.B) {
 }
 
 func BenchmarkValkeySessionSave_LiveValkey(b *testing.B) {
-	addr := os.Getenv("PARTY2_VALKEY_ADDR")
-	if addr == "" {
-		b.Skip("PARTY2_VALKEY_ADDR not set")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		b.Fatalf("failed to connect to Valkey: %v", err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(b)
 
 	ctx := context.Background()
 	repo := player.NewValkeySessionRepository(client)
@@ -91,16 +81,7 @@ func BenchmarkValkeySessionSave_LiveValkey(b *testing.B) {
 }
 
 func BenchmarkValkeySessionFind_LiveValkey(b *testing.B) {
-	addr := os.Getenv("PARTY2_VALKEY_ADDR")
-	if addr == "" {
-		b.Skip("PARTY2_VALKEY_ADDR not set")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		b.Fatalf("failed to connect to Valkey: %v", err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(b)
 
 	ctx := context.Background()
 	repo := player.NewValkeySessionRepository(client)

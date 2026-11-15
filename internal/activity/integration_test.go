@@ -14,7 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/scheduling"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type fixedClock struct{ now time.Time }
@@ -222,11 +222,7 @@ func TestTrainingScheduledActionIntegration(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	valkeyClient, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(valkeyClient.Close)
+	valkeyClient := testutil.OpenValkey(t)
 
 	characters, _ := database.NewCharacterRepository(db)
 	characterService, _ := character.NewService(characters)

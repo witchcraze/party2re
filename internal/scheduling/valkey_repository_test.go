@@ -3,27 +3,14 @@ package scheduling_test
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/scheduling"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
-
-func openValkeyClient(t *testing.T) valkey.Client {
-	t.Helper()
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("open valkey client: %v", err)
-	}
-	return client
-}
 
 func cleanupKeys(t *testing.T, client valkey.Client, ids ...string) {
 	t.Helper()
@@ -47,8 +34,7 @@ func validTestAction(id string, executeAt time.Time) core_scheduling.ScheduledAc
 }
 
 func TestValkeyRepository_FindPendingByActorID_Lifecycle(t *testing.T) {
-	client := openValkeyClient(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	ctx := context.Background()
 	repo := scheduling.NewValkeyRepository(client)
 	actor := "actor-query-lifecycle"
@@ -115,8 +101,7 @@ func TestValkeyRepository_FindPendingByActorID_Lifecycle(t *testing.T) {
 }
 
 func TestValkeyRepository_Schedule_StoresActionAndEnqueues(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "sched-test-01"
 	defer cleanupKeys(t, client, id)
 
@@ -151,8 +136,7 @@ func TestValkeyRepository_Schedule_StoresActionAndEnqueues(t *testing.T) {
 }
 
 func TestValkeyRepository_FetchDue_ReturnsPastActions(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "fetchdue-past-01"
 	defer cleanupKeys(t, client, id)
 
@@ -178,8 +162,7 @@ func TestValkeyRepository_FetchDue_ReturnsPastActions(t *testing.T) {
 }
 
 func TestValkeyRepository_FetchDue_ExcludesFutureActions(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "fetchdue-future-01"
 	defer cleanupKeys(t, client, id)
 
@@ -201,8 +184,7 @@ func TestValkeyRepository_FetchDue_ExcludesFutureActions(t *testing.T) {
 }
 
 func TestValkeyRepository_FetchDue_MalformedJSONRemovedFromQueue(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "fetchdue-malformed-01"
 	defer cleanupKeys(t, client, id)
 
@@ -231,8 +213,7 @@ func TestValkeyRepository_FetchDue_MalformedJSONRemovedFromQueue(t *testing.T) {
 }
 
 func TestValkeyRepository_FetchDue_InvalidValidateRemovedFromQueue(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "fetchdue-invalid-01"
 	defer cleanupKeys(t, client, id)
 
@@ -269,8 +250,7 @@ func TestValkeyRepository_FetchDue_InvalidValidateRemovedFromQueue(t *testing.T)
 }
 
 func TestValkeyRepository_FetchDue_StaleQueueEntryCleanedUp(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "fetchdue-stale-01"
 	defer cleanupKeys(t, client, id)
 
@@ -298,8 +278,7 @@ func TestValkeyRepository_FetchDue_StaleQueueEntryCleanedUp(t *testing.T) {
 }
 
 func TestValkeyRepository_AcquireLock_FirstCallerSucceeds(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "lock-test-01"
 	defer cleanupKeys(t, client, id)
 
@@ -316,8 +295,7 @@ func TestValkeyRepository_AcquireLock_FirstCallerSucceeds(t *testing.T) {
 }
 
 func TestValkeyRepository_AcquireLock_SecondCallerRejected(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "lock-test-02"
 	defer cleanupKeys(t, client, id)
 
@@ -337,8 +315,7 @@ func TestValkeyRepository_AcquireLock_SecondCallerRejected(t *testing.T) {
 }
 
 func TestValkeyRepository_AcquireLock_ExpiresAfterTTL(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "lock-ttl-01"
 	defer cleanupKeys(t, client, id)
 
@@ -360,8 +337,7 @@ func TestValkeyRepository_AcquireLock_ExpiresAfterTTL(t *testing.T) {
 }
 
 func TestValkeyRepository_Save_CompletedRemovesFromQueueAndSetsRetainTTL(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "save-completed-01"
 	defer cleanupKeys(t, client, id)
 
@@ -401,8 +377,7 @@ func TestValkeyRepository_Save_CompletedRemovesFromQueueAndSetsRetainTTL(t *test
 }
 
 func TestValkeyRepository_Save_FailedRemovesFromQueueAndSetsRetainTTL(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "save-failed-01"
 	defer cleanupKeys(t, client, id)
 
@@ -442,8 +417,7 @@ func TestValkeyRepository_Save_FailedRemovesFromQueueAndSetsRetainTTL(t *testing
 }
 
 func TestValkeyRepository_Save_ProcessingUpdatesKeyWithoutRemovingFromQueue(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	id := "save-processing-01"
 	defer cleanupKeys(t, client, id)
 
@@ -484,8 +458,7 @@ func TestValkeyRepository_Save_ProcessingUpdatesKeyWithoutRemovingFromQueue(t *t
 }
 
 func TestValkeyRepository_CancelByActorID(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	id1 := "cancel-actor-01"
 	id2 := "cancel-actor-02"

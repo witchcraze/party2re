@@ -12,6 +12,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type cleanupReadClient struct {
@@ -37,8 +38,7 @@ func TestExpeditionCleanup_RunIdentity(t *testing.T) {
 			var store dungeon.ActiveExpeditionStore = dungeon.NewMemoryExpeditionRepository()
 			var hooked *cleanupReadClient
 			if adapter != "memory" {
-				client := openTestValkey(t)
-				t.Cleanup(client.Close)
+				client := testutil.OpenValkey(t)
 				hooked = &cleanupReadClient{Client: client}
 				r, err := dungeon.NewValkeyExpeditionRepository(hooked)
 				if err != nil {

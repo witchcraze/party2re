@@ -21,7 +21,6 @@ import (
 	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/tavern"
 	"github.com/witchcraze/party2re/internal/testutil"
-	"github.com/witchcraze/party2re/internal/valkey"
 )
 
 type wakeCharacterRepository struct {
@@ -114,11 +113,7 @@ func TestWake_SQLRecovery(t *testing.T) {
 			t.Errorf("close wake subtest db: %v", err)
 		}
 	})
-	client, err := valkey.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -318,11 +313,7 @@ func TestWake_RealTavernFullnessReset(t *testing.T) {
 			t.Errorf("close wake subtest db: %v", err)
 		}
 	})
-	client, err := valkey.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -482,11 +473,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Errorf("close wake cycle db: %v", err)
 		}
 	})
-	client, err := valkey.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {

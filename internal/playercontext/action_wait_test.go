@@ -3,7 +3,6 @@ package playercontext
 import (
 	"context"
 	"errors"
-	"os"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -14,7 +13,6 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
-	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func TestActionWaitGateBlocksAllButRecovery(t *testing.T) {
@@ -244,14 +242,7 @@ func TestConcurrentActionWaitClaimsAdmitOne(t *testing.T) {
 	}
 	t.Run("memory", func(t *testing.T) { run(t, timer.NewService(nil)) })
 	t.Run("valkey", func(t *testing.T) {
-		if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-			t.Skip("PARTY2_VALKEY_ADDR is not configured")
-		}
-		client, err := vk.NewClient()
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(client.Close)
+		client := testutil.OpenValkey(t)
 		run(t, timer.NewService(client))
 	})
 }

@@ -2,13 +2,12 @@ package ratelimit_test
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/ratelimit"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func TestMemoryLimiter_BasicAndExpiry(t *testing.T) {
@@ -101,15 +100,7 @@ func TestMemoryLimiter_ConcurrentAccess(t *testing.T) {
 }
 
 func TestValkeyLimiter_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("failed to connect to valkey: %v", err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	lim := ratelimit.NewValkeyLimiter(client, ratelimit.WithKeyPrefix("test:ratelimit:"))
 	ctx := context.Background()

@@ -19,7 +19,6 @@ import (
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/testutil"
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
-	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 // Keep each test's actor isolated while exercising the real queue and indexes.
@@ -122,11 +121,7 @@ func TestTakarakujiScheduleRecoveryIntegration(t *testing.T) {
 			db := takarakujiIsolatedDB(t)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			client, err := vk.NewClient()
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer client.Close()
+			client := testutil.OpenValkey(t)
 			faults := &partialScheduleClient{Client: client}
 			queue := &recoveryQueue{ScheduledActionRepository: scheduling.NewValkeyRepository(faults), actor: "lottery-test:" + id.New()}
 			defer func() {

@@ -24,7 +24,7 @@ import (
 	"github.com/witchcraze/party2re/internal/inventory"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/store"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 const bookDefinition = "item-058"
@@ -156,11 +156,7 @@ func newBookFixture(t *testing.T, fail bookFailures) *bookFixture {
 	db := homeIsolatedDB(t)
 	var repo costume.Repository = costume.NewMemoryCostumeRepository()
 	if os.Getenv("PARTY2_VALKEY_ADDR") != "" {
-		client, err := vk.NewClient()
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(client.Close)
+		client := testutil.OpenValkey(t)
 		repo = costume.NewValkeyCostumeRepository(client)
 	}
 	charSaveFail := &atomic.Bool{}

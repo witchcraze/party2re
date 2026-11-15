@@ -16,6 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type mpSpendingResolver struct {
@@ -150,8 +151,7 @@ func TestDungeonMemberMP_EncodeDecodeContract(t *testing.T) {
 
 func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 	ctx := context.Background()
-	valkeyClient := openTestValkey(t)
-	t.Cleanup(valkeyClient.Close)
+	valkeyClient := testutil.OpenValkey(t)
 
 	customDungeon := dungeon.Dungeon{
 		ID:         "dg-mp-compat",
@@ -361,8 +361,7 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	valkeyClient := openTestValkey(t)
-	t.Cleanup(valkeyClient.Close)
+	valkeyClient := testutil.OpenValkey(t)
 
 	store, err := dungeon.NewValkeyExpeditionRepository(valkeyClient)
 	if err != nil {

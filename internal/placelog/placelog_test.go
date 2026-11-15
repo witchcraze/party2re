@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/testutil"
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
-	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func TestEntryVisibleTo(t *testing.T) {
@@ -52,14 +50,7 @@ func TestReadFailures(t *testing.T) {
 
 func realLog(t *testing.T, cfg placelog.Config) (*placelog.Log, valkey.Client) {
 	t.Helper()
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("connect valkey: %v", err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	return placelog.New(client, cfg), client
 }
 

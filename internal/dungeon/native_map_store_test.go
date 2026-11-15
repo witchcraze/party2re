@@ -10,7 +10,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 // nativeStoreContract checks one native transition boundary on any adapter.
@@ -74,8 +74,7 @@ func TestNativeMap0_StoreContract(t *testing.T) {
 		nativeStoreContract(t, dungeon.NewMemoryExpeditionRepository(), "native-mem")
 	})
 	t.Run("valkey", func(t *testing.T) {
-		client := openTestValkey(t)
-		defer client.Close()
+		client := testutil.OpenValkey(t)
 		charID := "native-vk-" + time.Now().Format("150405.000000")
 		defer cleanupDungeonValkey(t, client, charID)
 		store, err := dungeon.NewValkeyExpeditionRepository(client)
@@ -96,11 +95,7 @@ func TestNativeMap0_EscapeAtLimitThroughSQLFinalizer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	store, err := dungeon.NewValkeyExpeditionRepository(client)
 	if err != nil {
 		t.Fatal(err)

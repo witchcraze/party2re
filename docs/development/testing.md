@@ -137,10 +137,24 @@ The package deadline and its overrides are described under [execution budgets](#
 
 ## 5. Test Setup and Fixtures
 
-- **Avoid Premature Test Frameworks**: Do not proactively build complex test frameworks; introduce helpers only when duplication becomes a concrete burden.
-- **Explicit Setup over Magic**: Test helpers must not obscure what is being tested. Explicit setup is preferred over implicit abstraction.
-- **Reproducible Outcomes**: For exact outcome assertions, inject controlled RNG and clock inputs. Randomized tests should report their seed for replay.
-- **Shared Factories**: Use centralized test factories (`CreateTestPlayer`, `CreateTestCharacterWithFunds`, `CreateTestGuildWithLeader`) for integration tests to ensure unique IDs and valid name lengths.
+When adding a third copy across packages, or fixing support code that has copies,
+search for the existing setup before adding or changing it. Share copies when
+they differ only in parameters and a correctness or lifecycle fix would need to
+reach each one. Similar-looking stubs with different failure, state or call-recording
+behavior stay local; do not build a framework to accommodate those differences.
+
+Keep helpers used within one package in its `_test.go` files. Shared database
+fixtures and entity factories live in [`internal/database/testing.go`](../../internal/database/testing.go);
+use those factories for unique identities and valid entity names. Other shared
+test support lives in [`internal/testutil`](../../internal/testutil), including
+the environment-configured Valkey fixture. When consolidating, preserve each
+caller's skip/failure conditions, isolation boundary and cleanup ordering.
+
+**Explicit Setup over Magic**: Keep the case's input values, backend choice,
+owned records/keys, failure injection and assertions visible in the test;
+helpers may own connection disposal, but must leave clients open until fixture
+cleanup finishes. For exact outcomes, inject controlled RNG and clock inputs;
+randomized tests report their seed for replay.
 
 ### 5.1 Database Ownership and Isolation
 

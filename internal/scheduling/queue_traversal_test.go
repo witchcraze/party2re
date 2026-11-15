@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/scheduling"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func selectScheduledActions(actions []core.ScheduledAction, ids ...string) []core.ScheduledAction {
@@ -32,8 +33,7 @@ func selectScheduledActions(actions []core.ScheduledAction, ids ...string) []cor
 }
 
 func TestWorker_QueueTraversal_StarvationPrevention(t *testing.T) {
-	client := openValkeyClient(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	actorID := id.New()
@@ -152,8 +152,7 @@ func TestWorker_QueueTraversal_StarvationPrevention(t *testing.T) {
 }
 
 func TestWorker_QueueTraversal_MultiPage(t *testing.T) {
-	client := openValkeyClient(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	actorID := id.New()
@@ -234,8 +233,7 @@ func TestWorker_QueueTraversal_MultiPage(t *testing.T) {
 }
 
 func TestWorker_QueueTraversal_HealthyContrast(t *testing.T) {
-	client := openValkeyClient(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	actorID := id.New()
@@ -302,8 +300,7 @@ func TestWorker_QueueTraversal_HealthyContrast(t *testing.T) {
 }
 
 func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
-	client := openValkeyClient(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	actorID := id.New()
@@ -460,8 +457,7 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 }
 
 func TestWorker_QueueTraversal_TransientErrorPropagation(t *testing.T) {
-	client := openValkeyClient(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	fault := &terminalFaultClient{Client: client}
@@ -504,8 +500,7 @@ func TestWorker_QueueTraversal_TransientErrorPropagation(t *testing.T) {
 }
 
 func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
-	client := openValkeyClient(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	actorID := id.New()
