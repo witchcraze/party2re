@@ -82,30 +82,30 @@ func (h *Handler) registerNPC(service *playercontext.Service) {
 }
 
 // currentNPC uses the scene already admitted by the dispatcher.
-func (h *Handler) currentNPC(current playercontext.Result) (string, *npcProfile, corecharacter.Character) {
+func (h *Handler) currentNPC(current playercontext.Result) (*npcProfile, corecharacter.Character) {
 	destination := current.Snapshot.LocationID
-	return destination, h.sceneAdapters[destination].npc, current.Snapshot.Character
+	return h.sceneAdapters[destination].npc, current.Snapshot.Character
 }
 
 // puffPuff is ＠ぱふぱふ (secret.cgi:79-84): dialogue only, logged as a private
 // row pair addressed to the actor ($to_name = $m).
 func (h *Handler) puffPuff(ctx context.Context, current playercontext.Result) (NPCResult, error) {
-	destination, npc, char := h.currentNPC(current)
+	npc, char := h.currentNPC(current)
 	word := fmt.Sprintf(puffPuffDialogueFormat, char.Name)
-	h.appendNPCLog(ctx, destination, char, "＠ぱふぱふ", npc.name, word, char.ID)
+	h.appendNPCLog(ctx, current, "＠ぱふぱふ", npc.name, word, char.ID)
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
 // divinate is ＠うらない (park.cgi uranai): a public $npc_com that starts the wait.
 func (h *Handler) divinate(ctx context.Context, current playercontext.Result) (NPCResult, error) {
-	destination, npc, char := h.currentNPC(current)
+	npc, char := h.currentNPC(current)
 	word := divination(random.Intn, char.Name)
-	h.appendNPCLog(ctx, destination, char, "＠うらない", npc.name, word, "")
+	h.appendNPCLog(ctx, current, "＠うらない", npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
 func (h *Handler) npcAct(ctx context.Context, current playercontext.Result, talk bool) (NPCResult, error) {
-	destination, npc, char := h.currentNPC(current)
+	npc, char := h.currentNPC(current)
 	if talk && npc.talk != nil {
 		return npc.talk(h, ctx, current)
 	}
@@ -132,21 +132,24 @@ func (h *Handler) npcAct(ctx context.Context, current playercontext.Result, talk
 		return NPCResult{NPCName: npc.name, Dialogue: npcNoWords, Private: true}, nil
 	}
 	word := strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP), "{job}", h.jobName(char.JobID)).Replace(words[random.Intn(len(words))])
-	h.appendNPCLog(ctx, destination, char, command, npc.name, word, "")
+	h.appendNPCLog(ctx, current, command, npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
 // appendNPCLog writes the actor's command row and the NPC reply; a nonempty
 // recipient makes both rows private, like legacy $to_name.
-func (h *Handler) appendNPCLog(ctx context.Context, destination string, char corecharacter.Character, command, npcName, word, recipient string) {
+func (h *Handler) appendNPCLog(ctx context.Context, current playercontext.Result, command, npcName, word, recipient string) {
 	if h.placeLog == nil {
 		return
 	}
 	now := time.Now().UTC()
-	if err := h.placeLog.Append(ctx, placelog.Place{Kind: placelog.KindFacility, ID: destination},
-		placelog.Entry{OccurredAt: now, SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: char.ID, Name: char.Name, Color: char.Color, Text: command, RecipientCharacterID: recipient},
-		placelog.Entry{OccurredAt: now, SpeakerKind: placelog.SpeakerNPC, Name: npcName, Color: npcColor, Text: word, RecipientCharacterID: recipient}); err != nil {
+	char, place := current.Snapshot.Character, h.scenePlace(current)
+	rows := []placelog.Entry{{OccurredAt: now, SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: char.ID, Name: char.Name, Color: char.Color, Text: command, RecipientCharacterID: recipient}}
+	if word != "" {
+		rows = append(rows, placelog.Entry{OccurredAt: now, SpeakerKind: placelog.SpeakerNPC, Name: npcName, Color: npcColor, Text: word, RecipientCharacterID: recipient})
+	}
+	if err := h.placeLog.Append(ctx, place, rows...); err != nil {
 		// The reply is already decided; a lost log row is display-only.
-		slog.WarnContext(ctx, "place log append failed", slog.String("place", destination), slog.String("error", err.Error()))
+		slog.WarnContext(ctx, "place log append failed", slog.String("place", place.Kind+":"+place.ID), slog.String("error", err.Error()))
 	}
 }

@@ -19,10 +19,12 @@ import (
 type fakePlaceMembers struct {
 	rows              []placelog.Member
 	readErr, writeErr error
+	leaveErr          error
 	refreshed         []placelog.Place
 	refreshedAs       []placelog.Member
 	left              []string
 	reads             int
+	byPlace           map[placelog.Place][]placelog.Member
 }
 
 func (f *fakePlaceMembers) Refresh(_ context.Context, p placelog.Place, m placelog.Member, _ time.Time) error {
@@ -30,16 +32,33 @@ func (f *fakePlaceMembers) Refresh(_ context.Context, p placelog.Place, m placel
 		return f.writeErr
 	}
 	f.refreshed, f.refreshedAs = append(f.refreshed, p), append(f.refreshedAs, m)
+	if f.byPlace != nil {
+		for place, rows := range f.byPlace {
+			f.byPlace[place] = slices.DeleteFunc(rows, func(row placelog.Member) bool { return row.CharacterID == m.CharacterID })
+		}
+		f.byPlace[p] = append(f.byPlace[p], m)
+	}
 	return nil
 }
 
 func (f *fakePlaceMembers) Leave(_ context.Context, characterID string) error {
 	f.left = append(f.left, characterID)
+	if f.leaveErr != nil {
+		return f.leaveErr
+	}
+	if f.byPlace != nil && f.writeErr == nil {
+		for place, rows := range f.byPlace {
+			f.byPlace[place] = slices.DeleteFunc(rows, func(row placelog.Member) bool { return row.CharacterID == characterID })
+		}
+	}
 	return f.writeErr
 }
 
-func (f *fakePlaceMembers) Read(context.Context, placelog.Place, time.Time) ([]placelog.Member, error) {
+func (f *fakePlaceMembers) Read(_ context.Context, place placelog.Place, _ time.Time) ([]placelog.Member, error) {
 	f.reads++
+	if f.byPlace != nil {
+		return f.byPlace[place], f.readErr
+	}
 	return f.rows, f.readErr
 }
 

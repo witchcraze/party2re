@@ -91,7 +91,12 @@ func navigationRouter(t *testing.T, f *gatewayFixture, store *gatewayNavigationS
 
 func navigationGET(t *testing.T, router http.Handler) (int, PlayerContextResponse) {
 	t.Helper()
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/characters/hero/context", nil)
+	return navigationGETForActor(t, router, "hero")
+}
+
+func navigationGETForActor(t *testing.T, router http.Handler, actor string) (int, PlayerContextResponse) {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/characters/"+actor+"/context", nil)
 	r.Header.Set("Authorization", "Bearer session")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)

@@ -114,7 +114,6 @@ const homeNobodyHere = "しかし、誰もいなかった…"
 
 // homeTalk speaks for a random resident of the observed home. Without phrases
 // the resident stays silent, as legacy logs no empty $npc_com.
-// shortcut: replies are not logged until Home has its owner-scoped place log (#2254).
 func homeTalk(h *Handler, ctx context.Context, current playercontext.Result) (NPCResult, error) {
 	talk, err := h.homes.TalkToCompanion(ctx, homeOwner(current.Navigation, current.Snapshot.Character.ID))
 	if errors.Is(err, home.ErrNoPetsAtHome) {
@@ -123,6 +122,7 @@ func homeTalk(h *Handler, ctx context.Context, current playercontext.Result) (NP
 	if err != nil {
 		return NPCResult{}, err
 	}
+	h.appendNPCLog(ctx, current, "＠はなす", talk.PetName, talk.Phrase, "")
 	if talk.Phrase == "" {
 		return NPCResult{}, nil
 	}

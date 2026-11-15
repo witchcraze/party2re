@@ -13,10 +13,12 @@ import (
 )
 
 type fakePlaceLog struct {
-	rows   []placelog.Entry
-	err    error
-	places []placelog.Place
-	viewer string
+	rows    []placelog.Entry
+	err     error
+	places  []placelog.Place
+	viewer  string
+	byPlace map[placelog.Place][]placelog.Entry
+	writes  int
 }
 
 func (f *fakePlaceLog) Append(_ context.Context, p placelog.Place, entries ...placelog.Entry) error {
@@ -24,8 +26,13 @@ func (f *fakePlaceLog) Append(_ context.Context, p placelog.Place, entries ...pl
 		return f.err
 	}
 	f.places = append(f.places, p)
+	f.writes++
 	for _, e := range entries { // the last entry becomes the newest, as in placelog.Log
-		f.rows = append([]placelog.Entry{e}, f.rows...)
+		if f.byPlace != nil {
+			f.byPlace[p] = append([]placelog.Entry{e}, f.byPlace[p]...)
+		} else {
+			f.rows = append([]placelog.Entry{e}, f.rows...)
+		}
 	}
 	return nil
 }
@@ -36,7 +43,11 @@ func (f *fakePlaceLog) Read(_ context.Context, p placelog.Place, viewer string) 
 		return nil, f.err
 	}
 	var out []placelog.Entry
-	for _, r := range f.rows {
+	rows := f.rows
+	if f.byPlace != nil {
+		rows = f.byPlace[p]
+	}
+	for _, r := range rows {
 		if r.VisibleTo(viewer) {
 			out = append(out, r)
 		}

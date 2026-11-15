@@ -78,7 +78,7 @@ owns the approved lifecycle and delivery policies.
 - **Scope / Legacy**: `lib/home.cgi`の公開/本人表示、Home設定、`てがみをかく` / `てがみをよむ`、`からー`、`ことばをおしえる` / `ことばをわすれさせる`、ペット表示/会話、配送通知。共有`lib/system.cgi`の手紙・ログ処理まで追う。
 - **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/api/http/scene_home.go`・`action_home.go` (Homeシーンと本人コマンド)、`internal/api/http/home.go` (手紙・公開表示)。
 - **Contracts**: [design/home.md](../design/home.md)、[api/paths/home.json](../api/paths/home.json)、[api/paths/letter.json](../api/paths/letter.json)。
-- **Open follow-ups**: [#2162](https://github.com/witchcraze/party2re/issues/2162) (手紙のGateway移行)、[#2254](https://github.com/witchcraze/party2re/issues/2254) (家ごとのログ・住人member)。
+- **Open follow-ups**: [#2162](https://github.com/witchcraze/party2re/issues/2162) (手紙のGateway移行)。
 - **Boundary**: Homeからの図鑑・ジョブマスター・プロフィール・冒険記録・特技設定・画像設定は遷移先と対象identityを確認する。遷移先の全仕様はCL-01/04/06/07の担当範囲。壁紙等の表示はここ、使用による変更はCL-02E。
 
 #### CL-02B: Sleep & Recovery

@@ -60,7 +60,7 @@ func TestFacilityScenePresentation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := facilities[tc.destination]
 			choices := slices.Concat(f.commands, f.subjectCommands, f.ownedSubjectCommands, []string{"scene_page"})
-			result := playercontext.Result{Snapshot: playercontext.Snapshot{SceneActions: choices}, AvailableActions: choices,
+			result := playercontext.Result{Snapshot: playercontext.Snapshot{LocationID: tc.destination, SceneActions: choices}, AvailableActions: choices,
 				Navigation: &playercontext.NavigationObservation{Selection: playercontext.Selection{Destination: tc.destination}}}
 			service := playercontext.NewService(nil, nil, nil, playercontext.WithNavigation(&gatewayNavigationStore{},
 				playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "blackmarket", Parent: "town", CanEnter: func(corecharacter.Character) bool { return !tc.denied }}))
@@ -117,7 +117,7 @@ func TestFacilityScenePresentation(t *testing.T) {
 				}
 			}
 			wantMembers := []PlaceMember{}
-			if f.npc != nil && f.placeLog {
+			if f.npc != nil && f.npc.name != "" && f.placeLog {
 				wantMembers = append(wantMembers, PlaceMember{Kind: "npc", Name: f.npc.name, Color: npcColor})
 			}
 			if tc.ramia {
@@ -172,7 +172,7 @@ func TestScenePresentationCannotAdmitCommands(t *testing.T) {
 					return nil, nil
 				}}
 			}
-			r := playercontext.Result{Snapshot: playercontext.Snapshot{SceneActions: []string{"scene_page", "shop_sell", "shop_purchase"}},
+			r := playercontext.Result{Snapshot: playercontext.Snapshot{LocationID: destination, SceneActions: []string{"scene_page", "shop_sell", "shop_purchase"}},
 				AvailableActions: []string{"scene_page", "shop_sell", "bank_deposit"},
 				Navigation:       &playercontext.NavigationObservation{Selection: playercontext.Selection{Destination: destination}, Unavailable: tc.unavailable}}
 			var response PlayerContextResponse

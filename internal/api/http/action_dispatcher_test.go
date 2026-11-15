@@ -94,7 +94,7 @@ func (f *gatewayFixture) FindByID(ctx context.Context, id string) (corecharacter
 
 func (f *gatewayFixture) FindPendingByActorID(ctx context.Context, id string) ([]scheduling.ScheduledAction, error) {
 	f.checkContext(ctx)
-	if id != "hero" {
+	if id != f.char.ID {
 		f.t.Fatal("wrong query actor")
 	}
 	return f.actions, f.queryErr

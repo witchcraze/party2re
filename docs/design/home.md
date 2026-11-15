@@ -48,7 +48,6 @@ Resident companions combine ranch monsters at home and Heaven Wish NPC companion
 - **Legacy rule** (`lib/home.cgi:443–477`): the phrase list belongs to the character, not a pet. A new phrase goes to the head, duplicates are separate entries, and the list keeps at most `$max_log`, so teaching is never rejected for capacity. Removal by text removes only the first match (the newest duplicate).
 - **Capacity provenance:** the `config.cgi` tracked until commit `0713fcc` (2023-03-09) sets `$max_log = 30`. That commit added the template `config.cgi_origin`, which changes only `max_entry`, `max_login` and `max_log` to 999, so 999 is treated as a distribution default. The live value is unverified.
 - **Decision (#1125):** keep at most N phrases per character (default 30, `PARTY2_HOME_COMPANION_PHRASE_LIMIT`; an invalid value means 30 and does not stop startup). At capacity, teaching succeeds and removes the oldest in the same serialized transaction. Lowering N shortens the list on the next teach; there is no startup trim.
-- **Talking** (`lib/home.cgi:422–438`) in any home picks a random resident of that home and a uniformly random entry of its list, so duplicates weigh by count. With no resident it answers privately “しかし、誰もいなかった…”; with no phrase the resident says nothing. The home's own log, where legacy writes the reply, is open in #2254.
 
 ### 4. Remote Depot & Inventory Item Usage (`＠つかう`)
 
