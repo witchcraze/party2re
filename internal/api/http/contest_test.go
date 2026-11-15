@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -314,6 +315,11 @@ func TestSettleContestWithAdminKey(t *testing.T) {
 }
 
 func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
+	var logBuf bytes.Buffer
+	prevLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prevLogger) })
+
 	adminKey := "test-admin-secret-key"
 	stub := &stubContestService{
 		settleContestFn: func(ctx context.Context, force bool) (contest.SettlementResult, error) {
@@ -365,8 +371,15 @@ func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
 	if !payload.PrizesDistributed {
 		t.Errorf("expected prizes_distributed = true")
 	}
-	if payload.Warning == "" || !strings.Contains(payload.Warning, "scheduling failed") {
-		t.Errorf("expected warning mentioning scheduling failure, got %q", payload.Warning)
+	if payload.Warning != "contest settled, but settlement scheduling failed" {
+		t.Errorf("warning = %q, want %q", payload.Warning, "contest settled, but settlement scheduling failed")
+	}
+	if strings.Contains(payload.Warning, "queue unavailable") {
+		t.Errorf("warning leaked underlying error: %q", payload.Warning)
+	}
+	logged := logBuf.String()
+	if !strings.Contains(logged, "contest settlement scheduling failed") || !strings.Contains(logged, "queue unavailable") {
+		t.Errorf("expected scheduling error in server log, got %q", logged)
 	}
 }
 

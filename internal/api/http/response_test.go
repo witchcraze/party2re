@@ -1,9 +1,14 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -132,6 +137,71 @@ func TestWriteAppErrorf(t *testing.T) {
 		}
 		if resp.Error.Message != expectedMsg {
 			t.Errorf("expected message %q, got %q", expectedMsg, resp.Error.Message)
+		}
+	})
+}
+
+func TestWriteError(t *testing.T) {
+	t.Run("4xx preserves original error message and does not log", func(t *testing.T) {
+		for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+			var buf bytes.Buffer
+			prev := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+			t.Cleanup(func() { slog.SetDefault(prev) })
+
+			rec := httptest.NewRecorder()
+			writeError(rec, status, errors.New("invalid character name"))
+
+			if rec.Code != status {
+				t.Fatalf("status = %d, want %d", rec.Code, status)
+			}
+			var resp errorResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Error != "invalid character name" {
+				t.Errorf("error = %q, want %q", resp.Error, "invalid character name")
+			}
+			if buf.Len() != 0 {
+				t.Errorf("expected no server log for %d, got %s", status, buf.String())
+			}
+		}
+	})
+
+	t.Run("5xx returns generic message and logs original error", func(t *testing.T) {
+		rawErr := errors.New(`pq: relation "players" does not exist`)
+		for _, status := range []int{
+			http.StatusInternalServerError,
+			http.StatusNotImplemented,
+			http.StatusServiceUnavailable,
+		} {
+			var buf bytes.Buffer
+			prev := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+			t.Cleanup(func() { slog.SetDefault(prev) })
+
+			rec := httptest.NewRecorder()
+			writeError(rec, status, rawErr)
+
+			if rec.Code != status {
+				t.Fatalf("status = %d, want %d", rec.Code, status)
+			}
+			var resp errorResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Error != "internal server error" {
+				t.Errorf("error = %q, want %q", resp.Error, "internal server error")
+			}
+			if strings.Contains(rec.Body.String(), "players") {
+				t.Errorf("response body leaked internal error: %s", rec.Body.String())
+			}
+			logged := buf.String()
+			if !strings.Contains(logged, "http server error") ||
+				!strings.Contains(logged, fmt.Sprintf("status=%d", status)) ||
+				!strings.Contains(logged, "players") {
+				t.Errorf("expected server log with status=%d and raw error, got %q", status, logged)
+			}
 		}
 	})
 }

@@ -11,12 +11,8 @@ import (
 )
 
 func writeChallengeRecoveryError(w http.ResponseWriter, err error) bool {
-	if errors.Is(err, challenge.ErrRecoveryRequired) {
-		writeError(w, http.StatusServiceUnavailable, challenge.ErrRecoveryRequired)
-		return true
-	}
-	if errors.Is(err, challenge.ErrOutcomeUnknown) {
-		writeError(w, http.StatusServiceUnavailable, challenge.ErrOutcomeUnknown)
+	if errors.Is(err, challenge.ErrRecoveryRequired) || errors.Is(err, challenge.ErrOutcomeUnknown) {
+		writeError(w, http.StatusServiceUnavailable, err)
 		return true
 	}
 	return false
