@@ -2,12 +2,18 @@ package challenge_test
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
+	"fmt"
+	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/challenge"
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -19,13 +25,17 @@ import (
 // Real deletion traverses tables outside the settlement fixture. Copy their
 // definitions, including foreign keys, into that fixture's dedicated database.
 // This extends an already populated fixture; CreateTestDatabase creates a new DB.
-func (f *protocolFixture) deletionService(t *testing.T, account bool) func(context.Context) error {
+func (f *protocolFixture) deletionService(t testing.TB, account bool) func(context.Context) error {
 	t.Helper()
 	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer source.Close()
+	defer func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	ctx := context.Background()
 	rows, err := source.QueryContext(ctx, "SHOW TABLES")
 	if err != nil {
@@ -49,21 +59,28 @@ func (f *protocolFixture) deletionService(t *testing.T, account bool) func(conte
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		restoreCtx, restoreCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer restoreCancel()
+		if _, err := conn.ExecContext(restoreCtx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
+			t.Errorf("restore foreign key checks: %v", err)
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn }) //lint:ignore error-swallow marks connection bad so the pool discards it
+		}
+		if err := conn.Close(); err != nil && !errors.Is(err, sql.ErrConnDone) {
+			t.Error(err)
+		}
+	}()
 	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range tables {
 		var name, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&name, &ddl); err != nil {
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+strings.ReplaceAll(table, "`", "``")+"`").Scan(&name, &ddl); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := conn.ExecContext(ctx, strings.Replace(ddl, "CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
-		t.Fatal(err)
 	}
 	tx := database.NewTransactionProvider(f.db)
 	chars, err := character.NewService(f.chars, character.WithTransactionProvider(tx))
@@ -280,4 +297,180 @@ func TestRunProtocolLeaderDeletionRaceIntegration(t *testing.T) {
 			f.assertDeletionState(t, run, true)
 		})
 	}
+}
+
+func TestRunProtocolDeletionServiceForeignKeyChecksIntegration(t *testing.T) {
+	f := newProtocolFixture(t, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	var dbName string
+	if err := f.db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&dbName); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := mysql.ParseDSN(os.Getenv("PARTY2_TEST_DB_ADMIN_DSN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.DBName = dbName
+	cfg.ParseTime = true
+	baseConnector, err := mysql.NewConnector(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fc := &faultConnector{Connector: baseConnector}
+	f.db = sql.OpenDB(fc)
+	f.db.SetMaxOpenConns(1)
+	f.db.SetMaxIdleConns(1)
+	t.Cleanup(func() {
+		if err := f.db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	f.chars, err = database.NewCharacterRepository(f.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var beforeID int64
+	var fkChecks int
+	if err := f.db.QueryRowContext(ctx, "SELECT CONNECTION_ID(), @@FOREIGN_KEY_CHECKS").Scan(&beforeID, &fkChecks); err != nil || fkChecks != 1 {
+		t.Fatalf("initial connection=%d fkChecks=%d err=%v", beforeID, fkChecks, err)
+	}
+
+	runSetup := func() *deletionSpyTB {
+		spy := &deletionSpyTB{TB: t}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			f.deletionService(spy, false)
+		}()
+		<-done
+		return spy
+	}
+
+	copyErr := errors.New("injected schema copy error")
+	fc.fail = func(query string) error {
+		if strings.HasPrefix(query, "CREATE TABLE IF NOT EXISTS") {
+			return copyErr
+		}
+		return nil
+	}
+	spy := runSetup()
+	if len(spy.fatals) != 1 || !strings.Contains(spy.fatals[0], copyErr.Error()) {
+		t.Fatalf("schema-copy failure fatals=%v errs=%v", spy.fatals, spy.errs)
+	}
+	if len(spy.errs) != 0 {
+		t.Fatalf("unexpected non-fatal errors on copy failure: %v", spy.errs)
+	}
+	var afterID int64
+	if err := f.db.QueryRowContext(ctx, "SELECT CONNECTION_ID(), @@FOREIGN_KEY_CHECKS").Scan(&afterID, &fkChecks); err != nil {
+		t.Fatal(err)
+	}
+	if afterID != beforeID || fkChecks != 1 {
+		t.Fatalf("session after copy failure: id=%d (want %d) fkChecks=%d (want 1)", afterID, beforeID, fkChecks)
+	}
+
+	restoreErr := errors.New("injected restore error")
+	fc.fail = func(query string) error {
+		if strings.HasPrefix(query, "CREATE TABLE IF NOT EXISTS") {
+			return copyErr
+		}
+		if query == "SET FOREIGN_KEY_CHECKS=1" {
+			return restoreErr
+		}
+		return nil
+	}
+	spy = runSetup()
+	if len(spy.fatals) != 1 || !strings.Contains(spy.fatals[0], copyErr.Error()) {
+		t.Fatalf("restoration failure lost original copy error: fatals=%v", spy.fatals)
+	}
+	if len(spy.errs) != 1 || !strings.Contains(spy.errs[0], "restore foreign key checks") || !strings.Contains(spy.errs[0], restoreErr.Error()) {
+		t.Fatalf("expected restore error, got errs=%v", spy.errs)
+	}
+	if err := f.db.QueryRowContext(ctx, "SELECT CONNECTION_ID(), @@FOREIGN_KEY_CHECKS").Scan(&afterID, &fkChecks); err != nil {
+		t.Fatal(err)
+	}
+	if afterID == beforeID || fkChecks != 1 {
+		t.Fatalf("session after restore failure: id=%d (want != %d) fkChecks=%d (want 1)", afterID, beforeID, fkChecks)
+	}
+
+	fc.fail = nil
+	remove := f.deletionService(t, false)
+	if err := f.db.QueryRowContext(ctx, "SELECT @@FOREIGN_KEY_CHECKS").Scan(&fkChecks); err != nil || fkChecks != 1 {
+		t.Fatalf("foreign key checks after success: value=%d err=%v", fkChecks, err)
+	}
+	var tableName, ddl string
+	if err := f.db.QueryRowContext(ctx, "SHOW CREATE TABLE character_companion_phrases").Scan(&tableName, &ddl); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ddl, "FOREIGN KEY") {
+		t.Fatalf("copied table missing foreign key: %s", ddl)
+	}
+	got, err := f.chars.FindByID(ctx, f.actors[0].ID)
+	if err != nil || !reflect.DeepEqual(got, f.actors[0]) {
+		t.Fatalf("existing fixture character changed: %+v %v", got, err)
+	}
+	if err := remove(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.chars.FindByID(ctx, f.actors[0].ID); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("expected character deleted, got %v", err)
+	}
+}
+
+type deletionSpyTB struct {
+	testing.TB
+	errs   []string
+	fatals []string
+}
+
+func (s *deletionSpyTB) Helper() {}
+
+func (s *deletionSpyTB) Error(args ...any) {
+	s.errs = append(s.errs, fmt.Sprint(args...))
+}
+
+func (s *deletionSpyTB) Errorf(format string, args ...any) {
+	s.errs = append(s.errs, fmt.Sprintf(format, args...))
+}
+
+func (s *deletionSpyTB) Fatal(args ...any) {
+	s.fatals = append(s.fatals, fmt.Sprint(args...))
+	runtime.Goexit()
+}
+
+type faultConnector struct {
+	driver.Connector
+	fail func(query string) error
+}
+
+func (c *faultConnector) Connect(ctx context.Context) (driver.Conn, error) {
+	conn, err := c.Connector.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &faultConn{Conn: conn, connector: c}, nil
+}
+
+type faultConn struct {
+	driver.Conn
+	connector *faultConnector
+}
+
+func (c *faultConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	return c.Conn.(driver.ConnBeginTx).BeginTx(ctx, opts)
+}
+
+func (c *faultConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if c.connector.fail != nil {
+		if err := c.connector.fail(query); err != nil {
+			return nil, err
+		}
+	}
+	return c.Conn.(driver.ExecerContext).ExecContext(ctx, query, args)
+}
+
+func (c *faultConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	return c.Conn.(driver.QueryerContext).QueryContext(ctx, query, args)
 }
